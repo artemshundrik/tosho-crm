@@ -1,5 +1,6 @@
 // src/layout/AppLayout.tsx
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import { ShieldAlert } from "lucide-react"; // або інша іконка
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
@@ -24,6 +25,7 @@ import {
   Sun,
   Moon,
   ClipboardCheck,
+  WalletCards,
   LineChart,
   Swords,
   Dumbbell,
@@ -31,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { UserMenu } from "@/components/app/UserMenu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -88,6 +91,7 @@ const ROUTES = {
   trainings: "/admin/trainings",
   players: "/admin/players",
   tournaments: "/admin/tournaments",
+  finance: "/finance",
 
  analyticsPlayers: "/analytics/players",
 analyticsTeam: "/analytics/team",
@@ -119,6 +123,9 @@ const baseSidebarLinks: SidebarLink[] = [
 
   // MANAGEMENT
   { label: "Відвідуваність", to: ROUTES.attendance, group: "management", icon: ClipboardCheck },
+  { label: "Фінанси", to: ROUTES.finance, group: "management", icon: WalletCards },
+  { label: "Доступ / Ролі", to: "/settings/members", group: "management", icon: ShieldAlert },
+  
 ];
 
 // dev links (тільки в dev-режимі)
@@ -228,6 +235,20 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.tournaments,
     };
 
+  if (pathname.includes("finance"))
+    return {
+      title: "Фінанси",
+      subtitle: "Оплати, плани, нарахування та фінансова аналітика.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finance,
+    };
+if (pathname === ROUTES.profile)
+    return {
+      title: "Мій профіль",
+      subtitle: "Керуй своїм обліковим записом та налаштуваннями.",
+      breadcrumbLabel: "Профіль",
+      breadcrumbTo: ROUTES.profile,
+    };
   // fallback
   return {
     title: "Огляд",
@@ -477,53 +498,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
 
         {/* Footer / Profile */}
-        <div className="border-t border-border p-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  "w-full rounded-xl p-2.5 transition-colors",
-                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9 rounded-xl border border-border">
-                    <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
-                      AS
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="truncate text-[13px] font-semibold">Artem Shundryk</div>
-                    <div className="truncate text-[11px] text-muted-foreground">Senior UI/UX</div>
-                  </div>
-
-                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent className="w-[250px]" align="end">
-              <DropdownMenuLabel>Акаунт</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate(ROUTES.profile)}>
-                <User className="mr-2 h-4 w-4" />
-                Мій профіль
-              </DropdownMenuItem>
-
-              <DropdownMenuItem onClick={() => navigate(ROUTES.accountSettings)}>
-                <SlidersHorizontal className="mr-2 h-4 w-4" />
-                Налаштування
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {}}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Вийти
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+<div className="border-t border-border p-4">
+  <UserMenu />
+</div>
       </aside>
 
       {/* MAIN */}
@@ -569,9 +546,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                       </div>
                     </div>
 
-                    <div className="px-4 pb-5">
-                      <MobileNav currentPath={location.pathname} isDev={isDev} />
-                    </div>
+                    <div className="pt-2 border-t border-border">
+  <UserMenu mobile />
+</div>
                   </SheetContent>
                 </Sheet>
               </div>

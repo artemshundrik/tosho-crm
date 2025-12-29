@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/auth/AuthProvider"; // 1. Імпортуємо хук
 
 // UI Components
-import { Button } from "@/components/ui/button"; // Використовує твій button.tsx
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import {
@@ -20,7 +21,6 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetFooter,
 } from "@/components/ui/sheet";
 import {
   Select,
@@ -53,13 +53,12 @@ import {
   Shield,
   Cake,
   Shirt,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// --- Constants & Types ---
-const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
-
+// --- Types ---
 type Player = {
   id: string;
   team_id: string;
@@ -83,8 +82,6 @@ type FormState = {
 type SortMode = "number" | "age_young_first" | "age_old_first";
 
 // --- Helpers ---
-
-// FIX: Додано dark:[color-scheme:dark] для календаря
 const INPUT_CLASS = cn(
   "bg-background border-input text-foreground placeholder:text-muted-foreground",
   "focus-visible:ring-primary/30",
@@ -153,6 +150,8 @@ function PlayerAvatar({ player, size = 48 }: { player: Player; size?: number }) 
 
 export function PlayersAdminPage() {
   const navigate = useNavigate();
+  // 2. Отримуємо реальний teamId з контексту
+  const { teamId } = useAuth();
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,12 +172,20 @@ export function PlayersAdminPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Огортаємо в useCallback або просто слідкуємо за teamId
+  useEffect(() => {
+    if (teamId) {
+      loadPlayers();
+    }
+  }, [teamId]);
+
   async function loadPlayers() {
+    if (!teamId) return;
     setLoading(true);
     const { data, error } = await supabase
       .from("players")
       .select("*")
-      .eq("team_id", TEAM_ID)
+      .eq("team_id", teamId) // Використовуємо динамічний ID
       .order("shirt_number", { ascending: true });
 
     if (!error && data) {
@@ -186,10 +193,6 @@ export function PlayersAdminPage() {
     }
     setLoading(false);
   }
-
-  useEffect(() => {
-    loadPlayers();
-  }, []);
 
   function openCreate() {
     setForm({ firstName: "", lastName: "", shirtNumber: "", position: "UNIV", birthday: "", photoUrl: "" });
@@ -216,10 +219,11 @@ export function PlayersAdminPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.firstName.trim() || !form.lastName.trim()) return;
+    if (!teamId) return;
 
     setSaving(true);
     const payload = {
-      team_id: TEAM_ID,
+      team_id: teamId, // Динамічний ID
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
       shirt_number: form.shirtNumber.trim() === "" ? null : Number(form.shirtNumber),
@@ -316,7 +320,7 @@ export function PlayersAdminPage() {
           label: "Новий гравець",
           onClick: openCreate,
           iconLeft: Plus,
-          variant: "default",
+          variant: "default", // 3. Виправлено з "primary" на "default"
         }}
         kpis={playerKpis}
       />
@@ -424,7 +428,6 @@ export function PlayersAdminPage() {
                             variant="outline"
                             className={cn(
                                "px-2.5 py-1 text-xs font-semibold rounded-md border",
-                               // FIX: Кольори бейджів, щоб читались в темній темі
                                isGK 
                                 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20" 
                                 : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20 hover:bg-slate-500/20"
@@ -549,7 +552,6 @@ export function PlayersAdminPage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="birthday" className="text-foreground">Дата народження</Label>
-                        {/* FIX: dark:[color-scheme:dark] щоб іконка календаря була білою */}
                         <Input 
                             id="birthday" 
                             type="date" 
@@ -574,8 +576,6 @@ export function PlayersAdminPage() {
                 </div>
 
                 <div className="p-6 border-t border-border bg-muted/5 flex justify-end gap-3">
-                    {/* FIX 3: BUTTON SECONDARY */}
-                    {/* Використовуємо variant="secondary" бо "outline" не існує в button.tsx */}
                     <Button 
                         variant="secondary" 
                         type="button" 
@@ -583,13 +583,14 @@ export function PlayersAdminPage() {
                     >
                         Скасувати
                     </Button>
+                    {/* Виправлено variant="primary" -> variant="default" */}
                     <Button 
-                        variant="primary" 
+                        variant="default" 
                         type="submit" 
                         disabled={saving} 
                         className="min-w-[120px]"
                     >
-                        {saving ? "Збереження..." : "Зберегти"}
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Зберегти"}
                     </Button>
                 </div>
             </form>
