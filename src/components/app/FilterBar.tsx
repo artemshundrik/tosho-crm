@@ -22,6 +22,7 @@ export type FilterBarSearch = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  widthClassName?: string;
 };
 
 export type FilterBarSortOption<T extends string> = { value: T; label: string };
@@ -45,6 +46,7 @@ export type FilterBarProps<TTab extends string, TSort extends string> = {
   showSort?: boolean;
   compactSort?: boolean;
   search?: FilterBarSearch;
+  rightSlot?: React.ReactNode;
   bottomLeft?: React.ReactNode;
   bottomRight?: React.ReactNode;
   className?: string;
@@ -170,6 +172,7 @@ export function FilterBar<TTab extends string, TSort extends string>({
   showSort,
   compactSort,
   search,
+  rightSlot,
   bottomLeft,
   bottomRight,
   className,
@@ -215,8 +218,15 @@ export function FilterBar<TTab extends string, TSort extends string>({
 
           {sort && shouldShowSort ? (compactSort ? <CompactSort sort={sort} /> : <SortSelect sort={sort} />) : null}
 
+          {rightSlot}
+
           {search ? (
-            <div className="relative flex-1 max-w-[520px] min-w-[240px]">
+            <div
+              className={cx(
+                "relative flex-1 min-w-[200px]",
+                search.widthClassName ?? "max-w-[520px]"
+              )}
+            >
               <SearchIcon
                 size={16}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"

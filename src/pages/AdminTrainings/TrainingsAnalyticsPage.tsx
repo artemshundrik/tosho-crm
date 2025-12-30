@@ -1,29 +1,24 @@
+// src/pages/AdminTrainings/TrainingsAnalyticsPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CalendarRange,
   CheckCircle2,
-  ClipboardList,
   HeartPulse,
   Loader2,
-  ShieldAlert,
-  Swords,
   TrendingUp,
-  Users,
   XCircle,
+  Plus,
+  CalendarRange
 } from "lucide-react";
 
 import { getTrainings } from "../../api/trainings";
-import type { AttendanceStatus, Training } from "../../types/trainings";
+import type { Training } from "../../types/trainings";
 import { supabase } from "../../lib/supabaseClient";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FilterBar } from "@/components/app/FilterBar";
 import {
   Table,
   TableBody,
@@ -32,116 +27,152 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import { OperationalSummary } from "@/components/app/OperationalSummary";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
-type TrainingType = "regular" | "sparring";
-
-type Player = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  shirt_number: number | null;
-  position?: string | null;
-  photo_url?: string | null;
+// Мапа амплуа українською
+const positionUkMap: Record<string, string> = {
+  gk: "Воротар",
+  df: "Захисник",
+  mf: "Півзахисник",
+  fw: "Нападник",
+  univ: "Універсал",
+  universal: "Універсал"
 };
 
-type AttendanceRow = {
-  training_id: string;
-  player_id: string;
-  status: AttendanceStatus;
-  created_at?: string;
-};
+// Функція нормалізації URL для Supabase Storage (взята з вашої логіки у StatsPage.tsx)
+function normalizeAssetUrl(url: string | null | undefined): string | null {
+  const u = (url ?? "").toString().trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://") || u.startsWith("data:")) return u;
+  if (u.startsWith("/")) {
+      const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string)?.replace(/\/+$/, "");
+      return `${supabaseUrl}/storage/v1/object/public${u}`;
+  }
+  return u;
+}
+
+type SortKey = "name" | "percent";
+type SortDirection = "asc" | "desc";
 
 type PlayerAttendanceRow = {
   playerId: string;
   shirtNumber: number | null;
   photoUrl: string | null;
-  position?: string | null;
   name: string;
+  position: string;
   trainingsTracked: number;
   presentCount: number;
   absentCount: number;
   injuredCount: number;
   sickCount: number;
-  attendancePercent: number | null;
+  attendancePercent: number;
 };
 
-type TypeAttendanceSummary = {
-  type: TrainingType;
-  trainingsCount: number;
-  presentCount: number;
-  absentCount: number;
-  attendancePercent: number | null;
-};
-
-const typeLabels: Record<TrainingType, string> = {
-  regular: "Звичайне тренування",
-  sparring: "Спаринг",
-};
-
-const typeIcons: Record<TrainingType, React.ElementType> = {
-  regular: ClipboardList,
-  sparring: Swords,
-};
-
-const positionUkMap: Record<string, string> = {
-  gk: "Воротар",
-  goalkeeper: "Воротар",
-  df: "Захисник",
-  cb: "Центр. захисник",
-  lb: "Лівий захисник",
-  rb: "Правий захисник",
-  mf: "Півзахисник",
-  cm: "Центр. півзахисник",
-  dm: "Опорний півзахисник",
-  am: "Атак. півзахисник",
-  fw: "Нападник",
-  st: "Нападник",
-  cf: "Центр. форвард",
-  lf: "Лівий форвард",
-  rf: "Правий форвард",
-  wing: "Фланговий",
-  universal: "Універсал",
-  univ: "Універсал",
-};
-
-function round1(val: number) {
-  return Math.round(val * 10) / 10;
+// --- Секція гравця з виправленим URL та зумом аватара ---
+function PlayerInfoCell({ 
+  name, 
+  number, 
+  position, 
+  photoUrl 
+}: { 
+  name: string; 
+  number?: number | null; 
+  position?: string | null; 
+  photoUrl?: string | null 
+}) {
+  const initials = name.split(" ").map(n => n[0]).join("").toUpperCase();
+  const uaPosition = position ? (positionUkMap[position.toLowerCase()] || position) : "Універсал";
+  const safePhotoUrl = normalizeAssetUrl(photoUrl); // Використовуємо нормалізацію
+  
+  return (
+    <div className="flex items-center gap-3">
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border/50 bg-muted/40 shadow-sm">
+        {safePhotoUrl ? (
+          <img
+            src={safePhotoUrl}
+            alt={name}
+            className="h-full w-full object-cover object-top"
+            style={{ transform: "scale(1.8)", objectPosition: "50% -90%" }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground uppercase">
+            {initials}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col min-w-0 text-left">
+        <span className="text-sm font-semibold text-foreground truncate leading-tight group-hover:underline decoration-primary/30 underline-offset-4">
+          {name}
+        </span>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tracking-tight">
+          {number !== null && <span>#{number}</span>}
+          {number !== null && <span className="opacity-30">•</span>}
+          <span>{uaPosition}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function TrainingsAnalyticsPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [preset, setPreset] = useState<"month" | "year" | "all">("month");
+  const [sortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: "percent",
+    direction: "desc"
+  });
+
   const navigate = useNavigate();
+
+  const formatDateInput = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const applyPreset = (next: "month" | "year" | "all") => {
+    const now = new Date();
+    if (next === "all") {
+      setFromDate("");
+      setToDate("");
+      setPreset(next);
+      return;
+    }
+    if (next === "month") {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      setFromDate(formatDateInput(start));
+      setToDate(formatDateInput(now));
+      setPreset(next);
+      return;
+    }
+    const start = new Date(now.getFullYear(), 0, 1);
+    setFromDate(formatDateInput(start));
+    setToDate(formatDateInput(now));
+    setPreset(next);
+  };
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      setError(null);
       try {
-        const [trainingsData, attendanceRes, playersRes] = await Promise.all([
+        const [trData, attRes, plRes] = await Promise.all([
           getTrainings(TEAM_ID),
-          supabase.from("training_attendance").select("training_id, player_id, status, created_at"),
-          supabase
-            .from("players")
-            .select("id, first_name, last_name, shirt_number, position, photo_url")
-            .eq("team_id", TEAM_ID),
+          supabase.from("training_attendance").select("*"),
+          supabase.from("players").select("*").eq("team_id", TEAM_ID),
         ]);
-        if (attendanceRes.error) throw attendanceRes.error;
-        if (playersRes.error) throw playersRes.error;
-        setTrainings(trainingsData);
-        setAttendance((attendanceRes.data || []) as AttendanceRow[]);
-        setPlayers((playersRes.data || []) as Player[]);
-      } catch (e: any) {
-        console.error(e);
-        setError(e.message || "Не вдалося завантажити аналітику");
+        setTrainings(trData);
+        setAttendance(attRes.data || []);
+        setPlayers(plRes.data || []);
       } finally {
         setLoading(false);
       }
@@ -149,510 +180,224 @@ export function TrainingsAnalyticsPage() {
     load();
   }, []);
 
-  const filteredTrainings = useMemo(() => {
-    return trainings.filter((t) => {
-      if (fromDate && t.date < fromDate) return false;
-      if (toDate && t.date > toDate) return false;
-      return true;
-    });
-  }, [trainings, fromDate, toDate]);
+  useEffect(() => {
+    applyPreset("month");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const completedTrainings = useMemo(() => {
     const now = Date.now();
-    return filteredTrainings.filter(
-      (t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() <= now,
-    );
-  }, [filteredTrainings]);
-
-  const filteredAttendance = useMemo(() => {
-    const ids = new Set(completedTrainings.map((t) => t.id));
-    return attendance.filter((a) => ids.has(a.training_id));
-  }, [attendance, completedTrainings]);
-
-  const dedupAttendance = useMemo(() => {
-    const sorted = [...filteredAttendance].sort((a, b) => {
-      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return at - bt;
+    return trainings.filter(t => {
+      const ts = new Date(`${t.date}T${t.time || "00:00"}`).getTime();
+      if (fromDate && t.date < fromDate) return false;
+      if (toDate && t.date > toDate) return false;
+      return ts <= now;
     });
-    const map = new Map<string, AttendanceRow>();
-    sorted.forEach((row) => {
-      const key = `${row.training_id}_${row.player_id}`;
-      map.set(key, row);
-    });
-    return Array.from(map.values());
-  }, [filteredAttendance]);
+  }, [trainings, fromDate, toDate]);
 
-  const typeSummaries: TypeAttendanceSummary[] = useMemo(() => {
-    const summaries: TypeAttendanceSummary[] = [
-      { type: "regular", trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
-      { type: "sparring", trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
-    ];
-    const byTraining = new Map<string, TrainingType>();
-    completedTrainings.forEach((t) => {
-      if (t.type === "regular" || t.type === "sparring") {
-        summaries[t.type === "regular" ? 0 : 1].trainingsCount += 1;
-        byTraining.set(t.id, t.type);
-      }
-    });
-    dedupAttendance.forEach((row) => {
-      const tType = byTraining.get(row.training_id);
-      if (!tType) return;
-      const idx = tType === "regular" ? 0 : 1;
-      if (row.status === "present") summaries[idx].presentCount += 1;
-      if (row.status === "absent") summaries[idx].absentCount += 1;
-    });
-    summaries.forEach((s) => {
-      const denom = s.presentCount + s.absentCount;
-      s.attendancePercent = denom === 0 ? null : round1((s.presentCount / denom) * 100);
-    });
-    return summaries;
-  }, [completedTrainings, dedupAttendance]);
-
-  const globalSummary = useMemo(() => {
-    let presentCount = 0;
-    let absentCount = 0;
-    let injuredCount = 0;
-    let sickCount = 0;
-    dedupAttendance.forEach((row) => {
-      if (row.status === "present") presentCount += 1;
-      if (row.status === "absent") absentCount += 1;
-      if (row.status === "injured") injuredCount += 1;
-      if (row.status === "sick") sickCount += 1;
-    });
-    const denom = presentCount + absentCount;
-    return {
-      presentCount,
-      absentCount,
-      injuredCount,
-      sickCount,
-      attendancePercent: denom === 0 ? null : round1((presentCount / denom) * 100),
-    };
-  }, [dedupAttendance]);
-
-  const uniquePlayers = useMemo(() => {
-    return new Set(dedupAttendance.map((row) => row.player_id)).size;
-  }, [dedupAttendance]);
-
-  const playerRows: PlayerAttendanceRow[] = useMemo(() => {
-    const trainingsInPeriod = completedTrainings.length;
+  const playerRows = useMemo(() => {
     const map = new Map<string, PlayerAttendanceRow>();
-    players.forEach((p) => {
+    players.forEach(p => {
       map.set(p.id, {
-        playerId: p.id,
-        shirtNumber: p.shirt_number,
-        photoUrl: p.photo_url || null,
-        position: p.position,
-        name:
-          p.shirt_number !== null
-            ? `#${p.shirt_number} ${p.last_name} ${p.first_name}`
-            : `${p.last_name} ${p.first_name}`,
-        trainingsTracked: trainingsInPeriod,
-        presentCount: 0,
-        absentCount: 0,
-        injuredCount: 0,
-        sickCount: 0,
-        attendancePercent: null,
+        playerId: p.id, shirtNumber: p.shirt_number, photoUrl: p.photo_url,
+        name: `${p.first_name} ${p.last_name}`, position: p.position,
+        trainingsTracked: completedTrainings.length,
+        presentCount: 0, absentCount: 0, injuredCount: 0, sickCount: 0, attendancePercent: 0
       });
     });
 
-    dedupAttendance.forEach((row) => {
-      const entry = map.get(row.player_id);
-      if (!entry) return;
-      if (row.status === "present") entry.presentCount += 1;
-      if (row.status === "absent") entry.absentCount += 1;
-      if (row.status === "injured") entry.injuredCount += 1;
-      if (row.status === "sick") entry.sickCount += 1;
+    const activeIds = new Set(completedTrainings.map(t => t.id));
+    const latestByKey = new Map<string, any>();
+    attendance.filter(a => activeIds.has(a.training_id)).forEach(a => {
+      const key = `${a.training_id}_${a.player_id}`;
+      const prev = latestByKey.get(key);
+      if (!prev) {
+        latestByKey.set(key, a);
+        return;
+      }
+      const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
+      const nextTs = a?.created_at ? new Date(a.created_at).getTime() : -Infinity;
+      if (nextTs >= prevTs) latestByKey.set(key, a);
+    });
+    latestByKey.forEach(a => {
+      const row = map.get(a.player_id);
+      if (!row) return;
+      if (a.status === "present") row.presentCount++;
+      else if (a.status === "absent") row.absentCount++;
+      else if (a.status === "injured") row.injuredCount++;
+      else if (a.status === "sick") row.sickCount++;
     });
 
-    map.forEach((entry) => {
-      const denom = entry.presentCount + entry.absentCount;
-      entry.attendancePercent = denom === 0 ? null : round1((entry.presentCount / denom) * 100);
-    });
+    return Array.from(map.values()).map(r => ({
+      ...r,
+      attendancePercent: (r.presentCount + r.absentCount) > 0 
+        ? Math.round((r.presentCount / (r.presentCount + r.absentCount)) * 100) 
+        : 0
+    })).filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
+       .sort((a, b) => {
+         const factor = sortConfig.direction === "desc" ? 1 : -1;
+         if (sortConfig.key === "percent") return (b.attendancePercent - a.attendancePercent) * factor;
+         return a.name.localeCompare(b.name) * factor;
+       });
+  }, [players, attendance, completedTrainings, query, sortConfig]);
 
-    return Array.from(map.values()).sort((a, b) => {
-      const pa = a.attendancePercent ?? -1;
-      const pb = b.attendancePercent ?? -1;
-      if (pb !== pa) return pb - pa;
-      if (b.trainingsTracked !== a.trainingsTracked) return b.trainingsTracked - a.trainingsTracked;
-      const na = a.shirtNumber ?? Number.MAX_SAFE_INTEGER;
-      const nb = b.shirtNumber ?? Number.MAX_SAFE_INTEGER;
-      return na - nb;
-    });
-  }, [players, dedupAttendance, completedTrainings.length]);
+  // Підготовка лідерів для OperationalSummary
+  const topPlayers = useMemo(() => 
+    playerRows.slice(0, 5).map(p => ({ 
+      name: p.name, 
+      src: normalizeAssetUrl(p.photoUrl) // Нормалізуємо посилання для аватарок
+    })), 
+  [playerRows]);
 
-  const stableTop = useMemo(() => {
-    return playerRows
-      .filter((r) => r.trainingsTracked >= 3 && r.attendancePercent !== null)
-      .sort((a, b) => {
-        const pa = a.attendancePercent ?? -1;
-        const pb = b.attendancePercent ?? -1;
-        if (pb !== pa) return pb - pa;
-        return b.trainingsTracked - a.trainingsTracked;
-      })
-      .slice(0, 3);
-  }, [playerRows]);
-
-  const absentTop = useMemo(() => {
-    return playerRows
-      .filter((r) => r.trainingsTracked >= 3)
-      .sort((a, b) => {
-        if (b.absentCount !== a.absentCount) return b.absentCount - a.absentCount;
-        return b.trainingsTracked - a.trainingsTracked;
-      })
-      .filter((r) => r.absentCount > 0)
-      .slice(0, 3);
-  }, [playerRows]);
-
-  const applyPreset = (preset: "thisMonth" | "lastMonth" | "thisWeek" | "thisYear") => {
-    const today = new Date();
-    if (preset === "thisMonth") {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setFromDate(start.toISOString().slice(0, 10));
-      setToDate(end.toISOString().slice(0, 10));
-    }
-    if (preset === "lastMonth") {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const end = new Date(today.getFullYear(), today.getMonth(), 0);
-      setFromDate(start.toISOString().slice(0, 10));
-      setToDate(end.toISOString().slice(0, 10));
-    }
-    if (preset === "thisWeek") {
-      const day = today.getDay();
-      const diffToMonday = day === 0 ? -6 : 1 - day;
-      const monday = new Date(today);
-      monday.setDate(today.getDate() + diffToMonday);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      setFromDate(monday.toISOString().slice(0, 10));
-      setToDate(sunday.toISOString().slice(0, 10));
-    }
-    if (preset === "thisYear") {
-      setFromDate(`${today.getFullYear()}-01-01`);
-      setToDate(`${today.getFullYear()}-12-31`);
-    }
-  };
-
-  const hasTrainings = filteredTrainings.length > 0;
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Завантаження аналітики…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <ShieldAlert className="h-4 w-4" />
-        <AlertTitle>Помилка</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  const statPill = (value: string | number, className: string) => (
-    <span className={cn("inline-flex min-w-[48px] items-center justify-end font-semibold tabular-nums", className)}>
-      {value}
-    </span>
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <Loader2 className="animate-spin h-8 w-8 text-primary"/>
+      <span className="text-muted-foreground font-medium">Завантаження аналітики...</span>
+    </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Аналітика тренувань</h1>
-          <p className="text-sm text-muted-foreground">
-            Відстежуй відвідуваність, лідерів присутності та тренувальні тренди.
-          </p>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <OperationalSummary
+        title="Аналітика тренувань"
+        subtitle="Глибокий аналіз відвідуваності та активності команди"
+        nextUpLoading={false}
+        nextUp={{
+          tournamentName: "Середня відвідуваність",
+          primary: `${playerRows.length > 0 ? Math.round(playerRows.reduce((a, b) => a + b.attendancePercent, 0) / playerRows.length) : 0}%`,
+          secondary: "Лідери за присутністю",
+          avatars: topPlayers,
+          icon: TrendingUp,
+          tourLabel: `За період: ${completedTrainings.length} тренувань`,
+        }}
+        kpis={[
+          { key: "p", label: "Присутні", value: String(playerRows.reduce((a, b) => a + b.presentCount, 0)), icon: CheckCircle2, iconTone: "text-emerald-500 bg-emerald-500/10" },
+          { key: "a", label: "Відсутні", value: String(playerRows.reduce((a, b) => a + b.absentCount, 0)), icon: XCircle, iconTone: "text-rose-500 bg-rose-500/10" },
+          { key: "i", label: "Травми", value: String(playerRows.reduce((a, b) => a + b.injuredCount, 0)), icon: HeartPulse, iconTone: "text-amber-500 bg-amber-500/10" },
+          { key: "s", label: "Хвороби", value: String(playerRows.reduce((a, b) => a + b.sickCount, 0)), icon: HeartPulse, iconTone: "text-sky-500 bg-sky-500/10" },
+        ]}
+        primaryAction={{ label: "Нове тренування", to: "/admin/trainings/create", iconLeft: Plus }}
+      />
 
-      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <CardTitle className="text-lg">Період</CardTitle>
-            <p className="text-sm text-muted-foreground">Оберіть діапазон дат або пресет.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => applyPreset("thisWeek")}>Цей тиждень</Button>
-            <Button variant="outline" size="sm" onClick={() => applyPreset("thisMonth")}>Цей місяць</Button>
-            <Button variant="outline" size="sm" onClick={() => applyPreset("lastMonth")}>Минулий місяць</Button>
-            <Button variant="outline" size="sm" onClick={() => applyPreset("thisYear")}>Цей рік</Button>
-          </div>
+      <Card className="rounded-[var(--radius-section)] border-border bg-card shadow-none overflow-hidden">
+        <CardHeader className="border-b border-border bg-muted/20 pb-6 pt-6">
+          <FilterBar
+            className="border-0 bg-transparent p-0 shadow-none"
+            tabs={{
+              value: preset,
+              onChange: applyPreset,
+              items: [
+                { value: "month", label: "Цей місяць" },
+                { value: "year", label: "Цей рік" },
+                { value: "all", label: "Весь час" },
+              ],
+            }}
+            search={{
+              value: query,
+              onChange: setQuery,
+              placeholder: "Пошук гравця...",
+              widthClassName: "max-w-[260px]",
+            }}
+            rightSlot={
+              <div className="relative flex items-center text-xs text-muted-foreground">
+                <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <div className="flex h-10 items-center rounded-[var(--radius-lg)] border border-input bg-background pl-9 pr-3">
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="h-8 w-[96px] cursor-pointer border-none bg-transparent p-0 text-right text-xs font-medium tabular-nums shadow-none focus-visible:ring-0"
+                  />
+                  <span className="text-muted-foreground mx-1">—</span>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="h-8 w-[96px] cursor-pointer border-none bg-transparent p-0 text-xs font-medium tabular-nums shadow-none focus-visible:ring-0"
+                  />
+                </div>
+              </div>
+            }
+          />
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Початок
-            </label>
-            <div className="relative">
-              <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.currentTarget.value)}
-                className={cn(CONTROL_BASE, "pl-9")}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Кінець
-            </label>
-            <div className="relative">
-              <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.currentTarget.value)}
-                className={cn(CONTROL_BASE, "pl-9")}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {!hasTrainings ? (
-        <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-          <CardHeader>
-            <CardTitle className="text-lg">Немає тренувань у вибраному періоді</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Змініть діапазон дат або створіть нове тренування.
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Всього тренувань</div>
-                  <div className="text-2xl font-semibold tabular-nums">{completedTrainings.length}</div>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <ClipboardList className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Сер. відвідуваність</div>
-                  <div className="text-2xl font-semibold tabular-nums">
-                    {globalSummary.attendancePercent ?? "—"}%
-                  </div>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Гравців із відмітками</div>
-                  <div className="text-2xl font-semibold tabular-nums">{uniquePlayers}</div>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600">
-                  <Users className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg">Кількість тренувань за типом</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              {typeSummaries.map((t) => {
-                const Icon = typeIcons[t.type];
-                return (
-                  <div key={t.type} className="flex items-center justify-between rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">{typeLabels[t.type]}</div>
-                        <div className="text-xs text-muted-foreground">Кількість: {t.trainingsCount}</div>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="rounded-full">
-                      {t.attendancePercent ?? "—"}%
-                    </Badge>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg">Присутність по гравцях</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="w-[60px] text-xs">#</TableHead>
-                    <TableHead className="text-xs">Гравець</TableHead>
-                    <TableHead className="text-right text-xs">Було тренувань</TableHead>
-                    <TableHead className="text-right text-xs">Присутній</TableHead>
-                    <TableHead className="text-right text-xs">Відсутній</TableHead>
-                    <TableHead className="text-right text-xs">Травма</TableHead>
-                    <TableHead className="text-right text-xs">Хворий</TableHead>
-                    <TableHead className="text-right text-xs">%</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {playerRows.map((row, idx) => {
-                    const initials =
-                      `${row.name.replace(/^#\d+\s/, "").split(" ").map((p) => p[0]).join("")}` || "•";
-                    const positionLabel = row.position
-                      ? positionUkMap[row.position.toLowerCase()] || row.position
-                      : null;
-
-                    return (
-                      <TableRow
-                        key={row.playerId}
-                        className="cursor-pointer hover:bg-muted/40"
-                        onClick={() => navigate(`/players/${row.playerId}`)}
-                      >
-                        <TableCell className="text-muted-foreground">#{row.shirtNumber ?? idx + 1}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border border-border">
-                              <AvatarImage src={row.photoUrl || undefined} className="object-cover" />
-                              <AvatarFallback>{initials}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-semibold text-foreground">{row.name.replace(/^#\d+\s/, "")}</div>
-                              {positionLabel && (
-                                <div className="text-xs text-muted-foreground">{positionLabel}</div>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(row.trainingsTracked, "text-foreground")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(row.presentCount, "text-emerald-500")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(row.absentCount, "text-rose-500")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(row.injuredCount, "text-amber-500")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(row.sickCount, "text-sky-500")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {statPill(
-                            row.attendancePercent === null ? "—" : `${row.attendancePercent}%`,
-                            "text-indigo-500",
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30 border-b border-border hover:bg-muted/30">
+              <TableHead className="w-[60px] text-center text-xs font-semibold text-muted-foreground pl-6">#</TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground">Гравець</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Тренування</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Присутній</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Відсутній</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Травми</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Хвороби</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-muted-foreground pr-8">% явки</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {playerRows.length > 0 ? (
+              playerRows.map((row, idx) => (
+                <TableRow 
+                  key={row.playerId} 
+                  className="group hover:bg-muted/40 transition-colors border-b border-border/50 cursor-pointer"
+                  onClick={() => navigate(`/player/${row.playerId}`)} 
+                >
+                  <TableCell className="text-center text-xs font-bold text-muted-foreground/40 pl-6 tabular-nums">{idx + 1}</TableCell>
+                  <TableCell>
+                    <PlayerInfoCell 
+                      name={row.name}
+                      number={row.shirtNumber}
+                      position={row.position}
+                      photoUrl={row.photoUrl}
+                    />
+                  </TableCell>
+                  <TableCell className="text-center tabular-nums font-semibold text-muted-foreground">{row.trainingsTracked}</TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-emerald-500/10 px-1.5 text-xs font-black text-emerald-600">
+                      {row.presentCount}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-rose-500/10 px-1.5 text-xs font-black text-rose-600">
+                      {row.absentCount}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-amber-500/10 px-1.5 text-xs font-black text-amber-600">
+                      {row.injuredCount}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-sky-500/10 px-1.5 text-xs font-black text-sky-600">
+                      {row.sickCount}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right pr-8">
+                    <div className="flex items-center justify-end gap-4">
+                      <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden hidden sm:block">
+                        <div 
+                          className={cn(
+                            "h-full rounded-full transition-all duration-1000 ease-out", 
+                            row.attendancePercent >= 80 ? "bg-emerald-500" : row.attendancePercent >= 50 ? "bg-amber-500" : "bg-primary"
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  Найстабільніші гравці
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {stableTop.length === 0 ? (
-                  <p className="text-muted-foreground">Недостатньо даних для рейтингу.</p>
-                ) : (
-                  stableTop.map((r) => (
-                    <div key={r.playerId} className="flex items-center justify-between">
-                      <span className="font-medium text-foreground">{r.name}</span>
-                      <span className="text-muted-foreground">{r.attendancePercent}% • {r.trainingsTracked} тренувань</span>
+                          style={{ width: `${row.attendancePercent}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-black tabular-nums w-10 text-right">{row.attendancePercent}%</span>
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <XCircle className="h-5 w-5 text-rose-500" />
-                  Найбільше прогулів
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {absentTop.length === 0 ? (
-                  <p className="text-muted-foreground">У цього періоду немає прогулів 👏.</p>
-                ) : (
-                  absentTop.map((r) => (
-                    <div key={r.playerId} className="flex items-center justify-between">
-                      <span className="font-medium text-foreground">{r.name}</span>
-                      <span className="text-muted-foreground">{r.absentCount} пропуски • {r.trainingsTracked} тренувань</span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <HeartPulse className="h-5 w-5 text-amber-500" />
-                Зведення статусів
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-4">
-              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Присутні
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-emerald-500 tabular-nums">{globalSummary.presentCount}</div>
-              </div>
-              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                  <XCircle className="h-4 w-4 text-rose-500" />
-                  Відсутні
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-rose-500 tabular-nums">{globalSummary.absentCount}</div>
-              </div>
-              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                  <ShieldAlert className="h-4 w-4 text-amber-500" />
-                  Травми
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-amber-500 tabular-nums">{globalSummary.injuredCount}</div>
-              </div>
-              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                  <HeartPulse className="h-4 w-4 text-sky-500" />
-                  Хворі
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-sky-500 tabular-nums">{globalSummary.sickCount}</div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                  За вибраний період даних не знайдено
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

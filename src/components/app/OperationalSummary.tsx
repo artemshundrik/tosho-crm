@@ -340,8 +340,19 @@ function NextUpHero({
             <div className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-foreground">{time}</div>
             <div className="mt-1 text-sm font-medium text-muted-foreground">{dateLine}</div>
           </div>
-          {detailLine ? (
-            <div className="text-sm sm:text-base font-semibold text-foreground">{detailLine}</div>
+          {detailLine || avatars.length > 0 ? (
+            <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
+              {detailLine ? (
+                <div className="text-sm sm:text-base font-semibold text-foreground">{detailLine}</div>
+              ) : null}
+              {avatars.length > 0 ? (
+                <div className="flex items-center -space-x-2">
+                  {avatars.slice(0, 6).map((a, idx) => (
+                    <AvatarCircle key={`${a.name}-${idx}`} name={a.name} src={a.src} size={32} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       )}

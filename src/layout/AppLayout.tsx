@@ -91,11 +91,9 @@ const ROUTES = {
   tournaments: "/admin/tournaments",
   finance: "/finance",
 
- analyticsPlayers: "/analytics/players",
-analyticsTeam: "/analytics/team",
-
-
-  attendance: "/admin/trainings/analytics", // реюз існуючої сторінки
+  analyticsPlayers: "/analytics/players",
+  analyticsTeam: "/analytics/team",
+  trainingsAnalytics: "/admin/trainings/analytics",
 
   workspaceSettings: "/workspace-settings",
   accountSettings: "/account-settings",
@@ -114,9 +112,9 @@ const baseSidebarLinks: SidebarLink[] = [
   // ANALYTICS
   { label: "Статистика гравців", to: ROUTES.analyticsPlayers, group: "analytics", icon: BarChart3 },
   { label: "Аналітика команди", to: ROUTES.analyticsTeam, group: "analytics", icon: LineChart },
+  { label: "Аналітика тренувань", to: ROUTES.trainingsAnalytics, group: "analytics", icon: ClipboardCheck },
 
   // MANAGEMENT
-  { label: "Відвідуваність", to: ROUTES.attendance, group: "management", icon: ClipboardCheck },
   { label: "Фінанси", to: ROUTES.finance, group: "management", icon: WalletCards },
   { label: "Доступ / Ролі", to: "/settings/members", group: "management", icon: ShieldAlert },
   
@@ -140,6 +138,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Тренди, форма та інсайти (висновки, не таблиці).",
       breadcrumbLabel: "Аналітика команди",
       breadcrumbTo: ROUTES.analyticsTeam,
+    };
+
+  if (pathname.includes("trainings/analytics"))
+    return {
+      title: "Аналітика тренувань",
+      subtitle: "Відстежуй відвідуваність, лідерів присутності та тренувальні тренди.",
+      breadcrumbLabel: "Аналітика тренувань",
+      breadcrumbTo: ROUTES.trainingsAnalytics,
     };
 
   if (pathname.includes("analytics"))
@@ -172,14 +178,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Розклад, результати та події матчу.",
       breadcrumbLabel: "Матчі",
       breadcrumbTo: ROUTES.matches,
-    };
-
-  if (pathname.includes("trainings/analytics"))
-    return {
-      title: "Відвідуваність",
-      subtitle: "Хто ходить, хто пропускає, серії та % по команді.",
-      breadcrumbLabel: "Відвідуваність",
-      breadcrumbTo: ROUTES.attendance,
     };
 
   if (pathname.includes("trainings"))
@@ -223,6 +221,12 @@ if (pathname === ROUTES.profile)
 
 // --- Small helpers ---
 function isActivePath(currentPath: string, to: string) {
+  if (to === ROUTES.trainings) {
+    return (
+      currentPath === to ||
+      (currentPath.startsWith(to + "/") && !currentPath.startsWith(ROUTES.trainingsAnalytics))
+    );
+  }
   return currentPath === to || currentPath.startsWith(to + "/");
 }
 

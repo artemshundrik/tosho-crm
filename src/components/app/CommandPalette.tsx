@@ -201,6 +201,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         icon: Layers,
       },
       {
+        key: "route-trainings-analytics",
+        label: "Аналітика тренувань",
+        keywords: ["аналітика тренувань", "відвідуваність", "attendance", "trainings analytics"],
+        to: "/admin/trainings/analytics",
+        icon: BarChart3,
+      },
+      {
         key: "route-players",
         label: "Гравці",
         keywords: ["players", "гравці", "склад", "roster"],
