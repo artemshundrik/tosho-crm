@@ -51,6 +51,10 @@ import {
   Brain,
   HeartPulse,
   Activity,
+  PlaneTakeoff,
+  Stethoscope,
+  CheckCircle2,
+  UserX,
 } from "lucide-react";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
@@ -63,6 +67,7 @@ type Player = {
   shirt_number: number | null;
   position?: string | null;
   photo_url?: string | null;
+  status: "active" | "injured" | "sick" | "away" | "inactive"; // Додай цей рядок
 };
 
 const typeLabels: Record<Training["type"], string> = {
@@ -88,30 +93,37 @@ const typeOptions = [
 
 const statusOrder: AttendanceStatus[] = ["present", "absent", "injured", "sick"];
 
-const statusStyles: Record<AttendanceStatus, { label: string; short: string; tone: string; bar: string }> = {
+// Мапа для автоматичного призначення статусу відвідуваності на основі профілю
+const globalToAttendanceMap: Record<string, AttendanceStatus> = {
+  injured: "injured",
+  sick: "sick",
+  away: "absent",
+};
+
+const statusStyles: Record<AttendanceStatus, { label: string; short: string; tone: string; icon: any }> = {
   present: {
     label: "Присутні",
     short: "Присутній",
-    tone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
-    bar: "bg-emerald-500",
+    tone: "bg-success-soft text-success-foreground border-success-soft-border",
+    icon: CheckCircle2
   },
   absent: {
     label: "Відсутні",
     short: "Відсутній",
-    tone: "border-rose-500/30 bg-rose-500/10 text-rose-600",
-    bar: "bg-rose-500",
+    tone: "bg-neutral-soft text-neutral-foreground border-neutral-soft-border",
+    icon: UserX
   },
   injured: {
     label: "Травма",
     short: "Травма",
-    tone: "border-amber-500/30 bg-amber-500/10 text-amber-600",
-    bar: "bg-amber-500",
+    tone: "bg-danger-soft text-danger-foreground border-danger-soft-border",
+    icon: Stethoscope
   },
   sick: {
     label: "Хворі",
     short: "Хворий",
-    tone: "border-sky-500/30 bg-sky-500/10 text-sky-600",
-    bar: "bg-sky-500",
+    tone: "bg-info-soft text-info-foreground border-info-soft-border",
+    icon: Activity
   },
 };
 
@@ -160,24 +172,33 @@ export function TrainingDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const [tr, playersRes, att] = await Promise.all([
-          getTrainingById(id),
-          supabase
-            .from("players")
-            .select("id, first_name, last_name, shirt_number, position, photo_url")
-            .eq("team_id", TEAM_ID),
-          getAttendance(id),
-        ]);
+      const [tr, playersRes, att] = await Promise.all([
+  getTrainingById(id),
+  supabase
+    .from("players")
+    .select("id, first_name, last_name, shirt_number, position, photo_url, status") // Додали status
+    .eq("team_id", TEAM_ID)
+    .neq("status", "inactive"), // Автоматично прибираємо тих, хто пішов
+  getAttendance(id),
+]);
 
-        setTraining(tr);
+setTraining(tr);
 
-        if (playersRes.error) throw playersRes.error;
-        setPlayers((playersRes.data || []) as Player[]);
+const playerList = (playersRes.data || []) as Player[];
+setPlayers(playerList);
 
-        const attMap: Record<string, AttendanceStatus> = {};
-        (att as Attendance[]).forEach((row) => {
-          attMap[row.player_id] = row.status;
-        });
+const attMap: Record<string, AttendanceStatus> = {};
+(att as Attendance[]).forEach((row) => {
+  attMap[row.player_id] = row.status;
+});
+
+// --- ВСТАВИТИ ЦЕЙ БЛОК АВТОМАТИЗАЦІЇ ---
+playerList.forEach(p => {
+  // Якщо в базі тренування ще немає статусу, але він є в профілі гравця
+  if (!attMap[p.id] && globalToAttendanceMap[p.status]) {
+    attMap[p.id] = globalToAttendanceMap[p.status];
+  }
+});
         setAttendance(attMap);
 
         setForm({
@@ -694,43 +715,56 @@ export function TrainingDetailPage() {
                     <TableCell className="text-muted-foreground font-medium">#{p.shirt_number ?? idx + 1}</TableCell>
                     <TableCell>
                       <Link to={`/player/${p.id}`} className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={p.photo_url || undefined} alt={p.first_name} />
-                          <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-semibold text-foreground">
+                        <div className="relative">
+                          <Avatar
+                            className={cn(
+                              "h-10 w-10 border border-border/50 shadow-sm transition-transform",
+                              p.status !== "active" && "grayscale opacity-60"
+                            )}
+                          >
+                            <AvatarImage src={p.photo_url || undefined} className="object-cover" />
+                            <AvatarFallback className="text-[11px] font-black bg-muted">{initials}</AvatarFallback>
+                          </Avatar>
+                          {p.status !== "active" && (
+                            <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-[14px] leading-tight truncate">
                             {p.last_name} {p.first_name}
-                          </div>
+                          </span>
                           {positionLabel ? (
-                            <div className="text-xs text-muted-foreground">{positionLabel}</div>
+                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mt-0.5">
+                              {positionLabel}
+                            </span>
                           ) : null}
                         </div>
                       </Link>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {statusOrder.map((st) => {
-                          const cfg = statusStyles[st];
-                          const active = playerStatus === st;
-                          return (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => handleStatusChange(p.id, st)}
-                              className={cn(
-                                "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                                active
-                                  ? "border-transparent bg-foreground text-background"
-                                  : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
-                              )}
-                            >
-                              {cfg.short}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </TableCell>
+                   <TableCell className="text-right pr-6">
+  <div className="flex flex-wrap justify-end gap-1.5">
+    {statusOrder.map((st) => {
+      const cfg = statusStyles[st];
+      const isActive = playerStatus === st;
+      return (
+        <button
+          key={st}
+          type="button"
+          onClick={() => handleStatusChange(p.id, st)}
+          className={cn(
+            "h-9 rounded-xl border px-3 text-[10px] font-black uppercase tracking-tighter transition-all active:scale-95 flex items-center gap-1.5",
+            isActive
+              ? cfg.tone + " border-transparent ring-2 ring-offset-1 ring-offset-background ring-border/20"
+              : "border-border bg-background text-muted-foreground/40 hover:text-foreground hover:bg-muted/40"
+          )}
+        >
+          <cfg.icon className={cn("h-3.5 w-3.5", isActive ? "text-current" : "text-muted-foreground/60")} />
+          {cfg.short}
+        </button>
+      );
+    })}
+  </div>
+</TableCell>
                   </TableRow>
                 );
               })}

@@ -90,7 +90,8 @@ type Player = {
   last_name: string;
   shirt_number: number | null;
   photo_url: string | null;
-  position: string | null; // ✅ додали
+  position: string | null;
+  status?: string | null; // 👈 Додаємо це
 };
 
 type EventType =
@@ -512,35 +513,46 @@ function eventIcon(type: EventType) {
   return <span className="inline-flex h-4 w-4 items-center justify-center text-[14px] leading-none">🏁</span>;
 }
 
-function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) {
+function PlayerAvatar({ player, size = 32, isOldMatch = false }: { player: Player; size?: number; isOldMatch?: boolean }) {
   const initials =
-    `${player.first_name?.[0] ?? ""}${player.last_name?.[0] ?? ""}`.trim().toUpperCase() || "•";
+    (player.first_name?.[0] || "") + (player.last_name?.[0] || "");
+  const initialsLabel = initials.toUpperCase() || "•";
+  
+  // Якщо матч старий, ми ігноруємо поточну травму для візуальних ефектів
+  const showInjuryStyle = !isOldMatch && (player.status === 'injured' || player.status === 'sick' || player.status === 'away');
 
   return (
-    <div
-      className="shrink-0 overflow-hidden rounded-full border border-border bg-muted/40"
-      style={{ width: size, height: size }}
-      title={`${player.last_name} ${player.first_name}`.trim()}
-    >
-      {player.photo_url ? (
-        <img
-          src={player.photo_url}
-          alt={`${player.last_name} ${player.first_name}`.trim()}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-          style={{
-            objectPosition: "50% -90%",
-            transform: "scale(1.8)",
-          }}
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
-          {initials}
-        </div>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div
+        className={cn(
+          "flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-muted/40 border border-border/50",
+          showInjuryStyle && "opacity-60 grayscale-[0.5]"
+        )}
+      >
+        {player.photo_url ? (
+          <img
+            src={player.photo_url}
+            alt={`${player.first_name ?? ""} ${player.last_name ?? ""}`.trim()}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+            style={{
+              objectPosition: "50% -90%",
+              transform: "scale(1.8)",
+            }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-muted-foreground">
+            {initialsLabel}
+          </div>
+        )}
+      </div>
+      {/* 🔴 Пульсуючий індикатор лише для нових матчів */}
+      {!isOldMatch && player.status && player.status !== 'active' && (
+        <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
       )}
     </div>
   );
@@ -891,10 +903,11 @@ if (ttErr) {
       }
 
       const { data: playersData, error: playersErr } = await supabase
-        .from("players")
-        .select("id, first_name, last_name, shirt_number, photo_url, position")
-        .eq("team_id", typedMatch.team_id)
-        .order("shirt_number", { ascending: true });
+  .from("players")
+  .select("id, first_name, last_name, shirt_number, photo_url, position, status") // Додано status
+  .eq("team_id", typedMatch.team_id)
+  .neq("status", "inactive") // Додано фільтр
+  .order("shirt_number", { ascending: true });
 
       const allPlayers = playersErr ? [] : ((playersData || []) as Player[]);
       const filteredPlayers = rosterSet ? allPlayers.filter((p) => rosterSet!.has(p.id)) : allPlayers;
@@ -1769,34 +1782,43 @@ if (ttErr) {
 
                 return (
                   <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => toggleAttendance(p.id)}
-                    disabled={!!attendanceSavingId}
-                    className={cn(
-                      "shadow-[var(--shadow-surface)] transition-shadow duration-200 ease-out",
-                      "hover:shadow-[var(--shadow-floating)]",
-                      "rounded-2xl border border-border bg-card/60 p-4",
-                      "flex items-center justify-between gap-3 text-left",
-                      "transition-colors hover:bg-muted/40",
-                      "disabled:opacity-60 disabled:cursor-not-allowed"
-                    )}
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <PlayerAvatar player={p} size={36} />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-foreground">{formatPlayerLabel(p)}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                         {saving ? "Збереження…" : roleLabel(p)}
+  key={p.id}
+  type="button"
+  onClick={() => toggleAttendance(p.id)}
+  disabled={!!attendanceSavingId}
+  className={cn(
+    "shadow-[var(--shadow-surface)] transition-shadow duration-200 ease-out",
+    "hover:shadow-[var(--shadow-floating)]",
+    "rounded-2xl border border-border bg-card/60 p-4",
+    "flex items-center justify-between gap-3 text-left",
+    "transition-colors hover:bg-muted/40",
+    "disabled:opacity-60 disabled:cursor-not-allowed"
+  )}
+>
+  <div className="flex min-w-0 items-center gap-3">
+    <PlayerAvatar 
+  player={p} 
+  size={36} 
+  isOldMatch={match.status !== 'scheduled'} 
+/>
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5">
+        <div className="truncate text-sm font-semibold text-foreground">
+          {formatPlayerLabel(p)}
+        </div>
+     
+       
+      </div>
+      <div className="mt-1 text-[10px] uppercase font-black tracking-widest text-muted-foreground/60">
+        {saving ? "Збереження…" : roleLabel(p)}
+      </div>
+    </div>
+  </div>
 
-                        </div>
-                      </div>
-                    </div>
-
-                    <Badge variant={present ? "default" : "secondary"} className="rounded-full">
-                      {present ? "Присутній" : "Відсутній"}
-                    </Badge>
-                  </button>
+  <Badge variant={present ? "default" : "secondary"} className="rounded-full">
+    {present ? "Присутній" : "Відсутній"}
+  </Badge>
+</button>
                 );
               })}
             </div>

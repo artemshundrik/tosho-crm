@@ -2,13 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  CalendarRange,
   CheckCircle2,
   HeartPulse,
   Loader2,
   TrendingUp,
   XCircle,
-  Plus,
-  CalendarRange
+  Plus
 } from "lucide-react";
 
 import { getTrainings } from "../../api/trainings";
@@ -41,7 +41,7 @@ const positionUkMap: Record<string, string> = {
   universal: "Універсал"
 };
 
-// Функція нормалізації URL для Supabase Storage (взята з вашої логіки у StatsPage.tsx)
+// Функція нормалізації URL для Supabase Storage
 function normalizeAssetUrl(url: string | null | undefined): string | null {
   const u = (url ?? "").toString().trim();
   if (!u) return null;
@@ -62,6 +62,7 @@ type PlayerAttendanceRow = {
   photoUrl: string | null;
   name: string;
   position: string;
+  status: string; // Додано для індикації статусу
   trainingsTracked: number;
   presentCount: number;
   absentCount: number;
@@ -70,41 +71,49 @@ type PlayerAttendanceRow = {
   attendancePercent: number;
 };
 
-// --- Секція гравця з виправленим URL та зумом аватара ---
+// --- Секція гравця з індикатором статусу та зумом аватара ---
 function PlayerInfoCell({ 
   name, 
   number, 
   position, 
-  photoUrl 
+  photoUrl,
+  status // Новий проп
 }: { 
   name: string; 
   number?: number | null; 
   position?: string | null; 
-  photoUrl?: string | null 
+  photoUrl?: string | null;
+  status?: string;
 }) {
   const initials = name.split(" ").map(n => n[0]).join("").toUpperCase();
   const uaPosition = position ? (positionUkMap[position.toLowerCase()] || position) : "Універсал";
-  const safePhotoUrl = normalizeAssetUrl(photoUrl); // Використовуємо нормалізацію
+  const safePhotoUrl = normalizeAssetUrl(photoUrl);
   
   return (
     <div className="flex items-center gap-3">
-      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border/50 bg-muted/40 shadow-sm">
-        {safePhotoUrl ? (
-          <img
-            src={safePhotoUrl}
-            alt={name}
-            className="h-full w-full object-cover object-top"
-            style={{ transform: "scale(1.8)", objectPosition: "50% -90%" }}
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground uppercase">
-            {initials}
-          </div>
+      <div className="relative shrink-0">
+        <div className="h-10 w-10 overflow-hidden rounded-full border border-border/50 bg-muted/40 shadow-sm">
+          {safePhotoUrl ? (
+            <img
+              src={safePhotoUrl}
+              alt={name}
+              className="h-full w-full object-cover object-top"
+              style={{ transform: "scale(1.8)", objectPosition: "50% -90%" }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground uppercase">
+              {initials}
+            </div>
+          )}
+        </div>
+        {/* Пульсуючий індикатор статусу (як у турнірах) */}
+        {status && status !== 'active' && (
+          <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
         )}
       </div>
       <div className="flex flex-col min-w-0 text-left">
-        <span className="text-sm font-semibold text-foreground truncate leading-tight group-hover:underline decoration-primary/30 underline-offset-4">
+        <span className="text-sm font-semibold text-foreground truncate leading-tight">
           {name}
         </span>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tracking-tight">
@@ -168,7 +177,8 @@ export function TrainingsAnalyticsPage() {
         const [trData, attRes, plRes] = await Promise.all([
           getTrainings(TEAM_ID),
           supabase.from("training_attendance").select("*"),
-          supabase.from("players").select("*").eq("team_id", TEAM_ID),
+          // ❗ ФІЛЬТРАЦІЯ: Прибираємо колишніх гравців для чистої статистики
+          supabase.from("players").select("*").eq("team_id", TEAM_ID).neq("status", "inactive"),
         ]);
         setTrainings(trData);
         setAttendance(attRes.data || []);
@@ -201,6 +211,7 @@ export function TrainingsAnalyticsPage() {
       map.set(p.id, {
         playerId: p.id, shirtNumber: p.shirt_number, photoUrl: p.photo_url,
         name: `${p.first_name} ${p.last_name}`, position: p.position,
+        status: p.status, // Зберігаємо глобальний статус
         trainingsTracked: completedTrainings.length,
         presentCount: 0, absentCount: 0, injuredCount: 0, sickCount: 0, attendancePercent: 0
       });
@@ -219,6 +230,7 @@ export function TrainingsAnalyticsPage() {
       const nextTs = a?.created_at ? new Date(a.created_at).getTime() : -Infinity;
       if (nextTs >= prevTs) latestByKey.set(key, a);
     });
+    
     latestByKey.forEach(a => {
       const row = map.get(a.player_id);
       if (!row) return;
@@ -241,11 +253,10 @@ export function TrainingsAnalyticsPage() {
        });
   }, [players, attendance, completedTrainings, query, sortConfig]);
 
-  // Підготовка лідерів для OperationalSummary
   const topPlayers = useMemo(() => 
     playerRows.slice(0, 5).map(p => ({ 
       name: p.name, 
-      src: normalizeAssetUrl(p.photoUrl) // Нормалізуємо посилання для аватарок
+      src: normalizeAssetUrl(p.photoUrl)
     })), 
   [playerRows]);
 
@@ -328,9 +339,7 @@ export function TrainingsAnalyticsPage() {
               <TableHead className="text-xs font-semibold text-muted-foreground">Гравець</TableHead>
               <TableHead className="text-center text-xs font-semibold text-muted-foreground">Тренування</TableHead>
               <TableHead className="text-center text-xs font-semibold text-muted-foreground">Присутній</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Відсутній</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Травми</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Хвороби</TableHead>
+              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Травми/Хвороби</TableHead>
               <TableHead className="text-right text-xs font-semibold text-muted-foreground pr-8">% явки</TableHead>
             </TableRow>
           </TableHeader>
@@ -340,7 +349,7 @@ export function TrainingsAnalyticsPage() {
                 <TableRow 
                   key={row.playerId} 
                   className="group hover:bg-muted/40 transition-colors border-b border-border/50 cursor-pointer"
-                  onClick={() => navigate(`/player/${row.playerId}`)} 
+                  onClick={() => navigate(`/admin/players/${row.playerId}`)} 
                 >
                   <TableCell className="text-center text-xs font-bold text-muted-foreground/40 pl-6 tabular-nums">{idx + 1}</TableCell>
                   <TableCell>
@@ -349,6 +358,7 @@ export function TrainingsAnalyticsPage() {
                       number={row.shirtNumber}
                       position={row.position}
                       photoUrl={row.photoUrl}
+                      status={row.status} // ❗ Передаємо глобальний статус
                     />
                   </TableCell>
                   <TableCell className="text-center tabular-nums font-semibold text-muted-foreground">{row.trainingsTracked}</TableCell>
@@ -358,18 +368,8 @@ export function TrainingsAnalyticsPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-rose-500/10 px-1.5 text-xs font-black text-rose-600">
-                      {row.absentCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-amber-500/10 px-1.5 text-xs font-black text-amber-600">
-                      {row.injuredCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-sky-500/10 px-1.5 text-xs font-black text-sky-600">
-                      {row.sickCount}
+                      {row.injuredCount + row.sickCount}
                     </span>
                   </TableCell>
                   <TableCell className="text-right pr-8">
@@ -390,7 +390,7 @@ export function TrainingsAnalyticsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                   За вибраний період даних не знайдено
                 </TableCell>
               </TableRow>

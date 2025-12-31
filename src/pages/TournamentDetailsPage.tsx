@@ -52,6 +52,7 @@ type Player = {
   last_name: string;
   shirt_number: number | null;
   photo_url: string | null;
+  status: "active" | "injured" | "sick" | "away" | "inactive"; // Додано
 };
 
 /* ================= CONFIG ================= */
@@ -93,16 +94,28 @@ function playerInitials(firstName: string, lastName: string) {
 
 function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) {
   const initials = playerInitials(player.first_name, player.last_name);
+  // Перевірка наявності обмежень
+  const isUnavailable = player.status === 'injured' || player.status === 'sick' || player.status === 'away';
+
   return (
-    <div
-      className="grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border shrink-0"
-      style={{ width: size, height: size }}
-      title={`${player.last_name} ${player.first_name}`.trim()}
-    >
-      {player.photo_url ? (
-        <img src={player.photo_url} alt={player.last_name} className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-muted-foreground">{initials}</span>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div
+        className={cn(
+          "grid h-full w-full place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border",
+          isUnavailable && "opacity-60 grayscale-[0.5]"
+        )}
+        title={`${player.last_name} ${player.first_name}`.trim()}
+      >
+        {player.photo_url ? (
+          <img src={player.photo_url} alt={player.last_name} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <span className="text-[10px] font-bold text-muted-foreground">{initials}</span>
+        )}
+      </div>
+      
+      {/* Пульсуючий індикатор для будь-якого статусу, крім активного */}
+      {player.status !== 'active' && (
+        <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse shadow-sm" />
       )}
     </div>
   );
@@ -177,9 +190,10 @@ export function TournamentDetailsPage() {
 
         supabase
           .from("players")
-          .select("id, first_name, last_name, shirt_number, photo_url")
-          .eq("team_id", TEAM_ID)
-          .order("last_name"),
+  .select("id, first_name, last_name, shirt_number, photo_url, status") // Додано status
+  .eq("team_id", TEAM_ID)
+  .neq("status", "inactive") // ❗ ХОВАЄМО КОЛИШНІХ З ВИБОРУ
+  .order("last_name"),
 
         supabase
           .from("team_tournament_players")
@@ -307,81 +321,100 @@ export function TournamentDetailsPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {players.map((p) => {
-                    const checked = registeredIds.has(p.id);
+  const checked = registeredIds.has(p.id);
+  const saving = rosterSavingId === p.id;
+  
+  // Визначаємо стан доступності
+  const isUnavailable = p.status === 'injured' || p.status === 'sick' || p.status === 'away';
+  
+  // Словник для підписів
+  const statusLabels: Record<string, string> = {
+    injured: "Травмований",
+    sick: "Хворіє",
+    away: "Поїхав",
+  };
 
-                    const saving = rosterSavingId === p.id;
+  return (
+    <button
+      key={p.id}
+      type="button"
+      onClick={async () => {
+        if (!id || saving) return;
+        setRosterError(null);
+        setRosterSavingId(p.id);
 
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={async () => {
-                          if (!id) return;
-                          if (saving) return;
+        if (checked) {
+          const { error } = await supabase
+            .from("team_tournament_players")
+            .delete()
+            .eq("team_id", TEAM_ID)
+            .eq("tournament_id", id)
+            .eq("player_id", p.id);
 
-                          setRosterError(null);
-                          setRosterSavingId(p.id);
+          if (error) {
+            setRosterError(error.message || "Не вдалося видалити зі заявки");
+          } else {
+            setRegisteredIds(prev => {
+              const n = new Set(prev);
+              n.delete(p.id);
+              return n;
+            });
+          }
+        } else {
+          const { error } = await supabase
+            .from("team_tournament_players")
+            .insert({
+              team_id: TEAM_ID,
+              tournament_id: id,
+              player_id: p.id,
+            });
 
-                          if (checked) {
-                            const { error } = await supabase
-                              .from("team_tournament_players")
-                              .delete()
-                              .eq("team_id", TEAM_ID)
-                              .eq("tournament_id", id)
-                              .eq("player_id", p.id);
+          if (error) {
+            setRosterError(error.message || "Не вдалося додати у заявку");
+          } else {
+            setRegisteredIds(prev => new Set(prev).add(p.id));
+          }
+        }
+        setRosterSavingId(null);
+      }}
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all",
+        "shadow-sm hover:shadow-md active:scale-[0.98]",
+        checked 
+          ? "border-primary/30 bg-primary/5 ring-1 ring-primary/10" 
+          : isUnavailable 
+            ? "border-dashed border-red-200 bg-red-50/30 opacity-80" 
+            : "border-border bg-card/40",
+        saving ? "opacity-70 cursor-wait" : ""
+      )}
+      disabled={saving}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <PlayerAvatar player={p} size={36} />
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold text-foreground">
+            {p.last_name} {p.first_name}
+          </div>
+          <div className={cn(
+            "text-[10px] font-black uppercase tracking-tight",
+            isUnavailable ? "text-red-500" : "text-muted-foreground"
+          )}>
+            {isUnavailable 
+              ? statusLabels[p.status] || p.status 
+              : (p.shirt_number ? `#${p.shirt_number}` : "Без номера")}
+          </div>
+        </div>
+      </div>
 
-                            if (error) {
-                              setRosterError(error.message || "Не вдалося видалити зі заявки");
-                            } else {
-                              setRegisteredIds(prev => {
-                                const n = new Set(prev);
-                                n.delete(p.id);
-                                return n;
-                              });
-                            }
-                          } else {
-                            const { error } = await supabase
-                              .from("team_tournament_players")
-                              .insert({
-                                team_id: TEAM_ID,
-                                tournament_id: id,
-                                player_id: p.id,
-                              });
-
-                            if (error) {
-                              setRosterError(error.message || "Не вдалося додати у заявку");
-                            } else {
-                              setRegisteredIds(prev => new Set(prev).add(p.id));
-                            }
-                          }
-                          setRosterSavingId(null);
-                        }}
-                        className={cn(
-                          "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
-                          "transition-colors hover:bg-muted/40",
-                          checked ? "border-primary/30 bg-primary/5" : "border-border bg-card/40",
-                          saving ? "opacity-70 cursor-wait" : ""
-                        )}
-                        disabled={saving}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <PlayerAvatar player={p} size={36} />
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-foreground">
-                              {p.last_name} {p.first_name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {p.shirt_number ? `#${p.shirt_number}` : "Без номера"}
-                            </div>
-                          </div>
-                        </div>
-
-                        <Badge variant={checked ? "default" : "secondary"} className="rounded-full">
-                          {checked ? "У заявці" : "Не у заявці"}
-                        </Badge>
-                      </button>
-                    );
-                  })}
+      <Badge 
+        variant={checked ? "default" : "secondary"} 
+        className={cn("rounded-full h-6 px-2.5 text-[10px] font-bold uppercase tracking-wider")}
+      >
+        {checked ? "У заявці" : "Додати"}
+      </Badge>
+    </button>
+  );
+})}
                 </div>
               )}
             </TabsContent>
