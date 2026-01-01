@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
 
 // Словник для красивого відображення ролей
 const ROLE_NAMES: Record<string, string> = {
@@ -28,7 +29,8 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
     name: "Завантаження...",
     role: "...",
     initials: "..",
-    avatarUrl: null as string | null
+    avatarUrl: null as string | null,
+    roleKey: "viewer"
   });
 
   useEffect(() => {
@@ -59,7 +61,8 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
           name: fullName,
           role: displayRole,
           initials: initials,
-          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null
+          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
+          roleKey: rawRole
         });
       }
     }
@@ -85,7 +88,11 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold">{userData.name}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{userData.role}</div>
+          <div
+            className={cn("truncate text-[11px]", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}
+          >
+            {userData.role}
+          </div>
         </div>
         <button 
           onClick={handleLogout} 
@@ -121,7 +128,11 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
             <div className="min-w-0 flex-1 text-left">
               <div className="truncate text-[13px] font-semibold">{userData.name}</div>
               {/* Тут тепер буде писати роль (права) */}
-              <div className="truncate text-[11px] text-muted-foreground">{userData.role}</div>
+              <div
+                className={cn("truncate text-[11px]", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}
+              >
+                {userData.role}
+              </div>
             </div>
 
             <MoreVertical className="h-4 w-4 text-muted-foreground" />

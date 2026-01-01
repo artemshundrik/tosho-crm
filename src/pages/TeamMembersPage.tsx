@@ -19,6 +19,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ROLE_BADGE_STYLES } from "@/lib/roleBadges";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,25 +80,6 @@ type Invite = {
 };
 
 // --- КОНФІГИ ---
-const ROLE_CONFIG: Record<string, { label: string; style: string }> = {
-  super_admin: { 
-    label: "Super Admin", 
-    style: "bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-400 dark:border-purple-500/20" 
-  },
-  manager: { 
-    label: "Менеджер", 
-    style: "bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-500/20" 
-  },
-  viewer: { 
-    label: "Глядач", 
-    style: "bg-slate-500/10 text-slate-700 border-slate-200 dark:text-slate-400 dark:border-slate-500/20" 
-  },
-  player: {
-    label: "Гравець",
-    style: "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-400 dark:border-emerald-500/20"
-  }
-};
-
 const ROLE_SELECT_OPTIONS = {
   viewer: {
     label: "Viewer (Глядач)",
@@ -383,8 +365,8 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("px-2.5 py-1 font-medium rounded-lg", ROLE_CONFIG[m.role]?.style)}>
-                             {ROLE_CONFIG[m.role]?.label || m.role}
+                          <Badge variant="outline" className={cn("px-2.5 py-1 font-medium rounded-lg", ROLE_BADGE_STYLES[m.role]?.className)}>
+                             {ROLE_BADGE_STYLES[m.role]?.label || m.role}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -468,8 +450,8 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs rounded-md", ROLE_CONFIG[inv.role]?.style)}>
-                             {ROLE_CONFIG[inv.role]?.label || inv.role}
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs rounded-md", ROLE_BADGE_STYLES[inv.role]?.className)}>
+                             {ROLE_BADGE_STYLES[inv.role]?.label || inv.role}
                           </Badge>
                         </TableCell>
                         <TableCell>

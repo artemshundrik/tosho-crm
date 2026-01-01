@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
+import { ROLE_BADGE_STYLES } from "@/lib/roleBadges";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -262,10 +263,15 @@ export function ProfilePage() {
               
               <div className="mb-3 space-y-1.5 text-center sm:text-left">
                 <h2 className="text-2xl font-bold text-foreground tracking-tight">{fullName || "Користувач"}</h2>
-                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
                    {/* Role Badge: Soft style */}
-                   <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary uppercase tracking-wider">
-                      {role === 'super_admin' ? 'Super Admin' : role}
+                   <div
+                     className={cn(
+                       "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold",
+                       ROLE_BADGE_STYLES[role]?.className || "bg-muted text-muted-foreground border-border"
+                     )}
+                   >
+                      {ROLE_BADGE_STYLES[role]?.label || role}
                    </div>
                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Globe className="w-3 h-3" /> Kyiv, UA

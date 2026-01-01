@@ -898,7 +898,12 @@ if (ttErr) {
           .eq("tournament_id", typedMatch.tournament_id);
 
         if (!rosterErr) {
-          rosterSet = new Set((rosterData || []).map((r: { player_id: string }) => r.player_id));
+          const ids = (rosterData || [])
+            .map((r: { player_id: string }) => r.player_id)
+            .filter(Boolean);
+          if (ids.length > 0) {
+            rosterSet = new Set(ids);
+          }
         }
       }
 
@@ -1005,6 +1010,12 @@ if (ttErr) {
   }, [match]);
 
   const attendanceIds = React.useMemo(() => new Set(attendance.map((a) => a.player_id)), [attendance]);
+  const isOldMatch = React.useMemo(() => {
+    if (!match?.match_date) return false;
+    const matchTime = new Date(match.match_date).getTime();
+    if (Number.isNaN(matchTime)) return match?.status !== "scheduled";
+    return matchTime < Date.now() || match?.status !== "scheduled";
+  }, [match]);
 
   const playerById = React.useMemo(() => {
     const map = new Map<string, Player>();
@@ -1799,7 +1810,7 @@ if (ttErr) {
     <PlayerAvatar 
   player={p} 
   size={36} 
-  isOldMatch={match.status !== 'scheduled'} 
+  isOldMatch={isOldMatch} 
 />
     <div className="min-w-0">
       <div className="flex items-center gap-1.5">
@@ -1871,7 +1882,7 @@ if (ttErr) {
                           <TableCell className="px-4 py-4 align-middle font-medium text-foreground">
                             {ev.player_id && authorPlayer ? (
                               <Link to={`/player/${ev.player_id}`} className="flex items-center gap-3 hover:opacity-90">
-                                <PlayerAvatar player={authorPlayer} size={28} />
+                                <PlayerAvatar player={authorPlayer} size={28} isOldMatch={isOldMatch} />
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(authorPlayer)}</span>
                               </Link>
                             ) : (
@@ -1882,7 +1893,7 @@ if (ttErr) {
                           <TableCell className="px-4 py-4 align-middle text-sm text-muted-foreground">
                             {ev.assist_player_id && assistPlayer ? (
                               <Link to={`/player/${ev.assist_player_id}`} className="flex items-center gap-3 hover:opacity-90">
-                                <PlayerAvatar player={assistPlayer} size={28} />
+                                <PlayerAvatar player={assistPlayer} size={28} isOldMatch={isOldMatch} />
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(assistPlayer)}</span>
                               </Link>
                             ) : (
