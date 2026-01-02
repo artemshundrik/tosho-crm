@@ -230,8 +230,9 @@ function LoginPage() {
   const params = new URLSearchParams(location.search);
   const rawNext = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/overview";
   const next = rawNext.startsWith("/") ? rawNext : "/overview";
+  const isInviteFlow = next.startsWith("/invite");
 
-  const [mode, setMode] = useState<"password" | "magic">("password");
+  const [mode, setMode] = useState<"password" | "magic">(isInviteFlow ? "magic" : "password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -294,9 +295,13 @@ function LoginPage() {
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
-          <div className="text-xl font-extrabold text-foreground">Вхід у FAYNA TEAM</div>
+          <div className="text-xl font-extrabold text-foreground">
+            {isInviteFlow ? "Вхід за інвайтом" : "Вхід у FAYNA TEAM"}
+          </div>
           <div className="text-sm text-muted-foreground mt-1">
-            Увійди, щоб бачити матчі, тренування й фінанси (як дозволяє роль).
+            {isInviteFlow
+              ? "Увійди, щоб прийняти запрошення в команду."
+              : "Увійди, щоб бачити матчі, тренування й фінанси (як дозволяє роль)."}
           </div>
         </div>
 
@@ -314,32 +319,34 @@ function LoginPage() {
           </div>
         )}
 
-        <div className="mb-4 inline-flex rounded-xl bg-muted p-1 border border-border/50">
-          <button
-            type="button"
-            className={cx(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
-              mode === "magic" 
-                ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setMode("magic")}
-          >
-            Magic link
-          </button>
-          <button
-            type="button"
-            className={cx(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
-              mode === "password" 
-                ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setMode("password")}
-          >
-            Пароль
-          </button>
-        </div>
+        {!isInviteFlow ? (
+          <div className="mb-4 inline-flex rounded-xl bg-muted p-1 border border-border/50">
+            <button
+              type="button"
+              className={cx(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+                mode === "magic" 
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setMode("magic")}
+            >
+              Magic link
+            </button>
+            <button
+              type="button"
+              className={cx(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+                mode === "password" 
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setMode("password")}
+            >
+              Пароль
+            </button>
+          </div>
+        ) : null}
 
         <form onSubmit={onLogin} className="space-y-4">
           <div>
@@ -353,7 +360,7 @@ function LoginPage() {
             />
           </div>
 
-          {mode === "password" && (
+          {mode === "password" && !isInviteFlow && (
             <div>
               <label className="text-sm font-medium text-foreground">Пароль</label>
               <input
