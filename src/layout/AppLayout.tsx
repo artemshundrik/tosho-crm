@@ -96,6 +96,7 @@ const ROUTES = {
   trainingsAnalytics: "/admin/trainings/analytics",
 
   workspaceSettings: "/workspace-settings",
+  membersAccess: "/settings/members",
   accountSettings: "/account-settings",
   profile: "/profile",
 } as const;
@@ -116,7 +117,7 @@ const baseSidebarLinks: SidebarLink[] = [
 
   // MANAGEMENT
   { label: "Фінанси", to: ROUTES.finance, group: "management", icon: WalletCards },
-  { label: "Доступ / Ролі", to: "/settings/members", group: "management", icon: ShieldAlert },
+  { label: "Доступ / Ролі", to: ROUTES.membersAccess, group: "management", icon: ShieldAlert },
   
 ];
 
@@ -202,6 +203,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Оплати, плани, нарахування та фінансова аналітика.",
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
+    };
+  if (pathname.startsWith(ROUTES.membersAccess))
+    return {
+      title: "Доступ / Ролі",
+      subtitle: "Керування учасниками та запрошеннями команди.",
+      breadcrumbLabel: "Доступ / Ролі",
+      breadcrumbTo: ROUTES.membersAccess,
     };
 if (pathname === ROUTES.profile)
     return {
