@@ -71,8 +71,12 @@ export default function InvitePage() {
     } catch (e: any) {
       console.error(e);
       let msg = "Не вдалося прийняти запрошення.";
-      if (e.message?.includes("expired")) msg = "Термін дії посилання минув.";
-      if (e.message?.includes("already")) msg = "Ви вже є учасником цієї команди.";
+      const rawMessage = e?.message || e?.error_description || e?.details;
+      if (rawMessage?.includes("expired")) msg = "Термін дії посилання минув.";
+      if (rawMessage?.includes("already")) msg = "Ви вже є учасником цієї команди.";
+      if (rawMessage && rawMessage !== msg) {
+        msg = `${msg} (${rawMessage})`;
+      }
       setError(msg);
     } finally {
       setBusy(false);

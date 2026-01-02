@@ -228,7 +228,8 @@ function LoginPage() {
   const location = useLocation();
 
   const params = new URLSearchParams(location.search);
-  const next = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/overview";
+  const rawNext = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/overview";
+  const next = rawNext.startsWith("/") ? rawNext : "/overview";
 
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
@@ -273,7 +274,7 @@ function LoginPage() {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/overview`,
+          emailRedirectTo: `${window.location.origin}${next}`,
           shouldCreateUser: true,
         },
       });
