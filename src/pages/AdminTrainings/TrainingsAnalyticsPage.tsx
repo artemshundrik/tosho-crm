@@ -1,5 +1,5 @@
 // src/pages/AdminTrainings/TrainingsAnalyticsPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarRange,
@@ -8,7 +8,9 @@ import {
   Loader2,
   TrendingUp,
   XCircle,
-  Plus
+  Plus,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 import { getTrainings } from "../../api/trainings";
@@ -53,7 +55,7 @@ function normalizeAssetUrl(url: string | null | undefined): string | null {
   return u;
 }
 
-type SortKey = "name" | "percent";
+type SortKey = "number" | "name" | "trainings" | "present" | "injuries" | "percent";
 type SortDirection = "asc" | "desc";
 
 type PlayerAttendanceRow = {
@@ -70,6 +72,59 @@ type PlayerAttendanceRow = {
   sickCount: number;
   attendancePercent: number;
 };
+
+function SortableHead({
+  label,
+  sKey,
+  sortConfig,
+  onSort,
+  align = "center",
+  width,
+}: {
+  label: ReactNode;
+  sKey: SortKey;
+  sortConfig: { key: SortKey; direction: SortDirection };
+  onSort: (k: SortKey) => void;
+  align?: "left" | "center" | "right";
+  width?: string;
+}) {
+  const isActive = sortConfig.key === sKey;
+
+  return (
+    <TableHead
+      className={cn(
+        "cursor-pointer select-none transition-all active:scale-[0.98] text-xs font-semibold text-muted-foreground",
+        "whitespace-nowrap",
+        width,
+        align === "center" && "text-center",
+        align === "right" && "text-right",
+        isActive ? "text-primary" : "hover:text-foreground/80 hover:bg-muted/30"
+      )}
+      onClick={() => onSort(sKey)}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1.5",
+          align === "center" && "justify-center",
+          align === "right" && "justify-end"
+        )}
+      >
+        {label}
+        <span className="inline-flex h-3 w-3 items-center justify-center">
+          {isActive ? (
+            sortConfig.direction === "desc" ? (
+              <ChevronDown className="h-3 w-3" strokeWidth={3} />
+            ) : (
+              <ChevronUp className="h-3 w-3" strokeWidth={3} />
+            )
+          ) : (
+            <span className="h-3 w-3 opacity-0" />
+          )}
+        </span>
+      </div>
+    </TableHead>
+  );
+}
 
 // --- Секція гравця з індикатором статусу та зумом аватара ---
 function PlayerInfoCell({ 
@@ -134,10 +189,10 @@ export function TrainingsAnalyticsPage() {
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [query, setQuery] = useState("");
-  const [preset, setPreset] = useState<"month" | "year" | "all">("month");
-  const [sortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
-    key: "percent",
-    direction: "desc"
+  const [preset, setPreset] = useState<"month" | "last_month" | "year" | "all">("month");
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: "number",
+    direction: "asc"
   });
 
   const navigate = useNavigate();
@@ -149,7 +204,7 @@ export function TrainingsAnalyticsPage() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const applyPreset = (next: "month" | "year" | "all") => {
+  const applyPreset = (next: "month" | "last_month" | "year" | "all") => {
     const now = new Date();
     if (next === "all") {
       setFromDate("");
@@ -161,6 +216,14 @@ export function TrainingsAnalyticsPage() {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       setFromDate(formatDateInput(start));
       setToDate(formatDateInput(now));
+      setPreset(next);
+      return;
+    }
+    if (next === "last_month") {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      setFromDate(formatDateInput(start));
+      setToDate(formatDateInput(end));
       setPreset(next);
       return;
     }
@@ -240,18 +303,58 @@ export function TrainingsAnalyticsPage() {
       else if (a.status === "sick") row.sickCount++;
     });
 
-    return Array.from(map.values()).map(r => ({
+    const rows = Array.from(map.values()).map(r => ({
       ...r,
       attendancePercent: (r.presentCount + r.absentCount) > 0 
         ? Math.round((r.presentCount / (r.presentCount + r.absentCount)) * 100) 
         : 0
-    })).filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
-       .sort((a, b) => {
-         const factor = sortConfig.direction === "desc" ? 1 : -1;
-         if (sortConfig.key === "percent") return (b.attendancePercent - a.attendancePercent) * factor;
-         return a.name.localeCompare(b.name) * factor;
-       });
+    })).filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+
+    const withFallbackNumber = (value: number | string | null | undefined) => {
+      if (value === null || value === undefined || value === "") return Number.POSITIVE_INFINITY;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    };
+    const fallbackByNumber = (a: PlayerAttendanceRow, b: PlayerAttendanceRow) => {
+      const numDiff = withFallbackNumber(a.shirtNumber) - withFallbackNumber(b.shirtNumber);
+      if (numDiff !== 0) return numDiff;
+      return a.name.localeCompare(b.name);
+    };
+
+    rows.sort((a, b) => {
+      let diff = 0;
+      if (sortConfig.key === "number") {
+        diff = fallbackByNumber(a, b);
+        return sortConfig.direction === "asc" ? diff : -diff;
+      }
+
+      if (sortConfig.key === "name") {
+        diff = a.name.localeCompare(b.name);
+      } else if (sortConfig.key === "trainings") {
+        diff = a.trainingsTracked - b.trainingsTracked;
+      } else if (sortConfig.key === "present") {
+        diff = a.presentCount - b.presentCount;
+      } else if (sortConfig.key === "injuries") {
+        diff = (a.injuredCount + a.sickCount) - (b.injuredCount + b.sickCount);
+      } else if (sortConfig.key === "percent") {
+        diff = a.attendancePercent - b.attendancePercent;
+      }
+
+      if (diff === 0) return fallbackByNumber(a, b);
+      return sortConfig.direction === "asc" ? diff : -diff;
+    });
+
+    return rows;
   }, [players, attendance, completedTrainings, query, sortConfig]);
+
+  const handleSort = (key: SortKey) => {
+    const defaultDirection: SortDirection =
+      key === "number" || key === "name" ? "asc" : "desc";
+    setSortConfig((current) => ({
+      key,
+      direction: current.key === key ? (current.direction === "desc" ? "asc" : "desc") : defaultDirection,
+    }));
+  };
 
   const topPlayers = useMemo(() => 
     playerRows.slice(0, 5).map(p => ({ 
@@ -281,12 +384,6 @@ export function TrainingsAnalyticsPage() {
           icon: TrendingUp,
           tourLabel: `За період: ${completedTrainings.length} тренувань`,
         }}
-        kpis={[
-          { key: "p", label: "Присутні", value: String(playerRows.reduce((a, b) => a + b.presentCount, 0)), icon: CheckCircle2, iconTone: "text-emerald-500 bg-emerald-500/10" },
-          { key: "a", label: "Відсутні", value: String(playerRows.reduce((a, b) => a + b.absentCount, 0)), icon: XCircle, iconTone: "text-rose-500 bg-rose-500/10" },
-          { key: "i", label: "Травми", value: String(playerRows.reduce((a, b) => a + b.injuredCount, 0)), icon: HeartPulse, iconTone: "text-amber-500 bg-amber-500/10" },
-          { key: "s", label: "Хвороби", value: String(playerRows.reduce((a, b) => a + b.sickCount, 0)), icon: HeartPulse, iconTone: "text-sky-500 bg-sky-500/10" },
-        ]}
         primaryAction={{ label: "Нове тренування", to: "/admin/trainings/create", iconLeft: Plus }}
       />
 
@@ -299,6 +396,7 @@ export function TrainingsAnalyticsPage() {
               onChange: applyPreset,
               items: [
                 { value: "month", label: "Цей місяць" },
+                { value: "last_month", label: "Минулий місяць" },
                 { value: "year", label: "Цей рік" },
                 { value: "all", label: "Весь час" },
               ],
@@ -335,12 +433,50 @@ export function TrainingsAnalyticsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30 border-b border-border hover:bg-muted/30">
-              <TableHead className="w-[60px] text-center text-xs font-semibold text-muted-foreground pl-6">#</TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">Гравець</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Тренування</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Присутній</TableHead>
-              <TableHead className="text-center text-xs font-semibold text-muted-foreground">Травми/Хвороби</TableHead>
-              <TableHead className="text-right text-xs font-semibold text-muted-foreground pr-8">% явки</TableHead>
+              <SortableHead
+                label="#"
+                sKey="number"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="center"
+                width="w-[60px] pl-6"
+              />
+              <SortableHead
+                label="Гравець"
+                sKey="name"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="left"
+              />
+              <SortableHead
+                label="Тренування"
+                sKey="trainings"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="center"
+              />
+              <SortableHead
+                label="Присутній"
+                sKey="present"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="center"
+              />
+              <SortableHead
+                label="Травми/Хвороби"
+                sKey="injuries"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="center"
+              />
+              <SortableHead
+                label="% явки"
+                sKey="percent"
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                align="right"
+                width="pr-8"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -349,7 +485,7 @@ export function TrainingsAnalyticsPage() {
                 <TableRow 
                   key={row.playerId} 
                   className="group hover:bg-muted/40 transition-colors border-b border-border/50 cursor-pointer"
-                  onClick={() => navigate(`/admin/players/${row.playerId}`)} 
+                  onClick={() => navigate(`/player/${row.playerId}`)} 
                 >
                   <TableCell className="text-center text-xs font-bold text-muted-foreground/40 pl-6 tabular-nums">{idx + 1}</TableCell>
                   <TableCell>

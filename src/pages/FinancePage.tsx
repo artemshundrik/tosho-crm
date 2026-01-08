@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowUpRight,
   BadgeAlert,
@@ -21,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { OperationalSummary } from "@/components/app/OperationalSummary";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -66,6 +68,22 @@ type FinanceInvoice = {
   currency: string;
   due_date: string | null;
   paid_at: string | null;
+};
+
+type FinancePool = {
+  id: string;
+  title: string;
+  total_amount: number | string;
+  due_date: string | null;
+  status: string;
+  created_at: string;
+};
+
+type FinancePoolParticipant = {
+  id: string;
+  pool_id: string;
+  expected_amount: number | string;
+  paid_amount: number | string | null;
 };
 
 type PlayerLite = {
@@ -137,10 +155,13 @@ function daysOverdue(dueDate: string | null) {
 }
 
 export function FinancePage() {
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<FinancePlan[]>([]);
   const [rules, setRules] = useState<FinanceRecurringRule[]>([]);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [invoices, setInvoices] = useState<FinanceInvoice[]>([]);
+  const [pools, setPools] = useState<FinancePool[]>([]);
+  const [poolParticipants, setPoolParticipants] = useState<FinancePoolParticipant[]>([]);
   const [players, setPlayers] = useState<Record<string, PlayerLite>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +171,7 @@ export function FinancePage() {
       setLoading(true);
       setError(null);
       try {
-        const [plansRes, rulesRes, txRes, invRes] = await Promise.all([
+        const [plansRes, rulesRes, txRes, invRes, poolsRes] = await Promise.all([
           supabase
             .from("finance_plans")
             .select("id, name, description, amount, currency, billing_period, is_active")
@@ -172,12 +193,18 @@ export function FinancePage() {
             .select("id, player_id, title, status, amount, currency, due_date, paid_at")
             .eq("team_id", TEAM_ID)
             .order("created_at", { ascending: false }),
+          supabase
+            .from("finance_pools")
+            .select("id, title, total_amount, due_date, status, created_at")
+            .eq("team_id", TEAM_ID)
+            .order("created_at", { ascending: false }),
         ]);
 
         if (plansRes.error) throw plansRes.error;
         if (rulesRes.error) throw rulesRes.error;
         if (txRes.error) throw txRes.error;
         if (invRes.error) throw invRes.error;
+        if (poolsRes.error) throw poolsRes.error;
 
         const txData = (txRes.data || []) as FinanceTransaction[];
         const invData = (invRes.data || []) as FinanceInvoice[];
@@ -186,6 +213,22 @@ export function FinancePage() {
         setRules((rulesRes.data || []) as FinanceRecurringRule[]);
         setTransactions(txData);
         setInvoices(invData);
+        const poolRows = (poolsRes.data || []) as FinancePool[];
+        setPools(poolRows);
+
+        if (poolRows.length > 0) {
+          const { data: participantsData, error: participantsError } = await supabase
+            .from("finance_pool_participants")
+            .select("id, pool_id, expected_amount, paid_amount")
+            .in("pool_id", poolRows.map((p) => p.id));
+          if (!participantsError && participantsData) {
+            setPoolParticipants(participantsData as FinancePoolParticipant[]);
+          } else if (participantsError) {
+            throw participantsError;
+          }
+        } else {
+          setPoolParticipants([]);
+        }
 
         const playerIds = Array.from(
           new Set(
@@ -223,6 +266,17 @@ export function FinancePage() {
     () => transactions.filter((t) => t.status === "paid"),
     [transactions]
   );
+
+  const poolSummary = useMemo(() => {
+    const byPool = new Map<string, { expected: number; paid: number }>();
+    poolParticipants.forEach((p) => {
+      const current = byPool.get(p.pool_id) || { expected: 0, paid: 0 };
+      current.expected += toNumber(p.expected_amount);
+      current.paid += toNumber(p.paid_amount ?? 0);
+      byPool.set(p.pool_id, current);
+    });
+    return byPool;
+  }, [poolParticipants]);
 
   const incomeTotal = useMemo(
     () =>
@@ -352,80 +406,65 @@ export function FinancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Фінанси</h1>
-          <p className="text-sm text-muted-foreground">
-            Платежі, абонементи, доходи та витрати команди в одному місці.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline">
-            <Receipt className="h-4 w-4" />
-            Додати платіж
-          </Button>
-          <Button>
-            <FolderPlus className="h-4 w-4" />
-            Створити рахунок
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Баланс</div>
-              <div className="text-2xl font-semibold tabular-nums">{formatCurrency(balance)}</div>
-              <div className="text-xs text-muted-foreground">за весь період</div>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-              <Wallet className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Доходи</div>
-              <div className="text-2xl font-semibold tabular-nums">{formatCurrency(incomeTotal)}</div>
-              <div className="text-xs text-muted-foreground">оплачені</div>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10 text-blue-600">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Витрати</div>
-              <div className="text-2xl font-semibold tabular-nums">{formatCurrency(expenseTotal)}</div>
-              <div className="text-xs text-muted-foreground">оплачені</div>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-600">
-              <CircleDollarSign className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Борг</div>
-              <div className="text-2xl font-semibold tabular-nums">{formatCurrency(debtTotal)}</div>
-              <div className="text-xs text-muted-foreground">{debtorsCount} гравці</div>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
-              <CreditCard className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <OperationalSummary
+        title="Фінанси"
+        subtitle="Платежі, абонементи, доходи та витрати команди в одному місці."
+        nextUpLoading={false}
+        nextUp={{
+          tournamentName: "Фінансовий огляд",
+          primary: formatCurrency(balance),
+          secondary: `Доходи ${formatCurrency(incomeTotal)} • Витрати ${formatCurrency(expenseTotal)}`,
+          tourLabel: `За період: ${transactions.length} транзакцій`,
+        }}
+        kpis={[
+          {
+            key: "balance",
+            label: "Баланс",
+            value: formatCurrency(balance),
+            icon: Wallet,
+            iconTone: "text-emerald-500 bg-emerald-500/10",
+          },
+          {
+            key: "income",
+            label: "Доходи",
+            value: formatCurrency(incomeTotal),
+            icon: TrendingUp,
+            iconTone: "text-blue-500 bg-blue-500/10",
+          },
+          {
+            key: "expense",
+            label: "Витрати",
+            value: formatCurrency(expenseTotal),
+            icon: CircleDollarSign,
+            iconTone: "text-rose-500 bg-rose-500/10",
+          },
+          {
+            key: "debt",
+            label: "Борг",
+            value: formatCurrency(debtTotal),
+            icon: CreditCard,
+            iconTone: "text-amber-500 bg-amber-500/10",
+          },
+        ]}
+        primaryAction={{
+          label: "Додати платіж",
+          iconLeft: Receipt,
+          variant: "default",
+          onClick: () => navigate("/finance/transactions/new"),
+        }}
+        secondaryAction={{
+          label: "Створити рахунок",
+          iconLeft: FolderPlus,
+          variant: "outline",
+          onClick: () => navigate("/finance/invoices/new"),
+        }}
+      />
 
       <Tabs defaultValue="billing" className="space-y-4">
         <TabsList className="w-fit">
           <TabsTrigger value="billing">Плани та нарахування</TabsTrigger>
           <TabsTrigger value="analytics">Аналітика</TabsTrigger>
+          <TabsTrigger value="pools">Збори</TabsTrigger>
         </TabsList>
 
         <TabsContent value="billing" className="space-y-4">
@@ -678,6 +717,71 @@ export function FinancePage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="pools" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-base font-semibold text-foreground">Збори</div>
+              <div className="text-sm text-muted-foreground">
+                Контроль внесків, залишку та хто вже оплатив.
+              </div>
+            </div>
+            <Button onClick={() => navigate("/finance/pools/new")}>
+              <FolderPlus className="h-4 w-4" />
+              Новий збір
+            </Button>
+          </div>
+
+          {pools.length === 0 ? (
+            <Card className="rounded-[var(--radius-section)] border border-dashed border-border bg-card/50 shadow-none">
+              <CardContent className="p-6 text-sm text-muted-foreground">
+                Зборів поки немає. Створіть перший збір для оренди або внесків.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {pools.map((pool) => {
+                const summary = poolSummary.get(pool.id) || { expected: 0, paid: 0 };
+                const total = toNumber(pool.total_amount);
+                const expected = summary.expected || total;
+                const paid = summary.paid;
+                const remaining = Math.max(expected - paid, 0);
+                const percent = expected ? Math.round((paid / expected) * 100) : 0;
+                return (
+                  <Card key={pool.id} className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+                    <CardHeader className="space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <CardTitle className="text-lg truncate">{pool.title}</CardTitle>
+                          <div className="text-xs text-muted-foreground">
+                            {pool.due_date ? `До ${formatDate(pool.due_date)}` : "Без дедлайну"}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="rounded-full">
+                          {pool.status || "active"}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Сплачено {formatCurrency(paid)} із {formatCurrency(expected)}
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted">
+                        <div className="h-2 rounded-full bg-primary" style={{ width: `${percent}%` }} />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between text-sm">
+                      <div className="text-muted-foreground">
+                        Залишилось: <span className="font-semibold text-foreground">{formatCurrency(remaining)}</span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/finance/pools/${pool.id}`)}>
+                        Деталі
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

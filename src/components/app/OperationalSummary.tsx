@@ -288,6 +288,14 @@ function NextUpHero({
 }) {
   const Container: React.ElementType = clickable && to ? Link : "div";
   const containerProps = clickable && to ? { to } : {};
+  const percentValue = (() => {
+    const match = time.match(/^(\d+(?:[.,]\d+)?)%$/);
+    if (!match) return null;
+    const raw = Number(match[1].replace(",", "."));
+    if (!Number.isFinite(raw)) return null;
+    return Math.max(0, Math.min(100, raw));
+  })();
+  const showPercentBar = percentValue !== null;
 
   return (
     <Container
@@ -302,15 +310,16 @@ function NextUpHero({
       )}
     >
       {/* CONTEXT */}
-      <div className="flex items-center justify-center gap-3 text-sm sm:text-base font-semibold text-muted-foreground">
-        {leagueLogoUrl && <img src={leagueLogoUrl} alt="" className="h-6 w-6 sm:h-7 sm:w-7 object-contain" />}
-        <span className="truncate">{tournamentName}</span>
-        {tourLabel && (
-          <>
-            <span>•</span>
-            <span>{tourLabel}</span>
-          </>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base font-semibold text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          {leagueLogoUrl && <img src={leagueLogoUrl} alt="" className="h-6 w-6 sm:h-7 sm:w-7 object-contain" />}
+          <span className="truncate">{tournamentName}</span>
+        </div>
+        {tourLabel ? (
+          <span className="rounded-full border border-border bg-muted/50 px-3 py-1 text-xs font-semibold text-foreground/80">
+            {tourLabel}
+          </span>
+        ) : null}
       </div>
 
       {/* TEAMS */}
@@ -335,21 +344,44 @@ function NextUpHero({
           </div>
         </div>
       ) : (
-        <div className="mt-6 flex flex-col items-center gap-3 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div>
-            <div className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-foreground">{time}</div>
-            <div className="mt-1 text-sm font-medium text-muted-foreground">{dateLine}</div>
+        <div className="mt-5 grid gap-4 md:grid-cols-[1.1fr_1fr] md:items-center">
+          <div className="flex flex-col gap-2">
+            <div className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-foreground">
+              {time}
+            </div>
+            {dateLine ? (
+              <div className="text-sm font-medium text-muted-foreground">{dateLine}</div>
+            ) : showPercentBar ? (
+              <div className="text-sm font-medium text-muted-foreground">Середній показник</div>
+            ) : null}
+            {showPercentBar ? (
+              <div className="mt-1 h-2.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${percentValue}%` }}
+                />
+              </div>
+            ) : null}
           </div>
           {detailLine || avatars.length > 0 ? (
-            <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
+            <div className="rounded-[22px] border border-border/70 bg-muted/30 p-4">
               {detailLine ? (
-                <div className="text-sm sm:text-base font-semibold text-foreground">{detailLine}</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {detailLine}
+                </div>
               ) : null}
               {avatars.length > 0 ? (
-                <div className="flex items-center -space-x-2">
+                <div className="mt-2 flex items-center -space-x-2">
                   {avatars.slice(0, 6).map((a, idx) => (
-                    <AvatarCircle key={`${a.name}-${idx}`} name={a.name} src={a.src} size={32} />
+                    <div key={`${a.name}-${idx}`} className="rounded-full ring-2 ring-background">
+                      <AvatarCircle name={a.name} src={a.src} size={36} />
+                    </div>
                   ))}
+                  {avatars.length > 6 ? (
+                    <div className="ml-1 flex h-9 min-w-9 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground">
+                      +{avatars.length - 6}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -358,21 +390,16 @@ function NextUpHero({
       )}
 
       {/* CTA */}
-      <div className="mt-5 text-center">
-        <span
-          className={cn(
-            "inline-flex items-center gap-2",
-            "text-sm sm:text-base font-semibold",
-            "text-primary",
-            clickable ? "opacity-100" : "opacity-0 pointer-events-none select-none"
-          )}
-        >
-          {ctaLabel}
-          <span aria-hidden className="inline-block transition-transform duration-200 group-hover:translate-x-0.5">
-            →
+      {clickable ? (
+        <div className="mt-5 text-center">
+          <span className="inline-flex items-center gap-2 text-sm sm:text-base font-semibold text-primary">
+            {ctaLabel}
+            <span aria-hidden className="inline-block transition-transform duration-200 group-hover:translate-x-0.5">
+              →
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      ) : null}
     </Container>
   );
 }
@@ -387,6 +414,8 @@ export function OperationalSummary(props: OperationalSummaryProps) {
   const parsedTeams = props.nextUp?.secondary ? splitTeamsFromSecondary(props.nextUp.secondary) : null;
 
   const nextMeta = props.nextUp ? parsePrimaryMeta(props.nextUp.primary) : { time: "", dateLine: "" };
+  const nextDateLine =
+    nextMeta.dateLine || (props.nextUp && nextMeta.time !== props.nextUp.primary ? props.nextUp.primary : "");
 
   const leagueLabelFallback = leagueLabelFromEyebrow(eyebrow);
   const tournamentName = props.nextUp?.tournamentName ?? leagueLabelFallback ?? "Турнір";
@@ -495,7 +524,7 @@ export function OperationalSummary(props: OperationalSummaryProps) {
               clickable={nextUpClickable}
               to={props.nextUp.to}
               time={nextMeta.time}
-              dateLine={nextMeta.dateLine || props.nextUp.primary}
+              dateLine={nextDateLine}
               leagueLogoUrl={leagueLogoUrl}
               tournamentName={tournamentName}
               leagueName={leagueName}

@@ -204,6 +204,38 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.tournaments,
     };
 
+  if (pathname.startsWith("/finance/transactions/new"))
+    return {
+      title: "Новий платіж",
+      subtitle: "Додай дохід або витрату та привʼяжи до гравця за потреби.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finance,
+    };
+
+  if (pathname.startsWith("/finance/invoices/new"))
+    return {
+      title: "Новий рахунок",
+      subtitle: "Створи рахунок для гравця або команди.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finance,
+    };
+
+  if (pathname.startsWith("/finance/pools/new"))
+    return {
+      title: "Новий збір",
+      subtitle: "Збір на оренду або внески з контролем оплати.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finance,
+    };
+
+  if (pathname.startsWith("/finance/pools/"))
+    return {
+      title: "Збір",
+      subtitle: "Прогрес збору та список оплат.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finance,
+    };
+
   if (pathname.includes("finance"))
     return {
       title: "Фінанси",

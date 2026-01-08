@@ -37,6 +37,10 @@ import { CreateMatchPage } from "./pages/CreateMatchPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { TournamentDetailsPage } from "./pages/TournamentDetailsPage";
 import { FinancePage } from "./pages/FinancePage";
+import { FinanceTransactionCreatePage } from "./pages/FinanceTransactionCreatePage";
+import { FinanceInvoiceCreatePage } from "./pages/FinanceInvoiceCreatePage";
+import { FinancePoolCreatePage } from "./pages/FinancePoolCreatePage";
+import { FinancePoolDetailsPage } from "./pages/FinancePoolDetailsPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import UpdatePasswordPage from "./pages/UpdatePasswordPage";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -609,6 +613,46 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <FinancePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/transactions/new"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <FinanceTransactionCreatePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/invoices/new"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <FinanceInvoiceCreatePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/pools/new"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <FinancePoolCreatePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/pools/:id"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <FinancePoolDetailsPage />
             </AppLayout>
           </RequireAuth>
         }

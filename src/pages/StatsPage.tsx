@@ -2227,11 +2227,14 @@ export function StatsPage() {
                         </TableCell>
 
                         <TableCell className="w-[260px]">
-                          <div className="flex items-center gap-3">
+                          <Link
+                            to={`/player/${p.playerId}`}
+                            className="flex items-center gap-3 group/player focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+                          >
                             <PlayerAvatar player={p} size={36} />
                             
                             <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-semibold text-foreground truncate leading-tight group-hover:underline decoration-border underline-offset-4">
+                              <span className="text-sm font-semibold text-foreground truncate leading-tight group/player-hover:underline group/player-hover:decoration-border group/player-hover:underline-offset-4">
                                 {p.name}
                               </span>
 
@@ -2249,7 +2252,7 @@ export function StatsPage() {
                                 </span>
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         </TableCell>
 
                         <TableCell className="text-center px-0">
