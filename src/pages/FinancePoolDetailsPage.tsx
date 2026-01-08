@@ -89,7 +89,11 @@ export function FinancePoolDetailsPage() {
         setPool(poolRes.data as FinancePool);
       }
       if (!participantsRes.error && participantsRes.data) {
-        setParticipants(participantsRes.data as ParticipantRow[]);
+        const normalized = (participantsRes.data as any[]).map((row) => ({
+          ...row,
+          players: Array.isArray(row.players) ? row.players[0] ?? null : row.players ?? null,
+        })) as ParticipantRow[];
+        setParticipants(normalized);
       }
       setLoading(false);
     }
