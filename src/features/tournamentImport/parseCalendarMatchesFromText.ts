@@ -36,6 +36,10 @@ export function parseCalendarMatchesFromText(fullText: string): MatchItem[] {
       away_team: awayTeam.trim(),
       league_round_venue: leagueRoundVenue.trim(),
       status: status?.trim() ?? null,
+      start_at: null,
+      season_label: null,
+      tab_label: null,
+      external_match_id: "",
     });
   }
 

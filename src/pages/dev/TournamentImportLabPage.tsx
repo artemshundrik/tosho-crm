@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   type ImportRunSummary,
@@ -11,7 +11,15 @@ import { parseHtmlToDocument } from "@/features/tournamentImport/domUtils";
 import { parseStandingsFromText } from "@/features/tournamentImport/parseStandingsFromText";
 import { parseCalendarMatchesFromText } from "@/features/tournamentImport/parseCalendarMatchesFromText";
 import { parseStandingsFromDOM } from "@/features/tournamentImport/parseStandingsFromDOM";
-import { parseCalendarMatchesFromDOM } from "@/features/tournamentImport/parseCalendarMatchesFromDOM";
+import {
+  parseCalendarMatchesFromDOM,
+  type ParsedCalendar,
+} from "@/features/tournamentImport/parseCalendarMatchesFromDOM";
+import {
+  inferSeasonLabelFromDoc,
+  parseDateTextToISO,
+} from "@/features/tournamentImport/dateUtils";
+import { sha1Hex, stableKeyForMatch } from "@/features/tournamentImport/hashUtils";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -22,9 +30,18 @@ type CopyError = {
 
 type RunMeta = Pick<ImportRunSummary, "run_id" | "snapshot_file" | "parsed_at">;
 
+type Coverage = {
+  tab_labels: string[];
+  matches_per_tab: Record<string, number>;
+  tabs_found: number;
+  raw_matches: number;
+};
+
 const STANDINGS_LABEL = "Турнірна таблиця";
 const MATCHES_LABEL = "Календар матчів";
 const SNAPSHOT_FILE = "/snapshots/v9ky-gold-league.html";
+const SNAPSHOT_URL =
+  "https://v9ky.in.ua/2025-26_Zyma_Kyiv_Gold_League_Futsal?first_day=2025-12-27&last_day=0";
 
 function extractBlock(source: string, startLabel: string, endLabel?: string) {
   const startIndex = source.indexOf(startLabel);
@@ -53,11 +70,60 @@ function matchesOurTeam(match: MatchItem, query: string) {
   );
 }
 
+function normalizeMatches(
+  matches: MatchItem[],
+  seasonLabel: string | null,
+): Promise<MatchItem[]> {
+  return Promise.all(
+    matches.map(async (match) => {
+      const start_at = parseDateTextToISO(match.date_text, match.time, seasonLabel);
+      const key = stableKeyForMatch({
+        start_at,
+        home_team: match.home_team,
+        away_team: match.away_team,
+        league_round_venue: match.league_round_venue,
+        tab_label: match.tab_label,
+      });
+      const external_match_id = await sha1Hex(key);
+
+      return {
+        ...match,
+        start_at,
+        season_label: seasonLabel,
+        external_match_id,
+      };
+    }),
+  );
+}
+
+function buildCoverage(tabLabels: string[], matches: MatchItem[], rawMatches: number): Coverage {
+  const matchesPerTab: Record<string, number> = {};
+  for (const match of matches) {
+    const key = match.tab_label ?? "unknown";
+    matchesPerTab[key] = (matchesPerTab[key] ?? 0) + 1;
+  }
+
+  return {
+    tab_labels: tabLabels,
+    matches_per_tab: matchesPerTab,
+    tabs_found: tabLabels.length,
+    raw_matches: rawMatches,
+  };
+}
+
 export default function TournamentImportLabPage() {
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<CopyError>(null);
-  const [snapshotHtml, setSnapshotHtml] = useState<string>("");
+  const [rawHtml, setRawHtml] = useState<string>("");
+  const [parsed, setParsed] = useState<ParsedTournamentData | null>(null);
+  const [coverage, setCoverage] = useState<Coverage>({
+    tab_labels: [],
+    matches_per_tab: {},
+    tabs_found: 0,
+    raw_matches: 0,
+  });
+  const [seasonLabel, setSeasonLabel] = useState<string | null>(null);
   const [runMeta, setRunMeta] = useState<RunMeta | null>(null);
   const [ourTeamQuery, setOurTeamQuery] = useState<string>("FAYNA");
   const [onlyOurTeam, setOnlyOurTeam] = useState<boolean>(false);
@@ -77,7 +143,7 @@ export default function TournamentImportLabPage() {
       }
 
       const html = await response.text();
-      setSnapshotHtml(html);
+      setRawHtml(html);
       setRunMeta({
         run_id: crypto.randomUUID(),
         snapshot_file: SNAPSHOT_FILE,
@@ -92,9 +158,9 @@ export default function TournamentImportLabPage() {
   };
 
   const snapshotDoc = useMemo(() => {
-    if (!snapshotHtml) return null;
-    return parseHtmlToDocument(snapshotHtml);
-  }, [snapshotHtml]);
+    if (!rawHtml) return null;
+    return parseHtmlToDocument(rawHtml);
+  }, [rawHtml]);
 
   const normalizedText = useMemo(() => {
     if (!snapshotDoc) return "";
@@ -111,19 +177,46 @@ export default function TournamentImportLabPage() {
     };
   }, [normalizedText]);
 
-  const parsed = useMemo<ParsedTournamentData | null>(() => {
-    if (!snapshotDoc) return null;
-
-    if (parserMode === "dom") {
-      return {
-        standings: parseStandingsFromDOM(snapshotDoc),
-        matches: parseCalendarMatchesFromDOM(snapshotDoc),
-      };
+  useEffect(() => {
+    if (!snapshotDoc) {
+      setParsed(null);
+      setSeasonLabel(null);
+      setCoverage({ tab_labels: [], matches_per_tab: {}, tabs_found: 0, raw_matches: 0 });
+      return;
     }
 
-    return {
-      standings: parseStandingsFromText(normalizedText),
-      matches: parseCalendarMatchesFromText(normalizedText),
+    let cancelled = false;
+
+    const parseAsync = async () => {
+      let standings = parseStandingsFromText(normalizedText);
+      let calendar: ParsedCalendar = { tab_labels: [], matches: [], raw_matches: 0 };
+
+      if (parserMode === "dom") {
+        standings = parseStandingsFromDOM(snapshotDoc);
+        calendar = parseCalendarMatchesFromDOM(snapshotDoc);
+      } else {
+        const matches = parseCalendarMatchesFromText(normalizedText);
+        calendar = {
+          tab_labels: [],
+          matches,
+          raw_matches: matches.length,
+        };
+      }
+
+      const season = inferSeasonLabelFromDoc(snapshotDoc, SNAPSHOT_URL);
+      const normalizedMatches = await normalizeMatches(calendar.matches, season);
+
+      if (cancelled) return;
+
+      setSeasonLabel(season);
+      setCoverage(buildCoverage(calendar.tab_labels, normalizedMatches, calendar.raw_matches));
+      setParsed({ standings, matches: normalizedMatches });
+    };
+
+    void parseAsync();
+
+    return () => {
+      cancelled = true;
     };
   }, [normalizedText, parserMode, snapshotDoc]);
 
@@ -138,6 +231,36 @@ export default function TournamentImportLabPage() {
     return parsed.matches.filter((match) => matchesOurTeam(match, ourTeamQuery)).length;
   }, [parsed, ourTeamQuery]);
 
+  const warnings = useMemo(() => {
+    const entries: Array<{ type: string; message: string }> = [];
+    if (!parsed) return entries;
+
+    if (coverage.tabs_found >= 6 && parsed.matches.length <= 5) {
+      entries.push({
+        type: "coverage",
+        message: "Looks like only the active tab was parsed.",
+      });
+    }
+
+    const missingDates = parsed.matches.filter((match) => !match.start_at).length;
+    if (missingDates > 0) {
+      entries.push({
+        type: "dates",
+        message: `${missingDates} matches could not be normalized to start_at.`,
+      });
+    }
+
+    const dedupRemoved = Math.max(coverage.raw_matches - parsed.matches.length, 0);
+    if (coverage.raw_matches >= 5 && dedupRemoved >= 3 && dedupRemoved / coverage.raw_matches >= 0.2) {
+      entries.push({
+        type: "dedupe",
+        message: `Dedup removed ${dedupRemoved} of ${coverage.raw_matches} match candidates.`,
+      });
+    }
+
+    return entries;
+  }, [coverage.raw_matches, coverage.tabs_found, parsed]);
+
   const runSummary = useMemo<ImportRunSummary | null>(() => {
     if (!runMeta || !parsed) return null;
     return {
@@ -146,14 +269,31 @@ export default function TournamentImportLabPage() {
       parsed_at: runMeta.parsed_at,
       parser_mode: parserMode,
       standings_rows: parsed.standings.rows.length,
+      tabs_found: coverage.tabs_found,
+      tab_labels: coverage.tab_labels,
+      matches_per_tab: coverage.matches_per_tab,
       matches_found: parsed.matches.length,
       our_team_matches: ourTeamMatchesCount,
+      season_label: seasonLabel,
+      warnings,
       filters: {
         our_team_query: ourTeamQuery,
         only_our_team: onlyOurTeam,
       },
     };
-  }, [onlyOurTeam, ourTeamMatchesCount, ourTeamQuery, parsed, parserMode, runMeta]);
+  }, [
+    coverage.matches_per_tab,
+    coverage.tab_labels,
+    coverage.tabs_found,
+    onlyOurTeam,
+    ourTeamMatchesCount,
+    ourTeamQuery,
+    parsed,
+    parserMode,
+    runMeta,
+    seasonLabel,
+    warnings,
+  ]);
 
   const summaryLine = useMemo(() => {
     if (!runSummary) return null;
@@ -165,6 +305,12 @@ export default function TournamentImportLabPage() {
     return `Run: ${shortId} • Parsed: ${parsedAt} • Mode: ${modeLabel} • Standings: ${runSummary.standings_rows} • Matches: ${runSummary.matches_found} • Our team: ${runSummary.our_team_matches}`;
   }, [runSummary]);
 
+  const coverageLine = useMemo(() => {
+    if (!runSummary) return null;
+    const unknown = coverage.matches_per_tab.unknown ?? 0;
+    return `Tabs: ${runSummary.tabs_found} • Matches: ${runSummary.matches_found} • Unknown-tab: ${unknown} • Season: ${runSummary.season_label ?? "—"}`;
+  }, [coverage.matches_per_tab.unknown, runSummary]);
+
   const standingsJson = useMemo(() => {
     if (!parsed) return "";
     return JSON.stringify(parsed.standings, null, 2);
@@ -175,14 +321,27 @@ export default function TournamentImportLabPage() {
     return JSON.stringify(
       {
         parser_mode: parserMode,
-        standings: parsed.standings,
+        season_label: seasonLabel,
+        tabs_found: coverage.tabs_found,
+        tab_labels: coverage.tab_labels,
+        matches_per_tab: coverage.matches_per_tab,
         matches: parsed.matches,
         filtered_matches: filteredMatches,
+        warnings,
       },
       null,
       2,
     );
-  }, [filteredMatches, parsed, parserMode]);
+  }, [
+    coverage.matches_per_tab,
+    coverage.tab_labels,
+    coverage.tabs_found,
+    filteredMatches,
+    parsed,
+    parserMode,
+    seasonLabel,
+    warnings,
+  ]);
 
   const summaryJson = useMemo(() => {
     if (!runSummary) return "";
@@ -279,7 +438,44 @@ export default function TournamentImportLabPage() {
             {summaryLine}
           </div>
         ) : null}
+        {coverageLine ? (
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {coverageLine}
+          </div>
+        ) : null}
       </div>
+
+      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Coverage</h2>
+          <span className="text-xs text-muted-foreground">{coverage.tabs_found} tabs</span>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+          {coverage.tab_labels.length === 0 ? (
+            <span>Tab labels not detected.</span>
+          ) : (
+            coverage.tab_labels.map((label) => (
+              <div key={label} className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
+                <span>{label}</span>
+                <span>{coverage.matches_per_tab[label] ?? 0}</span>
+              </div>
+            ))
+          )}
+          {coverage.matches_per_tab.unknown ? (
+            <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
+              <span>Unknown</span>
+              <span>{coverage.matches_per_tab.unknown}</span>
+            </div>
+          ) : null}
+        </div>
+        {warnings.length > 0 ? (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            {warnings.map((warning) => (
+              <div key={warning.type}>{warning.message}</div>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-border bg-card p-4 shadow-sm">

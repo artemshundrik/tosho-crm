@@ -17,6 +17,10 @@ export type MatchItem = {
   away_team: string;
   league_round_venue: string;
   status: string | null;
+  start_at: string | null;
+  season_label: string | null;
+  tab_label: string | null;
+  external_match_id: string;
 };
 
 export type ParsedTournamentData = {
@@ -32,8 +36,13 @@ export type ImportRunSummary = {
   parsed_at: string;
   parser_mode: ParserMode;
   standings_rows: number;
+  tabs_found: number;
+  tab_labels: string[];
+  matches_per_tab: Record<string, number>;
   matches_found: number;
   our_team_matches: number;
+  season_label: string | null;
+  warnings: Array<{ type: string; message: string }>;
   filters: {
     our_team_query: string;
     only_our_team: boolean;
