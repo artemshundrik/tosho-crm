@@ -1,5 +1,6 @@
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+const ALLOWED_HOSTS = new Set(["v9ky.in.ua", "r-cup.com.ua", "sfck.com.ua"]);
 
 function buildResponse(statusCode: number, body: string) {
   return {
@@ -38,8 +39,8 @@ export const handler = async (event: any) => {
     }
 
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" || parsed.hostname !== "v9ky.in.ua") {
-      return buildResponse(400, "Only https://v9ky.in.ua/ URLs are allowed");
+    if (parsed.protocol !== "https:" || !ALLOWED_HOSTS.has(parsed.hostname)) {
+      return buildResponse(400, "URL host not allowed");
     }
 
     const response = await fetch(parsed.toString(), {

@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+const ALLOWED_HOSTS = new Set(["v9ky.in.ua", "r-cup.com.ua", "sfck.com.ua"]);
 
 export default defineConfig(({ command }) => ({
   plugins: [
@@ -37,9 +38,9 @@ export default defineConfig(({ command }) => ({
                   }
 
                   const parsed = new URL(url);
-                  if (parsed.protocol !== "https:" || parsed.hostname !== "v9ky.in.ua") {
+                  if (parsed.protocol !== "https:" || !ALLOWED_HOSTS.has(parsed.hostname)) {
                     res.statusCode = 400;
-                    res.end("Only https://v9ky.in.ua/ URLs are allowed");
+                    res.end("URL host not allowed");
                     return;
                   }
 

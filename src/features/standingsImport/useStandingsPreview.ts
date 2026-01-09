@@ -131,7 +131,7 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
       }
 
       const html = await fetchTournamentHtml(tournamentRow.external_url);
-      const parsed = parseStandingsFromHtmlDom(html);
+      const parsed = parseStandingsFromHtmlDom(html, tournamentRow.external_url);
 
       const { data: currentRows, error: currentError } = await supabase
         .from("tournament_standings_current")
