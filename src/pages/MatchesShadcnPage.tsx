@@ -1,6 +1,6 @@
 // src/pages/MatchesShadcnPage.tsx
 import * as React from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 import {
@@ -16,9 +16,12 @@ import { FilterBar } from "@/components/app/FilterBar";
 import { cn } from "@/lib/utils";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
-import { Swords, Target, Activity, Plus } from "lucide-react";
+import { Swords, Target, Activity, Plus, RotateCw } from "lucide-react";
+import { useAuth } from "@/auth/AuthProvider";
+import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
+const TEAM_NAME = "FAYNA TEAM";
 const PAGE_SIZE = 24;
 
 type DbTournament = {
@@ -28,6 +31,16 @@ type DbTournament = {
   season: string | null;
   logo_url: string | null;
   league_name: string | null;
+};
+
+type PrimaryTournament = {
+  id: string;
+  name: string;
+  season: string | null;
+};
+
+type StandingsRow = StandingsRowView & {
+  updated_at: string | null;
 };
 
 type DbMatch = {
@@ -355,11 +368,15 @@ function safeParseListState(raw: string | null): ListState | null {
 }
 
 export function MatchesShadcnPage() {
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [primaryTournament, setPrimaryTournament] = React.useState<PrimaryTournament | null>(null);
+  const [standingsRow, setStandingsRow] = React.useState<StandingsRow | null>(null);
+  const [standingsUpdatedAt, setStandingsUpdatedAt] = React.useState<string | null>(null);
 
   const [teamLogo, setTeamLogo] = React.useState<string | null>(null);
   const [matchesDb, setMatchesDb] = React.useState<DbMatch[]>([]);
@@ -395,6 +412,55 @@ export function MatchesShadcnPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadStandings() {
+      const { data: primaryRow, error: primaryError } = await supabase
+        .from("team_tournaments")
+        .select("tournament:tournament_id (id, name, season)")
+        .eq("team_id", TEAM_ID)
+        .eq("is_primary", true)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (!primaryError && primaryRow?.tournament) {
+        const tournament = primaryRow.tournament as PrimaryTournament;
+        setPrimaryTournament(tournament);
+
+        const { data: standingsData, error: standingsError } = await supabase
+          .from("tournament_standings_current")
+          .select("team_name, position, played, points, updated_at")
+          .eq("tournament_id", tournament.id)
+          .order("position", { ascending: true });
+
+        if (cancelled) return;
+
+        if (!standingsError) {
+          const rows = (standingsData ?? []) as StandingsRow[];
+          const latestUpdated = rows.reduce<string | null>((latest, row) => {
+            if (!row.updated_at) return latest;
+            if (!latest || row.updated_at > latest) return row.updated_at;
+            return latest;
+          }, null);
+          const context = getContextRows(rows, TEAM_NAME, 0);
+          setStandingsRow(context.teamRow);
+          setStandingsUpdatedAt(latestUpdated);
+        } else {
+          console.error("Matches standings load error", standingsError);
+        }
+      } else if (primaryError) {
+        console.error("Matches primary tournament load error", primaryError);
+      }
+    }
+
+    loadStandings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const saveListState = React.useCallback(
     (opts?: { forceScrollTop?: boolean }) => {
@@ -729,6 +795,7 @@ export function MatchesShadcnPage() {
   const nextMatchTo = nextMatch ? `/matches/${nextMatch.id}` : null;
 
   const leagueLogoUrl = currentLeagueLogoUrl ?? (nextMatch?.tournament?.logoUrl ?? null);
+  const canWrite = role === "manager" || role === "super_admin";
 
   function orderNextUpSides(m: MatchCardData) {
   const team = { name: m.team.name, logoUrl: m.team.logoUrl ?? null };
@@ -880,6 +947,38 @@ export function MatchesShadcnPage() {
             : null
         }
       />
+
+      {primaryTournament ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-foreground">
+              Турнір: {primaryTournament.name} {primaryTournament.season ?? ""}
+            </span>
+            <span>•</span>
+            <span>
+              Позиція: {standingsRow?.position ?? "—"}
+            </span>
+            <span>•</span>
+            <span>
+              Очки: {standingsRow?.points ?? "—"}
+            </span>
+            <span>•</span>
+            <span>{formatUpdatedAgo(standingsUpdatedAt)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {canWrite ? (
+              <Button asChild variant="ghost" size="icon" aria-label="Оновити">
+                <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
+                  <RotateCw className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>Відкрити таблицю</Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {loading ? (
         <Card className="rounded-3xl border border-border bg-card p-10">

@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { mapActivityRow, type ActivityItem, type ActivityRow } from "@/lib/activity";
+import { useAuth } from "@/auth/AuthProvider";
+import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import {
   Activity,
   Trophy,
   Target,
+  RotateCw,
 } from "lucide-react";
 
 /* ================== TYPES ================== */
@@ -43,6 +46,16 @@ type TrainingRow = {
   date: string;
   time: string | null;
   location: string | null;
+};
+
+type PrimaryTournament = {
+  id: string;
+  name: string;
+  season: string | null;
+};
+
+type StandingsRow = StandingsRowView & {
+  updated_at: string | null;
 };
 
 
@@ -102,10 +115,14 @@ function LogoCircle({ src, alt, size = 32, className }: { src?: string | null; a
 /* ================== PAGE ================== */
 
 export function OverviewPage() {
+  const { role } = useAuth();
   const [loading, setLoading] = useState(true);
   const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
   const TEAM_NAME = "FAYNA TEAM";
   const [teamLogo, setTeamLogo] = useState<string | null>(null);
+  const [primaryTournament, setPrimaryTournament] = useState<PrimaryTournament | null>(null);
+  const [standingsRows, setStandingsRows] = useState<StandingsRow[]>([]);
+  const [standingsUpdatedAt, setStandingsUpdatedAt] = useState<string | null>(null);
 
   const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
   const [lastMatch, setLastMatch] = useState<MatchRow | null>(null);
@@ -199,6 +216,40 @@ export function OverviewPage() {
       }
 
       setTeamLogo(logo);
+
+      const { data: primaryRow, error: primaryError } = await supabase
+        .from("team_tournaments")
+        .select("tournament:tournament_id (id, name, season)")
+        .eq("team_id", TEAM_ID)
+        .eq("is_primary", true)
+        .maybeSingle();
+
+      if (!primaryError && primaryRow?.tournament) {
+        const tournament = primaryRow.tournament as PrimaryTournament;
+        setPrimaryTournament(tournament);
+
+        const { data: standingsData, error: standingsError } = await supabase
+          .from("tournament_standings_current")
+          .select("team_name, position, played, points, updated_at")
+          .eq("tournament_id", tournament.id)
+          .order("position", { ascending: true });
+
+        if (!standingsError) {
+          const rows = (standingsData ?? []) as StandingsRow[];
+          const latestUpdated = rows.reduce<string | null>((latest, row) => {
+            if (!row.updated_at) return latest;
+            if (!latest || row.updated_at > latest) return row.updated_at;
+            return latest;
+          }, null);
+          setStandingsRows(rows);
+          setStandingsUpdatedAt(latestUpdated);
+        } else {
+          console.error("Overview standings load error", standingsError);
+        }
+      } else if (primaryError) {
+        console.error("Overview primary tournament load error", primaryError);
+      }
+
       const scoredMatches = playedMatches.filter(
         (m) => m.score_team !== null && m.score_opponent !== null
       );
@@ -280,6 +331,12 @@ export function OverviewPage() {
             : { label: "—", tone: "neutral" as const }
         ),
     [lastFive]
+  );
+
+  const canWrite = role === "manager" || role === "super_admin";
+  const standingsContext = useMemo(
+    () => getContextRows(standingsRows, TEAM_NAME, 2),
+    [standingsRows]
   );
 
   /* ================== UI ================== */
@@ -414,6 +471,66 @@ export function OverviewPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Ще не грали</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">Стан у лізі</CardTitle>
+                <div className="text-xs text-muted-foreground">
+                  {primaryTournament ? `${primaryTournament.name} ${primaryTournament.season ?? ""}`.trim() : "Немає основного турніру"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {canWrite && primaryTournament ? (
+                  <Button asChild variant="ghost" size="icon" aria-label="Оновити">
+                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
+                      <RotateCw className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : null}
+                {primaryTournament ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
+                      Відкрити турнір
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="text-xs text-muted-foreground">{formatUpdatedAgo(standingsUpdatedAt)}</div>
+              {standingsContext.rows.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Таблиця поки недоступна.</div>
+              ) : (
+                <div className="space-y-2">
+                  {standingsContext.rows.map((row) => {
+                    const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
+                    return (
+                      <div
+                        key={row.team_name}
+                        className={cn(
+                          "flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm",
+                          isOurTeam && "bg-primary/10 border-primary/30"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 text-xs font-semibold text-muted-foreground tabular-nums">
+                            {row.position}
+                          </span>
+                          <span className="font-semibold text-foreground">{row.team_name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>І {row.played ?? "—"}</span>
+                          <span>О {row.points ?? "—"}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>

@@ -1,6 +1,6 @@
 // src/pages/TournamentDetailsPage.tsx
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { ArrowLeft, ArrowRight, CalendarDays, Trophy } from "lucide-react";
+import { StandingsPreviewModal } from "@/features/standingsImport/StandingsPreviewModal";
+import { StandingsUpdatePanel } from "@/features/standingsImport/StandingsUpdatePanel";
+import { useStandingsPreview } from "@/features/standingsImport/useStandingsPreview";
+import { formatUpdatedAgo, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
 
 /* ================= TYPES ================= */
 
@@ -53,6 +58,10 @@ type Player = {
   shirt_number: number | null;
   photo_url: string | null;
   status: "active" | "injured" | "sick" | "away" | "inactive"; // Додано
+};
+
+type StandingsRow = StandingsRowView & {
+  updated_at: string | null;
 };
 
 /* ================= CONFIG ================= */
@@ -125,16 +134,52 @@ function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) 
 
 export function TournamentDetailsPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [rosterSavingId, setRosterSavingId] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
+  const [standingsLoading, setStandingsLoading] = useState(false);
+  const [standingsRows, setStandingsRows] = useState<StandingsRow[]>([]);
+  const [standingsUpdatedAt, setStandingsUpdatedAt] = useState<string | null>(null);
+  const [standingsModalOpen, setStandingsModalOpen] = useState(false);
 
   const [tRow, setTRow] = useState<TeamTournamentRow | null>(null);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [registeredIds, setRegisteredIds] = useState<Set<string>>(new Set());
+
+  const standingsPreview = useStandingsPreview({ tournamentId: id ?? "" });
+
+  const loadStandings = useCallback(async () => {
+    if (!id) return;
+    setStandingsLoading(true);
+    const { data, error } = await supabase
+      .from("tournament_standings_current")
+      .select("team_name, position, played, points, updated_at")
+      .eq("tournament_id", id)
+      .order("position", { ascending: true });
+
+    if (error) {
+      console.error("Standings load error", error);
+      setStandingsRows([]);
+      setStandingsUpdatedAt(null);
+      setStandingsLoading(false);
+      return;
+    }
+
+    const rows = (data ?? []) as StandingsRow[];
+    const latestUpdated = rows.reduce<string | null>((latest, row) => {
+      if (!row.updated_at) return latest;
+      if (!latest || row.updated_at > latest) return row.updated_at;
+      return latest;
+    }, null);
+
+    setStandingsRows(rows);
+    setStandingsUpdatedAt(latestUpdated);
+    setStandingsLoading(false);
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +265,10 @@ export function TournamentDetailsPage() {
     return () => { cancelled = true; };
   }, [id]);
 
+  useEffect(() => {
+    loadStandings();
+  }, [loadStandings]);
+
   const tournament = tRow?.tournament ?? null;
 
   const header = useMemo(() => {
@@ -275,6 +324,13 @@ export function TournamentDetailsPage() {
     );
   }, [loading, tournament, tRow]);
 
+  const defaultTab = useMemo(() => {
+    const candidate = searchParams.get("tab");
+    return candidate === "roster" || candidate === "matches" || candidate === "standings"
+      ? candidate
+      : "roster";
+  }, [searchParams]);
+
   return (
     <div className="space-y-4">
       {/* HEADER */}
@@ -284,12 +340,13 @@ export function TournamentDetailsPage() {
 
       {/* TABS */}
       <Card className="rounded-[var(--radius-section)]">
-        <Tabs defaultValue="roster">
+        <Tabs defaultValue={defaultTab}>
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <CardTitle className="text-base">Турнір</CardTitle>
               <TabsList>
                 <TabsTrigger value="roster">Заявка на турнір</TabsTrigger>
+                <TabsTrigger value="standings">Таблиця</TabsTrigger>
                 <TabsTrigger value="matches">Матчі</TabsTrigger>
               </TabsList>
             </div>
@@ -417,6 +474,72 @@ export function TournamentDetailsPage() {
 })}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="standings" className="mt-0">
+              <div className="space-y-4">
+                <StandingsUpdatePanel
+                  loading={standingsPreview.loading}
+                  error={standingsPreview.error}
+                  diff={standingsPreview.diff}
+                  canWrite={standingsPreview.canWrite}
+                  lastFetchedAt={standingsPreview.lastFetchedAt}
+                  linkRequired={standingsPreview.linkRequired}
+                  onPreview={standingsPreview.runPreview}
+                  onOpenModal={() => setStandingsModalOpen(true)}
+                  onReset={standingsPreview.resetPreview}
+                  onLink={standingsPreview.linkTournamentToTeam}
+                />
+
+                <StandingsPreviewModal
+                  open={standingsModalOpen}
+                  onOpenChange={setStandingsModalOpen}
+                  rows={standingsPreview.diff?.rows ?? []}
+                  canWrite={standingsPreview.canWrite}
+                  onConfirm={async () => {
+                    await standingsPreview.confirmApply();
+                    setStandingsModalOpen(false);
+                    await loadStandings();
+                  }}
+                  loading={standingsPreview.loading}
+                />
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Повна турнірна таблиця</span>
+                  <span>{formatUpdatedAgo(standingsUpdatedAt)}</span>
+                </div>
+
+                {standingsLoading ? (
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                ) : standingsRows.length === 0 ? (
+                  <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+                    Таблиця поки не завантажена.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[120px]">Позиція</TableHead>
+                          <TableHead>Команда</TableHead>
+                          <TableHead className="w-[100px]">І</TableHead>
+                          <TableHead className="w-[100px]">О</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {standingsRows.map((row) => (
+                          <TableRow key={row.team_name}>
+                            <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
+                            <TableCell className="font-medium">{row.team_name}</TableCell>
+                            <TableCell className="tabular-nums">{row.played ?? "—"}</TableCell>
+                            <TableCell className="tabular-nums">{row.points ?? "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="matches" className="mt-0">
