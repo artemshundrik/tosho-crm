@@ -432,7 +432,7 @@ export function MatchesShadcnPage() {
 
         const { data: standingsData, error: standingsError } = await supabase
           .from("tournament_standings_current")
-          .select("team_name, position, played, points, updated_at")
+          .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
           .eq("tournament_id", tournament.id)
           .order("position", { ascending: true });
 
@@ -955,12 +955,16 @@ export function MatchesShadcnPage() {
               Турнір: {primaryTournament.name} {primaryTournament.season ?? ""}
             </span>
             <span>•</span>
+            <span>Позиція: {standingsRow?.position ?? "—"}</span>
+            <span>•</span>
+            <span>Очки: {standingsRow?.points ?? "—"}</span>
+            <span>•</span>
             <span>
-              Позиція: {standingsRow?.position ?? "—"}
+              В-Н-П: {standingsRow?.wins ?? "—"}-{standingsRow?.draws ?? "—"}-{standingsRow?.losses ?? "—"}
             </span>
             <span>•</span>
             <span>
-              Очки: {standingsRow?.points ?? "—"}
+              Г: {standingsRow?.goals_for ?? "—"}-{standingsRow?.goals_against ?? "—"}
             </span>
             <span>•</span>
             <span>{formatUpdatedAgo(standingsUpdatedAt)}</span>

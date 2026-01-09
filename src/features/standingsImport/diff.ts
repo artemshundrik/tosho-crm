@@ -3,6 +3,12 @@ export type StandingRow = {
   position: number;
   played: number | null;
   points: number | null;
+  wins?: number | null;
+  draws?: number | null;
+  losses?: number | null;
+  goals_for?: number | null;
+  goals_against?: number | null;
+  logo_url?: string | null;
 };
 
 export type StandingDiffRow = {
@@ -13,6 +19,11 @@ export type StandingDiffRow = {
     position?: [number | null, number | null];
     played?: [number | null, number | null];
     points?: [number | null, number | null];
+    wins?: [number | null, number | null];
+    draws?: [number | null, number | null];
+    losses?: [number | null, number | null];
+    goals_for?: [number | null, number | null];
+    goals_against?: [number | null, number | null];
   };
   kind: "changed" | "same" | "new" | "removed";
 };
@@ -80,9 +91,23 @@ export function computeStandingsDiff(
       position: buildChangeTuple(oldRow.position, nextRow.position),
       played: buildChangeTuple(oldRow.played, nextRow.played),
       points: buildChangeTuple(oldRow.points, nextRow.points),
+      wins: buildChangeTuple(oldRow.wins, nextRow.wins),
+      draws: buildChangeTuple(oldRow.draws, nextRow.draws),
+      losses: buildChangeTuple(oldRow.losses, nextRow.losses),
+      goals_for: buildChangeTuple(oldRow.goals_for, nextRow.goals_for),
+      goals_against: buildChangeTuple(oldRow.goals_against, nextRow.goals_against),
     };
 
-    const hasChanges = Boolean(changes.position || changes.played || changes.points);
+    const hasChanges = Boolean(
+      changes.position ||
+        changes.played ||
+        changes.points ||
+        changes.wins ||
+        changes.draws ||
+        changes.losses ||
+        changes.goals_for ||
+        changes.goals_against
+    );
 
     rows.push({
       team_name: teamName,

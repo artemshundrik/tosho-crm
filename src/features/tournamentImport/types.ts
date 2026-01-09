@@ -1,8 +1,14 @@
 export type StandingRow = {
   position: number;
   team: string;
+  logo_url?: string | null;
   played: number | null;
   points: number | null;
+  wins?: number | null;
+  draws?: number | null;
+  losses?: number | null;
+  goals_for?: number | null;
+  goals_against?: number | null;
 };
 
 export type ParsedStandings = {

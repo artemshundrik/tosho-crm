@@ -60,6 +60,12 @@ function parseRowTokens(tokens: string[], startIndex: number, endIndex: number):
     team,
     played,
     points,
+    wins: null,
+    draws: null,
+    losses: null,
+    goals_for: null,
+    goals_against: null,
+    logo_url: null,
   };
 }
 

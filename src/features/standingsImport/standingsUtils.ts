@@ -3,6 +3,12 @@ export type StandingsRowView = {
   position: number;
   played: number | null;
   points: number | null;
+  wins?: number | null;
+  draws?: number | null;
+  losses?: number | null;
+  goals_for?: number | null;
+  goals_against?: number | null;
+  logo_url?: string | null;
   updated_at?: string | null;
 };
 

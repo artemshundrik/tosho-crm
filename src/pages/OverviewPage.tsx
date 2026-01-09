@@ -230,7 +230,7 @@ export function OverviewPage() {
 
         const { data: standingsData, error: standingsError } = await supabase
           .from("tournament_standings_current")
-          .select("team_name, position, played, points, updated_at")
+          .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
           .eq("tournament_id", tournament.id)
           .order("position", { ascending: true });
 
@@ -521,10 +521,22 @@ export function OverviewPage() {
                           <span className="w-6 text-xs font-semibold text-muted-foreground tabular-nums">
                             {row.position}
                           </span>
+                          {row.logo_url ? (
+                            <img
+                              src={row.logo_url}
+                              alt={row.team_name}
+                              className="h-6 w-6 rounded-full border border-border object-cover"
+                              loading="lazy"
+                            />
+                          ) : null}
                           <span className="font-semibold text-foreground">{row.team_name}</span>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <span>І {row.played ?? "—"}</span>
+                          <span>В {row.wins ?? "—"}</span>
+                          <span>Н {row.draws ?? "—"}</span>
+                          <span>П {row.losses ?? "—"}</span>
+                          <span>Г {row.goals_for ?? "—"}-{row.goals_against ?? "—"}</span>
                           <span>О {row.points ?? "—"}</span>
                         </div>
                       </div>

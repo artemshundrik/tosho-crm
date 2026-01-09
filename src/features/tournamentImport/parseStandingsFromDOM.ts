@@ -74,6 +74,12 @@ function parseNumber(text: string) {
   return Number(trimmed);
 }
 
+function parseGoals(text: string) {
+  const match = text.match(/(\d+)\s*-\s*(\d+)/);
+  if (!match) return { goals_for: null, goals_against: null };
+  return { goals_for: Number(match[1]), goals_against: Number(match[2]) };
+}
+
 function isHeaderLike(text: string) {
   if (!text) return true;
   const normalized = normalizeSpace(text);
@@ -103,6 +109,7 @@ export function parseStandingsFromDOM(doc: Document): ParsedStandings {
     if (row.querySelectorAll("th").length > 0) continue;
 
     const teamCell = row.querySelector(".cell--team");
+    const logoCell = row.querySelector(".cell--team-logo") as HTMLImageElement | null;
     const rowText = normalizeSpace(row.textContent ?? "");
     if (isHeaderLike(rowText)) continue;
 
@@ -121,6 +128,10 @@ export function parseStandingsFromDOM(doc: Document): ParsedStandings {
     const position = positionCellText ? Number(positionCellText) : NaN;
 
     const playedCell = row.querySelector(".cell--games");
+    const winCell = row.querySelector(".cell--win");
+    const drawCell = row.querySelector(".cell--draw");
+    const lossCell = row.querySelector(".cell--defeat");
+    const goalsCell = row.querySelector(".cell--scored");
     const pointsCell = row.querySelector(".cell--total");
 
     const numericCells = cells
@@ -134,6 +145,31 @@ export function parseStandingsFromDOM(doc: Document): ParsedStandings {
         : numericCells.length > 1
           ? numericCells[1]
           : null;
+
+    const wins = winCell
+      ? parseNumber(getText(winCell))
+      : headerMap.has("В") && cells[headerMap.get("В") ?? -1]
+        ? parseNumber(getText(cells[headerMap.get("В") ?? -1]))
+        : null;
+
+    const draws = drawCell
+      ? parseNumber(getText(drawCell))
+      : headerMap.has("Н") && cells[headerMap.get("Н") ?? -1]
+        ? parseNumber(getText(cells[headerMap.get("Н") ?? -1]))
+        : null;
+
+    const losses = lossCell
+      ? parseNumber(getText(lossCell))
+      : headerMap.has("П") && cells[headerMap.get("П") ?? -1]
+        ? parseNumber(getText(cells[headerMap.get("П") ?? -1]))
+        : null;
+
+    const goalsText = goalsCell
+      ? getText(goalsCell)
+      : headerMap.has("Г") && cells[headerMap.get("Г") ?? -1]
+        ? getText(cells[headerMap.get("Г") ?? -1])
+        : "";
+    const goalsParsed = parseGoals(goalsText);
 
     const points = pointsCell
       ? parseNumber(getText(pointsCell))
@@ -150,6 +186,12 @@ export function parseStandingsFromDOM(doc: Document): ParsedStandings {
       team: teamText,
       played,
       points,
+      wins,
+      draws,
+      losses,
+      goals_for: goalsParsed.goals_for,
+      goals_against: goalsParsed.goals_against,
+      logo_url: logoCell?.getAttribute("src") ?? null,
     });
   }
 

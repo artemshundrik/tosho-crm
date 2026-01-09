@@ -157,7 +157,7 @@ export function TournamentDetailsPage() {
     setStandingsLoading(true);
     const { data, error } = await supabase
       .from("tournament_standings_current")
-      .select("team_name, position, played, points, updated_at")
+      .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
       .eq("tournament_id", id)
       .order("position", { ascending: true });
 
@@ -516,28 +516,50 @@ export function TournamentDetailsPage() {
                     Таблиця поки не завантажена.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[120px]">Позиція</TableHead>
-                          <TableHead>Команда</TableHead>
-                          <TableHead className="w-[100px]">І</TableHead>
-                          <TableHead className="w-[100px]">О</TableHead>
+                <div className="overflow-hidden rounded-2xl border border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[120px]">Позиція</TableHead>
+                        <TableHead>Команда</TableHead>
+                        <TableHead className="w-[80px]">І</TableHead>
+                        <TableHead className="w-[80px]">В</TableHead>
+                        <TableHead className="w-[80px]">Н</TableHead>
+                        <TableHead className="w-[80px]">П</TableHead>
+                        <TableHead className="w-[120px]">Г</TableHead>
+                        <TableHead className="w-[80px]">О</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {standingsRows.map((row) => (
+                        <TableRow key={row.team_name}>
+                          <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              {row.logo_url ? (
+                                <img
+                                  src={row.logo_url}
+                                  alt={row.team_name}
+                                  className="h-7 w-7 rounded-full border border-border object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              <span className="font-medium">{row.team_name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="tabular-nums">{row.played ?? "—"}</TableCell>
+                          <TableCell className="tabular-nums">{row.wins ?? "—"}</TableCell>
+                          <TableCell className="tabular-nums">{row.draws ?? "—"}</TableCell>
+                          <TableCell className="tabular-nums">{row.losses ?? "—"}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
+                          </TableCell>
+                          <TableCell className="tabular-nums">{row.points ?? "—"}</TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {standingsRows.map((row) => (
-                          <TableRow key={row.team_name}>
-                            <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
-                            <TableCell className="font-medium">{row.team_name}</TableCell>
-                            <TableCell className="tabular-nums">{row.played ?? "—"}</TableCell>
-                            <TableCell className="tabular-nums">{row.points ?? "—"}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                 )}
               </div>
             </TabsContent>

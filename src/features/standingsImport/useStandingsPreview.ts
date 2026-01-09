@@ -135,7 +135,7 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
 
       const { data: currentRows, error: currentError } = await supabase
         .from("tournament_standings_current")
-        .select("team_name, position, played, points")
+        .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url")
         .eq("tournament_id", tournamentId);
 
       if (currentError) {
@@ -206,6 +206,12 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
         position: row.position,
         played: row.played,
         points: row.points,
+        wins: row.wins ?? null,
+        draws: row.draws ?? null,
+        losses: row.losses ?? null,
+        goals_for: row.goals_for ?? null,
+        goals_against: row.goals_against ?? null,
+        logo_url: row.logo_url ?? null,
         updated_at: updatedAt,
       }));
 
@@ -226,6 +232,12 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
         position: row.position,
         played: row.played,
         points: row.points,
+        wins: row.wins ?? null,
+        draws: row.draws ?? null,
+        losses: row.losses ?? null,
+        goals_for: row.goals_for ?? null,
+        goals_against: row.goals_against ?? null,
+        logo_url: row.logo_url ?? null,
       }));
 
       const { error: runRowsError } = await supabase

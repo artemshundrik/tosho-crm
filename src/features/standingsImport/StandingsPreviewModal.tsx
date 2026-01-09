@@ -41,8 +41,12 @@ export function StandingsPreviewModal({
               <TableRow>
                 <TableHead>Команда</TableHead>
                 <TableHead className="w-[120px]">Позиція</TableHead>
-                <TableHead className="w-[120px]">І</TableHead>
-                <TableHead className="w-[120px]">О</TableHead>
+                <TableHead className="w-[90px]">І</TableHead>
+                <TableHead className="w-[90px]">В</TableHead>
+                <TableHead className="w-[90px]">Н</TableHead>
+                <TableHead className="w-[90px]">П</TableHead>
+                <TableHead className="w-[120px]">Г</TableHead>
+                <TableHead className="w-[90px]">О</TableHead>
                 <TableHead className="w-[120px]">Статус</TableHead>
               </TableRow>
             </TableHeader>
@@ -51,6 +55,11 @@ export function StandingsPreviewModal({
                 const positionChange = row.changes.position;
                 const playedChange = row.changes.played;
                 const pointsChange = row.changes.points;
+                const winsChange = row.changes.wins;
+                const drawsChange = row.changes.draws;
+                const lossesChange = row.changes.losses;
+                const goalsForChange = row.changes.goals_for;
+                const goalsAgainstChange = row.changes.goals_against;
                 const next = row.next ?? row.old;
 
                 return (
@@ -61,6 +70,20 @@ export function StandingsPreviewModal({
                     </TableCell>
                     <TableCell className={cellClass(Boolean(playedChange), row.kind)}>
                       {next?.played ?? "—"}
+                    </TableCell>
+                    <TableCell className={cellClass(Boolean(winsChange), row.kind)}>
+                      {next?.wins ?? "—"}
+                    </TableCell>
+                    <TableCell className={cellClass(Boolean(drawsChange), row.kind)}>
+                      {next?.draws ?? "—"}
+                    </TableCell>
+                    <TableCell className={cellClass(Boolean(lossesChange), row.kind)}>
+                      {next?.losses ?? "—"}
+                    </TableCell>
+                    <TableCell
+                      className={cellClass(Boolean(goalsForChange || goalsAgainstChange), row.kind)}
+                    >
+                      {next?.goals_for ?? "—"}-{next?.goals_against ?? "—"}
                     </TableCell>
                     <TableCell className={cellClass(Boolean(pointsChange), row.kind)}>
                       {next?.points ?? "—"}

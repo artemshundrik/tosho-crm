@@ -29,6 +29,12 @@ export function parseStandingsFromHtmlDom(html: string): ParsedStandings {
       position: row.position,
       played: row.played ?? null,
       points: row.points ?? null,
+      wins: row.wins ?? null,
+      draws: row.draws ?? null,
+      losses: row.losses ?? null,
+      goals_for: row.goals_for ?? null,
+      goals_against: row.goals_against ?? null,
+      logo_url: row.logo_url ?? null,
     })),
   };
 }
