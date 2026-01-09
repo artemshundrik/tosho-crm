@@ -46,6 +46,7 @@ import UpdatePasswordPage from "./pages/UpdatePasswordPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import ActivityPage from "./pages/ActivityPage";
 import TournamentImportLabPage from "./pages/dev/TournamentImportLabPage";
+import TournamentStandingsImportPage from "./pages/dev/TournamentStandingsImportPage";
 
 // =======================
 // Types
@@ -394,16 +395,28 @@ function AppRoutes() {
     <Routes>
       {/* public */}
       {import.meta.env.DEV ? (
-        <Route
-          path="/dev/tournament-import-lab"
-          element={
-            <RequireAuth session={session} loading={loading}>
-              <AppLayout>
-                <TournamentImportLabPage />
-              </AppLayout>
-            </RequireAuth>
-          }
-        />
+        <>
+          <Route
+            path="/dev/tournament-import-lab"
+            element={
+              <RequireAuth session={session} loading={loading}>
+                <AppLayout>
+                  <TournamentImportLabPage />
+                </AppLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dev/tournament-standings"
+            element={
+              <RequireAuth session={session} loading={loading}>
+                <AppLayout>
+                  <TournamentStandingsImportPage />
+                </AppLayout>
+              </RequireAuth>
+            }
+          />
+        </>
       ) : null}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />

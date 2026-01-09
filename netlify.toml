@@ -4,3 +4,8 @@ publish = "dist"
 
 [build.environment]
 NODE_VERSION = "20"
+
+[[redirects]]
+from = "/api/fetch-v9ky-standings"
+to = "/.netlify/functions/fetch-v9ky-standings"
+status = 200
