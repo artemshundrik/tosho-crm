@@ -4,10 +4,14 @@ import {
   type ImportRunSummary,
   type MatchItem,
   type ParsedTournamentData,
+  type ParserMode,
 } from "@/features/tournamentImport/types";
 import { normalizeSpace } from "@/features/tournamentImport/textUtils";
+import { parseHtmlToDocument } from "@/features/tournamentImport/domUtils";
 import { parseStandingsFromText } from "@/features/tournamentImport/parseStandingsFromText";
 import { parseCalendarMatchesFromText } from "@/features/tournamentImport/parseCalendarMatchesFromText";
+import { parseStandingsFromDOM } from "@/features/tournamentImport/parseStandingsFromDOM";
+import { parseCalendarMatchesFromDOM } from "@/features/tournamentImport/parseCalendarMatchesFromDOM";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -53,13 +57,11 @@ export default function TournamentImportLabPage() {
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<CopyError>(null);
-  const [normalizedText, setNormalizedText] = useState<string>("");
-  const [standingsBlock, setStandingsBlock] = useState<string | null>(null);
-  const [matchesBlock, setMatchesBlock] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<ParsedTournamentData | null>(null);
+  const [snapshotHtml, setSnapshotHtml] = useState<string>("");
   const [runMeta, setRunMeta] = useState<RunMeta | null>(null);
   const [ourTeamQuery, setOurTeamQuery] = useState<string>("FAYNA");
   const [onlyOurTeam, setOnlyOurTeam] = useState<boolean>(false);
+  const [parserMode, setParserMode] = useState<ParserMode>("dom");
 
   const handleLoad = async () => {
     setState("loading");
@@ -75,32 +77,12 @@ export default function TournamentImportLabPage() {
       }
 
       const html = await response.text();
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const textContent = doc.body.textContent ?? "";
-      const normalized = normalizeSpace(textContent);
-
-      const standingsBlockText = extractBlock(normalized, STANDINGS_LABEL, MATCHES_LABEL);
-      const matchesBlockText = extractBlock(normalized, MATCHES_LABEL);
-
-      const standings = parseStandingsFromText(textContent);
-      const matches = parseCalendarMatchesFromText(textContent);
-
-      const parsedData: ParsedTournamentData = {
-        standings,
-        matches,
-      };
-
-      setNormalizedText(normalized);
-      setStandingsBlock(standingsBlockText);
-      setMatchesBlock(matchesBlockText);
-      setParsed(parsedData);
-
+      setSnapshotHtml(html);
       setRunMeta({
         run_id: crypto.randomUUID(),
         snapshot_file: SNAPSHOT_FILE,
         parsed_at: new Date().toISOString(),
       });
-
       setState("ready");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -108,6 +90,42 @@ export default function TournamentImportLabPage() {
       setState("error");
     }
   };
+
+  const snapshotDoc = useMemo(() => {
+    if (!snapshotHtml) return null;
+    return parseHtmlToDocument(snapshotHtml);
+  }, [snapshotHtml]);
+
+  const normalizedText = useMemo(() => {
+    if (!snapshotDoc) return "";
+    return normalizeSpace(snapshotDoc.body.textContent ?? "");
+  }, [snapshotDoc]);
+
+  const { standingsBlock, matchesBlock } = useMemo(() => {
+    if (!normalizedText) {
+      return { standingsBlock: null, matchesBlock: null };
+    }
+    return {
+      standingsBlock: extractBlock(normalizedText, STANDINGS_LABEL, MATCHES_LABEL),
+      matchesBlock: extractBlock(normalizedText, MATCHES_LABEL),
+    };
+  }, [normalizedText]);
+
+  const parsed = useMemo<ParsedTournamentData | null>(() => {
+    if (!snapshotDoc) return null;
+
+    if (parserMode === "dom") {
+      return {
+        standings: parseStandingsFromDOM(snapshotDoc),
+        matches: parseCalendarMatchesFromDOM(snapshotDoc),
+      };
+    }
+
+    return {
+      standings: parseStandingsFromText(normalizedText),
+      matches: parseCalendarMatchesFromText(normalizedText),
+    };
+  }, [normalizedText, parserMode, snapshotDoc]);
 
   const filteredMatches = useMemo(() => {
     if (!parsed) return [] as MatchItem[];
@@ -126,6 +144,7 @@ export default function TournamentImportLabPage() {
       run_id: runMeta.run_id,
       snapshot_file: runMeta.snapshot_file,
       parsed_at: runMeta.parsed_at,
+      parser_mode: parserMode,
       standings_rows: parsed.standings.rows.length,
       matches_found: parsed.matches.length,
       our_team_matches: ourTeamMatchesCount,
@@ -134,7 +153,7 @@ export default function TournamentImportLabPage() {
         only_our_team: onlyOurTeam,
       },
     };
-  }, [onlyOurTeam, ourTeamMatchesCount, ourTeamQuery, parsed, runMeta]);
+  }, [onlyOurTeam, ourTeamMatchesCount, ourTeamQuery, parsed, parserMode, runMeta]);
 
   const summaryLine = useMemo(() => {
     if (!runSummary) return null;
@@ -142,7 +161,8 @@ export default function TournamentImportLabPage() {
     const parsedAt = new Date(runSummary.parsed_at).toLocaleString("uk-UA", {
       hour12: false,
     });
-    return `Run: ${shortId} • Parsed: ${parsedAt} • Standings: ${runSummary.standings_rows} • Matches: ${runSummary.matches_found} • Our team: ${runSummary.our_team_matches}`;
+    const modeLabel = runSummary.parser_mode === "dom" ? "DOM" : "Text";
+    return `Run: ${shortId} • Parsed: ${parsedAt} • Mode: ${modeLabel} • Standings: ${runSummary.standings_rows} • Matches: ${runSummary.matches_found} • Our team: ${runSummary.our_team_matches}`;
   }, [runSummary]);
 
   const standingsJson = useMemo(() => {
@@ -154,13 +174,15 @@ export default function TournamentImportLabPage() {
     if (!parsed) return "";
     return JSON.stringify(
       {
+        parser_mode: parserMode,
+        standings: parsed.standings,
         matches: parsed.matches,
-        filteredMatches,
+        filtered_matches: filteredMatches,
       },
       null,
       2,
     );
-  }, [filteredMatches, parsed]);
+  }, [filteredMatches, parsed, parserMode]);
 
   const summaryJson = useMemo(() => {
     if (!runSummary) return "";
@@ -226,6 +248,32 @@ export default function TournamentImportLabPage() {
           </label>
         </div>
 
+        <div className="flex flex-wrap items-center gap-4 text-sm text-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">Parser mode</span>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="parser-mode"
+              value="dom"
+              checked={parserMode === "dom"}
+              onChange={() => setParserMode("dom")}
+              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+            <span>DOM (accurate)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="parser-mode"
+              value="text"
+              checked={parserMode === "text"}
+              onChange={() => setParserMode("text")}
+              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+            <span>Text (prototype)</span>
+          </label>
+        </div>
+
         {summaryLine ? (
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             {summaryLine}
@@ -267,7 +315,7 @@ export default function TournamentImportLabPage() {
           <p className="mt-3 text-xs text-muted-foreground">{toPreview(matchesBlock)}</p>
           <div className="mt-4 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              Parsed matches JSON · {filteredMatches.length} shown
+              Export JSON · {filteredMatches.length} shown
             </span>
             <button
               type="button"

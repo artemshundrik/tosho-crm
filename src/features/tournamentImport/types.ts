@@ -24,10 +24,13 @@ export type ParsedTournamentData = {
   matches: MatchItem[];
 };
 
+export type ParserMode = "text" | "dom";
+
 export type ImportRunSummary = {
   run_id: string;
   snapshot_file: string;
   parsed_at: string;
+  parser_mode: ParserMode;
   standings_rows: number;
   matches_found: number;
   our_team_matches: number;
