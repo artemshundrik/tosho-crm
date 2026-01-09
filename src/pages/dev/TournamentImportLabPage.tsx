@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   type ImportRunSummary,
@@ -20,6 +20,8 @@ import {
   parseDateTextToISO,
 } from "@/features/tournamentImport/dateUtils";
 import { sha1Hex, stableKeyForMatch } from "@/features/tournamentImport/hashUtils";
+import { fetchAndParseAllTabs } from "@/features/tournamentImport/multiTabFetch";
+import { inferBaseTournamentUrl } from "@/features/tournamentImport/v9kyUrl";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -35,12 +37,21 @@ type Coverage = {
   matches_per_tab: Record<string, number>;
   tabs_found: number;
   raw_matches: number;
+  fetched_tabs: number;
+  skipped_tabs: number;
+  fetch_errors: Array<{ tab_label: string; url: string; error: string }>;
 };
+
+type ProgressState = {
+  current: number;
+  total: number;
+  tab_label: string;
+} | null;
 
 const STANDINGS_LABEL = "Турнірна таблиця";
 const MATCHES_LABEL = "Календар матчів";
 const SNAPSHOT_FILE = "/snapshots/v9ky-gold-league.html";
-const SNAPSHOT_URL =
+const TOURNAMENT_URL =
   "https://v9ky.in.ua/2025-26_Zyma_Kyiv_Gold_League_Futsal?first_day=2025-12-27&last_day=0";
 
 function extractBlock(source: string, startLabel: string, endLabel?: string) {
@@ -108,6 +119,37 @@ function buildCoverage(tabLabels: string[], matches: MatchItem[], rawMatches: nu
     matches_per_tab: matchesPerTab,
     tabs_found: tabLabels.length,
     raw_matches: rawMatches,
+    fetched_tabs: 0,
+    skipped_tabs: 0,
+    fetch_errors: [],
+  };
+}
+
+function buildCoverageFromTabs(
+  tabs: Array<{ label: string; matches_count: number; skipped: boolean; error: string | null; url: string | null }>,
+): Coverage {
+  const matchesPerTab: Record<string, number> = {};
+  const tabLabels = tabs.map((tab) => tab.label);
+  const fetchErrors = tabs
+    .filter((tab) => tab.error && tab.url)
+    .map((tab) => ({
+      tab_label: tab.label,
+      url: tab.url ?? "",
+      error: tab.error ?? "",
+    }));
+
+  for (const tab of tabs) {
+    matchesPerTab[tab.label] = tab.matches_count;
+  }
+
+  return {
+    tab_labels: tabLabels,
+    matches_per_tab: matchesPerTab,
+    tabs_found: tabs.length,
+    raw_matches: tabs.reduce((sum, tab) => sum + tab.matches_count, 0),
+    fetched_tabs: tabs.filter((tab) => tab.url && !tab.error && !tab.skipped).length,
+    skipped_tabs: tabs.filter((tab) => tab.skipped).length,
+    fetch_errors: fetchErrors,
   };
 }
 
@@ -122,12 +164,20 @@ export default function TournamentImportLabPage() {
     matches_per_tab: {},
     tabs_found: 0,
     raw_matches: 0,
+    fetched_tabs: 0,
+    skipped_tabs: 0,
+    fetch_errors: [],
   });
   const [seasonLabel, setSeasonLabel] = useState<string | null>(null);
   const [runMeta, setRunMeta] = useState<RunMeta | null>(null);
   const [ourTeamQuery, setOurTeamQuery] = useState<string>("FAYNA");
   const [onlyOurTeam, setOnlyOurTeam] = useState<boolean>(false);
   const [parserMode, setParserMode] = useState<ParserMode>("dom");
+  const [progress, setProgress] = useState<ProgressState>(null);
+  const [isFetchingTabs, setIsFetchingTabs] = useState(false);
+  const [fetchAborted, setFetchAborted] = useState(false);
+  const [multiWarnings, setMultiWarnings] = useState<Array<{ type: string; message: string }>>([]);
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleLoad = async () => {
     setState("loading");
@@ -157,6 +207,14 @@ export default function TournamentImportLabPage() {
     }
   };
 
+  const handleStop = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsFetchingTabs(false);
+    setProgress(null);
+    setFetchAborted(true);
+  };
+
   const snapshotDoc = useMemo(() => {
     if (!rawHtml) return null;
     return parseHtmlToDocument(rawHtml);
@@ -181,13 +239,56 @@ export default function TournamentImportLabPage() {
     if (!snapshotDoc) {
       setParsed(null);
       setSeasonLabel(null);
-      setCoverage({ tab_labels: [], matches_per_tab: {}, tabs_found: 0, raw_matches: 0 });
+      setMultiWarnings([]);
+      setCoverage({
+        tab_labels: [],
+        matches_per_tab: {},
+        tabs_found: 0,
+        raw_matches: 0,
+        fetched_tabs: 0,
+        skipped_tabs: 0,
+        fetch_errors: [],
+      });
       return;
     }
 
     let cancelled = false;
+    const baseSeason = inferSeasonLabelFromDoc(snapshotDoc, TOURNAMENT_URL);
 
     const parseAsync = async () => {
+      if (parserMode === "dom_all_tabs") {
+        setIsFetchingTabs(true);
+        setFetchAborted(false);
+        setMultiWarnings([]);
+        const controller = new AbortController();
+        abortRef.current = controller;
+        setProgress(null);
+
+        const standings = parseStandingsFromDOM(snapshotDoc);
+        const result = await fetchAndParseAllTabs({
+          tournamentUrl: TOURNAMENT_URL,
+          seasonLabel: baseSeason,
+          docWithTabs: snapshotDoc,
+          ourTeamQuery,
+          rateLimitMs: 200,
+          signal: controller.signal,
+          onProgress: (p) => {
+            if (cancelled) return;
+            setProgress(p);
+          },
+        });
+
+        if (cancelled) return;
+
+        setParsed({ standings, matches: result.merged_matches });
+        setSeasonLabel(result.season_label);
+        setCoverage(buildCoverageFromTabs(result.tabs));
+        setMultiWarnings(result.warnings);
+        setIsFetchingTabs(false);
+        setProgress(null);
+        return;
+      }
+
       let standings = parseStandingsFromText(normalizedText);
       let calendar: ParsedCalendar = { tab_labels: [], matches: [], raw_matches: 0 };
 
@@ -203,22 +304,31 @@ export default function TournamentImportLabPage() {
         };
       }
 
-      const season = inferSeasonLabelFromDoc(snapshotDoc, SNAPSHOT_URL);
-      const normalizedMatches = await normalizeMatches(calendar.matches, season);
+      const normalizedMatches = await normalizeMatches(calendar.matches, baseSeason);
 
       if (cancelled) return;
 
-      setSeasonLabel(season);
+      setSeasonLabel(baseSeason);
       setCoverage(buildCoverage(calendar.tab_labels, normalizedMatches, calendar.raw_matches));
       setParsed({ standings, matches: normalizedMatches });
+      setMultiWarnings([]);
     };
 
-    void parseAsync();
+    void parseAsync().catch((err) => {
+      if (cancelled) return;
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+      setState("error");
+      setIsFetchingTabs(false);
+      setProgress(null);
+    });
 
     return () => {
       cancelled = true;
+      abortRef.current?.abort();
+      abortRef.current = null;
     };
-  }, [normalizedText, parserMode, snapshotDoc]);
+  }, [normalizedText, parserMode, snapshotDoc, ourTeamQuery]);
 
   const filteredMatches = useMemo(() => {
     if (!parsed) return [] as MatchItem[];
@@ -258,8 +368,55 @@ export default function TournamentImportLabPage() {
       });
     }
 
+    if (coverage.skipped_tabs > 0) {
+      entries.push({
+        type: "tabs",
+        message: `Skipped ${coverage.skipped_tabs} tabs due to missing date windows.`,
+      });
+    }
+
+    if (coverage.fetch_errors.length > 0) {
+      entries.push({
+        type: "fetch",
+        message: `Fetch errors on ${coverage.fetch_errors.length} tabs.`,
+      });
+    }
+
+    if (fetchAborted) {
+      entries.push({
+        type: "fetch",
+        message: "Fetch aborted.",
+      });
+    }
+
+    if (multiWarnings.length > 0) {
+      entries.push(...multiWarnings);
+    }
+
+    if (state === "ready" && !isFetchingTabs && abortRef.current === null && parserMode === "dom_all_tabs") {
+      if (progress === null && coverage.fetched_tabs === 0 && coverage.fetch_errors.length === 0) {
+        entries.push({
+          type: "fetch",
+          message: "No tabs were fetched.",
+        });
+      }
+    }
+
     return entries;
-  }, [coverage.raw_matches, coverage.tabs_found, parsed]);
+  }, [
+    coverage.fetch_errors.length,
+    coverage.raw_matches,
+    coverage.skipped_tabs,
+    coverage.tabs_found,
+    coverage.fetched_tabs,
+    fetchAborted,
+    isFetchingTabs,
+    multiWarnings,
+    parsed,
+    parserMode,
+    progress,
+    state,
+  ]);
 
   const runSummary = useMemo<ImportRunSummary | null>(() => {
     if (!runMeta || !parsed) return null;
@@ -276,20 +433,31 @@ export default function TournamentImportLabPage() {
       our_team_matches: ourTeamMatchesCount,
       season_label: seasonLabel,
       warnings,
+      fetched_tabs: coverage.fetched_tabs,
+      skipped_tabs: coverage.skipped_tabs,
+      fetch_errors: coverage.fetch_errors,
+      progress: {
+        current: progress?.current ?? 0,
+        total: progress?.total ?? 0,
+      },
       filters: {
         our_team_query: ourTeamQuery,
         only_our_team: onlyOurTeam,
       },
     };
   }, [
+    coverage.fetch_errors,
     coverage.matches_per_tab,
+    coverage.skipped_tabs,
     coverage.tab_labels,
     coverage.tabs_found,
+    coverage.fetched_tabs,
     onlyOurTeam,
     ourTeamMatchesCount,
     ourTeamQuery,
     parsed,
     parserMode,
+    progress,
     runMeta,
     seasonLabel,
     warnings,
@@ -301,15 +469,25 @@ export default function TournamentImportLabPage() {
     const parsedAt = new Date(runSummary.parsed_at).toLocaleString("uk-UA", {
       hour12: false,
     });
-    const modeLabel = runSummary.parser_mode === "dom" ? "DOM" : "Text";
+    const modeLabel =
+      runSummary.parser_mode === "dom_all_tabs"
+        ? "DOM all tabs"
+        : runSummary.parser_mode === "dom"
+          ? "DOM"
+          : "Text";
     return `Run: ${shortId} • Parsed: ${parsedAt} • Mode: ${modeLabel} • Standings: ${runSummary.standings_rows} • Matches: ${runSummary.matches_found} • Our team: ${runSummary.our_team_matches}`;
   }, [runSummary]);
 
   const coverageLine = useMemo(() => {
     if (!runSummary) return null;
     const unknown = coverage.matches_per_tab.unknown ?? 0;
-    return `Tabs: ${runSummary.tabs_found} • Matches: ${runSummary.matches_found} • Unknown-tab: ${unknown} • Season: ${runSummary.season_label ?? "—"}`;
-  }, [coverage.matches_per_tab.unknown, runSummary]);
+    return `Tabs: ${runSummary.tabs_found} • Fetched: ${coverage.fetched_tabs} • Skipped: ${coverage.skipped_tabs} • Matches: ${runSummary.matches_found} • Unknown-tab: ${unknown} • Season: ${runSummary.season_label ?? "—"}`;
+  }, [coverage.fetched_tabs, coverage.matches_per_tab.unknown, coverage.skipped_tabs, runSummary]);
+
+  const progressLine = useMemo(() => {
+    if (!progress) return null;
+    return `Fetching tab ${progress.current}/${progress.total}: ${progress.tab_label}`;
+  }, [progress]);
 
   const standingsJson = useMemo(() => {
     if (!parsed) return "";
@@ -322,9 +500,13 @@ export default function TournamentImportLabPage() {
       {
         parser_mode: parserMode,
         season_label: seasonLabel,
+        base_url: inferBaseTournamentUrl(TOURNAMENT_URL),
         tabs_found: coverage.tabs_found,
         tab_labels: coverage.tab_labels,
         matches_per_tab: coverage.matches_per_tab,
+        fetched_tabs: coverage.fetched_tabs,
+        skipped_tabs: coverage.skipped_tabs,
+        fetch_errors: coverage.fetch_errors,
         matches: parsed.matches,
         filtered_matches: filteredMatches,
         warnings,
@@ -333,9 +515,12 @@ export default function TournamentImportLabPage() {
       2,
     );
   }, [
+    coverage.fetch_errors,
     coverage.matches_per_tab,
     coverage.tab_labels,
     coverage.tabs_found,
+    coverage.fetched_tabs,
+    coverage.skipped_tabs,
     filteredMatches,
     parsed,
     parserMode,
@@ -372,11 +557,20 @@ export default function TournamentImportLabPage() {
           <button
             type="button"
             onClick={handleLoad}
-            disabled={state === "loading"}
+            disabled={state === "loading" || isFetchingTabs}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {state === "loading" ? "Завантаження..." : "Завантажити snapshot"}
           </button>
+          {isFetchingTabs ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+            >
+              Stop
+            </button>
+          ) : null}
           <div className="text-xs text-muted-foreground">
             {state === "idle" && "Очікує на завантаження"}
             {state === "ready" && "Snapshot готовий"}
@@ -384,6 +578,12 @@ export default function TournamentImportLabPage() {
           </div>
           {error ? <span className="text-xs text-destructive">{error}</span> : null}
         </div>
+
+        {progressLine ? (
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {progressLine}
+          </div>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-foreground">
@@ -419,6 +619,17 @@ export default function TournamentImportLabPage() {
               className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <span>DOM (accurate)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="parser-mode"
+              value="dom_all_tabs"
+              checked={parserMode === "dom_all_tabs"}
+              onChange={() => setParserMode("dom_all_tabs")}
+              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+            <span>DOM — ALL TABS (multi-fetch)</span>
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -468,6 +679,13 @@ export default function TournamentImportLabPage() {
             </div>
           ) : null}
         </div>
+        {coverage.fetch_errors.length > 0 ? (
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            {coverage.fetch_errors.map((item) => (
+              <div key={`${item.tab_label}-${item.url}`}>{item.tab_label}: {item.error}</div>
+            ))}
+          </div>
+        ) : null}
         {warnings.length > 0 ? (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             {warnings.map((warning) => (

@@ -28,7 +28,7 @@ export type ParsedTournamentData = {
   matches: MatchItem[];
 };
 
-export type ParserMode = "text" | "dom";
+export type ParserMode = "text" | "dom" | "dom_all_tabs";
 
 export type ImportRunSummary = {
   run_id: string;
@@ -43,6 +43,10 @@ export type ImportRunSummary = {
   our_team_matches: number;
   season_label: string | null;
   warnings: Array<{ type: string; message: string }>;
+  fetched_tabs: number;
+  skipped_tabs: number;
+  fetch_errors: Array<{ tab_label: string; url: string; error: string }>;
+  progress: { current: number; total: number };
   filters: {
     our_team_query: string;
     only_our_team: boolean;
