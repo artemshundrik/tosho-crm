@@ -375,7 +375,7 @@ export function MatchesShadcnPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [primaryTournament, setPrimaryTournament] = React.useState<PrimaryTournament | null>(null);
-  const [standingsRow, setStandingsRow] = React.useState<StandingsRow | null>(null);
+  const [standingsRow, setStandingsRow] = React.useState<StandingsRowView | null>(null);
   const [standingsUpdatedAt, setStandingsUpdatedAt] = React.useState<string | null>(null);
 
   const [teamLogo, setTeamLogo] = React.useState<string | null>(null);
@@ -426,8 +426,12 @@ export function MatchesShadcnPage() {
 
       if (cancelled) return;
 
-      if (!primaryError && primaryRow?.tournament) {
-        const tournament = primaryRow.tournament as PrimaryTournament;
+      const tournamentRaw = Array.isArray(primaryRow?.tournament)
+        ? primaryRow?.tournament[0]
+        : primaryRow?.tournament;
+
+      if (!primaryError && tournamentRaw) {
+        const tournament = tournamentRaw as PrimaryTournament;
         setPrimaryTournament(tournament);
 
         const { data: standingsData, error: standingsError } = await supabase

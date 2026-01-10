@@ -224,8 +224,12 @@ export function OverviewPage() {
         .eq("is_primary", true)
         .maybeSingle();
 
-      if (!primaryError && primaryRow?.tournament) {
-        const tournament = primaryRow.tournament as PrimaryTournament;
+      const tournamentRaw = Array.isArray(primaryRow?.tournament)
+        ? primaryRow?.tournament[0]
+        : primaryRow?.tournament;
+
+      if (!primaryError && tournamentRaw) {
+        const tournament = tournamentRaw as PrimaryTournament;
         setPrimaryTournament(tournament);
 
         const { data: standingsData, error: standingsError } = await supabase
