@@ -198,6 +198,7 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
           tournament_id: tournamentId,
           rows_count: previewRows.length,
           source_url: tournament.external_url,
+          fetched_at: new Date().toISOString(),
           status: "completed",
         })
         .select("id")

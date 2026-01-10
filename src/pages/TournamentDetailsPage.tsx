@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { ArrowLeft, ArrowRight, CalendarDays, Trophy } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Minus, Trophy } from "lucide-react";
 import { StandingsPreviewModal } from "@/features/standingsImport/StandingsPreviewModal";
 import { StandingsUpdatePanel } from "@/features/standingsImport/StandingsUpdatePanel";
 import { useStandingsPreview } from "@/features/standingsImport/useStandingsPreview";
@@ -62,6 +62,7 @@ type Player = {
 
 type StandingsRow = StandingsRowView & {
   updated_at: string | null;
+  position_delta: number | null;
 };
 
 /* ================= CONFIG ================= */
@@ -169,7 +170,45 @@ export function TournamentDetailsPage() {
       return;
     }
 
-    const rows = (data ?? []) as StandingsRow[];
+    const { data: runsData, error: runsError } = await supabase
+      .from("tournament_standings_runs")
+      .select("id, fetched_at")
+      .eq("tournament_id", id)
+      .order("fetched_at", { ascending: false, nullsFirst: false })
+      .limit(2);
+
+    if (runsError) {
+      console.error("Standings runs load error", runsError);
+    }
+
+    const previousRunId = runsData && runsData.length >= 2 ? runsData[1]?.id : null;
+    let previousPositions = new Map<string, number>();
+
+    if (previousRunId) {
+      const { data: prevRows, error: prevError } = await supabase
+        .from("tournament_standings_rows")
+        .select("team_name, position")
+        .eq("tournament_id", id)
+        .eq("run_id", previousRunId);
+
+      if (prevError) {
+        console.error("Standings previous rows load error", prevError);
+      } else {
+        previousPositions = new Map(
+          (prevRows ?? []).map((row) => [row.team_name, row.position as number]),
+        );
+      }
+    }
+
+    const rows = ((data ?? []) as StandingsRow[]).map((row) => {
+      const prevPosition = previousPositions.get(row.team_name);
+      const delta =
+        typeof prevPosition === "number" ? prevPosition - row.position : null;
+      return {
+        ...row,
+        position_delta: delta,
+      };
+    });
     const latestUpdated = rows.reduce<string | null>((latest, row) => {
       if (!row.updated_at) return latest;
       if (!latest || row.updated_at > latest) return row.updated_at;
@@ -520,8 +559,9 @@ export function TournamentDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[120px]">Позиція</TableHead>
-                        <TableHead>Команда</TableHead>
+                      <TableHead className="w-[120px]">Позиція</TableHead>
+                      <TableHead className="w-[80px] text-center"></TableHead>
+                      <TableHead>Команда</TableHead>
                         <TableHead className="w-[80px]">І</TableHead>
                         <TableHead className="w-[80px]">В</TableHead>
                         <TableHead className="w-[80px]">Н</TableHead>
@@ -531,12 +571,33 @@ export function TournamentDetailsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {standingsRows.map((row) => (
-                        <TableRow key={row.team_name}>
-                          <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              {row.logo_url ? (
+                        {standingsRows.map((row) => (
+                          <TableRow key={row.team_name}>
+                            <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
+                            <TableCell className="text-center">
+                              {row.position_delta === null ? (
+                                <span className="inline-flex items-center justify-center text-xs text-muted-foreground">
+                                  <Minus className="h-3.5 w-3.5" />
+                                </span>
+                              ) : row.position_delta > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-500">
+                                  <ArrowUp className="h-3.5 w-3.5" />
+                                  {row.position_delta}
+                                </span>
+                              ) : row.position_delta < 0 ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-500">
+                                  <ArrowDown className="h-3.5 w-3.5" />
+                                  {Math.abs(row.position_delta)}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center text-xs text-muted-foreground">
+                                  <Minus className="h-3.5 w-3.5" />
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                {row.logo_url ? (
                                 <img
                                   src={row.logo_url}
                                   alt={row.team_name}
