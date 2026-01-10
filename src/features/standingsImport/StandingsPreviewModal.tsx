@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -29,15 +30,23 @@ export function StandingsPreviewModal({
   onConfirm,
   loading,
 }: Props) {
+  const statusTone = (kind: StandingDiffRow["kind"]) => {
+    if (kind === "new") return "success";
+    if (kind === "removed") return "danger";
+    if (kind === "changed") return "info";
+    return "neutral";
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader className="px-6 pt-6 pr-12">
           <DialogTitle>Перевірка змін</DialogTitle>
         </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-auto rounded-2xl border border-border bg-card/60">
-          <Table>
+        <div className="px-6">
+          <div className="max-h-[60vh] overflow-auto rounded-2xl border border-border bg-card/60">
+            <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
                 <TableHead className="pl-4">Команда</TableHead>
@@ -136,17 +145,20 @@ export function StandingsPreviewModal({
                     >
                       {next?.points ?? "—"}
                     </TableCell>
-                    <TableCell className="text-center text-xs uppercase tracking-wide text-muted-foreground">
-                      {row.kind}
+                    <TableCell className="text-center">
+                      <Badge tone={statusTone(row.kind)} size="sm" pill>
+                        {row.kind}
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
+          </div>
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="mt-4 px-6 pb-6">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
