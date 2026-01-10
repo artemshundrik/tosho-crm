@@ -559,8 +559,8 @@ export function TournamentDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                      <TableHead className="w-[120px]">Позиція</TableHead>
-                      <TableHead className="w-[80px] text-center"></TableHead>
+                      <TableHead className="w-[80px]">№</TableHead>
+                      <TableHead className="w-[48px] text-center"></TableHead>
                       <TableHead>Команда</TableHead>
                         <TableHead className="w-[80px]">І</TableHead>
                         <TableHead className="w-[80px]">В</TableHead>
@@ -574,7 +574,7 @@ export function TournamentDetailsPage() {
                         {standingsRows.map((row) => (
                           <TableRow key={row.team_name}>
                             <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center tabular-nums">
                               {row.position_delta === null ? (
                                 <span className="inline-flex items-center justify-center text-xs text-muted-foreground">
                                   <Minus className="h-3.5 w-3.5" />
