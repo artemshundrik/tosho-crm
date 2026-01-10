@@ -559,8 +559,8 @@ export function TournamentDetailsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                      <TableHead className="w-[80px]">№</TableHead>
-                      <TableHead className="w-[48px] text-center"></TableHead>
+                      <TableHead className="w-[56px]">№</TableHead>
+                      <TableHead className="w-[28px] text-center"></TableHead>
                       <TableHead>Команда</TableHead>
                         <TableHead className="w-[80px]">І</TableHead>
                         <TableHead className="w-[80px]">В</TableHead>
