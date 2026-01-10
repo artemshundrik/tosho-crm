@@ -55,12 +55,12 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-card/60 p-4">
+      <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
             <TabsList
               className={cn(
-                "inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1",
+                "inline-flex h-10 items-center rounded-[var(--radius-inner)] p-1",
                 "bg-muted border border-border"
               )}
             >
@@ -127,13 +127,13 @@ export default function ActivityPage() {
           </Button>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-5">
           {loading ? (
-            <div className="rounded-2xl border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
               Завантаження...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
               Поки немає дій.
             </div>
           ) : (
@@ -144,7 +144,7 @@ export default function ActivityPage() {
                   type="button"
                   onClick={() => item.href && navigate(item.href)}
                   className={cn(
-                    "w-full text-left rounded-2xl border border-border bg-card/60 p-4 transition-colors hover:bg-muted/40"
+                    "w-full text-left rounded-[var(--radius-inner)] border border-border bg-card/60 p-4 transition-colors hover:bg-muted/40"
                   )}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -152,6 +152,9 @@ export default function ActivityPage() {
                       <div className="text-sm font-semibold text-foreground truncate">{item.title}</div>
                       {item.subtitle ? (
                         <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{item.subtitle}</div>
+                      ) : null}
+                      {item.actor ? (
+                        <div className="mt-2 text-xs text-muted-foreground">Зробив: {item.actor}</div>
                       ) : null}
                     </div>
                     <div className="text-xs text-muted-foreground whitespace-nowrap">{item.time}</div>

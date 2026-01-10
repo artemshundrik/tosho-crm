@@ -15,6 +15,7 @@ export type ActivityItem = {
   id: string;
   title: string;
   subtitle?: string;
+  actor?: string;
   href?: string;
   time: string;
   type?: string;
@@ -43,6 +44,7 @@ export function mapActivityRow(row: ActivityRow): ActivityItem {
     id: row.id,
     title,
     subtitle,
+    actor,
     href: row.href ?? undefined,
     time: formatActivityTime(row.created_at),
     type: row.entity_type ?? undefined,
