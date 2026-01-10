@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 import type { StandingDiffRow } from "./diff";
 
@@ -35,19 +36,19 @@ export function StandingsPreviewModal({
           <DialogTitle>Перевірка змін</DialogTitle>
         </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-auto rounded-md border">
+        <div className="max-h-[60vh] overflow-auto rounded-2xl border border-border bg-card/60">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Команда</TableHead>
-                <TableHead className="w-[120px]">Позиція</TableHead>
-                <TableHead className="w-[90px]">І</TableHead>
-                <TableHead className="w-[90px]">В</TableHead>
-                <TableHead className="w-[90px]">Н</TableHead>
-                <TableHead className="w-[90px]">П</TableHead>
-                <TableHead className="w-[120px]">Г</TableHead>
-                <TableHead className="w-[90px]">О</TableHead>
-                <TableHead className="w-[120px]">Статус</TableHead>
+              <TableRow className="bg-muted/40">
+                <TableHead className="pl-4">Команда</TableHead>
+                <TableHead className="w-[90px] text-center">Позиція</TableHead>
+                <TableHead className="w-[70px] text-center">І</TableHead>
+                <TableHead className="w-[70px] text-center">В</TableHead>
+                <TableHead className="w-[70px] text-center">Н</TableHead>
+                <TableHead className="w-[70px] text-center">П</TableHead>
+                <TableHead className="w-[110px] text-center">Г</TableHead>
+                <TableHead className="w-[70px] text-center">О</TableHead>
+                <TableHead className="w-[110px] text-center">Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,32 +64,81 @@ export function StandingsPreviewModal({
                 const next = row.next ?? row.old;
 
                 return (
-                  <TableRow key={row.team_name}>
-                    <TableCell className="font-medium">{row.team_name}</TableCell>
-                    <TableCell className={cellClass(Boolean(positionChange), row.kind)}>
+                  <TableRow key={row.team_name} className="hover:bg-muted/20">
+                    <TableCell className="pl-4">
+                      <div className="flex items-center gap-3">
+                        {next?.logo_url ? (
+                          <img
+                            src={next.logo_url}
+                            alt={row.team_name}
+                            className="h-7 w-7 rounded-full border border-border object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-7 w-7 rounded-full border border-border bg-muted/60" />
+                        )}
+                        <span className="font-semibold">{row.team_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(positionChange), row.kind),
+                      )}
+                    >
                       {next?.position ?? "—"}
                     </TableCell>
-                    <TableCell className={cellClass(Boolean(playedChange), row.kind)}>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(playedChange), row.kind),
+                      )}
+                    >
                       {next?.played ?? "—"}
                     </TableCell>
-                    <TableCell className={cellClass(Boolean(winsChange), row.kind)}>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(winsChange), row.kind),
+                      )}
+                    >
                       {next?.wins ?? "—"}
                     </TableCell>
-                    <TableCell className={cellClass(Boolean(drawsChange), row.kind)}>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(drawsChange), row.kind),
+                      )}
+                    >
                       {next?.draws ?? "—"}
                     </TableCell>
-                    <TableCell className={cellClass(Boolean(lossesChange), row.kind)}>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(lossesChange), row.kind),
+                      )}
+                    >
                       {next?.losses ?? "—"}
                     </TableCell>
                     <TableCell
-                      className={cellClass(Boolean(goalsForChange || goalsAgainstChange), row.kind)}
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(goalsForChange || goalsAgainstChange), row.kind),
+                      )}
                     >
                       {next?.goals_for ?? "—"}-{next?.goals_against ?? "—"}
                     </TableCell>
-                    <TableCell className={cellClass(Boolean(pointsChange), row.kind)}>
+                    <TableCell
+                      className={cn(
+                        "text-center tabular-nums",
+                        cellClass(Boolean(pointsChange), row.kind),
+                      )}
+                    >
                       {next?.points ?? "—"}
                     </TableCell>
-                    <TableCell>{row.kind}</TableCell>
+                    <TableCell className="text-center text-xs uppercase tracking-wide text-muted-foreground">
+                      {row.kind}
+                    </TableCell>
                   </TableRow>
                 );
               })}
