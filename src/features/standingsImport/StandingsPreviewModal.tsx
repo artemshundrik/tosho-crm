@@ -40,7 +40,7 @@ export function StandingsPreviewModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
-        <DialogHeader className="px-6 pt-6 pr-12">
+        <DialogHeader className="px-6 pt-4 pr-12">
           <DialogTitle>Перевірка змін</DialogTitle>
         </DialogHeader>
 
