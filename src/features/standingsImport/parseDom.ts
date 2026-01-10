@@ -136,6 +136,77 @@ function parseStandingsGeneric(doc: Document): ParsedStandings {
   return { title: null, rows: result };
 }
 
+function parseStandingsSfck(doc: Document): ParsedStandings {
+  const tables = Array.from(doc.querySelectorAll(".custom-table.custom-table-table"));
+  const rows: StandingRow[] = [];
+
+  for (const table of tables) {
+    const lines = Array.from(table.querySelectorAll(".custom-table__line"));
+    for (const line of lines) {
+      const positionText = normalizeSpace(
+        line.querySelector(".custom-table__number-wrapper")?.textContent ?? "",
+      );
+      const position = parseNumber(positionText);
+      if (position === null) continue;
+
+      const teamName = normalizeTeamName(
+        line.querySelector(".custom-table__team-name")?.textContent ?? "",
+      );
+      if (!teamName) continue;
+
+      const logo = line.querySelector(".custom-table__team-img")?.getAttribute("src") ?? null;
+      const gamesText = normalizeSpace(
+        line.querySelector(".custom-table__var--games .custom-table__content")?.textContent ?? "",
+      );
+      const played = parseNumber(gamesText);
+
+      const drawsText = normalizeSpace(
+        line.querySelector(".custom-table__cell--draws .custom-table__content")?.textContent ?? "",
+      );
+      const draws = parseNumber(drawsText);
+
+      const goalsText = normalizeSpace(
+        line.querySelector(".custom-table__var--diff .custom-table__content")?.textContent ?? "",
+      );
+      const goals = parseGoals(goalsText);
+
+      const pointsText = normalizeSpace(
+        line.querySelector(".custom-table__score .custom-table__content")?.textContent ?? "",
+      );
+      const points = parseNumber(pointsText);
+
+      const varCells = Array.from(line.querySelectorAll(".custom-table__var")).filter(
+        (cell) =>
+          !cell.classList.contains("custom-table__var--games") &&
+          !cell.classList.contains("custom-table__cell--draws") &&
+          !cell.classList.contains("custom-table__var--diff") &&
+          !cell.classList.contains("custom-table__score"),
+      );
+      const wins = parseNumber(
+        normalizeSpace(varCells[0]?.querySelector(".custom-table__content")?.textContent ?? ""),
+      );
+      const losses = parseNumber(
+        normalizeSpace(varCells[1]?.querySelector(".custom-table__content")?.textContent ?? ""),
+      );
+
+      rows.push({
+        team_name: teamName,
+        position,
+        played,
+        points,
+        wins,
+        draws,
+        losses,
+        goals_for: goals.goals_for,
+        goals_against: goals.goals_against,
+        logo_url: logo,
+      });
+    }
+  }
+
+  return { title: null, rows };
+}
+
 export function parseStandingsFromHtmlDom(html: string, sourceUrl?: string): ParsedStandings {
   const doc = parseHtmlToDocument(html);
   const host = sourceUrl ? new URL(sourceUrl).hostname : "";
@@ -156,6 +227,11 @@ export function parseStandingsFromHtmlDom(html: string, sourceUrl?: string): Par
         logo_url: row.logo_url ?? null,
       })),
     };
+  }
+
+  if (host === "sfck.com.ua" || host === "r-cup.com.ua") {
+    const sfckParsed = parseStandingsSfck(doc);
+    if (sfckParsed.rows.length > 0) return sfckParsed;
   }
 
   return parseStandingsGeneric(doc);
