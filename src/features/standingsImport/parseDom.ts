@@ -136,12 +136,16 @@ function parseStandingsGeneric(doc: Document): ParsedStandings {
   return { title: null, rows: result };
 }
 
-function parseStandingsSfck(doc: Document): ParsedStandings {
+function parseStandingsSfck(doc: Document, teamQuery?: string): ParsedStandings {
   const tables = Array.from(doc.querySelectorAll(".custom-table.custom-table-table"));
   const rows: StandingRow[] = [];
+  const normalizedQuery = teamQuery?.trim().toLowerCase();
 
   for (const table of tables) {
     const lines = Array.from(table.querySelectorAll(".custom-table__line"));
+    const tableRows: StandingRow[] = [];
+    let hasTeamMatch = false;
+
     for (const line of lines) {
       const positionText = normalizeSpace(
         line.querySelector(".custom-table__number-wrapper")?.textContent ?? "",
@@ -189,7 +193,7 @@ function parseStandingsSfck(doc: Document): ParsedStandings {
         normalizeSpace(varCells[1]?.querySelector(".custom-table__content")?.textContent ?? ""),
       );
 
-      rows.push({
+      const row: StandingRow = {
         team_name: teamName,
         position,
         played,
@@ -200,14 +204,30 @@ function parseStandingsSfck(doc: Document): ParsedStandings {
         goals_for: goals.goals_for,
         goals_against: goals.goals_against,
         logo_url: logo,
-      });
+      };
+
+      if (normalizedQuery && teamName.toLowerCase().includes(normalizedQuery)) {
+        hasTeamMatch = true;
+      }
+
+      tableRows.push(row);
     }
+
+    if (normalizedQuery && hasTeamMatch && tableRows.length > 0) {
+      return { title: null, rows: tableRows };
+    }
+
+    rows.push(...tableRows);
   }
 
   return { title: null, rows };
 }
 
-export function parseStandingsFromHtmlDom(html: string, sourceUrl?: string): ParsedStandings {
+export function parseStandingsFromHtmlDom(
+  html: string,
+  sourceUrl?: string,
+  teamQuery?: string,
+): ParsedStandings {
   const doc = parseHtmlToDocument(html);
   const host = sourceUrl ? new URL(sourceUrl).hostname : "";
   if (host === "v9ky.in.ua") {
@@ -230,7 +250,7 @@ export function parseStandingsFromHtmlDom(html: string, sourceUrl?: string): Par
   }
 
   if (host === "sfck.com.ua" || host === "r-cup.com.ua") {
-    const sfckParsed = parseStandingsSfck(doc);
+    const sfckParsed = parseStandingsSfck(doc, teamQuery);
     if (sfckParsed.rows.length > 0) return sfckParsed;
   }
 

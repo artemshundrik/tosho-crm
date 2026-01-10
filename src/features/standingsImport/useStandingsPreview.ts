@@ -130,8 +130,16 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
         throw new Error("Tournament is not linked to this team.");
       }
 
+      const { data: teamRow } = await supabase
+        .from("teams")
+        .select("name")
+        .eq("id", teamId)
+        .maybeSingle();
+
+      const teamName = (teamRow as { name?: string | null } | null)?.name ?? null;
+
       const html = await fetchTournamentHtml(tournamentRow.external_url);
-      const parsed = parseStandingsFromHtmlDom(html, tournamentRow.external_url);
+      const parsed = parseStandingsFromHtmlDom(html, tournamentRow.external_url, teamName ?? undefined);
 
       const { data: currentRows, error: currentError } = await supabase
         .from("tournament_standings_current")
