@@ -1270,6 +1270,8 @@ if (ttErr) {
     }
 
     const matchDateIso = matchDate.toISOString();
+    const eventDate = matchDateIso.slice(0, 10);
+    const eventTime = `${String(matchDate.getHours()).padStart(2, "0")}:${String(matchDate.getMinutes()).padStart(2, "0")}`;
 
     setMetaSaving(true);
 
@@ -1323,6 +1325,10 @@ if (ttErr) {
       entityId: match.id,
       title: `Оновлено матч проти ${payload.opponent_name}`,
       href: `/matches/${match.id}`,
+      metadata: {
+        event_date: eventDate,
+        event_time: eventTime,
+      },
     });
     setMetaSuccess("Деталі матчу збережено");
     setEditOpen(false);

@@ -2014,6 +2014,9 @@ export function CreateMatchPage() {
       return;
     }
 
+    const eventDate = dateObj.toISOString().slice(0, 10);
+    const eventTime = `${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
+
     logActivity({
       teamId: TEAM_ID,
       action: "create_match",
@@ -2021,6 +2024,10 @@ export function CreateMatchPage() {
       entityId: data.id,
       title: `Створено матч проти ${form.opponent_name.trim()}`,
       href: `/matches/${data.id}`,
+      metadata: {
+        event_date: eventDate,
+        event_time: eventTime,
+      },
     });
     navigate(`/matches/${data.id}`);
   }
@@ -2075,6 +2082,9 @@ export function CreateMatchPage() {
       return;
     }
 
+    const eventDate = dateObj.toISOString().slice(0, 10);
+    const eventTime = `${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
+
     logActivity({
       teamId: TEAM_ID,
       action: "create_match",
@@ -2082,6 +2092,10 @@ export function CreateMatchPage() {
       entityId: data.id,
       title: `Створено матч проти ${form.opponent_name.trim()}`,
       href: `/matches/${data.id}`,
+      metadata: {
+        event_date: eventDate,
+        event_time: eventTime,
+      },
     });
     setCreatedMatchId(data.id);
 

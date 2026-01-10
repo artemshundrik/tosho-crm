@@ -99,6 +99,10 @@ export function TrainingCreatePage() {
         entityId: created.id,
         title: `Створено тренування ${created.date} ${created.time || ""}`.trim(),
         href: `/admin/trainings/${created.id}`,
+        metadata: {
+          event_date: created.date,
+          event_time: created.time || null,
+        },
       });
       navigate("/admin/trainings");
     } catch (err: any) {

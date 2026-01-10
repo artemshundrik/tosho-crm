@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   formatActivityClock,
   formatActivityDayLabel,
@@ -16,6 +17,8 @@ import {
 import { Activity, CalendarDays, Trophy, UserPlus, Users, Wallet, Dumbbell } from "lucide-react";
 
 type FilterMode = "all" | "matches" | "trainings" | "finance" | "team";
+type MemberAvatar = { user_id: string; avatar_url: string | null; full_name: string | null };
+type TitleParts = { title: string; eventLine?: string };
 
 export default function ActivityPage() {
   const navigate = useNavigate();
@@ -30,12 +33,37 @@ export default function ActivityPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("activity_log")
-        .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, created_at")
+        .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, metadata, created_at")
         .eq("team_id", teamId)
         .order("created_at", { ascending: false })
         .limit(200);
       if (!error) {
-        setItems(((data || []) as ActivityRow[]).map(mapActivityRow));
+        const rows = (data || []) as ActivityRow[];
+        const mapped = rows.map(mapActivityRow);
+        setItems(mapped);
+        const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean))) as string[];
+        if (userIds.length > 0) {
+          const { data: members, error: membersError } = await supabase
+            .from("team_members_view")
+            .select("user_id, avatar_url, full_name")
+            .eq("team_id", teamId)
+            .in("user_id", userIds);
+          if (!membersError && members) {
+            const byId = new Map((members as MemberAvatar[]).map((m) => [m.user_id, m]));
+            setItems(
+              mapped.map((item) => {
+                if (!item.user_id) return item;
+                const member = byId.get(item.user_id);
+                if (!member) return item;
+                return {
+                  ...item,
+                  avatar_url: member.avatar_url ?? null,
+                  actor: item.actor || member.full_name || item.actor,
+                };
+              })
+            );
+          }
+        }
       }
       setLoading(false);
     }
@@ -96,6 +124,91 @@ export default function ActivityPage() {
     const parts = actor.split(" ").filter(Boolean);
     const initials = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : actor.slice(0, 2);
     return initials.toUpperCase();
+  };
+
+  const parseEventDateTime = (text: string) => {
+    const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+    const dmMatch = text.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b/);
+    const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    const time = timeMatch ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}` : null;
+    if (isoMatch) {
+      const year = Number(isoMatch[1]);
+      const month = Number(isoMatch[2]);
+      const day = Number(isoMatch[3]);
+      return { date: new Date(year, month - 1, day), time };
+    }
+    if (dmMatch) {
+      const day = Number(dmMatch[1]);
+      const month = Number(dmMatch[2]);
+      const year = dmMatch[3] ? Number(dmMatch[3]) : new Date().getFullYear();
+      return { date: new Date(year, month - 1, day), time };
+    }
+    return { date: null, time };
+  };
+
+  const parseEventDate = (value: string | null | undefined) => {
+    if (!value) return null;
+    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    const dm = value.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
+    if (dm) return new Date(Number(dm[3] || new Date().getFullYear()), Number(dm[2]) - 1, Number(dm[1]));
+    return null;
+  };
+
+  const formatEventDateLabel = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const weekday = new Intl.DateTimeFormat("uk-UA", { weekday: "long" }).format(date);
+    const weekdayLabel = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    return { dateLabel: `${day}.${month}`, weekdayLabel };
+  };
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const stripDateTime = (text: string) =>
+    text
+      .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, "")
+      .replace(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b/g, "")
+      .replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/[(),–—-]+\s*$/g, "")
+      .trim();
+
+  const getTitleParts = (item: ActivityItem): TitleParts => {
+    const title = item.title.trim();
+    const isTraining = item.type === "trainings" || title.toLowerCase().includes("тренуван");
+    const isMatch = item.type === "matches" || title.toLowerCase().includes("матч");
+    const metaDate = parseEventDate(item.event_date);
+    const metaTime = item.event_time || null;
+    const { date: fallbackDate, time: fallbackTime } = parseEventDateTime(title);
+    const date = metaDate ?? fallbackDate;
+    const time = metaTime ?? fallbackTime;
+    if (isTraining && date) {
+      return {
+        title: "Тренування",
+        eventLine: `${formatEventDateLabel(date).dateLabel} (${formatEventDateLabel(date).weekdayLabel})${
+          time ? ` о ${time}` : ""
+        }`,
+      };
+    }
+
+    if (isMatch) {
+      const opponentMatch = title.match(/проти\s+(.+)/i);
+      const opponentRaw = opponentMatch ? opponentMatch[1] : title.replace(/матч[:\s]+/i, "");
+      const opponent = stripDateTime(opponentRaw);
+      if (date) {
+        return {
+          title: opponent ? `Матч: ${opponent}` : title,
+          eventLine: `${formatEventDateLabel(date).dateLabel} (${formatEventDateLabel(date).weekdayLabel})${
+            time ? ` о ${time}` : ""
+          }`,
+        };
+      }
+      return { title: opponent ? `Матч: ${opponent}` : title };
+    }
+
+    return { title };
   };
 
   return (
@@ -192,6 +305,7 @@ export default function ActivityPage() {
                     {dayItems.map((item) => {
                       const Icon = iconForItem(item);
                       const badge = badgeForItem(item);
+                      const titleParts = getTitleParts(item);
                       return (
                         <button
                           key={item.id}
@@ -204,21 +318,31 @@ export default function ActivityPage() {
                         >
                           <div className="flex items-start gap-4">
                             <div className="flex items-center gap-3 pt-0.5">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/60 text-xs font-semibold text-muted-foreground">
-                                {initialsForItem(item)}
-                              </div>
+                              <Avatar className="h-10 w-10 border border-border bg-muted/60">
+                                <AvatarImage src={item.avatar_url || ""} />
+                                <AvatarFallback className="text-xs font-semibold text-muted-foreground">
+                                  {initialsForItem(item)}
+                                </AvatarFallback>
+                              </Avatar>
                               <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground">
                                 <Icon className="h-5 w-5" />
                               </div>
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-foreground truncate">{item.title}</span>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-sm font-semibold text-foreground truncate">
+                                  {titleParts.title}
+                                </span>
                                 <Badge tone={badge.tone} size="sm" pill>
                                   {badge.label}
                                 </Badge>
                               </div>
+                              {titleParts.eventLine ? (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {titleParts.eventLine}
+                                </div>
+                              ) : null}
                               {item.actor ? (
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   Зробив: <span className="font-medium text-foreground">{item.actor}</span>
@@ -226,7 +350,7 @@ export default function ActivityPage() {
                               ) : null}
                             </div>
 
-                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                            <div className="self-start pt-0.5 text-xs text-muted-foreground whitespace-nowrap">
                               {formatActivityClock(item.created_at)}
                             </div>
                           </div>

@@ -374,6 +374,10 @@ playerList.forEach(p => {
         entityId: id,
         title: `Оновлено тренування ${updated.date} ${updated.time || ""}`.trim(),
         href: `/admin/trainings/${id}`,
+        metadata: {
+          event_date: updated.date,
+          event_time: updated.time || null,
+        },
       });
       setEditing(false);
     } catch (e: any) {

@@ -8,6 +8,7 @@ export type ActivityRow = {
   entity_id: string | null;
   title: string | null;
   href: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -17,6 +18,10 @@ export type ActivityItem = {
   subtitle?: string;
   actor?: string;
   action?: string;
+  user_id?: string | null;
+  avatar_url?: string | null;
+  event_date?: string | null;
+  event_time?: string | null;
   href?: string;
   time: string;
   created_at: string;
@@ -67,12 +72,18 @@ export function mapActivityRow(row: ActivityRow): ActivityItem {
   const action = row.action?.trim() || "Оновив";
   const title = row.title?.trim() || `${actor} ${action}`.trim();
   const subtitle = row.entity_type ? `Розділ: ${row.entity_type}` : undefined;
+  const metadata = row.metadata ?? null;
+  const eventDate = typeof metadata?.event_date === "string" ? metadata.event_date : null;
+  const eventTime = typeof metadata?.event_time === "string" ? metadata.event_time : null;
   return {
     id: row.id,
     title,
     subtitle,
     actor,
     action,
+    user_id: row.user_id,
+    event_date: eventDate,
+    event_time: eventTime,
     href: row.href ?? undefined,
     time: formatActivityTime(row.created_at),
     created_at: row.created_at,
