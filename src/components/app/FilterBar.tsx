@@ -103,7 +103,12 @@ function SegmentedTabs<TTab extends string>({
   items: Array<FilterBarTab<TTab>>;
 }) {
   return (
-    <div className={cx("inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1", "bg-muted border border-border")}>
+    <div
+      className={cx(
+        "inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] p-1 sm:w-auto",
+        "bg-muted border border-border"
+      )}
+    >
       {items.map((t) => {
         const active = t.value === value;
         return (
@@ -192,39 +197,45 @@ export function FilterBar<TTab extends string, TSort extends string>({
   >
 
       {/* TOP ROW */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {tabs ? (
-          <div className="shrink-0">
+          <div className="w-full shrink-0 sm:w-auto">
             <SegmentedTabs value={tabs.value} onChange={tabs.onChange} items={tabs.items} />
           </div>
         ) : null}
 
-        <div className="flex flex-1 flex-wrap items-center justify-end gap-3 min-h-10">
+        <div className="flex w-full flex-col gap-3 sm:min-h-10 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
 
           {selects?.map((s) => (
-            <Select key={s.key} value={s.value} onValueChange={(v) => s.onChange(v)}>
-              <SelectTrigger className={cx(CONTROL_BASE, s.widthClassName ?? "w-52")}>
-                <SelectValue placeholder={s.placeholder} />
-              </SelectTrigger>
-              <SelectContent>
-                {s.options.map((o) => (
-                  <SelectItem key={`${s.key}_${o.value}`} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div key={s.key} className="w-full sm:w-auto">
+              <Select value={s.value} onValueChange={(v) => s.onChange(v)}>
+                <SelectTrigger className={cx(CONTROL_BASE, "w-full", s.widthClassName ?? "sm:w-52")}>
+                  <SelectValue placeholder={s.placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {s.options.map((o) => (
+                    <SelectItem key={`${s.key}_${o.value}`} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           ))}
 
-          {sort && shouldShowSort ? (compactSort ? <CompactSort sort={sort} /> : <SortSelect sort={sort} />) : null}
+          {sort && shouldShowSort ? (
+            <div className="w-full sm:w-auto">
+              {compactSort ? <CompactSort sort={sort} /> : <SortSelect sort={sort} />}
+            </div>
+          ) : null}
 
-          {rightSlot}
+          {rightSlot ? <div className="w-full sm:w-auto">{rightSlot}</div> : null}
 
           {search ? (
             <div
               className={cx(
-                "relative flex-1 min-w-[200px]",
-                search.widthClassName ?? "max-w-[520px]"
+                "relative w-full sm:flex-1 sm:min-w-[200px]",
+                search.widthClassName ?? "sm:max-w-[520px]"
               )}
             >
               <SearchIcon
@@ -257,7 +268,7 @@ export function FilterBar<TTab extends string, TSort extends string>({
 
       {/* BOTTOM ROW */}
       {hasBottom ? (
-        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <div>{bottomLeft}</div>
           <div>{bottomRight}</div>
         </div>

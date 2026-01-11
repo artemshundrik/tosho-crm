@@ -914,7 +914,7 @@ export function MatchesShadcnPage() {
             value: filters.tournamentId,
             onChange: (v) => updateFilters((p) => ({ ...p, tournamentId: v })),
             placeholder: "Всі турніри",
-            widthClassName: "w-52",
+            widthClassName: "sm:w-52",
             options: [
               { value: "all", label: "Всі турніри" },
               ...tournamentOptions.map((t) => ({ value: t.id, label: t.label })),
@@ -925,7 +925,7 @@ export function MatchesShadcnPage() {
             value: filters.season,
             onChange: (v) => updateFilters((p) => ({ ...p, season: v })),
             placeholder: "Всі сезони",
-            widthClassName: "w-44",
+            widthClassName: "sm:w-44",
             options: [
               { value: "all", label: "Всі сезони" },
               ...seasonOptions.map((s) => ({ value: s, label: s })),
@@ -936,6 +936,7 @@ export function MatchesShadcnPage() {
           value: filters.query,
           onChange: (v) => updateFilters((p) => ({ ...p, query: v })),
           placeholder: "Пошук (суперник / турнір)",
+          widthClassName: "sm:max-w-[520px]",
         }}
         bottomLeft={
           !loading && !error ? (
