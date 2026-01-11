@@ -6,6 +6,7 @@ import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
 import { Link } from "react-router-dom";
+import { RotateCw } from "lucide-react";
 
 export type OperationalSummaryKpi = {
   key: string;
@@ -170,35 +171,37 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
   if (kpi.key === "tournament") {
     return (
       <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60", "px-4 py-3")}>
-        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
-          <div className="flex items-center gap-2 min-w-0">
-            {Icon ? (
-              <span
-                className={cn(
-                  "inline-flex h-8 w-8 items-center justify-center rounded-[12px] ring-1 ring-inset ring-muted-foreground/20",
-                  "bg-muted text-muted-foreground",
-                  kpi.iconTone
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </span>
-            ) : null}
-            <span className="truncate">{kpi.label}</span>
-          </div>
-          {kpi.headerRight ? <span className="shrink-0">{kpi.headerRight}</span> : null}
+        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          {Icon ? (
+            <span
+              className={cn(
+                "inline-flex h-8 w-8 items-center justify-center rounded-[12px] ring-1 ring-inset ring-muted-foreground/20",
+                "bg-muted text-muted-foreground",
+                kpi.iconTone
+              )}
+            >
+              <Icon className="h-4 w-4" />
+            </span>
+          ) : null}
+          <span className="truncate">{kpi.label}</span>
         </div>
 
-        <div className="mt-1 text-[28px] font-bold tracking-tight tabular-nums text-foreground">
-          {kpi.value}
+        <div className="mt-2 flex items-baseline gap-2">
+          <div className="text-[28px] font-bold tracking-tight tabular-nums text-foreground">{kpi.value}</div>
+          <span className="text-[28px] font-bold text-muted-foreground">•</span>
+          <div className="text-[28px] font-bold tracking-tight text-foreground">{kpi.secondaryValue ?? "—"}</div>
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
-          <span>{kpi.secondaryValue ?? kpi.hint ?? "—"}</span>
+          <div className="inline-flex items-center gap-1 leading-none">
+            <RotateCw className="h-3 w-3" />
+            <span>{kpi.hint ?? "—"}</span>
+          </div>
           {kpi.footerCta ? (
             kpi.footerCta.to ? (
               <Link
                 to={kpi.footerCta.to}
-                className="inline-flex items-center gap-1 font-semibold text-primary hover:text-primary/90"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/90 leading-none"
               >
                 {kpi.footerCta.label}
                 <span aria-hidden="true">→</span>
@@ -207,7 +210,7 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
               <button
                 type="button"
                 onClick={kpi.footerCta.onClick}
-                className="inline-flex items-center gap-1 font-semibold text-primary hover:text-primary/90"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/90 leading-none"
               >
                 {kpi.footerCta.label}
                 <span aria-hidden="true">→</span>
@@ -426,10 +429,12 @@ function NextUpHero({
 
       {/* TEAMS */}
       {teams ? (
-        <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-10">
+        <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 sm:gap-10">
           {/* LEFT */}
           <div className="flex items-center justify-end gap-3 text-right min-w-0">
-            <div className="truncate text-lg sm:text-xl font-bold text-foreground">{teams.left}</div>
+            <div className="text-[13px] sm:text-xl font-bold text-foreground leading-tight break-words whitespace-normal">
+              {teams.left}
+            </div>
             <AvatarCircle name={avatars[0]?.name ?? teams.left} src={avatars[0]?.src} size={64} />
           </div>
 
@@ -442,7 +447,9 @@ function NextUpHero({
           {/* RIGHT */}
           <div className="flex items-center justify-start gap-3 text-left min-w-0">
             <AvatarCircle name={avatars[1]?.name ?? teams.right} src={avatars[1]?.src} size={64} />
-            <div className="truncate text-lg sm:text-xl font-bold text-foreground">{teams.right}</div>
+            <div className="text-[13px] sm:text-xl font-bold text-foreground leading-tight break-words whitespace-normal">
+              {teams.right}
+            </div>
           </div>
         </div>
       ) : (

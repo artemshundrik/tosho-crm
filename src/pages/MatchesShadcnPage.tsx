@@ -880,21 +880,20 @@ export function MatchesShadcnPage() {
                   currentTournamentDb?.league_name ||
                   primaryTournament?.name ||
                   currentLeagueName;
-                return [tournamentLabel, leagueLabel].filter(Boolean).join(" · ").trim() || "Турнір";
+                const seasonLabel = currentTournamentDb?.season || primaryTournament?.season;
+                const base = [tournamentLabel, leagueLabel].filter(Boolean).join(" · ").trim();
+                return [base, seasonLabel].filter(Boolean).join(" ").trim() || "Турнір";
               })(),
               value: standingsRow?.position ? `#${standingsRow.position}` : "—",
               secondaryValue:
                 typeof standingsRow?.points === "number" ? `${standingsRow.points} очок` : "—",
               icon: Trophy,
               iconTone: "bg-amber-500/10 text-amber-600",
-              headerRight:
-                canWrite && primaryTournament ? (
-                  <Button asChild variant="ghost" size="icon" className="h-7 w-7">
-                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`} aria-label="Оновити таблицю">
-                      <RotateCw className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                ) : null,
+              hint: standingsUpdatedAt
+                ? formatUpdatedAgo(standingsUpdatedAt)
+                    .replace(/^Оновлено\s*/i, "")
+                    .replace(/\b1 дн\b/i, "1 день")
+                : "—",
               footerCta: primaryTournament
                 ? {
                     label: "Таблиця",
