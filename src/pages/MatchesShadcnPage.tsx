@@ -1,6 +1,6 @@
 // src/pages/MatchesShadcnPage.tsx
 import * as React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useNavigationType } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 import {
@@ -371,6 +371,7 @@ export function MatchesShadcnPage() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigationType = useNavigationType();
 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -392,6 +393,7 @@ export function MatchesShadcnPage() {
 
   // read initial restore state once (based on initial URL params)
   React.useEffect(() => {
+    if (navigationType !== "POP") return;
     const key = listStateKeyFromParams(searchParams);
     const saved = safeParseListState(sessionStorage.getItem(key));
     if (saved) pendingRestoreRef.current = saved;
@@ -404,11 +406,13 @@ export function MatchesShadcnPage() {
     if (!filtersEqual(fromUrl, filters)) {
       setFilters(fromUrl);
 
-      // also try to restore state for this exact filter URL (if any)
-      const key = listStateKeyFromParams(searchParams);
-      const saved = safeParseListState(sessionStorage.getItem(key));
-      pendingRestoreRef.current = saved;
-      if (saved?.visibleCount) setVisibleCount(saved.visibleCount);
+      // also try to restore state for this exact filter URL (if any) on back/forward
+      if (navigationType === "POP") {
+        const key = listStateKeyFromParams(searchParams);
+        const saved = safeParseListState(sessionStorage.getItem(key));
+        pendingRestoreRef.current = saved;
+        if (saved?.visibleCount) setVisibleCount(saved.visibleCount);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -611,11 +615,15 @@ export function MatchesShadcnPage() {
       setCards(mapped);
 
       // restore visibleCount for current URL (if any)
-      const key = listStateKeyFromParams(searchParams);
-      const saved = safeParseListState(sessionStorage.getItem(key));
-      if (saved?.visibleCount) {
-        setVisibleCount(saved.visibleCount);
-        pendingRestoreRef.current = saved;
+      if (navigationType === "POP") {
+        const key = listStateKeyFromParams(searchParams);
+        const saved = safeParseListState(sessionStorage.getItem(key));
+        if (saved?.visibleCount) {
+          setVisibleCount(saved.visibleCount);
+          pendingRestoreRef.current = saved;
+        } else {
+          setVisibleCount(PAGE_SIZE);
+        }
       } else {
         setVisibleCount(PAGE_SIZE);
       }
