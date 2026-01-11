@@ -591,7 +591,7 @@ useEffect(() => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
         <div className="px-4 pt-5">
@@ -711,7 +711,11 @@ useEffect(() => {
       {/* MAIN */}
       <div className="md:pl-[270px]">
         {/* HEADER */}
-        <header className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl">
+        <header
+          key={theme}
+          data-theme={theme}
+          className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl"
+        >
           <div className="flex h-16 items-center justify-between px-3 md:px-6">
             <div className="flex items-center gap-3">
               {/* Mobile menu */}
@@ -725,7 +729,7 @@ useEffect(() => {
 
                   <SheetContent
                     side="left"
-                    className="h-full w-full max-w-none overflow-y-auto p-0 sm:w-[310px] sm:max-w-[310px]"
+                    className="h-full w-full max-w-none overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] sm:w-[310px] sm:max-w-[310px] min-h-[100dvh]"
                   >
                     <SheetHeader className="p-4 pb-2">
                       <SheetTitle>FAYNA TEAM</SheetTitle>
