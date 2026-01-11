@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { OperationalSummary, type OperationalSummaryKpi } from "@/components/app/OperationalSummary";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
   BarChart3,
@@ -61,12 +62,16 @@ function TrainingCard({
   total,
   presentPlayers,
   onClick,
+  isUpcoming = false,
+  showAttendance = true,
 }: {
   training: Training;
   present: number;
   total: number;
   presentPlayers: { id: string; first_name: string; last_name: string; photo_url?: string | null }[];
   onClick: () => void;
+  isUpcoming?: boolean;
+  showAttendance?: boolean;
 }) {
   const date = new Date(`${training.date}T${training.time || "00:00"}`);
   const { month, day, weekday, time } = formatDateParts(date);
@@ -121,13 +126,23 @@ function TrainingCard({
             </div>
           </div>
           
-          <Badge 
-            variant="secondary" 
-            className="rounded-lg px-2.5 py-1 text-xs font-semibold shadow-none bg-muted hover:bg-muted/80 text-foreground"
-          >
-            <Icon className="mr-1.5 h-3.5 w-3.5 text-primary" />
-            {typeLabel}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {isUpcoming ? (
+              <Badge
+                variant="secondary"
+                className="rounded-lg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/10 text-emerald-600 shadow-none"
+              >
+                Майбутнє
+              </Badge>
+            ) : null}
+            <Badge
+              variant="secondary"
+              className="rounded-lg px-2.5 py-1 text-xs font-semibold shadow-none bg-muted hover:bg-muted/80 text-foreground"
+            >
+              <Icon className="mr-1.5 h-3.5 w-3.5 text-primary" />
+              {typeLabel}
+            </Badge>
+          </div>
         </div>
 
         {/* Інфо-гріди */}
@@ -169,52 +184,54 @@ function TrainingCard({
         </div>
 
         {/* Прогрес та Аватарки */}
-        <div className="mt-6 flex flex-col gap-3">
-          <div className="flex items-end justify-between text-xs">
-            <span className="font-medium text-muted-foreground">Присутність</span>
-            <span className="font-bold text-foreground">
-              {present} <span className="text-muted-foreground font-normal">/ {total}</span>
-            </span>
-          </div>
-          
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-            <div 
-              className="h-full rounded-full bg-primary transition-all duration-500 shadow-[0_0_8px_rgba(var(--primary),0.4)]" 
-              style={{ width: `${progress}%` }} 
-            />
-          </div>
+        {showAttendance ? (
+          <div className="mt-6 flex flex-col gap-3">
+            <div className="flex items-end justify-between text-xs">
+              <span className="font-medium text-muted-foreground">Присутність</span>
+              <span className="font-bold text-foreground">
+                {present} <span className="text-muted-foreground font-normal">/ {total}</span>
+              </span>
+            </div>
 
-          <div className="mt-1 flex items-center pl-1">
-            {presentPlayers.length > 0 ? (
-              <>
-                {presentPlayers.slice(0, 6).map((p, idx) => {
-                  const initials = `${p.first_name?.[0] || ""}${p.last_name?.[0] || ""}` || "?";
-                  return (
-                    <Avatar
-                      key={p.id}
-                      className={cn(
-                        "h-6 w-6 border-2 border-card bg-muted ring-1 ring-border transition-transform hover:z-10 hover:scale-110",
-                        idx > 0 && "-ml-2.5"
-                      )}
-                    >
-                      <AvatarImage src={p.photo_url || ""} alt={p.first_name} />
-                      <AvatarFallback className="text-[8px] font-bold bg-muted text-muted-foreground">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  );
-                })}
-                {presentPlayers.length > 6 && (
-                  <div className="-ml-2.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-bold text-muted-foreground ring-1 ring-border">
-                    +{presentPlayers.length - 6}
-                  </div>
-                )}
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground italic">Поки нікого немає</span>
-            )}
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500 shadow-[0_0_8px_rgba(var(--primary),0.4)]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <div className="mt-1 flex items-center pl-1">
+              {presentPlayers.length > 0 ? (
+                <>
+                  {presentPlayers.slice(0, 6).map((p, idx) => {
+                    const initials = `${p.first_name?.[0] || ""}${p.last_name?.[0] || ""}` || "?";
+                    return (
+                      <Avatar
+                        key={p.id}
+                        className={cn(
+                          "h-6 w-6 border-2 border-card bg-muted ring-1 ring-border transition-transform hover:z-10 hover:scale-110",
+                          idx > 0 && "-ml-2.5"
+                        )}
+                      >
+                        <AvatarImage src={p.photo_url || ""} alt={p.first_name} />
+                        <AvatarFallback className="text-[8px] font-bold bg-muted text-muted-foreground">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                    );
+                  })}
+                  {presentPlayers.length > 6 && (
+                    <div className="-ml-2.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-bold text-muted-foreground ring-1 ring-border">
+                      +{presentPlayers.length - 6}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">Поки нікого немає</span>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );
@@ -229,6 +246,7 @@ export function TrainingsListPage() {
   const [playersCount, setPlayersCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "all">("all");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -515,17 +533,86 @@ export function TrainingsListPage() {
       ) : null}
 
       <section className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "upcoming" | "past" | "all")}>
+          <TabsList className="bg-muted/70 border border-border shadow-inner">
+            <TabsTrigger value="all">
+              Всі
+              <span className="ml-2 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">
+                {upcomingTrainings.length + pastTrainings.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="upcoming">
+              Заплановані
+              <span className="ml-2 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">
+                {upcomingTrainings.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="past">
+              Завершені
+              <span className="ml-2 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">
+                {pastTrainings.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {loading ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 2 }).map((_, idx) => (
+              <Skeleton key={`upcoming-skel-${idx}`} className="h-[220px] rounded-[var(--radius-inner)]" />
+            ))}
+          </div>
+        ) : (activeTab === "upcoming" || activeTab === "all") && upcomingTrainings.length === 0 ? (
+          <div className="rounded-[var(--radius-inner)] border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+            Немає запланованих тренувань
+          </div>
+        ) : activeTab === "upcoming" || activeTab === "all" ? (
+          <div className="space-y-6">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-foreground">Заплановані тренування</h3>
+                <span className="text-xs text-muted-foreground">
+                  {upcomingTrainings.length} тренувань
+                </span>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {upcomingTrainings.map((training) => {
+                  const att = attendance[training.id] || [];
+                  const presentEntries = att.filter((a) => a.status === "present");
+                  const presentPlayers = buildPresentPlayers(training.id);
+                  const present = presentEntries.length;
+                  const total = playersCount || new Set(att.map((a) => a.player_id)).size || 0;
+                    return (
+                      <TrainingCard
+                        key={training.id}
+                        training={training}
+                        present={present}
+                        total={total}
+                        presentPlayers={presentPlayers}
+                        onClick={() => navigate(`/admin/trainings/${training.id}`)}
+                        isUpcoming
+                        showAttendance={false}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-4">
+        {activeTab === "past" && loading ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, idx) => (
               <Skeleton key={`past-skel-${idx}`} className="h-[220px] rounded-[var(--radius-inner)]" />
             ))}
           </div>
-        ) : pastTrainings.length === 0 ? (
+        ) : (activeTab === "past" || activeTab === "all") && pastTrainings.length === 0 ? (
           <div className="rounded-[var(--radius-inner)] border border-border bg-muted/20 p-6 text-sm text-muted-foreground">
             Немає завершених тренувань
           </div>
-        ) : (
+        ) : activeTab === "past" || activeTab === "all" ? (
           <div className="space-y-6">
             {groupedPast.map(([month, list]) => (
               <section key={month} className="space-y-4">
@@ -557,7 +644,7 @@ export function TrainingsListPage() {
               </section>
             ))}
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   );

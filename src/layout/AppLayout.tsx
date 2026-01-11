@@ -711,7 +711,7 @@ useEffect(() => {
       <div className="md:pl-[270px]">
         {/* HEADER */}
         <header className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl">
-          <div className="flex h-16 items-center justify-between px-4 md:px-6">
+          <div className="flex h-16 items-center justify-between px-3 md:px-6">
             <div className="flex items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
@@ -722,7 +722,10 @@ useEffect(() => {
                     </Button>
                   </SheetTrigger>
 
-                  <SheetContent side="left" className="w-[310px] p-0">
+                  <SheetContent
+                    side="left"
+                    className="h-full w-full max-w-none overflow-y-auto p-0 sm:w-[310px] sm:max-w-[310px]"
+                  >
                     <SheetHeader className="p-4 pb-2">
                       <SheetTitle>FAYNA TEAM</SheetTitle>
                     </SheetHeader>
@@ -750,9 +753,9 @@ useEffect(() => {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-border">
-  <UserMenu mobile />
-</div>
+                    <div className="border-t border-border px-4 py-4 pb-8">
+                      <MobileNav currentPath={location.pathname} activityUnreadCount={activityUnreadCount} />
+                    </div>
                   </SheetContent>
                 </Sheet>
               </div>
@@ -876,7 +879,7 @@ useEffect(() => {
         </header>
 
         {/* CONTENT */}
-        <main className="px-4 py-6 md:px-6 lg:px-10">
+        <main className="w-full px-4 py-6 md:px-6 lg:px-10">
           <div className="mx-auto max-w-6xl space-y-8">
             {/* Page header (desktop) */}
             <div className="hidden md:flex flex-col gap-1">
