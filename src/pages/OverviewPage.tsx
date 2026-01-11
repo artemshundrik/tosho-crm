@@ -10,6 +10,14 @@ import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/featu
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 
@@ -510,43 +518,63 @@ export function OverviewPage() {
               {standingsContext.rows.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Таблиця поки недоступна.</div>
               ) : (
-                <div className="space-y-2">
-                  {standingsContext.rows.map((row) => {
-                    const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
-                    return (
-                      <div
-                        key={row.team_name}
-                        className={cn(
-                          "flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm",
-                          isOurTeam && "bg-primary/10 border-primary/30"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 text-xs font-semibold text-muted-foreground tabular-nums">
+                <Table className="min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10 text-center">#</TableHead>
+                      <TableHead>Команда</TableHead>
+                      <TableHead className="text-right">І</TableHead>
+                      <TableHead className="text-right">В</TableHead>
+                      <TableHead className="text-right">Н</TableHead>
+                      <TableHead className="text-right">П</TableHead>
+                      <TableHead className="text-right">Г</TableHead>
+                      <TableHead className="text-right">О</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {standingsContext.rows.map((row) => {
+                      const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
+                      return (
+                        <TableRow key={row.team_name} className={cn(isOurTeam && "bg-primary/10")}>
+                          <TableCell className="w-10 text-center text-xs font-semibold text-muted-foreground tabular-nums">
                             {row.position}
-                          </span>
-                          {row.logo_url ? (
-                            <img
-                              src={row.logo_url}
-                              alt={row.team_name}
-                              className="h-6 w-6 rounded-full border border-border object-cover"
-                              loading="lazy"
-                            />
-                          ) : null}
-                          <span className="font-semibold text-foreground">{row.team_name}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                          <span>І {row.played ?? "—"}</span>
-                          <span>В {row.wins ?? "—"}</span>
-                          <span>Н {row.draws ?? "—"}</span>
-                          <span>П {row.losses ?? "—"}</span>
-                          <span>Г {row.goals_for ?? "—"}-{row.goals_against ?? "—"}</span>
-                          <span>О {row.points ?? "—"}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              {row.logo_url ? (
+                                <img
+                                  src={row.logo_url}
+                                  alt={row.team_name}
+                                  className="h-6 w-6 rounded-full border border-border object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              <span className="font-semibold text-foreground">{row.team_name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                            {row.played ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                            {row.wins ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                            {row.draws ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                            {row.losses ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                            {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-foreground tabular-nums">
+                            {row.points ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

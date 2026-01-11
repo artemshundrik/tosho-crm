@@ -15,8 +15,7 @@ import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/app/FilterBar";
 import { cn } from "@/lib/utils";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
-import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
-import { Swords, Target, Activity, Plus, RotateCw } from "lucide-react";
+import { Swords, Target, Activity, Plus, RotateCw, Trophy } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
 
@@ -864,8 +863,45 @@ export function MatchesShadcnPage() {
               : undefined
           }
 
+          primaryAction={{
+            label: "Новий матч",
+            to: "/matches/new",
+          }}
           secondaryAction={undefined}
           kpis={[
+            {
+              key: "tournament",
+              label: (() => {
+                const tournamentLabel =
+                  currentTournamentDb?.short_name ||
+                  currentTournamentDb?.name ||
+                  currentTournamentLabel;
+                const leagueLabel =
+                  currentTournamentDb?.league_name ||
+                  primaryTournament?.name ||
+                  currentLeagueName;
+                return [tournamentLabel, leagueLabel].filter(Boolean).join(" · ").trim() || "Турнір";
+              })(),
+              value: standingsRow?.position ? `#${standingsRow.position}` : "—",
+              secondaryValue:
+                typeof standingsRow?.points === "number" ? `${standingsRow.points} очок` : "—",
+              icon: Trophy,
+              iconTone: "bg-amber-500/10 text-amber-600",
+              headerRight:
+                canWrite && primaryTournament ? (
+                  <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`} aria-label="Оновити таблицю">
+                      <RotateCw className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                ) : null,
+              footerCta: primaryTournament
+                ? {
+                    label: "Таблиця",
+                    to: `/admin/tournaments/${primaryTournament.id}?tab=standings`,
+                  }
+                : undefined,
+            },
             {
               key: "wdl",
               label: "Матчі",
@@ -893,9 +929,6 @@ export function MatchesShadcnPage() {
           ]}
         />
 
-        <div className="absolute right-6 top-6">
-          <NewMatchPrimarySplitCta />
-        </div>
       </div>
 
       <FilterBar
@@ -960,42 +993,6 @@ export function MatchesShadcnPage() {
             : null
         }
       />
-
-      {primaryTournament ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-foreground">
-              Турнір: {primaryTournament.name} {primaryTournament.season ?? ""}
-            </span>
-            <span>•</span>
-            <span>Позиція: {standingsRow?.position ?? "—"}</span>
-            <span>•</span>
-            <span>Очки: {standingsRow?.points ?? "—"}</span>
-            <span>•</span>
-            <span>
-              В-Н-П: {standingsRow?.wins ?? "—"}-{standingsRow?.draws ?? "—"}-{standingsRow?.losses ?? "—"}
-            </span>
-            <span>•</span>
-            <span>
-              Г: {standingsRow?.goals_for ?? "—"}-{standingsRow?.goals_against ?? "—"}
-            </span>
-            <span>•</span>
-            <span>{formatUpdatedAgo(standingsUpdatedAt)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {canWrite ? (
-              <Button asChild variant="ghost" size="icon" aria-label="Оновити">
-                <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
-                  <RotateCw className="h-4 w-4" />
-                </Link>
-              </Button>
-            ) : null}
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>Відкрити таблицю</Link>
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {loading ? (
         <Card className="rounded-3xl border border-border bg-card p-10">

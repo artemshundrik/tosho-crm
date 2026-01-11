@@ -13,6 +13,13 @@ export type OperationalSummaryKpi = {
   value: string;
   unit?: string;
   hint?: string;
+  secondaryValue?: string;
+  headerRight?: React.ReactNode;
+  footerCta?: {
+    label: string;
+    to?: string;
+    onClick?: () => void;
+  };
   icon?: React.ElementType;
   iconTone?: string;
   trend?: {
@@ -160,6 +167,63 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
       ? "bg-rose-500/10 text-rose-600"
       : "bg-muted text-muted-foreground";
 
+  if (kpi.key === "tournament") {
+    return (
+      <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60", "px-4 py-3")}>
+        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
+          <div className="flex items-center gap-2 min-w-0">
+            {Icon ? (
+              <span
+                className={cn(
+                  "inline-flex h-8 w-8 items-center justify-center rounded-[12px] ring-1 ring-inset ring-muted-foreground/20",
+                  "bg-muted text-muted-foreground",
+                  kpi.iconTone
+                )}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+            ) : null}
+            <span className="truncate">{kpi.label}</span>
+          </div>
+          {kpi.headerRight ? <span className="shrink-0">{kpi.headerRight}</span> : null}
+        </div>
+
+        <div className="mt-1 text-[28px] font-bold tracking-tight tabular-nums text-foreground">
+          {kpi.value}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+          <span>{kpi.secondaryValue ?? kpi.hint ?? "—"}</span>
+          {kpi.footerCta ? (
+            kpi.footerCta.to ? (
+              <Link
+                to={kpi.footerCta.to}
+                className="inline-flex items-center gap-1 font-semibold text-primary hover:text-primary/90"
+              >
+                {kpi.footerCta.label}
+                <span aria-hidden="true">→</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={kpi.footerCta.onClick}
+                className="inline-flex items-center gap-1 font-semibold text-primary hover:text-primary/90"
+              >
+                {kpi.footerCta.label}
+                <span aria-hidden="true">→</span>
+              </button>
+            )
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  const wdlParts =
+    kpi.key === "wdl" ? kpi.value.split(/[–-]/).map((v) => v.trim()).filter(Boolean) : [];
+  const wdlValues = wdlParts.length === 3 ? wdlParts : ["—", "—", "—"];
+  const wdlColors = ["text-emerald-500 dark:text-emerald-400", "text-muted-foreground", "text-red-500 dark:text-red-400"];
+
   return (
     <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60", "px-4 py-3")}>
       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
@@ -177,34 +241,33 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
         <span className="truncate">{kpi.label}</span>
       </div>
 
-      <div className="mt-1 flex items-baseline justify-between gap-3">
-        <div className="text-[28px] font-bold tracking-tight tabular-nums">
-          {kpi.key === "streak" ? (
-            kpi.value.split(" ").map((c, i) => (
-              <span
-                key={i}
-                className={
-                  c === "W"
-                    ? "text-emerald-500 dark:text-emerald-400"
-                    : c === "L"
-                    ? "text-red-500 dark:text-red-400"
-                    : "text-muted-foreground"
-                }
-              >
-                {c}{" "}
+      {kpi.trend ? (
+        <div className="mt-1 flex items-baseline justify-between gap-3">
+          <div className="text-[28px] font-bold tracking-tight tabular-nums">
+            {kpi.key === "streak" ? (
+              kpi.value.split(" ").map((c, i) => (
+                <span
+                  key={i}
+                  className={
+                    c === "W"
+                      ? "text-emerald-500 dark:text-emerald-400"
+                      : c === "L"
+                      ? "text-red-500 dark:text-red-400"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {c}{" "}
+                </span>
+              ))
+            ) : (
+              <span className="text-foreground">
+                {kpi.value}
+                {showUnit ? (
+                  <span className="ml-1 text-sm font-semibold text-muted-foreground">{kpi.unit}</span>
+                ) : null}
               </span>
-            ))
-          ) : (
-            <span className="text-foreground">
-              {kpi.value}
-              {showUnit ? (
-                <span className="ml-1 text-sm font-semibold text-muted-foreground">{kpi.unit}</span>
-              ) : null}
-            </span>
-          )}
-        </div>
-
-        {kpi.trend ? (
+            )}
+          </div>
           <div className="flex items-center gap-2 text-right">
             <span
               className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", trendTone)}
@@ -215,10 +278,49 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
               <span className="text-xs font-medium text-muted-foreground truncate max-w-[120px]">{kpi.hint}</span>
             ) : null}
           </div>
-        ) : kpi.hint ? (
-          <div className="text-xs font-medium text-muted-foreground truncate max-w-[58%] text-right">{kpi.hint}</div>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div className="mt-1">
+          <div className="text-[28px] font-bold tracking-tight tabular-nums">
+            {kpi.key === "streak" ? (
+              kpi.value.split(" ").map((c, i) => (
+                <span
+                  key={i}
+                  className={
+                    c === "W"
+                      ? "text-emerald-500 dark:text-emerald-400"
+                      : c === "L"
+                      ? "text-red-500 dark:text-red-400"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {c}{" "}
+                </span>
+              ))
+            ) : kpi.key === "wdl" ? (
+              <span className="text-foreground">
+                {wdlValues.map((val, i) => (
+                  <span key={i} className={wdlColors[i]}>
+                    {val}
+                    {i < wdlValues.length - 1 ? <span className="text-muted-foreground">–</span> : null}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="text-foreground">
+                {kpi.value}
+                {showUnit ? (
+                  <span className="ml-1 text-sm font-semibold text-muted-foreground">{kpi.unit}</span>
+                ) : null}
+              </span>
+            )}
+          </div>
+
+          {kpi.hint ? (
+            <div className="mt-2 text-xs font-medium text-muted-foreground">{kpi.hint}</div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
