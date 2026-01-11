@@ -8,6 +8,7 @@ import {
   useLocation,
   useNavigate,
   Link,
+  useNavigationType,
 } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 
@@ -388,6 +389,27 @@ function LoginPage() {
 // =======================
 // App routes
 // =======================
+function ScrollToTop() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+
+  useEffect(() => {
+    if (navigationType === "POP") return;
+
+    if (location.hash) {
+      const target = document.getElementById(location.hash.slice(1));
+      if (target) {
+        target.scrollIntoView({ behavior: "auto", block: "start" });
+        return;
+      }
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.hash, location.pathname, location.search, navigationType]);
+
+  return null;
+}
+
 function AppRoutes() {
   const { session, team, loading } = useAuthAndTeam();
 
@@ -717,6 +739,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AppRoutes />
       <Toaster position="top-center" />
     </BrowserRouter>
