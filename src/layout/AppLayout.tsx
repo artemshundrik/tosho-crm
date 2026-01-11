@@ -448,6 +448,7 @@ useEffect(() => {
   }, [baseHeader, matchId, matchMeta, matchEventsRoute]);
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -715,7 +716,7 @@ useEffect(() => {
             <div className="flex items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
-                <Sheet>
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
                       <Menu className="h-5 w-5" />
@@ -754,7 +755,11 @@ useEffect(() => {
                     </div>
 
                     <div className="border-t border-border px-4 py-4 pb-8">
-                      <MobileNav currentPath={location.pathname} activityUnreadCount={activityUnreadCount} />
+                      <MobileNav
+                        currentPath={location.pathname}
+                        activityUnreadCount={activityUnreadCount}
+                        onNavigate={() => setMobileMenuOpen(false)}
+                      />
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -902,11 +907,13 @@ function SidebarGroup({
   links,
   currentPath,
   activityUnreadCount = 0,
+  onNavigate,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
   activityUnreadCount?: number;
+  onNavigate?: () => void;
 }) {
   if (links.length === 0) return null;
 
@@ -925,6 +932,7 @@ function SidebarGroup({
             <Link
               key={link.to}
               to={link.to}
+              onClick={onNavigate}
               className={cn(
                 "relative group flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -969,7 +977,15 @@ function SidebarGroup({
   );
 }
 
-function MobileNav({ currentPath, activityUnreadCount = 0 }: { currentPath: string; activityUnreadCount?: number }) {
+function MobileNav({
+  currentPath,
+  activityUnreadCount = 0,
+  onNavigate,
+}: {
+  currentPath: string;
+  activityUnreadCount?: number;
+  onNavigate?: () => void;
+}) {
   return (
     <div className="space-y-5">
       <SidebarGroup
@@ -977,18 +993,21 @@ function MobileNav({ currentPath, activityUnreadCount = 0 }: { currentPath: stri
         links={sidebarLinks.filter((l) => l.group === "team")}
         currentPath={currentPath}
         activityUnreadCount={activityUnreadCount}
+        onNavigate={onNavigate}
       />
       <SidebarGroup
         label="Аналітика"
         links={sidebarLinks.filter((l) => l.group === "analytics")}
         currentPath={currentPath}
         activityUnreadCount={activityUnreadCount}
+        onNavigate={onNavigate}
       />
       <SidebarGroup
         label="Управління"
         links={sidebarLinks.filter((l) => l.group === "management")}
         currentPath={currentPath}
         activityUnreadCount={activityUnreadCount}
+        onNavigate={onNavigate}
       />
       <div className="pt-2 border-t border-border">
         <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">

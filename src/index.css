@@ -131,8 +131,13 @@
   * {
     border-color: hsl(var(--border));
   }
-  body {
+  html,
+  body,
+  #root {
+    min-height: 100%;
     background-color: hsl(var(--background));
+  }
+  body {
     color: hsl(var(--foreground));
   }
 }
