@@ -1,12 +1,33 @@
 // src/pages/TournamentDetailsPage.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,6 +44,7 @@ import { formatUpdatedAgo, type StandingsRowView } from "@/features/standingsImp
 type Tournament = {
   id: string;
   name: string;
+  short_name: string | null;
   season: string | null;
   league_name: string | null;
   age_group: string | null;
@@ -65,9 +87,30 @@ type StandingsRow = StandingsRowView & {
   position_delta: number | null;
 };
 
+type TournamentFormState = {
+  name: string;
+  short_name: string;
+  season: string;
+  league_name: string;
+  age_group: string;
+  external_url: string;
+  logo_url: string;
+  is_primary: boolean;
+};
+
 /* ================= CONFIG ================= */
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
+const EMPTY_FORM: TournamentFormState = {
+  name: "",
+  short_name: "",
+  season: "",
+  league_name: "",
+  age_group: "",
+  external_url: "",
+  logo_url: "",
+  is_primary: false,
+};
 
 /* ================= HELPERS ================= */
 
@@ -100,6 +143,11 @@ function matchStatusBadge(
 
 function playerInitials(firstName: string, lastName: string) {
   return `${(firstName || "")[0] ?? ""}${(lastName || "")[0] ?? ""}`.trim().toUpperCase() || "•";
+}
+
+function normalizeNullable(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) {
@@ -136,6 +184,7 @@ function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) 
 export function TournamentDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [playersLoading, setPlayersLoading] = useState(true);
@@ -145,6 +194,13 @@ export function TournamentDetailsPage() {
   const [standingsRows, setStandingsRows] = useState<StandingsRow[]>([]);
   const [standingsUpdatedAt, setStandingsUpdatedAt] = useState<string | null>(null);
   const [standingsModalOpen, setStandingsModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<TournamentFormState>(EMPTY_FORM);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [tRow, setTRow] = useState<TeamTournamentRow | null>(null);
   const [matches, setMatches] = useState<MatchRow[]>([]);
@@ -242,6 +298,7 @@ export function TournamentDetailsPage() {
             tournament:tournament_id (
               id,
               name,
+              short_name,
               season,
               league_name,
               age_group,
@@ -310,6 +367,142 @@ export function TournamentDetailsPage() {
 
   const tournament = tRow?.tournament ?? null;
 
+  useEffect(() => {
+    if (!tournament) return;
+    setDraft({
+      name: tournament.name ?? "",
+      short_name: tournament.short_name ?? "",
+      season: tournament.season ?? "",
+      league_name: tournament.league_name ?? "",
+      age_group: tournament.age_group ?? "",
+      external_url: tournament.external_url ?? "",
+      logo_url: tournament.logo_url ?? "",
+      is_primary: tRow?.is_primary ?? false,
+    });
+  }, [tournament, tRow?.is_primary]);
+
+  const handleUpdateTournament = useCallback(async () => {
+    if (!id) return;
+    if (!draft.name.trim()) {
+      setEditError("Вкажи назву турніру.");
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError(null);
+
+    const { error: updateError } = await supabase
+      .from("tournaments")
+      .update({
+        name: draft.name.trim(),
+        short_name: normalizeNullable(draft.short_name),
+        season: normalizeNullable(draft.season),
+        league_name: normalizeNullable(draft.league_name),
+        age_group: normalizeNullable(draft.age_group),
+        external_url: normalizeNullable(draft.external_url),
+        logo_url: normalizeNullable(draft.logo_url),
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      setEditError(updateError.message || "Не вдалося оновити турнір.");
+      setEditSaving(false);
+      return;
+    }
+
+    const { error: linkError } = await supabase
+      .from("team_tournaments")
+      .update({ is_primary: draft.is_primary })
+      .eq("team_id", TEAM_ID)
+      .eq("tournament_id", id);
+
+    if (linkError) {
+      setEditError(linkError.message || "Не вдалося оновити статус основного турніру.");
+      setEditSaving(false);
+      return;
+    }
+
+    setTRow((prev) => {
+      if (!prev) return prev;
+      const updated = prev.tournament
+        ? {
+            ...prev.tournament,
+            name: draft.name.trim(),
+            short_name: normalizeNullable(draft.short_name),
+            season: normalizeNullable(draft.season),
+            league_name: normalizeNullable(draft.league_name),
+            age_group: normalizeNullable(draft.age_group),
+            external_url: normalizeNullable(draft.external_url),
+            logo_url: normalizeNullable(draft.logo_url),
+          }
+        : prev.tournament;
+      return { ...prev, is_primary: draft.is_primary, tournament: updated };
+    });
+
+    if (draft.is_primary) {
+      const { error: resetError } = await supabase
+        .from("team_tournaments")
+        .update({ is_primary: false })
+        .eq("team_id", TEAM_ID)
+        .neq("tournament_id", id);
+
+      if (resetError) {
+        setEditError(resetError.message || "Не вдалося оновити основний турнір.");
+        setEditSaving(false);
+        return;
+      }
+    }
+
+    setEditSaving(false);
+    setEditOpen(false);
+  }, [draft, id]);
+
+  const handleDeleteTournament = useCallback(async () => {
+    if (!id) return;
+    setDeleteSaving(true);
+    setDeleteError(null);
+
+    const { error: rosterError } = await supabase
+      .from("team_tournament_players")
+      .delete()
+      .eq("team_id", TEAM_ID)
+      .eq("tournament_id", id);
+
+    if (rosterError) {
+      setDeleteError(rosterError.message || "Не вдалося видалити заявку турніру.");
+      setDeleteSaving(false);
+      return;
+    }
+
+    const { error: linkError } = await supabase
+      .from("tournament_teams")
+      .delete()
+      .eq("team_id", TEAM_ID)
+      .eq("tournament_id", id);
+
+    if (linkError) {
+      setDeleteError(linkError.message || "Не вдалося видалити звʼязок турніру.");
+      setDeleteSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("team_tournaments")
+      .delete()
+      .eq("team_id", TEAM_ID)
+      .eq("tournament_id", id);
+
+    if (error) {
+      setDeleteError(error.message || "Не вдалося видалити турнір.");
+      setDeleteSaving(false);
+      return;
+    }
+
+    setDeleteSaving(false);
+    setDeleteOpen(false);
+    navigate("/admin/tournaments");
+  }, [id, navigate]);
+
   const header = useMemo(() => {
     if (loading) {
       return (
@@ -334,9 +527,9 @@ export function TournamentDetailsPage() {
     return (
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted">
+          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-muted">
             {tournament.logo_url ? (
-              <img src={tournament.logo_url} className="h-12 w-12 object-contain" />
+              <img src={tournament.logo_url} className="h-full w-full object-cover" />
             ) : (
               <Trophy className="h-6 w-6 text-muted-foreground" />
             )}
@@ -353,12 +546,28 @@ export function TournamentDetailsPage() {
           </div>
         </div>
 
-        <Button asChild variant="outline" className="rounded-xl">
-          <Link to="/admin/tournaments">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Турніри
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            className="rounded-xl"
+            onClick={() => setEditOpen(true)}
+          >
+            Редагувати
+          </Button>
+          <Button
+            variant="destructive"
+            className="rounded-xl"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Видалити
+          </Button>
+          <Button asChild variant="outline" className="rounded-xl">
+            <Link to="/admin/tournaments">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Турніри
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }, [loading, tournament, tRow]);
@@ -663,6 +872,128 @@ export function TournamentDetailsPage() {
           </CardContent>
         </Tabs>
       </Card>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) {
+            setEditError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl overflow-hidden border-border bg-card/95 p-0">
+          <div className="border-b border-border bg-card/70 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-lg text-foreground">Редагувати турнір</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Онови назву, сезон, лігу та інші параметри турніру.
+              </DialogDescription>
+            </DialogHeader>
+            {editError ? (
+              <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {editError}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="max-h-[70vh] overflow-auto px-6 py-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Назва турніру *</Label>
+                <Input
+                  value={draft.name}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Коротка назва</Label>
+                <Input
+                  value={draft.short_name}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, short_name: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Сезон</Label>
+                <Input
+                  value={draft.season}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, season: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Ліга</Label>
+                <Input
+                  value={draft.league_name}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, league_name: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Вікова група</Label>
+                <Input
+                  value={draft.age_group}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, age_group: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Посилання на турнір</Label>
+                <Input
+                  value={draft.external_url}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, external_url: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Лого (URL)</Label>
+                <Input
+                  value={draft.logo_url}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, logo_url: event.target.value }))}
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={draft.is_primary}
+                  onCheckedChange={(value) => setDraft((prev) => ({ ...prev, is_primary: Boolean(value) }))}
+                />
+                <span className="text-sm text-foreground">Основний турнір команди</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border bg-card/70 px-6 py-4">
+            <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={editSaving}>
+              Скасувати
+            </Button>
+            <Button onClick={handleUpdateTournament} disabled={editSaving}>
+              {editSaving ? "Збереження..." : "Зберегти"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Видалити турнір?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Турнір зникне зі списку команди, а заявка буде очищена. Матчі та статистика залишаться.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {deleteError}
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSaving}>Скасувати</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTournament}
+              disabled={deleteSaving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSaving ? "Видалення..." : "Видалити"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -427,7 +427,11 @@
     align-items: center;
     justify-content: center;
     height: 20px !important;
-    padding: 0 6 !important;
+    padding: 0 6px !important;
+    width: auto !important;
+    max-width: max-content;
+    align-self: flex-start;
+    flex: 0 0 auto;
     border-radius: 9999px;
     font-size: 11px !important;
     font-weight: 800;

@@ -294,17 +294,29 @@ function LeagueMeta({
 }) {
   if (!leagueLabel && typeof matchday !== "number") return null;
 
+  const [logoFailed, setLogoFailed] = React.useState(false);
+  const trimmedLogo = (logoUrl ?? "").trim();
+  const showLogo = Boolean(trimmedLogo) && !logoFailed;
+
+  React.useEffect(() => {
+    setLogoFailed(false);
+  }, [trimmedLogo]);
+
   return (
     <div className="flex max-w-[70%] items-center gap-2">
-      {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt={leagueLabel ?? "Ліга"}
-          className="h-5 w-5 object-contain"
-        />
-      ) : (
-        <Trophy className="h-4 w-4 text-muted-foreground opacity-60" />
-      )}
+      <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border">
+        {showLogo ? (
+          <img
+            src={trimmedLogo}
+            alt={leagueLabel ?? "Ліга"}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <Trophy className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
+        )}
+      </div>
 
       <span className="min-w-0 truncate text-[13px] font-semibold text-foreground">
         {leagueLabel}

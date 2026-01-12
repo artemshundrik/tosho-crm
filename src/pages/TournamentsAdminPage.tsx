@@ -1,22 +1,34 @@
 // src/pages/TournamentsAdminPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 
-import { ArrowRight, CalendarDays, Flag, Star, Trophy } from "lucide-react";
+import { ArrowRight, CalendarDays, Flag, Plus, Star, Trophy } from "lucide-react";
 
 /* ================= TYPES ================= */
 
 type Tournament = {
   id: string;
   name: string;
+  short_name: string | null;
   season: string | null;
   league_name: string | null;
   age_group: string | null;
@@ -30,15 +42,67 @@ type TeamTournamentRow = {
   tournament: Tournament | null;
 };
 
+type TournamentFormState = {
+  name: string;
+  short_name: string;
+  season: string;
+  league_name: string;
+  age_group: string;
+  external_url: string;
+  logo_url: string;
+  is_primary: boolean;
+};
+
 /* ================= CONFIG ================= */
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
+const EMPTY_FORM: TournamentFormState = {
+  name: "",
+  short_name: "",
+  season: "",
+  league_name: "",
+  age_group: "",
+  external_url: "",
+  logo_url: "",
+  is_primary: false,
+};
+
+function normalizeNullable(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 /* ================= PAGE ================= */
 
 export function TournamentsAdminPage() {
   const [items, setItems] = useState<TeamTournamentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<TournamentFormState>(EMPTY_FORM);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const fetchTeamTournaments = useCallback(async () => {
+    return supabase
+      .from("team_tournaments")
+      .select(
+        `
+          is_primary,
+          tournament:tournament_id (
+            id,
+            name,
+            short_name,
+            season,
+            league_name,
+            age_group,
+            external_url,
+            logo_url
+          )
+        `
+      )
+      .eq("team_id", TEAM_ID)
+      .order("is_primary", { ascending: false });
+  }, []);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -90,24 +154,7 @@ export function TournamentsAdminPage() {
 
       // ✅ alias на FK: tournament:tournament_id(...)
       // Це змушує Supabase повернути 1 обʼєкт, а не масив.
-      const { data, error } = await supabase
-        .from("team_tournaments")
-        .select(
-          `
-          is_primary,
-          tournament:tournament_id (
-            id,
-            name,
-            season,
-            league_name,
-            age_group,
-            external_url,
-            logo_url
-          )
-        `
-        )
-        .eq("team_id", TEAM_ID)
-        .order("is_primary", { ascending: false });
+      const { data, error } = await fetchTeamTournaments();
 
       if (cancelled) return;
 
@@ -127,7 +174,72 @@ export function TournamentsAdminPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchTeamTournaments]);
+
+  const handleCreateTournament = useCallback(async () => {
+    if (!createForm.name.trim()) {
+      setCreateError("Вкажи назву турніру.");
+      return;
+    }
+
+    setCreateSaving(true);
+    setCreateError(null);
+
+    const { data: tournamentRow, error: tournamentError } = await supabase
+      .from("tournaments")
+      .insert({
+        name: createForm.name.trim(),
+        short_name: normalizeNullable(createForm.short_name),
+        season: normalizeNullable(createForm.season),
+        league_name: normalizeNullable(createForm.league_name),
+        age_group: normalizeNullable(createForm.age_group),
+        external_url: normalizeNullable(createForm.external_url),
+        logo_url: normalizeNullable(createForm.logo_url),
+      })
+      .select("id")
+      .single();
+
+    if (tournamentError || !tournamentRow) {
+      setCreateError(tournamentError?.message || "Не вдалося створити турнір.");
+      setCreateSaving(false);
+      return;
+    }
+
+    const { error: linkError } = await supabase.from("team_tournaments").insert({
+      team_id: TEAM_ID,
+      tournament_id: tournamentRow.id,
+      is_primary: createForm.is_primary,
+    });
+
+    if (linkError) {
+      setCreateError(linkError.message || "Не вдалося привʼязати турнір до команди.");
+      setCreateSaving(false);
+      return;
+    }
+
+    if (createForm.is_primary) {
+      const { error: resetError } = await supabase
+        .from("team_tournaments")
+        .update({ is_primary: false })
+        .eq("team_id", TEAM_ID)
+        .neq("tournament_id", tournamentRow.id);
+
+      if (resetError) {
+        setCreateError(resetError.message || "Не вдалося оновити основний турнір.");
+        setCreateSaving(false);
+        return;
+      }
+    }
+
+    const { data, error } = await fetchTeamTournaments();
+    if (!error) {
+      setItems(((data ?? []) as unknown as TeamTournamentRow[]).filter((x) => !!x.tournament));
+    }
+
+    setCreateSaving(false);
+    setCreateForm(EMPTY_FORM);
+    setCreateOpen(false);
+  }, [createForm, fetchTeamTournaments]);
 
   const content = useMemo(() => {
     if (loading) {
@@ -163,12 +275,12 @@ export function TournamentsAdminPage() {
             >
               <CardContent className="flex items-center gap-4 p-4">
                 {/* LOGO */}
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted/60 ring-1 ring-inset ring-border">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border">
                   {tournament.logo_url ? (
                     <img
                       src={tournament.logo_url}
                       alt={tournament.name}
-                      className="h-10 w-10 object-contain"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <Trophy className="h-5 w-5 text-muted-foreground" />
@@ -224,6 +336,11 @@ export function TournamentsAdminPage() {
         subtitle="Змагання, в яких бере участь команда"
         hideNextUp
         kpis={kpis}
+        primaryAction={{
+          label: "Додати турнір",
+          onClick: () => setCreateOpen(true),
+          iconLeft: Plus,
+        }}
       />
 
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
@@ -236,6 +353,113 @@ export function TournamentsAdminPage() {
         </CardHeader>
         <CardContent>{content}</CardContent>
       </Card>
+
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setCreateForm(EMPTY_FORM);
+            setCreateError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl overflow-hidden border-border bg-card/95 p-0">
+          <div className="border-b border-border bg-card/70 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-lg text-foreground">Новий турнір</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Заповни базову інформацію, щоб додати турнір до команди.
+              </DialogDescription>
+            </DialogHeader>
+            {createError ? (
+              <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {createError}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="max-h-[70vh] overflow-auto px-6 py-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Назва турніру *</Label>
+                <Input
+                  value={createForm.name}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Наприклад: V9KY Cup"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Коротка назва</Label>
+                <Input
+                  value={createForm.short_name}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, short_name: event.target.value }))}
+                  placeholder="V9KY"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Сезон</Label>
+                <Input
+                  value={createForm.season}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, season: event.target.value }))}
+                  placeholder="2025/26"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Ліга</Label>
+                <Input
+                  value={createForm.league_name}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, league_name: event.target.value }))}
+                  placeholder="Gold League"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Вікова група</Label>
+                <Input
+                  value={createForm.age_group}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, age_group: event.target.value }))}
+                  placeholder="U-19"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Посилання на турнір</Label>
+                <Input
+                  value={createForm.external_url}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, external_url: event.target.value }))}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs text-muted-foreground">Лого (URL)</Label>
+                <Input
+                  value={createForm.logo_url}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, logo_url: event.target.value }))}
+                  placeholder="https://.../logo.png"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={createForm.is_primary}
+                  onCheckedChange={(value) =>
+                    setCreateForm((prev) => ({ ...prev, is_primary: Boolean(value) }))
+                  }
+                />
+                <span className="text-sm text-foreground">Зробити основним турніром</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border bg-card/70 px-6 py-4">
+            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createSaving}>
+              Скасувати
+            </Button>
+            <Button onClick={handleCreateTournament} disabled={createSaving}>
+              {createSaving ? "Збереження..." : "Створити"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

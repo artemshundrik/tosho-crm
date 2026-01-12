@@ -417,7 +417,11 @@ function NextUpHero({
       {/* CONTEXT */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base font-semibold text-muted-foreground">
         <div className="flex min-w-0 items-center gap-2">
-          {leagueLogoUrl && <img src={leagueLogoUrl} alt="" className="h-6 w-6 sm:h-7 sm:w-7 object-contain" />}
+          {leagueLogoUrl ? (
+            <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-muted/60 ring-1 ring-inset ring-border sm:h-7 sm:w-7">
+              <img src={leagueLogoUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          ) : null}
           <span className="truncate">{tournamentName}</span>
         </div>
         {tourLabel ? (

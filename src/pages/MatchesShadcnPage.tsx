@@ -154,7 +154,8 @@ function formatNextMatchLine(m: MatchCardData) {
 }
 
 function normalizeLogoUrl(url?: string | null) {
-  if (!url) return null;
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
 
   const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(
     /\/+$/,
@@ -162,12 +163,12 @@ function normalizeLogoUrl(url?: string | null) {
   );
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-  if (!supabaseUrl || !supabaseAnonKey) return url;
+  if (!supabaseUrl || !supabaseAnonKey) return trimmed;
 
-  const looksRelative = url.startsWith("/") || !/^https?:\/\//i.test(url);
+  const looksRelative = trimmed.startsWith("/") || !/^https?:\/\//i.test(trimmed);
   const absoluteUrl = looksRelative
-    ? `${supabaseUrl}/${url.replace(/^\/+/, "")}`
-    : url;
+    ? `${supabaseUrl}/${trimmed.replace(/^\/+/, "")}`
+    : trimmed;
 
   if (!absoluteUrl.startsWith(supabaseUrl)) return absoluteUrl;
   if (absoluteUrl.includes("apikey=")) return absoluteUrl;
