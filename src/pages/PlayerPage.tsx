@@ -78,6 +78,13 @@ type TrainingRow = {
   time: string | null;
 };
 
+type TrainingSession = {
+  id: string;
+  date: string;
+  time: string | null;
+  status: TrainingAttendanceRow["status"];
+};
+
 type RatingBreakdown = {
   base: number;
   performance: number;
@@ -220,6 +227,32 @@ function monthKeyUA(date: string) {
   const y = new Intl.DateTimeFormat("uk-UA", { year: "numeric" }).format(d);
   return `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`;
 }
+
+function formatTrainingMeta(date: string, time: string | null) {
+  const d = new Date(`${date}T${time || "00:00"}`);
+  const weekday = new Intl.DateTimeFormat("uk-UA", { weekday: "short" })
+    .format(d)
+    .replace(".", "");
+  const dateLabel = new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+  const timeLabel = time
+    ? time.slice(0, 5)
+    : new Intl.DateTimeFormat("uk-UA", { hour: "2-digit", minute: "2-digit" }).format(d);
+  return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} • ${dateLabel} • ${timeLabel}`;
+}
+
+const trainingStatusMeta: Record<
+  TrainingAttendanceRow["status"],
+  { label: string; tone: "success" | "neutral" | "danger" | "info" }
+> = {
+  present: { label: "Присутній", tone: "success" },
+  absent: { label: "Відсутній", tone: "neutral" },
+  injured: { label: "Травма", tone: "danger" },
+  sick: { label: "Хворів", tone: "info" },
+};
 
 // --- UI COMPONENTS ---
 
@@ -377,6 +410,15 @@ export function PlayerPage() {
   const [recentMatches, setRecentMatches] = useState<any[]>([]);
   const [trainingData, setTrainingData] = useState<any[]>([]); 
   const [trainingSummary, setTrainingSummary] = useState({ present: 0, absent: 0, percent: 0, total: 0 });
+  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([]);
+  const [trainingBreakdown, setTrainingBreakdown] = useState({
+    total: 0,
+    present: 0,
+    absent: 0,
+    injured: 0,
+    sick: 0,
+  });
+  const [trainingFilter, setTrainingFilter] = useState<"all" | TrainingAttendanceRow["status"]>("all");
   
   // Rating
   const [rating, setRating] = useState(60);
@@ -549,7 +591,7 @@ export function PlayerPage() {
       const isGk = roleLabelCompact(playerData.position) === "ВР";
       const calculatedRawPoints = (pGoals * 4) + (pAssists * (isGk ? 4 : 3));
       
-      const { value: computedRating, breakdown } = calculateRatingWithBreakdown(
+      const { value: computedRating, breakdown: ratingBreakdownLocal } = calculateRatingWithBreakdown(
           { 
             goals: pGoals, assists: pAssists, matches: pMatches, 
             yellow: pYellow, red: pRed, position: playerData.position 
@@ -559,26 +601,54 @@ export function PlayerPage() {
           maxRawPointsInContext // Now using REAL context
       );
 
-      // F. Process Training Data
-      const trainingIds = Array.from(new Set(trainingAttendance.map(r => r.training_id)));
+      // F. Process Training Data (latest status per training)
+      const latestByTraining = new Map<string, TrainingAttendanceRow>();
+      trainingAttendance.forEach((row) => {
+        const prev = latestByTraining.get(row.training_id);
+        if (!prev) {
+          latestByTraining.set(row.training_id, row);
+          return;
+        }
+        const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
+        const nextTs = row?.created_at ? new Date(row.created_at).getTime() : -Infinity;
+        if (nextTs >= prevTs) latestByTraining.set(row.training_id, row);
+      });
+
+      const trainingIds = Array.from(latestByTraining.keys());
       const trainingsRes = trainingIds.length > 0 
-         ? await supabase.from("trainings").select("id, date").in("id", trainingIds)
+         ? await supabase.from("trainings").select("id, date, time").in("id", trainingIds)
          : { data: [] };
       const trainings = (trainingsRes.data ?? []) as TrainingRow[];
       const trainingById = new Map(trainings.map(t => [t.id, t]));
 
+      const sessions: TrainingSession[] = [];
+      latestByTraining.forEach((row, trainingId) => {
+        const t = trainingById.get(trainingId);
+        if (!t?.date) return;
+        sessions.push({
+          id: trainingId,
+          date: t.date,
+          time: t.time ?? null,
+          status: row.status,
+        });
+      });
+
+      sessions.sort((a, b) => {
+        const ta = new Date(`${a.date}T${a.time || "00:00"}`).getTime();
+        const tb = new Date(`${b.date}T${b.time || "00:00"}`).getTime();
+        return tb - ta;
+      });
+
       const monthMap = new Map<string, { present: number; total: number; sortKey: number }>();
-      trainingAttendance.forEach(row => {
-          const t = trainingById.get(row.training_id);
-          if (!t?.date) return;
-          const key = monthKeyUA(t.date);
-          const d = new Date(t.date);
-          const sortKey = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-          
-          const entry = monthMap.get(key) ?? { present: 0, total: 0, sortKey };
-          entry.total++;
-          if (row.status === "present") entry.present++;
-          monthMap.set(key, entry);
+      sessions.forEach((row) => {
+        const key = monthKeyUA(row.date);
+        const d = new Date(row.date);
+        const sortKey = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+
+        const entry = monthMap.get(key) ?? { present: 0, total: 0, sortKey };
+        entry.total++;
+        if (row.status === "present") entry.present++;
+        monthMap.set(key, entry);
       });
 
       const trainingSeries = Array.from(monthMap.entries())
@@ -588,8 +658,20 @@ export function PlayerPage() {
              percent: val.total > 0 ? Math.round((val.present / val.total) * 100) : 0
          }));
       
-      const tTotal = trainingAttendance.length;
-      const tPresent = trainingAttendance.filter(r => r.status === "present").length;
+      const trainingCounts = sessions.reduce(
+        (acc, row) => {
+          acc.total += 1;
+          if (row.status === "present") acc.present += 1;
+          if (row.status === "absent") acc.absent += 1;
+          if (row.status === "injured") acc.injured += 1;
+          if (row.status === "sick") acc.sick += 1;
+          return acc;
+        },
+        { total: 0, present: 0, absent: 0, injured: 0, sick: 0 }
+      );
+
+      const tTotal = trainingCounts.total;
+      const tPresent = trainingCounts.present;
 
       // Update State
       setStats({
@@ -598,6 +680,8 @@ export function PlayerPage() {
       });
       setRecentMatches(recent);
       setTrainingData(trainingSeries);
+      setTrainingSessions(sessions);
+      setTrainingBreakdown(trainingCounts);
       setTrainingSummary({
           present: tPresent,
           absent: tTotal - tPresent,
@@ -605,12 +689,47 @@ export function PlayerPage() {
           percent: tTotal > 0 ? Math.round((tPresent / tTotal) * 100) : 0
       });
       setRating(computedRating);
-      setRatingBreakdown(breakdown);
+      setRatingBreakdown(ratingBreakdownLocal);
       setLoading(false);
     }
 
     load();
   }, [playerId]);
+
+  const trainingFilters = useMemo(
+    () => [
+      { id: "all" as const, label: "Усі", count: trainingBreakdown.total },
+      { id: "present" as const, label: "Присутній", count: trainingBreakdown.present },
+      { id: "absent" as const, label: "Відсутній", count: trainingBreakdown.absent },
+      { id: "injured" as const, label: "Травма", count: trainingBreakdown.injured },
+      { id: "sick" as const, label: "Хворів", count: trainingBreakdown.sick },
+    ],
+    [trainingBreakdown]
+  );
+
+  const filteredTrainingSessions = useMemo(() => {
+    if (trainingFilter === "all") return trainingSessions;
+    return trainingSessions.filter((s) => s.status === trainingFilter);
+  }, [trainingFilter, trainingSessions]);
+
+  const groupedTrainingSessions = useMemo(() => {
+    const map = new Map<string, { items: TrainingSession[]; sortKey: number }>();
+    filteredTrainingSessions.forEach((session) => {
+      const key = monthKeyUA(session.date);
+      const ts = new Date(session.date).getTime();
+      const entry = map.get(key) ?? { items: [], sortKey: ts };
+      entry.items.push(session);
+      entry.sortKey = Math.max(entry.sortKey, ts);
+      map.set(key, entry);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1].sortKey - a[1].sortKey);
+  }, [filteredTrainingSessions]);
+
+  // Training Chart Calc
+  const trainingCircumference = 2 * Math.PI * 40; 
+  const trainingOffset = trainingSummary.total > 0
+    ? trainingCircumference - (trainingCircumference * trainingSummary.percent) / 100
+    : trainingCircumference;
 
   // Loading Screen
   if (loading) {
@@ -629,12 +748,6 @@ export function PlayerPage() {
   const fullName = `${player.first_name} ${player.last_name}`.trim();
   const positionLabel = getPositionLabel(player.position);
   
-  // Training Chart Calc
-  const trainingCircumference = 2 * Math.PI * 40; 
-  const trainingOffset = trainingSummary.total > 0
-    ? trainingCircumference - (trainingCircumference * trainingSummary.percent) / 100
-    : trainingCircumference;
-
   return (
     <div className="flex flex-col gap-6 pb-12 animate-in fade-in duration-500">
       
@@ -969,10 +1082,101 @@ export function PlayerPage() {
             </Card>
         </TabsContent>
 
-         <TabsContent value="training">
-            <div className="p-10 text-center text-muted-foreground bg-muted/10 rounded-3xl border border-dashed border-border">
-               Тут буде детальна таблиця всіх тренувань (Coming soon...)
+         <TabsContent value="training" className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+              <div className="rounded-[20px] border border-border bg-card/60 p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Всього</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-foreground">{trainingBreakdown.total}</div>
+              </div>
+              <div className="rounded-[20px] border border-border bg-emerald-500/5 p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-500">Присутній</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-emerald-600">{trainingBreakdown.present}</div>
+              </div>
+              <div className="rounded-[20px] border border-border bg-muted/40 p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Відсутній</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-foreground">{trainingBreakdown.absent}</div>
+              </div>
+              <div className="rounded-[20px] border border-border bg-rose-500/5 p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-500">Травма</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-rose-600">{trainingBreakdown.injured}</div>
+              </div>
+              <div className="rounded-[20px] border border-border bg-sky-500/5 p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-sky-500">Хворів</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-sky-600">{trainingBreakdown.sick}</div>
+              </div>
             </div>
+
+            <Card className="rounded-[24px] border-border shadow-sm">
+              <CardHeader className="flex flex-col gap-4 border-b border-border/50 pb-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="text-lg">Відвідування тренувань</CardTitle>
+                  <CardDescription>Детальна історія по кожному тренуванню</CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {trainingFilters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setTrainingFilter(filter.id)}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                        trainingFilter === filter.id
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-muted/30 text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <span>{filter.label}</span>
+                      <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-foreground">
+                        {filter.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                {trainingSessions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
+                    Ще немає відвідувань тренувань.
+                  </div>
+                ) : filteredTrainingSessions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
+                    Немає тренувань з цим статусом.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {groupedTrainingSessions.map(([month, group]) => (
+                      <div key={month} className="space-y-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          {month}
+                        </div>
+                        <div className="space-y-2">
+                          {group.items.map((session) => {
+                            const meta = trainingStatusMeta[session.status];
+                            return (
+                              <Link
+                                key={session.id}
+                                to={`/admin/trainings/${session.id}`}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/40 px-4 py-3 transition-colors hover:bg-muted/40"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-foreground">
+                                    {formatTrainingMeta(session.date, session.time)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">Тренування</span>
+                                </div>
+                                <Badge tone={meta.tone} size="sm" pill>
+                                  {meta.label}
+                                </Badge>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
          </TabsContent>
          
          <TabsContent value="tournaments">

@@ -305,7 +305,12 @@ export function PlayersAdminPage() {
                   return (
                     <TableRow 
                       key={player.id} 
-                      className={cn("group transition-colors border-border/40 h-[72px]", player.status === 'inactive' && "opacity-50 grayscale")}
+                      onClick={() => navigate(`/player/${player.id}`)}
+                      className={cn(
+                        "group transition-colors border-border/40 h-[72px] cursor-pointer",
+                        "hover:bg-muted/30",
+                        player.status === 'inactive' && "opacity-50 grayscale"
+                      )}
                     >
                       <TableCell className="text-center pl-6"><JerseyNumber number={player.shirt_number} /></TableCell>
                       <TableCell>

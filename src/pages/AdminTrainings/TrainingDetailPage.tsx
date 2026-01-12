@@ -6,6 +6,7 @@ import {
   deleteAttendance,
   getAttendance,
   getTrainingById,
+  bulkSetAttendance,
   setAttendance as setAttendanceApi,
   updateTraining,
 } from "../../api/trainings";
@@ -142,6 +143,7 @@ export function TrainingDetailPage() {
   const [training, setTraining] = useState<Training | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+  const [attendanceDbIds, setAttendanceDbIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,18 +198,41 @@ const playerList = (playersRes.data || []) as Player[];
 setPlayers(playerList);
 
 const attMap: Record<string, AttendanceStatus> = {};
+const dbIds = new Set<string>();
 (att as Attendance[]).forEach((row) => {
   attMap[row.player_id] = row.status;
+  dbIds.add(row.player_id);
 });
 
-// --- ВСТАВИТИ ЦЕЙ БЛОК АВТОМАТИЗАЦІЇ ---
-playerList.forEach(p => {
-  // Якщо в базі тренування ще немає статусу, але він є в профілі гравця
-  if (!attMap[p.id] && globalToAttendanceMap[p.status]) {
-    attMap[p.id] = globalToAttendanceMap[p.status];
-  }
-});
+        // --- Автостатус з профілю (тільки якщо в БД ще немає) ---
+        const autoUpdates: { playerId: string; status: AttendanceStatus }[] = [];
+        const trainingStartedForLoad = tr
+          ? new Date(`${tr.date}T${tr.time || "00:00"}`).getTime() <= Date.now()
+          : false;
+
+        playerList.forEach((p) => {
+          if (!attMap[p.id] && globalToAttendanceMap[p.status]) {
+            const status = globalToAttendanceMap[p.status];
+            attMap[p.id] = status;
+            autoUpdates.push({ playerId: p.id, status });
+          }
+        });
+
         setAttendance(attMap);
+        setAttendanceDbIds(dbIds);
+
+        if (trainingStartedForLoad && autoUpdates.length > 0) {
+          try {
+            await bulkSetAttendance(tr.id, autoUpdates);
+            setAttendanceDbIds((prev) => {
+              const next = new Set(prev);
+              autoUpdates.forEach((u) => next.add(u.playerId));
+              return next;
+            });
+          } catch (e) {
+            console.error("Failed to persist auto attendance", e);
+          }
+        }
 
         setForm({
           date: tr?.date || "",
@@ -254,8 +279,39 @@ playerList.forEach(p => {
 
   useEffect(() => {
     if (!training || !trainingStarted) return;
-    localStorage.removeItem(tempAttendanceKey(training.id));
-  }, [training, trainingStarted]);
+    const raw = localStorage.getItem(tempAttendanceKey(training.id));
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Record<string, AttendanceStatus> | null;
+      if (!parsed || typeof parsed !== "object") {
+        localStorage.removeItem(tempAttendanceKey(training.id));
+        return;
+      }
+
+      const updates = Object.entries(parsed)
+        .filter(([playerId]) => !attendanceDbIds.has(playerId))
+        .map(([playerId, status]) => ({ playerId, status }));
+
+      if (!updates.length) {
+        localStorage.removeItem(tempAttendanceKey(training.id));
+        return;
+      }
+
+      bulkSetAttendance(training.id, updates).then(() => {
+        setAttendanceDbIds((prev) => {
+          const next = new Set(prev);
+          updates.forEach((u) => next.add(u.playerId));
+          return next;
+        });
+        localStorage.removeItem(tempAttendanceKey(training.id));
+      }).catch((e) => {
+        console.error("Failed to sync temp attendance", e);
+      });
+    } catch (e) {
+      console.warn("Failed to sync temp attendance", e);
+    }
+  }, [attendanceDbIds, training, trainingStarted]);
 
   const summary = useMemo(() => {
     const counts: Record<AttendanceStatus, number> = {
