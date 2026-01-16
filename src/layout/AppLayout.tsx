@@ -33,6 +33,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/app/UserMenu";
+import {
+  PageHeaderActionsProvider,
+  usePageHeaderActionsValue,
+} from "@/components/app/page-header-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -44,15 +48,7 @@ import { mapNotificationRow, type NotificationItem, type NotificationRow } from 
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AppDropdown } from "@/components/app/AppDropdown";
 import { toast } from "sonner";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -76,6 +72,8 @@ type HeaderConfig = {
   subtitle: string;
   breadcrumbLabel: string;
   breadcrumbTo: string;
+  eyebrow?: string;
+  showPageHeader?: boolean;
 };
 
 type MatchMeta = {
@@ -329,10 +327,19 @@ function formatDateTimeUA(iso: string) {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  return (
+    <PageHeaderActionsProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </PageHeaderActionsProvider>
+  );
+}
+
+function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { userId, teamId } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
+  const headerActions = usePageHeaderActionsValue();
 
   // /matches/:matchId/events
   const matchEventsRoute = useMemo(() => {
@@ -449,6 +456,7 @@ useEffect(() => {
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -595,65 +603,78 @@ useEffect(() => {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
         <div className="px-4 pt-5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  "w-full rounded-xl px-2.5 py-2.5 text-left transition-all duration-200",
-                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 group"
-                )}
-              >
+          <AppDropdown
+            align="start"
+            contentClassName="w-[250px]"
+            triggerClassName="flex w-full"
+            trigger={
+                <Button
+                  type="button"
+                  variant="menu"
+                  size="md"
+                  className={cn(
+                  "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left group"
+                  )}
+                >
                 <div className="flex items-center gap-3">
-                  
-                  {/* --- ЛОГОТИП КОМАНДИ --- */}
                   <div className="relative">
-                    <Avatar className="h-9 w-9 rounded-xl border border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
-  {workspaceLogo ? (
-    <AvatarImage 
-      src={workspaceLogo} 
-      alt="Fayna Team Logo" 
-      className="object-cover" 
-    />
-  ) : null}
-  <AvatarFallback className="rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider">
-    FT
-  </AvatarFallback>
-</Avatar>
-                    
-                    {/* Зелена крапка онлайн статусу */}
+                    <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
+                      {workspaceLogo ? (
+                        <AvatarImage
+                          src={workspaceLogo}
+                          alt="Fayna Team Logo"
+                          className="object-cover"
+                        />
+                      ) : null}
+                      <AvatarFallback className="rounded-[var(--radius-lg)] bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider">
+                        FT
+                      </AvatarFallback>
+                    </Avatar>
+
                     <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border-2 border-background"></span>
                     </span>
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 leading-tight">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold tracking-tight text-foreground uppercase">Fayna Team</span>
+                      <span className="truncate text-[13px] font-semibold tracking-tight text-foreground uppercase">
+                        Fayna Team
+                      </span>
                       <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70 transition-transform group-data-[state=open]:rotate-180" />
                     </div>
-                    <div className="truncate text-[11px] font-medium text-muted-foreground/80">Workspace</div>
+                    <div className="truncate text-[11px] font-medium text-muted-foreground/80 mt-0.5">
+                      Workspace
+                    </div>
                   </div>
                 </div>
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent className="w-[250px]" align="start">
-              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => navigate(ROUTES.overview)}>
-                  <FolderKanban className="mr-2 h-4 w-4" />
-                  FAYNA TEAM
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate(ROUTES.workspaceSettings)}>
-                <Settings className="mr-2 h-4 w-4" />
-                Налаштування workspace
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </Button>
+            }
+            items={[
+              { type: "label", label: "Workspace" },
+              { type: "separator" },
+              {
+                label: (
+                  <>
+                    <FolderKanban className="mr-2 h-4 w-4" />
+                    FAYNA TEAM
+                  </>
+                ),
+                onSelect: () => navigate(ROUTES.overview),
+              },
+              { type: "separator" },
+              {
+                label: (
+                  <>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Налаштування workspace
+                  </>
+                ),
+                onSelect: () => navigate(ROUTES.workspaceSettings),
+              },
+            ]}
+          />
         </div>
 
         {/* Search (Cmd+K) */}
@@ -665,7 +686,7 @@ useEffect(() => {
               value=""
               placeholder="Пошук…"
               className={cn(
-                "h-10 rounded-xl pl-10 pr-16 bg-background/60",
+                "h-10 rounded-[var(--radius-lg)] pl-10 pr-16 bg-background/60",
                 "border border-input",
                 "cursor-pointer",
                 "focus-visible:ring-2 focus-visible:ring-primary/30"
@@ -673,7 +694,7 @@ useEffect(() => {
               onClick={() => setCmdkOpen(true)}
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
                 <span className="text-[11px]">⌘</span>K
               </kbd>
             </div>
@@ -713,7 +734,6 @@ useEffect(() => {
         {/* HEADER */}
         <header
           key={theme}
-          data-theme={theme}
           className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl"
         >
           <div className="flex h-16 items-center justify-between px-3 md:px-6">
@@ -722,7 +742,7 @@ useEffect(() => {
               <div className="md:hidden">
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-[var(--radius-lg)]">
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
@@ -743,7 +763,7 @@ useEffect(() => {
                           value=""
                           placeholder="Пошук…"
                           className={cn(
-                            "h-10 rounded-xl pl-10 pr-16 bg-background/60",
+                            "h-10 rounded-[var(--radius-lg)] pl-10 pr-16 bg-background/60",
                             "border border-input",
                             "cursor-pointer",
                             "focus-visible:ring-2 focus-visible:ring-primary/30"
@@ -751,7 +771,7 @@ useEffect(() => {
                           onClick={() => setCmdkOpen(true)}
                         />
                         <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
                             <span className="text-[11px]">⌘</span>K
                           </kbd>
                         </div>
@@ -773,14 +793,14 @@ useEffect(() => {
               <div className="hidden md:flex items-center text-xs font-medium text-muted-foreground">
                 <Link
                   to={ROUTES.overview}
-                  className="rounded-md px-1.5 py-1 hover:bg-muted/60 hover:text-foreground transition-colors"
+                  className="rounded-[var(--radius-md)] px-1.5 py-1 hover:bg-muted/60 hover:text-foreground transition-colors"
                 >
                   FAYNA TEAM
                 </Link>
                 <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-muted-foreground/80" />
                 <Link
                   to={header.breadcrumbTo}
-                  className="rounded-md bg-muted/50 px-2 py-1 text-foreground hover:bg-muted transition-colors"
+                  className="rounded-[var(--radius-md)] bg-muted/50 px-2 py-1 text-foreground hover:bg-muted transition-colors"
                 >
                   {header.breadcrumbLabel}
                 </Link>
@@ -797,9 +817,8 @@ useEffect(() => {
             <div className="flex items-center gap-2.5">
               {/* Theme toggle */}
               <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+                variant="control"
+                size="iconMd"
                 onClick={toggleTheme}
                 aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
                 title={theme === "dark" ? "Світла тема" : "Темна тема"}
@@ -807,14 +826,18 @@ useEffect(() => {
                 {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
               </Button>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className={cn(
-                      "relative h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground",
-                      "inline-flex items-center justify-center transition-colors",
-                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                    )}
+              <AppDropdown
+                align="end"
+                sideOffset={10}
+                contentClassName="w-[340px]"
+                open={notificationsOpen}
+                onOpenChange={setNotificationsOpen}
+                trigger={
+                  <Button
+                    type="button"
+                    variant="control"
+                    size="iconMd"
+                    className="relative"
                     aria-label="Сповіщення"
                     title="Сповіщення"
                   >
@@ -824,77 +847,111 @@ useEffect(() => {
                         {unreadCount}
                       </span>
                     ) : null}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[340px]" align="end" sideOffset={10}>
-                  <div className="px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-foreground">Сповіщення</div>
-                      {unreadCount > 0 ? (
-                        <button
-                          type="button"
-                          onClick={markAllRead}
-                          className="text-xs font-medium text-muted-foreground hover:text-foreground"
-                        >
-                          Позначити всі
-                        </button>
-                      ) : null}
+                  </Button>
+                }
+                content={
+                  <>
+                    <div className="px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-foreground">Сповіщення</div>
+                        {unreadCount > 0 ? (
+                          <Button
+                            type="button"
+                            variant="textMuted"
+                            size="xs"
+                            onClick={markAllRead}
+                            className="h-auto p-0"
+                          >
+                            Позначити всі
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {unreadCount > 0 ? `Непрочитані: ${unreadCount}` : "Все прочитано"}
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {unreadCount > 0 ? `Непрочитані: ${unreadCount}` : "Все прочитано"}
+                    <div className="h-px bg-border/70" />
+                    <div className="max-h-[320px] overflow-auto">
+                      {notificationsLoading ? (
+                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
+                      ) : unreadNotifications.length === 0 ? (
+                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">Немає непрочитаних.</div>
+                      ) : (
+                        unreadNotifications.map((n) => (
+                          <Button
+                            key={n.id}
+                            type="button"
+                            variant="menu"
+                            size="sm"
+                            className="h-auto w-full justify-start items-start gap-3 px-3 py-2.5 text-left"
+                            onClick={() => {
+                              openNotification(n);
+                              setNotificationsOpen(false);
+                            }}
+                          >
+                            <span
+                              className={cn(
+                                "mt-1 h-2 w-2 rounded-full",
+                                !n.read && n.tone === "success" && "bg-emerald-500",
+                                !n.read && n.tone === "warning" && "bg-amber-500",
+                                !n.read && n.tone === "info" && "bg-sky-500",
+                                !n.read && !n.tone && "bg-muted-foreground",
+                                n.read && "bg-muted-foreground/40"
+                              )}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
+                              <div className="text-xs text-muted-foreground line-clamp-2">{n.description}</div>
+                              <div className="mt-1 text-[10px] text-muted-foreground/70">{n.time}</div>
+                            </div>
+                          </Button>
+                        ))
+                      )}
                     </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <div className="max-h-[320px] overflow-auto">
-                    {notificationsLoading ? (
-                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
-                    ) : unreadNotifications.length === 0 ? (
-                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Немає непрочитаних.</div>
-                    ) : (
-                      unreadNotifications.map((n) => (
-                        <DropdownMenuItem
-                          key={n.id}
-                          className="flex items-start gap-3 px-3 py-2.5"
-                          onClick={() => openNotification(n)}
-                        >
-                          <span
-                            className={cn(
-                              "mt-1 h-2 w-2 rounded-full",
-                              !n.read && n.tone === "success" && "bg-emerald-500",
-                              !n.read && n.tone === "warning" && "bg-amber-500",
-                              !n.read && n.tone === "info" && "bg-sky-500",
-                              !n.read && !n.tone && "bg-muted-foreground",
-                              n.read && "bg-muted-foreground/40"
-                            )}
-                          />
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
-                            <div className="text-xs text-muted-foreground line-clamp-2">{n.description}</div>
-                            <div className="mt-1 text-[10px] text-muted-foreground/70">{n.time}</div>
-                          </div>
-                        </DropdownMenuItem>
-                      ))
-                    )}
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/notifications")}>
-                    Всі сповіщення
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <div className="h-px bg-border/70" />
+                    <Button
+                      type="button"
+                      variant="menu"
+                      size="sm"
+                      className="h-auto w-full justify-start px-3 py-2.5 text-left"
+                      onClick={() => {
+                        navigate("/notifications");
+                        setNotificationsOpen(false);
+                      }}
+                    >
+                      Всі сповіщення
+                    </Button>
+                  </>
+                }
+              />
 
             </div>
           </div>
         </header>
 
         {/* CONTENT */}
-        <main className="w-full px-4 py-6 md:px-6 lg:px-10">
-          <div className="mx-auto max-w-6xl space-y-8">
+        <main className="w-full px-4 py-6 md:px-6 lg:px-8 xl:px-8">
+          <div className="mx-auto max-w-[1320px] space-y-8">
             {/* Page header (desktop) */}
-            <div className="hidden md:flex flex-col gap-1">
-              <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
-              <p className="text-sm text-muted-foreground">{header.subtitle}</p>
-            </div>
+            {header.showPageHeader === false ? (
+              header.eyebrow ? (
+                <div className="hidden md:flex">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    {header.eyebrow}
+                  </span>
+                </div>
+              ) : null
+            ) : (
+              <div className="hidden md:flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
+                  <p className="text-sm text-muted-foreground">{header.subtitle}</p>
+                </div>
+                {headerActions ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div>
+                ) : null}
+              </div>
+            )}
 
             <div className="animate-in fade-in-50 duration-500">{children}</div>
           </div>
@@ -938,7 +995,7 @@ function SidebarGroup({
               to={link.to}
               onClick={onNavigate}
               className={cn(
-                "relative group flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",
+                "relative group flex items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-medium transition-colors",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 active
                   ? "bg-primary/10 text-foreground"
@@ -1014,9 +1071,9 @@ function MobileNav({
         onNavigate={onNavigate}
       />
       <div className="pt-2 border-t border-border">
-        <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">
-          <Avatar className="h-9 w-9 rounded-xl border border-border">
-            <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
+        <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
+          <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border">
+            <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-xs font-semibold text-muted-foreground">
               AS
             </AvatarFallback>
           </Avatar>

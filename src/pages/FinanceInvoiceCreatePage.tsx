@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { FilePlus2, Loader2 } from "lucide-react";
+import { CalendarDays, FilePlus2, Loader2 } from "lucide-react";
 
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { IconInput } from "@/components/ui/icon-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -149,11 +150,13 @@ export function FinanceInvoiceCreatePage() {
             </div>
             <div className="space-y-2">
               <Label>Кінцева дата</Label>
-              <Input
+              <IconInput
                 type="date"
                 value={form.due_date}
                 onChange={(e) => setForm((prev) => ({ ...prev, due_date: e.target.value }))}
                 className={CONTROL_BASE}
+                icon={CalendarDays}
+                iconLabel="Вибрати дату"
               />
             </div>
           </CardContent>

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -34,7 +36,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">Відновлення пароля</div>
           <div className="text-sm text-muted-foreground mt-1">Введи email, і ми надішлемо лист для встановлення нового пароля.</div>
@@ -42,7 +44,7 @@ export default function ResetPasswordPage() {
 
         {(error || msg) && (
           <div
-            className={`mb-4 rounded-xl border p-3 text-sm font-medium ${
+            className={`mb-4 rounded-[var(--radius-inner)] border p-3 text-sm font-medium ${
               error
                 ? "bg-danger-soft border-danger-soft-border text-danger-foreground"
                 : "bg-success-soft border-success-soft-border text-success-foreground"
@@ -56,8 +58,8 @@ export default function ResetPasswordPage() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium text-foreground">Email</label>
-            <input
-              className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+            <Input
+              className="mt-1.5"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@gmail.com"
@@ -66,13 +68,9 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-[var(--btn-radius)] bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
+          <Button type="submit" disabled={busy} className="w-full">
             {busy ? "..." : "Надіслати лист"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-5 text-center text-xs text-muted-foreground">

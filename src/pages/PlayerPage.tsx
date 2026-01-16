@@ -7,9 +7,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { 
   ArrowLeft, Calendar, Trophy, Zap, Activity, 
   TrendingUp, Shirt, Star, Timer, Target, Info
@@ -21,6 +21,7 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils";
+import "@/styles/player-hero.css";
 // Імпортуємо картку (переконайтеся, що шлях правильний до вашого файлу StatsPageFinal)
 import { FifaCard } from "./StatsPage"; 
 
@@ -259,7 +260,7 @@ const trainingStatusMeta: Record<
 // 1. Bento Grid Stat Card
 function StatCard({ label, value, subLabel, icon: Icon, colorClass, trend }: any) {
   return (
-    <div className="relative overflow-hidden rounded-[20px] border border-white/5 bg-card p-5 shadow-sm transition-all hover:shadow-md hover:bg-muted/20 group">
+    <div className="relative overflow-hidden rounded-[20px] border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:bg-muted/20 group">
       <div className="flex items-start justify-between z-10 relative">
         <div className="space-y-1">
            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground opacity-80">{label}</p>
@@ -268,12 +269,12 @@ function StatCard({ label, value, subLabel, icon: Icon, colorClass, trend }: any
            </div>
            {subLabel && <p className="text-xs text-muted-foreground font-medium">{subLabel}</p>}
            {trend && (
-             <div className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500 mt-1">
+             <div className="inline-flex items-center gap-1 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success-foreground mt-1">
                 <TrendingUp className="h-3 w-3" /> {trend}
              </div>
            )}
         </div>
-        <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/30 transition-colors group-hover:bg-muted/50", colorClass && "bg-opacity-10")}>
+        <div className={cn("flex h-10 w-10 items-center justify-center rounded-[var(--radius-inner)] bg-muted/30 transition-colors group-hover:bg-muted/50", colorClass && "bg-opacity-10")}>
            <Icon className={cn("h-5 w-5 opacity-60", colorClass)} />
         </div>
       </div>
@@ -295,14 +296,14 @@ function FormTimeline({ matches, playerId }: { matches: any[], playerId: string 
         const isWin = m.match.score_team > m.match.score_opponent;
         const isDraw = m.match.score_team === m.match.score_opponent;
         
-        let bgColor = "bg-slate-500/20 text-slate-500 border-slate-500/30"; // Draw/Loss default
+        let bgColor = "bg-muted/40 text-muted-foreground border-border"; // Draw default
         let label = "D";
         
         if (isWin) {
-            bgColor = "bg-emerald-500/20 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_-3px_rgba(16,185,129,0.3)]";
+            bgColor = "bg-success-soft text-success-foreground border-success-soft-border shadow-[var(--shadow-success-glow)]";
             label = "W";
         } else if (!isDraw) {
-            bgColor = "bg-red-500/20 text-red-500 border-red-500/30";
+            bgColor = "bg-danger-soft text-danger-foreground border-danger-soft-border";
             label = "L";
         }
 
@@ -336,20 +337,20 @@ function MatchRowItem({ match, contribution }: any) {
   const isWin = match.score_team > match.score_opponent;
   const isDraw = match.score_team === match.score_opponent;
   
-  const resultClass = isWin 
-    ? "text-emerald-500" 
-    : isDraw 
-      ? "text-slate-500" 
-      : "text-red-500";
+    const resultClass = isWin
+    ? "text-success-foreground"
+    : isDraw
+      ? "text-muted-foreground"
+      : "text-danger-foreground";
   
   const tournament = Array.isArray(match.tournaments) ? match.tournaments[0] : match.tournaments;
   const oppLogo = normalizeAssetUrl(match.opponent_logo_url);
 
   return (
-    <div className="group relative flex items-center justify-between rounded-xl border border-border/40 bg-card/40 p-3 transition-all hover:bg-card hover:border-border/80 hover:shadow-sm">
+    <div className="group relative flex items-center justify-between rounded-[var(--radius-lg)] border border-border/40 bg-card/40 p-3 transition-all hover:bg-card hover:border-border/80 hover:shadow-sm">
        {/* Left: Date & Opponent */}
        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-center justify-center rounded-lg bg-muted/30 px-2 py-1 min-w-[40px]">
+          <div className="flex flex-col items-center justify-center rounded-[var(--radius-md)] bg-muted/30 px-2 py-1 min-w-[40px]">
              <span className="text-[10px] font-bold uppercase text-muted-foreground">
                 {new Date(match.match_date).toLocaleDateString("uk-UA", { month: 'short' }).replace('.', '')}
              </span>
@@ -359,7 +360,7 @@ function MatchRowItem({ match, contribution }: any) {
           </div>
           
           <div className="flex items-center gap-3">
-             <div className="h-8 w-8 overflow-hidden rounded-full bg-white/5 border border-white/10 p-0.5">
+             <div className="h-8 w-8 overflow-hidden rounded-full bg-card/60 border border-border/40 p-0.5">
                 {oppLogo ? (
                    <img src={oppLogo} alt={match.opponent_name} className="h-full w-full object-cover rounded-full" />
                 ) : (
@@ -378,12 +379,12 @@ function MatchRowItem({ match, contribution }: any) {
           {/* Stats Badges */}
           <div className="flex gap-1">
              {contribution.goals > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-0 font-bold">
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-info-soft text-info-foreground border-info-soft-border font-bold">
                     {contribution.goals}G
                 </Badge>
              )}
              {contribution.assists > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-0 font-bold">
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-success-soft text-success-foreground border-success-soft-border font-bold">
                     {contribution.assists}A
                 </Badge>
              )}
@@ -733,14 +734,7 @@ export function PlayerPage() {
 
   // Loading Screen
   if (loading) {
-     return (
-       <div className="space-y-6 pt-6">
-         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-           <Skeleton className="h-[300px] w-full rounded-[2.5rem]" />
-           <Skeleton className="h-[300px] w-full rounded-[2.5rem]" />
-         </div>
-       </div>
-     );
+     return <PageSkeleton />;
   }
 
   if (!player) return <div className="p-10 text-center text-muted-foreground">Гравця не знайдено</div>;
@@ -756,10 +750,10 @@ export function PlayerPage() {
          
          {/* Background Effects (Subtle in Light, Rich in Dark) */}
          <div className="absolute inset-0 z-0">
-            {/* Тільки в темній темі показуємо кольорові плями */}
+            {/* Тільки в темній темі показуємо брендові плями */}
             <div className="dark:block hidden">
-               <div className="absolute -top-[50%] -left-[20%] w-[800px] h-[800px] bg-blue-600/20 rounded-full blur-[100px] mix-blend-screen pointer-events-none" />
-               <div className="absolute top-[20%] -right-[10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] mix-blend-screen pointer-events-none" />
+               <div className="absolute -top-[50%] -left-[20%] w-[800px] h-[800px] bg-primary/20 rounded-full blur-[100px] mix-blend-screen pointer-events-none" />
+               <div className="absolute top-[20%] -right-[10%] w-[600px] h-[600px] bg-primary/20 rounded-full blur-[100px] mix-blend-screen pointer-events-none" />
             </div>
             {/* Шум і сітка */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none" />
@@ -775,7 +769,7 @@ export function PlayerPage() {
                     rating={rating}
                     position={roleLabelCompact(player.position)}
                     // Адаптивна тінь для самої картки всередині
-                    className="w-[260px] h-[360px] shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
+                    className="w-[260px] h-[360px] shadow-2xl ring-1 ring-border"
                  />
                </div>
             </div>
@@ -788,23 +782,23 @@ export function PlayerPage() {
                   <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-6 opacity-90">
                       {/* Shirt Number */}
                       <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border backdrop-blur-md transition-colors
-                                      bg-slate-100 border-slate-200 text-slate-700
-                                      dark:bg-white/10 dark:border-white/5 dark:text-white">
+                                      bg-muted/60 border-border text-foreground
+                                      dark:bg-card/20 dark:border-border/60">
                           <Shirt className="h-3.5 w-3.5 opacity-70" />
                           <span>#{player.shirt_number ?? "-"}</span>
                       </div>
                       
                       {/* Age */}
                       <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border backdrop-blur-md transition-colors
-                                      bg-slate-100 border-slate-200 text-slate-700
-                                      dark:bg-white/5 dark:border-white/5 dark:text-slate-300">
+                                      bg-muted/60 border-border text-foreground
+                                      dark:bg-card/20 dark:border-border/60 dark:text-muted-foreground">
                           <span>{getAge(player.birthday)} років</span>
                       </div>
 
                       {/* Rating */}
                       <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border backdrop-blur-md transition-colors
-                                      bg-indigo-50 border-indigo-200 text-indigo-700
-                                      dark:bg-indigo-500/20 dark:border-indigo-500/30 dark:text-indigo-200">
+                                      bg-info-soft border-info-soft-border text-info-foreground
+                                      dark:bg-info-soft dark:border-info-soft-border dark:text-info-foreground">
                           <Star className="h-3.5 w-3.5 fill-current" />
                           <span>Rating {rating}</span>
                       </div>
@@ -823,12 +817,12 @@ export function PlayerPage() {
                   {/* TEAM INFO */}
                   <p className="text-lg flex items-center justify-center lg:justify-start gap-3 pt-2 font-medium">
                      <span className="px-2 py-0.5 rounded text-sm uppercase tracking-wide
-                                      bg-indigo-100 text-indigo-700
-                                      dark:bg-indigo-500/10 dark:text-indigo-400">
+                                      bg-info-soft text-info-foreground
+                                      dark:bg-info-soft dark:text-info-foreground">
                         {positionLabel}
                      </span> 
                      
-                     <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span> 
+                     <span className="w-1 h-1 rounded-full bg-border"></span> 
                      
                      <span className="hero-text-team">
                         FAYNA TEAM
@@ -850,7 +844,7 @@ export function PlayerPage() {
                      {/* Hover effect background */}
                      <div className="stat-box-blue-hover" />
                      
-                     <span className="stat-lbl group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                     <span className="stat-lbl group-hover:text-primary transition-colors">
                         Голи
                      </span>
                      <span className="stat-val-blue">
@@ -863,7 +857,7 @@ export function PlayerPage() {
                      {/* Hover effect background */}
                      <div className="stat-box-emerald-hover" />
                      
-                     <span className="stat-lbl group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">
+                     <span className="stat-lbl group-hover:text-success-foreground transition-colors">
                         Асисти
                      </span>
                      <span className="stat-val-emerald">
@@ -874,9 +868,7 @@ export function PlayerPage() {
 
                {/* Back Button */}
                <div className="pt-4">
-                  <Button variant="ghost" className="rounded-full px-6 transition-all duration-300 group -ml-4
-                                                     text-slate-500 hover:bg-slate-100 hover:text-slate-900
-                                                     dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5" asChild>
+                  <Button variant="textMuted" size="sm" className="rounded-full px-6 group -ml-4" asChild>
                      <Link to="/admin/players">
                         <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1"/> 
                         <span className="font-medium">До списку гравців</span>
@@ -913,10 +905,10 @@ export function PlayerPage() {
            
            {/* BENTO GRID KPI */}
            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Рейтинг" value={rating} icon={Star} colorClass="text-yellow-600" />
-              <StatCard label="Гол + Пас" value={stats.points} icon={Zap} colorClass="text-indigo-500" />
-              <StatCard label="Ефективність" value={stats.matches ? (stats.points / stats.matches).toFixed(2) : "0.0"} subLabel="дії за матч" icon={Target} colorClass="text-rose-500" />
-              <StatCard label="Хвилин" value={stats.matches * 50} subLabel="приблизно" icon={Timer} colorClass="text-slate-500" /> 
+              <StatCard label="Рейтинг" value={rating} icon={Star} colorClass="text-warning-foreground" />
+              <StatCard label="Гол + Пас" value={stats.points} icon={Zap} colorClass="text-primary" />
+              <StatCard label="Ефективність" value={stats.matches ? (stats.points / stats.matches).toFixed(2) : "0.0"} subLabel="дії за матч" icon={Target} colorClass="text-danger-foreground" />
+              <StatCard label="Хвилин" value={stats.matches * 50} subLabel="приблизно" icon={Timer} colorClass="text-muted-foreground" /> 
            </div>
 
            <div className="grid md:grid-cols-3 gap-6">
@@ -949,7 +941,7 @@ export function PlayerPage() {
                           </div>
                        )}
                        {recentMatches.length > 0 && (
-                           <Button variant="ghost" className="w-full text-muted-foreground mt-2 hover:text-foreground" asChild>
+                           <Button variant="textMuted" size="sm" className="w-full mt-2" asChild>
                              <Link to="?tab=matches">Всі матчі <ArrowLeft className="ml-1 h-4 w-4 rotate-180" /></Link>
                            </Button>
                        )}
@@ -967,20 +959,20 @@ export function PlayerPage() {
                             <AreaChart data={trainingData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorPercent" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                                 </linearGradient>
                             </defs>
-                            <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
+                            <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
                             <RechartsTooltip 
-                                contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", backgroundColor: 'var(--card)', fontSize: '12px' }}
+                                contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "var(--shadow-floating)", backgroundColor: 'var(--card)', fontSize: '12px' }}
                                 itemStyle={{ color: 'var(--foreground)' }}
                             />
                             <Area 
                                 type="monotone" 
                                 dataKey="percent" 
-                                stroke="#3b82f6" 
+                                stroke="hsl(var(--primary))" 
                                 strokeWidth={3} 
                                 fillOpacity={1} 
                                 fill="url(#colorPercent)" 
@@ -1046,15 +1038,15 @@ export function PlayerPage() {
                         <CardContent className="space-y-3 text-sm">
                            <div className="flex justify-between">
                               <span className="text-muted-foreground">Ефективність</span>
-                              <span className="font-bold text-emerald-600">+{ratingBreakdown.performance}</span>
+                              <span className="font-bold text-success-foreground">+{ratingBreakdown.performance}</span>
                            </div>
                            <div className="flex justify-between">
                               <span className="text-muted-foreground">Досвід (XP)</span>
-                              <span className="font-bold text-blue-500">+{ratingBreakdown.experience}</span>
+                              <span className="font-bold text-primary">+{ratingBreakdown.experience}</span>
                            </div>
                            <div className="flex justify-between">
                               <span className="text-muted-foreground">Дисципліна</span>
-                              <span className="font-bold text-red-500">-{ratingBreakdown.discipline.toFixed(1)}</span>
+                              <span className="font-bold text-danger-foreground">-{ratingBreakdown.discipline.toFixed(1)}</span>
                            </div>
                            <Separator />
                            <div className="flex justify-between text-xs text-muted-foreground">
@@ -1088,21 +1080,21 @@ export function PlayerPage() {
                 <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Всього</div>
                 <div className="mt-2 text-2xl font-black tabular-nums text-foreground">{trainingBreakdown.total}</div>
               </div>
-              <div className="rounded-[20px] border border-border bg-emerald-500/5 p-4 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-500">Присутній</div>
-                <div className="mt-2 text-2xl font-black tabular-nums text-emerald-600">{trainingBreakdown.present}</div>
+              <div className="rounded-[20px] border border-border bg-success-soft p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-success-foreground">Присутній</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-success-foreground">{trainingBreakdown.present}</div>
               </div>
               <div className="rounded-[20px] border border-border bg-muted/40 p-4 shadow-sm">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Відсутній</div>
                 <div className="mt-2 text-2xl font-black tabular-nums text-foreground">{trainingBreakdown.absent}</div>
               </div>
-              <div className="rounded-[20px] border border-border bg-rose-500/5 p-4 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-500">Травма</div>
-                <div className="mt-2 text-2xl font-black tabular-nums text-rose-600">{trainingBreakdown.injured}</div>
+              <div className="rounded-[20px] border border-border bg-danger-soft p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-danger-foreground">Травма</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-danger-foreground">{trainingBreakdown.injured}</div>
               </div>
-              <div className="rounded-[20px] border border-border bg-sky-500/5 p-4 shadow-sm">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-sky-500">Хворів</div>
-                <div className="mt-2 text-2xl font-black tabular-nums text-sky-600">{trainingBreakdown.sick}</div>
+              <div className="rounded-[20px] border border-border bg-warning-soft p-4 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-warning-foreground">Хворів</div>
+                <div className="mt-2 text-2xl font-black tabular-nums text-warning-foreground">{trainingBreakdown.sick}</div>
               </div>
             </div>
 
@@ -1114,32 +1106,29 @@ export function PlayerPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {trainingFilters.map((filter) => (
-                    <button
+                    <Button
                       key={filter.id}
                       type="button"
+                      variant="chip"
+                      size="xs"
+                      aria-pressed={trainingFilter === filter.id}
                       onClick={() => setTrainingFilter(filter.id)}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                        trainingFilter === filter.id
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-muted/30 text-muted-foreground hover:text-foreground"
-                      )}
                     >
                       <span>{filter.label}</span>
                       <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-foreground">
                         {filter.count}
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </CardHeader>
               <CardContent className="p-4">
                 {trainingSessions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
+                  <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
                     Ще немає відвідувань тренувань.
                   </div>
                 ) : filteredTrainingSessions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
+                  <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-muted/10 p-10 text-center text-sm text-muted-foreground">
                     Немає тренувань з цим статусом.
                   </div>
                 ) : (
@@ -1156,7 +1145,7 @@ export function PlayerPage() {
                               <Link
                                 key={session.id}
                                 to={`/admin/trainings/${session.id}`}
-                                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/40 px-4 py-3 transition-colors hover:bg-muted/40"
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-inner)] border border-border bg-card/40 px-4 py-3 transition-colors hover:bg-muted/40"
                               >
                                 <div className="flex flex-col">
                                   <span className="text-sm font-semibold text-foreground">

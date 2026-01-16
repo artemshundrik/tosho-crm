@@ -3,8 +3,10 @@ import { toast } from "sonner";
 import { User, Mail, Shield, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -205,11 +207,7 @@ export function ProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
@@ -219,7 +217,7 @@ export function ProfilePage() {
       <div className={cn(
         "bg-card border border-border overflow-hidden",
         "shadow-surface", // Твій кастомний клас тіні з CSS
-        "rounded-[24px] md:rounded-[32px]" // Велике заокруглення (як --radius-section)
+        "rounded-[var(--radius-section)]" // Велике заокруглення (як --radius-section)
       )}>
         
         {/* Banner: градієнт на основі Primary кольору (працює і в темній темі) */}
@@ -240,10 +238,12 @@ export function ProfilePage() {
                 </Avatar>
                 
                 {/* Edit Photo Button */}
-                <button
+                <Button
                   type="button"
+                  variant="inverted"
+                  size="iconXs"
                   onClick={handlePickAvatar}
-                  className="absolute bottom-1 right-1 p-2 rounded-full border-[3px] border-card bg-foreground text-background hover:bg-foreground/80 transition-colors shadow-sm"
+                  className="absolute bottom-1 right-1 border-[3px] border-card shadow-sm"
                   aria-label="Змінити фото профілю"
                   disabled={avatarUploading}
                 >
@@ -252,7 +252,7 @@ export function ProfilePage() {
                   ) : (
                     <Camera className="w-3.5 h-3.5" />
                   )}
-                </button>
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -288,7 +288,7 @@ export function ProfilePage() {
           </div>
 
           {avatarDraftUrl ? (
-            <div className="mb-8 rounded-2xl border border-border bg-muted/20 p-4">
+            <div className="mb-8 rounded-[var(--radius-inner)] border border-border bg-muted/20 p-4">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="relative h-36 w-36 overflow-hidden rounded-full border border-border bg-background">
                   <Cropper
@@ -313,13 +313,13 @@ export function ProfilePage() {
                     step={0.01}
                     value={zoom}
                     onChange={(e) => setZoom(Number(e.target.value))}
-                    className="w-full"
+                    className="w-full accent-primary"
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-9 rounded-xl"
+                      className="h-9"
                       onClick={handleCropCancel}
                       disabled={avatarUploading}
                     >
@@ -327,7 +327,7 @@ export function ProfilePage() {
                     </Button>
                     <Button
                       type="button"
-                      className="h-9 rounded-xl"
+                      className="h-9"
                       onClick={handleCropSave}
                       disabled={avatarUploading || !croppedAreaPixels}
                     >
@@ -360,8 +360,6 @@ export function ProfilePage() {
                 <Input 
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  // Використовуємо muted фон для інпутів для контрасту
-                  className="bg-muted/30 border-input focus:bg-background transition-all h-10 rounded-xl"
                   placeholder="Введи своє ім'я"
                 />
               </div>
@@ -374,8 +372,6 @@ export function ProfilePage() {
                 <Input 
                   value={email}
                   disabled
-                  // Disabled state styling
-                  className="bg-muted text-muted-foreground border-transparent h-10 rounded-xl"
                 />
                 <p className="text-[11px] text-muted-foreground px-1">
                   Змінити email можна лише через звернення до адміністратора.
@@ -405,10 +401,9 @@ export function ProfilePage() {
                         disabled 
                         value="••••••••••••••" 
                         type="password"
-                        className="bg-muted/30 border-input h-10 rounded-xl"
                      />
                    </div>
-                   <Button asChild variant="outline" className="h-10 rounded-xl border-input hover:bg-muted/50">
+                   <Button asChild variant="outline" className="h-10">
                      <Link to="/reset-password">Змінити</Link>
                    </Button>
                 </div>
@@ -418,7 +413,7 @@ export function ProfilePage() {
           
           {/* Mobile Save Button */}
           <div className="mt-8 sm:hidden">
-            <Button onClick={updateProfile} disabled={updating} className="w-full h-11 text-base rounded-xl">
+            <Button onClick={updateProfile} disabled={updating} className="w-full h-11 text-base">
               {updating ? "Зберігаю..." : "Зберегти зміни"}
             </Button>
           </div>

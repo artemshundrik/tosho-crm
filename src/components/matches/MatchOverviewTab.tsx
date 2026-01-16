@@ -107,10 +107,10 @@ export function MatchOverviewTab({
       label: eventLabels[e.event_type] || e.event_type,
       color:
         e.event_type === 'red_card'
-          ? '#e03131'
+          ? 'hsl(var(--danger-foreground))'
           : e.event_type === 'yellow_card'
-            ? '#f2c94c'
-            : '#12b886',
+            ? 'hsl(var(--warning-foreground))'
+            : 'hsl(var(--success-foreground))',
     };
   });
 
@@ -207,14 +207,14 @@ export function MatchOverviewTab({
                   left={0}
                   right={0}
                   top="40%"
-                  style={{ height: 12, background: '#0b0d50', borderRadius: 4 }}
+                  style={{ height: 12, background: 'hsl(var(--primary))', borderRadius: 4 }}
                 />
                 {/* лейбли таймів */}
                 <Group justify="space-between" align="center" pos="absolute" top="60%" left={0} right={0} px="xs">
-                  <Text size="xs" c="white" fw={600}>
+                  <Text size="xs" fw={600} style={{ color: 'hsl(var(--primary-foreground))' }}>
                     {Math.round(half)}’
                   </Text>
-                  <Text size="xs" c="white" fw={600}>
+                  <Text size="xs" fw={600} style={{ color: 'hsl(var(--primary-foreground))' }}>
                     {duration}’
                   </Text>
                 </Group>
@@ -222,10 +222,10 @@ export function MatchOverviewTab({
                   const pos = ((e.minute ?? 0) / duration) * 100;
                   const iconColor =
                     e.event_type === 'red_card'
-                      ? '#e03131'
+                      ? 'hsl(var(--danger-foreground))'
                       : e.event_type === 'yellow_card'
-                        ? '#f2c94c'
-                        : '#12b886';
+                        ? 'hsl(var(--warning-foreground))'
+                        : 'hsl(var(--success-foreground))';
                   return (
                     <Box key={e.id} pos="absolute" left={`${pos}%`} top={0} style={{ transform: 'translateX(-50%)' }}>
                       <Stack gap={4} align="center">
@@ -236,7 +236,7 @@ export function MatchOverviewTab({
                         ) : (
                           <IconBallFootball size={18} color={iconColor} />
                         )}
-                        <Box style={{ width: 2, height: 24, background: '#c778b6' }} />
+                        <Box style={{ width: 2, height: 24, background: 'hsl(var(--primary) / 0.5)' }} />
                         <Text size="xs" fw={600} c="dimmed">
                           {e.minute}’
                         </Text>
@@ -275,12 +275,12 @@ export function MatchOverviewTab({
                             left: '50%',
                             top: 0,
                             bottom: 0,
-                            borderLeft: '1px dashed #c4c9d6',
+                            borderLeft: '1px dashed hsl(var(--border))',
                             transform: 'translateX(-50%)',
                           }}
                         />
                         <Stack gap={4} align="center" justify="center">
-                          <Text fw={700} size="lg" c="teal">
+                          <Text fw={700} size="lg" style={{ color: 'hsl(var(--success-foreground))' }}>
                             {e.minute}’
                           </Text>
                           <div

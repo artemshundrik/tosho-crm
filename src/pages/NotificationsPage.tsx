@@ -6,6 +6,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 
@@ -68,7 +69,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-card/60 p-4">
+      <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
             <TabsList
@@ -114,22 +115,26 @@ export default function NotificationsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
-          Завантаження...
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <Skeleton key={`notif-skel-${idx}`} className="h-14 rounded-[var(--radius-inner)]" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((n) => (
-            <button
+            <Button
               key={n.id}
               type="button"
+              variant="card"
+              size="md"
               onClick={() => openNotification(n)}
               className={cn(
-                "w-full text-left rounded-2xl border border-border bg-card/60 p-4 transition-colors hover:bg-muted/40",
+                "h-auto p-4",
                 !n.read && "shadow-[var(--shadow-surface)]"
               )}
             >
@@ -155,7 +160,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="text-xs text-muted-foreground whitespace-nowrap">{n.time}</div>
               </div>
-            </button>
+            </Button>
           ))}
         </div>
       )}

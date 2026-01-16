@@ -48,7 +48,7 @@ const badgeVariants = cva(
 
       pill: {
         true: "rounded-full uppercase tracking-wide",
-        false: "rounded-md",
+        false: "rounded-[var(--radius)]",
       },
     },
 

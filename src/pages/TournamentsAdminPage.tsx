@@ -5,13 +5,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
-import { ArrowRight, CalendarDays, Flag, Plus, Star, Trophy } from "lucide-react";
+import { ArrowRight, CalendarDays, Flag, Star, Trophy } from "lucide-react";
 
 /* ================= TYPES ================= */
 
@@ -81,6 +83,7 @@ export function TournamentsAdminPage() {
   const [createForm, setCreateForm] = useState<TournamentFormState>(EMPTY_FORM);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const showSkeleton = useMinimumLoading(loading);
 
   const fetchTeamTournaments = useCallback(async () => {
     return supabase
@@ -245,9 +248,9 @@ export function TournamentsAdminPage() {
     if (loading) {
       return (
         <div className="space-y-3">
-          <Skeleton className="h-[84px] rounded-2xl" />
-          <Skeleton className="h-[84px] rounded-2xl" />
-          <Skeleton className="h-[84px] rounded-2xl" />
+          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
+          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
+          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
         </div>
       );
     }
@@ -314,7 +317,7 @@ export function TournamentsAdminPage() {
                 </div>
 
                 {/* ACTION */}
-                <Button asChild size="sm" variant="ghost" className="rounded-xl">
+                <Button asChild size="sm" variant="ghost">
                   <Link to={`/admin/tournaments/${tournament.id}`}>
                     <span className="flex items-center gap-1">
                       Перейти <ArrowRight className="h-4 w-4" />
@@ -329,18 +332,53 @@ export function TournamentsAdminPage() {
     );
   }, [items, loading]);
 
-  return (
+  const headerActions = useMemo(
+    () => (
+      <Button onClick={() => setCreateOpen(true)} variant="primary">
+        Додати турнір
+      </Button>
+    ),
+    [setCreateOpen]
+  );
+
+  usePageHeaderActions(headerActions, [setCreateOpen]);
+
+  return showSkeleton ? (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <Skeleton key={`tourn-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
+        ))}
+      </div>
+      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+          <Skeleton className="h-6 w-10 rounded-full" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <Skeleton key={`tourn-row-${idx}`} className="h-[84px] rounded-[var(--radius-inner)]" />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  ) : (
     <div className="space-y-6">
       <OperationalSummary
-        title="Турніри"
+        title="Огляд турнірів"
         subtitle="Змагання, в яких бере участь команда"
+        titleVariant="hidden"
+        sectionLabel="Огляд турнірів"
+        sectionIcon={Trophy}
         hideNextUp
         kpis={kpis}
-        primaryAction={{
-          label: "Додати турнір",
-          onClick: () => setCreateOpen(true),
-          iconLeft: Plus,
-        }}
       />
 
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
@@ -354,7 +392,7 @@ export function TournamentsAdminPage() {
         <CardContent>{content}</CardContent>
       </Card>
 
-      <Dialog
+      <Sheet
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);
@@ -364,102 +402,104 @@ export function TournamentsAdminPage() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl overflow-hidden border-border bg-card/95 p-0">
-          <div className="border-b border-border bg-card/70 px-6 py-5">
-            <DialogHeader>
-              <DialogTitle className="text-lg text-foreground">Новий турнір</DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground">
-                Заповни базову інформацію, щоб додати турнір до команди.
-              </DialogDescription>
-            </DialogHeader>
-            {createError ? (
-              <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {createError}
-              </div>
-            ) : null}
-          </div>
+        <SheetContent side="right" className="w-full max-w-xl border-border bg-card/95 p-0 sm:max-w-xl">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-border bg-card/70 px-6 py-4">
+              <SheetHeader>
+                <SheetTitle>Новий турнір</SheetTitle>
+                <SheetDescription>
+                  Заповни базову інформацію, щоб додати турнір до команди.
+                </SheetDescription>
+              </SheetHeader>
+              {createError ? (
+                <div className="mt-4 rounded-[var(--radius-inner)] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {createError}
+                </div>
+              ) : null}
+            </div>
 
-          <div className="max-h-[70vh] overflow-auto px-6 py-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-xs text-muted-foreground">Назва турніру *</Label>
-                <Input
-                  value={createForm.name}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
-                  placeholder="Наприклад: V9KY Cup"
-                />
-              </div>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Назва турніру *</Label>
+                  <Input
+                    value={createForm.name}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Наприклад: V9KY Cup"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Коротка назва</Label>
-                <Input
-                  value={createForm.short_name}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, short_name: event.target.value }))}
-                  placeholder="V9KY"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Сезон</Label>
-                <Input
-                  value={createForm.season}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, season: event.target.value }))}
-                  placeholder="2025/26"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Ліга</Label>
-                <Input
-                  value={createForm.league_name}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, league_name: event.target.value }))}
-                  placeholder="Gold League"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Вікова група</Label>
-                <Input
-                  value={createForm.age_group}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, age_group: event.target.value }))}
-                  placeholder="U-19"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-xs text-muted-foreground">Посилання на турнір</Label>
-                <Input
-                  value={createForm.external_url}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, external_url: event.target.value }))}
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-xs text-muted-foreground">Лого (URL)</Label>
-                <Input
-                  value={createForm.logo_url}
-                  onChange={(event) => setCreateForm((prev) => ({ ...prev, logo_url: event.target.value }))}
-                  placeholder="https://.../logo.png"
-                />
-              </div>
-              <div className="flex items-center gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Коротка назва</Label>
+                  <Input
+                    value={createForm.short_name}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, short_name: event.target.value }))}
+                    placeholder="V9KY"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Сезон</Label>
+                  <Input
+                    value={createForm.season}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, season: event.target.value }))}
+                    placeholder="2025/26"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Ліга</Label>
+                  <Input
+                    value={createForm.league_name}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, league_name: event.target.value }))}
+                    placeholder="Gold League"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Вікова група</Label>
+                  <Input
+                    value={createForm.age_group}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, age_group: event.target.value }))}
+                    placeholder="U-19"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Посилання на турнір</Label>
+                  <Input
+                    value={createForm.external_url}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, external_url: event.target.value }))}
+                    placeholder="https://..."
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Лого (URL)</Label>
+                  <Input
+                    value={createForm.logo_url}
+                    onChange={(event) => setCreateForm((prev) => ({ ...prev, logo_url: event.target.value }))}
+                    placeholder="https://.../logo.png"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
                 <Checkbox
                   checked={createForm.is_primary}
                   onCheckedChange={(value) =>
                     setCreateForm((prev) => ({ ...prev, is_primary: Boolean(value) }))
                   }
                 />
-                <span className="text-sm text-foreground">Зробити основним турніром</span>
+                  <span className="text-sm text-foreground">Зробити основним турніром</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter className="border-t border-border bg-card/70 px-6 py-4">
-            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createSaving}>
-              Скасувати
-            </Button>
-            <Button onClick={handleCreateTournament} disabled={createSaving}>
-              {createSaving ? "Збереження..." : "Створити"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <SheetFooter className="border-t border-border bg-card/70 px-6 py-4">
+              <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createSaving}>
+                Скасувати
+              </Button>
+              <Button onClick={handleCreateTournament} disabled={createSaving}>
+                {createSaving ? "Збереження..." : "Створити"}
+              </Button>
+            </SheetFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

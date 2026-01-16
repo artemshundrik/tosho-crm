@@ -47,7 +47,7 @@ const DialogContent = React.forwardRef<
         // ✅ max-height щоб не роздувало на довгих списках
         "max-h-[calc(100vh-16rem)]",
         // контейнер
-        "rounded-2xl border border-border bg-background shadow-2xl outline-none",
+        "rounded-[var(--radius-inner)] border border-border bg-background shadow-2xl outline-none",
         "flex flex-col overflow-hidden",
         // ✅ м’яка анімація: fade + slide зверху, без zoom
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
@@ -62,7 +62,7 @@ const DialogContent = React.forwardRef<
       {!hideClose && (
         <DialogClose
           className={cn(
-            "absolute right-4 top-4 rounded-md p-1.5 opacity-70 transition-opacity hover:opacity-100",
+            "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 opacity-70 transition-opacity hover:opacity-100",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           )}
         >

@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/app/FilterBar";
 import { cn } from "@/lib/utils";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { Swords, Target, Activity, Plus, RotateCw, Trophy } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
@@ -809,6 +811,13 @@ export function MatchesShadcnPage() {
   const leagueLogoUrl = currentLeagueLogoUrl ?? (nextMatch?.tournament?.logoUrl ?? null);
   const canWrite = role === "manager" || role === "super_admin";
 
+  const headerActions = React.useMemo(() => {
+    if (!canWrite) return null;
+    return <NewMatchPrimarySplitCta baseTo="/matches/new" />;
+  }, [canWrite]);
+
+  usePageHeaderActions(headerActions, [canWrite]);
+
   function orderNextUpSides(m: MatchCardData) {
   const team = { name: m.team.name, logoUrl: m.team.logoUrl ?? null };
   const opp = { name: m.opponent.name, logoUrl: m.opponent.logoUrl ?? null };
@@ -834,6 +843,9 @@ export function MatchesShadcnPage() {
         <OperationalSummary
           title="Огляд"
           subtitle="Поточний стан команди в турнірі та найближчий матч."
+          titleVariant="hidden"
+          sectionLabel="Огляд матчів"
+          sectionIcon={Swords}
           nextUpLoading={loading}
           nextUp={
             !loading && nextLine && nextMatchTo && nextMatch
@@ -863,12 +875,6 @@ export function MatchesShadcnPage() {
                 })()
               : undefined
           }
-
-          primaryAction={{
-            label: "Новий матч",
-            to: "/matches/new",
-          }}
-          secondaryAction={undefined}
           kpis={[
             {
               key: "tournament",
@@ -994,17 +1000,13 @@ export function MatchesShadcnPage() {
         }
       />
 
-      {loading ? (
-        <Card className="rounded-3xl border border-border bg-card p-10">
-          <div className="text-sm text-muted-foreground">Завантаження матчів…</div>
-        </Card>
-      ) : error ? (
-        <Card className="rounded-3xl border border-border bg-card p-10">
+      {error ? (
+        <Card className="rounded-[var(--radius-section)] border border-border bg-card p-10">
           <div className="text-base font-semibold text-foreground">Помилка</div>
           <div className="mt-2 text-sm text-destructive">{error}</div>
         </Card>
       ) : grouped.length === 0 ? (
-        <Card className="rounded-3xl border border-border bg-card p-10 text-center">
+        <Card className="rounded-[var(--radius-section)] border border-border bg-card p-10 text-center">
           <div className="text-base font-semibold text-foreground">Нічого не знайдено</div>
           <div className="mt-2 text-sm text-muted-foreground">
             Зміни фільтри або спробуй інший запит пошуку.
@@ -1024,10 +1026,12 @@ export function MatchesShadcnPage() {
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {list.map((m) => (
-                    <button
+                    <Button
                       key={m.id}
                       type="button"
-                      className="text-left"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto w-full p-0 text-left"
                       onClick={() => {
                         // ✅ save state before going to details
                         saveListState();
@@ -1041,7 +1045,7 @@ export function MatchesShadcnPage() {
                       }}
                     >
                       <MatchCard data={m} />
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </section>
@@ -1052,7 +1056,7 @@ export function MatchesShadcnPage() {
             <div className="flex justify-center pt-2">
               <Button
                 type="button"
-                className="rounded-2xl"
+                className="rounded-[var(--radius-inner)]"
                 onClick={() => {
                   setVisibleCount((c) => {
                     const next = Math.min(c + PAGE_SIZE, filteredAll.length);

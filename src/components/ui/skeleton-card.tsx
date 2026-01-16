@@ -52,7 +52,7 @@ export function SkeletonCard({
 
       {/* TIME */}
       <div className="flex flex-col items-center">
-        <Skel className="h-12 w-28 rounded-xl" />
+        <Skel className="h-12 w-28 rounded-[var(--radius-lg)]" />
         <Skel className="mt-2 h-4 w-36" />
 
       </div>

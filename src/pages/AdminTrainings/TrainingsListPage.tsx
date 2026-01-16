@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ElementType } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { getTrainings } from "../../api/trainings";
 import type { Attendance, Training } from "../../types/trainings";
@@ -10,14 +10,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { OperationalSummary, type OperationalSummaryKpi } from "@/components/app/OperationalSummary";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 import {
   BarChart3,
+  Brain,
   CalendarDays,
   Clock,
   Dumbbell,
+  HeartPulse,
   MapPin,
-  Plus,
   Swords,
   Users,
 } from "lucide-react";
@@ -35,8 +39,8 @@ const typeLabels: Record<Training["type"], string> = {
 
 const typeIcons: Record<Training["type"], ElementType> = {
   regular: Dumbbell,
-  tactics: Dumbbell,
-  fitness: Dumbbell,
+  tactics: Brain,
+  fitness: HeartPulse,
   sparring: Swords,
 };
 
@@ -92,6 +96,7 @@ function TrainingCard({
         "rounded-[var(--radius-section)]", // Заокруглення як у MatchCard
         "bg-card border border-border",
         "shadow-[var(--shadow-surface)]",   // Базова тінь як у MatchCard
+        "min-h-[240px]",
         
         // Анімація
         "transition-all duration-200 ease-out",
@@ -104,7 +109,7 @@ function TrainingCard({
       )}
     >
       {/* Ліва частина - Дата */}
-      <div className="flex w-[85px] shrink-0 flex-col items-center justify-center border-r border-border bg-muted/30 p-4 text-center group-hover:bg-muted/50 transition-colors">
+      <div className="flex w-[85px] shrink-0 flex-col items-center justify-center border-r border-border bg-muted/30 p-5 text-center group-hover:bg-muted/50 transition-colors">
         <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
           {month}
         </span>
@@ -114,7 +119,7 @@ function TrainingCard({
       </div>
 
       {/* Права частина - Основний контент */}
-      <div className="flex flex-1 flex-col p-5">
+      <div className="flex flex-1 flex-col p-6">
         
         {/* Верхній рядок */}
         <div className="flex items-start justify-between">
@@ -130,14 +135,14 @@ function TrainingCard({
             {isUpcoming ? (
               <Badge
                 variant="secondary"
-                className="rounded-lg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/10 text-emerald-600 shadow-none"
+                className="rounded-[var(--radius-md)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/10 text-emerald-600 shadow-none"
               >
                 Майбутнє
               </Badge>
             ) : null}
             <Badge
               variant="secondary"
-              className="rounded-lg px-2.5 py-1 text-xs font-semibold shadow-none bg-muted hover:bg-muted/80 text-foreground"
+              className="rounded-[var(--radius-md)] px-2.5 py-1 text-xs font-semibold shadow-none bg-muted hover:bg-muted/80 text-foreground"
             >
               <Icon className="mr-1.5 h-3.5 w-3.5 text-primary" />
               {typeLabel}
@@ -195,7 +200,7 @@ function TrainingCard({
 
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
               <div
-                className="h-full rounded-full bg-primary transition-all duration-500 shadow-[0_0_8px_rgba(var(--primary),0.4)]"
+                className="h-full rounded-full bg-primary transition-all duration-500 shadow-[var(--shadow-primary-glow)]"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -245,9 +250,11 @@ export function TrainingsListPage() {
   const [attendance, setAttendance] = useState<Record<string, Attendance[]>>({});
   const [playersCount, setPlayersCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "all">("all");
   const navigate = useNavigate();
+  const showSkeleton = useMinimumLoading(loading);
 
   useEffect(() => {
     async function load() {
@@ -268,32 +275,43 @@ export function TrainingsListPage() {
         setPlayers(playerList);
         setPlayersCount(playerList.length);
 
+        setLoading(false);
+
         if (tr.length > 0) {
-          const ids = tr.map((t) => t.id);
-          const { data, error: attError } = await supabase
-            .from("training_attendance")
-            .select("training_id, player_id, status, created_at")
-            .in("training_id", ids);
-          if (attError) throw attError;
-          const map: Record<string, Attendance[]> = {};
-          (data || []).forEach((row: any) => {
-            const key = `${row.training_id}_${row.player_id}`;
-            const list = map[row.training_id] || [];
-            const existingIdx = list.findIndex((x) => `${x.training_id}_${x.player_id}` === key);
-            const entry = row as Attendance & { created_at?: string | null };
-            if (existingIdx >= 0) {
-              const prev = list[existingIdx] as Attendance & { created_at?: string | null };
-              const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
-              const ts = entry?.created_at ? new Date(entry.created_at).getTime() : -Infinity;
-              if (ts >= prevTs) {
-                list[existingIdx] = entry;
+          const nowTs = Date.now();
+          const pastIds = tr
+            .filter((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() < nowTs)
+            .map((t) => t.id);
+          if (pastIds.length > 0) {
+            setAttendanceLoading(true);
+            const { data, error: attError } = await supabase
+              .from("training_attendance")
+              .select("training_id, player_id, status, created_at")
+              .in("training_id", pastIds);
+            if (attError) throw attError;
+            const map: Record<string, Attendance[]> = {};
+            (data || []).forEach((row: any) => {
+              const key = `${row.training_id}_${row.player_id}`;
+              const list = map[row.training_id] || [];
+              const existingIdx = list.findIndex((x) => `${x.training_id}_${x.player_id}` === key);
+              const entry = row as Attendance & { created_at?: string | null };
+              if (existingIdx >= 0) {
+                const prev = list[existingIdx] as Attendance & { created_at?: string | null };
+                const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
+                const ts = entry?.created_at ? new Date(entry.created_at).getTime() : -Infinity;
+                if (ts >= prevTs) {
+                  list[existingIdx] = entry;
+                }
+              } else {
+                list.push(entry);
               }
-            } else {
-              list.push(entry);
-            }
-            map[row.training_id] = list;
-          });
-          setAttendance(map);
+              map[row.training_id] = list;
+            });
+            setAttendance(map);
+            setAttendanceLoading(false);
+          } else {
+            setAttendance({});
+          }
         } else {
           setAttendance({});
         }
@@ -302,6 +320,7 @@ export function TrainingsListPage() {
         setError(e.message || "Не вдалося завантажити тренування");
       } finally {
         setLoading(false);
+        setAttendanceLoading(false);
       }
     }
 
@@ -412,7 +431,7 @@ export function TrainingsListPage() {
   }, [nextTraining]);
 
   const trainingKpis = useMemo<OperationalSummaryKpi[] | undefined>(() => {
-    if (loading || error) return undefined;
+    if (loading || error || attendanceLoading) return undefined;
     return [
       {
         key: "total",
@@ -454,6 +473,7 @@ export function TrainingsListPage() {
   }, [
     loading,
     error,
+    attendanceLoading,
     totalTrainings,
     upcomingCount,
     sparringsCount,
@@ -488,11 +508,48 @@ export function TrainingsListPage() {
     return Array.from(map.entries());
   }, [pastTrainings]);
 
-  return (
+  const headerActions = useMemo(
+    () => (
+      <>
+        <Button asChild variant="secondary">
+          <Link to="/admin/trainings/analytics">Аналітика</Link>
+        </Button>
+        <Button asChild variant="primary">
+          <Link to="/admin/trainings/create">Нове тренування</Link>
+        </Button>
+      </>
+    ),
+    []
+  );
+
+  usePageHeaderActions(headerActions, []);
+
+  return showSkeleton ? (
+    <div className="flex flex-col gap-6">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <Skeleton key={`train-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <Skeleton key={`train-card-${idx}`} className="h-[220px] rounded-[var(--radius-section)]" />
+        ))}
+      </div>
+      <Skeleton className="h-12 rounded-[var(--radius-inner)]" />
+    </div>
+  ) : (
     <div className="flex flex-col gap-6">
       <OperationalSummary
-        title="Тренування FAYNA TEAM"
+        title="Огляд тренувань"
         subtitle="Плануй, відстежуй присутність та аналізуй прогрес"
+        titleVariant="hidden"
+        sectionLabel="Огляд тренувань"
+        sectionIcon={Dumbbell}
         nextUpLoading={loading}
         nextUp={
           !loading && nextTraining && nextTrainingMeta
@@ -511,18 +568,6 @@ export function TrainingsListPage() {
           title: "Немає майбутніх тренувань",
           description: "Додай нове тренування, щоб команда бачила час і локацію.",
           actionLabel: "Нове тренування",
-        }}
-        primaryAction={{
-          label: "Нове тренування",
-          to: "/admin/trainings/create",
-          iconLeft: Plus,
-          variant: "default",
-        }}
-        secondaryAction={{
-          label: "Аналітика",
-          to: "/admin/trainings/analytics",
-          iconLeft: BarChart3,
-          variant: "secondary",
         }}
         kpis={trainingKpis}
       />
@@ -582,22 +627,22 @@ export function TrainingsListPage() {
                   const presentPlayers = buildPresentPlayers(training.id);
                   const present = presentEntries.length;
                   const total = playersCount || new Set(att.map((a) => a.player_id)).size || 0;
-                    return (
-                      <TrainingCard
-                        key={training.id}
-                        training={training}
-                        present={present}
-                        total={total}
-                        presentPlayers={presentPlayers}
-                        onClick={() => navigate(`/admin/trainings/${training.id}`)}
-                        isUpcoming
-                        showAttendance={false}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
+                  return (
+                    <TrainingCard
+                      key={training.id}
+                      training={training}
+                      present={present}
+                      total={total}
+                      presentPlayers={presentPlayers}
+                      onClick={() => navigate(`/admin/trainings/${training.id}`)}
+                      isUpcoming
+                      showAttendance={false}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         ) : null}
       </section>
 

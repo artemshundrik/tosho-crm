@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import {
-  Shield,
+  ShieldAlert,
+  Crown,
   MoreHorizontal,
   Trash2,
   UserCog,
@@ -32,18 +33,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +53,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CONTROL_BASE } from "@/components/ui/controlStyles";
 
 // --- ТИПИ ---
 type Member = {
@@ -86,19 +81,22 @@ const ROLE_SELECT_OPTIONS = {
     label: "Viewer (Глядач)",
     description: "Тільки перегляд, без редагування.",
     icon: User,
-    colorClass: "text-slate-600 dark:text-slate-400"
+    iconClass: "text-muted-foreground",
+    badgeClass: "bg-muted/50 border-border"
   },
   manager: {
     label: "Manager (Менеджер)",
     description: "Може редагувати гравців та матчі.",
-    icon: Shield,
-    colorClass: "text-blue-600 dark:text-blue-400"
+    icon: ShieldAlert,
+    iconClass: "text-primary",
+    badgeClass: "bg-primary/10 border-primary/20"
   },
   super_admin: {
     label: "Super Admin",
     description: "Повний доступ до всіх налаштувань.",
-    icon: Shield,
-    colorClass: "text-purple-600 dark:text-purple-400"
+    icon: Crown,
+    iconClass: "text-purple-600 dark:text-purple-400",
+    badgeClass: "bg-purple-500/10 border-purple-500/25"
   }
 };
 
@@ -324,68 +322,79 @@ export function TeamMembersPage() {
     });
   };
 
+  const headerActions = useMemo(() => {
+    if (!canManage) return null;
+    return (
+      <Button
+        variant="primary"
+        onClick={() => {
+          setGeneratedLink(null);
+          setInviteOpen(true);
+        }}
+      >
+        Запросити людину
+      </Button>
+    );
+  }, [canManage]);
+
+  usePageHeaderActions(headerActions, [canManage]);
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-500">
       
-      <OperationalSummary
-        title="Доступ до команди"
-        subtitle="Керування учасниками та активними запрошеннями."
-        hideNextUp
-        primaryAction={canManage ? {
-          label: "Запросити людину",
-          iconLeft: UserCog,
-          onClick: () => {
-             setGeneratedLink(null);
-             setInviteOpen(true);
-          },
-          variant: "default"
-        } : undefined}
-      />
-
       {/* FIXED: Shadow-none для плоскої картки */}
-      <Card className="rounded-[32px] border border-border bg-card shadow-none overflow-hidden flex flex-col">
+      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
         {/* --- TABS HEADER --- */}
-        <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5 md:flex-row md:items-center md:justify-between">
-          
-          {/* FIXED: Tabs стиль як у FilterBar (Segmented Control) */}
-          <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
-            <button
-              onClick={() => setActiveTab("members")}
-              className={cn(
-                "h-8 rounded-[var(--radius-md)] px-4 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                activeTab === "members" 
-                  ? "bg-card text-foreground shadow-sm" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Учасники ({members.length})
-            </button>
-            {canManage && (
-               <button
-               onClick={() => setActiveTab("invites")}
-               className={cn(
-                 "h-8 rounded-[var(--radius-md)] px-4 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 flex items-center gap-2",
-                 activeTab === "invites" 
-                   ? "bg-card text-foreground shadow-sm" 
-                   : "text-muted-foreground hover:text-foreground"
-               )}
-             >
-               Запрошення ({invites.filter(i => !i.used_at && !isExpired(i.expires_at)).length})
-             </button>
-            )}
+        <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-foreground">Доступ до команди</div>
+              <div className="mt-0.5 text-sm text-muted-foreground">
+                Керування учасниками та активними запрошеннями.
+              </div>
+            </div>
           </div>
 
-          {activeTab === "members" && (
-            <div className="relative w-full md:w-72">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-               <Input 
-                 value={searchQuery}
-                 onChange={e => setSearchQuery(e.target.value)}
-                 className="pl-10 h-10 bg-background border-input rounded-xl"
-                 placeholder="Пошук учасників..."
-               />
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {/* FIXED: Tabs стиль як у FilterBar (Segmented Control) */}
+            <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+              <Button
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={activeTab === "members"}
+                onClick={() => setActiveTab("members")}
+              >
+                Учасники ({members.length})
+              </Button>
+              {canManage && (
+                 <Button
+                 type="button"
+                 variant="segmented"
+                 size="xs"
+                 aria-pressed={activeTab === "invites"}
+                 onClick={() => setActiveTab("invites")}
+               >
+                 Запрошення ({invites.filter(i => !i.used_at && !isExpired(i.expires_at)).length})
+               </Button>
+              )}
             </div>
-          )}
+
+            {activeTab === "members" && (
+              <div className="relative w-full md:w-72">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                 <Input 
+                   value={searchQuery}
+                   onChange={e => setSearchQuery(e.target.value)}
+                   className="pl-10 h-10 bg-background border-input rounded-[var(--radius-lg)]"
+                   placeholder="Пошук учасників..."
+                 />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* --- CONTENT: MEMBERS --- */}
@@ -439,7 +448,7 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("px-2.5 py-1 font-medium rounded-lg", ROLE_BADGE_STYLES[m.role]?.className)}>
+                          <Badge variant="outline" className={cn("px-2.5 py-1 font-medium rounded-[var(--radius)]", ROLE_BADGE_STYLES[m.role]?.className)}>
                              {ROLE_BADGE_STYLES[m.role]?.label || m.role}
                           </Badge>
                         </TableCell>
@@ -452,24 +461,36 @@ export function TeamMembersPage() {
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           {canManage && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 group-hover:opacity-100">
+                            <AppDropdown
+                              align="end"
+                              contentClassName="w-56"
+                              trigger={
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-50 group-hover:opacity-100"
+                                >
                                   <MoreHorizontal className="w-4 h-4" />
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56 rounded-xl">
-                                <DropdownMenuLabel>Змінити права</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => updateRole(m.user_id, "viewer")}>Viewer</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => updateRole(m.user_id, "manager")}>Manager</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => updateRole(m.user_id, "super_admin")}>Super Admin</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600" onClick={() => confirmRemove(m.user_id)}>
-                                  <Trash2 className="w-4 h-4 mr-2" /> Видалити
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                              }
+                              items={[
+                                { type: "label", label: "Змінити права" },
+                                { type: "separator" },
+                                { label: "Viewer", onSelect: () => updateRole(m.user_id, "viewer") },
+                                { label: "Manager", onSelect: () => updateRole(m.user_id, "manager") },
+                                { label: "Super Admin", onSelect: () => updateRole(m.user_id, "super_admin") },
+                                { type: "separator" },
+                                {
+                                  label: (
+                                    <>
+                                      <Trash2 className="w-4 h-4 mr-2" /> Видалити
+                                    </>
+                                  ),
+                                  onSelect: () => confirmRemove(m.user_id),
+                                  destructive: true,
+                                },
+                              ]}
+                            />
                           )}
                         </TableCell>
                       </TableRow>
@@ -510,7 +531,7 @@ export function TeamMembersPage() {
                       <TableRow key={inv.id} className="h-[64px] hover:bg-muted/40 transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
-                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-border">
+                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-muted border border-border">
                                 <LinkIcon className="w-4 h-4 text-muted-foreground" />
                              </div>
                              <div className="flex flex-col max-w-[240px]">
@@ -524,7 +545,7 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs rounded-md", ROLE_BADGE_STYLES[inv.role]?.className)}>
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)]", ROLE_BADGE_STYLES[inv.role]?.className)}>
                              {ROLE_BADGE_STYLES[inv.role]?.label || inv.role}
                           </Badge>
                         </TableCell>
@@ -547,17 +568,19 @@ export function TeamMembersPage() {
                         <TableCell className="text-right pr-6">
                            <div className="flex items-center justify-end gap-2">
                               {!expired && !used && (
-                                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+                                <Button
+                                  size="iconXs"
+                                  variant="control"
                                   onClick={() => {
                                     navigator.clipboard.writeText(getLinkFromToken(inv.token));
                                     toast.success("Посилання скопійовано");
                                   }}
                                 >
-                                   <Copy className="w-4 h-4" />
+                                  <Copy className="w-4 h-4" />
                                 </Button>
                               )}
-                              <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => confirmRevoke(inv.id)}>
-                                 <Trash2 className="w-4 h-4" />
+                              <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                            </div>
                         </TableCell>
@@ -588,13 +611,20 @@ export function TeamMembersPage() {
           <div className="p-6">
             {!generatedLink ? (
               <div className="space-y-6">
-                <div className="space-y-3">
-                  <Label className="text-base font-medium text-foreground">Рівень доступу</Label>
+                <div className="space-y-0">
+                  <Label className="text-base font-medium text-foreground mb-3 block">Рівень доступу</Label>
                   <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger className="group flex w-full items-center justify-between rounded-xl border border-input bg-background dark:bg-muted/10 px-3 py-3 text-sm text-foreground ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/30 h-14">
+                    <SelectTrigger className={cn(CONTROL_BASE, "group h-14 px-3 py-3")}>
                       <div className="flex flex-row items-center gap-3 overflow-hidden">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted dark:bg-accent/40 border border-border">
-                          {currentRoleData && (<currentRoleData.icon className={cn("h-4 w-4", currentRoleData.colorClass)} />)}
+                        <div
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] border",
+                            currentRoleData?.badgeClass
+                          )}
+                        >
+                          {currentRoleData && (
+                            <currentRoleData.icon className={cn("h-4 w-4", currentRoleData.iconClass)} />
+                          )}
                         </div>
                         <span className="truncate font-medium text-foreground text-sm">
                           {currentRoleData?.label || "Оберіть роль"}
@@ -605,7 +635,14 @@ export function TeamMembersPage() {
                       {Object.entries(ROLE_SELECT_OPTIONS).map(([key, role]) => (
                         <SelectItem key={key} value={key} className="py-2.5 cursor-pointer">
                           <div className="flex flex-row items-center gap-3">
-                            <role.icon className={cn("w-4 h-4 shrink-0", role.colorClass)} />
+                            <div
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border",
+                                role.badgeClass
+                              )}
+                            >
+                              <role.icon className={cn("h-4 w-4", role.iconClass)} />
+                            </div>
                             <div className="flex flex-col text-left">
                                <span className="font-medium text-sm text-foreground">{role.label}</span>
                                <span className="text-xs text-muted-foreground">{role.description}</span>
@@ -616,13 +653,13 @@ export function TeamMembersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={generateInvite} disabled={inviteBusy} className="w-full h-12 text-base rounded-xl shadow-md" size="lg">
+                <Button onClick={generateInvite} disabled={inviteBusy} className="w-full h-12 text-base shadow-md" size="lg">
                   {inviteBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : "Створити посилання"}
                 </Button>
               </div>
             ) : (
               <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                 <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 rounded-2xl border border-emerald-100 dark:border-emerald-900/50">
+                 <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 rounded-[var(--radius-inner)] border border-emerald-100 dark:border-emerald-900/50">
                    <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-3 shadow-sm">
                       <Check className="w-6 h-6" />
                    </div>
@@ -634,7 +671,7 @@ export function TeamMembersPage() {
                  <div className="space-y-2">
                     <Label className="font-medium text-foreground">Посилання для копіювання</Label>
                     <div className="flex gap-2">
-                      <Input value={generatedLink} readOnly className="font-mono text-sm bg-muted/50 h-11 border-dashed focus-visible:ring-0 text-foreground" />
+                      <Input value={generatedLink} readOnly className="font-mono text-sm bg-muted/50 h-11 border-dashed text-foreground" />
                       <Button size="icon" variant="outline" className="h-11 w-11 shrink-0" onClick={() => {
                         navigator.clipboard.writeText(generatedLink);
                         toast.success("Скопійовано в буфер обміну");
@@ -666,16 +703,12 @@ export function TeamMembersPage() {
            </div>
            
            <div className="p-6 pt-0 flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1 h-11 rounded-[var(--btn-radius)] border-input hover:bg-accent hover:text-accent-foreground" 
-                onClick={() => setRevokeId(null)}
-              >
+              <Button variant="outline" className="flex-1 h-11" onClick={() => setRevokeId(null)}>
                  Скасувати
               </Button>
               <Button 
-                variant="destructive" 
-                className="flex-1 h-11 rounded-[var(--btn-radius)] bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md shadow-destructive/20"
+                variant="destructiveSolid" 
+                className="flex-1 h-11"
                 onClick={handleRevoke}
                 disabled={revokeBusy}
               >
@@ -704,15 +737,15 @@ export function TeamMembersPage() {
           <div className="p-6 pt-0 flex gap-3">
             <Button
               variant="outline"
-              className="flex-1 h-11 rounded-[var(--btn-radius)] border-input hover:bg-accent hover:text-accent-foreground"
+              className="flex-1 h-11"
               onClick={() => setRemoveId(null)}
               disabled={removeBusy}
             >
               Скасувати
             </Button>
             <Button
-              variant="destructive"
-              className="flex-1 h-11 rounded-[var(--btn-radius)] bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md shadow-destructive/20"
+              variant="destructiveSolid"
+              className="flex-1 h-11"
               onClick={handleRemoveMember}
               disabled={removeBusy}
             >

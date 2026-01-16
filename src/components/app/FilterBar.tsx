@@ -4,6 +4,7 @@ import { Search as SearchIcon, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 export type FilterBarTab<T extends string> = { value: T; label: string };
 
@@ -83,16 +84,6 @@ const CONTROL_BASE = cx(
   "hover:[&>svg]:text-foreground"
 );
 
-const CONTROL_ICON_BTN = cx(
-  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-lg)]",
-  "text-muted-foreground hover:text-foreground",
-  "hover:bg-muted",
-  "transition-colors",
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-);
-
-
-
 function SegmentedTabs<TTab extends string>({
   value,
   onChange,
@@ -112,20 +103,16 @@ function SegmentedTabs<TTab extends string>({
       {items.map((t) => {
         const active = t.value === value;
         return (
-          <button
-  key={t.value}
-  type="button"
-  onClick={() => onChange(t.value)}
-  className={cx(
-    "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-    active
-      ? "bg-card text-foreground shadow-sm"
-      : "text-muted-foreground hover:text-foreground"
-  )}
->
-  {t.label}
-</button>
+          <Button
+            key={t.value}
+            type="button"
+            variant="segmented"
+            size="xs"
+            aria-pressed={active}
+            onClick={() => onChange(t.value)}
+          >
+            {t.label}
+          </Button>
 
         );
       })}
@@ -251,15 +238,16 @@ export function FilterBar<TTab extends string, TSort extends string>({
               />
 
               {search.value.trim().length > 0 ? (
-                <button
+                <Button
                   type="button"
+                  variant="control"
+                  size="iconSm"
                   aria-label="Очистити пошук"
-                  className={cx("absolute right-2 top-1/2 -translate-y-1/2", CONTROL_ICON_BTN)}
-
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
                   onClick={() => search.onChange("")}
                 >
                   <X size={16} />
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}

@@ -25,6 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -507,15 +508,15 @@ export function TournamentDetailsPage() {
     if (loading) {
       return (
         <div className="flex items-start justify-between gap-4">
-          <Skeleton className="h-14 w-14 rounded-xl" />
-          <Skeleton className="h-9 w-28 rounded-xl" />
+          <Skeleton className="h-14 w-14 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-9 w-28 rounded-[var(--radius-md)]" />
         </div>
       );
     }
 
     if (!tournament) {
       return (
-        <Button asChild variant="outline" className="rounded-xl">
+        <Button asChild variant="outline">
           <Link to="/admin/tournaments">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Назад
@@ -549,19 +550,17 @@ export function TournamentDetailsPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
-            className="rounded-xl"
             onClick={() => setEditOpen(true)}
           >
             Редагувати
           </Button>
           <Button
             variant="destructive"
-            className="rounded-xl"
             onClick={() => setDeleteOpen(true)}
           >
             Видалити
           </Button>
-          <Button asChild variant="outline" className="rounded-xl">
+          <Button asChild variant="outline">
             <Link to="/admin/tournaments">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Турніри
@@ -571,6 +570,10 @@ export function TournamentDetailsPage() {
       </div>
     );
   }, [loading, tournament, tRow]);
+
+  if (loading) {
+    return <PageSkeleton />;
+  }
 
   const defaultTab = useMemo(() => {
     const candidate = searchParams.get("tab");
@@ -612,7 +615,7 @@ export function TournamentDetailsPage() {
               <Separator className="my-4" />
 
               {rosterError ? (
-                <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <div className="mb-4 rounded-[var(--radius-inner)] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {rosterError}
                 </div>
               ) : null}
@@ -620,7 +623,7 @@ export function TournamentDetailsPage() {
               {playersLoading ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {Array(6).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-16 rounded-2xl" />
+                    <Skeleton key={i} className="h-16 rounded-[var(--radius-inner)]" />
                   ))}
                 </div>
               ) : (
@@ -640,9 +643,13 @@ export function TournamentDetailsPage() {
   };
 
   return (
-    <button
+    <Button
       key={p.id}
       type="button"
+      variant="card"
+      size="md"
+      data-state={checked ? "active" : "inactive"}
+      data-status={isUnavailable ? "unavailable" : "available"}
       onClick={async () => {
         if (!id || saving) return;
         setRosterError(null);
@@ -683,13 +690,8 @@ export function TournamentDetailsPage() {
         setRosterSavingId(null);
       }}
       className={cn(
-        "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all",
+        "h-auto flex items-center justify-between gap-3 px-4 py-3",
         "shadow-sm hover:shadow-md active:scale-[0.98]",
-        checked 
-          ? "border-primary/30 bg-primary/5 ring-1 ring-primary/10" 
-          : isUnavailable 
-            ? "border-dashed border-red-200 bg-red-50/30 opacity-80" 
-            : "border-border bg-card/40",
         saving ? "opacity-70 cursor-wait" : ""
       )}
       disabled={saving}
@@ -717,7 +719,7 @@ export function TournamentDetailsPage() {
       >
         {checked ? "У заявці" : "Додати"}
       </Badge>
-    </button>
+    </Button>
   );
 })}
                 </div>
@@ -758,13 +760,13 @@ export function TournamentDetailsPage() {
                 </div>
 
                 {standingsLoading ? (
-                  <Skeleton className="h-24 w-full rounded-2xl" />
+                  <Skeleton className="h-24 w-full rounded-[var(--radius-inner)]" />
                 ) : standingsRows.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+                  <div className="rounded-[var(--radius-inner)] border border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
                     Таблиця поки не завантажена.
                   </div>
                 ) : (
-                <div className="overflow-hidden rounded-2xl border border-border">
+                <div className="overflow-hidden rounded-[var(--radius-inner)] border border-border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -836,7 +838,7 @@ export function TournamentDetailsPage() {
 
             <TabsContent value="matches" className="mt-0">
               {matches.length === 0 ? (
-                <div className="rounded-2xl border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius-inner)] border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
                   Поки немає матчів у цьому турнірі.
                 </div>
               ) : (
@@ -845,7 +847,7 @@ export function TournamentDetailsPage() {
                     <Link
                       key={m.id}
                       to={`/matches/${m.id}`}
-                      className={cn("block rounded-2xl border p-4 hover:bg-muted/40")}
+                      className={cn("block rounded-[var(--radius-inner)] border p-4 hover:bg-muted/40")}
                     >
                       <div className="flex justify-between">
                         <div>
@@ -891,7 +893,7 @@ export function TournamentDetailsPage() {
               </DialogDescription>
             </DialogHeader>
             {editError ? (
-              <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="mt-4 rounded-[var(--radius-inner)] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                 {editError}
               </div>
             ) : null}
@@ -978,7 +980,7 @@ export function TournamentDetailsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="rounded-[var(--radius-md)] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {deleteError}
             </div>
           ) : null}

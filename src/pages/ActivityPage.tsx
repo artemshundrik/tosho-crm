@@ -5,8 +5,10 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   formatActivityClock,
   formatActivityDayLabel,
@@ -98,6 +100,17 @@ export default function ActivityPage() {
     });
     return Array.from(buckets.entries());
   }, [filtered]);
+
+  const headerActions = useMemo(
+    () => (
+      <Button variant="secondary" onClick={() => navigate("/notifications")}>
+        Сповіщення
+      </Button>
+    ),
+    [navigate]
+  );
+
+  usePageHeaderActions(headerActions, [navigate]);
 
   const iconForItem = (item: ActivityItem) => {
     const title = item.title.toLowerCase();
@@ -214,7 +227,17 @@ export default function ActivityPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 border-b border-border pb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
+            <Activity className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-foreground">Активність команди</div>
+            <div className="mt-0.5 text-sm text-muted-foreground">Усі події та зміни в одному місці</div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
             <TabsList
               className={cn(
@@ -279,16 +302,14 @@ export default function ActivityPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-
-          <Button variant="outline" className="h-10 px-4" onClick={() => navigate("/notifications")}>
-            Сповіщення
-          </Button>
         </div>
 
         <div className="mt-6">
           {loading ? (
-            <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
-              Завантаження...
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <Skeleton key={`activity-skel-${idx}`} className="h-14 rounded-[var(--radius-inner)]" />
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
@@ -307,13 +328,15 @@ export default function ActivityPage() {
                       const badge = badgeForItem(item);
                       const titleParts = getTitleParts(item);
                       return (
-                        <button
+                        <Button
                           key={item.id}
                           type="button"
+                          variant="card"
+                          size="md"
                           onClick={() => item.href && navigate(item.href)}
                           className={cn(
-                            "w-full text-left rounded-[var(--radius-inner)] border border-border bg-card/60 p-5 transition-all",
-                            "hover:bg-muted/40 hover:shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
+                            "h-auto p-5",
+                            "hover:shadow-[var(--shadow-floating)]"
                           )}
                         >
                           <div className="flex items-start gap-4">
@@ -354,7 +377,7 @@ export default function ActivityPage() {
                               {formatActivityClock(item.created_at)}
                             </div>
                           </div>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>

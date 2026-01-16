@@ -11,15 +11,15 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { logActivity } from "@/lib/activityLogger";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Image as ImageIcon } from "lucide-react";
 
-import { ActionMenu } from "@/components/ui/action-menu";
+import { AppDropdown } from "@/components/app/AppDropdown";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -596,7 +596,7 @@ const FormSection = React.memo(function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-card/60 p-4", className)}>
+    <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60 p-4", className)}>
       <div className="mb-3">
         <div className="text-sm font-semibold text-foreground">{title}</div>
         {subtitle ? <div className="mt-0.5 text-xs text-muted-foreground">{subtitle}</div> : null}
@@ -1410,31 +1410,7 @@ if (ttErr) {
   }
 
   if (loading) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Card className={cn(CARD_BASE, "p-6", "shadow-none")}>
-
-          <div className="grid gap-5 md:grid-cols-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-5 w-48" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-5 w-40" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-5 w-28" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-5 w-24" />
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (error || !match) {
@@ -1492,46 +1468,56 @@ if (ttErr) {
       </Button>
 
       {/* Overflow actions */}
-      <ActionMenu
-  trigger={
-    <button
-      type="button"
-      className={cn(
-        "inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)]",
-        "border border-border bg-background text-foreground transition-colors",
-        "hover:bg-muted/40"
-      )}
-      aria-label="Додаткові дії"
-    >
-      <MoreVertical className="h-5 w-5" />
-    </button>
-  }
-  align="end"
-  contentClassName="w-56"
-  items={[
-    {
-      key: "events",
-      label: "Події матчу",
-      icon: Activity,
-      onSelect: () => navigate(`/matches/${match.id}/events`),
-    },
-    {
-      key: "delete",
-      label: "Видалити матч",
-      icon: Trash2,
-      onSelect: () => setDeleteOpen(true),
-      destructive: true,
-    },
-    { key: "sep-back", type: "separator" },
-    {
-      key: "back",
-      label: "До списку матчів",
-      icon: ArrowLeft,
-      onSelect: () => navigate("/matches-shadcn"),
-      muted: true,
-    },
-  ]}
-/>
+      <AppDropdown
+        align="end"
+        contentClassName="w-56"
+        trigger={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="rounded-[var(--radius-lg)]"
+            aria-label="Додаткові дії"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </Button>
+        }
+        items={[
+          {
+            key: "events",
+            label: (
+              <>
+                <Activity className="h-4 w-4" />
+                Події матчу
+              </>
+            ),
+            onSelect: () => navigate(`/matches/${match.id}/events`),
+          },
+          {
+            key: "delete",
+            label: (
+              <>
+                <Trash2 className="h-4 w-4" />
+                Видалити матч
+              </>
+            ),
+            onSelect: () => setDeleteOpen(true),
+            destructive: true,
+          },
+          { key: "sep-back", type: "separator" },
+          {
+            key: "back",
+            label: (
+              <>
+                <ArrowLeft className="h-4 w-4" />
+                До списку матчів
+              </>
+            ),
+            onSelect: () => navigate("/matches-shadcn"),
+            muted: true,
+          },
+        ]}
+      />
 
 
     </div>
@@ -1730,11 +1716,11 @@ if (ttErr) {
                   Дисципліна
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-3">
-                  <div className={cn("rounded-2xl border border-border bg-card/60 p-3 text-center")}>
+                  <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60 p-3 text-center")}>
                     <div className="text-xs text-muted-foreground">Жовті</div>
                     <div className="mt-1 text-lg font-semibold tabular-nums">{stats.yellow}</div>
                   </div>
-                  <div className={cn("rounded-2xl border border-border bg-card/60 p-3 text-center")}>
+                  <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60 p-3 text-center")}>
                     <div className="text-xs text-muted-foreground">Червоні</div>
                     <div className="mt-1 text-lg font-semibold tabular-nums">{stats.red}</div>
                   </div>
@@ -1815,17 +1801,18 @@ if (ttErr) {
                 const saving = attendanceSavingId === p.id;
 
                 return (
-                  <button
+                  <Button
   key={p.id}
   type="button"
+  variant="card"
+  size="md"
   onClick={() => toggleAttendance(p.id)}
   disabled={!!attendanceSavingId}
   className={cn(
-    "shadow-[var(--shadow-surface)] transition-shadow duration-200 ease-out",
+    "h-auto shadow-[var(--shadow-surface)] transition-shadow duration-200 ease-out",
     "hover:shadow-[var(--shadow-floating)]",
-    "rounded-2xl border border-border bg-card/60 p-4",
-    "flex items-center justify-between gap-3 text-left",
-    "transition-colors hover:bg-muted/40",
+    "p-4",
+    "flex w-full items-center justify-between gap-3",
     "disabled:opacity-60 disabled:cursor-not-allowed"
   )}
 >
@@ -1852,7 +1839,7 @@ if (ttErr) {
   <Badge variant={present ? "default" : "secondary"} className="rounded-full">
     {present ? "Присутній" : "Відсутній"}
   </Badge>
-</button>
+                  </Button>
                 );
               })}
             </div>

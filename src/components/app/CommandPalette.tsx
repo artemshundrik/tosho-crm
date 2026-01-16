@@ -31,6 +31,8 @@ import {
   Dumbbell,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 type RouteItem = {
   key: string;
@@ -447,21 +449,22 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         rightSlot={
           <div className="flex items-center gap-2">
             {query.length > 0 && (
-              <button
+              <Button
                 type="button"
+                variant="control"
+                size="iconSm"
                 aria-label="Очистити пошук"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                 }}
                 onClick={clearQuery}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             )}
 
-            <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+            <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-[11px]">⌘</span>K
               <span className="opacity-60">/</span>
               <span>Ctrl+K</span>

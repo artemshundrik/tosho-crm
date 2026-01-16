@@ -12,25 +12,36 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
     
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
     
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 222 47% 11%;
     
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
-    
+
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 222 47% 11%;
+
     
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 221 83% 53%;
+    /* --- BRAND TOKENS (single knob) --- */
+    /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
+    --brand-h: 221;
+    --brand-s: 83%;
+    --brand-l: 53%;
+
+    --primary: var(--brand-h) var(--brand-s) var(--brand-l);
+    --primary-foreground: 210 40% 98%;
+    --ring: var(--brand-h) var(--brand-s) var(--brand-l);
     
+    /* --- SHAPE RULES --- */
+    /* --radius: базові контроли (Input/Button/Badge) */
+    /* --radius-inner: Card/Table rows */
+    /* --radius-section: page sections/hero */
     --radius: 0.5rem;
     --radius-lg: 12px;
     --radius-md: 10px;
@@ -39,14 +50,17 @@
     --btn-radius: 12px;
 
     /* --- КНОПКИ (Gradient) --- */
-    --btn-primary-grad-top: 221 83% 58%;
-    --btn-primary-grad-bot: 221 83% 49%;
-    --btn-primary-shadow: 221 83% 53%;
+    --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
+    --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);
+    --btn-primary-shadow: var(--brand-h) var(--brand-s) var(--brand-l);
 
     /* --- ТІНІ --- */
     --shadow-surface: 0 10px 24px rgba(15, 23, 42, 0.08);
     --shadow-floating: 0 16px 32px rgba(15, 23, 42, 0.14);
     --shadow-pressed: 0 6px 14px rgba(15, 23, 42, 0.12);
+    --shadow-primary-glow: 0 0 8px hsl(var(--primary) / 0.4);
+    --shadow-success-glow: 0 0 10px -3px hsl(var(--success-foreground) / 0.3);
+    --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.3);
 
     /* --- BADGE TONES --- */
     --neutral-soft: 220 14% 96%;
@@ -61,9 +75,65 @@
     --success-soft-border: 142 60% 83%;
     --success-foreground: 142 55% 30%;
 
+    --warning-soft: 45 90% 92%;
+    --warning-soft-border: 45 85% 80%;
+    --warning-foreground: 45 90% 35%;
+
     --danger-soft: 0 84% 95%;
     --danger-soft-border: 0 74% 86%;
     --danger-foreground: 0 72% 40%;
+
+    /* --- RATING + LEADER TOKENS (LIGHT) --- */
+    --rating-bronze-from: #e6beaa;
+    --rating-bronze-to: #a87860;
+    --rating-bronze-border: rgba(255, 255, 255, 0.25);
+    --rating-bronze-foreground: #431407;
+
+    --rating-silver-from: #f1f5f9;
+    --rating-silver-to: #cbd5e1;
+    --rating-silver-border: rgba(255, 255, 255, 0.4);
+    --rating-silver-foreground: #1e293b;
+
+    --rating-gold-from: #e8c689;
+    --rating-gold-to: #b7903c;
+    --rating-gold-border: rgba(253, 230, 138, 0.4);
+    --rating-gold-foreground: #422006;
+
+    --rating-elite-from: #0f172a;
+    --rating-elite-mid: #1e3a8a;
+    --rating-elite-to: #172554;
+    --rating-elite-border: rgba(59, 130, 246, 0.4);
+    --rating-elite-foreground: #60a5fa;
+
+    --rating-legendary-from: #ffffff;
+    --rating-legendary-mid: #f0f9ff;
+    --rating-legendary-to: #fff1f2;
+    --rating-legendary-border: rgba(220, 184, 102, 0.6);
+    --rating-legendary-foreground: #a17a23;
+
+    --leader-goals-bg: rgba(59, 130, 246, 0.08);
+    --leader-goals-border: rgba(59, 130, 246, 0.25);
+    --leader-goals-foreground: #2563eb;
+
+    --leader-assists-bg: rgba(16, 185, 129, 0.1);
+    --leader-assists-border: rgba(16, 185, 129, 0.3);
+    --leader-assists-foreground: #059669;
+
+    --leader-points-bg: rgba(124, 58, 237, 0.08);
+    --leader-points-border: rgba(124, 58, 237, 0.25);
+    --leader-points-foreground: #7c3aed;
+
+    --leader-matches-bg: rgba(59, 130, 246, 0.08);
+    --leader-matches-border: rgba(147, 197, 253, 0.55);
+    --leader-matches-foreground: #0284c7;
+
+    --leader-discipline-bg: rgba(249, 115, 22, 0.1);
+    --leader-discipline-border: rgba(249, 115, 22, 0.25);
+    --leader-discipline-foreground: #ea580c;
+
+    --leader-efficiency-bg: rgba(100, 116, 139, 0.1);
+    --leader-efficiency-border: rgba(148, 163, 184, 0.35);
+    --leader-efficiency-foreground: #64748b;
   }
 
   .dark {
@@ -76,28 +146,23 @@
     --popover: 222 18% 13%;
     --popover-foreground: 210 40% 98%;
     
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 18% 11%;
     
     --secondary: 222 18% 20%;
     --secondary-foreground: 210 40% 98%;
     
     --muted: 222 18% 18%;
     --muted-foreground: 215 20% 65%;
-    
+
     --accent: 222 18% 18%;
     --accent-foreground: 210 40% 98%;
+    
     
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     
     --border: 222 18% 22%;
     --input: 222 18% 22%;
-    --ring: 217 91% 60%;
-
-    /* --- КНОПКИ (Gradient Dark) --- */
-    --btn-primary-grad-top: 217 92% 66%;
-    --btn-primary-grad-bot: 217 90% 56%;
+    /* --- BRAND TOKENS (inherit from :root) --- */
 
     --radius-lg: 12px;
     --radius-md: 10px;
@@ -108,6 +173,9 @@
     --shadow-surface: 0 12px 28px rgba(2, 6, 23, 0.55);
     --shadow-floating: 0 18px 40px rgba(2, 6, 23, 0.65);
     --shadow-pressed: 0 8px 16px rgba(2, 6, 23, 0.45);
+    --shadow-primary-glow: 0 0 8px hsl(var(--primary) / 0.5);
+    --shadow-success-glow: 0 0 10px -3px hsl(var(--success-foreground) / 0.4);
+    --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.4);
 
     --neutral-soft: 222 16% 20%;
     --neutral-soft-border: 222 16% 26%;
@@ -121,13 +189,67 @@
     --success-soft-border: 142 30% 28%;
     --success-foreground: 142 70% 70%;
 
+    --warning-soft: 45 25% 20%;
+    --warning-soft-border: 45 25% 28%;
+    --warning-foreground: 45 90% 70%;
+
     --danger-soft: 0 35% 22%;
     --danger-soft-border: 0 35% 30%;
     --danger-foreground: 0 80% 75%;
-  }
-}
 
-@layer base {
+    /* --- RATING + LEADER TOKENS (DARK) --- */
+    --rating-bronze-from: #6b4b3a;
+    --rating-bronze-to: #4b3328;
+    --rating-bronze-border: rgba(255, 255, 255, 0.18);
+    --rating-bronze-foreground: #f2e4da;
+
+    --rating-silver-from: #64748b;
+    --rating-silver-to: #475569;
+    --rating-silver-border: rgba(255, 255, 255, 0.2);
+    --rating-silver-foreground: #e2e8f0;
+
+    --rating-gold-from: #9a7a2e;
+    --rating-gold-to: #6b4f1c;
+    --rating-gold-border: rgba(253, 230, 138, 0.28);
+    --rating-gold-foreground: #fdecc8;
+
+    --rating-elite-from: #0b132b;
+    --rating-elite-mid: #1e3a8a;
+    --rating-elite-to: #102044;
+    --rating-elite-border: rgba(59, 130, 246, 0.5);
+    --rating-elite-foreground: #bfdbfe;
+
+    --rating-legendary-from: #f2deb1;
+    --rating-legendary-mid: #c6973a;
+    --rating-legendary-to: #c6973a;
+    --rating-legendary-border: rgba(255, 214, 138, 0.5);
+    --rating-legendary-foreground: #3a2606;
+
+    --leader-goals-bg: rgba(59, 130, 246, 0.18);
+    --leader-goals-border: rgba(59, 130, 246, 0.45);
+    --leader-goals-foreground: #93c5fd;
+
+    --leader-assists-bg: rgba(16, 185, 129, 0.2);
+    --leader-assists-border: rgba(16, 185, 129, 0.45);
+    --leader-assists-foreground: #a7f3d0;
+
+    --leader-points-bg: rgba(124, 58, 237, 0.22);
+    --leader-points-border: rgba(124, 58, 237, 0.5);
+    --leader-points-foreground: #ddd6fe;
+
+    --leader-matches-bg: rgba(59, 130, 246, 0.22);
+    --leader-matches-border: rgba(147, 197, 253, 0.55);
+    --leader-matches-foreground: #bae6fd;
+
+    --leader-discipline-bg: rgba(249, 115, 22, 0.22);
+    --leader-discipline-border: rgba(249, 115, 22, 0.5);
+    --leader-discipline-foreground: #fdba74;
+
+    --leader-efficiency-bg: rgba(148, 163, 184, 0.2);
+    --leader-efficiency-border: rgba(148, 163, 184, 0.45);
+    --leader-efficiency-foreground: #e2e8f0;
+  }
+
   * {
     border-color: hsl(var(--border));
   }
@@ -148,365 +270,23 @@
       min-height: 100dvh;
     }
   }
-}
 
-@layer components {
-  /* ========================================= */
-  /* 🦸‍♂️ HERO SECTION (FIXED CONTRAST)        */
-  /* ========================================= */
-
-  /* 1. CONTAINER CARD */
-  .hero-card-premium {
-    position: relative;
-    overflow: hidden;
-    border-radius: 2.5rem;
-    transition: all 500ms;
-    border-width: 1px;
-    border-style: solid;
-    
-    /* LIGHT MODE: Чистий білий фон, темна рамка */
-    background-color: #ffffff;
-    border-color: #e2e8f0; /* slate-200 */
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08); 
+  input[type="date"],
+  input[type="time"] {
+    -webkit-appearance: none;
+    appearance: none;
   }
-
-  .dark .hero-card-premium {
-    /* DARK MODE: Глибокий градієнт */
-    background: linear-gradient(135deg, #1e293b 0%, #020617 100%);
-    border-color: rgba(255,255,255,0.08);
-    box-shadow: 0 25px 50px -12px rgba(2, 6, 23, 0.7);
-  }
-
-  /* 2. PLAYER NAME (Typography) */
-  .hero-subtitle-name {
-    display: block;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    margin-bottom: -0.2em;
-    color: #64748b; /* slate-500 (Темно-сірий) */
-  }
-  .dark .hero-subtitle-name {
-    color: #94a3b8; /* slate-400 (Світло-сірий) */
-  }
-
-  .hero-title-name {
-    font-size: clamp(3rem, 5vw, 6rem);
-    line-height: 1;
-    font-weight: 900;
-    letter-spacing: -0.025em;
-    text-transform: uppercase;
-    
-    /* Light Mode: Темний "Графіт" */
-    background: linear-gradient(180deg, #1e293b 0%, #475569 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .dark .hero-title-name {
-    /* Dark Mode: Біле срібло */
-    background: linear-gradient(180deg, #ffffff 10%, #94a3b8 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
-  }
-
-  /* 3. TEAM NAME */
-  .hero-text-team {
-    font-weight: 600;
-    letter-spacing: 0.025em;
-    color: #475569; /* slate-600 (Читабельний на білому) */
-  }
-  .dark .hero-text-team {
-    color: #cbd5e1; /* slate-300 */
-  }
-
-  /* ========================================= */
-  /* 📊 STATS BOXES (CRITICAL FIX)             */
-  /* ========================================= */
-
-  .hero-stat-box {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    border-radius: 1.5rem;
-    transition: all 300ms;
-    overflow: hidden;
-    
-    /* LIGHT MODE: Світло-сірий фон, щоб виділятися на білій картці */
-    background-color: #f1f5f9; /* slate-100 */
-    border: 1px solid #e2e8f0; /* slate-200 */
-  }
-  
-  .dark .hero-stat-box {
-    /* DARK MODE: Прозоре скло */
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  /* --- MATCHES (Neutral) --- */
-  .stat-val-neutral {
-    font-size: 1.875rem;
-    line-height: 2.25rem;
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.025em;
-    color: #0f172a; /* slate-900 (Чорний) */
-  }
-  .dark .stat-val-neutral {
-    color: #ffffff; /* Білий */
-  }
-  .stat-lbl-neutral {
-    font-size: 10px;
-    line-height: 1;
-    text-transform: uppercase;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.25rem;
-    color: #64748b; /* slate-500 */
-  }
-  .dark .stat-lbl-neutral {
-    color: #94a3b8;
-  }
-
-  /* --- GOALS (Blue) --- */
-  .stat-val-blue {
-    font-size: 1.875rem;
-    line-height: 2.25rem;
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.025em;
-    transition: color 200ms;
-    color: #2563eb; /* blue-600 (Яскраво синій) - ЧИТАБЕЛЬНИЙ НА БІЛОМУ */
-  }
-  .dark .stat-val-blue {
-    color: #60a5fa; /* blue-400 (Світло-синій) - ЧИТАБЕЛЬНИЙ НА ТЕМНОМУ */
-  }
-  
-  .stat-box-blue-hover {
-    position: absolute;
-    inset: 0;
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
     opacity: 0;
-    transition: opacity 300ms;
-    /* Light Hover: дуже легкий синій */
-    background-color: rgba(37, 99, 235, 0.05);
+    display: none;
   }
-  .dark .stat-box-blue-hover {
-    /* Dark Hover: синій неон */
-    background-color: rgba(37, 99, 235, 0.15);
-  }
-  
-  .group:hover .stat-box-blue-hover {
-    opacity: 1;
-  }
-
-  /* --- ASSISTS (Emerald) --- */
-  .stat-val-emerald {
-    font-size: 1.875rem;
-    line-height: 2.25rem;
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.025em;
-    transition: color 200ms;
-    color: #059669; /* emerald-600 (Темно-зелений) */
-  }
-  .dark .stat-val-emerald {
-    color: #34d399; /* emerald-400 (Світло-зелений) */
-  }
-
-  .stat-box-emerald-hover {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    transition: opacity 300ms;
-    background-color: rgba(5, 150, 105, 0.05);
-  }
-  .dark .stat-box-emerald-hover {
-    background-color: rgba(5, 150, 105, 0.15);
-  }
-  .group:hover .stat-box-emerald-hover {
-    opacity: 1;
-  }
-
-  /* --- LABELS for Stats --- */
-  .stat-lbl {
-    position: relative;
-    z-index: 10;
-    font-size: 10px;
-    line-height: 1;
-    text-transform: uppercase;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.25rem;
-    color: #64748b; /* slate-500 */
-  }
-  .dark .stat-lbl {
-    color: #94a3b8; /* slate-400 */
+  input[type="date"]::-webkit-inner-spin-button,
+  input[type="time"]::-webkit-inner-spin-button {
+    display: none;
   }
 }
 
-@layer components {
-  /* ========================================= */
-  /* 🎖️ Rating + Leader Badges                */
-  /* ========================================= */
-  .rating-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 56px;
-    height: 32px;
-    padding: 0 12px;
-    border-radius: 9999px;
-    font-weight: 800;
-    font-size: 14px;
-    letter-spacing: 0.01em;
-    border: 1px solid transparent;
-    box-shadow: none;
-  }
-
-  .rating-badge--bronze {
-    background: linear-gradient(135deg, #e6beaa 0%, #a87860 100%) !important;
-    border-color: rgba(255, 255, 255, 0.25) !important;
-    color: #431407 !important;
-  }
-  .rating-badge--silver {
-    background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
-    color: #1e293b !important;
-  }
-  .rating-badge--gold {
-    background: linear-gradient(135deg, #e8c689 0%, #b7903c 100%) !important;
-    border-color: rgba(253, 230, 138, 0.4) !important;
-    color: #422006 !important;
-  }
-  .rating-badge--elite {
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #172554 100%) !important;
-    border-color: rgba(59, 130, 246, 0.4) !important;
-    color: #60a5fa !important;
-  }
-  .rating-badge--legendary {
-    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 45%, #fff1f2 100%) !important;
-    border-color: rgba(220, 184, 102, 0.6) !important;
-    color: #a17a23 !important;
-  }
-
-  .dark .rating-badge--bronze {
-    background: linear-gradient(135deg, #6b4b3a 0%, #4b3328 100%) !important;
-    border-color: rgba(255, 255, 255, 0.18) !important;
-    color: #f2e4da !important;
-  }
-  .dark .rating-badge--silver {
-    background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
-    color: #e2e8f0 !important;
-  }
-  .dark .rating-badge--gold {
-    background: linear-gradient(135deg, #9a7a2e 0%, #6b4f1c 100%) !important;
-    border-color: rgba(253, 230, 138, 0.28) !important;
-    color: #fdecc8 !important;
-  }
-  .dark .rating-badge--elite {
-    background: linear-gradient(135deg, #0b132b 0%, #1e3a8a 40%, #102044 100%) !important;
-    border-color: rgba(59, 130, 246, 0.5) !important;
-    color: #bfdbfe !important;
-  }
-  .dark .rating-badge--legendary {
-    background: linear-gradient(135deg, #f2deb1 0%, #c6973a 100%) !important;
-    border-color: rgba(255, 214, 138, 0.5) !important;
-    color: #3a2606 !important;
-  }
-
-  .leader-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 20px !important;
-    padding: 0 6px !important;
-    width: auto !important;
-    max-width: max-content;
-    align-self: flex-start;
-    flex: 0 0 auto;
-    border-radius: 9999px;
-    font-size: 11px !important;
-    font-weight: 800;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase;
-    border: 1px solid transparent;
-    background-color: transparent;
-    line-height: 1 !important;
-  }
-  .leader-badge--goals {
-    background-color: rgba(59, 130, 246, 0.08) !important;
-    border-color: rgba(59, 130, 246, 0.25) !important;
-    color: #2563eb !important;
-  }
-  .leader-badge--assists {
-    background-color: rgba(16, 185, 129, 0.1) !important;
-    border-color: rgba(16, 185, 129, 0.3) !important;
-    color: #059669 !important;
-  }
-  .leader-badge--points {
-    background-color: rgba(124, 58, 237, 0.08) !important;
-    border-color: rgba(124, 58, 237, 0.25) !important;
-    color: #7c3aed !important;
-  }
-  .leader-badge--matches {
-    background-color: rgba(59, 130, 246, 0.08) !important;
-    border-color: rgba(147, 197, 253, 0.55) !important;
-    color: #0284c7 !important;
-  }
-  .leader-badge--discipline {
-    background-color: rgba(249, 115, 22, 0.1) !important;
-    border-color: rgba(249, 115, 22, 0.25) !important;
-    color: #ea580c !important;
-  }
-  .leader-badge--efficiency {
-    background-color: rgba(100, 116, 139, 0.1) !important;
-    border-color: rgba(148, 163, 184, 0.35) !important;
-    color: #64748b !important;
-  }
-
-  .dark .leader-badge--goals {
-    background-color: rgba(59, 130, 246, 0.18) !important;
-    border-color: rgba(59, 130, 246, 0.45) !important;
-    color: #93c5fd !important;
-  }
-  .dark .leader-badge--assists {
-    background-color: rgba(16, 185, 129, 0.2) !important;
-    border-color: rgba(16, 185, 129, 0.45) !important;
-    color: #a7f3d0 !important;
-  }
-  .dark .leader-badge--points {
-    background-color: rgba(124, 58, 237, 0.22) !important;
-    border-color: rgba(124, 58, 237, 0.5) !important;
-    color: #ddd6fe !important;
-  }
-  .dark .leader-badge--matches {
-    background-color: rgba(59, 130, 246, 0.22) !important;
-    border-color: rgba(147, 197, 253, 0.55) !important;
-    color: #bae6fd !important;
-  }
-  .dark .leader-badge--discipline {
-    background-color: rgba(249, 115, 22, 0.22) !important;
-    border-color: rgba(249, 115, 22, 0.5) !important;
-    color: #fdba74 !important;
-  }
-  .dark .leader-badge--efficiency {
-    background-color: rgba(148, 163, 184, 0.2) !important;
-    border-color: rgba(148, 163, 184, 0.45) !important;
-    color: #e2e8f0 !important;
-  }
-
-  .dark .rating-badge {
-    box-shadow: none;
-  }
-}
 
 @layer utilities {
   .bg-neutral-soft {
@@ -539,6 +319,16 @@
     color: hsl(var(--success-foreground));
   }
 
+  .bg-warning-soft {
+    background-color: hsl(var(--warning-soft));
+  }
+  .border-warning-soft-border {
+    border-color: hsl(var(--warning-soft-border));
+  }
+  .text-warning-foreground {
+    color: hsl(var(--warning-foreground));
+  }
+
   .bg-danger-soft {
     background-color: hsl(var(--danger-soft));
   }
@@ -550,14 +340,12 @@
   }
 
   .form-dot-neutral {
-    background-color: #cbd5e1;
+    background-color: hsl(var(--muted));
   }
   .dark .form-dot-neutral {
-    background-color: #475569;
+    background-color: hsl(var(--muted-foreground));
   }
-}
 
-@layer utilities {
   /* ... твої утиліти для бейджів, залишаємо як є, але в стандартному синтаксисі ... */
   .gumloop-blue-gradient {
     background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));

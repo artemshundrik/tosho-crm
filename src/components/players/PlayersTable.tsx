@@ -21,7 +21,7 @@ const players = [
 
 export function PlayersTable() {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-[var(--radius-section)] border border-border bg-card overflow-hidden">
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow>

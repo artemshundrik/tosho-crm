@@ -2,9 +2,9 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, Plus, Trophy } from "lucide-react";
 
-import { ActionMenu } from "@/components/ui/action-menu";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AppDropdown } from "@/components/app/AppDropdown";
 
 type NewMatchPrimarySplitCtaProps = {
   baseTo?: string;
@@ -24,30 +24,31 @@ export function NewMatchPrimarySplitCta({ baseTo = "/matches/new", className }: 
       className={cn(
         buttonVariants({ variant: "primary", size: "md" }),
         "!p-0 !px-0 !gap-0 overflow-visible inline-flex items-stretch",
-        "focus-within:outline-none focus-within:ring-0 focus-within:ring-offset-0",
+        "focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2 focus-within:ring-offset-background",
         className
       )}
     >
       {/* LEFT */}
-      <button
+      <Button
         type="button"
+        variant="onPrimary"
+        size="sm"
         onClick={goScheduled}
         className={[
-          "h-full flex flex-1 items-center justify-center gap-2",
+          "h-full flex-1 gap-2",
           "px-4",
           "leading-none",
-          "bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+          "border-0 outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-primary/30",
           "rounded-l-[var(--btn-radius)] rounded-r-none",
         ].join(" ")}
       >
         <Plus className="h-4 w-4" />
         <span>Новий матч</span>
-      </button>
+      </Button>
 
       <div className="self-stretch w-px bg-white/15" />
 
-      {/* RIGHT — ActionMenu */}
-      <ActionMenu
+      <AppDropdown
         open={open}
         onOpenChange={setOpen}
         align="end"
@@ -55,25 +56,30 @@ export function NewMatchPrimarySplitCta({ baseTo = "/matches/new", className }: 
         contentClassName="w-72"
         triggerClassName="inline-flex"
         trigger={
-          <button
+          <Button
             type="button"
+            variant="onPrimary"
+            size="sm"
             aria-label="Вибрати тип матчу"
             className={[
-              "h-full flex items-center justify-center",
-              "px-3",
+              "h-full px-3",
               "leading-none",
-              "bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+              "border-0 outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-primary/30",
               "rounded-r-[var(--btn-radius)] rounded-l-none",
             ].join(" ")}
           >
             <ChevronDown className="h-4 w-4 opacity-90" />
-          </button>
+          </Button>
         }
         items={[
           {
             key: "scheduled",
-            label: "Додати запланований матч",
-            icon: Plus,
+            label: (
+              <>
+                <Plus className="h-4 w-4" />
+                Додати запланований матч
+              </>
+            ),
             onSelect: () => {
               setOpen(false);
               goScheduled();
@@ -81,8 +87,12 @@ export function NewMatchPrimarySplitCta({ baseTo = "/matches/new", className }: 
           },
           {
             key: "played",
-            label: "Додати зіграний матч",
-            icon: Trophy,
+            label: (
+              <>
+                <Trophy className="h-4 w-4" />
+                Додати зіграний матч
+              </>
+            ),
             onSelect: () => {
               setOpen(false);
               goPlayed();

@@ -20,12 +20,15 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 
 import {
   BarChart3,
   CalendarDays,
   MapPin,
   Swords,
+  LayoutGrid,
   Plus,
   ArrowRight,
   Activity,
@@ -403,11 +406,28 @@ export function OverviewPage() {
     };
   }, [nextMatch, teamLogo]);
 
+  const headerActions = useMemo(
+    () => (
+      <>
+        <Button asChild variant="secondary">
+          <Link to="/admin/trainings/create">Нове тренування</Link>
+        </Button>
+        <NewMatchPrimarySplitCta baseTo="/matches/new" />
+      </>
+    ),
+    []
+  );
+
+  usePageHeaderActions(headerActions, []);
+
   return (
     <div className="space-y-6">
       <OperationalSummary
-        title="Огляд"
+        title="Огляд команди"
         subtitle="Ключові події команди та загальні показники."
+        titleVariant="hidden"
+        sectionLabel="Пульс команди"
+        sectionIcon={LayoutGrid}
         nextUpLoading={loading}
         nextUp={
           !loading && nextMatch && nextMatchSides
@@ -429,18 +449,6 @@ export function OverviewPage() {
           title: "Немає запланованих матчів",
           description: "Додай новий матч, щоб команда бачила час і суперника.",
           actionLabel: "Новий матч",
-        }}
-        primaryAction={{
-          label: "Новий матч",
-          to: "/matches/new",
-          iconLeft: Plus,
-          variant: "default",
-        }}
-        secondaryAction={{
-          label: "Нове тренування",
-          to: "/admin/trainings/create",
-          iconLeft: CalendarDays,
-          variant: "secondary",
         }}
         kpis={kpis}
       />
@@ -606,14 +614,14 @@ export function OverviewPage() {
                         ? outcome(m.score_team, m.score_opponent)
                         : { label: "—", tone: "neutral" as const };
                     return (
-                      <Link
-                        key={m.id}
-                        to={`/matches/${m.id}`}
-                        className={cn(
-                          "flex items-center justify-between rounded-xl border border-border px-3 py-2",
+                        <Link
+                          key={m.id}
+                          to={`/matches/${m.id}`}
+                          className={cn(
+                          "flex items-center justify-between rounded-[var(--radius-inner)] border border-border px-3 py-2",
                           "bg-muted/20 transition-all hover:-translate-y-[1px] hover:bg-muted/40 hover:shadow-[var(--shadow-floating)]"
-                        )}
-                      >
+                          )}
+                        >
                         <div className="flex min-w-0 items-center gap-3">
                           <Badge tone={badge.tone} className="h-7 w-7 justify-center rounded-full p-0">
                             {badge.label}
@@ -657,7 +665,7 @@ export function OverviewPage() {
                       {nextTraining.location}
                     </div>
                   ) : null}
-                  <Button asChild size="sm" variant="secondary" className="rounded-xl">
+                  <Button asChild size="sm" variant="secondary">
                     <Link to="/admin/trainings">Перейти</Link>
                   </Button>
                 </div>
@@ -687,7 +695,7 @@ export function OverviewPage() {
                 <div className="space-y-3">
                   {activity.map((a) => (
                     <div key={a.id} className="flex items-start gap-3 text-sm text-muted-foreground">
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary/50 shadow-[0_0_0_3px_rgba(59,130,246,0.08)]" />
+                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]" />
                       <div className="min-w-0">
                         <div className="text-sm text-foreground truncate">{a.title}</div>
                         {a.subtitle ? <div className="text-xs text-muted-foreground">{a.subtitle}</div> : null}
@@ -706,12 +714,12 @@ export function OverviewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button asChild className="w-full justify-between rounded-xl">
+              <Button asChild className="w-full justify-between">
                 <Link to="/matches/new">
                   Новий матч <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="secondary" className="w-full justify-between rounded-xl">
+              <Button asChild variant="secondary" className="w-full justify-between">
                 <Link to="/admin/trainings/create">
                   Нове тренування <ArrowRight className="h-4 w-4" />
                 </Link>

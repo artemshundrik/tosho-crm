@@ -84,7 +84,7 @@ export function StandingsUpdatePanel({
         ) : null}
 
         {linkRequired ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Турнір не привʼязаний до поточної команди.
             <Button
               variant="link"

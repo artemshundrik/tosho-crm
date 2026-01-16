@@ -8,10 +8,10 @@ import {
   CircleDollarSign,
   CreditCard,
   FolderPlus,
-  Loader2,
   Receipt,
   TrendingUp,
   Wallet,
+  WalletCards,
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabaseClient";
@@ -23,6 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -165,6 +168,7 @@ export function FinancePage() {
   const [players, setPlayers] = useState<Record<string, PlayerLite>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const showSkeleton = useMinimumLoading(loading);
 
   useEffect(() => {
     async function load() {
@@ -386,29 +390,37 @@ export function FinancePage() {
 
   const recentTransactions = useMemo(() => transactions.slice(0, 8), [transactions]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Завантаження фінансів…
-      </div>
-    );
-  }
+  const headerActions = useMemo(
+    () => (
+      <>
+        <Button variant="secondary" onClick={() => navigate("/finance/invoices/new")}>
+          Створити рахунок
+        </Button>
+        <Button variant="primary" onClick={() => navigate("/finance/transactions/new")}>
+          Додати платіж
+        </Button>
+      </>
+    ),
+    [navigate]
+  );
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Помилка</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
+  usePageHeaderActions(headerActions, [navigate]);
 
-  return (
+  return showSkeleton ? (
+    <PageSkeleton />
+  ) : error ? (
+    <Alert variant="destructive">
+      <AlertTitle>Помилка</AlertTitle>
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ) : (
     <div className="space-y-6">
       <OperationalSummary
         title="Фінанси"
         subtitle="Платежі, абонементи, доходи та витрати команди в одному місці."
+        titleVariant="hidden"
+        sectionLabel="Фінанси"
+        sectionIcon={WalletCards}
         nextUpLoading={false}
         nextUp={{
           tournamentName: "Фінансовий огляд",
@@ -446,18 +458,6 @@ export function FinancePage() {
             iconTone: "text-amber-500 bg-amber-500/10",
           },
         ]}
-        primaryAction={{
-          label: "Додати платіж",
-          iconLeft: Receipt,
-          variant: "default",
-          onClick: () => navigate("/finance/transactions/new"),
-        }}
-        secondaryAction={{
-          label: "Створити рахунок",
-          iconLeft: FolderPlus,
-          variant: "outline",
-          onClick: () => navigate("/finance/invoices/new"),
-        }}
       />
 
       <Tabs defaultValue="billing" className="space-y-4">

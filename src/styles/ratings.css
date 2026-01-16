@@ -1,0 +1,105 @@
+@layer components {
+  /* ========================================= */
+  /* 🎖️ Rating + Leader Badges                */
+  /* ========================================= */
+  .rating-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+    box-shadow: none;
+  }
+
+  .rating-badge--bronze {
+    background: linear-gradient(135deg, var(--rating-bronze-from) 0%, var(--rating-bronze-to) 100%) !important;
+    border-color: var(--rating-bronze-border) !important;
+    color: var(--rating-bronze-foreground) !important;
+  }
+  .rating-badge--silver {
+    background: linear-gradient(135deg, var(--rating-silver-from) 0%, var(--rating-silver-to) 100%) !important;
+    border-color: var(--rating-silver-border) !important;
+    color: var(--rating-silver-foreground) !important;
+  }
+  .rating-badge--gold {
+    background: linear-gradient(135deg, var(--rating-gold-from) 0%, var(--rating-gold-to) 100%) !important;
+    border-color: var(--rating-gold-border) !important;
+    color: var(--rating-gold-foreground) !important;
+  }
+  .rating-badge--elite {
+    background: linear-gradient(
+      135deg,
+      var(--rating-elite-from) 0%,
+      var(--rating-elite-mid) 40%,
+      var(--rating-elite-to) 100%
+    ) !important;
+    border-color: var(--rating-elite-border) !important;
+    color: var(--rating-elite-foreground) !important;
+  }
+  .rating-badge--legendary {
+    background: linear-gradient(
+      135deg,
+      var(--rating-legendary-from) 0%,
+      var(--rating-legendary-mid) 45%,
+      var(--rating-legendary-to) 100%
+    ) !important;
+    border-color: var(--rating-legendary-border) !important;
+    color: var(--rating-legendary-foreground) !important;
+  }
+
+  .leader-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px !important;
+    padding: 0 6px !important;
+    width: auto !important;
+    max-width: max-content;
+    align-self: flex-start;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    font-size: 11px !important;
+    font-weight: 800;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    background-color: transparent;
+    line-height: 1 !important;
+  }
+  .leader-badge--goals {
+    background-color: var(--leader-goals-bg) !important;
+    border-color: var(--leader-goals-border) !important;
+    color: var(--leader-goals-foreground) !important;
+  }
+  .leader-badge--assists {
+    background-color: var(--leader-assists-bg) !important;
+    border-color: var(--leader-assists-border) !important;
+    color: var(--leader-assists-foreground) !important;
+  }
+  .leader-badge--points {
+    background-color: var(--leader-points-bg) !important;
+    border-color: var(--leader-points-border) !important;
+    color: var(--leader-points-foreground) !important;
+  }
+  .leader-badge--matches {
+    background-color: var(--leader-matches-bg) !important;
+    border-color: var(--leader-matches-border) !important;
+    color: var(--leader-matches-foreground) !important;
+  }
+  .leader-badge--discipline {
+    background-color: var(--leader-discipline-bg) !important;
+    border-color: var(--leader-discipline-border) !important;
+    color: var(--leader-discipline-foreground) !important;
+  }
+  .leader-badge--efficiency {
+    background-color: var(--leader-efficiency-bg) !important;
+    border-color: var(--leader-efficiency-border) !important;
+    color: var(--leader-efficiency-foreground) !important;
+  }
+}

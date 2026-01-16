@@ -1028,7 +1028,7 @@ if (minute !== null && Number.isNaN(minute)) {
 
                 <TabsContent value="table" className="mt-4">
                   {sortedEvents.length === 0 ? (
-                    <div className="rounded-2xl border border-border bg-background p-6 text-center">
+                    <div className="rounded-[var(--radius-inner)] border border-border bg-background p-6 text-center">
                       <div className="text-base font-semibold text-foreground">Поки немає подій</div>
                       <div className="mt-2 text-sm text-muted-foreground">Додай першу подію — і тут з’явиться список.</div>
                       <div className="mt-4">
@@ -1041,8 +1041,7 @@ if (minute !== null && Number.isNaN(minute)) {
                   ) : (
                     <div
   className={cn(
-    "overflow-hidden border border-border",
-    "rounded-[var(--radius-lg)]" // 12px
+    "overflow-hidden border border-border rounded-[var(--radius-inner)]"
   )}
 >
   <Table className="w-full">
@@ -1116,9 +1115,8 @@ if (minute !== null && Number.isNaN(minute)) {
               <div className="inline-flex items-center justify-end gap-1">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="control"
                   size="icon"
-                  className="text-muted-foreground hover:text-foreground"
                   onClick={() => enterEdit(ev)}
                   disabled={saving}
                   aria-label="Редагувати"
@@ -1129,9 +1127,8 @@ if (minute !== null && Number.isNaN(minute)) {
 
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="controlDestructive"
                   size="icon"
-                  className="text-muted-foreground hover:text-destructive"
                   onClick={() => openDelete(ev)}
                   disabled={saving}
                   aria-label="Видалити"
@@ -1154,7 +1151,7 @@ if (minute !== null && Number.isNaN(minute)) {
 
                 <TabsContent value="timeline" className="mt-4">
                   {sortedEvents.length === 0 ? (
-                    <div className="rounded-2xl border border-border bg-background p-6 text-center">
+                    <div className="rounded-[var(--radius-inner)] border border-border bg-background p-6 text-center">
                       <div className="text-base font-semibold text-foreground">Поки немає подій</div>
                       <div className="mt-2 text-sm text-muted-foreground">Додай першу подію — і тут з’явиться таймлайн.</div>
                       <div className="mt-4">
@@ -1165,7 +1162,7 @@ if (minute !== null && Number.isNaN(minute)) {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-border bg-background p-4">
+                    <div className="rounded-[var(--radius-inner)] border border-border bg-background p-4">
                       <div className="space-y-2">
                         {sortedEvents.map((ev) => {
                           const author = ev.player_id ? playerLabelById.get(ev.player_id) || "—" : "—";
@@ -1174,10 +1171,10 @@ if (minute !== null && Number.isNaN(minute)) {
                           return (
                             <div
                               key={ev.id}
-                              className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4 hover:bg-muted/20"
+                              className="group flex items-start justify-between gap-3 rounded-[var(--radius-inner)] border border-border bg-card p-4 hover:bg-muted/20"
                             >
                               <div className="flex min-w-0 items-start gap-3">
-                                <div className="grid h-9 w-9 place-items-center rounded-xl border bg-background">
+                                <div className="grid h-9 w-9 place-items-center rounded-[var(--radius-md)] border bg-background">
                                   {ev.minute !== null ? (
                                     <span className="text-sm font-semibold tabular-nums">{ev.minute}</span>
                                   ) : (
@@ -1206,9 +1203,8 @@ if (minute !== null && Number.isNaN(minute)) {
                               <div className="flex shrink-0 items-center gap-1">
                                 <Button
                                   type="button"
-                                  variant="ghost"
+                                  variant="control"
                                   size="icon"
-                                  className="opacity-100"
                                   onClick={() => enterEdit(ev)}
                                   disabled={saving}
                                   aria-label="Редагувати"
@@ -1219,9 +1215,8 @@ if (minute !== null && Number.isNaN(minute)) {
 
                                 <Button
                                   type="button"
-                                  variant="ghost"
+                                  variant="controlDestructive"
                                   size="icon"
-                                  className="text-destructive opacity-100"
                                   onClick={() => openDelete(ev)}
                                   disabled={saving}
                                   aria-label="Видалити"

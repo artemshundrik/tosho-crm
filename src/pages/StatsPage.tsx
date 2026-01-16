@@ -16,9 +16,12 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 
 import { Trophy, TrendingUp, Search, X, Filter, ChevronUp, ChevronDown, Minus, Star, HelpCircle, Crown, Info, Calendar, ArrowRight, Gem } from "lucide-react";
 import { cn } from "@/lib/utils";
+import "@/styles/ratings.css";
 
 // --- Types ---
 type Mode = "players" | "team";
@@ -442,7 +445,7 @@ function PortalTooltip({
           onMouseEnter={handleMouseEnter} 
           onMouseLeave={handleMouseLeave}
         >
-          <div className="bg-popover border border-border text-popover-foreground text-xs rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-popover border border-border text-popover-foreground text-xs rounded-[var(--radius-lg)] shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             {content}
             <div 
               className={cn(
@@ -512,7 +515,7 @@ function FormIndicator({
         const opponentLogoSrc = item.opponentLogoUrl || opponentFallback;
 
         const tooltipContent = (
-             <div className="w-[280px] overflow-hidden rounded-xl">
+             <div className="w-[280px] overflow-hidden rounded-[var(--radius-lg)]">
                  <div className={cn("px-4 py-3 border-b flex justify-between items-center", headerColor)}>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider opacity-90">
                         <Calendar className="h-3 w-3" />
@@ -575,7 +578,7 @@ function FormIndicator({
 
                     <Link 
                         to={`/matches/${item.matchId}`} 
-                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2 text-xs font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98]"
+                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-primary py-2 text-xs font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98]"
                     >
                         <span>Деталі матчу</span>
                         <ArrowRight className="h-3 w-3" />
@@ -753,13 +756,15 @@ function CardTiersLegendTooltip() {
 
   return (
     <PortalTooltip side="bottom" content={content}>
-      <button 
+      <Button
         type="button"
-        className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/50"
+        variant="textMuted"
+        size="xxs"
+        className="h-auto items-center gap-1.5"
       >
         <Info className="h-3.5 w-3.5" />
         <span>Ранги</span>
-      </button>
+      </Button>
     </PortalTooltip>
   );
 }
@@ -826,7 +831,7 @@ function RatingInfoTooltip() {
            <p className="leading-snug mb-2">
              Динамічний рейтинг з високою конкуренцією в топі.
            </p>
-          <div className="grid gap-1.5 bg-muted/30 p-2 rounded-lg border border-border/50">
+          <div className="grid gap-1.5 bg-muted/30 p-2 rounded-[var(--radius-lg)] border border-border/50">
             <div className="flex justify-between items-center">
               <span>🚀 База</span>
               <span className="font-mono font-bold text-foreground">50</span>
@@ -852,13 +857,15 @@ function RatingInfoTooltip() {
 
   return (
     <PortalTooltip side="bottom" content={content}>
-      <button 
+      <Button
         type="button"
-        className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/50"
+        variant="textMuted"
+        size="xxs"
+        className="h-auto items-center gap-1.5"
       >
         <HelpCircle className="h-3.5 w-3.5" />
         <span>Як це працює?</span>
-      </button>
+      </Button>
     </PortalTooltip>
   );
 }
@@ -1254,7 +1261,7 @@ export function FifaCard({
       onMouseLeave={handleMouseLeave}
       style={{ ...style, ...bgStyle }}
       className={cn(
-        "relative isolate w-[104px] h-[140px] rounded-xl select-none transition-all duration-200 ease-out overflow-hidden",
+        "relative isolate w-[104px] h-[140px] rounded-[var(--radius-lg)] select-none transition-all duration-200 ease-out overflow-hidden",
         borderClass,
         className
       )}
@@ -1347,7 +1354,7 @@ export function FifaCard({
       {/* --- SHINE EFFECT --- */}
       <div 
         className={cn(
-          "absolute inset-0 rounded-xl pointer-events-none z-50 transition-opacity duration-200", 
+          "absolute inset-0 rounded-[var(--radius-lg)] pointer-events-none z-50 transition-opacity duration-200", 
           shineOpacity
         )}
         style={{
@@ -1357,7 +1364,7 @@ export function FifaCard({
       />
       
       {/* BORDER HIGHLIGHT */}
-      <div className="absolute inset-0 rounded-xl border border-white/40 pointer-events-none z-[51]" />
+      <div className="absolute inset-0 rounded-[var(--radius-lg)] border border-white/40 pointer-events-none z-[51]" />
     </div>
   );
 }
@@ -1365,6 +1372,8 @@ export function FifaCard({
 export function StatsPage() {
   const location = useLocation();
   const mode: Mode = useMemo(() => getModeFromPath(location.pathname), [location.pathname]);
+
+  usePageHeaderActions(null, []);
 
   const [loading, setLoading] = useState(true);
   const [rosterCount, setRosterCount] = useState(0);
@@ -1927,8 +1936,8 @@ export function StatsPage() {
             <div className="border-b border-border p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Crown className="h-4 w-4" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
+                    <Crown className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-foreground">Лідери команди</div>
@@ -2071,8 +2080,8 @@ export function StatsPage() {
             <div className="border-b border-border p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Filter className="h-4 w-4" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
+                    <Filter className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-foreground">Статистика гравців</div>
@@ -2104,14 +2113,16 @@ export function StatsPage() {
                       placeholder="Пошук..."
                     />
                     {query && (
-                      <button
-                        onClick={() => setQuery("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        aria-label="Очистити пошук"
+                      <Button
                         type="button"
+                        variant="control"
+                        size="iconSm"
+                        onClick={() => setQuery("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2"
+                        aria-label="Очистити пошук"
                       >
                         <X className="h-3 w-3" />
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -2229,7 +2240,7 @@ export function StatsPage() {
                         <TableCell className="w-[260px]">
                           <Link
                             to={`/player/${p.playerId}`}
-                            className="flex items-center gap-3 group/player focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+                            className="flex items-center gap-3 group/player focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-md)]"
                           >
                             <PlayerAvatar player={p} size={36} />
                             
@@ -2275,7 +2286,7 @@ export function StatsPage() {
 
                         <TableCell className="text-center tabular-nums">
                           {p.yellow > 0 ? (
-                            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-md bg-yellow-500/10 px-1 text-xs font-bold text-yellow-600">
+                            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-[var(--radius)] bg-yellow-500/10 px-1 text-xs font-bold text-yellow-600">
                               {p.yellow}
                             </span>
                           ) : (
@@ -2285,7 +2296,7 @@ export function StatsPage() {
 
                         <TableCell className="text-center tabular-nums">
                           {p.red > 0 ? (
-                            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-md bg-red-500/10 px-1 text-xs font-bold text-red-600">
+                            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-[var(--radius)] bg-red-500/10 px-1 text-xs font-bold text-red-600">
                               {p.red}
                             </span>
                           ) : (
@@ -2340,7 +2351,7 @@ export function StatsPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-20 rounded-[var(--radius-lg)]" />
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-border pb-2">
@@ -2384,7 +2395,7 @@ export function StatsPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-20 rounded-[var(--radius-lg)]" />
               ) : (
                 <div className="flex flex-col items-center justify-center py-4">
                   <div className="text-4xl font-black text-foreground">{teamKpi.attendanceRate30d}%</div>

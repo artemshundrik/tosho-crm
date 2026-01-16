@@ -340,9 +340,9 @@ export function MatchCard({ data }: { data: MatchCardData }) {
   return (
     <div
       className={cn(
-        "group relative overflow-hidden",
+        "group relative w-full overflow-hidden",
         "rounded-[var(--radius-section)] bg-card border border-border",
-        "p-6",
+        "p-6 min-h-[240px]",
         "shadow-[var(--shadow-surface)]",
         "transition-all duration-200 ease-out",
         "cursor-pointer select-none",
@@ -365,7 +365,7 @@ className={cn(
   "grid h-9 w-9 place-items-center",
 
   // базовий стан
-  "rounded-lg",
+  "rounded-[var(--radius-md)]",
   "bg-transparent",
   "text-muted-foreground",
 
@@ -375,7 +375,7 @@ className={cn(
   "group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto",
 
   // hover саме на олівці
-  "hover:bg-card/90 hover:border hover:border-border hover:rounded-xl",
+  "hover:bg-card/90 hover:border hover:border-border hover:rounded-[var(--radius-lg)]",
   "hover:text-foreground",
 
   // focus (keyboard)

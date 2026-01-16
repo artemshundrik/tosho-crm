@@ -204,7 +204,7 @@ export function MatchAttendanceSection({ matchId }: MatchAttendanceSectionProps)
                   key={p.id}
                   px="xs"
                   py={6}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                  style={{ borderBottom: '1px solid hsl(var(--border) / 0.6)' }}
                 >
                   <Group gap="sm">
                     <Checkbox

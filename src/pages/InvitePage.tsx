@@ -11,6 +11,7 @@ import {
   ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { logActivity } from "@/lib/activityLogger";
 
 export default function InvitePage() {
@@ -35,7 +36,7 @@ export default function InvitePage() {
   if (!code) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
+        <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
           <div className="mx-auto bg-danger-soft w-16 h-16 rounded-full flex items-center justify-center mb-6 text-danger-foreground border border-danger-soft-border">
             <ShieldAlert className="w-8 h-8" />
           </div>
@@ -43,12 +44,9 @@ export default function InvitePage() {
           <p className="text-muted-foreground mt-2">
             У посиланні відсутній код запрошення. Спробуйте скопіювати його заново.
           </p>
-          <button
-            onClick={() => nav("/")}
-            className="mt-6 w-full rounded-[var(--btn-radius)] border border-input bg-background py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground"
-          >
+          <Button onClick={() => nav("/")} variant="outline" className="mt-6 w-full">
             На головну
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -96,7 +94,7 @@ export default function InvitePage() {
   if (!session) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
           
           {/* Іконка */}
           <div className="mx-auto bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mb-6 text-primary border border-primary/20">
@@ -109,17 +107,16 @@ export default function InvitePage() {
           </p>
 
           {/* Інфо-блок */}
-          <div className="mt-6 bg-muted/50 rounded-xl p-4 border border-border text-sm text-muted-foreground">
+          <div className="mt-6 bg-muted/50 rounded-[var(--radius-inner)] p-4 border border-border text-sm text-muted-foreground">
             Це запрошення буде прив'язано до вашого акаунту після входу.
           </div>
 
           {/* Кнопка */}
-          <Link 
-            to={linkToAuth}
-            className="mt-6 inline-flex w-full items-center justify-center rounded-[var(--btn-radius)] bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            Увійти або Створити акаунт <ArrowRight className="ml-2 w-4 h-4" />
-          </Link>
+          <Button asChild className="mt-6 w-full">
+            <Link to={linkToAuth}>
+              Увійти або Створити акаунт <ArrowRight className="ml-2 w-4 h-4" />
+            </Link>
+          </Button>
         </div>
       </div>
     );
@@ -130,16 +127,18 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
+      <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
         
         {/* Кнопка виходу */}
-        <button 
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => signOut()}
-          className="absolute top-4 right-4 text-xs font-medium text-muted-foreground hover:text-destructive flex items-center transition-colors"
+          className="absolute top-4 right-4 h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-danger-soft/40"
           title="Вийти з акаунту"
         >
           <LogOut className="w-3.5 h-3.5 mr-1" /> Це не я
-        </button>
+        </Button>
 
         {success ? (
           // Стан успіху
@@ -160,8 +159,8 @@ export default function InvitePage() {
             <h2 className="text-lg font-medium text-muted-foreground">Привіт, {email}</h2>
             <h1 className="text-2xl font-extrabold text-foreground mt-1">Прийняти запрошення?</h1>
 
-            <div className="mt-6 bg-muted/30 border border-border rounded-xl p-4 text-left flex items-start gap-3">
-              <div className="bg-background p-1.5 rounded-lg shadow-sm text-primary border border-border shrink-0">
+            <div className="mt-6 bg-muted/30 border border-border rounded-[var(--radius-inner)] p-4 text-left flex items-start gap-3">
+              <div className="bg-background p-1.5 rounded-[var(--radius)] shadow-sm text-primary border border-border shrink-0">
                 <User className="w-5 h-5" />
               </div>
               <div>
@@ -173,24 +172,20 @@ export default function InvitePage() {
             </div>
 
             {error && (
-              <div className="mt-4 p-3 rounded-xl bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
                 {error}
               </div>
             )}
 
-            <button
-              onClick={acceptInvite}
-              disabled={busy}
-              className="mt-6 w-full rounded-[var(--btn-radius)] bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
-            >
+            <Button onClick={acceptInvite} disabled={busy} className="mt-6 w-full">
               {busy ? (
                 <>
-                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обробка...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обробка...
                 </>
               ) : (
                 "Приєднатися до команди"
               )}
-            </button>
+            </Button>
           </>
         )}
       </div>

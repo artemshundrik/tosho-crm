@@ -20,6 +20,7 @@ import InvitePage from "./pages/InvitePage"; // <--- ДОДАЛИ ІМПОРТ
 import { AuthProvider } from "@/auth/AuthProvider"; 
 import { TeamMembersPage } from "./pages/TeamMembersPage";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { AdminPage } from "./pages/AdminPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { PlayersAdminPage } from "./pages/PlayersAdminPage";
@@ -37,6 +38,7 @@ import { AppLayout } from "@/layout/AppLayout";
 import { CreateMatchPage } from "./pages/CreateMatchPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { TournamentDetailsPage } from "./pages/TournamentDetailsPage";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { FinancePage } from "./pages/FinancePage";
 import { FinanceTransactionCreatePage } from "./pages/FinanceTransactionCreatePage";
 import { FinanceInvoiceCreatePage } from "./pages/FinanceInvoiceCreatePage";
@@ -64,17 +66,6 @@ type TeamContext = {
 // =======================
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function Spinner({ label = "Завантаження..." }: { label?: string }) {
-  return (
-    <div className="min-h-[50vh] w-full flex items-center justify-center">
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
 }
 
 // =======================
@@ -177,7 +168,7 @@ function RequireAuth({
 }) {
   const location = useLocation();
 
-  if (loading) return <Spinner label="Перевіряю сесію..." />;
+  if (loading) return <PageSkeleton />;
 
   if (!session) {
     const redirect = encodeURIComponent(location.pathname + location.search);
@@ -357,13 +348,13 @@ function LoginPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full rounded-[var(--btn-radius)] bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full"
           >
             {loading ? "..." : "Увійти"}
-          </button>
+          </Button>
         </form>
 
         {!isInviteFlow ? (

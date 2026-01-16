@@ -67,7 +67,7 @@ export async function deleteTraining(trainingId: string) {
 export async function getAttendance(trainingId: string) {
   const { data, error } = await supabase
     .from('training_attendance')
-    .select('*')
+    .select('training_id, player_id, status, comment')
     .eq('training_id', trainingId);
   if (error) throw error;
   return data || [];

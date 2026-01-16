@@ -1,0 +1,205 @@
+@layer components {
+  /* ========================================= */
+  /* 🦸‍♂️ HERO SECTION (FIXED CONTRAST)        */
+  /* ========================================= */
+
+  /* 1. CONTAINER CARD */
+  .hero-card-premium {
+    position: relative;
+    overflow: hidden;
+    border-radius: 2.5rem;
+    transition: all 500ms;
+    border-width: 1px;
+    border-style: solid;
+    
+    /* LIGHT MODE: Чистий білий фон, темна рамка */
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-floating);
+  }
+
+  .dark .hero-card-premium {
+    /* DARK MODE: Глибокий градієнт */
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
+    border-color: hsl(var(--border) / 0.35);
+    box-shadow: var(--shadow-floating);
+  }
+
+  /* 2. PLAYER NAME (Typography) */
+  .hero-subtitle-name {
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: -0.2em;
+    color: hsl(var(--muted-foreground));
+  }
+  .dark .hero-subtitle-name {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .hero-title-name {
+    font-size: clamp(3rem, 5vw, 6rem);
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.025em;
+    text-transform: uppercase;
+    
+    /* Light Mode: Темний "Графіт" */
+    background: linear-gradient(180deg, hsl(var(--foreground)) 0%, hsl(var(--muted-foreground)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark .hero-title-name {
+    /* Dark Mode: Біле срібло */
+    background: linear-gradient(180deg, hsl(var(--foreground)) 10%, hsl(var(--muted-foreground)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 4px 6px hsl(var(--foreground) / 0.4));
+  }
+
+  /* 3. TEAM NAME */
+  .hero-text-team {
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    color: hsl(var(--foreground));
+  }
+  .dark .hero-text-team {
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* ========================================= */
+  /* 📊 STATS BOXES (CRITICAL FIX)             */
+  /* ========================================= */
+
+  .hero-stat-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 1.5rem;
+    transition: all 300ms;
+    overflow: hidden;
+    
+    /* LIGHT MODE: Світло-сірий фон, щоб виділятися на білій картці */
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .hero-stat-box > * {
+    position: relative;
+    z-index: 10;
+  }
+  
+  .dark .hero-stat-box {
+    /* DARK MODE: Прозоре скло */
+    background: hsl(var(--card) / 0.35);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* --- MATCHES (Neutral) --- */
+  .stat-val-neutral {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+  }
+  .dark .stat-val-neutral {
+    color: hsl(var(--foreground));
+  }
+  .stat-lbl-neutral {
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .dark .stat-lbl-neutral {
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* --- GOALS (Blue) --- */
+  .stat-val-blue {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    transition: color 200ms;
+    color: hsl(var(--primary));
+  }
+  .dark .stat-val-blue {
+    color: hsl(var(--primary));
+  }
+  
+  .stat-box-blue-hover {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 300ms;
+    /* Light Hover: дуже легкий синій */
+    background-color: hsl(var(--primary) / 0.05);
+  }
+  .dark .stat-box-blue-hover {
+    /* Dark Hover: синій неон */
+    background-color: hsl(var(--primary) / 0.15);
+  }
+  
+  .group:hover .stat-box-blue-hover {
+    opacity: 1;
+  }
+
+  /* --- ASSISTS (Emerald) --- */
+  .stat-val-emerald {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    transition: color 200ms;
+    color: hsl(var(--success-foreground));
+  }
+  .dark .stat-val-emerald {
+    color: hsl(var(--success-foreground));
+  }
+
+  .stat-box-emerald-hover {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 300ms;
+    background-color: hsl(var(--success-soft));
+  }
+  .dark .stat-box-emerald-hover {
+    background-color: hsl(var(--success-soft));
+  }
+  .group:hover .stat-box-emerald-hover {
+    opacity: 1;
+  }
+
+  /* --- LABELS for Stats --- */
+  .stat-lbl {
+    position: relative;
+    z-index: 10;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .dark .stat-lbl {
+    color: hsl(var(--muted-foreground));
+  }
+}

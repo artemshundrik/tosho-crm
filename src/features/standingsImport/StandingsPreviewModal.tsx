@@ -45,7 +45,7 @@ export function StandingsPreviewModal({
         </DialogHeader>
 
         <div className="px-6">
-          <div className="max-h-[60vh] overflow-auto rounded-2xl border border-border bg-card/60">
+          <div className="max-h-[60vh] overflow-auto rounded-[var(--radius-inner)] border border-border bg-card/60">
             <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">

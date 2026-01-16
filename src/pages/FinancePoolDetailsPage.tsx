@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -139,12 +139,7 @@ export function FinancePoolDetailsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Завантаження збору…
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!pool) {

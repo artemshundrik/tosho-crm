@@ -34,9 +34,9 @@ export function PlayerInfoCell({
   
   return (
     <div className="flex items-center gap-3">
-      <Avatar className="h-10 w-10 rounded-xl border border-border/50 shadow-sm transition-transform group-hover:scale-105">
+      <Avatar className="h-10 w-10 rounded-[var(--radius-lg)] border border-border/50 shadow-sm transition-transform group-hover:scale-105">
         <AvatarImage src={photoUrl || ""} className="object-cover" />
-        <AvatarFallback className="rounded-xl bg-muted text-[10px] font-bold">{initials}</AvatarFallback>
+        <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-[10px] font-bold">{initials}</AvatarFallback>
       </Avatar>
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-semibold text-foreground truncate leading-tight">{name}</span>

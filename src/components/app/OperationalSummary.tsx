@@ -44,6 +44,9 @@ export type OperationalSummaryProps = {
 
   title: string;
   subtitle?: string;
+  titleVariant?: "default" | "section" | "hidden";
+  sectionLabel?: string;
+  sectionIcon?: React.ElementType;
 
   /**
    * Якщо прокинеш — буде 100% контроль ззовні.
@@ -207,14 +210,16 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
                 <span aria-hidden="true">→</span>
               </Link>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="textPrimary"
+                size="xxs"
                 onClick={kpi.footerCta.onClick}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/90 leading-none"
+                className="h-auto p-0 items-center gap-1 leading-none"
               >
                 {kpi.footerCta.label}
                 <span aria-hidden="true">→</span>
-              </button>
+              </Button>
             )
           ) : null}
         </div>
@@ -519,6 +524,14 @@ function NextUpHero({
 
 export function OperationalSummary(props: OperationalSummaryProps) {
   const nextUpClickable = Boolean(props.nextUp?.to);
+  const titleVariant = props.titleVariant ?? "default";
+  const showTitle = titleVariant !== "hidden";
+  const showSubtitle = Boolean(props.subtitle) && titleVariant !== "hidden";
+  const sectionLabel = props.sectionLabel?.trim();
+  const SectionIcon = props.sectionIcon;
+  const showSectionHeader = Boolean(sectionLabel && SectionIcon);
+  const hasActions = Boolean(props.primaryAction || props.secondaryAction);
+  const hasHeaderContent = showSectionHeader || showTitle || showSubtitle;
 
   const eyebrow = props.nextUp?.eyebrow?.trim();
   const leagueLogoUrl = props.nextUp?.leagueLogoUrl ?? null;
@@ -600,11 +613,40 @@ export function OperationalSummary(props: OperationalSummaryProps) {
   return (
     <section className={cn("rounded-[var(--radius-section)] border border-border bg-card", "p-6", props.className)}>
       {/* Top row */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{props.title}</h2>
-          {props.subtitle ? <p className="mt-1 text-sm text-muted-foreground">{props.subtitle}</p> : null}
-        </div>
+      <div
+        className={cn(
+          "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-start text-left",
+          hasActions ? "sm:justify-between" : "sm:justify-start"
+        )}
+      >
+        {showSectionHeader ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
+              {SectionIcon ? <SectionIcon className="h-5 w-5" /> : null}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">{sectionLabel}</div>
+              {props.subtitle ? (
+                <div className="mt-0.5 text-sm text-muted-foreground">{props.subtitle}</div>
+              ) : null}
+            </div>
+          </div>
+        ) : hasHeaderContent ? (
+          <div className="min-w-0">
+            {titleVariant === "section" ? (
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {props.title}
+              </div>
+            ) : (
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{props.title}</h2>
+            )}
+            {showSubtitle ? (
+              <p className={cn("text-sm text-muted-foreground", titleVariant === "section" ? "mt-2" : "mt-1")}>
+                {props.subtitle}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {(props.primaryAction || props.secondaryAction) ? (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">

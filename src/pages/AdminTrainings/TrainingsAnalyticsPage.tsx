@@ -5,10 +5,9 @@ import {
   CalendarRange,
   CheckCircle2,
   HeartPulse,
-  Loader2,
+  ClipboardCheck,
   TrendingUp,
   XCircle,
-  Plus,
   ChevronDown,
   ChevronUp
 } from "lucide-react";
@@ -20,6 +19,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/app/FilterBar";
 import {
   Table,
@@ -30,6 +30,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -191,9 +194,10 @@ export function TrainingsAnalyticsPage() {
   const [query, setQuery] = useState("");
   const [preset, setPreset] = useState<"month" | "last_month" | "year" | "all">("month");
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
-    key: "number",
-    direction: "asc"
+    key: "percent",
+    direction: "desc"
   });
+  const showSkeleton = useMinimumLoading(loading);
 
   const navigate = useNavigate();
 
@@ -239,9 +243,13 @@ export function TrainingsAnalyticsPage() {
       try {
         const [trData, attRes, plRes] = await Promise.all([
           getTrainings(TEAM_ID),
-          supabase.from("training_attendance").select("*"),
+          supabase.from("training_attendance").select("training_id, player_id, status"),
           // ❗ ФІЛЬТРАЦІЯ: Прибираємо колишніх гравців для чистої статистики
-          supabase.from("players").select("*").eq("team_id", TEAM_ID).neq("status", "inactive"),
+          supabase
+            .from("players")
+            .select("id, first_name, last_name, photo_url, shirt_number")
+            .eq("team_id", TEAM_ID)
+            .neq("status", "inactive"),
         ]);
         setTrainings(trData);
         setAttendance(attRes.data || []);
@@ -338,6 +346,15 @@ export function TrainingsAnalyticsPage() {
         diff = (a.injuredCount + a.sickCount) - (b.injuredCount + b.sickCount);
       } else if (sortConfig.key === "percent") {
         diff = a.attendancePercent - b.attendancePercent;
+        if (diff === 0) {
+          diff = a.presentCount - b.presentCount;
+        }
+        if (diff === 0) {
+          diff = (a.injuredCount + a.sickCount) - (b.injuredCount + b.sickCount);
+        }
+        if (diff === 0) {
+          diff = a.trainingsTracked - b.trainingsTracked;
+        }
       }
 
       if (diff === 0) return fallbackByNumber(a, b);
@@ -363,18 +380,49 @@ export function TrainingsAnalyticsPage() {
     })), 
   [playerRows]);
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <Loader2 className="animate-spin h-8 w-8 text-primary"/>
-      <span className="text-muted-foreground font-medium">Завантаження аналітики...</span>
-    </div>
+  const headerActions = useMemo(
+    () => (
+      <Button variant="primary" onClick={() => navigate("/admin/trainings/create")}>
+        Нове тренування
+      </Button>
+    ),
+    [navigate]
   );
 
-  return (
+  usePageHeaderActions(headerActions, [navigate]);
+
+  return showSkeleton ? (
+    <div className="flex flex-col gap-6">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <Skeleton key={`analytics-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
+        ))}
+      </div>
+      <div className="rounded-[var(--radius-section)] border border-border bg-card p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
+          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
+          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <Skeleton key={`analytics-row-${idx}`} className="h-12 rounded-[var(--radius-inner)]" />
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <OperationalSummary
         title="Аналітика тренувань"
         subtitle="Глибокий аналіз відвідуваності та активності команди"
+        titleVariant="hidden"
+        sectionLabel="Аналітика тренувань"
+        sectionIcon={ClipboardCheck}
         nextUpLoading={false}
         nextUp={{
           tournamentName: "Середня відвідуваність",
@@ -384,7 +432,6 @@ export function TrainingsAnalyticsPage() {
           icon: TrendingUp,
           tourLabel: `За період: ${completedTrainings.length} тренувань`,
         }}
-        primaryAction={{ label: "Нове тренування", to: "/admin/trainings/create", iconLeft: Plus }}
       />
 
       <Card className="rounded-[var(--radius-section)] border-border bg-card shadow-none overflow-hidden">
@@ -410,7 +457,7 @@ export function TrainingsAnalyticsPage() {
             rightSlot={
               <div className="relative flex items-center text-xs text-muted-foreground">
                 <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <div className="flex h-10 items-center rounded-[var(--radius-lg)] border border-input bg-background pl-9 pr-3">
+                <div className="flex h-10 items-center rounded-[var(--radius-lg)] border border-input bg-background pl-9 pr-3 focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/40">
                   <Input
                     type="date"
                     value={fromDate}
@@ -499,12 +546,12 @@ export function TrainingsAnalyticsPage() {
                   </TableCell>
                   <TableCell className="text-center tabular-nums font-semibold text-muted-foreground">{row.trainingsTracked}</TableCell>
                   <TableCell className="text-center">
-                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-emerald-500/10 px-1.5 text-xs font-black text-emerald-600">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-[var(--radius)] bg-emerald-500/10 px-1.5 text-xs font-black text-emerald-600">
                       {row.presentCount}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-md bg-amber-500/10 px-1.5 text-xs font-black text-amber-600">
+                    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-[var(--radius)] bg-amber-500/10 px-1.5 text-xs font-black text-amber-600">
                       {row.injuredCount + row.sickCount}
                     </span>
                   </TableCell>

@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { IconInput } from "@/components/ui/icon-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -42,6 +43,7 @@ import { logActivity } from "@/lib/activityLogger";
 
 import {
   ArrowLeft,
+  CalendarDays,
   Clock,
   Copy,
   Dumbbell,
@@ -87,10 +89,10 @@ const typeIcons: Record<Training["type"], React.ElementType> = {
 };
 
 const typeOptions = [
-  { value: "regular", label: "Звичайне" },
-  { value: "tactics", label: "Тактичне" },
-  { value: "fitness", label: "Фізпідготовка" },
-  { value: "sparring", label: "Спаринг" },
+  { value: "regular", label: "Звичайне", icon: Dumbbell },
+  { value: "tactics", label: "Тактичне", icon: Brain },
+  { value: "fitness", label: "Фізпідготовка", icon: HeartPulse },
+  { value: "sparring", label: "Спаринг", icon: Swords },
 ];
 
 const statusOrder: AttendanceStatus[] = ["present", "absent", "injured", "sick"];
@@ -473,45 +475,7 @@ const dbIds = new Set<string>();
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-9 w-40" />
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-28" />
-            <Skeleton className="h-9 w-28" />
-          </div>
-        </div>
-        <Card className="rounded-[var(--radius-section)]">
-          <CardContent className="p-6">
-            <div className="space-y-3">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-10 w-2/3" />
-              <Skeleton className="h-4 w-1/2" />
-            </div>
-          </CardContent>
-        </Card>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, idx) => (
-            <Card key={`stat-skel-${idx}`} className="rounded-[var(--radius-inner)]">
-              <CardContent className="p-4 space-y-2">
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-7 w-16" />
-                <Skeleton className="h-2 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Card className="rounded-[var(--radius-section)]">
-          <CardContent className="p-6 space-y-3">
-            <Skeleton className="h-5 w-32" />
-            {Array.from({ length: 5 }).map((_, idx) => (
-              <Skeleton key={`row-skel-${idx}`} className="h-12 w-full" />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!training) {
@@ -583,12 +547,12 @@ const dbIds = new Set<string>();
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="gap-2 rounded-lg">
+                <Badge variant="secondary" className="gap-2 rounded-[var(--radius)]">
                   <TypeIcon className="h-4 w-4" />
                   {typeLabels[training.type]}
                 </Badge>
                 {training.type === "sparring" && training.sparring_opponent ? (
-                  <Badge variant="outline" className="rounded-lg">
+                  <Badge variant="outline" className="rounded-[var(--radius)]">
                     Суперник: {training.sparring_opponent}
                   </Badge>
                 ) : null}
@@ -627,22 +591,26 @@ const dbIds = new Set<string>();
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="training-date">Дата</Label>
-                  <Input
+                  <IconInput
                     id="training-date"
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm((prev) => ({ ...prev, date: e.currentTarget.value }))}
                     required
+                    icon={CalendarDays}
+                    iconLabel="Вибрати дату"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="training-time">Час</Label>
-                  <Input
+                  <IconInput
                     id="training-time"
                     type="time"
                     value={form.time}
                     onChange={(e) => setForm((prev) => ({ ...prev, time: e.currentTarget.value || "" }))}
                     required
+                    icon={Clock}
+                    iconLabel="Вибрати час"
                   />
                 </div>
                 <div className="space-y-2">
@@ -662,7 +630,10 @@ const dbIds = new Set<string>();
                     <SelectContent>
                       {typeOptions.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                          <span className="flex items-center gap-2">
+                            <opt.icon className="h-4 w-4 text-muted-foreground" />
+                            <span>{opt.label}</span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -831,12 +802,14 @@ const dbIds = new Set<string>();
       const cfg = statusStyles[st];
       const isActive = playerStatus === st;
       return (
-        <button
+        <Button
           key={st}
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => handleStatusChange(p.id, st)}
           className={cn(
-            "h-9 rounded-xl border px-3 text-[10px] font-black uppercase tracking-tighter transition-all active:scale-95 flex items-center gap-1.5",
+            "h-9 rounded-[var(--radius-lg)] border px-3 text-[10px] font-black uppercase tracking-tighter transition-all active:scale-95 flex items-center gap-1.5",
             isActive
               ? cfg.tone + " border-transparent ring-2 ring-offset-1 ring-offset-background ring-border/20"
               : "border-border bg-background text-muted-foreground/40 hover:text-foreground hover:bg-muted/40"
@@ -844,7 +817,7 @@ const dbIds = new Set<string>();
         >
           <cfg.icon className={cn("h-3.5 w-3.5", isActive ? "text-current" : "text-muted-foreground/60")} />
           {cfg.short}
-        </button>
+        </Button>
       );
     })}
   </div>

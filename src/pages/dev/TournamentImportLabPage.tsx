@@ -22,6 +22,9 @@ import {
 import { sha1Hex, stableKeyForMatch } from "@/features/tournamentImport/hashUtils";
 import { fetchAndParseAllTabs } from "@/features/tournamentImport/multiTabFetch";
 import { inferBaseTournamentUrl } from "@/features/tournamentImport/v9kyUrl";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -552,24 +555,19 @@ export default function TournamentImportLabPage() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-col gap-4 rounded-[var(--radius-inner)] border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <Button
             type="button"
             onClick={handleLoad}
             disabled={state === "loading" || isFetchingTabs}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {state === "loading" ? "Завантаження..." : "Завантажити snapshot"}
-          </button>
+          </Button>
           {isFetchingTabs ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
-            >
+            <Button type="button" variant="outline" size="sm" onClick={handleStop}>
               Stop
-            </button>
+            </Button>
           ) : null}
           <div className="text-xs text-muted-foreground">
             {state === "idle" && "Очікує на завантаження"}
@@ -580,7 +578,7 @@ export default function TournamentImportLabPage() {
         </div>
 
         {progressLine ? (
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[var(--radius-md)] border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             {progressLine}
           </div>
         ) : null}
@@ -588,20 +586,18 @@ export default function TournamentImportLabPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-foreground">
             <span className="text-xs font-semibold text-muted-foreground">Наша команда (фільтр)</span>
-            <input
+            <Input
               value={ourTeamQuery}
               onChange={(event) => setOurTeamQuery(event.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="h-9 text-sm"
               type="text"
             />
           </label>
 
           <label className="flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={onlyOurTeam}
-              onChange={(event) => setOnlyOurTeam(event.target.checked)}
-              className="h-4 w-4 rounded border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onCheckedChange={(value) => setOnlyOurTeam(Boolean(value))}
             />
             <span>Показувати тільки матчі нашої команди</span>
           </label>
@@ -616,7 +612,7 @@ export default function TournamentImportLabPage() {
               value="dom"
               checked={parserMode === "dom"}
               onChange={() => setParserMode("dom")}
-              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="h-4 w-4 rounded-[var(--radius)] border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <span>DOM (accurate)</span>
           </label>
@@ -627,7 +623,7 @@ export default function TournamentImportLabPage() {
               value="dom_all_tabs"
               checked={parserMode === "dom_all_tabs"}
               onChange={() => setParserMode("dom_all_tabs")}
-              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="h-4 w-4 rounded-[var(--radius)] border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <span>DOM — ALL TABS (multi-fetch)</span>
           </label>
@@ -638,25 +634,25 @@ export default function TournamentImportLabPage() {
               value="text"
               checked={parserMode === "text"}
               onChange={() => setParserMode("text")}
-              className="h-4 w-4 border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="h-4 w-4 rounded-[var(--radius)] border border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             />
             <span>Text (prototype)</span>
           </label>
         </div>
 
         {summaryLine ? (
-          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[var(--radius-md)] border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             {summaryLine}
           </div>
         ) : null}
         {coverageLine ? (
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-[var(--radius-md)] border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             {coverageLine}
           </div>
         ) : null}
       </div>
 
-      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <section className="rounded-[var(--radius-inner)] border border-border bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Coverage</h2>
           <span className="text-xs text-muted-foreground">{coverage.tabs_found} tabs</span>
@@ -666,28 +662,28 @@ export default function TournamentImportLabPage() {
             <span>Tab labels not detected.</span>
           ) : (
             coverage.tab_labels.map((label) => (
-              <div key={label} className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
+              <div key={label} className="flex items-center justify-between rounded-[var(--radius-md)] bg-muted/50 px-2 py-1">
                 <span>{label}</span>
                 <span>{coverage.matches_per_tab[label] ?? 0}</span>
               </div>
             ))
           )}
           {coverage.matches_per_tab.unknown ? (
-            <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
+            <div className="flex items-center justify-between rounded-[var(--radius-md)] bg-muted/50 px-2 py-1">
               <span>Unknown</span>
               <span>{coverage.matches_per_tab.unknown}</span>
             </div>
           ) : null}
         </div>
         {coverage.fetch_errors.length > 0 ? (
-          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="mt-3 rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             {coverage.fetch_errors.map((item) => (
               <div key={`${item.tab_label}-${item.url}`}>{item.tab_label}: {item.error}</div>
             ))}
           </div>
         ) : null}
         {warnings.length > 0 ? (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="mt-4 rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             {warnings.map((warning) => (
               <div key={warning.type}>{warning.message}</div>
             ))}
@@ -696,7 +692,7 @@ export default function TournamentImportLabPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+        <section className="rounded-[var(--radius-inner)] border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">Standings block</h2>
             <span className="text-xs text-muted-foreground">{standingsBlock?.length ?? 0} chars</span>
@@ -704,24 +700,26 @@ export default function TournamentImportLabPage() {
           <p className="mt-3 text-xs text-muted-foreground">{toPreview(standingsBlock)}</p>
           <div className="mt-4 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Parsed standings JSON</span>
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
               onClick={() => handleCopy("standings", standingsJson || "{}")}
-              className="text-xs font-semibold text-primary hover:underline"
               disabled={!standingsJson}
             >
               Скопіювати JSON
-            </button>
+            </Button>
           </div>
           {copyError?.key === "standings" ? (
             <div className="mt-2 text-xs text-destructive">{copyError.message}</div>
           ) : null}
-          <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground">
+          <pre className="mt-2 max-h-64 overflow-auto rounded-[var(--radius-md)] bg-muted/60 p-3 text-[11px] text-muted-foreground">
             {standingsJson || "{}"}
           </pre>
         </section>
 
-        <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+        <section className="rounded-[var(--radius-inner)] border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">Calendar matches block</h2>
             <span className="text-xs text-muted-foreground">{matchesBlock?.length ?? 0} chars</span>
@@ -731,44 +729,48 @@ export default function TournamentImportLabPage() {
             <span className="text-xs text-muted-foreground">
               Export JSON · {filteredMatches.length} shown
             </span>
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
               onClick={() => handleCopy("matches", matchesJson || "{}")}
-              className="text-xs font-semibold text-primary hover:underline"
               disabled={!matchesJson}
             >
               Скопіювати JSON
-            </button>
+            </Button>
           </div>
           {copyError?.key === "matches" ? (
             <div className="mt-2 text-xs text-destructive">{copyError.message}</div>
           ) : null}
-          <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground">
+          <pre className="mt-2 max-h-64 overflow-auto rounded-[var(--radius-md)] bg-muted/60 p-3 text-[11px] text-muted-foreground">
             {matchesJson || "{}"}
           </pre>
         </section>
       </div>
 
-      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <section className="rounded-[var(--radius-inner)] border border-border bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Run summary</h2>
           <span className="text-xs text-muted-foreground">{normalizedText.length} chars</span>
         </div>
         <div className="mt-3 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">ImportRunSummary JSON</span>
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs"
             onClick={() => handleCopy("summary", summaryJson || "{}")}
-            className="text-xs font-semibold text-primary hover:underline"
             disabled={!summaryJson}
           >
             Скопіювати JSON
-          </button>
+          </Button>
         </div>
         {copyError?.key === "summary" ? (
           <div className="mt-2 text-xs text-destructive">{copyError.message}</div>
         ) : null}
-        <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground">
+        <pre className="mt-2 max-h-72 overflow-auto rounded-[var(--radius-md)] bg-muted/60 p-3 text-[11px] text-muted-foreground">
           {summaryJson || "{}"}
         </pre>
       </section>
