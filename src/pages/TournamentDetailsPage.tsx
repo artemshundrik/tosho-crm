@@ -571,16 +571,16 @@ export function TournamentDetailsPage() {
     );
   }, [loading, tournament, tRow]);
 
-  if (loading) {
-    return <PageSkeleton />;
-  }
-
   const defaultTab = useMemo(() => {
     const candidate = searchParams.get("tab");
     return candidate === "roster" || candidate === "matches" || candidate === "standings"
       ? candidate
       : "roster";
   }, [searchParams]);
+
+  if (loading) {
+    return <PageSkeleton />;
+  }
 
   return (
     <div className="space-y-4">

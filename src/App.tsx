@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -13,43 +13,11 @@ import {
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabaseClient";
-
-// === ІМПОРТУЄМО НОВУ СТОРІНКУ ЗАПРОШЕНЬ ===
-import InvitePage from "./pages/InvitePage"; // <--- ДОДАЛИ ІМПОРТ
-
 import { AuthProvider } from "@/auth/AuthProvider"; 
-import { TeamMembersPage } from "./pages/TeamMembersPage";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
-import { AdminPage } from "./pages/AdminPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { PlayersAdminPage } from "./pages/PlayersAdminPage";
-import { MatchEventsAdminPage } from "./pages/MatchEventsAdminPage";
-import { TournamentsAdminPage } from "./pages/TournamentsAdminPage";
-import { StatsPage } from "./pages/StatsPage";
-import { PlayerPage } from "./pages/PlayerPage";
-import { MatchDetailsPage } from "./pages/MatchDetailsPage";
-import { TrainingsListPage } from "./pages/AdminTrainings/TrainingsListPage";
-import { TrainingCreatePage } from "./pages/AdminTrainings/TrainingCreatePage";
-import { TrainingDetailPage } from "./pages/AdminTrainings/TrainingDetailPage";
-import { TrainingsAnalyticsPage } from "./pages/AdminTrainings/TrainingsAnalyticsPage";
-import { MatchesShadcnPage } from "@/pages/MatchesShadcnPage";
 import { AppLayout } from "@/layout/AppLayout";
-import { CreateMatchPage } from "./pages/CreateMatchPage";
-import { OverviewPage } from "./pages/OverviewPage";
-import { TournamentDetailsPage } from "./pages/TournamentDetailsPage";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
-import { FinancePage } from "./pages/FinancePage";
-import { FinanceTransactionCreatePage } from "./pages/FinanceTransactionCreatePage";
-import { FinanceInvoiceCreatePage } from "./pages/FinanceInvoiceCreatePage";
-import { FinancePoolCreatePage } from "./pages/FinancePoolCreatePage";
-import { FinancePoolDetailsPage } from "./pages/FinancePoolDetailsPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import UpdatePasswordPage from "./pages/UpdatePasswordPage";
-import NotificationsPage from "./pages/NotificationsPage";
-import ActivityPage from "./pages/ActivityPage";
-import TournamentImportLabPage from "./pages/dev/TournamentImportLabPage";
-import TournamentStandingsImportPage from "./pages/dev/TournamentStandingsImportPage";
 
 // =======================
 // Types
@@ -66,6 +34,102 @@ type TeamContext = {
 // =======================
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
+}
+
+const InvitePage = lazy(() => import("./pages/InvitePage"));
+const TeamMembersPage = lazy(() =>
+  import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
+);
+const AdminPage = lazy(() =>
+  import("./pages/AdminPage").then((module) => ({ default: module.AdminPage }))
+);
+const ProfilePage = lazy(() =>
+  import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
+);
+const PlayersAdminPage = lazy(() =>
+  import("./pages/PlayersAdminPage").then((module) => ({ default: module.PlayersAdminPage }))
+);
+const MatchEventsAdminPage = lazy(() =>
+  import("./pages/MatchEventsAdminPage").then((module) => ({ default: module.MatchEventsAdminPage }))
+);
+const TournamentsAdminPage = lazy(() =>
+  import("./pages/TournamentsAdminPage").then((module) => ({ default: module.TournamentsAdminPage }))
+);
+const StatsPage = lazy(() =>
+  import("./pages/StatsPage").then((module) => ({ default: module.StatsPage }))
+);
+const PlayerPage = lazy(() =>
+  import("./pages/PlayerPage").then((module) => ({ default: module.PlayerPage }))
+);
+const MatchDetailsPage = lazy(() =>
+  import("./pages/MatchDetailsPage").then((module) => ({ default: module.MatchDetailsPage }))
+);
+const TrainingsListPage = lazy(() =>
+  import("./pages/AdminTrainings/TrainingsListPage").then((module) => ({
+    default: module.TrainingsListPage,
+  }))
+);
+const TrainingCreatePage = lazy(() =>
+  import("./pages/AdminTrainings/TrainingCreatePage").then((module) => ({
+    default: module.TrainingCreatePage,
+  }))
+);
+const TrainingDetailPage = lazy(() =>
+  import("./pages/AdminTrainings/TrainingDetailPage").then((module) => ({
+    default: module.TrainingDetailPage,
+  }))
+);
+const TrainingsAnalyticsPage = lazy(() =>
+  import("./pages/AdminTrainings/TrainingsAnalyticsPage").then((module) => ({
+    default: module.TrainingsAnalyticsPage,
+  }))
+);
+const MatchesShadcnPage = lazy(() =>
+  import("./pages/MatchesShadcnPage").then((module) => ({ default: module.MatchesShadcnPage }))
+);
+const CreateMatchPage = lazy(() =>
+  import("./pages/CreateMatchPage").then((module) => ({ default: module.CreateMatchPage }))
+);
+const OverviewPage = lazy(() =>
+  import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
+);
+const TournamentDetailsPage = lazy(() =>
+  import("./pages/TournamentDetailsPage").then((module) => ({
+    default: module.TournamentDetailsPage,
+  }))
+);
+const FinancePage = lazy(() =>
+  import("./pages/FinancePage").then((module) => ({ default: module.FinancePage }))
+);
+const FinanceTransactionCreatePage = lazy(() =>
+  import("./pages/FinanceTransactionCreatePage").then((module) => ({
+    default: module.FinanceTransactionCreatePage,
+  }))
+);
+const FinanceInvoiceCreatePage = lazy(() =>
+  import("./pages/FinanceInvoiceCreatePage").then((module) => ({
+    default: module.FinanceInvoiceCreatePage,
+  }))
+);
+const FinancePoolCreatePage = lazy(() =>
+  import("./pages/FinancePoolCreatePage").then((module) => ({
+    default: module.FinancePoolCreatePage,
+  }))
+);
+const FinancePoolDetailsPage = lazy(() =>
+  import("./pages/FinancePoolDetailsPage").then((module) => ({
+    default: module.FinancePoolDetailsPage,
+  }))
+);
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const UpdatePasswordPage = lazy(() => import("./pages/UpdatePasswordPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const ActivityPage = lazy(() => import("./pages/ActivityPage"));
+const TournamentImportLabPage = lazy(() => import("./pages/dev/TournamentImportLabPage"));
+const TournamentStandingsImportPage = lazy(() => import("./pages/dev/TournamentStandingsImportPage"));
+
+function RouteSuspense({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
 // =======================
@@ -409,37 +473,57 @@ function AppRoutes() {
       {/* public */}
       {import.meta.env.DEV ? (
         <>
-          <Route
-            path="/dev/tournament-import-lab"
-            element={
-              <RequireAuth session={session} loading={loading}>
-                <AppLayout>
-                  <TournamentImportLabPage />
-                </AppLayout>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dev/tournament-standings"
-            element={
-              <RequireAuth session={session} loading={loading}>
-                <AppLayout>
-                  <TournamentStandingsImportPage />
-                </AppLayout>
-              </RequireAuth>
-            }
-          />
+      <Route
+        path="/dev/tournament-import-lab"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense>
+                <TournamentImportLabPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dev/tournament-standings"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense>
+                <TournamentStandingsImportPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
         </>
       ) : null}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/update-password" element={<UpdatePasswordPage />} />
+      <Route
+        path="/reset-password"
+        element={
+          <RouteSuspense>
+            <ResetPasswordPage />
+          </RouteSuspense>
+        }
+      />
+      <Route
+        path="/update-password"
+        element={
+          <RouteSuspense>
+            <UpdatePasswordPage />
+          </RouteSuspense>
+        }
+      />
       <Route
         path="/notifications"
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <NotificationsPage />
+              <RouteSuspense>
+                <NotificationsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -449,14 +533,23 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <ActivityPage />
+              <RouteSuspense>
+                <ActivityPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
       />
 
       {/* --- ВИПРАВЛЕНО: Інвайт тепер "публічний" (має свій лейаут всередині) --- */}
-      <Route path="/invite" element={<InvitePage />} />
+      <Route
+        path="/invite"
+        element={
+          <RouteSuspense>
+            <InvitePage />
+          </RouteSuspense>
+        }
+      />
 
       {/* Overview */}
       <Route
@@ -464,7 +557,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <OverviewPage />
+              <RouteSuspense>
+                <OverviewPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -476,7 +571,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <MatchesShadcnPage />
+              <RouteSuspense>
+                <MatchesShadcnPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -488,7 +585,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <MatchDetailsPage />
+              <RouteSuspense>
+                <MatchDetailsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -501,7 +600,9 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <MatchEventsAdminPage />
+                <RouteSuspense>
+                  <MatchEventsAdminPage />
+                </RouteSuspense>
               </RoleGate>
             </AppLayout>
           </RequireAuth>
@@ -515,7 +616,9 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <CreateMatchPage />
+                <RouteSuspense>
+                  <CreateMatchPage />
+                </RouteSuspense>
               </RoleGate>
             </AppLayout>
           </RequireAuth>
@@ -528,7 +631,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <TrainingsListPage />
+              <RouteSuspense>
+                <TrainingsListPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -539,7 +644,9 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <TrainingCreatePage />
+                <RouteSuspense>
+                  <TrainingCreatePage />
+                </RouteSuspense>
               </RoleGate>
             </AppLayout>
           </RequireAuth>
@@ -550,7 +657,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <TrainingDetailPage />
+              <RouteSuspense>
+                <TrainingDetailPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -560,7 +669,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <TrainingsAnalyticsPage />
+              <RouteSuspense>
+                <TrainingsAnalyticsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -572,7 +683,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <PlayersAdminPage />
+              <RouteSuspense>
+                <PlayersAdminPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -584,7 +697,9 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin"]} role={team.role}>
-                <TeamMembersPage />
+                <RouteSuspense>
+                  <TeamMembersPage />
+                </RouteSuspense>
               </RoleGate>
             </AppLayout>
           </RequireAuth>
@@ -595,7 +710,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <PlayerPage />
+              <RouteSuspense>
+                <PlayerPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -607,7 +724,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <TournamentsAdminPage />
+              <RouteSuspense>
+                <TournamentsAdminPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -617,7 +736,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <TournamentDetailsPage />
+              <RouteSuspense>
+                <TournamentDetailsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -629,7 +750,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <StatsPage />
+              <RouteSuspense>
+                <StatsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -639,7 +762,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <StatsPage />
+              <RouteSuspense>
+                <StatsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -651,7 +776,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <FinancePage />
+              <RouteSuspense>
+                <FinancePage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -661,7 +788,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <FinanceTransactionCreatePage />
+              <RouteSuspense>
+                <FinanceTransactionCreatePage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -671,7 +800,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <FinanceInvoiceCreatePage />
+              <RouteSuspense>
+                <FinanceInvoiceCreatePage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -681,7 +812,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <FinancePoolCreatePage />
+              <RouteSuspense>
+                <FinancePoolCreatePage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -691,7 +824,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <FinancePoolDetailsPage />
+              <RouteSuspense>
+                <FinancePoolDetailsPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -702,7 +837,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <ProfilePage />
+              <RouteSuspense>
+                <ProfilePage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
@@ -714,7 +851,9 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <AdminPage />
+              <RouteSuspense>
+                <AdminPage />
+              </RouteSuspense>
             </AppLayout>
           </RequireAuth>
         }
