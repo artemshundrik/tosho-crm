@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { IconInput } from "@/components/ui/icon-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -522,7 +522,7 @@ const dbIds = new Set<string>();
   };
 
   if (shouldShowSkeleton) {
-    return <PageSkeleton />;
+    return <DetailSkeleton />;
   }
 
   if (!training) {

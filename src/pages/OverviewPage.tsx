@@ -1,5 +1,5 @@
 // src/pages/OverviewPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,8 @@ import { Separator } from "@/components/ui/separator";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
+import { usePageData } from "@/hooks/usePageData";
 
 import {
   BarChart3,
@@ -125,37 +127,26 @@ function LogoCircle({ src, alt, size = 32, className }: { src?: string | null; a
 
 /* ================== PAGE ================== */
 
+type OverviewPageCache = {
+  teamLogo: string | null;
+  primaryTournament: PrimaryTournament | null;
+  standingsRows: StandingsRow[];
+  standingsUpdatedAt: string | null;
+  nextMatch: MatchRow | null;
+  lastMatch: MatchRow | null;
+  nextTraining: TrainingRow | null;
+  lastFive: MatchRow[];
+  activity: ActivityItem[];
+  kpi: KPI;
+};
+
 export function OverviewPage() {
   const { role } = useAuth();
-  const [loading, setLoading] = useState(true);
   const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
   const TEAM_NAME = "FAYNA TEAM";
-  const [teamLogo, setTeamLogo] = useState<string | null>(null);
-  const [primaryTournament, setPrimaryTournament] = useState<PrimaryTournament | null>(null);
-  const [standingsRows, setStandingsRows] = useState<StandingsRow[]>([]);
-  const [standingsUpdatedAt, setStandingsUpdatedAt] = useState<string | null>(null);
-
-  const [nextMatch, setNextMatch] = useState<MatchRow | null>(null);
-  const [lastMatch, setLastMatch] = useState<MatchRow | null>(null);
-  const [nextTraining, setNextTraining] = useState<TrainingRow | null>(null);
-  const [lastFive, setLastFive] = useState<MatchRow[]>([]);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-
-  const [kpi, setKpi] = useState<KPI>({
-    matches: 0,
-    wins: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    attendanceRate: 0,
-  });
-
-  /* ================== LOAD DATA ================== */
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
+  const { data, loading, showSkeleton } = usePageData<OverviewPageCache>({
+    cacheKey: "overview",
+    loadFn: async () => {
       const now = new Date().toISOString();
       const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const sinceDate = since14d.slice(0, 10);
@@ -187,7 +178,6 @@ export function OverviewPage() {
           .limit(24),
       ]);
 
-      if (cancelled) return;
       if (playedRes.error) {
         console.error("Overview played matches load error", playedRes.error);
       }
@@ -226,8 +216,6 @@ export function OverviewPage() {
         }
       }
 
-      setTeamLogo(logo);
-
       const { data: primaryRow, error: primaryError } = await supabase
         .from("team_tournaments")
         .select("tournament:tournament_id (id, name, season)")
@@ -239,25 +227,27 @@ export function OverviewPage() {
         ? primaryRow?.tournament[0]
         : primaryRow?.tournament;
 
+      let primaryTournament: PrimaryTournament | null = null;
+      let standingsRows: StandingsRow[] = [];
+      let standingsUpdatedAt: string | null = null;
+
       if (!primaryError && tournamentRaw) {
-        const tournament = tournamentRaw as PrimaryTournament;
-        setPrimaryTournament(tournament);
+        primaryTournament = tournamentRaw as PrimaryTournament;
 
         const { data: standingsData, error: standingsError } = await supabase
           .from("tournament_standings_current")
           .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
-          .eq("tournament_id", tournament.id)
+          .eq("tournament_id", primaryTournament.id)
           .order("position", { ascending: true });
 
         if (!standingsError) {
           const rows = (standingsData ?? []) as StandingsRow[];
-          const latestUpdated = rows.reduce<string | null>((latest, row) => {
+          standingsRows = rows;
+          standingsUpdatedAt = rows.reduce<string | null>((latest, row) => {
             if (!row.updated_at) return latest;
             if (!latest || row.updated_at > latest) return row.updated_at;
             return latest;
           }, null);
-          setStandingsRows(rows);
-          setStandingsUpdatedAt(latestUpdated);
         } else {
           console.error("Overview standings load error", standingsError);
         }
@@ -297,41 +287,50 @@ export function OverviewPage() {
             .in("training_id", recentTrainingIds)
         : { data: [] };
 
-      setNextMatch(nextMatchItem);
-      setLastMatch(lastMatchItem);
-      setLastFive(lastFiveList);
-      setNextTraining(nextTrainingItem);
-      if (!activityRes.error) {
-        setActivity(((activityRes.data || []) as ActivityRow[]).map(mapActivityRow));
-      }
-
       const wins = scoredMatches.filter((m) => (m.score_team ?? 0) > (m.score_opponent ?? 0)).length;
-      setKpi((prev) => ({
-        ...prev,
+      const finalKpi = {
         matches: playedMatches.length,
         wins,
         goalsFor: scoredMatches.reduce((s, m) => s + (m.score_team ?? 0), 0),
         goalsAgainst: scoredMatches.reduce((s, m) => s + (m.score_opponent ?? 0), 0),
-      }));
+        attendanceRate: attendanceRes.data ? (() => {
+          const total = attendanceRes.data.length;
+          const present = attendanceRes.data.filter((a) => a.status === "present").length;
+          return total ? Math.round((present / total) * 100) : 0;
+        })() : 0,
+      };
 
-      if (attendanceRes.data) {
-        const total = attendanceRes.data.length;
-        const present = attendanceRes.data.filter((a) => a.status === "present").length;
+      return {
+        teamLogo: logo,
+        primaryTournament,
+        standingsRows,
+        standingsUpdatedAt,
+        nextMatch: nextMatchItem,
+        lastMatch: lastMatchItem,
+        nextTraining: nextTrainingItem,
+        lastFive: lastFiveList,
+        activity: activityRes.error ? [] : ((activityRes.data || []) as ActivityRow[]).map(mapActivityRow),
+        kpi: finalKpi,
+      };
+    },
+  });
 
-        setKpi((prev) => ({
-          ...prev,
-          attendanceRate: total ? Math.round((present / total) * 100) : 0,
-        }));
-      }
-
-      setLoading(false);
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const teamLogo = data?.teamLogo ?? null;
+  const primaryTournament = data?.primaryTournament ?? null;
+  const standingsRows = data?.standingsRows ?? [];
+  const standingsUpdatedAt = data?.standingsUpdatedAt ?? null;
+  const nextMatch = data?.nextMatch ?? null;
+  const lastMatch = data?.lastMatch ?? null;
+  const nextTraining = data?.nextTraining ?? null;
+  const lastFive = data?.lastFive ?? [];
+  const activity = data?.activity ?? [];
+  const kpi = data?.kpi ?? {
+    matches: 0,
+    wins: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    attendanceRate: 0,
+  };
 
   /* ================== DERIVED ================== */
 
@@ -419,6 +418,10 @@ export function OverviewPage() {
   );
 
   usePageHeaderActions(headerActions, []);
+
+  if (showSkeleton) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
@@ -652,9 +655,7 @@ export function OverviewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">Завантаження…</p>
-              ) : nextTraining ? (
+              {nextTraining ? (
                 <div className="space-y-3">
                   <div className="text-sm font-semibold text-foreground">
                     {formatDateTimeUA(`${nextTraining.date}T${nextTraining.time || "00:00"}`)}

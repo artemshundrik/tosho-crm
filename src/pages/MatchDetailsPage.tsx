@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { logActivity } from "@/lib/activityLogger";
-import { usePageCache } from "@/hooks/usePageCache";
+import { usePageData } from "@/hooks/usePageData";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -694,111 +694,20 @@ export function MatchDetailsPage() {
   }, [tabParam]);
 
   const cacheKey = matchId ? `match-details:${matchId}` : "match-details:unknown";
-  const { cached, setCache } = usePageCache<MatchDetailsCache>(cacheKey);
-  
-  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
-  const hasCache = Boolean(cached);
-
-  const [loading, setLoading] = React.useState(!hasCache);
-  const [error, setError] = React.useState<string | null>(null);
-  
-  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
-  React.useEffect(() => {
-    if (hasCache && loading) {
-      setLoading(false);
-    }
-  }, [hasCache, loading]);
-  
-  // Показуємо skeleton тільки якщо немає кешу
-  const shouldShowSkeleton = loading && !hasCache;
-
-  const [match, setMatch] = React.useState<Match | null>(cached?.match ?? null);
-  const [events, setEvents] = React.useState<MatchEvent[]>(cached?.events ?? []);
-  const [players, setPlayers] = React.useState<Player[]>(cached?.players ?? []);
-  const [teamLogo, setTeamLogo] = React.useState<string | null>(cached?.teamLogo ?? null);
-  const sortedPlayers = React.useMemo(() => {
-  return [...players].sort((a, b) => {
-    const agk = isGoalkeeper(a);
-    const bgk = isGoalkeeper(b);
-
-    // GK на початок
-    if (agk && !bgk) return -1;
-    if (!agk && bgk) return 1;
-
-    // далі — за номером
-    return (a.shirt_number ?? 999) - (b.shirt_number ?? 999);
-  });
-}, [players]);
-
-  const [attendance, setAttendance] = React.useState<AttendanceRow[]>(cached?.attendance ?? []);
-  const [attendanceLoaded, setAttendanceLoaded] = React.useState(cached?.attendanceLoaded ?? false);
-
-  const [attendanceSavingId, setAttendanceSavingId] = React.useState<string | null>(null);
-  const [attendanceError, setAttendanceError] = React.useState<string | null>(null);
-  const [rosterSyncing, setRosterSyncing] = React.useState(false);
-  const rosterAutoAppliedRef = React.useRef<string | null>(null);
-
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-
-  const [metaSaving, setMetaSaving] = React.useState(false);
-  const [metaError, setMetaError] = React.useState<string | null>(null);
-  const [metaSuccess, setMetaSuccess] = React.useState<string | null>(null);
-
-  const [tournamentsList, setTournamentsList] = React.useState<Tournament[]>(cached?.tournamentsList ?? []);
-
-  const [smartDateInput, setSmartDateInput] = React.useState("");
-  const [smartDateHint, setSmartDateHint] = React.useState<string | null>(null);
-  const [smartDateError, setSmartDateError] = React.useState<string | null>(null);
-
-  const [draft, setDraft] = React.useState<MatchDraft>(
-    cached?.draft ?? {
-      opponent_name: "",
-      opponent_logo_url: "",
-      match_date_local: "",
-      home_away: "home",
-      status: "scheduled",
-      score_opponent: "",
-      tournament_id: "none",
-      matchday: "",
-      stage: "",
-    }
-  );
-
-  const SECTION_BASE = cn(
-    "rounded-[var(--radius-section)] border border-border bg-card",
-    "shadow-none",
-  );
-
-  const CARD_BASE = SECTION_BASE;
-  const CONTROL_BASE = cn(
-    "shadow-none",
-    "h-10 rounded-[var(--radius-lg)] bg-background",
-    "border border-input",
-    "text-foreground placeholder:text-muted-foreground",
-    "transition-colors",
-    "hover:border-foreground/20 hover:bg-muted/20",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40",
-    "disabled:opacity-50 disabled:cursor-not-allowed",
-    "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
-    "hover:[&>svg]:text-foreground"
-  );
-
-  React.useEffect(() => {
-    async function load() {
+  const {
+    data,
+    showSkeleton,
+    error,
+    refetch,
+    clearCache,
+  } = usePageData<MatchDetailsCache>({
+    cacheKey,
+    loadFn: async () => {
       if (!matchId) {
-        setError("Не вказаний matchId");
-        setLoading(false);
-        return;
+        throw new Error("Не вказаний matchId");
       }
 
       let nextTournamentsList: Tournament[] = [];
-      // Завантажуємо тільки якщо немає кешу
-      if (!hasCache) {
-        setLoading(true);
-        setAttendanceLoaded(false);
-      }
-      setError(null);
 
       const { data: matchData, error: matchError } = await supabase
         .from("matches")
@@ -830,68 +739,56 @@ export function MatchDetailsPage() {
         .single();
 
       if (matchError || !matchData) {
-        setError(matchError?.message || "Матч не знайдено");
-        setMatch(null);
-        setLoading(false);
-        return;
+        throw new Error(matchError?.message || "Матч не знайдено");
       }
 
       const typedMatch = matchData as Match;
-      setMatch(typedMatch);
-      setTeamLogo(null);
 
-    
+      const { data: ttData, error: ttErr } = await supabase
+        .from("team_tournaments")
+        .select(
+          `
+          tournament_id,
+          is_primary,
+          tournaments (
+            id,
+            name,
+            short_name,
+            season,
+            logo_url,
+            league_name
+          )
+        `
+        )
+        .eq("team_id", typedMatch.team_id);
 
-const { data: ttData, error: ttErr } = await supabase
-  .from("team_tournaments")
-  .select(
-    `
-    tournament_id,
-    is_primary,
-    tournaments (
-      id,
-      name,
-      short_name,
-      season,
-      logo_url,
-      league_name
-    )
-  `
-  )
-  .eq("team_id", typedMatch.team_id);
+      if (!ttErr) {
+        const rows = (ttData || []) as TeamTournamentRow[];
 
+        const list = rows
+          .flatMap((r) => {
+            const t = r.tournaments;
+            if (!t) return [];
+            return Array.isArray(t) ? t : [t];
+          })
+          .filter((t): t is Tournament => Boolean(t));
 
-if (ttErr) {
-  setTournamentsList([]);
-} else {
-  const rows = (ttData || []) as TeamTournamentRow[];
+        const primary = rows.find((r) => r.is_primary)?.tournament_id || null;
+        const unique = Array.from(new Map(list.map((t) => [t.id, t])).values());
 
-  const list = rows
-    .flatMap((r) => {
-      const t = r.tournaments;
-      if (!t) return [];
-      return Array.isArray(t) ? t : [t];
-    })
-    .filter((t): t is Tournament => Boolean(t));
+        const sorted = unique.slice().sort((a, b) => {
+          if (primary) {
+            if (a.id === primary && b.id !== primary) return -1;
+            if (b.id === primary && a.id !== primary) return 1;
+          }
+          const as = (a.season || "").trim();
+          const bs = (b.season || "").trim();
+          if (as !== bs) return bs.localeCompare(as);
+          return (a.name || "").localeCompare(b.name || "");
+        });
 
-  const primary = rows.find((r) => r.is_primary)?.tournament_id || null;
-  const unique = Array.from(new Map(list.map((t) => [t.id, t])).values());
-
-  const sorted = unique.slice().sort((a, b) => {
-    if (primary) {
-      if (a.id === primary && b.id !== primary) return -1;
-      if (b.id === primary && a.id !== primary) return 1;
-    }
-    const as = (a.season || "").trim();
-    const bs = (b.season || "").trim();
-    if (as !== bs) return bs.localeCompare(as);
-    return (a.name || "").localeCompare(b.name || "");
-  });
-
-  setTournamentsList(sorted);
-  nextTournamentsList = sorted;
-}
-
+        nextTournamentsList = sorted;
+      }
 
       const local = isoToLocalInputValue(typedMatch.match_date);
 
@@ -909,22 +806,6 @@ if (ttErr) {
         matchday: typeof typedMatch.matchday === "number" ? String(typedMatch.matchday) : "",
         stage: typedMatch.stage ?? "",
       };
-      setDraft(nextDraft);
-
-
-      // синхронізуємо smart поле
-      try {
-        const d = new Date(local);
-        if (!Number.isNaN(d.getTime())) {
-          setSmartDateInput(formatHuman(d));
-        } else {
-          setSmartDateInput("");
-        }
-      } catch {
-        setSmartDateInput("");
-      }
-      setSmartDateHint(null);
-      setSmartDateError(null);
 
       const [{ data: eventsData, error: eventsErr }, { data: attendanceData, error: attErr }] = await Promise.all([
         supabase
@@ -933,10 +814,6 @@ if (ttErr) {
           .eq("match_id", matchId),
         supabase.from("match_attendance").select("player_id").eq("match_id", matchId),
       ]);
-
-      setEvents(eventsErr ? [] : ((eventsData || []) as MatchEvent[]).slice().sort(sortEventsStable));
-      setAttendance(attErr ? [] : ((attendanceData || []) as AttendanceRow[]));
-      setAttendanceLoaded(!attErr);
 
       let rosterSet: Set<string> | null = null;
       if (typedMatch.tournament_id) {
@@ -957,15 +834,14 @@ if (ttErr) {
       }
 
       const { data: playersData, error: playersErr } = await supabase
-  .from("players")
-  .select("id, first_name, last_name, shirt_number, photo_url, position, status") // Додано status
-  .eq("team_id", typedMatch.team_id)
-  .neq("status", "inactive") // Додано фільтр
-  .order("shirt_number", { ascending: true });
+        .from("players")
+        .select("id, first_name, last_name, shirt_number, photo_url, position, status")
+        .eq("team_id", typedMatch.team_id)
+        .neq("status", "inactive")
+        .order("shirt_number", { ascending: true });
 
       const allPlayers = playersErr ? [] : ((playersData || []) as Player[]);
       const filteredPlayers = rosterSet ? allPlayers.filter((p) => rosterSet!.has(p.id)) : allPlayers;
-      setPlayers(filteredPlayers);
 
       let teamLogoUrl: string | null = null;
       const { data: teamData } = await supabase
@@ -986,16 +862,13 @@ if (ttErr) {
           teamLogoUrl = normalizeLogoUrl(clubData.logo_url as string);
         }
       } else {
-        // якщо немає club_id, але таблиця clubs має єдиний запис, пробуємо його
         const { data: clubRow } = await supabase.from("clubs").select("logo_url").limit(1).maybeSingle();
         if (clubRow?.logo_url) {
           teamLogoUrl = normalizeLogoUrl(clubRow.logo_url as string);
         }
       }
 
-      setTeamLogo(teamLogoUrl || TEAM_LOGO_FALLBACK || null);
-
-      setCache({
+      return {
         match: typedMatch,
         events: eventsErr ? [] : ((eventsData || []) as MatchEvent[]).slice().sort(sortEventsStable),
         players: filteredPlayers,
@@ -1004,16 +877,106 @@ if (ttErr) {
         attendance: attErr ? [] : ((attendanceData || []) as AttendanceRow[]),
         attendanceLoaded: !attErr,
         draft: nextDraft,
-      });
-      setLoading(false);
-    }
+      };
+    },
+  });
 
-    // Завантажуємо тільки якщо немає кешу
-    if (!hasCache) {
-      load();
+  const errorMessage = error?.message ?? null;
+
+  const [match, setMatch] = React.useState<Match | null>(data?.match ?? null);
+  const [events, setEvents] = React.useState<MatchEvent[]>(data?.events ?? []);
+  const [players, setPlayers] = React.useState<Player[]>(data?.players ?? []);
+  const [teamLogo, setTeamLogo] = React.useState<string | null>(data?.teamLogo ?? null);
+  const sortedPlayers = React.useMemo(() => {
+  return [...players].sort((a, b) => {
+    const agk = isGoalkeeper(a);
+    const bgk = isGoalkeeper(b);
+
+    // GK на початок
+    if (agk && !bgk) return -1;
+    if (!agk && bgk) return 1;
+
+    // далі — за номером
+    return (a.shirt_number ?? 999) - (b.shirt_number ?? 999);
+  });
+}, [players]);
+
+  const [attendance, setAttendance] = React.useState<AttendanceRow[]>(data?.attendance ?? []);
+  const [attendanceLoaded, setAttendanceLoaded] = React.useState(data?.attendanceLoaded ?? false);
+
+  const [attendanceSavingId, setAttendanceSavingId] = React.useState<string | null>(null);
+  const [attendanceError, setAttendanceError] = React.useState<string | null>(null);
+  const [rosterSyncing, setRosterSyncing] = React.useState(false);
+  const rosterAutoAppliedRef = React.useRef<string | null>(null);
+
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+
+  const [metaSaving, setMetaSaving] = React.useState(false);
+  const [metaError, setMetaError] = React.useState<string | null>(null);
+  const [metaSuccess, setMetaSuccess] = React.useState<string | null>(null);
+
+  const [tournamentsList, setTournamentsList] = React.useState<Tournament[]>(data?.tournamentsList ?? []);
+
+  const [smartDateInput, setSmartDateInput] = React.useState("");
+  const [smartDateHint, setSmartDateHint] = React.useState<string | null>(null);
+  const [smartDateError, setSmartDateError] = React.useState<string | null>(null);
+
+  const [draft, setDraft] = React.useState<MatchDraft>(
+    data?.draft ?? {
+      opponent_name: "",
+      opponent_logo_url: "",
+      match_date_local: "",
+      home_away: "home",
+      status: "scheduled",
+      score_opponent: "",
+      tournament_id: "none",
+      matchday: "",
+      stage: "",
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCache, matchId]);
+  );
+
+  const SECTION_BASE = cn(
+    "rounded-[var(--radius-section)] border border-border bg-card",
+    "shadow-none",
+  );
+
+  const CARD_BASE = SECTION_BASE;
+  const CONTROL_BASE = cn(
+    "shadow-none",
+    "h-10 rounded-[var(--radius-lg)] bg-background",
+    "border border-input",
+    "text-foreground placeholder:text-muted-foreground",
+    "transition-colors",
+    "hover:border-foreground/20 hover:bg-muted/20",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40",
+    "disabled:opacity-50 disabled:cursor-not-allowed",
+    "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
+    "hover:[&>svg]:text-foreground"
+  );
+
+  const prevMatchIdRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!matchId) return;
+    if (prevMatchIdRef.current && prevMatchIdRef.current !== matchId) {
+      clearCache();
+      refetch();
+    }
+    prevMatchIdRef.current = matchId;
+  }, [matchId, clearCache, refetch]);
+
+  React.useEffect(() => {
+    if (!data) return;
+    setMatch(data.match);
+    setEvents(data.events);
+    setPlayers(data.players);
+    setTeamLogo(data.teamLogo);
+    setTournamentsList(data.tournamentsList);
+    setAttendance(data.attendance);
+    setAttendanceLoaded(data.attendanceLoaded);
+    setDraft(data.draft);
+  }, [data]);
 
   // коли відкрив діалог — підставимо “людську” дату в smart поле з draft
   React.useEffect(() => {
@@ -1470,17 +1433,17 @@ if (ttErr) {
     window.location.href = "/matches-shadcn";
   }
 
-  if (loading) {
-    if (shouldShowSkeleton) return <PageSkeleton />;
+  if (showSkeleton) {
+    return <DetailSkeleton />;
   }
 
-  if (error || !match) {
+  if (errorMessage || !match) {
     return (
       <div className="flex flex-col gap-6">
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Помилка</AlertTitle>
-          <AlertDescription className="text-sm">{error || "Матч не знайдено"}</AlertDescription>
+          <AlertDescription className="text-sm">{errorMessage || "Матч не знайдено"}</AlertDescription>
         </Alert>
 
         <Card className={cn(CARD_BASE, "p-10")}>

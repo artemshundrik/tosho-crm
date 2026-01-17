@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 
@@ -463,7 +463,7 @@ export function FinancePage() {
   usePageHeaderActions(headerActions, [navigate]);
 
   return showSkeleton ? (
-    <PageSkeleton />
+    <DashboardSkeleton />
   ) : error ? (
     <Alert variant="destructive">
       <AlertTitle>Помилка</AlertTitle>

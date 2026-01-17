@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import {
   Table,
   TableBody,
@@ -18,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageCache } from "@/hooks/usePageCache";
 
 import { Trophy, TrendingUp, Search, X, Filter, ChevronUp, ChevronDown, Minus, Star, HelpCircle, Crown, Info, Calendar, ArrowRight, Gem } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1369,27 +1372,49 @@ export function FifaCard({
   );
 }
 
+type StatsPageCache = {
+  matches: MatchRow[];
+  events: MatchEventRow[];
+  matchAttendance: MatchAttendanceRow[];
+  teamName: string;
+  teamLogo: string | null;
+  playersById: Array<[string, { name: string; avatarUrl: string | null; shirtNumber: number | null; position: string | null }]>;
+  rosterCount: number;
+};
+
 export function StatsPage() {
   const location = useLocation();
   const mode: Mode = useMemo(() => getModeFromPath(location.pathname), [location.pathname]);
 
   usePageHeaderActions(null, []);
 
-  const [loading, setLoading] = useState(true);
-  const [rosterCount, setRosterCount] = useState(0);
+  const cacheKey = `stats:${mode}`;
+  const { cached, setCache } = usePageCache<StatsPageCache>(cacheKey);
+  const hasCache = Boolean(cached);
+
+  const [loading, setLoading] = useState(!hasCache);
+  const [rosterCount, setRosterCount] = useState(cached?.rosterCount ?? 0);
+  
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+
+  const showSkeleton = useMinimumLoading(loading && !hasCache);
 
   // Data
-  const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [events, setEvents] = useState<MatchEventRow[]>([]);
-  const [matchAttendance, setMatchAttendance] = useState<MatchAttendanceRow[]>([]);
-  const [teamName, setTeamName] = useState<string>("FAYNA TEAM");
+  const [matches, setMatches] = useState<MatchRow[]>(cached?.matches ?? []);
+  const [events, setEvents] = useState<MatchEventRow[]>(cached?.events ?? []);
+  const [matchAttendance, setMatchAttendance] = useState<MatchAttendanceRow[]>(cached?.matchAttendance ?? []);
+  const [teamName, setTeamName] = useState<string>(cached?.teamName ?? "FAYNA TEAM");
   // LOGO STATE
-  const [teamLogo, setTeamLogo] = useState<string | null>(null);
+  const [teamLogo, setTeamLogo] = useState<string | null>(cached?.teamLogo ?? null);
 
   // Meta map
   const [playersById, setPlayersById] = useState<
     Map<string, { name: string; avatarUrl: string | null; shirtNumber: number | null; position: string | null }>
-  >(new Map());
+  >(new Map(cached?.playersById ?? []));
 
   // Filters state
   const [minMatches, setMinMatches] = useState<MinMatchesKey>("0"); 
@@ -1459,7 +1484,9 @@ export function StatsPage() {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
+      if (!hasCache) {
+        setLoading(true);
+      }
 
       const matchesPromise = supabase
         .from("matches")
@@ -1579,14 +1606,29 @@ export function StatsPage() {
       setRosterCount(roster.length);
       setEvents(ev);
       setPlayersById(meta);
+      setTeamLogo(resolvedLogo);
+      setTeamName(resolvedName);
+      
+      setCache({
+        matches: allMatches,
+        events: ev,
+        matchAttendance: attendance,
+        teamName: resolvedName,
+        teamLogo: resolvedLogo,
+        playersById: Array.from(meta.entries()),
+        rosterCount: roster.length,
+      });
+      
       setLoading(false);
     }
 
-    load();
+    if (!hasCache) {
+      load();
+    }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hasCache]);
 
   const playerStats = useMemo<PlayerStat[]>(() => {
     const validMatches = matches.filter((m) => {
@@ -1927,6 +1969,10 @@ export function StatsPage() {
       }),
     ];
   }, [playerStats]);
+
+  if (showSkeleton) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6">

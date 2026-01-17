@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
 import { 
   ArrowLeft, Calendar, Trophy, Zap, Activity, 
@@ -814,7 +814,7 @@ export function PlayerPage() {
 
   // Loading Screen
   if (loading) {
-     if (shouldShowSkeleton) return <PageSkeleton />;
+     if (shouldShowSkeleton) return <DetailSkeleton />;
   }
 
   if (!player) return <div className="p-10 text-center text-muted-foreground">Гравця не знайдено</div>;

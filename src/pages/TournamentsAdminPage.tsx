@@ -18,10 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageData } from "@/hooks/usePageData";
 
 import { ArrowRight, CalendarDays, Flag, Star, Trophy } from "lucide-react";
 
@@ -78,12 +78,10 @@ function normalizeNullable(value: string) {
 
 export function TournamentsAdminPage() {
   const [items, setItems] = useState<TeamTournamentRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<TournamentFormState>(EMPTY_FORM);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const showSkeleton = useMinimumLoading(loading);
 
   const fetchTeamTournaments = useCallback(async () => {
     return supabase
@@ -106,6 +104,25 @@ export function TournamentsAdminPage() {
       .eq("team_id", TEAM_ID)
       .order("is_primary", { ascending: false });
   }, []);
+
+  const { data, showSkeleton, refetch } = usePageData<{ items: TeamTournamentRow[] }>({
+    cacheKey: "tournaments-admin",
+    loadFn: async () => {
+      const { data, error } = await fetchTeamTournaments();
+      if (error) {
+        console.error("Tournaments load error", error);
+        return { items: [] };
+      }
+
+      const nextItems = ((data ?? []) as unknown as TeamTournamentRow[]).filter((x) => !!x.tournament);
+      return { items: nextItems };
+    },
+  });
+
+  useEffect(() => {
+    if (!data) return;
+    setItems(data.items);
+  }, [data]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -148,36 +165,6 @@ export function TournamentsAdminPage() {
     ],
     [stats]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-
-      // ✅ alias на FK: tournament:tournament_id(...)
-      // Це змушує Supabase повернути 1 обʼєкт, а не масив.
-      const { data, error } = await fetchTeamTournaments();
-
-      if (cancelled) return;
-
-      if (error) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // ✅ типізація без кривих кастів, + null-safe
-      setItems(((data ?? []) as unknown as TeamTournamentRow[]).filter((x) => !!x.tournament));
-      setLoading(false);
-    }
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchTeamTournaments]);
 
   const handleCreateTournament = useCallback(async () => {
     if (!createForm.name.trim()) {
@@ -234,27 +221,14 @@ export function TournamentsAdminPage() {
       }
     }
 
-    const { data, error } = await fetchTeamTournaments();
-    if (!error) {
-      setItems(((data ?? []) as unknown as TeamTournamentRow[]).filter((x) => !!x.tournament));
-    }
+    await refetch();
 
     setCreateSaving(false);
     setCreateForm(EMPTY_FORM);
     setCreateOpen(false);
-  }, [createForm, fetchTeamTournaments]);
+  }, [createForm, refetch]);
 
   const content = useMemo(() => {
-    if (loading) {
-      return (
-        <div className="space-y-3">
-          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
-          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
-          <Skeleton className="h-[84px] rounded-[var(--radius-inner)]" />
-        </div>
-      );
-    }
-
     if (!items.length) {
       return (
         <div className="py-10 text-center text-sm text-muted-foreground">
@@ -330,7 +304,7 @@ export function TournamentsAdminPage() {
         })}
       </div>
     );
-  }, [items, loading]);
+  }, [items]);
 
   const headerActions = useMemo(
     () => (
@@ -344,31 +318,7 @@ export function TournamentsAdminPage() {
   usePageHeaderActions(headerActions, [setCreateOpen]);
 
   return showSkeleton ? (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-72" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, idx) => (
-          <Skeleton key={`tourn-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
-        ))}
-      </div>
-      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-48" />
-          </div>
-          <Skeleton className="h-6 w-10 rounded-full" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <Skeleton key={`tourn-row-${idx}`} className="h-[84px] rounded-[var(--radius-inner)]" />
-          ))}
-        </CardContent>
-      </Card>
-    </div>
+    <DashboardSkeleton />
   ) : (
     <div className="space-y-6">
       <OperationalSummary

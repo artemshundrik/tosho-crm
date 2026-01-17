@@ -17,9 +17,11 @@ import { cn } from "@/lib/utils";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { Swords, Target, Activity, Plus, RotateCw, Trophy } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
+import { usePageData } from "@/hooks/usePageData";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 const TEAM_NAME = "FAYNA TEAM";
@@ -375,8 +377,6 @@ export function MatchesShadcnPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigationType = useNavigationType();
 
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
   const [primaryTournament, setPrimaryTournament] = React.useState<PrimaryTournament | null>(null);
   const [standingsRow, setStandingsRow] = React.useState<StandingsRowView | null>(null);
   const [standingsUpdatedAt, setStandingsUpdatedAt] = React.useState<string | null>(null);
@@ -389,6 +389,7 @@ export function MatchesShadcnPage() {
   const [filters, setFilters] = React.useState<Filters>(() => readFiltersFromSearchParams(searchParams));
 
   const [visibleCount, setVisibleCount] = React.useState<number>(PAGE_SIZE);
+  const initListStateRef = React.useRef(false);
 
   // ✅ restore list state (scroll + visibleCount) when returning back
   const pendingRestoreRef = React.useRef<ListState | null>(null);
@@ -419,10 +420,20 @@ export function MatchesShadcnPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  React.useEffect(() => {
-    let cancelled = false;
+  const { data, loading, showSkeleton, error } = usePageData<{
+    primaryTournament: PrimaryTournament | null;
+    standingsRow: StandingsRowView | null;
+    standingsUpdatedAt: string | null;
+    teamLogo: string | null;
+    matchesDb: DbMatch[];
+    cards: MatchCardData[];
+  }>({
+    cacheKey: "matches-list",
+    loadFn: async () => {
+      let primaryTournament: PrimaryTournament | null = null;
+      let standingsRow: StandingsRowView | null = null;
+      let standingsUpdatedAt: string | null = null;
 
-    async function loadStandings() {
       const { data: primaryRow, error: primaryError } = await supabase
         .from("team_tournaments")
         .select("tournament:tournament_id (id, name, season)")
@@ -430,23 +441,18 @@ export function MatchesShadcnPage() {
         .eq("is_primary", true)
         .maybeSingle();
 
-      if (cancelled) return;
-
       const tournamentRaw = Array.isArray(primaryRow?.tournament)
         ? primaryRow?.tournament[0]
         : primaryRow?.tournament;
 
       if (!primaryError && tournamentRaw) {
-        const tournament = tournamentRaw as PrimaryTournament;
-        setPrimaryTournament(tournament);
+        primaryTournament = tournamentRaw as PrimaryTournament;
 
         const { data: standingsData, error: standingsError } = await supabase
           .from("tournament_standings_current")
           .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
-          .eq("tournament_id", tournament.id)
+          .eq("tournament_id", primaryTournament.id)
           .order("position", { ascending: true });
-
-        if (cancelled) return;
 
         if (!standingsError) {
           const rows = (standingsData ?? []) as StandingsRow[];
@@ -456,21 +462,116 @@ export function MatchesShadcnPage() {
             return latest;
           }, null);
           const context = getContextRows(rows, TEAM_NAME, 0);
-          setStandingsRow(context.teamRow);
-          setStandingsUpdatedAt(latestUpdated);
+          standingsRow = context.teamRow;
+          standingsUpdatedAt = latestUpdated;
         } else {
           console.error("Matches standings load error", standingsError);
         }
       } else if (primaryError) {
         console.error("Matches primary tournament load error", primaryError);
       }
-    }
 
-    loadStandings();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      const { data, error: matchesError } = await supabase
+        .from("matches")
+        .select(
+          `
+          id,
+          opponent_name,
+          match_date,
+          status,
+          score_team,
+          score_opponent,
+          home_away,
+          opponent_logo_url,
+          tournament_id,
+          stage,
+          matchday,
+          tournaments (
+            id,
+            name,
+            short_name,
+            season,
+            logo_url,
+            league_name
+          )
+        `
+        )
+        .eq("team_id", TEAM_ID)
+        .order("match_date", { ascending: false });
+
+      if (matchesError) {
+        throw new Error(matchesError.message || "Не вдалося завантажити матчі");
+      }
+
+      const rawMatches = (data || []) as DbMatch[];
+
+      let logo: string | null = null;
+
+      const { data: teamData, error: teamError } = await supabase
+        .from("teams")
+        .select("club_id")
+        .eq("id", TEAM_ID)
+        .single();
+
+      if (!teamError && teamData?.club_id) {
+        const { data: clubData, error: clubError } = await supabase
+          .from("clubs")
+          .select("logo_url")
+          .eq("id", teamData.club_id)
+          .single();
+
+        if (!clubError) {
+          const raw =
+            (clubData as { logo_url?: string | null } | null)?.logo_url || null;
+          logo = normalizeLogoUrl(raw);
+        }
+      }
+
+      const normalizedMatches: DbMatch[] = rawMatches.map((m) => ({
+        ...m,
+        opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
+        tournaments: m.tournaments
+          ? Array.isArray(m.tournaments)
+            ? m.tournaments.map((t) => ({
+                ...t,
+                logo_url: normalizeLogoUrl(t.logo_url ?? null),
+              }))
+            : {
+                ...m.tournaments,
+                logo_url: normalizeLogoUrl(m.tournaments.logo_url ?? null),
+              }
+          : null,
+      }));
+
+      const mapped = normalizedMatches.map((match) =>
+        mapDbMatchToCardData({
+          match,
+          teamName: "FAYNA TEAM",
+          teamLogo: logo,
+        })
+      );
+
+      return {
+        primaryTournament,
+        standingsRow,
+        standingsUpdatedAt,
+        teamLogo: logo,
+        matchesDb: normalizedMatches,
+        cards: mapped,
+      };
+    },
+  });
+  const errorMessage = error?.message ?? null;
+
+  React.useEffect(() => {
+    if (!data) return;
+    setPrimaryTournament(data.primaryTournament);
+    setStandingsRow(data.standingsRow);
+    setStandingsUpdatedAt(data.standingsUpdatedAt);
+    setTeamLogo(data.teamLogo);
+    setMatchesDb(data.matchesDb);
+    setCards(data.cards);
+  }, [data]);
 
   const saveListState = React.useCallback(
     (opts?: { forceScrollTop?: boolean }) => {
@@ -522,120 +623,21 @@ export function MatchesShadcnPage() {
   );
 
   React.useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: matchesError } = await supabase
-        .from("matches")
-        .select(
-          `
-          id,
-          opponent_name,
-          match_date,
-          status,
-          score_team,
-          score_opponent,
-          home_away,
-          opponent_logo_url,
-          tournament_id,
-          stage,
-          matchday,
-          tournaments (
-            id,
-            name,
-            short_name,
-            season,
-            logo_url,
-            league_name
-          )
-        `
-        )
-        .eq("team_id", TEAM_ID)
-        .order("match_date", { ascending: false });
-
-      if (matchesError) {
-        setError(matchesError.message);
-        setMatchesDb([]);
-        setCards([]);
-        setLoading(false);
-        return;
-      }
-
-      const rawMatches = (data || []) as DbMatch[];
-
-      let logo: string | null = null;
-
-      const { data: teamData, error: teamError } = await supabase
-        .from("teams")
-        .select("club_id")
-        .eq("id", TEAM_ID)
-        .single();
-
-      if (!teamError && teamData?.club_id) {
-        const { data: clubData, error: clubError } = await supabase
-          .from("clubs")
-          .select("logo_url")
-          .eq("id", teamData.club_id)
-          .single();
-
-        if (!clubError) {
-          const raw =
-            (clubData as { logo_url?: string | null } | null)?.logo_url || null;
-          logo = normalizeLogoUrl(raw);
-        }
-      }
-
-      setTeamLogo(logo);
-
-      const normalizedMatches: DbMatch[] = rawMatches.map((m) => ({
-        ...m,
-        opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
-        tournaments: m.tournaments
-          ? Array.isArray(m.tournaments)
-            ? m.tournaments.map((t) => ({
-                ...t,
-                logo_url: normalizeLogoUrl(t.logo_url ?? null),
-              }))
-            : {
-                ...m.tournaments,
-                logo_url: normalizeLogoUrl(m.tournaments.logo_url ?? null),
-              }
-          : null,
-      }));
-
-      setMatchesDb(normalizedMatches);
-
-      const mapped = normalizedMatches.map((match) =>
-        mapDbMatchToCardData({
-          match,
-          teamName: "FAYNA TEAM",
-          teamLogo: logo,
-        })
-      );
-
-      setCards(mapped);
-
-      // restore visibleCount for current URL (if any)
-      if (navigationType === "POP") {
-        const key = listStateKeyFromParams(searchParams);
-        const saved = safeParseListState(sessionStorage.getItem(key));
-        if (saved?.visibleCount) {
-          setVisibleCount(saved.visibleCount);
-          pendingRestoreRef.current = saved;
-        } else {
-          setVisibleCount(PAGE_SIZE);
-        }
+    if (!data || initListStateRef.current) return;
+    initListStateRef.current = true;
+    if (navigationType === "POP") {
+      const key = listStateKeyFromParams(searchParams);
+      const saved = safeParseListState(sessionStorage.getItem(key));
+      if (saved?.visibleCount) {
+        setVisibleCount(saved.visibleCount);
+        pendingRestoreRef.current = saved;
       } else {
         setVisibleCount(PAGE_SIZE);
       }
-
-      setLoading(false);
+    } else {
+      setVisibleCount(PAGE_SIZE);
     }
-
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data, navigationType, searchParams]);
 
   // after loading, restore scroll position once (if we have pending restore)
   React.useEffect(() => {
@@ -837,6 +839,10 @@ export function MatchesShadcnPage() {
 
 
 
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="relative">
@@ -978,7 +984,7 @@ export function MatchesShadcnPage() {
           widthClassName: "sm:max-w-[520px]",
         }}
         bottomLeft={
-          !loading && !error ? (
+          !loading && !errorMessage ? (
             <>
               Показано:{" "}
               <span className="font-medium text-foreground">
@@ -992,7 +998,7 @@ export function MatchesShadcnPage() {
           ) : null
         }
         bottomRight={
-          !loading && !error
+          !loading && !errorMessage
             ? canLoadMore
               ? "Натисни “Показати ще”, щоб відкрити наступні матчі."
               : "Це всі матчі за поточними фільтрами."
@@ -1000,10 +1006,10 @@ export function MatchesShadcnPage() {
         }
       />
 
-      {error ? (
+      {errorMessage ? (
         <Card className="rounded-[var(--radius-section)] border border-border bg-card p-10">
           <div className="text-base font-semibold text-foreground">Помилка</div>
-          <div className="mt-2 text-sm text-destructive">{error}</div>
+          <div className="mt-2 text-sm text-destructive">{errorMessage}</div>
         </Card>
       ) : grouped.length === 0 ? (
         <Card className="rounded-[var(--radius-section)] border border-border bg-card p-10 text-center">

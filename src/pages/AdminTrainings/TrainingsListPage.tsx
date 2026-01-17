@@ -6,13 +6,13 @@ import type { Attendance, Training } from "../../types/trainings";
 import { supabase } from "../../lib/supabaseClient";
 
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { OperationalSummary, type OperationalSummaryKpi } from "@/components/app/OperationalSummary";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageData } from "@/hooks/usePageData";
 
 import {
   BarChart3,
@@ -249,83 +249,86 @@ export function TrainingsListPage() {
   >([]);
   const [attendance, setAttendance] = useState<Record<string, Attendance[]>>({});
   const [playersCount, setPlayersCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "all">("all");
   const navigate = useNavigate();
-  const showSkeleton = useMinimumLoading(loading);
+  const { data, loading, showSkeleton, error } = usePageData<{
+    trainings: Training[];
+    players: { id: string; first_name: string; last_name: string; photo_url?: string | null }[];
+    attendance: Record<string, Attendance[]>;
+    playersCount: number;
+  }>({
+    cacheKey: "trainings-list",
+    loadFn: async () => {
+      const [tr, playersRes] = await Promise.all([
+        getTrainings(TEAM_ID),
+        supabase.from("players").select("id, first_name, last_name, photo_url").eq("team_id", TEAM_ID),
+      ]);
+
+      if (playersRes.error) {
+        throw new Error(playersRes.error.message || "Не вдалося завантажити гравців");
+      }
+
+      const playerList = (playersRes.data || []) as {
+        id: string;
+        first_name: string;
+        last_name: string;
+        photo_url?: string | null;
+      }[];
+
+      let attendanceMap: Record<string, Attendance[]> = {};
+
+      if (tr.length > 0) {
+        const nowTs = Date.now();
+        const pastIds = tr
+          .filter((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() < nowTs)
+          .map((t) => t.id);
+        if (pastIds.length > 0) {
+          const { data: attendanceData, error: attError } = await supabase
+            .from("training_attendance")
+            .select("training_id, player_id, status, created_at")
+            .in("training_id", pastIds);
+          if (attError) throw attError;
+          const map: Record<string, Attendance[]> = {};
+          (attendanceData || []).forEach((row: any) => {
+            const key = `${row.training_id}_${row.player_id}`;
+            const list = map[row.training_id] || [];
+            const existingIdx = list.findIndex((x) => `${x.training_id}_${x.player_id}` === key);
+            const entry = row as Attendance & { created_at?: string | null };
+            if (existingIdx >= 0) {
+              const prev = list[existingIdx] as Attendance & { created_at?: string | null };
+              const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
+              const ts = entry?.created_at ? new Date(entry.created_at).getTime() : -Infinity;
+              if (ts >= prevTs) {
+                list[existingIdx] = entry;
+              }
+            } else {
+              list.push(entry);
+            }
+            map[row.training_id] = list;
+          });
+          attendanceMap = map;
+        }
+      }
+
+      return {
+        trainings: tr,
+        players: playerList,
+        attendance: attendanceMap,
+        playersCount: playerList.length,
+      };
+    },
+  });
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [tr, playersRes] = await Promise.all([
-          getTrainings(TEAM_ID),
-          supabase.from("players").select("id, first_name, last_name, photo_url").eq("team_id", TEAM_ID),
-        ]);
-        setTrainings(tr);
-        const playerList = (playersRes.data || []) as {
-          id: string;
-          first_name: string;
-          last_name: string;
-          photo_url?: string | null;
-        }[];
-        setPlayers(playerList);
-        setPlayersCount(playerList.length);
+    if (!data) return;
+    setTrainings(data.trainings);
+    setPlayers(data.players);
+    setAttendance(data.attendance);
+    setPlayersCount(data.playersCount);
+  }, [data]);
 
-        setLoading(false);
-
-        if (tr.length > 0) {
-          const nowTs = Date.now();
-          const pastIds = tr
-            .filter((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() < nowTs)
-            .map((t) => t.id);
-          if (pastIds.length > 0) {
-            setAttendanceLoading(true);
-            const { data, error: attError } = await supabase
-              .from("training_attendance")
-              .select("training_id, player_id, status, created_at")
-              .in("training_id", pastIds);
-            if (attError) throw attError;
-            const map: Record<string, Attendance[]> = {};
-            (data || []).forEach((row: any) => {
-              const key = `${row.training_id}_${row.player_id}`;
-              const list = map[row.training_id] || [];
-              const existingIdx = list.findIndex((x) => `${x.training_id}_${x.player_id}` === key);
-              const entry = row as Attendance & { created_at?: string | null };
-              if (existingIdx >= 0) {
-                const prev = list[existingIdx] as Attendance & { created_at?: string | null };
-                const prevTs = prev?.created_at ? new Date(prev.created_at).getTime() : -Infinity;
-                const ts = entry?.created_at ? new Date(entry.created_at).getTime() : -Infinity;
-                if (ts >= prevTs) {
-                  list[existingIdx] = entry;
-                }
-              } else {
-                list.push(entry);
-              }
-              map[row.training_id] = list;
-            });
-            setAttendance(map);
-            setAttendanceLoading(false);
-          } else {
-            setAttendance({});
-          }
-        } else {
-          setAttendance({});
-        }
-      } catch (e: any) {
-        console.error(e);
-        setError(e.message || "Не вдалося завантажити тренування");
-      } finally {
-        setLoading(false);
-        setAttendanceLoading(false);
-      }
-    }
-
-    load();
-  }, []);
+  const attendanceLoading = loading;
+  const errorMessage = error?.message ?? null;
 
   const sortedTrainings = useMemo(
     () => [...trainings].sort((a, b) => `${a.date} ${a.time || ""}`.localeCompare(`${b.date} ${b.time || ""}`)),
@@ -431,7 +434,7 @@ export function TrainingsListPage() {
   }, [nextTraining]);
 
   const trainingKpis = useMemo<OperationalSummaryKpi[] | undefined>(() => {
-    if (loading || error || attendanceLoading) return undefined;
+    if (loading || errorMessage || attendanceLoading) return undefined;
     return [
       {
         key: "total",
@@ -472,7 +475,7 @@ export function TrainingsListPage() {
     ];
   }, [
     loading,
-    error,
+    errorMessage,
     attendanceLoading,
     totalTrainings,
     upcomingCount,
@@ -525,23 +528,7 @@ export function TrainingsListPage() {
   usePageHeaderActions(headerActions, []);
 
   return showSkeleton ? (
-    <div className="flex flex-col gap-6">
-      <div className="space-y-2">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-72" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, idx) => (
-          <Skeleton key={`train-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
-        ))}
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, idx) => (
-          <Skeleton key={`train-card-${idx}`} className="h-[220px] rounded-[var(--radius-section)]" />
-        ))}
-      </div>
-      <Skeleton className="h-12 rounded-[var(--radius-inner)]" />
-    </div>
+    <ListSkeleton />
   ) : (
     <div className="flex flex-col gap-6">
       <OperationalSummary
@@ -571,9 +558,9 @@ export function TrainingsListPage() {
         }}
         kpis={trainingKpis}
       />
-      {error ? (
+      {errorMessage ? (
         <div className="rounded-[var(--radius-inner)] border border-border bg-muted/20 p-4 text-sm text-rose-500">
-          {error}
+          {errorMessage}
         </div>
       ) : null}
 
@@ -604,7 +591,7 @@ export function TrainingsListPage() {
         {loading ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 2 }).map((_, idx) => (
-              <Skeleton key={`upcoming-skel-${idx}`} className="h-[220px] rounded-[var(--radius-inner)]" />
+              <Skeleton key={`upcoming-skel-${idx}`} className="h-[240px] rounded-[var(--radius-section)]" />
             ))}
           </div>
         ) : (activeTab === "upcoming" || activeTab === "all") && upcomingTrainings.length === 0 ? (
@@ -650,7 +637,7 @@ export function TrainingsListPage() {
         {activeTab === "past" && loading ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, idx) => (
-              <Skeleton key={`past-skel-${idx}`} className="h-[220px] rounded-[var(--radius-inner)]" />
+              <Skeleton key={`past-skel-${idx}`} className="h-[240px] rounded-[var(--radius-section)]" />
             ))}
           </div>
         ) : (activeTab === "past" || activeTab === "all") && pastTrainings.length === 0 ? (

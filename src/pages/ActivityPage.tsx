@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -22,17 +25,32 @@ type FilterMode = "all" | "matches" | "trainings" | "finance" | "team";
 type MemberAvatar = { user_id: string; avatar_url: string | null; full_name: string | null };
 type TitleParts = { title: string; eventLine?: string };
 
+type ActivityPageCache = {
+  items: ActivityItem[];
+};
+
 export default function ActivityPage() {
   const navigate = useNavigate();
   const { teamId, userId } = useAuth();
-  const [items, setItems] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { cached, setCache } = usePageCache<ActivityPageCache>("activity");
+  const hasCache = Boolean(cached);
+  
+  const [items, setItems] = useState<ActivityItem[]>(cached?.items ?? []);
+  const [loading, setLoading] = useState(!hasCache);
   const [filter, setFilter] = useState<FilterMode>("all");
+
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
 
   useEffect(() => {
     async function load() {
       if (!teamId) return;
-      setLoading(true);
+      if (!hasCache) {
+        setLoading(true);
+      }
       const { data, error } = await supabase
         .from("activity_log")
         .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, metadata, created_at")
@@ -52,25 +70,33 @@ export default function ActivityPage() {
             .in("user_id", userIds);
           if (!membersError && members) {
             const byId = new Map((members as MemberAvatar[]).map((m) => [m.user_id, m]));
-            setItems(
-              mapped.map((item) => {
-                if (!item.user_id) return item;
-                const member = byId.get(item.user_id);
-                if (!member) return item;
-                return {
-                  ...item,
-                  avatar_url: member.avatar_url ?? null,
-                  actor: item.actor || member.full_name || item.actor,
-                };
-              })
-            );
+            const enriched = mapped.map((item) => {
+              if (!item.user_id) return item;
+              const member = byId.get(item.user_id);
+              if (!member) return item;
+              return {
+                ...item,
+                avatar_url: member.avatar_url ?? null,
+                actor: item.actor || member.full_name || item.actor,
+              };
+            });
+            setItems(enriched);
+            setCache({ items: enriched });
+          } else {
+            setItems(mapped);
+            setCache({ items: mapped });
           }
+        } else {
+          setItems([]);
+          setCache({ items: [] });
         }
       }
       setLoading(false);
     }
-    load();
-  }, [teamId]);
+    if (!hasCache && teamId) {
+      load();
+    }
+  }, [hasCache, teamId]);
 
   useEffect(() => {
     async function markRead() {
@@ -111,6 +137,12 @@ export default function ActivityPage() {
   );
 
   usePageHeaderActions(headerActions, [navigate]);
+
+  const showSkeleton = useMinimumLoading(loading);
+
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
 
   const iconForItem = (item: ActivityItem) => {
     const title = item.title.toLowerCase();
@@ -305,13 +337,7 @@ export default function ActivityPage() {
         </div>
 
         <div className="mt-6">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, idx) => (
-                <Skeleton key={`activity-skel-${idx}`} className="h-14 rounded-[var(--radius-inner)]" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
               Поки немає дій.
             </div>

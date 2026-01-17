@@ -52,7 +52,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { usePageData } from "@/hooks/usePageData";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 
 // --- ТИПИ ---
@@ -109,7 +110,6 @@ export function TeamMembersPage() {
   // DATA STATE
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   // INVITE MODAL STATE
@@ -129,48 +129,53 @@ export function TeamMembersPage() {
   const canManage = myRole === "super_admin";
   const currentRoleData = ROLE_SELECT_OPTIONS[inviteRole as keyof typeof ROLE_SELECT_OPTIONS];
 
-  // --- INITIAL LOAD ---
-  useEffect(() => {
-    if (teamId) {
-      fetchMembers();
-      if (canManage) fetchInvites();
-    }
-  }, [teamId, canManage]);
+  const { data, showSkeleton, refetch } = usePageData<{ members: Member[]; invites: Invite[] }>({
+    cacheKey: `team-members:${teamId ?? "none"}:${canManage ? "admin" : "viewer"}`,
+    loadFn: async () => {
+      if (!teamId) return { members: [], invites: [] };
 
-  // --- API CALLS ---
-  async function fetchMembers() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("team_members_view")
-      .select("*")
-      .eq("team_id", teamId);
+      const { data, error } = await supabase
+        .from("team_members_view")
+        .select("*")
+        .eq("team_id", teamId);
 
-    if (error) {
-      console.error("View error, fallback to raw", error);
-      const { data: rawData } = await supabase.from("team_members").select("*").eq("team_id", teamId);
-      if (rawData) {
-        setMembers(rawData.map((m: any) => ({
-          ...m, email: "Hidden", full_name: "User", avatar_url: null
-        })));
+      let nextMembers: Member[] = [];
+      if (error) {
+        console.error("View error, fallback to raw", error);
+        const { data: rawData } = await supabase.from("team_members").select("*").eq("team_id", teamId);
+        if (rawData) {
+          nextMembers = rawData.map((m: any) => ({
+            ...m,
+            email: "Hidden",
+            full_name: "User",
+            avatar_url: null,
+          })) as Member[];
+        }
+      } else {
+        nextMembers = (data as Member[]) ?? [];
       }
-    } else {
-      setMembers(data as Member[]);
-    }
-    setLoading(false);
-  }
 
-  async function fetchInvites() {
-    if (!canManage) return;
-    const { data, error } = await supabase
-      .from("team_invites")
-      .select("*")
-      .eq("team_id", teamId)
-      .order("created_at", { ascending: false });
+      let nextInvites: Invite[] = [];
+      if (canManage) {
+        const { data: invitesData, error: invitesError } = await supabase
+          .from("team_invites")
+          .select("*")
+          .eq("team_id", teamId)
+          .order("created_at", { ascending: false });
+        if (!invitesError && invitesData) {
+          nextInvites = invitesData as Invite[];
+        }
+      }
 
-    if (!error && data) {
-      setInvites(data as Invite[]);
-    }
-  }
+      return { members: nextMembers, invites: nextInvites };
+    },
+  });
+
+  useEffect(() => {
+    if (!data) return;
+    setMembers(data.members);
+    setInvites(data.invites);
+  }, [data]);
 
   // --- ACTIONS ---
   async function updateRole(targetUserId: string, newRole: string) {
@@ -287,7 +292,7 @@ export function TeamMembersPage() {
       
       const link = `${window.location.origin}/invite?code=${data}`;
       setGeneratedLink(link);
-      fetchInvites();
+      await refetch();
       const roleLabel = ROLE_BADGE_STYLES[inviteRole]?.label || inviteRole;
       logActivity({
         teamId,
@@ -338,6 +343,10 @@ export function TeamMembersPage() {
   }, [canManage]);
 
   usePageHeaderActions(headerActions, [canManage]);
+
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-500">
@@ -410,16 +419,7 @@ export function TeamMembersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
-                   Array(3).fill(0).map((_, i) => (
-                      <TableRow key={i} className="h-[72px]">
-                         <TableCell className="pl-6"><Skeleton className="h-10 w-32" /></TableCell>
-                         <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                         <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                      </TableRow>
-                   ))
-                ) : filteredMembers.length === 0 ? (
+                {filteredMembers.length === 0 ? (
                    <TableRow>
                      <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
                         Користувачів не знайдено.

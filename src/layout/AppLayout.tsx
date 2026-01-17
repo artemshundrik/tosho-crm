@@ -53,6 +53,7 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { toast } from "sonner";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { PageReveal } from "@/components/app/PageReveal";
 
 // --- Types ---
 type AppLayoutProps = {
@@ -341,6 +342,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const { userId, teamId } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
+  const shouldReveal = useMemo(() => {
+    return sidebarLinks.some((link) => {
+      if (location.pathname === link.to) return true;
+      return location.pathname.startsWith(`${link.to}/`);
+    });
+  }, [location.pathname]);
+  const pageContent = shouldReveal ? (
+    <PageReveal activeKey={location.pathname}>{children}</PageReveal>
+  ) : (
+    children
+  );
 
   // /matches/:matchId/events
   const matchEventsRoute = useMemo(() => {
@@ -954,7 +966,7 @@ useEffect(() => {
               </div>
             )}
 
-            <div className="animate-in fade-in-50 duration-500">{children}</div>
+            <div>{pageContent}</div>
           </div>
         </main>
       </div>

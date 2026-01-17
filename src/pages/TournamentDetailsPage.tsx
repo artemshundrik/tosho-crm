@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
-import { usePageCache } from "@/hooks/usePageCache";
+import { usePageData } from "@/hooks/usePageData";
 
 import {
   AlertDialog,
@@ -26,7 +26,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -196,24 +196,86 @@ export function TournamentDetailsPage() {
   const navigate = useNavigate();
 
   const cacheKey = id ? `tournament-details:${id}` : "tournament-details:unknown";
-  const { cached, setCache } = usePageCache<TournamentDetailsCache>(cacheKey);
-  
-  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
-  const hasCache = Boolean(cached);
+  const { data, showSkeleton } = usePageData<TournamentDetailsCache>({
+    cacheKey,
+    loadFn: async () => {
+      if (!id) {
+        return { tRow: null, matches: [], players: [], registeredIds: [] };
+      }
 
-  const [loading, setLoading] = useState(!hasCache);
-  const [playersLoading, setPlayersLoading] = useState(!hasCache);
-  
-  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
-  useEffect(() => {
-    if (hasCache && loading) {
-      setLoading(false);
-      setPlayersLoading(false);
-    }
-  }, [hasCache, loading]);
-  
-  // Показуємо skeleton тільки якщо немає кешу
-  const shouldShowSkeleton = loading && !hasCache;
+      const [
+        tournamentRes,
+        matchesRes,
+        playersRes,
+        regRes,
+      ] = await Promise.all([
+        supabase
+          .from("team_tournaments")
+          .select(`
+            is_primary,
+            tournament:tournament_id (
+              id,
+              name,
+              short_name,
+              season,
+              league_name,
+              age_group,
+              external_url,
+              logo_url
+            )
+          `)
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id)
+          .maybeSingle(),
+
+        supabase
+          .from("matches")
+          .select(`
+            id,
+            opponent_name,
+            match_date,
+            status,
+            score_team,
+            score_opponent,
+            home_away,
+            opponent_logo_url,
+            tournament_id,
+            stage,
+            matchday
+          `)
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id)
+          .order("match_date", { ascending: false }),
+
+        supabase
+          .from("players")
+          .select("id, first_name, last_name, shirt_number, photo_url, status")
+          .eq("team_id", TEAM_ID)
+          .neq("status", "inactive")
+          .order("last_name"),
+
+        supabase
+          .from("team_tournament_players")
+          .select("player_id")
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id),
+      ]);
+
+      const row = (tournamentRes.data ?? null) as TeamTournamentRow | null;
+      const safeRow = row && row.tournament ? row : null;
+      const nextMatches = (matchesRes.data ?? []) as MatchRow[];
+      const nextPlayers = (playersRes.data ?? []) as Player[];
+      const nextRegistered = (regRes.data ?? []).map((r) => r.player_id);
+
+      return {
+        tRow: safeRow,
+        matches: nextMatches,
+        players: nextPlayers,
+        registeredIds: nextRegistered,
+      };
+    },
+  });
+  const playersLoading = showSkeleton;
   const [rosterSavingId, setRosterSavingId] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
@@ -228,11 +290,11 @@ export function TournamentDetailsPage() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const [tRow, setTRow] = useState<TeamTournamentRow | null>(cached?.tRow ?? null);
-  const [matches, setMatches] = useState<MatchRow[]>(cached?.matches ?? []);
-  const [players, setPlayers] = useState<Player[]>(cached?.players ?? []);
+  const [tRow, setTRow] = useState<TeamTournamentRow | null>(data?.tRow ?? null);
+  const [matches, setMatches] = useState<MatchRow[]>(data?.matches ?? []);
+  const [players, setPlayers] = useState<Player[]>(data?.players ?? []);
   const [registeredIds, setRegisteredIds] = useState<Set<string>>(
-    new Set(cached?.registeredIds ?? [])
+    new Set(data?.registeredIds ?? [])
   );
 
   const standingsPreview = useStandingsPreview({ tournamentId: id ?? "" });
@@ -305,102 +367,12 @@ export function TournamentDetailsPage() {
   }, [id]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      if (!id) return;
-
-      // Завантажуємо тільки якщо немає кешу
-      if (!hasCache) {
-        setLoading(true);
-        setPlayersLoading(true);
-      }
-
-      const [
-        tournamentRes,
-        matchesRes,
-        playersRes,
-        regRes,
-      ] = await Promise.all([
-        supabase
-          .from("team_tournaments")
-          .select(`
-            is_primary,
-            tournament:tournament_id (
-              id,
-              name,
-              short_name,
-              season,
-              league_name,
-              age_group,
-              external_url,
-              logo_url
-            )
-          `)
-          .eq("team_id", TEAM_ID)
-          .eq("tournament_id", id)
-          .maybeSingle(),
-
-        supabase
-          .from("matches")
-          .select(`
-            id,
-            opponent_name,
-            match_date,
-            status,
-            score_team,
-            score_opponent,
-            home_away,
-            opponent_logo_url,
-            tournament_id,
-            stage,
-            matchday
-          `)
-          .eq("team_id", TEAM_ID)
-          .eq("tournament_id", id)
-          .order("match_date", { ascending: false }),
-
-        supabase
-          .from("players")
-  .select("id, first_name, last_name, shirt_number, photo_url, status") // Додано status
-  .eq("team_id", TEAM_ID)
-  .neq("status", "inactive") // ❗ ХОВАЄМО КОЛИШНІХ З ВИБОРУ
-  .order("last_name"),
-
-        supabase
-          .from("team_tournament_players")
-          .select("player_id")
-          .eq("team_id", TEAM_ID)
-          .eq("tournament_id", id),
-      ]);
-
-      if (cancelled) return;
-
-      const row = (tournamentRes.data ?? null) as TeamTournamentRow | null;
-      setTRow(row && row.tournament ? row : null);
-      setMatches((matchesRes.data ?? []) as MatchRow[]);
-      setPlayers((playersRes.data ?? []) as Player[]);
-      const nextRegistered = new Set((regRes.data ?? []).map((r) => r.player_id));
-      setRegisteredIds(nextRegistered);
-
-      setCache({
-        tRow: row && row.tournament ? row : null,
-        matches: (matchesRes.data ?? []) as MatchRow[],
-        players: (playersRes.data ?? []) as Player[],
-        registeredIds: Array.from(nextRegistered),
-      });
-
-      setLoading(false);
-      setPlayersLoading(false);
-    }
-
-    // Завантажуємо тільки якщо немає кешу
-    if (!hasCache) {
-      load();
-    }
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCache, id]);
+    if (!data) return;
+    setTRow(data.tRow);
+    setMatches(data.matches);
+    setPlayers(data.players);
+    setRegisteredIds(new Set(data.registeredIds));
+  }, [data]);
 
   useEffect(() => {
     loadStandings();
@@ -545,7 +517,7 @@ export function TournamentDetailsPage() {
   }, [id, navigate]);
 
   const header = useMemo(() => {
-    if (loading) {
+    if (showSkeleton) {
       return (
         <div className="flex items-start justify-between gap-4">
           <Skeleton className="h-14 w-14 rounded-[var(--radius-md)]" />
@@ -609,7 +581,7 @@ export function TournamentDetailsPage() {
         </div>
       </div>
     );
-  }, [loading, tournament, tRow]);
+  }, [showSkeleton, tournament, tRow]);
 
   const defaultTab = useMemo(() => {
     const candidate = searchParams.get("tab");
@@ -618,8 +590,8 @@ export function TournamentDetailsPage() {
       : "roster";
   }, [searchParams]);
 
-  if (loading) {
-    if (shouldShowSkeleton) return <PageSkeleton />;
+  if (showSkeleton) {
+    return <DetailSkeleton />;
   }
 
   return (

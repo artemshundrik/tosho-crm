@@ -7,22 +7,40 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 
 type FilterMode = "all" | "unread";
 
+type NotificationsPageCache = {
+  notifications: NotificationItem[];
+};
+
 export default function NotificationsPage() {
   const { userId } = useAuth();
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { cached, setCache } = usePageCache<NotificationsPageCache>("notifications");
+  const hasCache = Boolean(cached);
+  
+  const [notifications, setNotifications] = useState<NotificationItem[]>(cached?.notifications ?? []);
+  const [loading, setLoading] = useState(!hasCache);
   const [filter, setFilter] = useState<FilterMode>("all");
+
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
 
   useEffect(() => {
     async function load() {
       if (!userId) return;
-      setLoading(true);
+      if (!hasCache) {
+        setLoading(true);
+      }
       const { data, error } = await supabase
         .from("notifications")
         .select("id, title, body, href, created_at, read_at, type")
@@ -30,12 +48,19 @@ export default function NotificationsPage() {
         .order("created_at", { ascending: false })
         .limit(200);
       if (!error) {
-        setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
+        const mapped = ((data || []) as NotificationRow[]).map(mapNotificationRow);
+        setNotifications(mapped);
+        setCache({ notifications: mapped });
+      } else {
+        setNotifications([]);
+        setCache({ notifications: [] });
       }
       setLoading(false);
     }
-    load();
-  }, [userId]);
+    if (!hasCache && userId) {
+      load();
+    }
+  }, [hasCache, userId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -58,6 +83,12 @@ export default function NotificationsPage() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     toast.success("Усі сповіщення прочитані");
   };
+
+  const showSkeleton = useMinimumLoading(loading);
+
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
 
   const openNotification = async (n: NotificationItem) => {
     setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
@@ -114,13 +145,7 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, idx) => (
-            <Skeleton key={`notif-skel-${idx}`} className="h-14 rounded-[var(--radius-inner)]" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.
         </div>

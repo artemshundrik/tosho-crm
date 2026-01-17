@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
 
 import { supabase } from "@/lib/supabaseClient";
@@ -172,7 +172,7 @@ export function FinancePoolDetailsPage() {
   };
 
   if (loading) {
-    if (shouldShowSkeleton) return <PageSkeleton />;
+    if (shouldShowSkeleton) return <DetailSkeleton />;
   }
 
   if (!pool) {

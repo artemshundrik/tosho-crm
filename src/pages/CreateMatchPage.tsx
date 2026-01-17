@@ -8,7 +8,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -1187,7 +1187,7 @@ if (minute !== null && Number.isNaN(minute)) {
   const CARD_BASE = cn("rounded-3xl", "border border-border", "bg-card");
 
   if (loading) {
-    return <PageSkeleton />;
+    return <DetailSkeleton />;
   }
 
   return (

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { User, Mail, Shield, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
@@ -263,7 +263,7 @@ export function ProfilePage() {
   };
 
   if (loading) {
-    if (shouldShowSkeleton) return <PageSkeleton />;
+    if (shouldShowSkeleton) return <DetailSkeleton />;
   }
 
   return (

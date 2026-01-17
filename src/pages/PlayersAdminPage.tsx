@@ -33,6 +33,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageCache } from "@/hooks/usePageCache";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
@@ -143,11 +146,18 @@ function PlayerAvatar({ player, size = 44 }: { player: Player; size?: number }) 
   );
 }
 
+type PlayersAdminPageCache = {
+  players: Player[];
+};
+
 export function PlayersAdminPage() {
   const navigate = useNavigate();
   const { teamId } = useAuth();
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { cached, setCache } = usePageCache<PlayersAdminPageCache>("players-admin");
+  const hasCache = Boolean(cached);
+  
+  const [players, setPlayers] = useState<Player[]>(cached?.players ?? []);
+  const [loading, setLoading] = useState(!hasCache);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("number");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -156,13 +166,29 @@ export function PlayersAdminPage() {
   const [form, setForm] = useState<FormState>({ firstName: "", lastName: "", shirtNumber: "", position: "UNIV", birthday: "", photoUrl: "", status: "active" });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (teamId) loadPlayers(); }, [teamId]);
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+
+  const showSkeleton = useMinimumLoading(loading && !hasCache);
+
+  useEffect(() => { 
+    if (!hasCache && teamId) {
+      loadPlayers();
+    }
+  }, [hasCache, teamId]);
 
   async function loadPlayers() {
     if (!teamId) return;
     setLoading(true);
     const { data, error } = await supabase.from("players").select("*").eq("team_id", teamId).order("shirt_number", { ascending: true });
-    if (!error && data) setPlayers(data as Player[]);
+    if (!error && data) {
+      const playersData = data as Player[];
+      setPlayers(playersData);
+      setCache({ players: playersData });
+    }
     setLoading(false);
   }
 
@@ -240,6 +266,10 @@ export function PlayersAdminPage() {
 
   usePageHeaderActions(headerActions, [openCreate]);
 
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20">
       <OperationalSummary
@@ -289,9 +319,6 @@ export function PlayersAdminPage() {
         </div>
 
         <div className="overflow-x-auto">
-          {loading ? (
-             <div className="p-8 space-y-4">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-[var(--radius-inner)]" />)}</div>
-          ) : (
             <Table>
               <TableHeader className="bg-muted/20">
                 <TableRow className="hover:bg-transparent border-border/50">
@@ -424,8 +451,7 @@ export function PlayersAdminPage() {
                 })}
               </TableBody>
             </Table>
-          )}
-        </div>
+          </div>
       </Card>
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>

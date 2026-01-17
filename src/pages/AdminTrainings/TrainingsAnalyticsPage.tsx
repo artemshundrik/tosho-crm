@@ -31,8 +31,8 @@ import {
 } from "@/components/ui/table";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
+import { usePageData } from "@/hooks/usePageData";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -188,7 +188,6 @@ export function TrainingsAnalyticsPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -197,7 +196,38 @@ export function TrainingsAnalyticsPage() {
     key: "percent",
     direction: "desc"
   });
-  const showSkeleton = useMinimumLoading(loading);
+  const { data, showSkeleton } = usePageData<{
+    trainings: Training[];
+    attendance: any[];
+    players: any[];
+  }>({
+    cacheKey: "trainings-analytics",
+    loadFn: async () => {
+      const [trData, attRes, plRes] = await Promise.all([
+        getTrainings(TEAM_ID),
+        supabase.from("training_attendance").select("training_id, player_id, status, created_at"),
+        // ❗ ФІЛЬТРАЦІЯ: Прибираємо колишніх гравців для чистої статистики
+        supabase
+          .from("players")
+          .select("id, first_name, last_name, photo_url, shirt_number")
+          .eq("team_id", TEAM_ID)
+          .neq("status", "inactive"),
+      ]);
+
+      if (attRes.error) {
+        throw new Error(attRes.error.message || "Не вдалося завантажити відвідуваність");
+      }
+      if (plRes.error) {
+        throw new Error(plRes.error.message || "Не вдалося завантажити гравців");
+      }
+
+      return {
+        trainings: trData,
+        attendance: attRes.data || [],
+        players: plRes.data || [],
+      };
+    },
+  });
 
   const navigate = useNavigate();
 
@@ -238,28 +268,11 @@ export function TrainingsAnalyticsPage() {
   };
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const [trData, attRes, plRes] = await Promise.all([
-          getTrainings(TEAM_ID),
-          supabase.from("training_attendance").select("training_id, player_id, status"),
-          // ❗ ФІЛЬТРАЦІЯ: Прибираємо колишніх гравців для чистої статистики
-          supabase
-            .from("players")
-            .select("id, first_name, last_name, photo_url, shirt_number")
-            .eq("team_id", TEAM_ID)
-            .neq("status", "inactive"),
-        ]);
-        setTrainings(trData);
-        setAttendance(attRes.data || []);
-        setPlayers(plRes.data || []);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    if (!data) return;
+    setTrainings(data.trainings);
+    setAttendance(data.attendance);
+    setPlayers(data.players);
+  }, [data]);
 
   useEffect(() => {
     applyPreset("month");
@@ -392,29 +405,7 @@ export function TrainingsAnalyticsPage() {
   usePageHeaderActions(headerActions, [navigate]);
 
   return showSkeleton ? (
-    <div className="flex flex-col gap-6">
-      <div className="space-y-2">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-72" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, idx) => (
-          <Skeleton key={`analytics-kpi-${idx}`} className="h-28 rounded-[var(--radius-inner)]" />
-        ))}
-      </div>
-      <div className="rounded-[var(--radius-section)] border border-border bg-card p-6">
-        <div className="mb-4 flex items-center gap-3">
-          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
-          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
-          <Skeleton className="h-10 w-32 rounded-[var(--radius-inner)]" />
-        </div>
-        <div className="space-y-3">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <Skeleton key={`analytics-row-${idx}`} className="h-12 rounded-[var(--radius-inner)]" />
-          ))}
-        </div>
-      </div>
-    </div>
+    <DashboardSkeleton />
   ) : (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <OperationalSummary
