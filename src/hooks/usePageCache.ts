@@ -5,6 +5,13 @@ type PageCacheEntry<T> = {
   updatedAt: number;
 };
 
+/**
+ * Простий hook для кешування даних сторінки.
+ * Для більш розширених можливостей (stale-while-revalidate, background refetch) 
+ * використовуйте usePageData.
+ * 
+ * @deprecated Рекомендується використовувати usePageData для нових сторінок
+ */
 export function usePageCache<T>(key: string) {
   const queryClient = useQueryClient();
   const cacheKey = ["page-cache", key];
@@ -17,5 +24,20 @@ export function usePageCache<T>(key: string) {
     });
   };
 
-  return { cached: cached?.data ?? null, setCache };
+  const clearCache = () => {
+    queryClient.removeQueries({ queryKey: cacheKey });
+  };
+
+  const isStale = (ttl: number) => {
+    if (!cached) return true;
+    return Date.now() - cached.updatedAt > ttl;
+  };
+
+  return { 
+    cached: cached?.data ?? null, 
+    setCache,
+    clearCache,
+    isStale,
+    updatedAt: cached?.updatedAt ?? null,
+  };
 }

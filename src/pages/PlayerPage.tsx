@@ -418,9 +418,21 @@ export function PlayerPage() {
   const { playerId } = useParams();
   const cacheKey = playerId ? `player:${playerId}` : "player:unknown";
   const { cached, setCache } = usePageCache<PlayerPageCache>(cacheKey);
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!hasCache);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
   const [player, setPlayer] = useState<Player | null>(cached?.player ?? null);
   
   // States
@@ -456,7 +468,8 @@ export function PlayerPage() {
   useEffect(() => {
     async function load() {
       if (!playerId) return;
-      if (!hasCacheRef.current) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
       }
 
@@ -480,7 +493,6 @@ export function PlayerPage() {
           rating: 60,
           ratingBreakdown: null,
         });
-        hasCacheRef.current = true;
         setLoading(false);
         return;
       }
@@ -755,12 +767,15 @@ export function PlayerPage() {
         rating: computedRating,
         ratingBreakdown: ratingBreakdownLocal,
       });
-      hasCacheRef.current = true;
       setLoading(false);
     }
 
-    load();
-  }, [playerId]);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache, playerId]);
 
   const trainingFilters = useMemo(
     () => [
@@ -799,7 +814,7 @@ export function PlayerPage() {
 
   // Loading Screen
   if (loading) {
-     return <PageSkeleton />;
+     if (shouldShowSkeleton) return <PageSkeleton />;
   }
 
   if (!player) return <div className="p-10 text-center text-muted-foreground">Гравця не знайдено</div>;

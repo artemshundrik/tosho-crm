@@ -695,10 +695,22 @@ export function MatchDetailsPage() {
 
   const cacheKey = matchId ? `match-details:${matchId}` : "match-details:unknown";
   const { cached, setCache } = usePageCache<MatchDetailsCache>(cacheKey);
-  const hasCacheRef = React.useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
-  const [loading, setLoading] = React.useState(!cached);
+  const [loading, setLoading] = React.useState(!hasCache);
   const [error, setError] = React.useState<string | null>(null);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  React.useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
 
   const [match, setMatch] = React.useState<Match | null>(cached?.match ?? null);
   const [events, setEvents] = React.useState<MatchEvent[]>(cached?.events ?? []);
@@ -781,7 +793,8 @@ export function MatchDetailsPage() {
       }
 
       let nextTournamentsList: Tournament[] = [];
-      if (!hasCacheRef.current) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
         setAttendanceLoaded(false);
       }
@@ -992,12 +1005,15 @@ if (ttErr) {
         attendanceLoaded: !attErr,
         draft: nextDraft,
       });
-      hasCacheRef.current = true;
       setLoading(false);
     }
 
-    load();
-  }, [matchId]);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache, matchId]);
 
   // коли відкрив діалог — підставимо “людську” дату в smart поле з draft
   React.useEffect(() => {
@@ -1455,7 +1471,7 @@ if (ttErr) {
   }
 
   if (loading) {
-    return <PageSkeleton />;
+    if (shouldShowSkeleton) return <PageSkeleton />;
   }
 
   if (error || !match) {

@@ -163,7 +163,9 @@ export function TrainingDetailPage() {
 
   const cacheKey = id ? `training-detail:${id}` : "training-detail:unknown";
   const { cached, setCache } = usePageCache<TrainingDetailCache>(cacheKey);
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
   const [training, setTraining] = useState<Training | null>(cached?.training ?? null);
   const [players, setPlayers] = useState<Player[]>(cached?.players ?? []);
@@ -173,9 +175,19 @@ export function TrainingDetailPage() {
   const [attendanceDbIds, setAttendanceDbIds] = useState<Set<string>>(
     new Set(cached?.attendanceDbIds ?? [])
   );
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!hasCache);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<TrainingFormState>(
     cached?.form ?? {
@@ -200,7 +212,8 @@ export function TrainingDetailPage() {
   useEffect(() => {
     async function load() {
       if (!id) return;
-      if (!hasCacheRef.current) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
       }
       setError(null);
@@ -275,7 +288,6 @@ const dbIds = new Set<string>();
           attendanceDbIds: Array.from(dbIds),
           form: nextForm,
         });
-        hasCacheRef.current = true;
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Не вдалося завантажити тренування");
@@ -284,8 +296,12 @@ const dbIds = new Set<string>();
       }
     }
 
-    load();
-  }, [id]);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache, id]);
 
   useEffect(() => {
     if (!training || !trainingFuture) return;
@@ -505,7 +521,7 @@ const dbIds = new Set<string>();
     return map[key] || pos;
   };
 
-  if (loading) {
+  if (shouldShowSkeleton) {
     return <PageSkeleton />;
   }
 

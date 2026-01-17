@@ -171,7 +171,9 @@ function daysOverdue(dueDate: string | null) {
 export function FinancePage() {
   const navigate = useNavigate();
   const { cached, setCache } = usePageCache<FinancePageCache>("finance");
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз, а не тільки при монтуванні
+  const hasCache = Boolean(cached);
 
   const [plans, setPlans] = useState<FinancePlan[]>(cached?.plans ?? []);
   const [rules, setRules] = useState<FinanceRecurringRule[]>(cached?.rules ?? []);
@@ -182,13 +184,24 @@ export function FinancePage() {
     cached?.poolParticipants ?? []
   );
   const [players, setPlayers] = useState<Record<string, PlayerLite>>(cached?.players ?? {});
-  const [loading, setLoading] = useState(!cached);
+  // loading = false якщо є кеш, true якщо немає
+  const [loading, setLoading] = useState(!hasCache);
   const [error, setError] = useState<string | null>(null);
-  const showSkeleton = useMinimumLoading(loading);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу І завантажуємо
+  const showSkeleton = useMinimumLoading(loading && !hasCache);
 
   useEffect(() => {
     async function load() {
-      if (!hasCacheRef.current) {
+      // Якщо немає кешу, встановлюємо loading
+      if (!hasCache) {
         setLoading(true);
       }
       setError(null);
@@ -294,7 +307,6 @@ export function FinancePage() {
           poolParticipants: nextPoolParticipants,
           players: nextPlayers,
         });
-        hasCacheRef.current = true;
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Не вдалося завантажити фінанси");
@@ -303,8 +315,12 @@ export function FinancePage() {
       }
     }
 
-    load();
-  }, []);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache]);
 
   const paidTransactions = useMemo(
     () => transactions.filter((t) => t.status === "paid"),

@@ -2,13 +2,23 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export type SkeletonProps = React.HTMLAttributes<HTMLDivElement> & {
+  /** Accessibility label для screen readers */
+  "aria-label"?: string;
+};
+
+function Skeleton({ className, "aria-label": ariaLabel, ...props }: SkeletonProps) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-[var(--radius-md)] border border-border/50 bg-card/70",
+        "animate-pulse rounded-[var(--radius-md)] border",
+        "bg-[var(--skeleton-bg)] border-[var(--skeleton-border)]",
         className
       )}
+      role="status"
+      aria-label={ariaLabel ?? "Завантаження..."}
+      aria-live="polite"
+      aria-busy="true"
       {...props}
     />
   );

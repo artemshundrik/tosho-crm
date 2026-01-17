@@ -1,37 +1,47 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export type SkeletonCardProps = {
   className?: string;
-  /** висота “карточки” (пікселі або tailwind клас) */
+  /** висота "карточки" (пікселі або tailwind клас) */
   heightClassName?: string;
   /** макет: "nextUp" під твій OperationalSummary або "list" під таблиці */
   variant?: "nextUp" | "list";
+  /** Accessibility label для screen readers */
+  "aria-label"?: string;
 };
 
 function Skel({ className }: { className: string }) {
-  return <div className={cn("animate-pulse rounded-[var(--radius-section)] bg-muted/50", className)} />;
+  return (
+    <Skeleton
+      className={cn("rounded-[var(--radius-section)]", className)}
+      aria-label=""
+    />
+  );
 }
 
 export function SkeletonCard({
   className,
   heightClassName,
   variant = "list",
+  "aria-label": ariaLabel,
 }: SkeletonCardProps) {
   return (
     <div
-  className={cn(
-    "rounded-[var(--radius-inner)] border border-border bg-card/40",
-    variant === "nextUp"
-  ? "px-6 py-6 sm:px-8 sm:py-7"
-  : "px-4 py-4 sm:px-6 sm:py-5",
-    // ⬇️ КЛЮЧОВЕ
-   
-
-    heightClassName,
-    className
-  )}
->
+      className={cn(
+        "rounded-[var(--radius-inner)] border border-border bg-card/40",
+        variant === "nextUp"
+          ? "px-6 py-6 sm:px-8 sm:py-7"
+          : "px-4 py-4 sm:px-6 sm:py-5",
+        heightClassName,
+        className
+      )}
+      role="status"
+      aria-label={ariaLabel ?? (variant === "nextUp" ? "Завантаження матчу..." : "Завантаження...")}
+      aria-live="polite"
+      aria-busy="true"
+    >
 
       {variant === "nextUp" ? (
   <div className="flex flex-col items-center">

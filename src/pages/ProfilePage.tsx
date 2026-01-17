@@ -27,11 +27,23 @@ type ProfileCache = {
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!hasCache);
   const [updating, setUpdating] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(cached?.avatarUrl ?? null);
   const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -60,12 +72,17 @@ export function ProfilePage() {
   };
 
   useEffect(() => {
-    getProfile();
-  }, []);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      getProfile();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache]);
 
   const getProfile = async () => {
     try {
-      if (!hasCacheRef.current) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
       }
       const { data: { user } } = await supabase.auth.getUser();
@@ -95,7 +112,6 @@ export function ProfilePage() {
           initials: i,
           avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
         });
-        hasCacheRef.current = true;
       }
     } catch (error) {
       console.error("Error loading user:", error);
@@ -247,7 +263,7 @@ export function ProfilePage() {
   };
 
   if (loading) {
-    return <PageSkeleton />;
+    if (shouldShowSkeleton) return <PageSkeleton />;
   }
 
   return (

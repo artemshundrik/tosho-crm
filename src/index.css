@@ -49,6 +49,12 @@
     --radius-inner: 16px;
     --btn-radius: 12px;
 
+    /* --- SKELETON LOADING --- */
+    --skeleton-min-duration: 400ms;
+    --skeleton-transition: 200ms;
+    --skeleton-bg: hsl(var(--muted) / 0.5);
+    --skeleton-border: hsl(var(--border) / 0.5);
+
     /* --- КНОПКИ (Gradient) --- */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
     --btn-primary-grad-bot: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 4%);

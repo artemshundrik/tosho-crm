@@ -69,9 +69,21 @@ export function FinancePoolDetailsPage() {
   const navigate = useNavigate();
   const cacheKey = id ? `finance-pool:${id}` : "finance-pool:unknown";
   const { cached, setCache } = usePageCache<FinancePoolDetailsCache>(cacheKey);
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!hasCache);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
   const [pool, setPool] = useState<FinancePool | null>(cached?.pool ?? null);
   const [participants, setParticipants] = useState<ParticipantRow[]>(cached?.participants ?? []);
   const [payInputs, setPayInputs] = useState<Record<string, string>>({});
@@ -79,7 +91,8 @@ export function FinancePoolDetailsPage() {
   useEffect(() => {
     async function load() {
       if (!id) return;
-      if (!hasCacheRef.current) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
       }
       const [poolRes, participantsRes] = await Promise.all([
@@ -111,11 +124,14 @@ export function FinancePoolDetailsPage() {
         pool: poolRes.error ? null : (poolRes.data as FinancePool),
         participants: normalized,
       });
-      hasCacheRef.current = true;
       setLoading(false);
     }
-    load();
-  }, [id]);
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache, id]);
 
   const totals = useMemo(() => {
     const expected = participants.reduce((sum, p) => sum + toNumber(p.expected_amount), 0);
@@ -156,7 +172,7 @@ export function FinancePoolDetailsPage() {
   };
 
   if (loading) {
-    return <PageSkeleton />;
+    if (shouldShowSkeleton) return <PageSkeleton />;
   }
 
   if (!pool) {

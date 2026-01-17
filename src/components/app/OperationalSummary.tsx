@@ -550,7 +550,8 @@ export function OperationalSummary(props: OperationalSummaryProps) {
   const ctaLabel = props.nextUpCtaLabel ?? "Перейти до матчу";
   const detailLine = props.nextUp?.secondary?.trim() ?? "";
 
-  const MIN_SKELETON_MS = 350;
+  // Використовуємо константи для консистентності з іншими skeleton компонентами
+  const MIN_SKELETON_MS = 350; // Трохи менше ніж стандартний, для швидшого переходу
   const EMPTY_DELAY_MS = 600;
 
   const externalLoading = props.nextUpLoading;

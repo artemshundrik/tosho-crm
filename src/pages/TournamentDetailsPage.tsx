@@ -197,10 +197,23 @@ export function TournamentDetailsPage() {
 
   const cacheKey = id ? `tournament-details:${id}` : "tournament-details:unknown";
   const { cached, setCache } = usePageCache<TournamentDetailsCache>(cacheKey);
-  const hasCacheRef = useRef(Boolean(cached));
+  
+  // Перевіряємо наявність кешу - важливо перевіряти кожен раз
+  const hasCache = Boolean(cached);
 
-  const [loading, setLoading] = useState(!cached);
-  const [playersLoading, setPlayersLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!hasCache);
+  const [playersLoading, setPlayersLoading] = useState(!hasCache);
+  
+  // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
+  useEffect(() => {
+    if (hasCache && loading) {
+      setLoading(false);
+      setPlayersLoading(false);
+    }
+  }, [hasCache, loading]);
+  
+  // Показуємо skeleton тільки якщо немає кешу
+  const shouldShowSkeleton = loading && !hasCache;
   const [rosterSavingId, setRosterSavingId] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
@@ -297,8 +310,8 @@ export function TournamentDetailsPage() {
     async function load() {
       if (!id) return;
 
-      const shouldShowSkeleton = !hasCacheRef.current;
-      if (shouldShowSkeleton) {
+      // Завантажуємо тільки якщо немає кешу
+      if (!hasCache) {
         setLoading(true);
         setPlayersLoading(true);
       }
@@ -376,15 +389,18 @@ export function TournamentDetailsPage() {
         players: (playersRes.data ?? []) as Player[],
         registeredIds: Array.from(nextRegistered),
       });
-      hasCacheRef.current = true;
 
       setLoading(false);
       setPlayersLoading(false);
     }
 
-    load();
+    // Завантажуємо тільки якщо немає кешу
+    if (!hasCache) {
+      load();
+    }
     return () => { cancelled = true; };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCache, id]);
 
   useEffect(() => {
     loadStandings();
@@ -603,7 +619,7 @@ export function TournamentDetailsPage() {
   }, [searchParams]);
 
   if (loading) {
-    return <PageSkeleton />;
+    if (shouldShowSkeleton) return <PageSkeleton />;
   }
 
   return (
