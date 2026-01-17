@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { TableHeaderCell, TableNumericCell } from "@/components/app/table-kit";
 import { cn } from "@/lib/utils";
 
 import type { StandingDiffRow } from "./diff";
@@ -46,18 +47,18 @@ export function StandingsPreviewModal({
 
         <div className="px-6">
           <div className="max-h-[60vh] overflow-auto rounded-[var(--radius-inner)] border border-border bg-card/60">
-            <Table>
+            <Table variant="analytics" size="sm">
             <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="pl-4">Команда</TableHead>
-                <TableHead className="w-[90px] text-center">Позиція</TableHead>
-                <TableHead className="w-[70px] text-center">І</TableHead>
-                <TableHead className="w-[70px] text-center">В</TableHead>
-                <TableHead className="w-[70px] text-center">Н</TableHead>
-                <TableHead className="w-[70px] text-center">П</TableHead>
-                <TableHead className="w-[110px] text-center">Г</TableHead>
-                <TableHead className="w-[70px] text-center">О</TableHead>
-                <TableHead className="w-[110px] text-center">Статус</TableHead>
+              <TableRow>
+                <TableHeaderCell>Команда</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[90px]">Позиція</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[70px]">І</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[70px]">В</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[70px]">Н</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[70px]">П</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[110px]">Г</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[70px]">О</TableHeaderCell>
+                <TableHeaderCell align="center" widthClass="w-[110px]">Статус</TableHeaderCell>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -73,78 +74,78 @@ export function StandingsPreviewModal({
                 const next = row.next ?? row.old;
 
                 return (
-                  <TableRow key={row.team_name} className="hover:bg-muted/20">
-                    <TableCell className="pl-4">
+                  <TableRow key={row.team_name}>
+                    <TableCell>
                       <div className="flex items-center gap-3">
                         {next?.logo_url ? (
                           <img
                             src={next.logo_url}
                             alt={row.team_name}
-                            className="h-7 w-7 rounded-full border border-border object-cover"
+                            className="h-6 w-6 rounded-full border border-border object-cover"
                             loading="lazy"
                           />
                         ) : (
-                          <div className="h-7 w-7 rounded-full border border-border bg-muted/60" />
+                          <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
                         )}
                         <span className="font-semibold">{row.team_name}</span>
                       </div>
                     </TableCell>
-                    <TableCell
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(positionChange), row.kind),
                       )}
                     >
                       {next?.position ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(playedChange), row.kind),
                       )}
                     >
                       {next?.played ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(winsChange), row.kind),
                       )}
                     >
                       {next?.wins ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(drawsChange), row.kind),
                       )}
                     >
                       {next?.draws ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(lossesChange), row.kind),
                       )}
                     >
                       {next?.losses ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(goalsForChange || goalsAgainstChange), row.kind),
                       )}
                     >
                       {next?.goals_for ?? "—"}-{next?.goals_against ?? "—"}
-                    </TableCell>
-                    <TableCell
+                    </TableNumericCell>
+                    <TableNumericCell
                       className={cn(
-                        "text-center tabular-nums",
+                        "text-center",
                         cellClass(Boolean(pointsChange), row.kind),
                       )}
                     >
                       {next?.points ?? "—"}
-                    </TableCell>
+                    </TableNumericCell>
                     <TableCell className="text-center">
                       <Badge tone={statusTone(row.kind)} size="sm" pill>
                         {row.kind}

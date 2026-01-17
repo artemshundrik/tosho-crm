@@ -1,21 +1,26 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
+import { MatchAttendanceSection } from "../features/matches/MatchAttendanceSection";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Alert,
-  Button,
-  Container,
-  Group,
-  NumberInput,
-  Paper,
   Select,
-  Stack,
-  Table,
-  TextInput,
-  Title,
-  Text,
-} from '@mantine/core';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
-import { MatchAttendanceSection } from '../features/matches/MatchAttendanceSection';
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableActionHeaderCell,
+  TableHeaderCell,
+  TableNumericCell,
+} from "@/components/app/table-kit";
 
 const TEAM_ID = '389719a7-5022-41da-bc49-11e7a3afbd98';
 
@@ -323,200 +328,241 @@ export function AdminPage() {
   const tournamentOptions = teamTournaments;
 
   return (
-    <Container size="lg">
-      <Title order={2} mb="md">
-        {mode === 'create' ? 'Адмінка – створення матчу' : 'Адмінка – редагування матчу'}
-      </Title>
+    <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
+      <div className="space-y-1">
+        <h2 className="text-2xl font-semibold">
+        {mode === "create" ? "Адмінка – створення матчу" : "Адмінка – редагування матчу"}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Створи матч, привʼяжи турнір та додай склад на гру.
+        </p>
+      </div>
 
-      <Stack gap="sm">
+      <div className="space-y-4">
         {error && (
-          <Alert color="red" variant="light" radius="md">
-            {error}
+          <Alert variant="destructive">
+            <AlertTitle>Помилка</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert color="teal" variant="light" radius="md">
-            {success}
+          <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+            <AlertTitle>Готово</AlertTitle>
+            <AlertDescription>{success}</AlertDescription>
           </Alert>
         )}
 
-        <Paper withBorder shadow="sm" radius="md" p="md">
-          <Stack gap="sm" component="form" onSubmit={handleSubmit}>
-            <TextInput
-              label="Суперник"
-              placeholder="Наприклад, AFK Kateter"
-              value={form.opponentName}
-              onChange={(e) => updateForm('opponentName', e.currentTarget.value)}
-            />
+        <Card className="border border-border shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-base">Дані матчу</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Суперник</Label>
+                  <Input
+                    className="h-10"
+                    placeholder="Наприклад, AFK Kateter"
+                    value={form.opponentName}
+                    onChange={(e) => updateForm("opponentName", e.target.value)}
+                  />
+                </div>
 
-            <TextInput
-              label="Дата та час"
-              type="datetime-local"
-              value={form.dateTime}
-              onChange={(e) => updateForm('dateTime', e.currentTarget.value)}
-            />
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Дата та час</Label>
+                  <Input
+                    type="datetime-local"
+                    className="h-10"
+                    value={form.dateTime}
+                    onChange={(e) => updateForm("dateTime", e.target.value)}
+                  />
+                </div>
+              </div>
 
-            <Select
-              label="Поле"
-              data={[
-                { value: 'home', label: 'Вдома' },
-                { value: 'away', label: 'Виїзд' },
-              ]}
-              value={form.homeAway}
-              onChange={(value) => updateForm('homeAway', value as HomeAway)}
-            />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Поле</Label>
+                  <Select
+                    value={form.homeAway}
+                    onValueChange={(value) => updateForm("homeAway", value as HomeAway)}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Оберіть поле" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="home">Вдома</SelectItem>
+                      <SelectItem value="away">Виїзд</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <Select
-              label="Статус"
-              data={[
-                { value: 'scheduled', label: 'Запланований' },
-                { value: 'played', label: 'Зіграний' },
-              ]}
-              value={form.status}
-              onChange={(value) => updateForm('status', value as MatchStatus)}
-            />
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Статус</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(value) => updateForm("status", value as MatchStatus)}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Оберіть статус" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">Запланований</SelectItem>
+                      <SelectItem value="played">Зіграний</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-            <Select
-              label="Турнір"
-              data={[
-                { value: '', label: 'Без турніру' },
-                ...tournamentOptions.map((tt) => ({
-                  value: tt.tournament_id,
-                  label: `${tt.tournament.name} (${tt.tournament.season})${
-                    tt.is_primary ? ' • основний' : ''
-                  }`,
-                })),
-              ]}
-              value={form.tournamentId}
-              onChange={(value) => updateForm('tournamentId', value || '')}
-              searchable
-              clearable
-            />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Турнір</Label>
+                <Select
+                  value={form.tournamentId || "none"}
+                  onValueChange={(value) => updateForm("tournamentId", value === "none" ? "" : value)}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Оберіть турнір" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без турніру</SelectItem>
+                    {tournamentOptions.map((tt) => (
+                      <SelectItem key={tt.tournament_id} value={tt.tournament_id}>
+                        {`${tt.tournament.name} (${tt.tournament.season})${tt.is_primary ? " • основний" : ""}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <Group grow>
-              <TextInput
-                label="Стадія"
-                placeholder="Регулярний чемпіонат"
-                value={form.stage}
-                onChange={(e) => updateForm('stage', e.currentTarget.value)}
-              />
-              <NumberInput
-                label="Тур"
-                placeholder="1"
-                min={0}
-                value={form.matchday === '' ? undefined : Number(form.matchday)}
-                onChange={(value) => updateForm('matchday', value ? String(value) : '')}
-              />
-            </Group>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Стадія</Label>
+                  <Input
+                    className="h-10"
+                    placeholder="Регулярний чемпіонат"
+                    value={form.stage}
+                    onChange={(e) => updateForm("stage", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Тур</Label>
+                  <Input
+                    type="number"
+                    className="h-10"
+                    min={0}
+                    placeholder="1"
+                    value={form.matchday}
+                    onChange={(e) => updateForm("matchday", e.target.value)}
+                  />
+                </div>
+              </div>
 
-            <Group grow>
-              <NumberInput
-                label="Рахунок суперника"
-                min={0}
-                value={form.scoreOpponent === '' ? undefined : Number(form.scoreOpponent)}
-                onChange={(value) => updateForm('scoreOpponent', value ? String(value) : '')}
-              />
-              <TextInput
-                label="Наш рахунок (авто)"
-                readOnly
-                value={
-                  mode === 'edit'
-                    ? String(matches.find((m) => m.id === editingId)?.score_team ?? '—')
-                    : '—'
-                }
-              />
-            </Group>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Рахунок суперника</Label>
+                  <Input
+                    type="number"
+                    className="h-10"
+                    min={0}
+                    value={form.scoreOpponent}
+                    onChange={(e) => updateForm("scoreOpponent", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Наш рахунок (авто)</Label>
+                  <Input
+                    className="h-10"
+                    readOnly
+                    value={
+                      mode === "edit"
+                        ? String(matches.find((m) => m.id === editingId)?.score_team ?? "—")
+                        : "—"
+                    }
+                  />
+                </div>
+              </div>
 
-            <Group gap="sm">
-              <Button type="submit" disabled={saving}>
-                {saving
-                  ? mode === 'create'
-                    ? 'Збереження…'
-                    : 'Оновлення…'
-                  : mode === 'create'
-                  ? 'Створити матч'
-                  : 'Зберегти зміни'}
-              </Button>
-              {mode === 'edit' && (
-                <Button variant="subtle" onClick={resetForm} disabled={saving}>
-                  Скасувати редагування
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving
+                    ? mode === "create"
+                      ? "Збереження…"
+                      : "Оновлення…"
+                    : mode === "create"
+                      ? "Створити матч"
+                      : "Зберегти зміни"}
                 </Button>
-              )}
-            </Group>
-          </Stack>
-        </Paper>
+                {mode === "edit" && (
+                  <Button size="sm" variant="outline" onClick={resetForm} disabled={saving}>
+                    Скасувати редагування
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
-      {mode === 'edit' && editingId && (
-        <MatchAttendanceSection matchId={editingId} />
-      )}
+        {mode === "edit" && editingId && <MatchAttendanceSection matchId={editingId} />}
 
-      <Paper withBorder shadow="sm" radius="md" p="md">
-        <Title order={3} mb="sm">
-          Список матчів
-        </Title>
-        {loadingMatches ? (
-          <Text>Завантаження матчів…</Text>
-        ) : matches.length === 0 ? (
-          <Text>Ще немає матчів.</Text>
-        ) : (
-          <Table highlightOnHover withRowBorders={false} striped>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Дата</Table.Th>
-                <Table.Th>Суперник</Table.Th>
-                <Table.Th>Статус</Table.Th>
-                <Table.Th ta="center">Рахунок</Table.Th>
-                <Table.Th ta="right">Дії</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {matches.map((m) => {
-                const date = new Date(m.match_date);
-                const score =
-                  m.score_team !== null && m.score_opponent !== null
-                    ? `${m.score_team} : ${m.score_opponent}`
-                    : '— : —';
+        <Card className="border border-border shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-base">Список матчів</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingMatches ? (
+              <p className="text-sm text-muted-foreground">Завантаження матчів…</p>
+            ) : matches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Ще немає матчів.</p>
+            ) : (
+              <Table variant="list" size="md">
+                <TableHeader>
+                  <TableRow>
+                    <TableHeaderCell>Дата</TableHeaderCell>
+                    <TableHeaderCell>Суперник</TableHeaderCell>
+                    <TableHeaderCell>Статус</TableHeaderCell>
+                    <TableHeaderCell align="center">Рахунок</TableHeaderCell>
+                    <TableActionHeaderCell>Дії</TableActionHeaderCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {matches.map((m) => {
+                    const date = new Date(m.match_date);
+                    const score =
+                      m.score_team !== null && m.score_opponent !== null
+                        ? `${m.score_team} : ${m.score_opponent}`
+                        : "— : —";
 
-                const statusLabel = statusLabels[m.status];
+                    const statusLabel = statusLabels[m.status];
 
-                return (
-                  <Table.Tr key={m.id}>
-                    <Table.Td>{date.toLocaleString()}</Table.Td>
-                    <Table.Td>{m.opponent_name}</Table.Td>
-                    <Table.Td>{statusLabel}</Table.Td>
-                    <Table.Td ta="center">{score}</Table.Td>
-                    <Table.Td ta="right">
-                      <Group gap="xs" justify="flex-end">
-                        <Button size="xs" variant="subtle" onClick={() => fillFormFromMatch(m)}>
-                          Редагувати
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          onClick={() => handleDelete(m.id)}
-                        >
-                          Видалити
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          component={Link}
-                          to={`/admin/matches/${m.id}/events`}
-                        >
-                          Події
-                        </Button>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-        )}
-      </Paper>
-      </Stack>
-    </Container>
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell>{date.toLocaleString()}</TableCell>
+                        <TableCell>{m.opponent_name}</TableCell>
+                        <TableCell>{statusLabel}</TableCell>
+                        <TableNumericCell align="center">{score}</TableNumericCell>
+                        <TableActionCell>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Button size="xs" variant="secondary" onClick={() => fillFormFromMatch(m)}>
+                              Редагувати
+                            </Button>
+                            <Button size="xs" variant="destructive" onClick={() => handleDelete(m.id)}>
+                              Видалити
+                            </Button>
+                            <Button asChild size="xs" variant="outline">
+                              <Link to={`/admin/matches/${m.id}/events`}>Події</Link>
+                            </Button>
+                          </div>
+                        </TableActionCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

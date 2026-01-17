@@ -12,10 +12,17 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableCenterHeaderCell,
+  TableHeaderCell,
+  TableNumberCell,
+  TableNumberHeaderCell,
+  TableTextHeaderCell,
+} from "@/components/app/table-kit";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -137,6 +144,7 @@ type TeamKpi = {
 type MinMatchesKey = "0" | "5" | "10" | "20";
 type SortKey = "rating" | "points" | "goals" | "assists" | "discipline" | "matches" | "form";
 type SortDirection = "asc" | "desc";
+type FormFilter = "all" | "positive" | "neutral" | "negative";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -627,16 +635,13 @@ function SortableHead({
   const isActive = sortConfig.key === sKey;
   
   return (
-    <TableHead 
+    <TableHeaderCell
+      align={align}
+      widthClass={width}
       className={cn(
-        "cursor-pointer select-none transition-all active:scale-[0.98]", 
+        "cursor-pointer select-none transition-all active:scale-[0.98]",
         "whitespace-nowrap",
-        width,
-        align === "center" && "text-center",
-        align === "right" && "text-right",
-        isActive 
-            ? "text-primary font-bold" 
-            : "hover:text-foreground/80 hover:bg-muted/30"
+        isActive ? "text-primary font-bold" : "hover:text-foreground/80 hover:bg-muted/30"
       )}
       onClick={() => onSort(sKey)}
       title={title}
@@ -658,7 +663,7 @@ function SortableHead({
         </span>
         {children}
       </div>
-    </TableHead>
+    </TableHeaderCell>
   );
 }
 
@@ -700,6 +705,16 @@ function FormLegendTooltip() {
              </div>
         </PortalTooltip>
     );
+}
+
+function FormHeaderStreak() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span key={i} className="h-2 w-2 rounded-full form-dot-neutral" />
+      ))}
+    </span>
+  );
 }
 
 function CardTiersLegendTooltip() {
@@ -882,31 +897,13 @@ function PlayerAvatar({ player, size = 36 }: { player: PlayerStat; size?: number
       .toUpperCase() || "•";
 
   return (
-    <div
-      className="shrink-0 overflow-hidden rounded-full border border-border bg-muted/40"
-      style={{ width: size, height: size }}
-    >
-      {player.avatarUrl ? (
-        <img
-          src={player.avatarUrl}
-          alt={player.name}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-          style={{
-            objectPosition: "50% -90%",
-            transform: "scale(1.8)",
-          }}
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-muted-foreground">
-          {initials}
-        </div>
-      )}
-    </div>
+    <PlayerAvatarBase
+      src={player.avatarUrl}
+      name={player.name}
+      fallback={initials}
+      size={size}
+      referrerPolicy="no-referrer"
+    />
   );
 }
 
@@ -1420,6 +1417,7 @@ export function StatsPage() {
   const [minMatches, setMinMatches] = useState<MinMatchesKey>("0"); 
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [formFilter, setFormFilter] = useState<FormFilter>("all");
   
   // State object for bi-directional sorting
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
@@ -1905,13 +1903,25 @@ export function StatsPage() {
     const minM = parseInt(minMatches, 10);
     const filteredByMatches = finalList.filter(p => p.matches >= minM);
 
+    const filteredByForm = filteredByMatches.filter((p) => {
+      if (formFilter === "all") return true;
+      const score = p.last5.reduce((acc, item) => {
+        if (item.status === "bad") return acc - 1;
+        if (item.status === "good" || item.status === "win_bonus") return acc + 1;
+        return acc;
+      }, 0);
+      if (formFilter === "positive") return score > 0;
+      if (formFilter === "negative") return score < 0;
+      return score === 0;
+    });
+
     if (query.trim()) {
       const q = query.toLowerCase();
-      return filteredByMatches.filter((p) => p.name.toLowerCase().includes(q));
+      return filteredByForm.filter((p) => p.name.toLowerCase().includes(q));
     }
 
-    return filteredByMatches;
-  }, [events, matches, playersById, minMatches, selectedTournamentId, query, sortConfig, matchAttendance]); 
+    return filteredByForm;
+  }, [events, matches, playersById, minMatches, selectedTournamentId, query, sortConfig, matchAttendance, formFilter]); 
 
   const leaders = useMemo(() => {
     const withValue = (
@@ -2150,6 +2160,18 @@ export function StatsPage() {
                     </SelectContent>
                   </Select>
 
+                  <Select value={formFilter} onValueChange={(value) => setFormFilter(value as FormFilter)}>
+                    <SelectTrigger className={cn(CONTROL_BASE, "w-[200px]")}>
+                      <SelectValue placeholder="Форма" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Уся форма</SelectItem>
+                      <SelectItem value="positive">Позитивна</SelectItem>
+                      <SelectItem value="neutral">Нейтральна</SelectItem>
+                      <SelectItem value="negative">Негативна</SelectItem>
+                    </SelectContent>
+                  </Select>
+
                   <div className="relative w-full max-w-[240px]">
                     <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -2189,23 +2211,19 @@ export function StatsPage() {
                   <p className="text-xs">Спробуй змінити фільтри</p>
                 </div>
               ) : (
-                <Table>
+                <Table variant="analytics" size="md">
                   <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="w-[40px] text-center text-xs">#</TableHead>
-                      <TableHead className="w-[40px] text-center text-xs" title="Зміна позиції"></TableHead>
-                      <TableHead className="w-[260px] text-xs">Гравець</TableHead>
+                    <TableRow>
+                      <TableNumberHeaderCell widthClass="w-[24px]">#</TableNumberHeaderCell>
+                      <TableCenterHeaderCell widthClass="w-[24px]" title="Зміна позиції">Δ</TableCenterHeaderCell>
+                      <TableTextHeaderCell widthClass="w-[260px]">Гравець</TableTextHeaderCell>
                       
-                      <SortableHead 
-                        label="Форма" 
-                        sKey="form" 
-                        sortConfig={sortConfig} 
-                        onSort={() => {}} 
-                        width="w-[100px]"
-                        title="Останні 5 матчів (Особисті дії)"
-                      >
-                        <FormLegendTooltip />
-                      </SortableHead>
+                      <TableHeaderCell widthClass="w-[100px]" title="Останні 5 матчів (Особисті дії)">
+                        <div className="flex items-center gap-1">
+                          <span>Форма</span>
+                          <FormLegendTooltip />
+                        </div>
+                      </TableHeaderCell>
                       <SortableHead 
                         label="Матчі" 
                         sKey="matches" 
@@ -2271,9 +2289,9 @@ export function StatsPage() {
                   <TableBody>
                     {playerStats.map((p, idx) => (
                       <TableRow key={p.playerId} className="group hover:bg-muted/40">
-                        <TableCell className="text-center font-medium text-muted-foreground text-xs text-foreground/50">
+                        <TableNumberCell align="center" className="px-1 text-foreground/60">
                           {idx + 1}
-                        </TableCell>
+                        </TableNumberCell>
 
                         <TableCell className="text-center px-0">
                           <RankChangeIndicatorWithTooltip 
@@ -2316,21 +2334,21 @@ export function StatsPage() {
                            <FormIndicator results={p.last5} ourLogo={teamLogo} ourName={teamName} />
                         </TableCell>
 
-                        <TableCell className="text-center font-medium tabular-nums text-foreground/90">
+                        <TableCell className="text-center font-medium text-foreground/90">
                           {p.matches || <span className="text-muted-foreground/30">—</span>}
                         </TableCell>
-                        <TableCell className="text-center font-medium tabular-nums text-foreground/90">
+                        <TableCell className="text-center font-medium text-foreground/90">
                           {p.goals || <span className="text-muted-foreground/30">—</span>}
                         </TableCell>
-                        <TableCell className="text-center font-medium tabular-nums text-foreground/90">
+                        <TableCell className="text-center font-medium text-foreground/90">
                           {p.assists || <span className="text-muted-foreground/30">—</span>}
                         </TableCell>
 
-                        <TableCell className="text-center tabular-nums text-muted-foreground">
+                        <TableCell className="text-center text-muted-foreground">
                           {p.goals + p.assists}
                         </TableCell>
 
-                        <TableCell className="text-center tabular-nums">
+                        <TableCell className="text-center">
                           {p.yellow > 0 ? (
                             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-[var(--radius)] bg-yellow-500/10 px-1 text-xs font-bold text-yellow-600">
                               {p.yellow}
@@ -2340,7 +2358,7 @@ export function StatsPage() {
                           )}
                         </TableCell>
 
-                        <TableCell className="text-center tabular-nums">
+                        <TableCell className="text-center">
                           {p.red > 0 ? (
                             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-[var(--radius)] bg-red-500/10 px-1 text-xs font-bold text-red-600">
                               {p.red}

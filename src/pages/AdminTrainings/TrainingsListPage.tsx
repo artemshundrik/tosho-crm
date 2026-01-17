@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
 
 import { Badge } from "@/components/ui/badge";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import { OperationalSummary, type OperationalSummaryKpi } from "@/components/app/OperationalSummary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -212,18 +212,18 @@ function TrainingCard({
                   {presentPlayers.slice(0, 6).map((p, idx) => {
                     const initials = `${p.first_name?.[0] || ""}${p.last_name?.[0] || ""}` || "?";
                     return (
-                      <Avatar
+                      <div
                         key={p.id}
-                        className={cn(
-                          "h-6 w-6 border-2 border-card bg-muted ring-1 ring-border transition-transform hover:z-10 hover:scale-110",
-                          idx > 0 && "-ml-2.5"
-                        )}
+                        className={cn("transition-transform hover:z-10 hover:scale-110", idx > 0 && "-ml-2.5")}
                       >
-                        <AvatarImage src={p.photo_url || ""} alt={p.first_name} />
-                        <AvatarFallback className="text-[8px] font-bold bg-muted text-muted-foreground">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
+                        <PlayerAvatarBase
+                          src={p.photo_url}
+                          name={`${p.first_name} ${p.last_name}`}
+                          fallback={initials}
+                          size={28}
+                          className="border-2 border-card ring-1 ring-border"
+                        />
+                      </div>
                     );
                   })}
                   {presentPlayers.length > 6 && (

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, MoreVertical, SlidersHorizontal, User } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,14 +87,15 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
     }
     return (
       <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
-        <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border">
-          {userData.avatarUrl ? (
-            <AvatarImage src={userData.avatarUrl} className="object-cover" />
-          ) : null}
-          <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-xs font-semibold text-muted-foreground">
-            {userData.initials}
-          </AvatarFallback>
-        </Avatar>
+        <AvatarBase
+          src={userData.avatarUrl}
+          name={userData.name}
+          fallback={userData.initials}
+          size={36}
+          shape="rounded"
+          className="border-border"
+          imageClassName="object-cover"
+        />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold">{userData.name}</div>
           <div
@@ -149,14 +150,15 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
           )}
         >
           <div className="flex items-center gap-2">
-            <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border">
-              {userData.avatarUrl ? (
-                <AvatarImage src={userData.avatarUrl} className="object-cover" />
-              ) : null}
-              <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-xs font-semibold text-muted-foreground">
-                {userData.initials}
-              </AvatarFallback>
-            </Avatar>
+            <AvatarBase
+              src={userData.avatarUrl}
+              name={userData.name}
+              fallback={userData.initials}
+              size={36}
+              shape="rounded"
+              className="border-border"
+              imageClassName="object-cover"
+            />
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-[13px] font-semibold">{userData.name}</div>

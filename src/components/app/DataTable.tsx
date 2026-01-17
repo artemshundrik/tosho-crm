@@ -1,7 +1,5 @@
 import * as React from "react";
-import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 
 export type Column<T> = {
   header: string;
@@ -30,14 +28,19 @@ export function PlayerInfoCell({
   position?: string | null; 
   photoUrl?: string | null 
 }) {
-  const initials = name.split(" ").map(n => n[0]).join("").toUpperCase();
+  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase();
   
   return (
     <div className="flex items-center gap-3">
-      <Avatar className="h-10 w-10 rounded-[var(--radius-lg)] border border-border/50 shadow-sm transition-transform group-hover:scale-105">
-        <AvatarImage src={photoUrl || ""} className="object-cover" />
-        <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-[10px] font-bold">{initials}</AvatarFallback>
-      </Avatar>
+      <PlayerAvatarBase
+        src={photoUrl}
+        name={name}
+        fallback={initials}
+        size={48}
+        shape="rounded"
+        className="border-border/50 shadow-sm transition-transform group-hover:scale-105"
+        fallbackClassName="text-[10px] font-bold"
+      />
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-semibold text-foreground truncate leading-tight">{name}</span>
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground uppercase tracking-tight">

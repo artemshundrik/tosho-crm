@@ -37,7 +37,7 @@ import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { preloadRoute } from "@/routes/routePreload";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -631,18 +631,16 @@ useEffect(() => {
                 >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
-                      {workspaceLogo ? (
-                        <AvatarImage
-                          src={workspaceLogo}
-                          alt="Fayna Team Logo"
-                          className="object-cover"
-                        />
-                      ) : null}
-                      <AvatarFallback className="rounded-[var(--radius-lg)] bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider">
-                        FT
-                      </AvatarFallback>
-                    </Avatar>
+                    <AvatarBase
+                      src={workspaceLogo}
+                      name="Fayna Team"
+                      fallback="FT"
+                      size={36}
+                      shape="rounded"
+                      className="border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105"
+                      imageClassName="object-cover"
+                      fallbackClassName="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider"
+                    />
 
                     <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -1088,11 +1086,13 @@ function MobileNav({
       />
       <div className="pt-2 border-t border-border">
         <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
-          <Avatar className="h-9 w-9 rounded-[var(--radius-lg)] border border-border">
-            <AvatarFallback className="rounded-[var(--radius-lg)] bg-muted text-xs font-semibold text-muted-foreground">
-              AS
-            </AvatarFallback>
-          </Avatar>
+          <AvatarBase
+            name="Artem Shundryk"
+            fallback="AS"
+            size={36}
+            shape="rounded"
+            className="border-border"
+          />
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold">Artem Shundryk</div>
             <div className="truncate text-[11px] text-muted-foreground">Senior UI/UX</div>

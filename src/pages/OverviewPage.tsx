@@ -14,10 +14,10 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableHeaderCell, TableNumericCell } from "@/components/app/table-kit";
 import { Separator } from "@/components/ui/separator";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
@@ -113,7 +113,7 @@ function normalizeLogoUrl(url?: string | null) {
   return `${absoluteUrl}${sep}apikey=${supabaseAnonKey}`;
 }
 
-function LogoCircle({ src, alt, size = 32, className }: { src?: string | null; alt: string; size?: number; className?: string }) {
+function LogoCircle({ src, alt, size = 36, className }: { src?: string | null; alt: string; size?: number; className?: string }) {
   return (
     <div
       className={cn("shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border", className)}
@@ -473,7 +473,7 @@ export function OverviewPage() {
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
                   <div className="flex items-center justify-end gap-3 text-right min-w-0">
                     <div className="truncate text-sm font-semibold text-foreground">{TEAM_NAME}</div>
-                    <LogoCircle src={teamLogo} alt={TEAM_NAME} size={40} />
+                    <LogoCircle src={teamLogo} alt={TEAM_NAME} size={48} />
                   </div>
 
                   <div className="flex flex-col items-center">
@@ -488,7 +488,7 @@ export function OverviewPage() {
                   </div>
 
                   <div className="flex items-center justify-start gap-3 min-w-0">
-                    <LogoCircle src={lastMatch.opponent_logo_url} alt={lastMatch.opponent_name} size={40} />
+                    <LogoCircle src={lastMatch.opponent_logo_url} alt={lastMatch.opponent_name} size={48} />
                     <div className="truncate text-sm font-semibold text-foreground">{lastMatch.opponent_name}</div>
                   </div>
                 </div>
@@ -529,17 +529,17 @@ export function OverviewPage() {
               {standingsContext.rows.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Таблиця поки недоступна.</div>
               ) : (
-                <Table className="min-w-[640px]">
+                <Table variant="analytics" size="sm" className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10 text-center">#</TableHead>
-                      <TableHead>Команда</TableHead>
-                      <TableHead className="text-right">І</TableHead>
-                      <TableHead className="text-right">В</TableHead>
-                      <TableHead className="text-right">Н</TableHead>
-                      <TableHead className="text-right">П</TableHead>
-                      <TableHead className="text-right">Г</TableHead>
-                      <TableHead className="text-right">О</TableHead>
+                      <TableHeaderCell align="center" widthClass="w-10">#</TableHeaderCell>
+                      <TableHeaderCell>Команда</TableHeaderCell>
+                      <TableHeaderCell align="center">І</TableHeaderCell>
+                      <TableHeaderCell align="center">В</TableHeaderCell>
+                      <TableHeaderCell align="center">Н</TableHeaderCell>
+                      <TableHeaderCell align="center">П</TableHeaderCell>
+                      <TableHeaderCell align="center">Г</TableHeaderCell>
+                      <TableHeaderCell align="center">О</TableHeaderCell>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -547,9 +547,9 @@ export function OverviewPage() {
                       const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
                       return (
                         <TableRow key={row.team_name} className={cn(isOurTeam && "bg-primary/10")}>
-                          <TableCell className="w-10 text-center text-xs font-semibold text-muted-foreground tabular-nums">
+                          <TableNumericCell align="center" className="w-10 font-semibold text-muted-foreground">
                             {row.position}
-                          </TableCell>
+                          </TableNumericCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               {row.logo_url ? (
@@ -559,28 +559,30 @@ export function OverviewPage() {
                                   className="h-6 w-6 rounded-full border border-border object-cover"
                                   loading="lazy"
                                 />
-                              ) : null}
+                              ) : (
+                                <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
+                              )}
                               <span className="font-semibold text-foreground">{row.team_name}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          <TableNumericCell align="center" className="text-muted-foreground">
                             {row.played ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          </TableNumericCell>
+                          <TableNumericCell align="center" className="text-muted-foreground">
                             {row.wins ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          </TableNumericCell>
+                          <TableNumericCell align="center" className="text-muted-foreground">
                             {row.draws ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          </TableNumericCell>
+                          <TableNumericCell align="center" className="text-muted-foreground">
                             {row.losses ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          </TableNumericCell>
+                          <TableNumericCell align="center" className="text-muted-foreground">
                             {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-semibold text-foreground tabular-nums">
+                          </TableNumericCell>
+                          <TableNumericCell align="center" className="font-semibold text-foreground">
                             {row.points ?? "—"}
-                          </TableCell>
+                          </TableNumericCell>
                         </TableRow>
                       );
                     })}
@@ -629,7 +631,7 @@ export function OverviewPage() {
                           <Badge tone={badge.tone} className="h-7 w-7 justify-center rounded-full p-0">
                             {badge.label}
                           </Badge>
-                          <LogoCircle src={m.opponent_logo_url} alt={m.opponent_name} size={32} />
+                          <LogoCircle src={m.opponent_logo_url} alt={m.opponent_name} size={36} />
                           <div className="min-w-0">
                             <div className="truncate font-medium text-foreground">{m.opponent_name}</div>
                             <div className="text-xs text-muted-foreground">{formatDateTimeUA(m.match_date)}</div>

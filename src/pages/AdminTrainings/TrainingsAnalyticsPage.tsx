@@ -25,10 +25,16 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableCenterCell,
+  TableHeaderCell,
+  TableNumberCell,
+  TableNumberHeaderCell,
+} from "@/components/app/table-kit";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
@@ -58,7 +64,7 @@ function normalizeAssetUrl(url: string | null | undefined): string | null {
   return u;
 }
 
-type SortKey = "number" | "name" | "trainings" | "present" | "injuries" | "percent";
+type SortKey = "trainings" | "present" | "injuries" | "percent";
 type SortDirection = "asc" | "desc";
 
 type PlayerAttendanceRow = {
@@ -94,13 +100,12 @@ function SortableHead({
   const isActive = sortConfig.key === sKey;
 
   return (
-    <TableHead
+    <TableHeaderCell
+      align={align}
+      widthClass={width}
       className={cn(
-        "cursor-pointer select-none transition-all active:scale-[0.98] text-xs font-semibold text-muted-foreground",
+        "cursor-pointer select-none transition-all active:scale-[0.98]",
         "whitespace-nowrap",
-        width,
-        align === "center" && "text-center",
-        align === "right" && "text-right",
         isActive ? "text-primary" : "hover:text-foreground/80 hover:bg-muted/30"
       )}
       onClick={() => onSort(sKey)}
@@ -125,7 +130,7 @@ function SortableHead({
           )}
         </span>
       </div>
-    </TableHead>
+    </TableHeaderCell>
   );
 }
 
@@ -150,21 +155,13 @@ function PlayerInfoCell({
   return (
     <div className="flex items-center gap-3">
       <div className="relative shrink-0">
-        <div className="h-10 w-10 overflow-hidden rounded-full border border-border/50 bg-muted/40 shadow-sm">
-          {safePhotoUrl ? (
-            <img
-              src={safePhotoUrl}
-              alt={name}
-              className="h-full w-full object-cover object-top"
-              style={{ transform: "scale(1.8)", objectPosition: "50% -90%" }}
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground uppercase">
-              {initials}
-            </div>
-          )}
-        </div>
+        <PlayerAvatarBase
+          src={safePhotoUrl}
+          name={name}
+          fallback={initials}
+          size={48}
+          className="border-border/50 bg-muted/40 shadow-sm"
+        />
         {/* Пульсуючий індикатор статусу (як у турнірах) */}
         {status && status !== 'active' && (
           <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
@@ -190,7 +187,6 @@ export function TrainingsAnalyticsPage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
-  const [query, setQuery] = useState("");
   const [preset, setPreset] = useState<"month" | "last_month" | "year" | "all">("month");
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
     key: "percent",
@@ -329,7 +325,7 @@ export function TrainingsAnalyticsPage() {
       attendancePercent: (r.presentCount + r.absentCount) > 0 
         ? Math.round((r.presentCount / (r.presentCount + r.absentCount)) * 100) 
         : 0
-    })).filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+    }));
 
     const withFallbackNumber = (value: number | string | null | undefined) => {
       if (value === null || value === undefined || value === "") return Number.POSITIVE_INFINITY;
@@ -344,14 +340,7 @@ export function TrainingsAnalyticsPage() {
 
     rows.sort((a, b) => {
       let diff = 0;
-      if (sortConfig.key === "number") {
-        diff = fallbackByNumber(a, b);
-        return sortConfig.direction === "asc" ? diff : -diff;
-      }
-
-      if (sortConfig.key === "name") {
-        diff = a.name.localeCompare(b.name);
-      } else if (sortConfig.key === "trainings") {
+      if (sortConfig.key === "trainings") {
         diff = a.trainingsTracked - b.trainingsTracked;
       } else if (sortConfig.key === "present") {
         diff = a.presentCount - b.presentCount;
@@ -375,11 +364,10 @@ export function TrainingsAnalyticsPage() {
     });
 
     return rows;
-  }, [players, attendance, completedTrainings, query, sortConfig]);
+  }, [players, attendance, completedTrainings, sortConfig]);
 
   const handleSort = (key: SortKey) => {
-    const defaultDirection: SortDirection =
-      key === "number" || key === "name" ? "asc" : "desc";
+    const defaultDirection: SortDirection = "desc";
     setSortConfig((current) => ({
       key,
       direction: current.key === key ? (current.direction === "desc" ? "asc" : "desc") : defaultDirection,
@@ -439,12 +427,6 @@ export function TrainingsAnalyticsPage() {
                 { value: "all", label: "Весь час" },
               ],
             }}
-            search={{
-              value: query,
-              onChange: setQuery,
-              placeholder: "Пошук гравця...",
-              widthClassName: "max-w-[260px]",
-            }}
             rightSlot={
               <div className="relative flex items-center text-xs text-muted-foreground">
                 <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -468,24 +450,11 @@ export function TrainingsAnalyticsPage() {
           />
         </CardHeader>
 
-        <Table>
+        <Table variant="analytics" size="md">
           <TableHeader>
-            <TableRow className="bg-muted/30 border-b border-border hover:bg-muted/30">
-              <SortableHead
-                label="#"
-                sKey="number"
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                align="center"
-                width="w-[60px] pl-6"
-              />
-              <SortableHead
-                label="Гравець"
-                sKey="name"
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                align="left"
-              />
+            <TableRow>
+              <TableNumberHeaderCell widthClass="w-[60px]">#</TableNumberHeaderCell>
+              <TableHeaderCell align="left">Гравець</TableHeaderCell>
               <SortableHead
                 label="Тренування"
                 sKey="trainings"
@@ -520,12 +489,14 @@ export function TrainingsAnalyticsPage() {
           <TableBody>
             {playerRows.length > 0 ? (
               playerRows.map((row, idx) => (
-                <TableRow 
-                  key={row.playerId} 
-                  className="group hover:bg-muted/40 transition-colors border-b border-border/50 cursor-pointer"
-                  onClick={() => navigate(`/player/${row.playerId}`)} 
+                <TableRow
+                  key={row.playerId}
+                  className="group cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/40"
+                  onClick={() => navigate(`/player/${row.playerId}`)}
                 >
-                  <TableCell className="text-center text-xs font-bold text-muted-foreground/40 pl-6 tabular-nums">{idx + 1}</TableCell>
+                  <TableNumberCell align="center" className="text-muted-foreground/60">
+                    {idx + 1}
+                  </TableNumberCell>
                   <TableCell>
                     <PlayerInfoCell 
                       name={row.name}
@@ -535,18 +506,18 @@ export function TrainingsAnalyticsPage() {
                       status={row.status} // ❗ Передаємо глобальний статус
                     />
                   </TableCell>
-                  <TableCell className="text-center tabular-nums font-semibold text-muted-foreground">{row.trainingsTracked}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center font-semibold text-muted-foreground">{row.trainingsTracked}</TableCell>
+                  <TableCenterCell>
                     <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-[var(--radius)] bg-emerald-500/10 px-1.5 text-xs font-black text-emerald-600">
                       {row.presentCount}
                     </span>
-                  </TableCell>
-                  <TableCell className="text-center">
+                  </TableCenterCell>
+                  <TableCenterCell>
                     <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-[var(--radius)] bg-amber-500/10 px-1.5 text-xs font-black text-amber-600">
                       {row.injuredCount + row.sickCount}
                     </span>
-                  </TableCell>
-                  <TableCell className="text-right pr-8">
+                  </TableCenterCell>
+                  <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-4">
                       <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden hidden sm:block">
                         <div 
@@ -557,7 +528,7 @@ export function TrainingsAnalyticsPage() {
                           style={{ width: `${row.attendancePercent}%` }}
                         />
                       </div>
-                      <span className="text-sm font-black tabular-nums w-10 text-right">{row.attendancePercent}%</span>
+                      <span className="text-sm font-black w-10 text-right">{row.attendancePercent}%</span>
                     </div>
                   </TableCell>
                 </TableRow>

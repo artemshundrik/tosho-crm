@@ -17,7 +17,9 @@ import { logActivity } from "@/lib/activityLogger";
 import { usePageData } from "@/hooks/usePageData";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { TableHeaderCell, TableNumericCell } from "@/components/app/table-kit";
+import { AvatarBase, PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import { Image as ImageIcon } from "lucide-react";
 
 import { AppDropdown } from "@/components/app/AppDropdown";
@@ -538,7 +540,7 @@ function eventIcon(type: EventType) {
   return <span className="inline-flex h-4 w-4 items-center justify-center text-[14px] leading-none">🏁</span>;
 }
 
-function PlayerAvatar({ player, size = 32, isOldMatch = false }: { player: Player; size?: number; isOldMatch?: boolean }) {
+function PlayerAvatar({ player, size = 36, isOldMatch = false }: { player: Player; size?: number; isOldMatch?: boolean }) {
   const initials =
     (player.first_name?.[0] || "") + (player.last_name?.[0] || "");
   const initialsLabel = initials.toUpperCase() || "•";
@@ -547,34 +549,15 @@ function PlayerAvatar({ player, size = 32, isOldMatch = false }: { player: Playe
   const showInjuryStyle = !isOldMatch && (player.status === 'injured' || player.status === 'sick' || player.status === 'away');
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div
-        className={cn(
-          "flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-muted/40 border border-border/50",
-          showInjuryStyle && "opacity-60 grayscale-[0.5]"
-        )}
-      >
-        {player.photo_url ? (
-          <img
-            src={player.photo_url}
-            alt={`${player.first_name ?? ""} ${player.last_name ?? ""}`.trim()}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-            style={{
-              objectPosition: "50% -90%",
-              transform: "scale(1.8)",
-            }}
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-muted-foreground">
-            {initialsLabel}
-          </div>
-        )}
-      </div>
+    <div className="relative shrink-0">
+      <PlayerAvatarBase
+        src={player.photo_url}
+        name={`${player.first_name ?? ""} ${player.last_name ?? ""}`.trim()}
+        fallback={initialsLabel}
+        size={size}
+        referrerPolicy="no-referrer"
+        className={cn(showInjuryStyle && "opacity-60 grayscale-[0.5]")}
+      />
       {/* 🔴 Пульсуючий індикатор лише для нових матчів */}
       {!isOldMatch && player.status && player.status !== 'active' && (
         <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
@@ -632,44 +615,22 @@ const FormSection = React.memo(function FormSection({
 function TeamAvatar({
   name,
   logoUrl,
-  size = 44,
+  size = 48,
 }: {
   name: string;
   logoUrl?: string | null;
   size?: number;
 }) {
-  const initials =
-    name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((x) => x[0])
-      .join("")
-      .toUpperCase() || "•";
-
   return (
-    <div
-      className="shrink-0 overflow-hidden rounded-full border border-border bg-muted/40"
-      style={{ width: size, height: size }}
-      title={name}
-    >
-      {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt={name}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
-          {initials}
-        </div>
-      )}
-    </div>
+    <AvatarBase
+      src={logoUrl}
+      name={name}
+      size={size}
+      shape="circle"
+      className="shrink-0"
+      imageClassName="object-cover"
+      referrerPolicy="no-referrer"
+    />
   );
 }
 
@@ -1579,7 +1540,7 @@ export function MatchDetailsPage() {
           {scoreboard.leftName}
         </div>
       </div>
-      <TeamAvatar name={scoreboard.leftName} logoUrl={scoreboard.leftLogo} size={64} />
+      <TeamAvatar name={scoreboard.leftName} logoUrl={scoreboard.leftLogo} size={48} />
     </div>
 
     {/* CENTER (fixed width) */}
@@ -1608,7 +1569,7 @@ export function MatchDetailsPage() {
 
     {/* RIGHT SIDE (fixed width) */}
     <div className="flex w-[280px] items-center justify-start gap-3 min-w-0">
-      <TeamAvatar name={scoreboard.rightName} logoUrl={scoreboard.rightLogo} size={64} />
+      <TeamAvatar name={scoreboard.rightName} logoUrl={scoreboard.rightLogo} size={48} />
       <div className="min-w-0 text-left">
         <div className="truncate text-lg font-semibold tracking-tight text-foreground">
           {scoreboard.rightName}
@@ -1884,14 +1845,14 @@ export function MatchDetailsPage() {
               </div>
             ) : (
               <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/40")}>
-                <Table className="w-full">
+                <Table variant="analytics" size="sm" className="w-full">
                   <TableHeader>
-                    <TableRow className="bg-muted/40">
-                      <TableHead className="w-[70px] px-4 py-3 text-xs font-semibold text-muted-foreground">Хв.</TableHead>
-                      <TableHead className="w-[220px] px-4 py-3 text-xs font-semibold text-muted-foreground">Тип</TableHead>
-                      <TableHead className="px-4 py-3 text-xs font-semibold text-muted-foreground">Автор</TableHead>
-                      <TableHead className="px-4 py-3 text-xs font-semibold text-muted-foreground">Асист</TableHead>
-                      <TableHead className="w-[190px] px-4 py-3 text-xs font-semibold text-muted-foreground">Створено</TableHead>
+                    <TableRow>
+                      <TableHeaderCell widthClass="w-[70px]">Хв.</TableHeaderCell>
+                      <TableHeaderCell widthClass="w-[220px]">Тип</TableHeaderCell>
+                      <TableHeaderCell>Автор</TableHeaderCell>
+                      <TableHeaderCell>Асист</TableHeaderCell>
+                      <TableHeaderCell widthClass="w-[190px]">Створено</TableHeaderCell>
                     </TableRow>
                   </TableHeader>
 
@@ -1902,21 +1863,21 @@ export function MatchDetailsPage() {
 
                       return (
                         <TableRow key={ev.id} className="hover:bg-muted/40 transition-colors">
-                          <TableCell className="px-4 py-4 align-middle font-medium tabular-nums text-foreground">
+                          <TableNumericCell align="left" className="align-middle font-medium text-foreground">
                             {typeof ev.minute === "number" ? ev.minute : "—"}
-                          </TableCell>
+                          </TableNumericCell>
 
-                          <TableCell className="px-4 py-4 align-middle">
+                          <TableCell className="align-middle">
                             <div className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5", eventPillClasses(ev.event_type))}>
                               <span className="inline-flex h-5 w-5 items-center justify-center">{eventIcon(ev.event_type)}</span>
                               <span className="font-semibold text-foreground">{eventLabels[ev.event_type] ?? ev.event_type}</span>
                             </div>
                           </TableCell>
 
-                          <TableCell className="px-4 py-4 align-middle font-medium text-foreground">
+                          <TableCell className="align-middle font-medium text-foreground">
                             {ev.player_id && authorPlayer ? (
                               <Link to={`/player/${ev.player_id}`} className="flex items-center gap-3 hover:opacity-90">
-                                <PlayerAvatar player={authorPlayer} size={28} isOldMatch={isOldMatch} />
+                                <PlayerAvatar player={authorPlayer} size={36} isOldMatch={isOldMatch} />
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(authorPlayer)}</span>
                               </Link>
                             ) : (
@@ -1924,10 +1885,10 @@ export function MatchDetailsPage() {
                             )}
                           </TableCell>
 
-                          <TableCell className="px-4 py-4 align-middle text-sm text-muted-foreground">
+                          <TableCell className="align-middle text-sm text-muted-foreground">
                             {ev.assist_player_id && assistPlayer ? (
                               <Link to={`/player/${ev.assist_player_id}`} className="flex items-center gap-3 hover:opacity-90">
-                                <PlayerAvatar player={assistPlayer} size={28} isOldMatch={isOldMatch} />
+                                <PlayerAvatar player={assistPlayer} size={36} isOldMatch={isOldMatch} />
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(assistPlayer)}</span>
                               </Link>
                             ) : (
@@ -1935,7 +1896,7 @@ export function MatchDetailsPage() {
                             )}
                           </TableCell>
 
-                          <TableCell className="px-4 py-4 align-middle text-sm text-muted-foreground">{safeDateTimeUA(ev.created_at)}</TableCell>
+                          <TableCell className="align-middle text-sm text-muted-foreground">{safeDateTimeUA(ev.created_at)}</TableCell>
                         </TableRow>
                       );
                     })}

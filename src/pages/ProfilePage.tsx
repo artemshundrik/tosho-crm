@@ -7,7 +7,7 @@ import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
@@ -288,10 +288,16 @@ export function ProfilePage() {
               
               {/* Avatar Wrapper */}
               <div className="relative group mx-auto sm:mx-0">
-                <Avatar className="h-28 w-28 border-[4px] border-card shadow-lg bg-card text-foreground">
-                  {avatarUrl ? <AvatarImage src={avatarUrl} className="object-cover" /> : null}
-                  <AvatarFallback className="text-3xl font-bold bg-muted text-foreground">{initials}</AvatarFallback>
-                </Avatar>
+                <AvatarBase
+                  src={avatarUrl}
+                  name={fullName || "Користувач"}
+                  fallback={initials}
+                  size={112}
+                  shape="circle"
+                  className="border-[4px] border-card shadow-lg bg-card text-foreground"
+                  imageClassName="object-cover"
+                  fallbackClassName="text-3xl font-bold text-foreground"
+                />
                 
                 {/* Edit Photo Button */}
                 <Button

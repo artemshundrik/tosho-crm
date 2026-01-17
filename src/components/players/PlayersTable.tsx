@@ -1,16 +1,23 @@
 import React from "react";
-import { MoreHorizontal, ArrowUpDown } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableActionHeaderCell,
+  TableAvatarCell,
+  TableCenterHeaderCell,
+  TableNumberHeaderCell,
+  TableTextHeaderCell,
+  TableNumberCell,
+} from "@/components/app/table-kit";
 
 // Демо дані
 const players = [
@@ -22,29 +29,24 @@ const players = [
 export function PlayersTable() {
   return (
     <div className="rounded-[var(--radius-section)] border border-border bg-card overflow-hidden">
-      <Table>
+      <Table variant="list" size="md">
         <TableHeader className="bg-muted/50">
           <TableRow>
-            <TableHead className="w-[50px]">#</TableHead>
-            <TableHead>Гравець</TableHead>
-            <TableHead>Позиція</TableHead>
-            <TableHead>Статус</TableHead>
-            <TableHead className="text-right">Дії</TableHead>
+            <TableNumberHeaderCell widthClass="w-[50px]">#</TableNumberHeaderCell>
+            <TableTextHeaderCell>Гравець</TableTextHeaderCell>
+            <TableCenterHeaderCell>Позиція</TableCenterHeaderCell>
+            <TableCenterHeaderCell>Статус</TableCenterHeaderCell>
+            <TableActionHeaderCell>Дії</TableActionHeaderCell>
           </TableRow>
         </TableHeader>
         <TableBody>
           {players.map((player) => (
             <TableRow key={player.id} className="hover:bg-muted/30 transition-colors">
-              <TableCell className="font-medium text-muted-foreground">{player.number}</TableCell>
+              <TableNumberCell>{player.number}</TableNumberCell>
               
               <TableCell>
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={player.avatar} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                      {player.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <TableAvatarCell src={player.avatar} fallback={player.name.charAt(0)} size={28} />
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-foreground">{player.name}</span>
                     <span className="text-[10px] text-muted-foreground">ID: {player.id}</span>
@@ -66,11 +68,13 @@ export function PlayersTable() {
                 )}
               </TableCell>
               
-              <TableCell className="text-right">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </TableCell>
+              <TableActionCell>
+                <div className="flex justify-end">
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              </TableActionCell>
             </TableRow>
           ))}
         </TableBody>

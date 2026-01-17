@@ -12,10 +12,17 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableActionHeaderCell,
+  TableCenterCell,
+  TableNumberHeaderCell,
+  TableTextHeaderCell,
+  TableNumericCell,
+} from "@/components/app/table-kit";
 import {
   Sheet,
   SheetContent,
@@ -34,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { Label } from "@/components/ui/label";
@@ -116,33 +124,22 @@ function formatBirthday(birthday: string | null): string {
 function JerseyNumber({ number }: { number: number | null }) {
   if (number === null) return <span className="text-muted-foreground/20 text-lg font-bold">—</span>;
   return (
-    <div className="relative flex items-center justify-center w-10 h-10 select-none">
-       <Shirt className="absolute w-8 h-8 text-muted-foreground/10" strokeWidth={1.5} />
-       <span className="relative text-[15px] font-black text-foreground/80 z-10">{number}</span>
+    <div className="relative flex h-9 w-9 items-center justify-center select-none">
+       <Shirt className="absolute h-7 w-7 text-muted-foreground/10" strokeWidth={1.5} />
+       <span className="relative text-[13px] font-black text-foreground/80 z-10">{number}</span>
     </div>
   );
 }
 
-function PlayerAvatar({ player, size = 44 }: { player: Player; size?: number }) {
+function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) {
   const initials = `${player.first_name?.[0] || ""}${player.last_name?.[0] || ""}`.toUpperCase();
   return (
-    <div
-      className="shrink-0 overflow-hidden rounded-full border border-border/50 bg-muted/40 shadow-sm"
-      style={{ width: size, height: size }}
-    >
-      {player.photo_url ? (
-        <img
-          src={player.photo_url}
-          alt="Avatar"
-          className="h-full w-full object-cover object-top"
-          style={{ transform: "scale(1.8)", objectPosition: "50% -90%" }}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-muted-foreground uppercase">
-          {initials}
-        </div>
-      )}
-    </div>
+    <PlayerAvatarBase
+      src={player.photo_url}
+      name={`${player.first_name} ${player.last_name}`}
+      fallback={initials}
+      size={size}
+    />
   );
 }
 
@@ -319,15 +316,15 @@ export function PlayersAdminPage() {
         </div>
 
         <div className="overflow-x-auto">
-            <Table>
+          <Table variant="list" size="sm">
               <TableHeader className="bg-muted/20">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="w-[80px] text-center pl-6 uppercase text-[10px] font-bold tracking-wider">№</TableHead>
-                  <TableHead className="w-[260px] uppercase text-[10px] font-bold tracking-wider">Гравець</TableHead>
-                  <TableHead className="w-[180px] text-center uppercase text-[10px] font-bold tracking-wider">Статус</TableHead>
-                  <TableHead className="w-[140px] text-center uppercase text-[10px] font-bold tracking-wider">Амплуа</TableHead>
-                  <TableHead className="w-[80px] text-center uppercase text-[10px] font-bold tracking-wider">Вік</TableHead>
-                  <TableHead className="w-[64px] pr-6"></TableHead>
+                  <TableNumberHeaderCell widthClass="w-[56px]">№</TableNumberHeaderCell>
+                  <TableTextHeaderCell widthClass="w-[260px]">Гравець</TableTextHeaderCell>
+                  <TableTextHeaderCell widthClass="w-[160px]">Статус</TableTextHeaderCell>
+                  <TableTextHeaderCell widthClass="w-[120px]">Амплуа</TableTextHeaderCell>
+                  <TableTextHeaderCell widthClass="w-[70px]">Вік</TableTextHeaderCell>
+                  <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -338,12 +335,14 @@ export function PlayersAdminPage() {
                       key={player.id} 
                       onClick={() => navigate(`/player/${player.id}`)}
                       className={cn(
-                        "group transition-colors border-border/40 h-[72px] cursor-pointer",
+                        "group transition-colors border-border/40 cursor-pointer",
                         "hover:bg-muted/30",
                         player.status === 'inactive' && "opacity-50 grayscale"
                       )}
                     >
-                      <TableCell className="text-center pl-6"><JerseyNumber number={player.shirt_number} /></TableCell>
+                      <TableCenterCell>
+                        <JerseyNumber number={player.shirt_number} />
+                      </TableCenterCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <PlayerAvatar player={player} />
@@ -353,7 +352,7 @@ export function PlayersAdminPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-left">
                         <AppDropdown
                           align="center"
                           contentClassName="w-48 shadow-floating border-border/50"
@@ -400,15 +399,15 @@ export function PlayersAdminPage() {
                           ]}
                         />
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-left">
                         <Badge variant="outline" className="h-7 px-3 rounded-[var(--radius-md)] bg-muted/30 border-border/60 font-medium text-xs">
                           {player.position === 'GK' ? "Воротар" : "Універсал"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-center text-sm font-medium tabular-nums text-muted-foreground">
+                      <TableNumericCell align="left" className="text-sm font-medium text-muted-foreground">
                         {getAgeFromBirthday(player.birthday || null) || "—"} р.
-                      </TableCell>
-                      <TableCell className="pr-6">
+                      </TableNumericCell>
+                      <TableActionCell className="pr-6">
                         <AppDropdown
                           align="end"
                           contentClassName="shadow-floating border-border/50"
@@ -445,7 +444,7 @@ export function PlayersAdminPage() {
                             },
                           ]}
                         />
-                      </TableCell>
+                      </TableActionCell>
                     </TableRow>
                   );
                 })}

@@ -7,6 +7,7 @@ import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
 import { Link } from "react-router-dom";
 import { RotateCw } from "lucide-react";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 
 export type OperationalSummaryKpi = {
   key: string;
@@ -130,33 +131,16 @@ function ActionButton({ action }: { action: OperationalSummaryAction }) {
 function AvatarCircle({
   name,
   src,
-  size = 24,
+  size = 28,
 }: {
   name: string;
   src?: string | null;
   size?: number;
 }) {
-  const initials =
-    name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase())
-      .join("") || "T";
-
   return (
-    <div
-      className="grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border shrink-0"
-      style={{ width: size, height: size }}
-      aria-label={name}
-      title={name}
-    >
-      {src ? (
-        <img src={src} alt={name} className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-muted-foreground">{initials}</span>
-      )}
-    </div>
+    <span className="shrink-0" aria-label={name} title={name}>
+      <PlayerAvatarBase src={src} name={name} size={size} />
+    </span>
   );
 }
 
@@ -444,7 +428,7 @@ function NextUpHero({
             <div className="text-[13px] sm:text-xl font-bold text-foreground leading-tight break-words whitespace-normal">
               {teams.left}
             </div>
-            <AvatarCircle name={avatars[0]?.name ?? teams.left} src={avatars[0]?.src} size={64} />
+            <AvatarCircle name={avatars[0]?.name ?? teams.left} src={avatars[0]?.src} size={48} />
           </div>
 
           {/* TIME */}
@@ -455,7 +439,7 @@ function NextUpHero({
 
           {/* RIGHT */}
           <div className="flex items-center justify-start gap-3 text-left min-w-0">
-            <AvatarCircle name={avatars[1]?.name ?? teams.right} src={avatars[1]?.src} size={64} />
+            <AvatarCircle name={avatars[1]?.name ?? teams.right} src={avatars[1]?.src} size={48} />
             <div className="text-[13px] sm:text-xl font-bold text-foreground leading-tight break-words whitespace-normal">
               {teams.right}
             </div>

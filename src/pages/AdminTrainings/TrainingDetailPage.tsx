@@ -29,15 +29,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableHeaderCell,
+  TableNumberCell,
+} from "@/components/app/table-kit";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { logActivity } from "@/lib/activityLogger";
@@ -799,12 +803,12 @@ const dbIds = new Set<string>();
           <Badge variant="secondary">{totalPlayers}</Badge>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table variant="list" size="md">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[60px]">#</TableHead>
-                <TableHead>Гравець</TableHead>
-                <TableHead className="text-right">Статус</TableHead>
+                <TableHeaderCell widthClass="w-[60px]">#</TableHeaderCell>
+                <TableHeaderCell>Гравець</TableHeaderCell>
+                <TableHeaderCell align="right" className="pr-6">Статус</TableHeaderCell>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -814,19 +818,17 @@ const dbIds = new Set<string>();
                 const positionLabel = formatPositionUk(p.position);
                 return (
                   <TableRow key={p.id} className="hover:bg-muted/30">
-                    <TableCell className="text-muted-foreground font-medium">#{p.shirt_number ?? idx + 1}</TableCell>
+                    <TableNumberCell align="left">#{p.shirt_number ?? idx + 1}</TableNumberCell>
                     <TableCell>
                       <Link to={`/player/${p.id}`} className="flex items-center gap-3">
                         <div className="relative">
-                          <Avatar
-                            className={cn(
-                              "h-10 w-10 border border-border/50 shadow-sm transition-transform",
-                              p.status !== "active" && "grayscale opacity-60"
-                            )}
-                          >
-                            <AvatarImage src={p.photo_url || undefined} className="object-cover" />
-                            <AvatarFallback className="text-[11px] font-black bg-muted">{initials}</AvatarFallback>
-                          </Avatar>
+                          <PlayerAvatarBase
+                            src={p.photo_url}
+                            name={`${p.first_name} ${p.last_name}`}
+                            fallback={initials}
+                            size={36}
+                            className={cn(p.status !== "active" && "grayscale opacity-60")}
+                          />
                           {p.status !== "active" && (
                             <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive animate-pulse" />
                           )}
@@ -843,32 +845,32 @@ const dbIds = new Set<string>();
                         </div>
                       </Link>
                     </TableCell>
-                   <TableCell className="text-right pr-6">
-  <div className="flex flex-wrap justify-end gap-1.5">
-    {statusOrder.map((st) => {
-      const cfg = statusStyles[st];
-      const isActive = playerStatus === st;
-      return (
-        <Button
-          key={st}
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => handleStatusChange(p.id, st)}
-          className={cn(
-            "h-9 rounded-[var(--radius-lg)] border px-3 text-[10px] font-black uppercase tracking-tighter transition-all active:scale-95 flex items-center gap-1.5",
-            isActive
-              ? cfg.tone + " border-transparent ring-2 ring-offset-1 ring-offset-background ring-border/20"
-              : "border-border bg-background text-muted-foreground/40 hover:text-foreground hover:bg-muted/40"
-          )}
-        >
-          <cfg.icon className={cn("h-3.5 w-3.5", isActive ? "text-current" : "text-muted-foreground/60")} />
-          {cfg.short}
-        </Button>
-      );
-    })}
-  </div>
-</TableCell>
+                    <TableActionCell className="pr-6">
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {statusOrder.map((st) => {
+                          const cfg = statusStyles[st];
+                          const isActive = playerStatus === st;
+                          return (
+                            <Button
+                              key={st}
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStatusChange(p.id, st)}
+                              className={cn(
+                                "h-9 rounded-[var(--radius-lg)] border px-3 text-[10px] font-black uppercase tracking-tighter transition-all active:scale-95 flex items-center gap-1.5",
+                                isActive
+                                  ? cfg.tone + " border-transparent ring-2 ring-offset-1 ring-offset-background ring-border/20"
+                                  : "border-border bg-background text-muted-foreground/40 hover:text-foreground hover:bg-muted/40"
+                              )}
+                            >
+                              <cfg.icon className={cn("h-3.5 w-3.5", isActive ? "text-current" : "text-muted-foreground/60")} />
+                              {cfg.short}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </TableActionCell>
                   </TableRow>
                 );
               })}

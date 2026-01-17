@@ -10,7 +10,7 @@ import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   formatActivityClock,
@@ -367,12 +367,12 @@ export default function ActivityPage() {
                         >
                           <div className="flex items-start gap-4">
                             <div className="flex items-center gap-3 pt-0.5">
-                              <Avatar className="h-10 w-10 border border-border bg-muted/60">
-                                <AvatarImage src={item.avatar_url || ""} />
-                                <AvatarFallback className="text-xs font-semibold text-muted-foreground">
-                                  {initialsForItem(item)}
-                                </AvatarFallback>
-                              </Avatar>
+                              <AvatarBase
+                                src={item.avatar_url}
+                                name={item.actor || item.title || "User"}
+                                fallback={initialsForItem(item)}
+                                variant="sm"
+                              />
                               <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground">
                                 <Icon className="h-5 w-5" />
                               </div>

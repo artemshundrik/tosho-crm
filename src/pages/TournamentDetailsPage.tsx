@@ -33,7 +33,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { TableHeaderCell, TableNumericCell } from "@/components/app/table-kit";
+import { AvatarBase, PlayerAvatar as PlayerAvatarBase } from "@/components/app/avatar-kit";
 
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Minus, Trophy } from "lucide-react";
 import { StandingsPreviewModal } from "@/features/standingsImport/StandingsPreviewModal";
@@ -165,20 +167,14 @@ function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) 
   const isUnavailable = player.status === 'injured' || player.status === 'sick' || player.status === 'away';
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div
-        className={cn(
-          "grid h-full w-full place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border",
-          isUnavailable && "opacity-60 grayscale-[0.5]"
-        )}
-        title={`${player.last_name} ${player.first_name}`.trim()}
-      >
-        {player.photo_url ? (
-          <img src={player.photo_url} alt={player.last_name} className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <span className="text-[10px] font-bold text-muted-foreground">{initials}</span>
-        )}
-      </div>
+    <div className="relative shrink-0">
+      <PlayerAvatarBase
+        src={player.photo_url}
+        name={`${player.last_name} ${player.first_name}`.trim()}
+        fallback={initials}
+        size={size}
+        className={cn(isUnavailable && "opacity-60 grayscale-[0.5]")}
+      />
       
       {/* Пульсуючий індикатор для будь-якого статусу, крім активного */}
       {player.status !== 'active' && (
@@ -779,25 +775,25 @@ export function TournamentDetailsPage() {
                   </div>
                 ) : (
                 <div className="overflow-hidden rounded-[var(--radius-inner)] border border-border">
-                  <Table>
+                  <Table variant="analytics" size="sm">
                     <TableHeader>
                       <TableRow>
-                      <TableHead className="w-[56px]">№</TableHead>
-                      <TableHead className="w-[28px] text-center"></TableHead>
-                      <TableHead>Команда</TableHead>
-                        <TableHead className="w-[80px]">І</TableHead>
-                        <TableHead className="w-[80px]">В</TableHead>
-                        <TableHead className="w-[80px]">Н</TableHead>
-                        <TableHead className="w-[80px]">П</TableHead>
-                        <TableHead className="w-[120px]">Г</TableHead>
-                        <TableHead className="w-[80px]">О</TableHead>
+                        <TableHeaderCell align="center" widthClass="w-[56px]">№</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[28px]" />
+                        <TableHeaderCell>Команда</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[80px]">І</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[80px]">В</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[80px]">Н</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[80px]">П</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[120px]">Г</TableHeaderCell>
+                        <TableHeaderCell align="center" widthClass="w-[80px]">О</TableHeaderCell>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                         {standingsRows.map((row) => (
                           <TableRow key={row.team_name}>
-                            <TableCell className="font-semibold tabular-nums">{row.position}</TableCell>
-                            <TableCell className="text-center tabular-nums">
+                            <TableNumericCell align="center" className="font-semibold">{row.position}</TableNumericCell>
+                            <TableCell className="text-center">
                               {row.position_delta === null ? (
                                 <span className="inline-flex items-center justify-center text-xs text-muted-foreground">
                                   <Minus className="h-3.5 w-3.5" />
@@ -821,24 +817,26 @@ export function TournamentDetailsPage() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 {row.logo_url ? (
-                                <img
-                                  src={row.logo_url}
-                                  alt={row.team_name}
-                                  className="h-7 w-7 rounded-full border border-border object-cover"
-                                  loading="lazy"
-                                />
-                              ) : null}
-                              <span className="font-medium">{row.team_name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="tabular-nums">{row.played ?? "—"}</TableCell>
-                          <TableCell className="tabular-nums">{row.wins ?? "—"}</TableCell>
-                          <TableCell className="tabular-nums">{row.draws ?? "—"}</TableCell>
-                          <TableCell className="tabular-nums">{row.losses ?? "—"}</TableCell>
-                          <TableCell className="tabular-nums">
-                            {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
-                          </TableCell>
-                          <TableCell className="tabular-nums">{row.points ?? "—"}</TableCell>
+                                  <img
+                                    src={row.logo_url}
+                                    alt={row.team_name}
+                                    className="h-6 w-6 rounded-full border border-border object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
+                                )}
+                                <span className="font-medium">{row.team_name}</span>
+                              </div>
+                            </TableCell>
+                            <TableNumericCell align="center">{row.played ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.wins ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.draws ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.losses ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">
+                              {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center">{row.points ?? "—"}</TableNumericCell>
                         </TableRow>
                       ))}
                     </TableBody>

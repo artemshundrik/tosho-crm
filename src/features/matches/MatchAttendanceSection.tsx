@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Group,
-  Paper,
-  ScrollArea,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from '../../lib/supabaseClient';
 
 type MatchAttendanceSectionProps = {
@@ -165,67 +157,75 @@ export function MatchAttendanceSection({ matchId }: MatchAttendanceSectionProps)
   }
 
   return (
-    <Paper withBorder shadow="sm" p="md" radius="md">
-      <Group justify="space-between" align="center" mb="sm">
-        <Title order={4}>Склад на матч</Title>
-        <Group gap="xs">
-          <Button variant="outline" size="sm" onClick={handleSelectAll} disabled={saving || loading}>
+    <Card className="border border-border shadow-none">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 pb-3">
+        <div>
+          <CardTitle className="text-base">Склад на матч</CardTitle>
+          <p className="text-xs text-muted-foreground">Відміть присутність гравців.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="xs" onClick={handleSelectAll} disabled={saving || loading}>
             Відмітити всіх
           </Button>
-          <Button variant="subtle" size="sm" onClick={handleClearAll} disabled={saving || loading}>
+          <Button variant="ghost" size="xs" onClick={handleClearAll} disabled={saving || loading}>
             Очистити всіх
           </Button>
-        </Group>
-      </Group>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Помилка</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {error && (
-        <Alert color="red" mb="sm" title="Помилка">
-          {error}
-        </Alert>
-      )}
-
-      <ScrollArea h={320} type="auto">
-        {loading ? (
-          <Text size="sm" c="dimmed">
-            Завантаження...
-          </Text>
-        ) : playerList.length === 0 ? (
-          <Text size="sm">Немає активних гравців.</Text>
-        ) : (
-          <Stack gap={4}>
-            {playerList.map((p) => {
-              const label =
-                p.shirt_number !== null
-                  ? `${p.shirt_number}. ${p.last_name} ${p.first_name}`
-                  : `${p.last_name} ${p.first_name}`;
-              const checked = attendance.has(p.id);
-              return (
-                <Box
-                  key={p.id}
-                  px="xs"
-                  py={6}
-                  style={{ borderBottom: '1px solid hsl(var(--border) / 0.6)' }}
-                >
-                  <Group gap="sm">
+        <div className="max-h-80 overflow-y-auto rounded-[var(--radius-inner)] border border-border/60 bg-muted/10">
+          {loading ? (
+            <p className="p-4 text-sm text-muted-foreground">Завантаження...</p>
+          ) : playerList.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">Немає активних гравців.</p>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {playerList.map((p) => {
+                const label =
+                  p.shirt_number !== null
+                    ? `${p.shirt_number}. ${p.last_name} ${p.first_name}`
+                    : `${p.last_name} ${p.first_name}`;
+                const checked = attendance.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => !saving && togglePlayer(p.id, !checked)}
+                    onKeyDown={(e) => {
+                      if (saving) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        togglePlayer(p.id, !checked);
+                      }
+                    }}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
                     <Checkbox
                       checked={checked}
                       disabled={saving}
-                      onChange={(e) => togglePlayer(p.id, e.currentTarget.checked)}
+                      onCheckedChange={(next) => togglePlayer(p.id, Boolean(next))}
+                      onClick={(e) => e.stopPropagation()}
                     />
-                    <Text>{label}</Text>
-                  </Group>
-                </Box>
-              );
-            })}
-          </Stack>
-        )}
-      </ScrollArea>
+                    <span>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-      {saving && (
-        <Text size="xs" c="dimmed" mt="xs">
-          Збереження змін...
-        </Text>
-      )}
-    </Paper>
+        {saving && (
+          <p className="text-xs text-muted-foreground">Збереження змін...</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

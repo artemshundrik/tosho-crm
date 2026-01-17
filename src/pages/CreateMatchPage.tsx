@@ -15,7 +15,12 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableHeaderCell,
+  TableNumericCell,
+} from "@/components/app/table-kit";
 
 import {
   AlertTriangle,
@@ -1420,15 +1425,15 @@ if (minute !== null && Number.isNaN(minute)) {
                 </div>
               ) : (
                 <div className={cn("overflow-hidden border border-border rounded-[var(--radius-inner)]")}>
-                  <Table className="w-full">
+                  <Table variant="analytics" size="sm" className="w-full">
                     <TableHeader>
-                      <TableRow className="bg-muted/40">
-                        <TableHead className="w-[70px] px-4 py-3 text-xs font-semibold text-muted-foreground">Хв.</TableHead>
-                        <TableHead className="w-[220px] px-4 py-3 text-xs font-semibold text-muted-foreground">Тип</TableHead>
-                        <TableHead className="px-4 py-3 text-xs font-semibold text-muted-foreground">Автор</TableHead>
-                        <TableHead className="px-4 py-3 text-xs font-semibold text-muted-foreground">Асист</TableHead>
-                        <TableHead className="w-[190px] px-4 py-3 text-xs font-semibold text-muted-foreground">Створено</TableHead>
-                        <TableHead className="w-[120px] px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Дії</TableHead>
+                      <TableRow>
+                        <TableHeaderCell widthClass="w-[70px]">Хв.</TableHeaderCell>
+                        <TableHeaderCell widthClass="w-[220px]">Тип</TableHeaderCell>
+                        <TableHeaderCell>Автор</TableHeaderCell>
+                        <TableHeaderCell>Асист</TableHeaderCell>
+                        <TableHeaderCell widthClass="w-[190px]">Створено</TableHeaderCell>
+                        <TableHeaderCell align="right" widthClass="w-[120px]">Дії</TableHeaderCell>
                       </TableRow>
                     </TableHeader>
 
@@ -1439,22 +1444,22 @@ if (minute !== null && Number.isNaN(minute)) {
 
                         return (
                           <TableRow key={ev.id} className="hover:bg-muted/40 transition-colors">
-                            <TableCell className="px-4 py-4 align-middle font-medium tabular-nums text-foreground">
+                            <TableNumericCell align="left" className="align-middle font-medium text-foreground">
                               {typeof ev.minute === "number" ? ev.minute : "—"}
-                            </TableCell>
+                            </TableNumericCell>
 
-                            <TableCell className="px-4 py-4 align-middle">
+                            <TableCell className="align-middle">
                               <div className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5", "text-foreground", eventPillClasses(ev.event_type))}>
                                 <span className="inline-flex h-5 w-5 items-center justify-center">{eventIcon(ev.event_type)}</span>
                                 <span className="font-semibold">{eventTypeLabels[ev.event_type]}</span>
                               </div>
                             </TableCell>
 
-                            <TableCell className="px-4 py-4 align-middle font-medium text-foreground">{author}</TableCell>
-                            <TableCell className="px-4 py-4 align-middle text-sm text-muted-foreground">{assist !== "—" ? `${assist}` : "—"}</TableCell>
-                            <TableCell className="px-4 py-4 align-middle text-sm text-muted-foreground">{safeDateTimeUA(ev.created_at)}</TableCell>
+                            <TableCell className="align-middle font-medium text-foreground">{author}</TableCell>
+                            <TableCell className="align-middle text-sm text-muted-foreground">{assist !== "—" ? `${assist}` : "—"}</TableCell>
+                            <TableCell className="align-middle text-sm text-muted-foreground">{safeDateTimeUA(ev.created_at)}</TableCell>
 
-                            <TableCell className="px-4 py-4 align-middle text-right">
+                            <TableActionCell className="align-middle">
                               <div className="inline-flex items-center justify-end gap-1">
                                 <Button
                                   type="button"
@@ -1480,7 +1485,7 @@ if (minute !== null && Number.isNaN(minute)) {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
-                            </TableCell>
+                            </TableActionCell>
                           </TableRow>
                         );
                       })}

@@ -4,16 +4,53 @@ import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef<
   HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+  React.HTMLAttributes<HTMLTableElement> & {
+    variant?: "list" | "analytics" | "compact";
+    size?: "sm" | "md" | "lg";
+  }
+>(({ className, variant, size, ...props }, ref) => {
+  const sizeClasses = {
+    sm: "[&_tbody_tr]:h-12 [&_th]:h-9 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
+    md: "[&_tbody_tr]:h-14 [&_th]:h-10 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3",
+    lg: "[&_tbody_tr]:h-16 [&_th]:h-12 [&_th]:px-6 [&_td]:px-6 [&_td]:py-4",
+  };
+
+  const variantClasses = {
+    list: [
+      "[&_thead]:bg-muted/20",
+      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
+    ].join(" "),
+    analytics: [
+      "[&_thead]:bg-muted/40",
+      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
+      "[&_tbody_tr:hover]:bg-muted/40",
+      "[&_tbody_td]:tabular-nums",
+    ].join(" "),
+    compact: [
+      "[&_thead]:bg-muted/10",
+      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-muted/20",
+    ].join(" "),
+  };
+
+  return (
+    <div className="relative w-full overflow-auto">
+      <table
+        ref={ref}
+        className={cn(
+          "w-full caption-bottom text-sm",
+          variant ? variantClasses[variant] : null,
+          size ? sizeClasses[size] : null,
+          className
+        )}
+        data-variant={variant}
+        data-size={size}
+        {...props}
+      />
+    </div>
+  );
+})
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<

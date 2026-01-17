@@ -1,0 +1,143 @@
+import * as React from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+
+type AvatarVariant = "xs" | "sm" | "lg" | "hero";
+type AvatarShape = "circle" | "rounded";
+
+const VARIANT_SIZES: Record<AvatarVariant, number> = {
+  xs: 28,
+  sm: 36,
+  lg: 48,
+  hero: 112,
+};
+
+export function getPlayerAvatarImageStyle(size?: number): React.CSSProperties | undefined {
+  void size;
+  return {
+    objectPosition: "50% -70%",
+    transform: "scale(1.7)",
+  };
+}
+
+function getInitials(name?: string, fallback?: string) {
+  if (fallback?.trim()) return fallback.trim();
+  if (!name) return "•";
+  const parts = name.split(" ").filter(Boolean);
+  const initials = parts.slice(0, 2).map((p) => p[0]).join("");
+  return initials.toUpperCase() || "•";
+}
+
+type AvatarBaseProps = {
+  src?: string | null;
+  name?: string;
+  fallback?: string;
+  variant?: AvatarVariant;
+  size?: number;
+  shape?: AvatarShape;
+  className?: string;
+  imageClassName?: string;
+  imageStyle?: React.CSSProperties;
+  fallbackClassName?: string;
+  loading?: "eager" | "lazy";
+  referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>["referrerPolicy"];
+};
+
+type PlayerAvatarProps = {
+  src?: string | null;
+  name?: string;
+  fallback?: string;
+  size?: number;
+  shape?: AvatarShape;
+  className?: string;
+  imageClassName?: string;
+  fallbackClassName?: string;
+  loading?: "eager" | "lazy";
+  referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>["referrerPolicy"];
+};
+
+export function AvatarBase({
+  src,
+  name,
+  fallback,
+  variant = "sm",
+  size,
+  shape = "circle",
+  className,
+  imageClassName,
+  imageStyle,
+  fallbackClassName,
+  loading = "lazy",
+  referrerPolicy,
+}: AvatarBaseProps) {
+  const [errored, setErrored] = React.useState(false);
+
+  React.useEffect(() => {
+    setErrored(false);
+  }, [src]);
+
+  const computedSize = size ?? VARIANT_SIZES[variant];
+  const initials = getInitials(name, fallback);
+  const showImage = Boolean(src) && !errored;
+
+  return (
+    <Avatar
+      className={cn(
+        "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
+        shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+        className
+      )}
+      style={{ width: computedSize, height: computedSize }}
+    >
+      {showImage ? (
+        <AvatarImage
+          src={src ?? ""}
+          alt={name || "Avatar"}
+          className={cn("object-cover", imageClassName)}
+          style={imageStyle}
+          loading={loading}
+          referrerPolicy={referrerPolicy}
+          onError={() => setErrored(true)}
+        />
+      ) : null}
+      <AvatarFallback
+        className={cn(
+          "text-[10px] font-semibold uppercase text-muted-foreground",
+          shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+          fallbackClassName
+        )}
+      >
+        {initials}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+export function PlayerAvatar({
+  src,
+  name,
+  fallback,
+  size = VARIANT_SIZES.sm,
+  shape = "circle",
+  className,
+  imageClassName,
+  fallbackClassName,
+  loading = "lazy",
+  referrerPolicy,
+}: PlayerAvatarProps) {
+  return (
+    <AvatarBase
+      src={src}
+      name={name}
+      fallback={fallback}
+      size={size}
+      shape={shape}
+      className={className}
+      imageClassName={imageClassName}
+      fallbackClassName={fallbackClassName}
+      loading={loading}
+      referrerPolicy={referrerPolicy}
+      imageStyle={getPlayerAvatarImageStyle(size)}
+    />
+  );
+}

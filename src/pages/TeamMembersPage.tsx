@@ -29,14 +29,19 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  TableActionCell,
+  TableActionHeaderCell,
+  TableEmptyRow,
+  TableTextHeaderCell,
+} from "@/components/app/table-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   Dialog,
@@ -409,35 +414,34 @@ export function TeamMembersPage() {
         {/* --- CONTENT: MEMBERS --- */}
         {activeTab === "members" && (
           <div className="overflow-x-auto">
-            <Table>
+            <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="w-[40%] pl-6">Користувач</TableHead>
-                  <TableHead>Роль</TableHead>
-                  <TableHead>Приєднався</TableHead>
-                  <TableHead className="text-right pr-6">Дії</TableHead>
+                  <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">Користувач</TableTextHeaderCell>
+                  <TableTextHeaderCell>Роль</TableTextHeaderCell>
+                  <TableTextHeaderCell>Приєднався</TableTextHeaderCell>
+                  <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredMembers.length === 0 ? (
-                   <TableRow>
-                     <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
-                        Користувачів не знайдено.
-                     </TableCell>
-                   </TableRow>
+                  <TableEmptyRow colSpan={4}>Користувачів не знайдено.</TableEmptyRow>
                 ) : (
                   filteredMembers.map((m) => {
                     const initials = (m.full_name || m.email || "U").substring(0, 2).toUpperCase();
                     return (
-                      <TableRow key={m.user_id} className="h-[72px] hover:bg-muted/40 transition-colors group">
+                      <TableRow key={m.user_id} className="hover:bg-muted/40 transition-colors group">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 border border-border bg-muted/50">
-                              <AvatarImage src={m.avatar_url || ""} />
-                              <AvatarFallback className="text-xs font-bold text-muted-foreground bg-slate-100 dark:bg-slate-800">
-                                {initials}
-                              </AvatarFallback>
-                            </Avatar>
+                            <AvatarBase
+                              src={m.avatar_url}
+                              name={m.full_name || m.email || "Користувач"}
+                              fallback={initials}
+                              size={48}
+                              shape="circle"
+                              className="border-border bg-muted/50"
+                              fallbackClassName="text-xs font-bold"
+                            />
                             <div className="flex flex-col">
                               <span className="text-sm font-semibold text-foreground">{m.full_name || "Користувач"}</span>
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -459,7 +463,7 @@ export function TeamMembersPage() {
                               <span>{formatDate(m.created_at)}</span>
                            </div>
                         </TableCell>
-                        <TableCell className="text-right pr-6">
+                        <TableActionCell className="pr-6">
                           {canManage && (
                             <AppDropdown
                               align="end"
@@ -492,7 +496,7 @@ export function TeamMembersPage() {
                               ]}
                             />
                           )}
-                        </TableCell>
+                        </TableActionCell>
                       </TableRow>
                     );
                   })
@@ -505,30 +509,26 @@ export function TeamMembersPage() {
         {/* --- CONTENT: INVITES --- */}
         {activeTab === "invites" && canManage && (
           <div className="overflow-x-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
-             <Table>
+             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="pl-6 w-[40%]">Посилання / Email</TableHead>
-                  <TableHead>Роль</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Створено</TableHead>
-                  <TableHead className="text-right pr-6">Дії</TableHead>
+                  <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">Посилання / Email</TableTextHeaderCell>
+                  <TableTextHeaderCell>Роль</TableTextHeaderCell>
+                  <TableTextHeaderCell>Статус</TableTextHeaderCell>
+                  <TableTextHeaderCell>Створено</TableTextHeaderCell>
+                  <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {invites.length === 0 ? (
-                   <TableRow>
-                     <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                        Немає активних запрошень.
-                     </TableCell>
-                   </TableRow>
+                  <TableEmptyRow colSpan={5}>Немає активних запрошень.</TableEmptyRow>
                 ) : (
                   invites.map((inv) => {
                     const expired = isExpired(inv.expires_at);
                     const used = !!inv.used_at;
                     
                     return (
-                      <TableRow key={inv.id} className="h-[64px] hover:bg-muted/40 transition-colors">
+                      <TableRow key={inv.id} className="hover:bg-muted/40 transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-muted border border-border">
@@ -565,25 +565,25 @@ export function TeamMembersPage() {
                               <span>{formatDate(inv.created_at)}</span>
                            </div>
                         </TableCell>
-                        <TableCell className="text-right pr-6">
-                           <div className="flex items-center justify-end gap-2">
-                              {!expired && !used && (
-                                <Button
-                                  size="iconXs"
-                                  variant="control"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(getLinkFromToken(inv.token));
-                                    toast.success("Посилання скопійовано");
-                                  }}
-                                >
-                                  <Copy className="w-4 h-4" />
-                                </Button>
-                              )}
-                              <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
-                                <Trash2 className="w-4 h-4" />
+                        <TableActionCell className="pr-6">
+                          <div className="flex items-center justify-end gap-2">
+                            {!expired && !used && (
+                              <Button
+                                size="iconXs"
+                                variant="control"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(getLinkFromToken(inv.token));
+                                  toast.success("Посилання скопійовано");
+                                }}
+                              >
+                                <Copy className="w-4 h-4" />
                               </Button>
-                           </div>
-                        </TableCell>
+                            )}
+                            <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableActionCell>
                       </TableRow>
                     )
                   })

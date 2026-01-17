@@ -1,10 +1,10 @@
-import { Box, Center, Group, Paper, SimpleGrid, Space, Stack, Text, Title } from '@mantine/core';
 import {
   IconBallFootball,
   IconSquareRounded,
   IconSquareRoundedFilled,
   IconTimelineEvent,
 } from '@tabler/icons-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type MatchStatus = 'scheduled' | 'played' | 'canceled';
 
@@ -47,12 +47,6 @@ type MatchEvent = {
   created_at: string;
 };
 
-const statusLabels: Record<MatchStatus, { label: string; color: string }> = {
-  scheduled: { label: 'Запланований', color: 'blue' },
-  played: { label: 'Зіграний', color: 'teal' },
-  canceled: { label: 'Скасований', color: 'red' },
-};
-
 const goalTypes = ['goal', 'own_goal', 'penalty_scored'];
 const eventLabels: Record<string, string> = {
   goal: 'Гол',
@@ -64,16 +58,6 @@ const eventLabels: Record<string, string> = {
   two_minutes: '2 хвилини',
   goalkeeper_save: 'Сейв воротаря',
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('uk-UA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
 
 function playerLabel(player: Player | undefined) {
   if (!player) return '—';
@@ -119,206 +103,163 @@ export function MatchOverviewTab({
   const markerEvents = timeline.filter((e) => e.minute !== null);
 
   return (
-    <Stack gap="xl">
-
-      {/* Ключові моменти */}
-      <Paper shadow="xs" radius="md" p="md">
-        <Stack gap="md">
-          <Text fw={700} size="lg">
-            Ключові моменти
-          </Text>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
-            <Stack gap={6}>
-              <Text fw={600}>Голи</Text>
-              {goals.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  Голи відсутні
-                </Text>
-              ) : (
-                goals.map((g) => {
+    <div className="space-y-6">
+      <Card className="border border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Ключові моменти</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Голи</p>
+            {goals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Голи відсутні</p>
+            ) : (
+              <div className="space-y-2">
+                {goals.map((g) => {
                   const player = players.find((p) => p.id === g.player_id);
                   return (
-                    <Group key={g.id} gap="xs">
-                      <Text>⚽</Text>
-                      <Text size="sm">
-                        {playerLabel(player)} {g.minute ? `(${g.minute}’)` : ''}
-                      </Text>
-                    </Group>
+                    <div key={g.id} className="flex items-center gap-2 text-sm">
+                      <span>⚽</span>
+                      <span>
+                        {playerLabel(player)} {g.minute ? `(${g.minute}’)` : ""}
+                      </span>
+                    </div>
                   );
-                })
-              )}
-            </Stack>
-            <Stack gap={6}>
-              <Text fw={600}>Картки</Text>
-              {yellowCards.length === 0 && redCards.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  Карток немає
-                </Text>
-              ) : (
-                <Stack gap={4}>
-                  {yellowCards.map((c) => {
-                    const player = players.find((p) => p.id === c.player_id);
-                    return (
-                      <Group key={c.id} gap="xs">
-                        <Text>🟨</Text>
-                        <Text size="sm">
-                          {playerLabel(player)} {c.minute ? `(${c.minute}’)` : ''}
-                        </Text>
-                      </Group>
-                    );
-                  })}
-                  {redCards.map((c) => {
-                    const player = players.find((p) => p.id === c.player_id);
-                    return (
-                      <Group key={c.id} gap="xs">
-                        <Text>🟥</Text>
-                        <Text size="sm">
-                          {playerLabel(player)} {c.minute ? `(${c.minute}’)` : ''}
-                        </Text>
-                      </Group>
-                    );
-                  })}
-                </Stack>
-              )}
-            </Stack>
-          </SimpleGrid>
-        </Stack>
-      </Paper>
+                })}
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Картки</p>
+            {yellowCards.length === 0 && redCards.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Карток немає</p>
+            ) : (
+              <div className="space-y-2">
+                {yellowCards.map((c) => {
+                  const player = players.find((p) => p.id === c.player_id);
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 text-sm">
+                      <span>🟨</span>
+                      <span>
+                        {playerLabel(player)} {c.minute ? `(${c.minute}’)` : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+                {redCards.map((c) => {
+                  const player = players.find((p) => p.id === c.player_id);
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 text-sm">
+                      <span>🟥</span>
+                      <span>
+                        {playerLabel(player)} {c.minute ? `(${c.minute}’)` : ""}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Таймлайн */}
-      <Paper shadow="xs" radius="md" p="md">
-        <Stack gap="sm" align="stretch">
-          <Group gap="xs">
-            <IconTimelineEvent size={18} />
-            <Text fw={700} size="lg">
-              Таймлайн
-            </Text>
-          </Group>
+      <Card className="border border-border shadow-none">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <IconTimelineEvent size={18} className="text-muted-foreground" />
+          <CardTitle className="text-base">Таймлайн</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           {timeline.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              Подій із зазначенням хвилини немає.
-            </Text>
+            <p className="text-sm text-muted-foreground">Подій із зазначенням хвилини немає.</p>
           ) : (
             <>
-              {/* верхня горизонтальна шкала */}
-              <Box pos="relative" style={{ width: '100%', height: 80 }}>
-                <Box
-                  pos="absolute"
-                  left={0}
-                  right={0}
-                  top="40%"
-                  style={{ height: 12, background: 'hsl(var(--primary))', borderRadius: 4 }}
-                />
-                {/* лейбли таймів */}
-                <Group justify="space-between" align="center" pos="absolute" top="60%" left={0} right={0} px="xs">
-                  <Text size="xs" fw={600} style={{ color: 'hsl(var(--primary-foreground))' }}>
-                    {Math.round(half)}’
-                  </Text>
-                  <Text size="xs" fw={600} style={{ color: 'hsl(var(--primary-foreground))' }}>
-                    {duration}’
-                  </Text>
-                </Group>
+              <div className="relative h-20 w-full">
+                <div className="absolute left-0 right-0 top-[40%] h-3 rounded bg-primary/80" />
+                <div className="absolute left-0 right-0 top-[60%] flex items-center justify-between px-2 text-xs font-semibold text-primary-foreground">
+                  <span>{Math.round(half)}’</span>
+                  <span>{duration}’</span>
+                </div>
                 {markerEvents.map((e) => {
                   const pos = ((e.minute ?? 0) / duration) * 100;
                   const iconColor =
-                    e.event_type === 'red_card'
-                      ? 'hsl(var(--danger-foreground))'
-                      : e.event_type === 'yellow_card'
-                        ? 'hsl(var(--warning-foreground))'
-                        : 'hsl(var(--success-foreground))';
+                    e.event_type === "red_card"
+                      ? "hsl(var(--danger-foreground))"
+                      : e.event_type === "yellow_card"
+                        ? "hsl(var(--warning-foreground))"
+                        : "hsl(var(--success-foreground))";
                   return (
-                    <Box key={e.id} pos="absolute" left={`${pos}%`} top={0} style={{ transform: 'translateX(-50%)' }}>
-                      <Stack gap={4} align="center">
-                        {e.event_type === 'yellow_card' ? (
+                    <div
+                      key={e.id}
+                      className="absolute top-0"
+                      style={{ left: `${pos}%`, transform: "translateX(-50%)" }}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        {e.event_type === "yellow_card" ? (
                           <IconSquareRounded size={18} color={iconColor} />
-                        ) : e.event_type === 'red_card' ? (
+                        ) : e.event_type === "red_card" ? (
                           <IconSquareRoundedFilled size={18} color={iconColor} />
                         ) : (
                           <IconBallFootball size={18} color={iconColor} />
                         )}
-                        <Box style={{ width: 2, height: 24, background: 'hsl(var(--primary) / 0.5)' }} />
-                        <Text size="xs" fw={600} c="dimmed">
-                          {e.minute}’
-                        </Text>
-                      </Stack>
-                    </Box>
-                    );
-                  })}
-                </Box>
+                        <div className="h-6 w-0.5 bg-primary/50" />
+                        <span className="text-xs font-semibold text-muted-foreground">{e.minute}’</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-              <Space h="sm" />
+              <div className="h-3" />
 
-              {/* вертикальна вісь і події */}
-              <Stack gap="sm" style={{ alignItems: 'stretch' }}>
+              <div className="space-y-3">
                 {timelineItems.map((e) => {
                   const player = players.find((p) => p.id === e.player_id);
                   const assist = players.find((p) => p.id === e.assist_player_id);
                   return (
-                    <Group key={e.id} align="stretch" gap="md">
-                      <Box style={{ flex: 1 }}>
-                        {e.side === 'left' && (
-                          <Stack gap={4} align="flex-end">
-                            <Text fw={700}>{playerLabel(player)}</Text>
+                    <div key={e.id} className="flex items-stretch gap-4">
+                      <div className="flex-1">
+                        {e.side === "left" && (
+                          <div className="space-y-1 text-right">
+                            <div className="text-sm font-semibold">{playerLabel(player)}</div>
                             {assist && (
-                              <Text size="xs" c="dimmed">
+                              <div className="text-xs text-muted-foreground">
                                 Асист: {playerLabel(assist)}
-                              </Text>
+                              </div>
                             )}
-                          </Stack>
+                          </div>
                         )}
-                      </Box>
+                      </div>
 
-                      <Center style={{ width: 80, position: 'relative' }}>
-                        <Box
-                          style={{
-                            position: 'absolute',
-                            left: '50%',
-                            top: 0,
-                            bottom: 0,
-                            borderLeft: '1px dashed hsl(var(--border))',
-                            transform: 'translateX(-50%)',
-                          }}
-                        />
-                        <Stack gap={4} align="center" justify="center">
-                          <Text fw={700} size="lg" style={{ color: 'hsl(var(--success-foreground))' }}>
-                            {e.minute}’
-                          </Text>
-                          <div
-                            style={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              background: e.color,
-                              zIndex: 1,
-                            }}
-                          />
-                        </Stack>
-                      </Center>
+                      <div className="relative flex w-20 items-center justify-center">
+                        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 border-l border-dashed border-border" />
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-lg font-semibold text-success-foreground">{e.minute}’</span>
+                          <span className="h-3 w-3 rounded-full" style={{ background: e.color }} />
+                        </div>
+                      </div>
 
-                      <Box style={{ flex: 1 }}>
-                        {e.side === 'right' && (
-                          <Stack gap={4} align="flex-start">
-                            <Text fw={700}>{playerLabel(player)}</Text>
+                      <div className="flex-1">
+                        {e.side === "right" && (
+                          <div className="space-y-1 text-left">
+                            <div className="text-sm font-semibold">{playerLabel(player)}</div>
                             {assist && (
-                              <Text size="xs" c="dimmed">
+                              <div className="text-xs text-muted-foreground">
                                 Асист: {playerLabel(assist)}
-                              </Text>
+                              </div>
                             )}
-                          </Stack>
+                          </div>
                         )}
-                      </Box>
+                      </div>
 
-                      <Box style={{ minWidth: 64 }} />
-                    </Group>
+                      <div className="w-16" />
+                    </div>
                   );
                 })}
-              </Stack>
-              <Space h="xs" />
+              </div>
             </>
           )}
-        </Stack>
-      </Paper>
-
-    </Stack>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
