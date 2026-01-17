@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { OperationalSummary, type OperationalSummaryKpi } from "@/components/app/OperationalSummary";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
