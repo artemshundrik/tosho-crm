@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { logActivity } from "@/lib/activityLogger";
+import { usePageCache } from "@/hooks/usePageCache";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -120,6 +121,29 @@ type MatchEvent = {
 
 type AttendanceRow = {
   player_id: string;
+};
+
+type MatchDraft = {
+  opponent_name: string;
+  opponent_logo_url: string;
+  match_date_local: string;
+  home_away: "home" | "away" | "neutral";
+  status: MatchStatus;
+  score_opponent: string;
+  tournament_id: string;
+  matchday: string;
+  stage: string;
+};
+
+type MatchDetailsCache = {
+  match: Match | null;
+  events: MatchEvent[];
+  players: Player[];
+  teamLogo: string | null;
+  tournamentsList: Tournament[];
+  attendance: AttendanceRow[];
+  attendanceLoaded: boolean;
+  draft: MatchDraft;
 };
 
 const TEAM_NAME = "FAYNA TEAM";
@@ -669,13 +693,17 @@ export function MatchDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabParam]);
 
-  const [loading, setLoading] = React.useState(true);
+  const cacheKey = matchId ? `match-details:${matchId}` : "match-details:unknown";
+  const { cached, setCache } = usePageCache<MatchDetailsCache>(cacheKey);
+  const hasCacheRef = React.useRef(Boolean(cached));
+
+  const [loading, setLoading] = React.useState(!cached);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [match, setMatch] = React.useState<Match | null>(null);
-  const [events, setEvents] = React.useState<MatchEvent[]>([]);
-  const [players, setPlayers] = React.useState<Player[]>([]);
-  const [teamLogo, setTeamLogo] = React.useState<string | null>(null);
+  const [match, setMatch] = React.useState<Match | null>(cached?.match ?? null);
+  const [events, setEvents] = React.useState<MatchEvent[]>(cached?.events ?? []);
+  const [players, setPlayers] = React.useState<Player[]>(cached?.players ?? []);
+  const [teamLogo, setTeamLogo] = React.useState<string | null>(cached?.teamLogo ?? null);
   const sortedPlayers = React.useMemo(() => {
   return [...players].sort((a, b) => {
     const agk = isGoalkeeper(a);
@@ -690,8 +718,8 @@ export function MatchDetailsPage() {
   });
 }, [players]);
 
-  const [attendance, setAttendance] = React.useState<AttendanceRow[]>([]);
-  const [attendanceLoaded, setAttendanceLoaded] = React.useState(false);
+  const [attendance, setAttendance] = React.useState<AttendanceRow[]>(cached?.attendance ?? []);
+  const [attendanceLoaded, setAttendanceLoaded] = React.useState(cached?.attendanceLoaded ?? false);
 
   const [attendanceSavingId, setAttendanceSavingId] = React.useState<string | null>(null);
   const [attendanceError, setAttendanceError] = React.useState<string | null>(null);
@@ -705,23 +733,25 @@ export function MatchDetailsPage() {
   const [metaError, setMetaError] = React.useState<string | null>(null);
   const [metaSuccess, setMetaSuccess] = React.useState<string | null>(null);
 
-  const [tournamentsList, setTournamentsList] = React.useState<Tournament[]>([]);
+  const [tournamentsList, setTournamentsList] = React.useState<Tournament[]>(cached?.tournamentsList ?? []);
 
   const [smartDateInput, setSmartDateInput] = React.useState("");
   const [smartDateHint, setSmartDateHint] = React.useState<string | null>(null);
   const [smartDateError, setSmartDateError] = React.useState<string | null>(null);
 
-  const [draft, setDraft] = React.useState({
-    opponent_name: "",
-    opponent_logo_url: "",
-    match_date_local: "",
-    home_away: "home" as "home" | "away" | "neutral",
-    status: "scheduled" as MatchStatus,
-    score_opponent: "" as string,
-    tournament_id: "none" as string,
-    matchday: "" as string,
-    stage: "" as string,
-  });
+  const [draft, setDraft] = React.useState<MatchDraft>(
+    cached?.draft ?? {
+      opponent_name: "",
+      opponent_logo_url: "",
+      match_date_local: "",
+      home_away: "home",
+      status: "scheduled",
+      score_opponent: "",
+      tournament_id: "none",
+      matchday: "",
+      stage: "",
+    }
+  );
 
   const SECTION_BASE = cn(
     "rounded-[var(--radius-section)] border border-border bg-card",
@@ -750,9 +780,12 @@ export function MatchDetailsPage() {
         return;
       }
 
-      setLoading(true);
+      let nextTournamentsList: Tournament[] = [];
+      if (!hasCacheRef.current) {
+        setLoading(true);
+        setAttendanceLoaded(false);
+      }
       setError(null);
-      setAttendanceLoaded(false);
 
       const { data: matchData, error: matchError } = await supabase
         .from("matches")
@@ -843,12 +876,13 @@ if (ttErr) {
   });
 
   setTournamentsList(sorted);
+  nextTournamentsList = sorted;
 }
 
 
       const local = isoToLocalInputValue(typedMatch.match_date);
 
-      setDraft({
+      const nextDraft: MatchDraft = {
         opponent_name: typedMatch.opponent_name || "",
         opponent_logo_url: typedMatch.opponent_logo_url ? String(typedMatch.opponent_logo_url) : "",
         match_date_local: local,
@@ -861,7 +895,8 @@ if (ttErr) {
         tournament_id: typedMatch.tournament_id ?? "none",
         matchday: typeof typedMatch.matchday === "number" ? String(typedMatch.matchday) : "",
         stage: typedMatch.stage ?? "",
-      });
+      };
+      setDraft(nextDraft);
 
 
       // синхронізуємо smart поле
@@ -947,7 +982,17 @@ if (ttErr) {
 
       setTeamLogo(teamLogoUrl || TEAM_LOGO_FALLBACK || null);
 
-
+      setCache({
+        match: typedMatch,
+        events: eventsErr ? [] : ((eventsData || []) as MatchEvent[]).slice().sort(sortEventsStable),
+        players: filteredPlayers,
+        teamLogo: teamLogoUrl || TEAM_LOGO_FALLBACK || null,
+        tournamentsList: nextTournamentsList,
+        attendance: attErr ? [] : ((attendanceData || []) as AttendanceRow[]),
+        attendanceLoaded: !attErr,
+        draft: nextDraft,
+      });
+      hasCacheRef.current = true;
       setLoading(false);
     }
 

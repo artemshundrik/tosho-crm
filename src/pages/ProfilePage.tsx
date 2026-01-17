@@ -12,26 +12,52 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { ROLE_BADGE_STYLES } from "@/lib/roleBadges";
+import { usePageCache } from "@/hooks/usePageCache";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
+type ProfileCache = {
+  userId: string | null;
+  fullName: string;
+  email: string;
+  role: string;
+  initials: string;
+  avatarUrl: string | null;
+};
+
 export function ProfilePage() {
-  const [loading, setLoading] = useState(true);
+  const { cached, setCache } = usePageCache<ProfileCache>("profile");
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [loading, setLoading] = useState(!cached);
   const [updating, setUpdating] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(cached?.avatarUrl ?? null);
   const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(cached?.userId ?? null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Form state
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("");
-  const [initials, setInitials] = useState("");
+  const [fullName, setFullName] = useState(cached?.fullName ?? "");
+  const [email, setEmail] = useState(cached?.email ?? "");
+  const [role, setRole] = useState(cached?.role ?? "");
+  const [initials, setInitials] = useState(cached?.initials ?? "");
+
+  const commitCache = (overrides: Partial<ProfileCache> = {}) => {
+    if (!userId) return;
+    setCache({
+      userId,
+      fullName,
+      email,
+      role,
+      initials,
+      avatarUrl,
+      ...overrides,
+    });
+  };
 
   useEffect(() => {
     getProfile();
@@ -39,7 +65,9 @@ export function ProfilePage() {
 
   const getProfile = async () => {
     try {
-      setLoading(true);
+      if (!hasCacheRef.current) {
+        setLoading(true);
+      }
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
@@ -58,6 +86,16 @@ export function ProfilePage() {
 
         const { data: roleData } = await supabase.rpc('current_team_role');
         setRole((roleData as string) || "viewer");
+
+        setCache({
+          userId: user.id,
+          fullName: metaName,
+          email: user.email || "",
+          role: (roleData as string) || "viewer",
+          initials: i,
+          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
+        });
+        hasCacheRef.current = true;
       }
     } catch (error) {
       console.error("Error loading user:", error);
@@ -156,6 +194,7 @@ export function ProfilePage() {
 
       setAvatarUrl(publicUrl);
       setAvatarDraftUrl(null);
+      commitCache({ avatarUrl: publicUrl });
       toast.success("Аватар оновлено");
     } catch (error: any) {
       toast.error("Не вдалося оновити аватар", {
@@ -193,6 +232,7 @@ export function ProfilePage() {
       toast.success("Профіль оновлено!", {
         description: "Твоє нове ім'я збережено в системі.",
       });
+      commitCache({ fullName, avatarUrl, initials: i });
 
       // Невеликий таймаут для візуального комфорту перед оновленням
       setTimeout(() => window.location.reload(), 1000);

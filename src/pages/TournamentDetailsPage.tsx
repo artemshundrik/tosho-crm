@@ -1,8 +1,9 @@
 // src/pages/TournamentDetailsPage.tsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { usePageCache } from "@/hooks/usePageCache";
 
 import {
   AlertDialog,
@@ -99,6 +100,13 @@ type TournamentFormState = {
   is_primary: boolean;
 };
 
+type TournamentDetailsCache = {
+  tRow: TeamTournamentRow | null;
+  matches: MatchRow[];
+  players: Player[];
+  registeredIds: string[];
+};
+
 /* ================= CONFIG ================= */
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
@@ -187,8 +195,12 @@ export function TournamentDetailsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [playersLoading, setPlayersLoading] = useState(true);
+  const cacheKey = id ? `tournament-details:${id}` : "tournament-details:unknown";
+  const { cached, setCache } = usePageCache<TournamentDetailsCache>(cacheKey);
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [loading, setLoading] = useState(!cached);
+  const [playersLoading, setPlayersLoading] = useState(!cached);
   const [rosterSavingId, setRosterSavingId] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
@@ -203,10 +215,12 @@ export function TournamentDetailsPage() {
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const [tRow, setTRow] = useState<TeamTournamentRow | null>(null);
-  const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [registeredIds, setRegisteredIds] = useState<Set<string>>(new Set());
+  const [tRow, setTRow] = useState<TeamTournamentRow | null>(cached?.tRow ?? null);
+  const [matches, setMatches] = useState<MatchRow[]>(cached?.matches ?? []);
+  const [players, setPlayers] = useState<Player[]>(cached?.players ?? []);
+  const [registeredIds, setRegisteredIds] = useState<Set<string>>(
+    new Set(cached?.registeredIds ?? [])
+  );
 
   const standingsPreview = useStandingsPreview({ tournamentId: id ?? "" });
 
@@ -283,8 +297,11 @@ export function TournamentDetailsPage() {
     async function load() {
       if (!id) return;
 
-      setLoading(true);
-      setPlayersLoading(true);
+      const shouldShowSkeleton = !hasCacheRef.current;
+      if (shouldShowSkeleton) {
+        setLoading(true);
+        setPlayersLoading(true);
+      }
 
       const [
         tournamentRes,
@@ -350,9 +367,16 @@ export function TournamentDetailsPage() {
       setTRow(row && row.tournament ? row : null);
       setMatches((matchesRes.data ?? []) as MatchRow[]);
       setPlayers((playersRes.data ?? []) as Player[]);
-      setRegisteredIds(
-        new Set((regRes.data ?? []).map((r) => r.player_id))
-      );
+      const nextRegistered = new Set((regRes.data ?? []).map((r) => r.player_id));
+      setRegisteredIds(nextRegistered);
+
+      setCache({
+        tRow: row && row.tournament ? row : null,
+        matches: (matchesRes.data ?? []) as MatchRow[],
+        players: (playersRes.data ?? []) as Player[],
+        registeredIds: Array.from(nextRegistered),
+      });
+      hasCacheRef.current = true;
 
       setLoading(false);
       setPlayersLoading(false);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -21,6 +21,7 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { IconInput } from "@/components/ui/icon-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { usePageCache } from "@/hooks/usePageCache";
 import {
   Select,
   SelectContent,
@@ -72,6 +73,24 @@ type Player = {
   position?: string | null;
   photo_url?: string | null;
   status: "active" | "injured" | "sick" | "away" | "inactive"; // Додай цей рядок
+};
+
+type TrainingFormState = {
+  date: string;
+  time: string;
+  type: Training["type"];
+  location: string;
+  sparring_opponent: string;
+  sparring_logo_url: string;
+  comment: string;
+};
+
+type TrainingDetailCache = {
+  training: Training | null;
+  players: Player[];
+  attendance: Record<string, AttendanceStatus>;
+  attendanceDbIds: string[];
+  form: TrainingFormState;
 };
 
 const typeLabels: Record<Training["type"], string> = {
@@ -142,24 +161,24 @@ export function TrainingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [training, setTraining] = useState<Training | null>(null);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
-  const [attendanceDbIds, setAttendanceDbIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const cacheKey = id ? `training-detail:${id}` : "training-detail:unknown";
+  const { cached, setCache } = usePageCache<TrainingDetailCache>(cacheKey);
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [training, setTraining] = useState<Training | null>(cached?.training ?? null);
+  const [players, setPlayers] = useState<Player[]>(cached?.players ?? []);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>(
+    cached?.attendance ?? {}
+  );
+  const [attendanceDbIds, setAttendanceDbIds] = useState<Set<string>>(
+    new Set(cached?.attendanceDbIds ?? [])
+  );
+  const [loading, setLoading] = useState(!cached);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<{
-    date: string;
-    time: string;
-    type: Training["type"];
-    location: string;
-    sparring_opponent: string;
-    sparring_logo_url: string;
-    comment: string;
-  }>(
-    {
+  const [form, setForm] = useState<TrainingFormState>(
+    cached?.form ?? {
       date: "",
       time: "",
       type: "regular",
@@ -181,7 +200,9 @@ export function TrainingDetailPage() {
   useEffect(() => {
     async function load() {
       if (!id) return;
-      setLoading(true);
+      if (!hasCacheRef.current) {
+        setLoading(true);
+      }
       setError(null);
       try {
       const [tr, playersRes, att] = await Promise.all([
@@ -236,7 +257,7 @@ const dbIds = new Set<string>();
           }
         }
 
-        setForm({
+        const nextForm: TrainingFormState = {
           date: tr?.date || "",
           time: tr?.time || "",
           type: tr?.type || "regular",
@@ -244,7 +265,17 @@ const dbIds = new Set<string>();
           sparring_opponent: tr?.sparring_opponent || "",
           sparring_logo_url: tr?.sparring_logo_url || "",
           comment: tr?.comment || "",
+        };
+        setForm(nextForm);
+
+        setCache({
+          training: tr,
+          players: playerList,
+          attendance: attMap,
+          attendanceDbIds: Array.from(dbIds),
+          form: nextForm,
         });
+        hasCacheRef.current = true;
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Не вдалося завантажити тренування");

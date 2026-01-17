@@ -38,6 +38,7 @@ import {
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { preloadRoute } from "@/routes/routePreload";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -994,6 +995,9 @@ function SidebarGroup({
               key={link.to}
               to={link.to}
               onClick={onNavigate}
+              onMouseEnter={() => preloadRoute(link.to)}
+              onFocus={() => preloadRoute(link.to)}
+              onTouchStart={() => preloadRoute(link.to)}
               className={cn(
                 "relative group flex items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-medium transition-colors",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",

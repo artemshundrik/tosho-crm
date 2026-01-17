@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { usePageCache } from "@/hooks/usePageCache";
 import { 
   ArrowLeft, Calendar, Trophy, Zap, Activity, 
   TrendingUp, Shirt, Star, Timer, Target, Info
@@ -92,6 +93,18 @@ type RatingBreakdown = {
   experience: number;
   discipline: number;
   label?: string;
+};
+
+type PlayerPageCache = {
+  player: Player | null;
+  stats: { matches: number; goals: number; assists: number; points: number; yellow: number; red: number };
+  recentMatches: any[];
+  trainingData: any[];
+  trainingSummary: { present: number; absent: number; percent: number; total: number };
+  trainingSessions: TrainingSession[];
+  trainingBreakdown: { total: number; present: number; absent: number; injured: number; sick: number };
+  rating: number;
+  ratingBreakdown: RatingBreakdown | null;
 };
 
 // --- HELPERS ---
@@ -403,33 +416,49 @@ function MatchRowItem({ match, contribution }: any) {
 
 export function PlayerPage() {
   const { playerId } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [player, setPlayer] = useState<Player | null>(null);
+  const cacheKey = playerId ? `player:${playerId}` : "player:unknown";
+  const { cached, setCache } = usePageCache<PlayerPageCache>(cacheKey);
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [loading, setLoading] = useState(!cached);
+  const [player, setPlayer] = useState<Player | null>(cached?.player ?? null);
   
   // States
-  const [stats, setStats] = useState({ matches: 0, goals: 0, assists: 0, points: 0, yellow: 0, red: 0 });
-  const [recentMatches, setRecentMatches] = useState<any[]>([]);
-  const [trainingData, setTrainingData] = useState<any[]>([]); 
-  const [trainingSummary, setTrainingSummary] = useState({ present: 0, absent: 0, percent: 0, total: 0 });
-  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([]);
-  const [trainingBreakdown, setTrainingBreakdown] = useState({
-    total: 0,
-    present: 0,
-    absent: 0,
-    injured: 0,
-    sick: 0,
-  });
+  const [stats, setStats] = useState(
+    cached?.stats ?? { matches: 0, goals: 0, assists: 0, points: 0, yellow: 0, red: 0 }
+  );
+  const [recentMatches, setRecentMatches] = useState<any[]>(cached?.recentMatches ?? []);
+  const [trainingData, setTrainingData] = useState<any[]>(cached?.trainingData ?? []); 
+  const [trainingSummary, setTrainingSummary] = useState(
+    cached?.trainingSummary ?? { present: 0, absent: 0, percent: 0, total: 0 }
+  );
+  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>(
+    cached?.trainingSessions ?? []
+  );
+  const [trainingBreakdown, setTrainingBreakdown] = useState(
+    cached?.trainingBreakdown ?? {
+      total: 0,
+      present: 0,
+      absent: 0,
+      injured: 0,
+      sick: 0,
+    }
+  );
   const [trainingFilter, setTrainingFilter] = useState<"all" | TrainingAttendanceRow["status"]>("all");
   
   // Rating
-  const [rating, setRating] = useState(60);
-  const [ratingBreakdown, setRatingBreakdown] = useState<RatingBreakdown | null>(null);
+  const [rating, setRating] = useState(cached?.rating ?? 60);
+  const [ratingBreakdown, setRatingBreakdown] = useState<RatingBreakdown | null>(
+    cached?.ratingBreakdown ?? null
+  );
 
   // --- DATA LOADING ---
   useEffect(() => {
     async function load() {
       if (!playerId) return;
-      setLoading(true);
+      if (!hasCacheRef.current) {
+        setLoading(true);
+      }
 
       // 1. Fetch Player
       const { data: playerData } = await supabase
@@ -440,6 +469,18 @@ export function PlayerPage() {
 
       if (!playerData) {
         setPlayer(null);
+        setCache({
+          player: null,
+          stats: { matches: 0, goals: 0, assists: 0, points: 0, yellow: 0, red: 0 },
+          recentMatches: [],
+          trainingData: [],
+          trainingSummary: { present: 0, absent: 0, percent: 0, total: 0 },
+          trainingSessions: [],
+          trainingBreakdown: { total: 0, present: 0, absent: 0, injured: 0, sick: 0 },
+          rating: 60,
+          ratingBreakdown: null,
+        });
+        hasCacheRef.current = true;
         setLoading(false);
         return;
       }
@@ -691,6 +732,30 @@ export function PlayerPage() {
       });
       setRating(computedRating);
       setRatingBreakdown(ratingBreakdownLocal);
+      setCache({
+        player: playerData as Player,
+        stats: {
+          matches: pMatches,
+          goals: pGoals,
+          assists: pAssists,
+          points: pGoals + pAssists,
+          yellow: pYellow,
+          red: pRed,
+        },
+        recentMatches: recent,
+        trainingData: trainingSeries,
+        trainingSummary: {
+          present: tPresent,
+          absent: tTotal - tPresent,
+          total: tTotal,
+          percent: tTotal > 0 ? Math.round((tPresent / tTotal) * 100) : 0,
+        },
+        trainingSessions: sessions,
+        trainingBreakdown: trainingCounts,
+        rating: computedRating,
+        ratingBreakdown: ratingBreakdownLocal,
+      });
+      hasCacheRef.current = true;
       setLoading(false);
     }
 

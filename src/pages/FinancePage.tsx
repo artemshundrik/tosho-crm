@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -26,6 +26,7 @@ import { OperationalSummary } from "@/components/app/OperationalSummary";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { usePageCache } from "@/hooks/usePageCache";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -95,6 +96,16 @@ type PlayerLite = {
   last_name: string | null;
 };
 
+type FinancePageCache = {
+  plans: FinancePlan[];
+  rules: FinanceRecurringRule[];
+  transactions: FinanceTransaction[];
+  invoices: FinanceInvoice[];
+  pools: FinancePool[];
+  poolParticipants: FinancePoolParticipant[];
+  players: Record<string, PlayerLite>;
+};
+
 const statusLabel: Record<FinanceTransaction["status"], string> = {
   pending: "Очікує",
   paid: "Оплачено",
@@ -159,22 +170,31 @@ function daysOverdue(dueDate: string | null) {
 
 export function FinancePage() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState<FinancePlan[]>([]);
-  const [rules, setRules] = useState<FinanceRecurringRule[]>([]);
-  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
-  const [invoices, setInvoices] = useState<FinanceInvoice[]>([]);
-  const [pools, setPools] = useState<FinancePool[]>([]);
-  const [poolParticipants, setPoolParticipants] = useState<FinancePoolParticipant[]>([]);
-  const [players, setPlayers] = useState<Record<string, PlayerLite>>({});
-  const [loading, setLoading] = useState(true);
+  const { cached, setCache } = usePageCache<FinancePageCache>("finance");
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [plans, setPlans] = useState<FinancePlan[]>(cached?.plans ?? []);
+  const [rules, setRules] = useState<FinanceRecurringRule[]>(cached?.rules ?? []);
+  const [transactions, setTransactions] = useState<FinanceTransaction[]>(cached?.transactions ?? []);
+  const [invoices, setInvoices] = useState<FinanceInvoice[]>(cached?.invoices ?? []);
+  const [pools, setPools] = useState<FinancePool[]>(cached?.pools ?? []);
+  const [poolParticipants, setPoolParticipants] = useState<FinancePoolParticipant[]>(
+    cached?.poolParticipants ?? []
+  );
+  const [players, setPlayers] = useState<Record<string, PlayerLite>>(cached?.players ?? {});
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const showSkeleton = useMinimumLoading(loading);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
+      if (!hasCacheRef.current) {
+        setLoading(true);
+      }
       setError(null);
       try {
+        let nextPoolParticipants: FinancePoolParticipant[] = [];
+        let nextPlayers: Record<string, PlayerLite> = {};
         const [plansRes, rulesRes, txRes, invRes, poolsRes] = await Promise.all([
           supabase
             .from("finance_plans")
@@ -226,11 +246,13 @@ export function FinancePage() {
             .select("id, pool_id, expected_amount, paid_amount")
             .in("pool_id", poolRows.map((p) => p.id));
           if (!participantsError && participantsData) {
-            setPoolParticipants(participantsData as FinancePoolParticipant[]);
+            nextPoolParticipants = participantsData as FinancePoolParticipant[];
+            setPoolParticipants(nextPoolParticipants);
           } else if (participantsError) {
             throw participantsError;
           }
         } else {
+          nextPoolParticipants = [];
           setPoolParticipants([]);
         }
 
@@ -252,9 +274,27 @@ export function FinancePage() {
             (playersRes.data as PlayerLite[]).forEach((p) => {
               map[p.id] = p;
             });
+            nextPlayers = map;
             setPlayers(map);
+          } else {
+            nextPlayers = {};
+            setPlayers({});
           }
+        } else {
+          nextPlayers = {};
+          setPlayers({});
         }
+
+        setCache({
+          plans: (plansRes.data || []) as FinancePlan[],
+          rules: (rulesRes.data || []) as FinanceRecurringRule[],
+          transactions: txData,
+          invoices: invData,
+          pools: poolRows,
+          poolParticipants: nextPoolParticipants,
+          players: nextPlayers,
+        });
+        hasCacheRef.current = true;
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Не вдалося завантажити фінанси");

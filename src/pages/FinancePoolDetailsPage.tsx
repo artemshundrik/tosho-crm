@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { usePageCache } from "@/hooks/usePageCache";
 
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,11 @@ type ParticipantRow = {
   } | null;
 };
 
+type FinancePoolDetailsCache = {
+  pool: FinancePool | null;
+  participants: ParticipantRow[];
+};
+
 function toNumber(value: number | string | null | undefined) {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -61,15 +67,21 @@ function formatDate(date: string) {
 export function FinancePoolDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [pool, setPool] = useState<FinancePool | null>(null);
-  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const cacheKey = id ? `finance-pool:${id}` : "finance-pool:unknown";
+  const { cached, setCache } = usePageCache<FinancePoolDetailsCache>(cacheKey);
+  const hasCacheRef = useRef(Boolean(cached));
+
+  const [loading, setLoading] = useState(!cached);
+  const [pool, setPool] = useState<FinancePool | null>(cached?.pool ?? null);
+  const [participants, setParticipants] = useState<ParticipantRow[]>(cached?.participants ?? []);
   const [payInputs, setPayInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function load() {
       if (!id) return;
-      setLoading(true);
+      if (!hasCacheRef.current) {
+        setLoading(true);
+      }
       const [poolRes, participantsRes] = await Promise.all([
         supabase
           .from("finance_pools")
@@ -88,13 +100,18 @@ export function FinancePoolDetailsPage() {
       } else {
         setPool(poolRes.data as FinancePool);
       }
-      if (!participantsRes.error && participantsRes.data) {
-        const normalized = (participantsRes.data as any[]).map((row) => ({
-          ...row,
-          players: Array.isArray(row.players) ? row.players[0] ?? null : row.players ?? null,
-        })) as ParticipantRow[];
-        setParticipants(normalized);
-      }
+      const normalized = !participantsRes.error && participantsRes.data
+        ? ((participantsRes.data as any[]).map((row) => ({
+            ...row,
+            players: Array.isArray(row.players) ? row.players[0] ?? null : row.players ?? null,
+          })) as ParticipantRow[])
+        : [];
+      setParticipants(normalized);
+      setCache({
+        pool: poolRes.error ? null : (poolRes.data as FinancePool),
+        participants: normalized,
+      });
+      hasCacheRef.current = true;
       setLoading(false);
     }
     load();
