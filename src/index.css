@@ -12,7 +12,6 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
     
-    
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 222 47% 11%;
     
@@ -21,13 +20,13 @@
 
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 222 47% 11%;
-
     
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
+    
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
     --brand-h: 221;
@@ -39,9 +38,6 @@
     --ring: var(--brand-h) var(--brand-s) var(--brand-l);
     
     /* --- SHAPE RULES --- */
-    /* --radius: базові контроли (Input/Button/Badge) */
-    /* --radius-inner: Card/Table rows */
-    /* --radius-section: page sections/hero */
     --radius: 0.5rem;
     --radius-lg: 12px;
     --radius-md: 10px;
@@ -49,11 +45,12 @@
     --radius-inner: 16px;
     --btn-radius: 12px;
 
-    /* --- SKELETON LOADING --- */
+    /* --- SKELETON LOADING (UPDATED - LIGHT) --- */
     --skeleton-min-duration: 400ms;
     --skeleton-transition: 200ms;
-    --skeleton-bg: hsl(220 6% 94%);
-    --skeleton-border: hsl(220 8% 86%);
+    /* Змінено на HSL 240 (нейтральний до фону) і трохи темніше (90%) для контрасту на білому */
+   --skeleton-bg: hsl(240 5% 88%);
+    --skeleton-border: transparent; /* Бордер тут зайвий, додає бруду */
 
     /* --- КНОПКИ (Gradient) --- */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
@@ -152,7 +149,6 @@
     --popover: 222 18% 13%;
     --popover-foreground: 210 40% 98%;
     
-    
     --secondary: 222 18% 20%;
     --secondary-foreground: 210 40% 98%;
     
@@ -162,12 +158,12 @@
     --accent: 222 18% 18%;
     --accent-foreground: 210 40% 98%;
     
-    
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     
     --border: 222 18% 22%;
     --input: 222 18% 22%;
+
     /* --- BRAND TOKENS (inherit from :root) --- */
 
     --radius-lg: 12px;
@@ -183,9 +179,10 @@
     --shadow-success-glow: 0 0 10px -3px hsl(var(--success-foreground) / 0.4);
     --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.4);
 
-    /* --- SKELETON LOADING (DARK) --- */
-    --skeleton-bg: hsl(222 16% 18%);
-    --skeleton-border: hsl(222 16% 26%);
+    /* --- SKELETON LOADING (UPDATED - DARK) --- */
+    /* Lightness 23% проти 14% у Card - достатній контраст, не надто різкий */
+    --skeleton-bg: hsl(222 18% 20%);
+    --skeleton-border: transparent;
 
     --neutral-soft: 222 16% 20%;
     --neutral-soft-border: 222 16% 26%;
@@ -380,9 +377,7 @@
     background-color: hsl(var(--muted-foreground));
   }
 
-  /* ... твої утиліти для бейджів, залишаємо як є, але в стандартному синтаксисі ... */
   .gumloop-blue-gradient {
     background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));
   }
-  /* Інші утиліти для бейджів можна додати сюди, якщо потрібно */
 }
