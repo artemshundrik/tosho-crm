@@ -46,11 +46,10 @@
     --btn-radius: 12px;
 
     /* --- SKELETON LOADING (UPDATED - LIGHT) --- */
-    --skeleton-min-duration: 400ms;
-    --skeleton-transition: 200ms;
-    /* Змінено на HSL 240 (нейтральний до фону) і трохи темніше (90%) для контрасту на білому */
-   --skeleton-bg: hsl(240 5% 88%);
-    --skeleton-border: transparent; /* Бордер тут зайвий, додає бруду */
+    --skeleton-min-duration: 80ms;
+    --skeleton-transition: 80ms;
+    /* Змінено на HSL 240 (нейтральний до фону) і трохи темніше (88%) для контрасту на білому */
+    --skeleton-bg: 240 5% 88%;
 
     /* --- КНОПКИ (Gradient) --- */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
@@ -180,9 +179,10 @@
     --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.4);
 
     /* --- SKELETON LOADING (UPDATED - DARK) --- */
-    /* Lightness 23% проти 14% у Card - достатній контраст, не надто різкий */
-    --skeleton-bg: hsl(222 18% 20%);
-    --skeleton-border: transparent;
+    /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
+    --skeleton-min-duration: 80ms;
+    --skeleton-transition: 80ms;
+    --skeleton-bg: 222 18% 20%;
 
     --neutral-soft: 222 16% 20%;
     --neutral-soft-border: 222 16% 26%;

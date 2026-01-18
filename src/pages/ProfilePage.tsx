@@ -267,7 +267,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-6 space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto py-6 space-y-8">
       
       {/* Картка профілю: використовуємо системні змінні для кольорів та радіусів */}
       <div className={cn(

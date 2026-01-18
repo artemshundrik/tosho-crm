@@ -60,7 +60,20 @@ export default function ActivityPage() {
       if (!error) {
         const rows = (data || []) as ActivityRow[];
         const mapped = rows.map(mapActivityRow);
-        setItems(mapped);
+        const cachedById = new Map(
+          (cached?.items ?? []).filter((item) => item.user_id).map((item) => [item.user_id as string, item])
+        );
+        const hydrated = mapped.map((item) => {
+          if (!item.user_id || item.avatar_url) return item;
+          const cachedItem = cachedById.get(item.user_id);
+          if (!cachedItem) return item;
+          return {
+            ...item,
+            avatar_url: cachedItem.avatar_url ?? null,
+            actor: item.actor || cachedItem.actor,
+          };
+        });
+        setItems(hydrated);
         const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean))) as string[];
         if (userIds.length > 0) {
           const { data: members, error: membersError } = await supabase
@@ -70,7 +83,7 @@ export default function ActivityPage() {
             .in("user_id", userIds);
           if (!membersError && members) {
             const byId = new Map((members as MemberAvatar[]).map((m) => [m.user_id, m]));
-            const enriched = mapped.map((item) => {
+            const enriched = hydrated.map((item) => {
               if (!item.user_id) return item;
               const member = byId.get(item.user_id);
               if (!member) return item;
@@ -83,20 +96,20 @@ export default function ActivityPage() {
             setItems(enriched);
             setCache({ items: enriched });
           } else {
-            setItems(mapped);
-            setCache({ items: mapped });
+            setItems(hydrated);
+            setCache({ items: hydrated });
           }
         } else {
-          setItems([]);
-          setCache({ items: [] });
+          setItems(hydrated);
+          setCache({ items: hydrated });
         }
       }
       setLoading(false);
     }
-    if (!hasCache && teamId) {
+    if (teamId) {
       load();
     }
-  }, [hasCache, teamId]);
+  }, [teamId]);
 
   useEffect(() => {
     async function markRead() {

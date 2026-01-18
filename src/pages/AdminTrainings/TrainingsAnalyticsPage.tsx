@@ -395,7 +395,7 @@ export function TrainingsAnalyticsPage() {
   return showSkeleton ? (
     <DashboardSkeleton />
   ) : (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6">
       <OperationalSummary
         title="Аналітика тренувань"
         subtitle="Глибокий аналіз відвідуваності та активності команди"

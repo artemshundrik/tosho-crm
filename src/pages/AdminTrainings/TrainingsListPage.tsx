@@ -538,9 +538,9 @@ export function TrainingsListPage() {
         titleVariant="hidden"
         sectionLabel="Огляд тренувань"
         sectionIcon={Dumbbell}
-        nextUpLoading={loading}
+        nextUpLoading={showSkeleton && !nextTraining}
         nextUp={
-          !loading && nextTraining && nextTrainingMeta
+          !showSkeleton && nextTraining && nextTrainingMeta
             ? {
                 primary: nextTrainingMeta.primary,
                 secondary: nextTrainingDetail || undefined,

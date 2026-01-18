@@ -11,8 +11,8 @@ function Skeleton({ className, "aria-label": ariaLabel, ...props }: SkeletonProp
   return (
     <div
       className={cn(
-        "animate-pulse rounded-[var(--radius-md)] border",
-        "bg-[var(--skeleton-bg)] border-[var(--skeleton-border)]",
+        "animate-pulse rounded-[var(--radius-md)]",
+        "bg-[hsl(var(--skeleton-bg))]",
         className
       )}
       role="status"

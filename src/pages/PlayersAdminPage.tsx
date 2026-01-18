@@ -172,14 +172,16 @@ export function PlayersAdminPage() {
   const showSkeleton = useMinimumLoading(loading && !hasCache);
 
   useEffect(() => { 
-    if (!hasCache && teamId) {
+    if (teamId) {
       loadPlayers();
     }
-  }, [hasCache, teamId]);
+  }, [teamId]);
 
   async function loadPlayers() {
     if (!teamId) return;
-    setLoading(true);
+    if (!hasCache) {
+      setLoading(true);
+    }
     const { data, error } = await supabase.from("players").select("*").eq("team_id", teamId).order("shirt_number", { ascending: true });
     if (!error && data) {
       const playersData = data as Player[];

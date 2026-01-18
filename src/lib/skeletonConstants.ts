@@ -4,9 +4,9 @@
  */
 export const SKELETON_CONSTANTS = {
   /** Мінімальний час показу skeleton (ms) */
-  MIN_DURATION_MS: 400,
+  MIN_DURATION_MS: 80,
   /** Час переходу між станами (ms) */
-  TRANSITION_MS: 200,
+  TRANSITION_MS: 80,
 } as const;
 
 /**

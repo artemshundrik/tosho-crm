@@ -354,7 +354,7 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20">
       
       {/* FIXED: Shadow-none для плоскої картки */}
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
@@ -508,7 +508,7 @@ export function TeamMembersPage() {
 
         {/* --- CONTENT: INVITES --- */}
         {activeTab === "invites" && canManage && (
-          <div className="overflow-x-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="overflow-x-auto">
              <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
@@ -658,7 +658,7 @@ export function TeamMembersPage() {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="space-y-6">
                  <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 rounded-[var(--radius-inner)] border border-emerald-100 dark:border-emerald-900/50">
                    <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-3 shadow-sm">
                       <Check className="w-6 h-6" />

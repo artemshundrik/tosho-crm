@@ -434,44 +434,14 @@ export function MatchesShadcnPage() {
       let standingsRow: StandingsRowView | null = null;
       let standingsUpdatedAt: string | null = null;
 
-      const { data: primaryRow, error: primaryError } = await supabase
+      const primaryPromise = supabase
         .from("team_tournaments")
         .select("tournament:tournament_id (id, name, season)")
         .eq("team_id", TEAM_ID)
         .eq("is_primary", true)
         .maybeSingle();
 
-      const tournamentRaw = Array.isArray(primaryRow?.tournament)
-        ? primaryRow?.tournament[0]
-        : primaryRow?.tournament;
-
-      if (!primaryError && tournamentRaw) {
-        primaryTournament = tournamentRaw as PrimaryTournament;
-
-        const { data: standingsData, error: standingsError } = await supabase
-          .from("tournament_standings_current")
-          .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
-          .eq("tournament_id", primaryTournament.id)
-          .order("position", { ascending: true });
-
-        if (!standingsError) {
-          const rows = (standingsData ?? []) as StandingsRow[];
-          const latestUpdated = rows.reduce<string | null>((latest, row) => {
-            if (!row.updated_at) return latest;
-            if (!latest || row.updated_at > latest) return row.updated_at;
-            return latest;
-          }, null);
-          const context = getContextRows(rows, TEAM_NAME, 0);
-          standingsRow = context.teamRow;
-          standingsUpdatedAt = latestUpdated;
-        } else {
-          console.error("Matches standings load error", standingsError);
-        }
-      } else if (primaryError) {
-        console.error("Matches primary tournament load error", primaryError);
-      }
-
-      const { data, error: matchesError } = await supabase
+      const matchesPromise = supabase
         .from("matches")
         .select(
           `
@@ -497,7 +467,18 @@ export function MatchesShadcnPage() {
         `
         )
         .eq("team_id", TEAM_ID)
-        .order("match_date", { ascending: false });
+        .order("match_date", { ascending: false })
+        .limit(30);
+
+      const teamPromise = supabase
+        .from("teams")
+        .select("club_id, clubs(logo_url)")
+        .eq("id", TEAM_ID)
+        .single();
+
+      const [primaryRes, matchesRes, teamRes] = await Promise.all([primaryPromise, matchesPromise, teamPromise]);
+      const { data: primaryRow, error: primaryError } = primaryRes;
+      const { data, error: matchesError } = matchesRes;
 
       if (matchesError) {
         throw new Error(matchesError.message || "Не вдалося завантажити матчі");
@@ -505,26 +486,21 @@ export function MatchesShadcnPage() {
 
       const rawMatches = (data || []) as DbMatch[];
 
+      const tournamentRaw = Array.isArray(primaryRow?.tournament)
+        ? primaryRow?.tournament[0]
+        : primaryRow?.tournament;
+
+      if (!primaryError && tournamentRaw) {
+        primaryTournament = tournamentRaw as PrimaryTournament;
+      } else if (primaryError) {
+        console.error("Matches primary tournament load error", primaryError);
+      }
+
       let logo: string | null = null;
-
-      const { data: teamData, error: teamError } = await supabase
-        .from("teams")
-        .select("club_id")
-        .eq("id", TEAM_ID)
-        .single();
-
-      if (!teamError && teamData?.club_id) {
-        const { data: clubData, error: clubError } = await supabase
-          .from("clubs")
-          .select("logo_url")
-          .eq("id", teamData.club_id)
-          .single();
-
-        if (!clubError) {
-          const raw =
-            (clubData as { logo_url?: string | null } | null)?.logo_url || null;
-          logo = normalizeLogoUrl(raw);
-        }
+      const teamData = teamRes.data as { clubs?: { logo_url?: string | null } | { logo_url?: string | null }[] | null } | null;
+      const club = Array.isArray(teamData?.clubs) ? teamData?.clubs[0] : teamData?.clubs;
+      if (club?.logo_url) {
+        logo = normalizeLogoUrl(club.logo_url ?? null);
       }
 
       const normalizedMatches: DbMatch[] = rawMatches.map((m) => ({
@@ -553,8 +529,8 @@ export function MatchesShadcnPage() {
 
       return {
         primaryTournament,
-        standingsRow,
-        standingsUpdatedAt,
+        standingsRow: null,
+        standingsUpdatedAt: null,
         teamLogo: logo,
         matchesDb: normalizedMatches,
         cards: mapped,
@@ -572,6 +548,46 @@ export function MatchesShadcnPage() {
     setMatchesDb(data.matchesDb);
     setCards(data.cards);
   }, [data]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadStandings() {
+      if (!primaryTournament) {
+        setStandingsRow(null);
+        setStandingsUpdatedAt(null);
+        return;
+      }
+
+      const { data: standingsData, error: standingsError } = await supabase
+        .from("tournament_standings_current")
+        .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
+        .eq("tournament_id", primaryTournament.id)
+        .order("position", { ascending: true });
+
+      if (standingsError) {
+        console.error("Matches standings load error", standingsError);
+        return;
+      }
+
+      if (cancelled) return;
+
+      const rows = (standingsData ?? []) as StandingsRow[];
+      const latestUpdated = rows.reduce<string | null>((latest, row) => {
+        if (!row.updated_at) return latest;
+        if (!latest || row.updated_at > latest) return row.updated_at;
+        return latest;
+      }, null);
+      const context = getContextRows(rows, TEAM_NAME, 0);
+      setStandingsRow(context.teamRow);
+      setStandingsUpdatedAt(latestUpdated);
+    }
+
+    loadStandings();
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryTournament]);
 
   const saveListState = React.useCallback(
     (opts?: { forceScrollTop?: boolean }) => {
@@ -852,9 +868,9 @@ export function MatchesShadcnPage() {
           titleVariant="hidden"
           sectionLabel="Огляд матчів"
           sectionIcon={Swords}
-          nextUpLoading={loading}
+          nextUpLoading={showSkeleton && !nextMatch}
           nextUp={
-            !loading && nextLine && nextMatchTo && nextMatch
+            !showSkeleton && nextLine && nextMatchTo && nextMatch
               ? (() => {
                   const sides = orderNextUpSides(nextMatch);
 

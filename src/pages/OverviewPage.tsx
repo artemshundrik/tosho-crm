@@ -158,7 +158,7 @@ export function OverviewPage() {
           .eq("team_id", TEAM_ID)
           .eq("status", "played")
           .order("match_date", { ascending: false })
-          .limit(500),
+          .limit(120),
 
         supabase
           .from("matches")
@@ -199,21 +199,14 @@ export function OverviewPage() {
       let logo: string | null = null;
       const { data: teamData, error: teamError } = await supabase
         .from("teams")
-        .select("club_id")
+        .select("club_id, clubs(logo_url)")
         .eq("id", TEAM_ID)
         .single();
 
-      if (!teamError && teamData?.club_id) {
-        const { data: clubData, error: clubError } = await supabase
-          .from("clubs")
-          .select("logo_url")
-          .eq("id", teamData.club_id)
-          .single();
-
-        if (!clubError) {
-          const raw = (clubData as { logo_url?: string | null } | null)?.logo_url || null;
-          logo = normalizeLogoUrl(raw);
-        }
+      if (!teamError) {
+        const club = Array.isArray(teamData?.clubs) ? teamData?.clubs[0] : teamData?.clubs;
+        const raw = (club as { logo_url?: string | null } | null)?.logo_url || null;
+        logo = normalizeLogoUrl(raw);
       }
 
       const { data: primaryRow, error: primaryError } = await supabase
@@ -267,18 +260,20 @@ export function OverviewPage() {
       const nextTrainingItem =
         trainingsList.find((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() >= Date.now()) || null;
 
-      const activityRes = await supabase
-        .from("activity_log")
-        .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, created_at")
-        .eq("team_id", TEAM_ID)
-        .order("created_at", { ascending: false })
-        .limit(6);
+      const [activityRes, recentTrainingsRes] = await Promise.all([
+        supabase
+          .from("activity_log")
+          .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, created_at")
+          .eq("team_id", TEAM_ID)
+          .order("created_at", { ascending: false })
+          .limit(6),
+        supabase
+          .from("trainings")
+          .select("id")
+          .eq("team_id", TEAM_ID)
+          .gte("date", sinceDate),
+      ]);
 
-      const recentTrainingsRes = await supabase
-        .from("trainings")
-        .select("id")
-        .eq("team_id", TEAM_ID)
-        .gte("date", sinceDate);
       const recentTrainingIds = ((recentTrainingsRes.data as { id: string }[]) ?? []).map((t) => t.id);
       const attendanceRes = recentTrainingIds.length
         ? await supabase
@@ -322,6 +317,7 @@ export function OverviewPage() {
   const nextMatch = data?.nextMatch ?? null;
   const lastMatch = data?.lastMatch ?? null;
   const nextTraining = data?.nextTraining ?? null;
+  
   const lastFive = data?.lastFive ?? [];
   const activity = data?.activity ?? [];
   const kpi = data?.kpi ?? {
@@ -431,9 +427,9 @@ export function OverviewPage() {
         titleVariant="hidden"
         sectionLabel="Пульс команди"
         sectionIcon={LayoutGrid}
-        nextUpLoading={loading}
+        nextUpLoading={showSkeleton}
         nextUp={
-          !loading && nextMatch && nextMatchSides
+          !showSkeleton && nextMatch && nextMatchSides
             ? {
                 primary: formatDateTimeUA(nextMatch.match_date),
                 secondary: `${nextMatchSides.left.name} — ${nextMatchSides.right.name}`,

@@ -144,7 +144,6 @@ type TeamKpi = {
 type MinMatchesKey = "0" | "5" | "10" | "20";
 type SortKey = "rating" | "points" | "goals" | "assists" | "discipline" | "matches" | "form";
 type SortDirection = "asc" | "desc";
-type FormFilter = "all" | "positive" | "neutral" | "negative";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -1417,7 +1416,6 @@ export function StatsPage() {
   const [minMatches, setMinMatches] = useState<MinMatchesKey>("0"); 
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("all");
   const [query, setQuery] = useState("");
-  const [formFilter, setFormFilter] = useState<FormFilter>("all");
   
   // State object for bi-directional sorting
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
@@ -1495,33 +1493,34 @@ export function StatsPage() {
         .eq("team_id", TEAM_ID)
         .eq("status", "played")
         .order("match_date", { ascending: false })
-        .limit(500);
+        .limit(30);
 
       const rosterPromise = fetchTeamPlayers(TEAM_ID);
 
       const teamPromise = supabase
         .from("teams")
-        .select("logo_url, club_id, name")
+        .select("logo_url, club_id, name, clubs(name, logo_url)")
         .eq("id", TEAM_ID)
         .single();
 
       const [matchesRes, roster, teamRes] = await Promise.all([matchesPromise, rosterPromise, teamPromise]);
 
-      const teamData = teamRes.data as { logo_url?: string | null; club_id?: string | null; name?: string | null } | null;
+      const teamData = teamRes.data as {
+        logo_url?: string | null;
+        club_id?: string | null;
+        name?: string | null;
+        clubs?: { name?: string | null; logo_url?: string | null } | { name?: string | null; logo_url?: string | null }[] | null;
+      } | null;
       let resolvedName = (teamData?.name || "").trim() || "FAYNA TEAM";
       let resolvedLogo: string | null = teamData?.logo_url ? normalizeAssetUrl(teamData.logo_url) : null;
 
       if (!resolvedLogo && teamData?.club_id) {
-        const { data: clubData } = await supabase
-          .from("clubs")
-          .select("name, logo_url")
-          .eq("id", teamData.club_id)
-          .maybeSingle();
-        if (clubData?.logo_url) {
-          resolvedLogo = normalizeAssetUrl(clubData.logo_url as string);
+        const club = Array.isArray(teamData?.clubs) ? teamData?.clubs[0] : teamData?.clubs;
+        if (club?.logo_url) {
+          resolvedLogo = normalizeAssetUrl(club.logo_url as string);
         }
-        if (clubData?.name) {
-          resolvedName = String(clubData.name);
+        if (club?.name) {
+          resolvedName = String(club.name);
         }
       } else if (!teamData?.club_id) {
         const { data: clubRow } = await supabase
@@ -1543,31 +1542,31 @@ export function StatsPage() {
       }
 
       const allMatches = ((matchesRes.data ?? []) as MatchRow[]) ?? [];
-      const attendance = await fetchMatchAttendanceByMatchIds(allMatches.map((m) => m.id));
-
       const matchIds = allMatches.map((m) => m.id);
-      const safeMatchIds = matchIds.slice(0, 200);
+      const safeMatchIds = matchIds.slice(0, 30);
 
-      let ev: MatchEventRow[] = [];
-      if (safeMatchIds.length > 0) {
-        const eventsRes = await supabase
-          .from("match_events")
-          .select(`
-            id, match_id, team_id, player_id, assist_player_id, event_type, minute, created_at,
-            player:player_id ( id, first_name, last_name, shirt_number, position, photo_url ),
-            assist:assist_player_id ( id, first_name, last_name, shirt_number, position, photo_url )
-          `)
-          .eq("team_id", TEAM_ID)
-          .in("match_id", safeMatchIds)
-          .order("created_at", { ascending: false });
+      const attendancePromise = fetchMatchAttendanceByMatchIds(matchIds);
+      const eventsPromise = safeMatchIds.length
+        ? supabase
+            .from("match_events")
+            .select(`
+              id, match_id, team_id, player_id, assist_player_id, event_type, minute, created_at,
+              player:player_id ( id, first_name, last_name, shirt_number, position, photo_url ),
+              assist:assist_player_id ( id, first_name, last_name, shirt_number, position, photo_url )
+            `)
+            .eq("team_id", TEAM_ID)
+            .in("match_id", safeMatchIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] });
 
-        const rows = ((eventsRes.data ?? []) as MatchEventJoinRow[]) ?? [];
-        ev = rows.map((row) => ({
-          ...row,
-          player: normalizeJoinedPlayer(row.player),
-          assist: normalizeJoinedPlayer(row.assist),
-        }));
-      }
+      const [attendance, eventsRes] = await Promise.all([attendancePromise, eventsPromise]);
+
+      const rows = (((eventsRes as { data?: MatchEventJoinRow[] }).data ?? []) as MatchEventJoinRow[]) ?? [];
+      const ev = rows.map((row) => ({
+        ...row,
+        player: normalizeJoinedPlayer(row.player),
+        assist: normalizeJoinedPlayer(row.assist),
+      }));
 
       const meta = new Map<string, { name: string; avatarUrl: string | null; shirtNumber: number | null; position: string | null }>();
       const addPlayerToMeta = (p: PlayerDbRow) => {
@@ -1620,13 +1619,11 @@ export function StatsPage() {
       setLoading(false);
     }
 
-    if (!hasCache) {
-      load();
-    }
+    load();
     return () => {
       cancelled = true;
     };
-  }, [hasCache]);
+  }, []);
 
   const playerStats = useMemo<PlayerStat[]>(() => {
     const validMatches = matches.filter((m) => {
@@ -1903,25 +1900,13 @@ export function StatsPage() {
     const minM = parseInt(minMatches, 10);
     const filteredByMatches = finalList.filter(p => p.matches >= minM);
 
-    const filteredByForm = filteredByMatches.filter((p) => {
-      if (formFilter === "all") return true;
-      const score = p.last5.reduce((acc, item) => {
-        if (item.status === "bad") return acc - 1;
-        if (item.status === "good" || item.status === "win_bonus") return acc + 1;
-        return acc;
-      }, 0);
-      if (formFilter === "positive") return score > 0;
-      if (formFilter === "negative") return score < 0;
-      return score === 0;
-    });
-
     if (query.trim()) {
       const q = query.toLowerCase();
-      return filteredByForm.filter((p) => p.name.toLowerCase().includes(q));
+      return filteredByMatches.filter((p) => p.name.toLowerCase().includes(q));
     }
 
-    return filteredByForm;
-  }, [events, matches, playersById, minMatches, selectedTournamentId, query, sortConfig, matchAttendance, formFilter]); 
+    return filteredByMatches;
+  }, [events, matches, playersById, minMatches, selectedTournamentId, query, sortConfig, matchAttendance]); 
 
   const leaders = useMemo(() => {
     const withValue = (
@@ -2157,18 +2142,6 @@ export function StatsPage() {
                           {t.label}
                         </SelectItem>
                       ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={formFilter} onValueChange={(value) => setFormFilter(value as FormFilter)}>
-                    <SelectTrigger className={cn(CONTROL_BASE, "w-[200px]")}>
-                      <SelectValue placeholder="Форма" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Уся форма</SelectItem>
-                      <SelectItem value="positive">Позитивна</SelectItem>
-                      <SelectItem value="neutral">Нейтральна</SelectItem>
-                      <SelectItem value="negative">Негативна</SelectItem>
                     </SelectContent>
                   </Select>
 

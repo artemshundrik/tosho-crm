@@ -542,9 +542,20 @@ export function OperationalSummary(props: OperationalSummaryProps) {
   const hasNextUp = Boolean(props.nextUp);
 
   const [phase, setPhase] = React.useState<"skeleton" | "content" | "empty">(() => {
-    if (externalLoading === true) return "skeleton";
-    if (hasNextUp) return "content";
-    return "skeleton";
+    // FIX: Краща логіка початкової ініціалізації
+    let initialPhase: "skeleton" | "content" | "empty";
+    if (externalLoading === true) {
+      initialPhase = "skeleton";
+    } else if (externalLoading === false) {
+      initialPhase = hasNextUp ? "content" : "empty";
+    } else {
+      // externalLoading === undefined
+      initialPhase = hasNextUp ? "content" : "skeleton";
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/11b5ec69-b54d-4e33-804b-27523a2e1ba6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OperationalSummary.tsx:544',message:'initial phase',data:{externalLoading,hasNextUp,initialPhase},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+    return initialPhase;
   });
 
   const timersRef = React.useRef<number[]>([]);
@@ -554,18 +565,32 @@ export function OperationalSummary(props: OperationalSummaryProps) {
   }, []);
 
   React.useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/11b5ec69-b54d-4e33-804b-27523a2e1ba6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OperationalSummary.tsx:556',message:'useEffect start',data:{nextUpLoading:props.nextUpLoading,hasNextUp,currentPhase:phase},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,E'})}).catch(()=>{});
+    // #endregion
+    
     clearTimers();
 
     if (props.nextUpLoading !== undefined) {
-      setPhase(props.nextUpLoading ? "skeleton" : hasNextUp ? "content" : "empty");
+      const newPhase = props.nextUpLoading ? "skeleton" : hasNextUp ? "content" : "empty";
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/11b5ec69-b54d-4e33-804b-27523a2e1ba6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OperationalSummary.tsx:563',message:'nextUpLoading defined',data:{nextUpLoading:props.nextUpLoading,hasNextUp,newPhase},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D,E'})}).catch(()=>{});
+      // #endregion
+      setPhase(newPhase);
       return;
     }
 
     if (hasNextUp) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/11b5ec69-b54d-4e33-804b-27523a2e1ba6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OperationalSummary.tsx:572',message:'hasNextUp=true, setPhase(content)',data:{hasNextUp},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       setPhase("content");
       return;
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/11b5ec69-b54d-4e33-804b-27523a2e1ba6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OperationalSummary.tsx:579',message:'no data, setPhase(skeleton)',data:{hasNextUp},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     setPhase("skeleton");
 
     const t1 = window.setTimeout(() => {
