@@ -239,7 +239,7 @@ function RequireAuth({
 }) {
   const location = useLocation();
 
-  if (loading) return <PageSkeleton />;
+  if (loading) return <AppShell />;
 
   if (!session) {
     const redirect = encodeURIComponent(location.pathname + location.search);
