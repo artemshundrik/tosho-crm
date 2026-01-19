@@ -29,9 +29,9 @@
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
-    --brand-h: 221;
-    --brand-s: 83%;
-    --brand-l: 53%;
+    --brand-h: 325;
+    --brand-s: 99%;
+    --brand-l: 43%;
 
     --primary: var(--brand-h) var(--brand-s) var(--brand-l);
     --primary-foreground: 210 40% 98%;
