@@ -18,6 +18,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { AppShell } from "@/components/app/AppShell";
 
 // =======================
 // Types
@@ -128,8 +129,14 @@ const ActivityPage = lazy(() => import("./pages/ActivityPage"));
 const TournamentImportLabPage = lazy(() => import("./pages/dev/TournamentImportLabPage"));
 const TournamentStandingsImportPage = lazy(() => import("./pages/dev/TournamentStandingsImportPage"));
 
-function RouteSuspense({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
+function RouteSuspense({
+  children,
+  shell = false,
+}: {
+  children: React.ReactNode;
+  shell?: boolean;
+}) {
+  return <Suspense fallback={shell ? <AppShell /> : <PageSkeleton />}>{children}</Suspense>;
 }
 
 // =======================
@@ -478,7 +485,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TournamentImportLabPage />
               </RouteSuspense>
             </AppLayout>
@@ -490,7 +497,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TournamentStandingsImportPage />
               </RouteSuspense>
             </AppLayout>
@@ -521,7 +528,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <NotificationsPage />
               </RouteSuspense>
             </AppLayout>
@@ -533,7 +540,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <ActivityPage />
               </RouteSuspense>
             </AppLayout>
@@ -557,7 +564,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <OverviewPage />
               </RouteSuspense>
             </AppLayout>
@@ -571,7 +578,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <MatchesShadcnPage />
               </RouteSuspense>
             </AppLayout>
@@ -585,7 +592,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <MatchDetailsPage />
               </RouteSuspense>
             </AppLayout>
@@ -600,7 +607,7 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <RouteSuspense>
+                <RouteSuspense shell>
                   <MatchEventsAdminPage />
                 </RouteSuspense>
               </RoleGate>
@@ -616,7 +623,7 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <RouteSuspense>
+                <RouteSuspense shell>
                   <CreateMatchPage />
                 </RouteSuspense>
               </RoleGate>
@@ -631,7 +638,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TrainingsListPage />
               </RouteSuspense>
             </AppLayout>
@@ -644,7 +651,7 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin", "manager"]} role={team.role}>
-                <RouteSuspense>
+                <RouteSuspense shell>
                   <TrainingCreatePage />
                 </RouteSuspense>
               </RoleGate>
@@ -657,7 +664,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TrainingDetailPage />
               </RouteSuspense>
             </AppLayout>
@@ -669,7 +676,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TrainingsAnalyticsPage />
               </RouteSuspense>
             </AppLayout>
@@ -683,7 +690,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <PlayersAdminPage />
               </RouteSuspense>
             </AppLayout>
@@ -697,7 +704,7 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <RoleGate allow={["super_admin"]} role={team.role}>
-                <RouteSuspense>
+                <RouteSuspense shell>
                   <TeamMembersPage />
                 </RouteSuspense>
               </RoleGate>
@@ -710,7 +717,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <PlayerPage />
               </RouteSuspense>
             </AppLayout>
@@ -724,7 +731,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TournamentsAdminPage />
               </RouteSuspense>
             </AppLayout>
@@ -736,7 +743,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <TournamentDetailsPage />
               </RouteSuspense>
             </AppLayout>
@@ -750,7 +757,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <StatsPage />
               </RouteSuspense>
             </AppLayout>
@@ -762,7 +769,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <StatsPage />
               </RouteSuspense>
             </AppLayout>
@@ -776,7 +783,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <FinancePage />
               </RouteSuspense>
             </AppLayout>
@@ -788,7 +795,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <FinanceTransactionCreatePage />
               </RouteSuspense>
             </AppLayout>
@@ -800,7 +807,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <FinanceInvoiceCreatePage />
               </RouteSuspense>
             </AppLayout>
@@ -812,7 +819,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <FinancePoolCreatePage />
               </RouteSuspense>
             </AppLayout>
@@ -824,7 +831,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <FinancePoolDetailsPage />
               </RouteSuspense>
             </AppLayout>
@@ -837,7 +844,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <ProfilePage />
               </RouteSuspense>
             </AppLayout>
@@ -851,7 +858,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RouteSuspense>
+              <RouteSuspense shell>
                 <AdminPage />
               </RouteSuspense>
             </AppLayout>
