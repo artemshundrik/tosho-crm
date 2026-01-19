@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let cachedClient: SupabaseClient | null = null;
 
-const getSupabaseClient = () => {
+const getSupabaseClient = (): SupabaseClient => {
   if (cachedClient) return cachedClient;
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -26,7 +26,7 @@ const getSupabaseClient = () => {
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
     const client = getSupabaseClient();
-    const value = (client as Record<PropertyKey, unknown>)[prop];
+    const value = (client as unknown as Record<PropertyKey, unknown>)[prop];
     return typeof value === 'function' ? value.bind(client) : value;
   },
 });
