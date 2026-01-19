@@ -977,7 +977,7 @@ useEffect(() => {
         </main>
       </div>
 
-      <TabBar />
+      <TabBar hidden={mobileMenuOpen} />
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
     </div>
   );
@@ -1071,7 +1071,7 @@ function MobileNav({
   onNavigate?: () => void;
 }) {
   return (
-    <div className="space-y-5">
+    <div className="flex min-h-[calc(100dvh-140px)] flex-col gap-5">
       <SidebarGroup
         label="Команда"
         links={sidebarLinks.filter((l) => l.group === "team" && !MOBILE_PRIMARY_ROUTES.has(l.to))}
@@ -1093,20 +1093,8 @@ function MobileNav({
         activityUnreadCount={activityUnreadCount}
         onNavigate={onNavigate}
       />
-      <div className="pt-2 border-t border-border">
-        <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
-          <AvatarBase
-            name="Artem Shundryk"
-            fallback="AS"
-            size={36}
-            shape="rounded"
-            className="border-border"
-          />
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold">Artem Shundryk</div>
-            <div className="truncate text-[11px] text-muted-foreground">Senior UI/UX</div>
-          </div>
-        </div>
+      <div className="mt-auto pt-2 border-t border-border">
+        <UserMenu mobile onNavigate={onNavigate} />
       </div>
     </div>
   );

@@ -18,16 +18,33 @@ const ROLE_NAMES: Record<string, string> = {
   player: "Гравець"
 };
 
-export function UserMenu({ mobile = false }: { mobile?: boolean }) {
+type UserMenuProps = {
+  mobile?: boolean;
+  onNavigate?: () => void;
+};
+
+type UserState = {
+  name: string;
+  role: string;
+  initials: string;
+  avatarUrl: string | null;
+  roleKey: string;
+};
+
+let cachedUserData: UserState | null = null;
+
+export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState({
-    name: "Завантаження...",
-    role: "...",
-    initials: "..",
-    avatarUrl: null as string | null,
-    roleKey: "viewer"
-  });
+  const [loading, setLoading] = useState(!cachedUserData);
+  const [userData, setUserData] = useState<UserState>(
+    cachedUserData ?? {
+      name: "Завантаження...",
+      role: "...",
+      initials: "..",
+      avatarUrl: null,
+      roleKey: "viewer",
+    }
+  );
 
   useEffect(() => {
     async function getUserData() {
@@ -53,13 +70,15 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
         const rawRole = (roleData as string) || "viewer";
         const displayRole = ROLE_NAMES[rawRole] || rawRole;
 
-        setUserData({
+        const nextData: UserState = {
           name: fullName,
           role: displayRole,
           initials: initials,
           avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
           roleKey: rawRole
-        });
+        };
+        cachedUserData = nextData;
+        setUserData(nextData);
       }
       setLoading(false);
     }
@@ -67,6 +86,7 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
   }, []);
 
   const handleLogout = async () => {
+    onNavigate?.();
     await supabase.auth.signOut();
     navigate("/login");
   };
@@ -87,23 +107,33 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
     }
     return (
       <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
-        <AvatarBase
-          src={userData.avatarUrl}
-          name={userData.name}
-          fallback={userData.initials}
-          size={36}
-          shape="rounded"
-          className="border-border"
-          imageClassName="object-cover"
-        />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">{userData.name}</div>
-          <div
-            className={cn("truncate text-[11px]", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}
-          >
-            {userData.role}
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto flex-1 justify-start gap-3 px-0 py-0"
+          onClick={() => {
+            onNavigate?.();
+            navigate("/profile");
+          }}
+        >
+          <AvatarBase
+            src={userData.avatarUrl}
+            name={userData.name}
+            fallback={userData.initials}
+            size={36}
+            shape="rounded"
+            className="border-border"
+            imageClassName="object-cover"
+          />
+          <div className="min-w-0 flex-1 text-left">
+            <div className="truncate text-[13px] font-semibold">{userData.name}</div>
+            <div
+              className={cn("truncate text-[11px]", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}
+            >
+              {userData.role}
+            </div>
           </div>
-        </div>
+        </Button>
         <Button
           type="button"
           variant="controlDestructive"
