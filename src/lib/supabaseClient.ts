@@ -1,15 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+let cachedClient: SupabaseClient | null = null;
 
-if (!supabaseUrl) throw new Error('VITE_SUPABASE_URL is required');
-if (!supabaseAnonKey) throw new Error('VITE_SUPABASE_ANON_KEY is required');
+const getSupabaseClient = () => {
+  if (cachedClient) return cachedClient;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+  if (!supabaseUrl) throw new Error('VITE_SUPABASE_URL is required');
+  if (!supabaseAnonKey) throw new Error('VITE_SUPABASE_ANON_KEY is required');
+
+  cachedClient = createClient(supabaseUrl, supabaseAnonKey, {
+    db: { schema: 'tosho' },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+
+  return cachedClient;
+};
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseClient();
+    const value = (client as Record<PropertyKey, unknown>)[prop];
+    return typeof value === 'function' ? value.bind(client) : value;
   },
 });
+
+export const supabaseHealthCheck = async () => {
+  const client = getSupabaseClient();
+  return client.from('_healthcheck').select('*').maybeSingle();
+};
