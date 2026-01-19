@@ -25,7 +25,7 @@ import { usePageData } from "@/hooks/usePageData";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 const TEAM_NAME = "FAYNA TEAM";
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 120;
 
 type DbTournament = {
   id: string;
@@ -428,7 +428,7 @@ export function MatchesShadcnPage() {
     matchesDb: DbMatch[];
     cards: MatchCardData[];
   }>({
-    cacheKey: "matches-list",
+    cacheKey: "matches-list:v2",
     loadFn: async () => {
       let primaryTournament: PrimaryTournament | null = null;
       let standingsRow: StandingsRowView | null = null;
@@ -468,7 +468,7 @@ export function MatchesShadcnPage() {
         )
         .eq("team_id", TEAM_ID)
         .order("match_date", { ascending: false })
-        .limit(30);
+        .limit(120);
 
       const teamPromise = supabase
         .from("teams")

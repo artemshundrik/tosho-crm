@@ -1374,6 +1374,7 @@ type StatsPageCache = {
   matchAttendance: MatchAttendanceRow[];
   teamName: string;
   teamLogo: string | null;
+  teamTournaments: Array<{ id: string; name: string; season: string | null }>;
   playersById: Array<[string, { name: string; avatarUrl: string | null; shirtNumber: number | null; position: string | null }]>;
   rosterCount: number;
 };
@@ -1384,7 +1385,7 @@ export function StatsPage() {
 
   usePageHeaderActions(null, []);
 
-  const cacheKey = `stats:${mode}`;
+  const cacheKey = `stats:${mode}:v3`;
   const { cached, setCache } = usePageCache<StatsPageCache>(cacheKey);
   const hasCache = Boolean(cached);
 
@@ -1406,6 +1407,9 @@ export function StatsPage() {
   const [teamName, setTeamName] = useState<string>(cached?.teamName ?? "FAYNA TEAM");
   // LOGO STATE
   const [teamLogo, setTeamLogo] = useState<string | null>(cached?.teamLogo ?? null);
+  const [teamTournaments, setTeamTournaments] = useState<
+    Array<{ id: string; name: string; season: string | null }>
+  >(cached?.teamTournaments ?? []);
 
   // Meta map
   const [playersById, setPlayersById] = useState<
@@ -1433,16 +1437,24 @@ export function StatsPage() {
 
   const availableTournaments = useMemo(() => {
     const map = new Map<string, string>();
-    matches.forEach((m) => {
-      const tournament = normalizeTournament(m.tournaments);
-      if (tournament) {
-        const name = tournament.name || "Турнір";
-        const season = tournament.season ? ` (${tournament.season})` : "";
-        map.set(tournament.id, `${name}${season}`);
-      }
-    });
+    if (teamTournaments.length > 0) {
+      teamTournaments.forEach((t) => {
+        const name = t.name || "Турнір";
+        const season = t.season ? ` (${t.season})` : "";
+        map.set(t.id, `${name}${season}`);
+      });
+    } else {
+      matches.forEach((m) => {
+        const tournament = normalizeTournament(m.tournaments);
+        if (tournament) {
+          const name = tournament.name || "Турнір";
+          const season = tournament.season ? ` (${tournament.season})` : "";
+          map.set(tournament.id, `${name}${season}`);
+        }
+      });
+    }
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
-  }, [matches]);
+  }, [matches, teamTournaments]);
 
   const teamKpi = useMemo<TeamKpi>(() => {
     let wins = 0, draws = 0, losses = 0;
@@ -1493,7 +1505,7 @@ export function StatsPage() {
         .eq("team_id", TEAM_ID)
         .eq("status", "played")
         .order("match_date", { ascending: false })
-        .limit(30);
+        .limit(120);
 
       const rosterPromise = fetchTeamPlayers(TEAM_ID);
 
@@ -1503,7 +1515,17 @@ export function StatsPage() {
         .eq("id", TEAM_ID)
         .single();
 
-      const [matchesRes, roster, teamRes] = await Promise.all([matchesPromise, rosterPromise, teamPromise]);
+      const tournamentsPromise = supabase
+        .from("team_tournaments")
+        .select("tournament:tournament_id (id, name, season)")
+        .eq("team_id", TEAM_ID);
+
+      const [matchesRes, roster, teamRes, tournamentsRes] = await Promise.all([
+        matchesPromise,
+        rosterPromise,
+        teamPromise,
+        tournamentsPromise,
+      ]);
 
       const teamData = teamRes.data as {
         logo_url?: string | null;
@@ -1543,7 +1565,25 @@ export function StatsPage() {
 
       const allMatches = ((matchesRes.data ?? []) as MatchRow[]) ?? [];
       const matchIds = allMatches.map((m) => m.id);
-      const safeMatchIds = matchIds.slice(0, 30);
+      const safeMatchIds = matchIds.slice(0, 120);
+
+      const teamTournamentsList = (tournamentsRes.data ?? [])
+        .flatMap((row) => {
+          const raw = (row as { tournament?: { id: string; name: string; season: string | null } | { id: string; name: string; season: string | null }[] | null })
+            .tournament;
+          if (!raw) return [];
+          return Array.isArray(raw) ? raw : [raw];
+        })
+        .filter((t) => t && t.id)
+        .map((t) => ({
+          id: t.id,
+          name: t.name || "Турнір",
+          season: t.season ?? null,
+        }));
+
+      const uniqueTournaments = Array.from(
+        new Map(teamTournamentsList.map((t) => [t.id, t])).values()
+      );
 
       const attendancePromise = fetchMatchAttendanceByMatchIds(matchIds);
       const eventsPromise = safeMatchIds.length
@@ -1605,6 +1645,7 @@ export function StatsPage() {
       setPlayersById(meta);
       setTeamLogo(resolvedLogo);
       setTeamName(resolvedName);
+      setTeamTournaments(uniqueTournaments);
       
       setCache({
         matches: allMatches,
@@ -1612,6 +1653,7 @@ export function StatsPage() {
         matchAttendance: attendance,
         teamName: resolvedName,
         teamLogo: resolvedLogo,
+        teamTournaments: uniqueTournaments,
         playersById: Array.from(meta.entries()),
         rosterCount: roster.length,
       });
