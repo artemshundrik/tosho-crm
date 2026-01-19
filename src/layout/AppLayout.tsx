@@ -54,6 +54,7 @@ import { toast } from "sonner";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
+import { TabBar } from "@/components/app/TabBar";
 
 // --- Types ---
 type AppLayoutProps = {
@@ -106,6 +107,13 @@ const ROUTES = {
   accountSettings: "/account-settings",
   profile: "/profile",
 } as const;
+
+const MOBILE_PRIMARY_ROUTES = new Set([
+  ROUTES.overview,
+  ROUTES.matches,
+  ROUTES.trainings,
+  ROUTES.finance,
+]);
 
 // --- Sidebar Config ---
 const baseSidebarLinks: SidebarLink[] = [
@@ -760,7 +768,7 @@ useEffect(() => {
 
                   <SheetContent
                     side="left"
-                    className="h-full w-full max-w-none overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] sm:w-[310px] sm:max-w-[310px] min-h-[100dvh]"
+                    className="h-full w-full max-w-none overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] sm:w-[310px] sm:max-w-[310px] min-h-[100dvh] will-change-transform data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
                   >
                     <SheetHeader className="p-4 pb-2">
                       <SheetTitle>FAYNA TEAM</SheetTitle>
@@ -941,8 +949,8 @@ useEffect(() => {
         </header>
 
         {/* CONTENT */}
-        <main className="w-full px-4 py-6 md:px-6 lg:px-8 xl:px-8">
-          <div className="mx-auto max-w-[1320px] space-y-8">
+        <main className="w-full overflow-x-hidden px-4 py-6 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:px-6 md:pb-6 lg:px-8 xl:px-8">
+          <div className="mx-auto max-w-[1320px] space-y-8 min-w-0">
             {/* Page header (desktop) */}
             {header.showPageHeader === false ? (
               header.eyebrow ? (
@@ -969,6 +977,7 @@ useEffect(() => {
         </main>
       </div>
 
+      <TabBar />
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
     </div>
   );
@@ -1065,7 +1074,7 @@ function MobileNav({
     <div className="space-y-5">
       <SidebarGroup
         label="Команда"
-        links={sidebarLinks.filter((l) => l.group === "team")}
+        links={sidebarLinks.filter((l) => l.group === "team" && !MOBILE_PRIMARY_ROUTES.has(l.to))}
         currentPath={currentPath}
         activityUnreadCount={activityUnreadCount}
         onNavigate={onNavigate}
@@ -1079,7 +1088,7 @@ function MobileNav({
       />
       <SidebarGroup
         label="Управління"
-        links={sidebarLinks.filter((l) => l.group === "management")}
+        links={sidebarLinks.filter((l) => l.group === "management" && !MOBILE_PRIMARY_ROUTES.has(l.to))}
         currentPath={currentPath}
         activityUnreadCount={activityUnreadCount}
         onNavigate={onNavigate}

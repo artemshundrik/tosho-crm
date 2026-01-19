@@ -136,6 +136,24 @@
     --leader-efficiency-bg: rgba(100, 116, 139, 0.1);
     --leader-efficiency-border: rgba(148, 163, 184, 0.35);
     --leader-efficiency-foreground: #64748b;
+
+    /* --- TAB BAR TOKENS (LIGHT) --- */
+    --tabbar-bg: var(--background);
+    --tabbar-border: var(--border);
+    --tabbar-shadow: 0 10px 24px hsl(var(--foreground) / 0.08);
+    --tabbar-icon: var(--muted-foreground);
+    --tabbar-icon-active: var(--primary);
+    --tabbar-label: var(--muted-foreground);
+    --tabbar-label-active: var(--primary);
+    --tabbar-backdrop-blur: 22px;
+    --tabbar-backdrop-saturate: 1.2;
+    --tabbar-radius: 24px;
+    --tabbar-height: 58px;
+    --tabbar-inset-x: 16px;
+    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 12px);
+    --tabbar-gap: 6px;
+    --tabbar-active-scale: 1.06;
+    --tabbar-transition: 140ms;
   }
 
   .dark {
@@ -255,6 +273,24 @@
     --leader-efficiency-bg: rgba(148, 163, 184, 0.2);
     --leader-efficiency-border: rgba(148, 163, 184, 0.45);
     --leader-efficiency-foreground: #e2e8f0;
+
+    /* --- TAB BAR TOKENS (DARK) --- */
+    --tabbar-bg: var(--card);
+    --tabbar-border: var(--border);
+    --tabbar-shadow: 0 12px 28px hsl(0 0% 0% / 0.35);
+    --tabbar-icon: var(--muted-foreground);
+    --tabbar-icon-active: var(--primary);
+    --tabbar-label: var(--muted-foreground);
+    --tabbar-label-active: var(--primary);
+    --tabbar-backdrop-blur: 22px;
+    --tabbar-backdrop-saturate: 1.2;
+    --tabbar-radius: 24px;
+    --tabbar-height: 58px;
+    --tabbar-inset-x: 16px;
+    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 12px);
+    --tabbar-gap: 6px;
+    --tabbar-active-scale: 1.06;
+    --tabbar-transition: 140ms;
   }
 
   * {

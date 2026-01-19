@@ -452,10 +452,10 @@ export function OverviewPage() {
         kpis={kpis}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-4">
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] min-w-0">
+        <div className="space-y-4 min-w-0">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
+            <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">Останній результат</CardTitle>
               {lastMatch ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
@@ -464,10 +464,10 @@ export function OverviewPage() {
                 </div>
               ) : null}
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {lastMatch ? (
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-                  <div className="flex items-center justify-end gap-3 text-right min-w-0">
+                <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
+                  <div className="flex items-center justify-center gap-3 text-center min-w-0 sm:justify-end sm:text-right">
                     <div className="truncate text-sm font-semibold text-foreground">{TEAM_NAME}</div>
                     <LogoCircle src={teamLogo} alt={TEAM_NAME} size={48} />
                   </div>
@@ -483,7 +483,7 @@ export function OverviewPage() {
                     ) : null}
                   </div>
 
-                  <div className="flex items-center justify-start gap-3 min-w-0">
+                  <div className="flex items-center justify-center gap-3 min-w-0 sm:justify-start">
                     <LogoCircle src={lastMatch.opponent_logo_url} alt={lastMatch.opponent_name} size={48} />
                     <div className="truncate text-sm font-semibold text-foreground">{lastMatch.opponent_name}</div>
                   </div>
@@ -494,8 +494,8 @@ export function OverviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
+            <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base">Стан у лізі</CardTitle>
                 <div className="text-xs text-muted-foreground">
@@ -511,7 +511,7 @@ export function OverviewPage() {
                   </Button>
                 ) : null}
                 {primaryTournament ? (
-                  <Button asChild variant="outline" size="sm">
+                  <Button asChild variant="outline" size="sm" className="gap-2">
                     <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
                       Відкрити турнір
                       <ArrowRight className="h-4 w-4" />
@@ -520,80 +520,82 @@ export function OverviewPage() {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 min-w-0">
               <div className="text-xs text-muted-foreground">{formatUpdatedAgo(standingsUpdatedAt)}</div>
               {standingsContext.rows.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Таблиця поки недоступна.</div>
               ) : (
-                <Table variant="analytics" size="sm" className="min-w-[640px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHeaderCell align="center" widthClass="w-10">#</TableHeaderCell>
-                      <TableHeaderCell>Команда</TableHeaderCell>
-                      <TableHeaderCell align="center">І</TableHeaderCell>
-                      <TableHeaderCell align="center">В</TableHeaderCell>
-                      <TableHeaderCell align="center">Н</TableHeaderCell>
-                      <TableHeaderCell align="center">П</TableHeaderCell>
-                      <TableHeaderCell align="center">Г</TableHeaderCell>
-                      <TableHeaderCell align="center">О</TableHeaderCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {standingsContext.rows.map((row) => {
-                      const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
-                      return (
-                        <TableRow key={row.team_name} className={cn(isOurTeam && "bg-primary/10")}>
-                          <TableNumericCell align="center" className="w-10 font-semibold text-muted-foreground">
-                            {row.position}
-                          </TableNumericCell>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              {row.logo_url ? (
-                                <img
-                                  src={row.logo_url}
-                                  alt={row.team_name}
-                                  className="h-6 w-6 rounded-full border border-border object-cover"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
-                              )}
-                              <span className="font-semibold text-foreground">{row.team_name}</span>
-                            </div>
-                          </TableCell>
-                          <TableNumericCell align="center" className="text-muted-foreground">
-                            {row.played ?? "—"}
-                          </TableNumericCell>
-                          <TableNumericCell align="center" className="text-muted-foreground">
-                            {row.wins ?? "—"}
-                          </TableNumericCell>
-                          <TableNumericCell align="center" className="text-muted-foreground">
-                            {row.draws ?? "—"}
-                          </TableNumericCell>
-                          <TableNumericCell align="center" className="text-muted-foreground">
-                            {row.losses ?? "—"}
-                          </TableNumericCell>
-                          <TableNumericCell align="center" className="text-muted-foreground">
-                            {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
-                          </TableNumericCell>
-                          <TableNumericCell align="center" className="font-semibold text-foreground">
-                            {row.points ?? "—"}
-                          </TableNumericCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="-mx-2 overflow-x-auto sm:mx-0 w-full">
+                  <Table variant="analytics" size="sm" className="min-w-[520px] sm:min-w-[640px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHeaderCell align="center" widthClass="w-10">#</TableHeaderCell>
+                        <TableHeaderCell>Команда</TableHeaderCell>
+                        <TableHeaderCell align="center">І</TableHeaderCell>
+                        <TableHeaderCell align="center">В</TableHeaderCell>
+                        <TableHeaderCell align="center">Н</TableHeaderCell>
+                        <TableHeaderCell align="center">П</TableHeaderCell>
+                        <TableHeaderCell align="center">Г</TableHeaderCell>
+                        <TableHeaderCell align="center">О</TableHeaderCell>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {standingsContext.rows.map((row) => {
+                        const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
+                        return (
+                          <TableRow key={row.team_name} className={cn(isOurTeam && "bg-primary/10")}>
+                            <TableNumericCell align="center" className="w-10 font-semibold text-muted-foreground">
+                              {row.position}
+                            </TableNumericCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                {row.logo_url ? (
+                                  <img
+                                    src={row.logo_url}
+                                    alt={row.team_name}
+                                    className="h-6 w-6 rounded-full border border-border object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
+                                )}
+                                <span className="font-semibold text-foreground">{row.team_name}</span>
+                              </div>
+                            </TableCell>
+                            <TableNumericCell align="center" className="text-muted-foreground">
+                              {row.played ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center" className="text-muted-foreground">
+                              {row.wins ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center" className="text-muted-foreground">
+                              {row.draws ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center" className="text-muted-foreground">
+                              {row.losses ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center" className="text-muted-foreground">
+                              {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
+                            </TableNumericCell>
+                            <TableNumericCell align="center" className="font-semibold text-foreground">
+                              {row.points ?? "—"}
+                            </TableNumericCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
+            <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">Форма (5 матчів)</CardTitle>
               <div className="text-xs text-muted-foreground">Останні 5</div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 min-w-0">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <div className="flex flex-wrap gap-1.5">
                   {formBadges.map((b, i) => (
@@ -615,11 +617,11 @@ export function OverviewPage() {
                         ? outcome(m.score_team, m.score_opponent)
                         : { label: "—", tone: "neutral" as const };
                     return (
-                        <Link
+                      <Link
                           key={m.id}
                           to={`/matches/${m.id}`}
                           className={cn(
-                          "flex items-center justify-between rounded-[var(--radius-inner)] border border-border px-3 py-2",
+                          "flex items-center justify-between rounded-[var(--radius-inner)] border border-border px-3 py-2 min-w-0",
                           "bg-muted/20 transition-all hover:-translate-y-[1px] hover:bg-muted/40 hover:shadow-[var(--shadow-floating)]"
                           )}
                         >
@@ -633,7 +635,7 @@ export function OverviewPage() {
                             <div className="text-xs text-muted-foreground">{formatDateTimeUA(m.match_date)}</div>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                        <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">
                           {m.score_team ?? "—"}:{m.score_opponent ?? "—"}
                         </span>
                       </Link>
@@ -645,14 +647,14 @@ export function OverviewPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
+        <div className="space-y-4 min-w-0">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarDays className="h-4 w-4" /> Наступне тренування
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {nextTraining ? (
                 <div className="space-y-3">
                   <div className="text-sm font-semibold text-foreground">
@@ -674,7 +676,7 @@ export function OverviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -685,7 +687,7 @@ export function OverviewPage() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {activity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Подій поки немає — почніть з матчу або тренування
@@ -706,7 +708,7 @@ export function OverviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
+          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Plus className="h-4 w-4" /> Швидкі дії

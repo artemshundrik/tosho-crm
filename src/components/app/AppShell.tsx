@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardSkeleton, DetailSkeleton, ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { TabBar } from "@/components/app/TabBar";
 
 function resolveShellContent(pathname: string) {
   if (pathname.startsWith("/matches/")) return <DetailSkeleton />;
@@ -83,8 +84,8 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="w-full px-4 py-6 md:px-6 lg:px-8 xl:px-8">
-          <div className="mx-auto max-w-[1320px] space-y-8">
+        <main className="w-full overflow-x-hidden px-4 py-6 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:px-6 md:pb-6 lg:px-8 xl:px-8">
+          <div className="mx-auto max-w-[1320px] space-y-8 min-w-0">
             <div className="hidden md:flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <Skeleton className="h-6 w-56" />
@@ -100,6 +101,8 @@ export function AppShell() {
           </div>
         </main>
       </div>
+
+      <TabBar />
     </div>
   );
 }
