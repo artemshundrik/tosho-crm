@@ -108,7 +108,7 @@ const ROUTES = {
   profile: "/profile",
 } as const;
 
-const MOBILE_PRIMARY_ROUTES = new Set([
+const MOBILE_PRIMARY_ROUTES = new Set<string>([
   ROUTES.overview,
   ROUTES.matches,
   ROUTES.trainings,
