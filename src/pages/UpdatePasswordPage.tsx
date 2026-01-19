@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ export default function UpdatePasswordPage() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       if (!mounted) return;
       setHasSession(!!data.session);
     });
