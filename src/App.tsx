@@ -16,6 +16,7 @@ import { supabase } from "./lib/supabaseClient";
 import { AuthProvider } from "@/auth/AuthProvider"; 
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/password-input";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
@@ -408,12 +409,12 @@ function LoginPage() {
           {mode === "password" && !isInviteFlow && (
             <div>
               <label className="text-sm font-medium text-foreground">Пароль</label>
-              <input
-                className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+              <PasswordInput
+                wrapperClassName="mt-1.5"
+                inputClassName="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                type="password"
                 autoComplete="current-password"
               />
             </div>

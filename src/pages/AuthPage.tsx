@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 
 export default function AuthPage() {
@@ -102,10 +103,9 @@ export default function AuthPage() {
           {mode !== "magic" && (
             <label className="block">
               <div className="text-sm font-medium mb-1">Пароль</div>
-              <Input
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                type="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
                 minLength={6}

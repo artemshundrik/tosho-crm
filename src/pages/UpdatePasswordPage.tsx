@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 
 export default function UpdatePasswordPage() {
@@ -94,21 +95,19 @@ export default function UpdatePasswordPage() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium text-foreground">Новий пароль</label>
-            <Input
-              className="mt-1.5"
+            <PasswordInput
+              wrapperClassName="mt-1.5"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              type="password"
               autoComplete="new-password"
             />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Повтори пароль</label>
-            <Input
-              className="mt-1.5"
+            <PasswordInput
+              wrapperClassName="mt-1.5"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              type="password"
               autoComplete="new-password"
             />
           </div>
