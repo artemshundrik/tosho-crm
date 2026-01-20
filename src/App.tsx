@@ -57,6 +57,15 @@ const MatchEventsAdminPage = lazy(() =>
 const TournamentsAdminPage = lazy(() =>
   import("./pages/TournamentsAdminPage").then((module) => ({ default: module.TournamentsAdminPage }))
 );
+const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
+const OrdersProductionPage = lazy(() => import("./pages/OrdersProductionPage"));
+const OrdersReadyToShipPage = lazy(() => import("./pages/OrdersReadyToShipPage"));
+const FinanceInvoicesPage = lazy(() => import("./pages/FinanceInvoicesPage"));
+const FinanceExpenseInvoicesPage = lazy(() => import("./pages/FinanceExpenseInvoicesPage"));
+const FinanceActsPage = lazy(() => import("./pages/FinanceActsPage"));
+const LogisticsPage = lazy(() => import("./pages/LogisticsPage"));
+const DesignPage = lazy(() => import("./pages/DesignPage"));
+const ContractorsPage = lazy(() => import("./pages/ContractorsPage"));
 const StatsPage = lazy(() =>
   import("./pages/StatsPage").then((module) => ({ default: module.StatsPage }))
 );
@@ -567,6 +576,120 @@ function AppRoutes() {
             <AppLayout>
               <RouteSuspense shell>
                 <OverviewPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+
+      {/* Orders */}
+      <Route
+        path="/orders/estimates"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <OrdersEstimatesPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/orders/production"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <OrdersProductionPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/orders/ready-to-ship"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <OrdersReadyToShipPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+
+      {/* Finance */}
+      <Route
+        path="/finance/invoices"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <FinanceInvoicesPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/expense-invoices"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <FinanceExpenseInvoicesPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance/acts"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <FinanceActsPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+
+      {/* Logistics / Design / Contractors */}
+      <Route
+        path="/logistics"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <LogisticsPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/design"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <DesignPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/contractors"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <ContractorsPage />
               </RouteSuspense>
             </AppLayout>
           </RequireAuth>

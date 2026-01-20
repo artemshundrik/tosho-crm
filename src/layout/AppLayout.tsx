@@ -1,34 +1,23 @@
 // src/layout/AppLayout.tsx
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
-import { ShieldAlert } from "lucide-react"; // або інша іконка
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
-  LayoutGrid,
-  Users,
-  Trophy,
-  BarChart3,
-  Layers,
   Bell,
+  Calculator,
   ChevronRight,
-  MoreVertical,
-  Search,
-  ChevronDown,
-  Menu,
-  Settings,
-  LogOut,
-  User,
-  Sparkles,
-  SlidersHorizontal,
+  Factory,
+  FileCheck,
+  FileMinus,
   FolderKanban,
-  Sun,
+  Menu,
   Moon,
-  ClipboardCheck,
-  Activity,
-  WalletCards,
-  LineChart,
-  Swords,
-  Dumbbell,
-  UserRound,
+  Palette,
+  ReceiptText,
+  Search,
+  Settings,
+  Sun,
+  Truck,
+  Users,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -62,7 +51,7 @@ type AppLayoutProps = {
   children: ReactNode;
 };
 
-type SidebarGroupKey = "team" | "analytics" | "management";
+type SidebarGroupKey = "orders" | "finance" | "operations";
 
 type SidebarLink = {
   label: string;
@@ -102,6 +91,18 @@ const ROUTES = {
   analyticsTeam: "/analytics/team",
   trainingsAnalytics: "/admin/trainings/analytics",
 
+  ordersEstimates: "/orders/estimates",
+  ordersProduction: "/orders/production",
+  ordersReadyToShip: "/orders/ready-to-ship",
+
+  financeInvoices: "/finance/invoices",
+  financeExpenseInvoices: "/finance/expense-invoices",
+  financeActs: "/finance/acts",
+
+  logistics: "/logistics",
+  design: "/design",
+  contractors: "/contractors",
+
   workspaceSettings: "/workspace-settings",
   membersAccess: "/settings/members",
   notifications: "/notifications",
@@ -109,32 +110,22 @@ const ROUTES = {
   profile: "/profile",
 } as const;
 
-const MOBILE_PRIMARY_ROUTES = new Set<string>([
-  ROUTES.overview,
-  ROUTES.matches,
-  ROUTES.trainings,
-  ROUTES.finance,
-]);
-
 // --- Sidebar Config ---
 const baseSidebarLinks: SidebarLink[] = [
-  // TEAM
-  { label: "Огляд", to: ROUTES.overview, group: "team", icon: LayoutGrid },
-  { label: "Матчі", to: ROUTES.matches, group: "team", icon: Swords },
-  { label: "Тренування", to: ROUTES.trainings, group: "team", icon: Dumbbell },
-  { label: "Гравці", to: ROUTES.players, group: "team", icon: UserRound },
-  { label: "Турніри", to: ROUTES.tournaments, group: "team", icon: Trophy },
+  // Замовлення
+  { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator },
+  { label: "У виробництві", to: ROUTES.ordersProduction, group: "orders", icon: Factory },
+  { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck },
 
-  // ANALYTICS
-  { label: "Статистика гравців", to: ROUTES.analyticsPlayers, group: "analytics", icon: BarChart3 },
-  { label: "Аналітика команди", to: ROUTES.analyticsTeam, group: "analytics", icon: LineChart },
-  { label: "Аналітика тренувань", to: ROUTES.trainingsAnalytics, group: "analytics", icon: ClipboardCheck },
+  // Фінанси
+  { label: "Рахунки", to: ROUTES.financeInvoices, group: "finance", icon: ReceiptText },
+  { label: "Видаткові накладні", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus },
+  { label: "Акти виконаних робіт", to: ROUTES.financeActs, group: "finance", icon: FileCheck },
 
-  // MANAGEMENT
-  { label: "Фінанси", to: ROUTES.finance, group: "management", icon: WalletCards },
-  { label: "Активність", to: ROUTES.activity, group: "management", icon: Activity },
-  { label: "Доступ / Ролі", to: ROUTES.membersAccess, group: "management", icon: ShieldAlert },
-  
+  // Операції
+  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck },
+  { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette },
+  { label: "Підрядники", to: ROUTES.contractors, group: "operations", icon: Users },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -147,6 +138,69 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Пульс команди, найближчі події та швидкі дії.",
       breadcrumbLabel: "Огляд",
       breadcrumbTo: ROUTES.overview,
+    };
+  if (pathname.startsWith(ROUTES.ordersEstimates))
+    return {
+      title: "Прорахунки замовлень",
+      subtitle: "Підготовка розрахунків і комерційних пропозицій.",
+      breadcrumbLabel: "Прорахунки замовлень",
+      breadcrumbTo: ROUTES.ordersEstimates,
+    };
+  if (pathname.startsWith(ROUTES.ordersProduction))
+    return {
+      title: "У виробництві",
+      subtitle: "Активні замовлення, що зараз виконуються.",
+      breadcrumbLabel: "У виробництві",
+      breadcrumbTo: ROUTES.ordersProduction,
+    };
+  if (pathname.startsWith(ROUTES.ordersReadyToShip))
+    return {
+      title: "Готові до відвантаження",
+      subtitle: "Замовлення, що готові до логістики.",
+      breadcrumbLabel: "Готові до відвантаження",
+      breadcrumbTo: ROUTES.ordersReadyToShip,
+    };
+  if (pathname.startsWith(ROUTES.financeInvoices))
+    return {
+      title: "Рахунки",
+      subtitle: "Рахунки для клієнтів і статуси оплат.",
+      breadcrumbLabel: "Рахунки",
+      breadcrumbTo: ROUTES.financeInvoices,
+    };
+  if (pathname.startsWith(ROUTES.financeExpenseInvoices))
+    return {
+      title: "Видаткові накладні",
+      subtitle: "Документи відвантаження та облік витрат.",
+      breadcrumbLabel: "Видаткові накладні",
+      breadcrumbTo: ROUTES.financeExpenseInvoices,
+    };
+  if (pathname.startsWith(ROUTES.financeActs))
+    return {
+      title: "Акти виконаних робіт",
+      subtitle: "Акти для закриття робіт і звітності.",
+      breadcrumbLabel: "Акти виконаних робіт",
+      breadcrumbTo: ROUTES.financeActs,
+    };
+  if (pathname.startsWith(ROUTES.logistics))
+    return {
+      title: "Логістика",
+      subtitle: "Доставка, маршрути та статуси відвантаження.",
+      breadcrumbLabel: "Логістика",
+      breadcrumbTo: ROUTES.logistics,
+    };
+  if (pathname.startsWith(ROUTES.design))
+    return {
+      title: "Дизайн",
+      subtitle: "Макети, правки та задачі на дизайн.",
+      breadcrumbLabel: "Дизайн",
+      breadcrumbTo: ROUTES.design,
+    };
+  if (pathname.startsWith(ROUTES.contractors))
+    return {
+      title: "Підрядники",
+      subtitle: "База партнерів, договори та взаємодія.",
+      breadcrumbLabel: "Підрядники",
+      breadcrumbTo: ROUTES.contractors,
     };
 
   if (pathname === ROUTES.analyticsTeam)
@@ -351,12 +405,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const { userId, teamId } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
+  const sidebarRoutes = useMemo(() => sidebarLinks.map((link) => link.to), []);
   const shouldReveal = useMemo(() => {
-    return sidebarLinks.some((link) => {
-      if (location.pathname === link.to) return true;
-      return location.pathname.startsWith(`${link.to}/`);
+    return sidebarRoutes.some((route) => {
+      if (location.pathname === route) return true;
+      return location.pathname.startsWith(`${route}/`);
     });
-  }, [location.pathname]);
+  }, [location.pathname, sidebarRoutes]);
   const pageContent = shouldReveal ? (
     <PageReveal activeKey={location.pathname}>{children}</PageReveal>
   ) : (
@@ -488,6 +543,7 @@ useEffect(() => {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
 
   const toggleTheme = () => {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -697,22 +753,19 @@ useEffect(() => {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
           <SidebarGroup
-            label="Команда"
-            links={sidebarLinks.filter((l) => l.group === "team")}
+            label="Замовлення"
+            links={sidebarLinks.filter((l) => l.group === "orders")}
             currentPath={location.pathname}
-            activityUnreadCount={activityUnreadCount}
           />
           <SidebarGroup
-            label="Аналітика"
-            links={sidebarLinks.filter((l) => l.group === "analytics")}
+            label="Фінанси"
+            links={sidebarLinks.filter((l) => l.group === "finance")}
             currentPath={location.pathname}
-            activityUnreadCount={activityUnreadCount}
           />
           <SidebarGroup
-            label="Управління"
-            links={sidebarLinks.filter((l) => l.group === "management")}
+            label="Операції"
+            links={sidebarLinks.filter((l) => l.group === "operations")}
             currentPath={location.pathname}
-            activityUnreadCount={activityUnreadCount}
           />
         </nav>
 
@@ -772,11 +825,27 @@ useEffect(() => {
                     </div>
 
                     <div className="border-t border-border px-4 py-4 pb-8">
-                      <MobileNav
+                      <SidebarGroup
+                        label="Замовлення"
+                        links={sidebarLinks.filter((l) => l.group === "orders")}
                         currentPath={location.pathname}
-                        activityUnreadCount={activityUnreadCount}
                         onNavigate={() => setMobileMenuOpen(false)}
                       />
+                      <SidebarGroup
+                        label="Фінанси"
+                        links={sidebarLinks.filter((l) => l.group === "finance")}
+                        currentPath={location.pathname}
+                        onNavigate={() => setMobileMenuOpen(false)}
+                      />
+                      <SidebarGroup
+                        label="Операції"
+                        links={sidebarLinks.filter((l) => l.group === "operations")}
+                        currentPath={location.pathname}
+                        onNavigate={() => setMobileMenuOpen(false)}
+                      />
+                      <div className="mt-6 pt-2 border-t border-border">
+                        <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -961,13 +1030,11 @@ function SidebarGroup({
   label,
   links,
   currentPath,
-  activityUnreadCount = 0,
   onNavigate,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
-  activityUnreadCount?: number;
   onNavigate?: () => void;
 }) {
   if (links.length === 0) return null;
@@ -1014,61 +1081,9 @@ function SidebarGroup({
               />
 
               <span className="truncate">{link.label}</span>
-
-              {link.to === ROUTES.activity && activityUnreadCount > 0 ? (
-                <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                  {activityUnreadCount}
-                </span>
-              ) : (
-                <span
-                  className={cn(
-                    "ml-auto h-1.5 w-1.5 rounded-full transition-opacity",
-                    active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
-                  )}
-                />
-              )}
             </Link>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-function MobileNav({
-  currentPath,
-  activityUnreadCount = 0,
-  onNavigate,
-}: {
-  currentPath: string;
-  activityUnreadCount?: number;
-  onNavigate?: () => void;
-}) {
-  return (
-    <div className="flex min-h-[calc(100dvh-140px)] flex-col gap-5">
-      <SidebarGroup
-        label="Команда"
-        links={sidebarLinks.filter((l) => l.group === "team" && !MOBILE_PRIMARY_ROUTES.has(l.to))}
-        currentPath={currentPath}
-        activityUnreadCount={activityUnreadCount}
-        onNavigate={onNavigate}
-      />
-      <SidebarGroup
-        label="Аналітика"
-        links={sidebarLinks.filter((l) => l.group === "analytics")}
-        currentPath={currentPath}
-        activityUnreadCount={activityUnreadCount}
-        onNavigate={onNavigate}
-      />
-      <SidebarGroup
-        label="Управління"
-        links={sidebarLinks.filter((l) => l.group === "management" && !MOBILE_PRIMARY_ROUTES.has(l.to))}
-        currentPath={currentPath}
-        activityUnreadCount={activityUnreadCount}
-        onNavigate={onNavigate}
-      />
-      <div className="mt-auto pt-2 border-t border-border">
-        <UserMenu mobile onNavigate={onNavigate} />
       </div>
     </div>
   );
