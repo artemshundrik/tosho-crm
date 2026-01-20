@@ -636,7 +636,7 @@ useEffect(() => {
                   variant="menu"
                   size="md"
                   className={cn(
-                  "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left group"
+                  "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left hover:bg-transparent active:bg-transparent"
                   )}
                 >
                 <div className="flex items-center">
@@ -686,8 +686,8 @@ useEffect(() => {
               )}
               onClick={() => setCmdkOpen(true)}
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+            <div className="absolute right-2 inset-y-0 flex items-center">
+              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
                 <span className="text-[11px]">⌘</span>K
               </kbd>
             </div>
@@ -763,8 +763,8 @@ useEffect(() => {
                           )}
                           onClick={() => setCmdkOpen(true)}
                         />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+                        <div className="absolute right-2 inset-y-0 flex items-center">
+                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
                             <span className="text-[11px]">⌘</span>K
                           </kbd>
                         </div>
