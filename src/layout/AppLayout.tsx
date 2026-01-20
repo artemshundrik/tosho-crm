@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import { supabase } from "@/lib/supabaseClient";
+import { getAgencyLogo } from "@/lib/agencyAssets";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 
@@ -482,6 +483,7 @@ useEffect(() => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [activityUnreadCount, setActivityUnreadCount] = useState(0);
+  const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
 
   useEffect(() => {
     applyTheme(theme);
@@ -637,36 +639,8 @@ useEffect(() => {
                   "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left group"
                   )}
                 >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <AvatarBase
-                      src={workspaceLogo}
-                      name="Fayna Team"
-                      fallback="FT"
-                      size={36}
-                      shape="rounded"
-                      className="border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105"
-                      imageClassName="object-cover"
-                      fallbackClassName="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider"
-                    />
-
-                    <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border-2 border-background"></span>
-                    </span>
-                  </div>
-
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold tracking-tight text-foreground uppercase">
-                        Fayna Team
-                      </span>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70 transition-transform group-data-[state=open]:rotate-180" />
-                    </div>
-                    <div className="truncate text-[11px] font-medium text-muted-foreground/80 mt-0.5">
-                      Workspace
-                    </div>
-                  </div>
+                <div className="flex items-center">
+                  <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
                 </div>
               </Button>
             }
@@ -771,7 +745,7 @@ useEffect(() => {
                     className="h-full w-full max-w-none overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] sm:w-[310px] sm:max-w-[310px] min-h-[100dvh] will-change-transform data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
                   >
                     <SheetHeader className="p-4 pb-2">
-                      <SheetTitle>FAYNA TEAM</SheetTitle>
+                    <SheetTitle>ToSho CRM</SheetTitle>
                     </SheetHeader>
 
                     <div className="px-4 pb-3">
@@ -814,7 +788,7 @@ useEffect(() => {
                   to={ROUTES.overview}
                   className="rounded-[var(--radius-md)] px-1.5 py-1 hover:bg-muted/60 hover:text-foreground transition-colors"
                 >
-                  FAYNA TEAM
+                  ToSho CRM
                 </Link>
                 <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-muted-foreground/80" />
                 <Link
