@@ -54,7 +54,7 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card p-6 shadow-surface text-card-foreground">
         <div className="mb-5">
-          <div className="text-2xl font-semibold text-foreground">FAYNA TEAM</div>
+          <div className="text-2xl font-semibold text-foreground">ToSho CRM</div>
           <div className="text-sm text-muted-foreground mt-1">{title}</div>
         </div>
 

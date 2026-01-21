@@ -379,7 +379,7 @@ function LoginPage() {
       <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">
-            {isInviteFlow ? "Вхід за інвайтом" : "Вхід у FAYNA TEAM"}
+            {isInviteFlow ? "Вхід за інвайтом" : "Вхід у ToSho CRM"}
           </div>
           <div className="text-sm text-muted-foreground mt-1">
             {isInviteFlow
