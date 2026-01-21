@@ -15,6 +15,7 @@ import {
   ReceiptText,
   Search,
   Settings,
+  ShieldAlert,
   Sun,
   Truck,
   Users,
@@ -51,7 +52,7 @@ type AppLayoutProps = {
   children: ReactNode;
 };
 
-type SidebarGroupKey = "orders" | "finance" | "operations";
+type SidebarGroupKey = "orders" | "finance" | "operations" | "account";
 
 type SidebarLink = {
   label: string;
@@ -126,6 +127,9 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette },
   { label: "Підрядники", to: ROUTES.contractors, group: "operations", icon: Users },
+
+  // Акаунт
+  { label: "Доступ / Ролі", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -767,6 +771,11 @@ useEffect(() => {
             links={sidebarLinks.filter((l) => l.group === "operations")}
             currentPath={location.pathname}
           />
+          <SidebarGroup
+            label="Акаунт"
+            links={sidebarLinks.filter((l) => l.group === "account")}
+            currentPath={location.pathname}
+          />
         </nav>
 
         {/* Footer / Profile */}
@@ -840,6 +849,12 @@ useEffect(() => {
                       <SidebarGroup
                         label="Операції"
                         links={sidebarLinks.filter((l) => l.group === "operations")}
+                        currentPath={location.pathname}
+                        onNavigate={() => setMobileMenuOpen(false)}
+                      />
+                      <SidebarGroup
+                        label="Акаунт"
+                        links={sidebarLinks.filter((l) => l.group === "account")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                       />

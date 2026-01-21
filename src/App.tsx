@@ -485,6 +485,9 @@ function ScrollToTop() {
 function AppRoutes() {
   const { session, team, loading } = useAuthAndTeam();
 
+
+
+
   return (
     <Routes>
       {/* public */}
