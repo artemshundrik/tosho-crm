@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -11,6 +11,15 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/password-input";
+
+type InviteInfo = {
+  email: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  accessRole?: string | null;
+  jobRole?: string | null;
+};
 
 export default function InvitePage() {
   const { session, signOut } = useAuth();
@@ -23,10 +32,40 @@ export default function InvitePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
 
   const linkToAuth = useMemo(() => {
     const nextPath = token ? `/invite?token=${token}` : "/";
     return `/login?next=${encodeURIComponent(nextPath)}`;
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const loadInvite = async () => {
+      setInviteLoading(true);
+      try {
+        const response = await fetch(
+          `/.netlify/functions/get-workspace-invite?token=${encodeURIComponent(token)}`
+        );
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || "Invite not found");
+        if (!cancelled) setInviteInfo(payload as InviteInfo);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Не вдалося знайти інвайт");
+      } finally {
+        if (!cancelled) setInviteLoading(false);
+      }
+    };
+
+    void loadInvite();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   if (!token) {
@@ -52,6 +91,17 @@ export default function InvitePage() {
     setBusy(true);
     setError(null);
     try {
+      if (password || passwordConfirm) {
+        if (password.length < 8) {
+          throw new Error("Пароль має бути мінімум 8 символів.");
+        }
+        if (password !== passwordConfirm) {
+          throw new Error("Паролі не співпадають.");
+        }
+        const { error: passwordError } = await supabase.auth.updateUser({ password });
+        if (passwordError) throw passwordError;
+      }
+
       const { error } = await supabase
         .schema("tosho")
         .rpc("accept_workspace_invite", { p_token: token });
@@ -104,6 +154,10 @@ export default function InvitePage() {
   }
 
   const email = user?.email;
+  const inviteEmail = inviteInfo?.email;
+  const isInviteExpired = Boolean(inviteInfo?.expiresAt && new Date(inviteInfo.expiresAt) < new Date());
+  const inviteAccepted = Boolean(inviteInfo?.acceptedAt);
+  const emailMismatch = Boolean(inviteEmail && email && inviteEmail.toLowerCase() !== email.toLowerCase());
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
@@ -128,12 +182,40 @@ export default function InvitePage() {
           </div>
         ) : (
           <>
+            {inviteLoading ? (
+              <div className="text-sm text-muted-foreground">Завантаження інвайту...</div>
+            ) : null}
+
+            {inviteEmail ? (
+              <div className="mb-4 text-xs text-muted-foreground">
+                Запрошення для: <span className="font-semibold text-foreground">{inviteEmail}</span>
+              </div>
+            ) : null}
+
             <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-primary font-bold text-xl border-4 border-background shadow-sm">
               {email?.slice(0, 2).toUpperCase()}
             </div>
 
             <h2 className="text-lg font-medium text-muted-foreground">Привіт, {email}</h2>
             <h1 className="text-2xl font-extrabold text-foreground mt-1">Прийняти запрошення?</h1>
+
+            {emailMismatch ? (
+              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+                Ви увійшли як {email}, але інвайт для {inviteEmail}. Увійдіть правильним email.
+              </div>
+            ) : null}
+
+            {inviteAccepted ? (
+              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-muted/40 text-muted-foreground text-sm font-medium border border-border">
+                Інвайт уже використано.
+              </div>
+            ) : null}
+
+            {isInviteExpired ? (
+              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+                Термін дії інвайту минув.
+              </div>
+            ) : null}
 
             <div className="mt-6 bg-muted/30 border border-border rounded-[var(--radius-inner)] p-4 text-left flex items-start gap-3">
               <div className="bg-background p-1.5 rounded-[var(--radius)] shadow-sm text-primary border border-border shrink-0">
@@ -147,13 +229,37 @@ export default function InvitePage() {
               </div>
             </div>
 
+            <div className="mt-4 text-left">
+              <label className="text-xs font-semibold text-muted-foreground">Пароль</label>
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Вигадайте пароль"
+                wrapperClassName="mt-2"
+              />
+              <label className="mt-3 block text-xs font-semibold text-muted-foreground">Підтвердження пароля</label>
+              <PasswordInput
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                placeholder="Повторіть пароль"
+                wrapperClassName="mt-2"
+              />
+              <div className="mt-2 text-xs text-muted-foreground">
+                Якщо ви вже маєте пароль, можете залишити поля порожніми.
+              </div>
+            </div>
+
             {error && (
               <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
                 {error}
               </div>
             )}
 
-            <Button onClick={acceptInvite} disabled={busy} className="mt-6 w-full">
+            <Button
+              onClick={acceptInvite}
+              disabled={busy || emailMismatch || inviteAccepted || isInviteExpired}
+              className="mt-6 w-full"
+            >
               {busy ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обробка...

@@ -38,6 +38,8 @@ import { Card } from "@/components/ui/card";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { usePageCache } from "@/hooks/usePageCache";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +77,12 @@ type Invite = {
 };
 
 type WorkspaceIdResult = { id: string };
+
+type TeamMembersPageCache = {
+  workspaceId: string | null;
+  members: Member[];
+  invites: Invite[];
+};
 
 type AccessRoleOption = {
   label: string;
@@ -134,17 +142,20 @@ export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
 
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
+  const hasCache = Boolean(cached);
+
+  const [workspaceId, setWorkspaceId] = useState<string | null>(cached?.workspaceId ?? null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(!hasCache);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
+  const [members, setMembers] = useState<Member[]>(cached?.members ?? []);
+  const [membersLoading, setMembersLoading] = useState(!hasCache);
   const [membersError, setMembersError] = useState<string | null>(null);
 
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [invitesError, setInvitesError] = useState<string | null>(null);
 
@@ -212,40 +223,51 @@ export function TeamMembersPage() {
   }, []);
 
   useEffect(() => {
+    if (hasCache) {
+      if (workspaceLoading) setWorkspaceLoading(false);
+      if (membersLoading) setMembersLoading(false);
+    }
+  }, [hasCache, workspaceLoading, membersLoading]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadWorkspaceId = async () => {
-      setWorkspaceLoading(true);
+      if (!hasCache) setWorkspaceLoading(true);
       setWorkspaceError(null);
 
       let resolvedId: string | null = null;
 
-      const { data: rpcData, error: rpcError } = await supabase
-        .schema("tosho")
-        .rpc("current_workspace_id");
-
-      if (!rpcError && rpcData) {
-        resolvedId = rpcData as string;
-      }
-
-      if (!resolvedId) {
-        const { data, error } = await supabase
+      try {
+        const { data: rpcData, error: rpcError } = await supabase
           .schema("tosho")
-          .from("workspaces")
-          .select("id")
-          .limit(1)
-          .single<WorkspaceIdResult>();
+          .rpc("current_workspace_id");
 
-        if (error) {
-          if (!cancelled) setWorkspaceError(error.message);
-        } else {
-          resolvedId = data?.id ?? null;
+        if (!rpcError && rpcData) {
+          resolvedId = rpcData as string;
         }
-      }
 
-      if (!cancelled) {
-        setWorkspaceId(resolvedId);
-        setWorkspaceLoading(false);
+        if (!resolvedId) {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("workspaces")
+            .select("id")
+            .limit(1)
+            .single<WorkspaceIdResult>();
+
+          if (error) {
+            if (!cancelled) setWorkspaceError(error.message);
+          } else {
+            resolvedId = data?.id ?? null;
+          }
+        }
+      } catch (error: any) {
+        if (!cancelled) setWorkspaceError(error?.message ?? "Unknown error");
+      } finally {
+        if (!cancelled) {
+          setWorkspaceId(resolvedId);
+          setWorkspaceLoading(false);
+        }
       }
     };
 
@@ -262,26 +284,33 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMembers = async () => {
-      setMembersLoading(true);
+      if (!hasCache) setMembersLoading(true);
       setMembersError(null);
 
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("memberships_view")
-        .select("user_id,email,access_role,job_role,created_at")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("memberships_view")
+          .select("user_id,email,access_role,job_role,created_at")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: true });
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error) {
-        setMembersError(error.message);
-        setMembers([]);
-      } else {
-        setMembers((data as Member[]) ?? []);
+        if (error) {
+          setMembersError(error.message);
+          setMembers([]);
+        } else {
+          setMembers((data as Member[]) ?? []);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setMembersError(error?.message ?? "Unknown error");
+          setMembers([]);
+        }
+      } finally {
+        if (!cancelled) setMembersLoading(false);
       }
-
-      setMembersLoading(false);
     };
 
     void loadMembers();
@@ -294,32 +323,40 @@ export function TeamMembersPage() {
   useEffect(() => {
     if (!workspaceId || !canManage) {
       setInvites([]);
+      setInvitesLoading(false);
       return;
     }
 
     let cancelled = false;
 
     const loadInvites = async () => {
-      setInvitesLoading(true);
+      if (!hasCache) setInvitesLoading(true);
       setInvitesError(null);
 
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("workspace_invites")
-        .select("id,email,access_role,job_role,token,created_at,expires_at,accepted_at")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("workspace_invites")
+          .select("id,email,access_role,job_role,token,created_at,expires_at,accepted_at")
+          .eq("workspace_id", workspaceId)
+          .order("created_at", { ascending: false });
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error) {
-        setInvitesError(error.message);
-        setInvites([]);
-      } else {
-        setInvites((data as Invite[]) ?? []);
+        if (error) {
+          setInvitesError(error.message);
+          setInvites([]);
+        } else {
+          setInvites((data as Invite[]) ?? []);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setInvitesError(error?.message ?? "Unknown error");
+          setInvites([]);
+        }
+      } finally {
+        if (!cancelled) setInvitesLoading(false);
       }
-
-      setInvitesLoading(false);
     };
 
     void loadInvites();
@@ -346,6 +383,15 @@ export function TeamMembersPage() {
       toast.error("Не вдалося завантажити інвайти", { description: invitesError });
     }
   }, [invitesError]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    setCache({
+      workspaceId,
+      members,
+      invites,
+    });
+  }, [workspaceId, members, invites, setCache]);
 
   const filteredMembers = members.filter((m) => {
     const email = (m.email ?? "").toLowerCase();
@@ -379,23 +425,38 @@ export function TeamMembersPage() {
 
     setInviteBusy(true);
     try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .rpc("create_workspace_invite", {
-          p_email: inviteEmail,
-          p_access_role: inviteAccessRole,
-          p_job_role: inviteJobRole === "member" ? null : inviteJobRole,
-          p_expires_in_days: 7,
-        });
-      if (error) throw error;
-
-      const token = (data as { token?: string } | string | null) as string | null;
-      if (!token) {
-        toast.error("Не вдалося отримати токен інвайту");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        toast.error("Не вдалося підтвердити авторизацію");
         return;
       }
 
-      setGeneratedLink(getInviteLink(token));
+      const response = await fetch("/.netlify/functions/create-workspace-invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          accessRole: inviteAccessRole,
+          jobRole: inviteJobRole === "member" ? null : inviteJobRole,
+          expiresInDays: 7,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Invite failed");
+      }
+
+      const token = payload?.token as string | undefined;
+      if (token) {
+        setGeneratedLink(getInviteLink(token));
+      } else {
+        setGeneratedLink(null);
+      }
 
       const { data: invitesData } = await supabase
         .schema("tosho")
@@ -438,7 +499,11 @@ export function TeamMembersPage() {
     setRevokeId(null);
   };
 
-  if (workspaceLoading || membersLoading || invitesLoading) {
+  const showSkeleton = useMinimumLoading(
+    (workspaceLoading || membersLoading || (activeTab === "invites" && invitesLoading)) && !hasCache
+  );
+
+  if (showSkeleton) {
     return <ListSkeleton />;
   }
 

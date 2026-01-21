@@ -11,7 +11,6 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
-import { ROLE_BADGE_STYLES } from "@/lib/roleBadges";
 import { usePageCache } from "@/hooks/usePageCache";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -20,16 +19,19 @@ type ProfileCache = {
   userId: string | null;
   fullName: string;
   email: string;
-  role: string;
+  accessRole: string;
+  jobRole: string | null;
   initials: string;
   avatarUrl: string | null;
 };
+
+type WorkspaceIdResult = { id: string };
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
   
   // Перевіряємо наявність кешу - важливо перевіряти кожен раз
-  const hasCache = Boolean(cached);
+  const hasCache = Boolean(cached && cached.accessRole !== undefined);
 
   const [loading, setLoading] = useState(!hasCache);
   const [updating, setUpdating] = useState(false);
@@ -55,7 +57,8 @@ export function ProfilePage() {
   // Form state
   const [fullName, setFullName] = useState(cached?.fullName ?? "");
   const [email, setEmail] = useState(cached?.email ?? "");
-  const [role, setRole] = useState(cached?.role ?? "");
+  const [accessRole, setAccessRole] = useState(cached?.accessRole ?? (cached as any)?.role ?? "");
+  const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
   const [initials, setInitials] = useState(cached?.initials ?? "");
 
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
@@ -64,7 +67,8 @@ export function ProfilePage() {
       userId,
       fullName,
       email,
-      role,
+      accessRole,
+      jobRole,
       initials,
       avatarUrl,
       ...overrides,
@@ -101,14 +105,53 @@ export function ProfilePage() {
           .substring(0, 2).toUpperCase();
         setInitials(i);
 
-        const { data: roleData } = await supabase.rpc('current_team_role');
-        setRole((roleData as string) || "viewer");
+        let resolvedWorkspaceId: string | null = null;
+        let resolvedAccessRole = "member";
+        let resolvedJobRole: string | null = null;
+
+        const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
+          .schema("tosho")
+          .rpc("current_workspace_id");
+
+        if (!workspaceRpcError && workspaceRpcData) {
+          resolvedWorkspaceId = workspaceRpcData as string;
+        }
+
+        if (!resolvedWorkspaceId) {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("workspaces")
+            .select("id")
+            .limit(1)
+            .single<WorkspaceIdResult>();
+
+          if (!error) {
+            resolvedWorkspaceId = data?.id ?? null;
+          }
+        }
+
+        if (resolvedWorkspaceId) {
+          const { data: membership } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select("access_role, job_role")
+            .eq("workspace_id", resolvedWorkspaceId)
+            .eq("user_id", user.id)
+            .single();
+
+          resolvedAccessRole = (membership?.access_role as string) || "member";
+          resolvedJobRole = (membership?.job_role as string) || null;
+        }
+
+        setAccessRole(resolvedAccessRole);
+        setJobRole(resolvedJobRole);
 
         setCache({
           userId: user.id,
           fullName: metaName,
           email: user.email || "",
-          role: (roleData as string) || "viewer",
+          accessRole: resolvedAccessRole,
+          jobRole: resolvedJobRole,
           initials: i,
           avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
         });
@@ -331,10 +374,18 @@ export function ProfilePage() {
                    <div
                      className={cn(
                        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold",
-                       ROLE_BADGE_STYLES[role]?.className || "bg-muted text-muted-foreground border-border"
+                       accessRole === "owner"
+                         ? "bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-400 dark:border-purple-500/20"
+                         : accessRole === "admin"
+                         ? "bg-primary/10 text-foreground border-primary/20"
+                         : "bg-muted text-muted-foreground border-border"
                      )}
                    >
-                      {ROLE_BADGE_STYLES[role]?.label || role}
+                      {accessRole === "owner"
+                        ? "Super Admin"
+                        : accessRole === "admin"
+                        ? "Admin"
+                        : "Member"}
                    </div>
                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Globe className="w-3 h-3" /> Kyiv, UA
