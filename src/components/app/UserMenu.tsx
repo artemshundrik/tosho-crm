@@ -63,11 +63,45 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
           .substring(0, 2)
           .toUpperCase();
 
-        // 2. Отримуємо реальну роль через RPC функцію (як в App.tsx)
-        const { data: roleData } = await supabase.rpc('current_team_role');
-        
-        // Перетворюємо 'super_admin' -> 'Super Admin'
-        const rawRole = (roleData as string) || "viewer";
+        let workspaceId: string | null = null;
+
+        const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
+          .schema("tosho")
+          .rpc("current_workspace_id");
+
+        if (!workspaceRpcError && workspaceRpcData) {
+          workspaceId = workspaceRpcData as string;
+        }
+
+        if (!workspaceId) {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("workspaces")
+            .select("id")
+            .limit(1)
+            .single();
+
+          if (!error) {
+            workspaceId = (data as { id?: string } | null)?.id ?? null;
+          }
+        }
+
+        let rawRole = "viewer";
+        if (workspaceId) {
+          const { data: membership } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select("access_role")
+            .eq("workspace_id", workspaceId)
+            .eq("user_id", user.id)
+            .single();
+
+          const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
+          if (accessRole === "owner") rawRole = "super_admin";
+          else if (accessRole === "admin") rawRole = "manager";
+          else if (accessRole) rawRole = "viewer";
+        }
+
         const displayRole = ROLE_NAMES[rawRole] || rawRole;
 
         const nextData: UserState = {

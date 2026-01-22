@@ -165,20 +165,52 @@ function useAuthAndTeam() {
         return;
       }
 
-      const [{ data: teamId, error: e1 }, { data: role, error: e2 }] = await Promise.all([
-        supabase.rpc("current_team_id"),
-        supabase.rpc("current_team_role"),
-      ]);
+      let workspaceId: string | null = null;
 
-      if (e1 || e2) {
-        console.error("Failed to load team context:", e1 ?? e2);
-        setTeam({ teamId: null, role: null });
-        return;
+      const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
+        .schema("tosho")
+        .rpc("current_workspace_id");
+
+      if (!workspaceRpcError && workspaceRpcData) {
+        workspaceId = workspaceRpcData as string;
+      }
+
+      if (!workspaceId) {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("workspaces")
+          .select("id")
+          .limit(1)
+          .single();
+
+        if (!error) {
+          workspaceId = (data as { id?: string } | null)?.id ?? null;
+        }
+      }
+
+      let roleValue: TeamRole = null;
+      if (workspaceId) {
+        const { data: membership, error: membershipError } = await supabase
+          .schema("tosho")
+          .from("memberships_view")
+          .select("access_role")
+          .eq("workspace_id", workspaceId)
+          .eq("user_id", s.user.id)
+          .single();
+
+        if (membershipError) {
+          console.error("memberships_view error", membershipError);
+        } else {
+          const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
+          if (accessRole === "owner") roleValue = "super_admin";
+          else if (accessRole === "admin") roleValue = "manager";
+          else if (accessRole) roleValue = "viewer";
+        }
       }
 
       setTeam({
-        teamId: (teamId as string | null) ?? null,
-        role: (role as TeamRole) ?? null,
+        teamId: null,
+        role: roleValue,
       });
     };
   }, []);
