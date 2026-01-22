@@ -109,7 +109,7 @@ export default function InvitePage() {
 
       setSuccess(true);
       setTimeout(() => {
-        nav("/overview");
+        nav("/orders/estimates");
       }, 1500);
     } catch (e: any) {
       console.error(e);

@@ -343,8 +343,8 @@ function LoginPage() {
   const location = useLocation();
 
   const params = new URLSearchParams(location.search);
-  const rawNext = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/overview";
-  const next = rawNext.startsWith("/") ? rawNext : "/overview";
+  const rawNext = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/orders/estimates";
+  const next = rawNext.startsWith("/") ? rawNext : "/orders/estimates";
   const isInviteFlow = next.startsWith("/invite");
 
   const [mode] = useState<"password" | "magic">(isInviteFlow ? "magic" : "password");
@@ -1026,8 +1026,8 @@ function AppRoutes() {
       />
 
       {/* Default */}
-      <Route path="/" element={<Navigate to="/overview" replace />} />
-      <Route path="*" element={<Navigate to="/overview" replace />} />
+      <Route path="/" element={<Navigate to="/orders/estimates" replace />} />
+      <Route path="*" element={<Navigate to="/orders/estimates" replace />} />
     </Routes>
   );
 }
