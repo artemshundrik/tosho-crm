@@ -59,7 +59,7 @@ const TournamentsAdminPage = lazy(() =>
 );
 const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
 const OrdersEstimateDetailsPage = lazy(() => import("./pages/OrdersEstimateDetailsPage"));
-const ProductCatalogPage = lazy(() => import("./pages/ProductCatalogPage"));
+const ProductCatalogPage = lazy(() => import("./features/catalog/ProductCatalogPage"));
 const OrdersProductionPage = lazy(() => import("./pages/OrdersProductionPage"));
 const OrdersReadyToShipPage = lazy(() => import("./pages/OrdersReadyToShipPage"));
 const FinanceInvoicesPage = lazy(() => import("./pages/FinanceInvoicesPage"));
