@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { QuotesPage } from "@/pages/QuotesPage";
+import { QuoteDetailsPage } from "@/pages/QuoteDetailsPage";
 
-export default function OrdersEstimatesPage() {
+export default function OrdersEstimateDetailsPage() {
+  const { id } = useParams();
   const [teamId, setTeamId] = useState<string | null>(() => {
     try {
       return localStorage.getItem("tosho.teamId");
@@ -62,6 +64,10 @@ export default function OrdersEstimatesPage() {
     };
   }, []);
 
+  if (!id) {
+    return <div className="p-6 text-sm text-muted-foreground">Невірний ідентифікатор.</div>;
+  }
+
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
   }
@@ -78,5 +84,5 @@ export default function OrdersEstimatesPage() {
     );
   }
 
-  return <QuotesPage teamId={teamId} />;
+  return <QuoteDetailsPage teamId={teamId} quoteId={id} />;
 }

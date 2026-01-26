@@ -48,6 +48,11 @@ export const supabase: AnySupabaseClient = new Proxy({} as AnySupabaseClient, {
   },
 }) as AnySupabaseClient;
 
+// Dev-only helper to inspect auth/session in browser console.
+if (import.meta.env.DEV) {
+  (window as any).supabase = supabase;
+}
+
 /**
  * Зручний db експорт для CRM:
  * import { db } from "@/lib/supabaseClient"

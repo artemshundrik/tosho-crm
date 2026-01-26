@@ -241,7 +241,7 @@ export function TeamMembersPage() {
       try {
         const { data: rpcData, error: rpcError } = await supabase
           .schema("tosho")
-          .rpc("current_workspace_id");
+          .rpc("my_workspace_id");
 
         if (!rpcError && rpcData) {
           resolvedId = rpcData as string;

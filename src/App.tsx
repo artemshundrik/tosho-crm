@@ -58,6 +58,8 @@ const TournamentsAdminPage = lazy(() =>
   import("./pages/TournamentsAdminPage").then((module) => ({ default: module.TournamentsAdminPage }))
 );
 const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
+const OrdersEstimateDetailsPage = lazy(() => import("./pages/OrdersEstimateDetailsPage"));
+const ProductCatalogPage = lazy(() => import("./pages/ProductCatalogPage"));
 const OrdersProductionPage = lazy(() => import("./pages/OrdersProductionPage"));
 const OrdersReadyToShipPage = lazy(() => import("./pages/OrdersReadyToShipPage"));
 const FinanceInvoicesPage = lazy(() => import("./pages/FinanceInvoicesPage"));
@@ -516,12 +518,13 @@ function ScrollToTop() {
 
 function AppRoutes() {
   const { session, team, loading } = useAuthAndTeam();
+  const location = useLocation();
 
 
 
 
   return (
-    <Routes>
+    <Routes location={location} key={location.pathname}>
       {/* public */}
       {import.meta.env.DEV ? (
         <>
@@ -631,6 +634,18 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/orders/estimates/:id"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <OrdersEstimateDetailsPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/orders/production"
         element={
           <RequireAuth session={session} loading={loading}>
@@ -649,6 +664,18 @@ function AppRoutes() {
             <AppLayout>
               <RouteSuspense shell>
                 <OrdersReadyToShipPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/catalog/products"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <ProductCatalogPage />
               </RouteSuspense>
             </AppLayout>
           </RequireAuth>

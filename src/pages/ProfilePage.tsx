@@ -111,7 +111,7 @@ export function ProfilePage() {
 
         const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
           .schema("tosho")
-          .rpc("current_workspace_id");
+          .rpc("my_workspace_id");
 
         if (!workspaceRpcError && workspaceRpcData) {
           resolvedWorkspaceId = workspaceRpcData as string;

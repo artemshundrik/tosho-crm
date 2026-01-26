@@ -67,7 +67,7 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
 
         const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
           .schema("tosho")
-          .rpc("current_workspace_id");
+          .rpc("my_workspace_id");
 
         if (!workspaceRpcError && workspaceRpcData) {
           workspaceId = workspaceRpcData as string;

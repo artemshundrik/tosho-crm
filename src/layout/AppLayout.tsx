@@ -95,6 +95,7 @@ const ROUTES = {
   ordersEstimates: "/orders/estimates",
   ordersProduction: "/orders/production",
   ordersReadyToShip: "/orders/ready-to-ship",
+  catalogProducts: "/catalog/products",
 
   financeInvoices: "/finance/invoices",
   financeExpenseInvoices: "/finance/expense-invoices",
@@ -124,6 +125,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Акти виконаних робіт", to: ROUTES.financeActs, group: "finance", icon: FileCheck },
 
   // Операції
+  { label: "Каталог продукції", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban },
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette },
   { label: "Підрядники", to: ROUTES.contractors, group: "operations", icon: Users },
@@ -163,6 +165,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Замовлення, що готові до логістики.",
       breadcrumbLabel: "Готові до відвантаження",
       breadcrumbTo: ROUTES.ordersReadyToShip,
+    };
+  if (pathname.startsWith(ROUTES.catalogProducts))
+    return {
+      title: "Каталог продукції",
+      subtitle: "Довідники типів, видів, моделей та методів нанесення.",
+      breadcrumbLabel: "Каталог продукції",
+      breadcrumbTo: ROUTES.catalogProducts,
     };
   if (pathname.startsWith(ROUTES.financeInvoices))
     return {
@@ -417,7 +426,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     });
   }, [location.pathname, sidebarRoutes]);
   const pageContent = shouldReveal ? (
-    <PageReveal activeKey={location.pathname}>{children}</PageReveal>
+    <PageReveal key={location.pathname} activeKey={location.pathname}>
+      {children}
+    </PageReveal>
   ) : (
     children
   );

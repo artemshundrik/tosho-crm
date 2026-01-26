@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -6,24 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -34,10 +17,11 @@ import {
 } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
 import { 
   Coins, Layers, Plus, Trash2, Edit2, Search, X, AlertCircle, TrendingDown, 
   Copy, Download, Upload, Image as ImageIcon, Link2, AlertTriangle, Settings,
-  FolderPlus, Tag
+  FolderPlus, Tag, MapPin
 } from "lucide-react";
 
 // --- Types ---
@@ -51,61 +35,18 @@ type CatalogModel = {
   methodIds?: string[];
   imageUrl?: string;
 };
-type CatalogKind = { id: string; name: string; models: CatalogModel[]; methods: CatalogMethod[]; };
-type CatalogType = { id: string; name: string; kinds: CatalogKind[]; };
+type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
+type CatalogKind = {
+  id: string;
+  name: string;
+  models: CatalogModel[];
+  methods: CatalogMethod[];
+  printPositions: CatalogPrintPosition[];
+};
+type CatalogType = { id: string; name: string; quote_type?: string | null; kinds: CatalogKind[]; };
 
 // --- Initial Data ---
-const INITIAL_CATALOG: CatalogType[] = [
-  {
-    id: "apparel",
-    name: "Одяг",
-    kinds: [
-      {
-        id: "tshirt",
-        name: "Футболка",
-        models: [
-          {
-            id: "malfini-basic-160",
-            name: "Malfini BASIC 160",
-            imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop",
-            priceTiers: [
-              { id: "tier-1", min: 1, max: 9, price: 180 },
-              { id: "tier-2", min: 10, max: 49, price: 150 },
-              { id: "tier-3", min: 50, max: 199, price: 120 },
-              { id: "tier-4", min: 200, max: null, price: 95 },
-            ],
-            methodIds: ["dtf", "silkscreen"],
-          },
-          { id: "roly-stafford", name: "Roly Stafford", price: 110, methodIds: ["dtf"] },
-          { 
-            id: "sols-imperial", 
-            name: "SOL'S Imperial", 
-            price: 135, 
-            methodIds: ["sublimation"],
-            imageUrl: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop"
-          },
-        ],
-        methods: [
-          { id: "dtf", name: "DTF", price: 40 },
-          { id: "silkscreen", name: "Шовкодрук", price: 55 },
-          { id: "sublimation", name: "Сублімація", price: 60 },
-        ],
-      },
-      {
-        id: "hoodie",
-        name: "Худі",
-        models: [
-          { id: "st3000", name: "Stedman ST3000", price: 180, methodIds: ["dtf", "embroidery"] },
-          { id: "awdis", name: "AWDis JH001", price: 210, methodIds: ["embroidery"] },
-        ],
-        methods: [
-          { id: "dtf", name: "DTF", price: 45 },
-          { id: "embroidery", name: "Вишивка", price: 90 },
-        ],
-      },
-    ],
-  },
-];
+const INITIAL_CATALOG: CatalogType[] = [];
 
 // --- Helpers ---
 function createLocalId() { return `${Date.now()}-${Math.floor(Math.random() * 10000)}`; }
@@ -135,7 +76,6 @@ function validateModel(model: CatalogModel): { isValid: boolean; warnings: strin
   
   if (!model.name.trim()) warnings.push("Відсутня назва моделі");
   if (!model.methodIds || model.methodIds.length === 0) warnings.push("Не вибрано жодного методу");
-  if (!model.imageUrl) warnings.push("Немає фото");
   
   if (model.priceTiers && model.priceTiers.length > 1) {
     for (let i = 1; i < model.priceTiers.length; i++) {
@@ -186,25 +126,43 @@ function exportToCSV(catalog: CatalogType[]) {
 
 export default function ProductCatalogPageBestVariant() {
   const [catalog, setCatalog] = useState<CatalogType[]>(INITIAL_CATALOG);
-  const [selectedTypeId, setSelectedTypeId] = useState(catalog[0]?.id ?? "");
-  const [selectedKindId, setSelectedKindId] = useState(catalog[0]?.kinds[0]?.id ?? "");
+  const [selectedTypeId, setSelectedTypeId] = useState("");
+  const [selectedKindId, setSelectedKindId] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
   const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
+
+  const [teamId, setTeamId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("tosho.teamId");
+    } catch {
+      return null;
+    }
+  });
+  const [teamLoading, setTeamLoading] = useState(!teamId);
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [modelToDelete, setModelToDelete] = useState<string | null>(null);
+  const [savingModel, setSavingModel] = useState(false);
 
   // Category Management
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryMode, setCategoryMode] = useState<"type" | "kind">("type");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newTypeQuoteType, setNewTypeQuoteType] = useState<"merch" | "print" | "other">("merch");
   const [selectedTypeForKind, setSelectedTypeForKind] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [typeQuoteTypeSaving, setTypeQuoteTypeSaving] = useState(false);
+  const [typeQuoteTypeError, setTypeQuoteTypeError] = useState<string | null>(null);
 
   // Draft state
-  const [draftTypeId, setDraftTypeId] = useState(selectedTypeId);
-  const [draftKindId, setDraftKindId] = useState(selectedKindId);
+  const [draftTypeId, setDraftTypeId] = useState("");
+  const [draftKindId, setDraftKindId] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftPriceMode, setDraftPriceMode] = useState<"fixed" | "tiers">("fixed");
   const [draftFixedPrice, setDraftFixedPrice] = useState("0");
@@ -212,12 +170,234 @@ export default function ProductCatalogPageBestVariant() {
   const [draftMethodIds, setDraftMethodIds] = useState<string[]>([]);
   const [draftImageUrl, setDraftImageUrl] = useState("");
   const [imageUploadMode, setImageUploadMode] = useState<"url" | "file">("url");
+  const [newMethodName, setNewMethodName] = useState("");
+  const [newMethodPrice, setNewMethodPrice] = useState("");
+  const [methodSaving, setMethodSaving] = useState(false);
+  const [methodError, setMethodError] = useState<string | null>(null);
+  const [newPrintPositionName, setNewPrintPositionName] = useState("");
+  const [printPositionSaving, setPrintPositionSaving] = useState(false);
+  const [printPositionError, setPrintPositionError] = useState<string | null>(null);
 
   // Inline edit
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlinePrice, setInlinePrice] = useState("");
 
   const currencySymbol = "₴";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTeamId = async () => {
+      setTeamLoading(true);
+      setTeamError(null);
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        if (!cancelled) {
+          setTeamError(userError?.message ?? "User not authenticated");
+          setTeamId(null);
+          setTeamLoading(false);
+        }
+        return;
+      }
+
+      const { data, error: teamError } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userData.user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (!cancelled) {
+        if (teamError) {
+          setTeamError(teamError.message);
+          setTeamId(null);
+        } else {
+          const nextTeamId = (data as { team_id?: string } | null)?.team_id ?? null;
+          setTeamId(nextTeamId);
+          try {
+            if (nextTeamId) localStorage.setItem("tosho.teamId", nextTeamId);
+          } catch {
+            // ignore storage errors
+          }
+        }
+        setTeamLoading(false);
+      }
+    };
+
+    void loadTeamId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
+      setCatalogError(null);
+      try {
+        const { data: typeRows, error: typeError } = await supabase
+          .schema("tosho")
+          .from("catalog_types")
+          .select("id,name,sort_order,quote_type")
+          .eq("team_id", teamId)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true });
+        if (typeError) throw typeError;
+
+        const { data: kindRows, error: kindError } = await supabase
+          .schema("tosho")
+          .from("catalog_kinds")
+          .select("id,type_id,name,sort_order")
+          .eq("team_id", teamId)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true });
+        if (kindError) throw kindError;
+
+        const { data: modelRows, error: modelError } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .select("id,kind_id,name,price,image_url")
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
+        if (modelError) throw modelError;
+
+        const { data: methodRows, error: methodError } = await supabase
+          .schema("tosho")
+          .from("catalog_methods")
+          .select("id,kind_id,name,price")
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
+        if (methodError) throw methodError;
+
+        const { data: printRows, error: printError } = await supabase
+          .schema("tosho")
+          .from("catalog_print_positions")
+          .select("id,kind_id,label,sort_order")
+          .order("sort_order", { ascending: true })
+          .order("label", { ascending: true });
+        if (printError) throw printError;
+
+        const modelIds = (modelRows ?? []).map((row) => row.id);
+
+        const { data: modelMethodRows, error: modelMethodError } = modelIds.length
+          ? await supabase
+              .schema("tosho")
+              .from("catalog_model_methods")
+              .select("model_id,method_id")
+              .in("model_id", modelIds)
+          : { data: [], error: null };
+        if (modelMethodError) throw modelMethodError;
+
+        const { data: tierRows, error: tierError } = modelIds.length
+          ? await supabase
+              .schema("tosho")
+              .from("catalog_price_tiers")
+              .select("id,model_id,min_qty,max_qty,price")
+              .in("model_id", modelIds)
+              .order("min_qty", { ascending: true })
+          : { data: [], error: null };
+        if (tierError) throw tierError;
+
+        const methodIdsByModel = new Map<string, string[]>();
+        (modelMethodRows ?? []).forEach((row) => {
+          const list = methodIdsByModel.get(row.model_id) ?? [];
+          list.push(row.method_id);
+          methodIdsByModel.set(row.model_id, list);
+        });
+
+        const tiersByModel = new Map<string, CatalogPriceTier[]>();
+        (tierRows ?? []).forEach((row) => {
+          const list = tiersByModel.get(row.model_id) ?? [];
+          list.push({
+            id: row.id,
+            min: row.min_qty,
+            max: row.max_qty,
+            price: row.price,
+          });
+          tiersByModel.set(row.model_id, list);
+        });
+
+        const methodsByKind = new Map<string, CatalogMethod[]>();
+        (methodRows ?? []).forEach((row) => {
+          const list = methodsByKind.get(row.kind_id) ?? [];
+          list.push({ id: row.id, name: row.name, price: row.price ?? undefined });
+          methodsByKind.set(row.kind_id, list);
+        });
+
+        const printPositionsByKind = new Map<string, CatalogPrintPosition[]>();
+        (printRows ?? []).forEach((row) => {
+          const list = printPositionsByKind.get(row.kind_id) ?? [];
+          list.push({ id: row.id, label: row.label, sort_order: row.sort_order ?? undefined });
+          printPositionsByKind.set(row.kind_id, list);
+        });
+
+        const modelsByKind = new Map<string, CatalogModel[]>();
+        (modelRows ?? []).forEach((row) => {
+          const list = modelsByKind.get(row.kind_id) ?? [];
+          list.push({
+            id: row.id,
+            name: row.name,
+            price: row.price ?? undefined,
+            imageUrl: row.image_url ?? undefined,
+            methodIds: methodIdsByModel.get(row.id) ?? [],
+            priceTiers: tiersByModel.get(row.id),
+          });
+          modelsByKind.set(row.kind_id, list);
+        });
+
+        const kindsByType = new Map<string, CatalogKind[]>();
+        (kindRows ?? []).forEach((row) => {
+          const list = kindsByType.get(row.type_id) ?? [];
+          list.push({
+            id: row.id,
+            name: row.name,
+            models: modelsByKind.get(row.id) ?? [],
+            methods: methodsByKind.get(row.id) ?? [],
+            printPositions: printPositionsByKind.get(row.id) ?? [],
+          });
+          kindsByType.set(row.type_id, list);
+        });
+
+        const nextCatalog = (typeRows ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          quote_type: row.quote_type ?? null,
+          kinds: kindsByType.get(row.id) ?? [],
+        }));
+
+        if (!cancelled) {
+          setCatalog(nextCatalog);
+          if (nextCatalog.length > 0) {
+            const nextTypeId = nextCatalog[0].id;
+            const nextKindId = nextCatalog[0].kinds[0]?.id ?? "";
+            setSelectedTypeId((prev) => prev || nextTypeId);
+            setSelectedKindId((prev) => prev || nextKindId);
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setCatalogError(e?.message ?? "Не вдалося завантажити каталог");
+          setCatalog([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setCatalogLoading(false);
+        }
+      }
+    };
+
+    void loadCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
 
   // --- Global Search ---
   const allModelsWithContext = useMemo(() => {
@@ -290,46 +470,96 @@ export default function ProductCatalogPageBestVariant() {
   const openAddType = () => {
     setCategoryMode("type");
     setNewCategoryName("");
+    setNewTypeQuoteType("merch");
+    setCategoryError(null);
     setCategoryDialogOpen(true);
   };
 
   const openAddKind = () => {
     setCategoryMode("kind");
     setNewCategoryName("");
+    setCategoryError(null);
     setSelectedTypeForKind(selectedTypeId || catalog[0]?.id || "");
     setCategoryDialogOpen(true);
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
+    if (!teamId) {
+      setCategoryError("Немає доступної команди. Перевір членство або інвайт.");
+      return;
+    }
     const name = newCategoryName.trim();
     if (!name) return;
+    if (categorySaving) return;
+    setCategorySaving(true);
+    setCategoryError(null);
 
     if (categoryMode === "type") {
-      const newType: CatalogType = {
-        id: createLocalId(),
-        name,
-        kinds: []
-      };
-      setCatalog(prev => [...prev, newType]);
-      setSelectedTypeId(newType.id);
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_types")
+        .insert({ team_id: teamId, name, quote_type: newTypeQuoteType })
+        .select("id,name,quote_type")
+        .single();
+      if (error || !data) {
+        console.error("create type failed", error);
+        setCategoryError(error?.message ?? "Не вдалося створити категорію");
+        setCategorySaving(false);
+        return;
+      }
+      const newType: CatalogType = { id: data.id, name: data.name, quote_type: data.quote_type ?? null, kinds: [] };
+      setCatalog((prev) => [...prev, newType]);
+      setSelectedTypeId(data.id);
     } else {
       if (!selectedTypeForKind) return;
-      const newKind: CatalogKind = {
-        id: createLocalId(),
-        name,
-        models: [],
-        methods: []
-      };
-      setCatalog(prev => prev.map(type => 
-        type.id === selectedTypeForKind 
-          ? { ...type, kinds: [...type.kinds, newKind] }
-          : type
-      ));
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_kinds")
+        .insert({ team_id: teamId, type_id: selectedTypeForKind, name })
+        .select("id,name,type_id")
+        .single();
+      if (error || !data) {
+        console.error("create kind failed", error);
+        setCategoryError(error?.message ?? "Не вдалося створити вид");
+        setCategorySaving(false);
+        return;
+      }
+      const newKind: CatalogKind = { id: data.id, name: data.name, models: [], methods: [], printPositions: [] };
+      setCatalog((prev) =>
+        prev.map((type) =>
+          type.id === selectedTypeForKind ? { ...type, kinds: [...type.kinds, newKind] } : type
+        )
+      );
       setSelectedTypeId(selectedTypeForKind);
-      setSelectedKindId(newKind.id);
+      setSelectedKindId(data.id);
     }
 
     setCategoryDialogOpen(false);
+    setCategorySaving(false);
+  };
+
+  const handleQuoteTypeUpdate = async (value: "merch" | "print" | "other") => {
+    if (!teamId || !selectedTypeId) return;
+    if (typeQuoteTypeSaving) return;
+    setTypeQuoteTypeSaving(true);
+    setTypeQuoteTypeError(null);
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_types")
+      .update({ quote_type: value })
+      .eq("id", selectedTypeId)
+      .eq("team_id", teamId);
+    if (error) {
+      setTypeQuoteTypeError(error.message);
+      setTypeQuoteTypeSaving(false);
+      return;
+    }
+    setCatalog((prev) =>
+      prev.map((type) =>
+        type.id === selectedTypeId ? { ...type, quote_type: value } : type
+      )
+    );
+    setTypeQuoteTypeSaving(false);
   };
 
   // --- Handlers: Navigation ---
@@ -338,29 +568,83 @@ export default function ProductCatalogPageBestVariant() {
     const nextType = catalog.find((type) => type.id === typeId);
     setSelectedKindId(nextType?.kinds[0]?.id ?? "");
     setGlobalSearch("");
+    setNewPrintPositionName("");
+    setPrintPositionError(null);
   };
 
   // --- Handlers: Clone ---
-  const handleCloneModel = (modelId: string) => {
+  const handleCloneModel = async (modelId: string) => {
+    if (!teamId) return;
     const item = allModelsWithContext.find(i => i.model.id === modelId);
     if (!item) return;
     
     const clonedModel: CatalogModel = {
       ...item.model,
-      id: createLocalId(),
       name: `${item.model.name} (копія)`,
     };
-    
-    setCatalog(prev => prev.map(type => {
-      if (type.id !== item.typeId) return type;
-      return {
-        ...type,
-        kinds: type.kinds.map(kind => {
-          if (kind.id !== item.kindId) return kind;
-          return { ...kind, models: [...kind.models, clonedModel] };
-        })
-      };
-    }));
+
+    const { data: insertModel, error: insertError } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .insert({
+        team_id: teamId,
+        kind_id: item.kindId,
+        name: clonedModel.name,
+        price: clonedModel.price ?? null,
+        image_url: clonedModel.imageUrl ?? null,
+      })
+      .select("id")
+      .single();
+    if (insertError || !insertModel) {
+      console.error("clone model insert failed", insertError);
+      return;
+    }
+
+    const newModelId = insertModel.id as string;
+
+    if (clonedModel.priceTiers && clonedModel.priceTiers.length > 0) {
+      const tierPayload = clonedModel.priceTiers.map((tier) => ({
+        model_id: newModelId,
+        min_qty: tier.min,
+        max_qty: tier.max,
+        price: tier.price,
+      }));
+      const { error: tierError } = await supabase
+        .schema("tosho")
+        .from("catalog_price_tiers")
+        .insert(tierPayload);
+      if (tierError) {
+        console.error("clone model tiers failed", tierError);
+      }
+    }
+
+    if (clonedModel.methodIds && clonedModel.methodIds.length > 0) {
+      const methodPayload = clonedModel.methodIds.map((methodId) => ({
+        model_id: newModelId,
+        method_id: methodId,
+      }));
+      const { error: methodError } = await supabase
+        .schema("tosho")
+        .from("catalog_model_methods")
+        .insert(methodPayload);
+      if (methodError) {
+        console.error("clone model methods failed", methodError);
+      }
+    }
+
+    const nextModel = { ...clonedModel, id: newModelId };
+    setCatalog((prev) =>
+      prev.map((type) => {
+        if (type.id !== item.typeId) return type;
+        return {
+          ...type,
+          kinds: type.kinds.map((kind) => {
+            if (kind.id !== item.kindId) return kind;
+            return { ...kind, models: [...kind.models, nextModel] };
+          }),
+        };
+      })
+    );
   };
 
   // --- Handlers: Inline Edit ---
@@ -369,20 +653,34 @@ export default function ProductCatalogPageBestVariant() {
     setInlinePrice(String(currentPrice));
   };
 
-  const saveInlineEdit = () => {
+  const saveInlineEdit = async () => {
+    if (!teamId) return;
     if (!inlineEditId) return;
     const newPrice = Math.max(0, Number(inlinePrice) || 0);
-    
-    setCatalog(prev => prev.map(type => ({
-      ...type,
-      kinds: type.kinds.map(kind => ({
-        ...kind,
-        models: kind.models.map(model => 
-          model.id === inlineEditId ? { ...model, price: newPrice } : model
-        )
+
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .update({ price: newPrice })
+      .eq("id", inlineEditId)
+      .eq("team_id", teamId);
+    if (error) {
+      console.error("inline price update failed", error);
+      return;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => ({
+          ...kind,
+          models: kind.models.map((model) =>
+            model.id === inlineEditId ? { ...model, price: newPrice } : model
+          ),
+        })),
       }))
-    })));
-    
+    );
+
     setInlineEditId(null);
   };
 
@@ -436,6 +734,9 @@ export default function ProductCatalogPageBestVariant() {
   const handleDraftKindChange = (value: string) => {
     setDraftKindId(value);
     setDraftMethodIds([]);
+    setNewMethodName("");
+    setNewMethodPrice("");
+    setMethodError(null);
   };
 
   const handlePriceModeChange = (mode: "fixed" | "tiers") => {
@@ -464,6 +765,123 @@ export default function ProductCatalogPageBestVariant() {
     );
   };
 
+  const handleAddMethod = async () => {
+    if (!teamId || !draftKindId) return;
+    const name = newMethodName.trim();
+    if (!name) return;
+    if (methodSaving) return;
+    setMethodSaving(true);
+    setMethodError(null);
+    const priceValue = newMethodPrice.trim();
+    const price = priceValue === "" ? null : Math.max(0, Number(priceValue) || 0);
+
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_methods")
+      .insert({
+        team_id: teamId,
+        kind_id: draftKindId,
+        name,
+        price,
+      })
+      .select("id,name,price,kind_id")
+      .single();
+
+    if (error || !data) {
+      setMethodError(error?.message ?? "Не вдалося додати метод");
+      setMethodSaving(false);
+      return;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== draftKindId) return kind;
+          const nextMethods = [
+            ...kind.methods,
+            { id: data.id, name: data.name, price: data.price ?? undefined },
+          ];
+          return { ...kind, methods: nextMethods };
+        }),
+      }))
+    );
+
+    setNewMethodName("");
+    setNewMethodPrice("");
+    setMethodSaving(false);
+  };
+
+  const handleAddPrintPosition = async (kindId: string) => {
+    if (!teamId || !kindId) return;
+    const label = newPrintPositionName.trim();
+    if (!label) return;
+    if (printPositionSaving) return;
+    setPrintPositionSaving(true);
+    setPrintPositionError(null);
+
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_print_positions")
+      .insert({
+        kind_id: kindId,
+        label,
+        sort_order: 0,
+      })
+      .select("id,label,kind_id,sort_order")
+      .single();
+
+    if (error || !data) {
+      setPrintPositionError(error?.message ?? "Не вдалося додати місце нанесення");
+      setPrintPositionSaving(false);
+      return;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== kindId) return kind;
+          return {
+            ...kind,
+            printPositions: [
+              ...kind.printPositions,
+              { id: data.id, label: data.label, sort_order: data.sort_order ?? undefined },
+            ],
+          };
+        }),
+      }))
+    );
+
+    setNewPrintPositionName("");
+    setPrintPositionSaving(false);
+  };
+
+  const handleDeletePrintPosition = async (kindId: string, positionId: string) => {
+    if (!teamId || !kindId) return;
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_print_positions")
+      .delete()
+      .eq("id", positionId);
+    if (error) {
+      setPrintPositionError(error.message);
+      return;
+    }
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== kindId) return kind;
+          return {
+            ...kind,
+            printPositions: kind.printPositions.filter((pos) => pos.id !== positionId),
+          };
+        }),
+      }))
+    );
+  };
+
   const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -475,9 +893,12 @@ export default function ProductCatalogPageBestVariant() {
     }
   };
 
-  const handleSaveModel = () => {
+  const handleSaveModel = async () => {
+    if (!teamId) return;
     const name = draftName.trim();
     if (!name || !draftTypeId || !draftKindId) return;
+    if (savingModel) return;
+    setSavingModel(true);
 
     const modelId = editingModelId ?? createLocalId();
     const fixedPrice = Math.max(0, Number(draftFixedPrice) || 0);
@@ -491,28 +912,103 @@ export default function ProductCatalogPageBestVariant() {
       imageUrl: draftImageUrl || undefined,
     };
 
-    setCatalog((prevCatalog) => {
-      const cleanedCatalog = prevCatalog.map((type) => ({
-        ...type,
-        kinds: type.kinds.map((kind) => ({
-          ...kind,
-          models: kind.models.filter((model) => model.id !== modelId),
-        })),
-      }));
+    try {
+      let persistedModelId = modelId;
+      if (editingModelId) {
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .update({
+            name: nextModel.name,
+            price: nextModel.price ?? null,
+            image_url: nextModel.imageUrl ?? null,
+            kind_id: draftKindId,
+          })
+          .eq("id", editingModelId)
+          .eq("team_id", teamId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .insert({
+            team_id: teamId,
+            kind_id: draftKindId,
+            name: nextModel.name,
+            price: nextModel.price ?? null,
+            image_url: nextModel.imageUrl ?? null,
+          })
+          .select("id")
+          .single();
+        if (error || !data) throw error;
+        persistedModelId = data.id as string;
+      }
 
-      return cleanedCatalog.map((type) => {
-        if (type.id !== draftTypeId) return type;
-        return {
+      await supabase
+        .schema("tosho")
+        .from("catalog_price_tiers")
+        .delete()
+        .eq("model_id", persistedModelId);
+
+      if (nextModel.priceTiers && nextModel.priceTiers.length > 0) {
+        const tierPayload = nextModel.priceTiers.map((tier) => ({
+          model_id: persistedModelId,
+          min_qty: tier.min,
+          max_qty: tier.max,
+          price: tier.price,
+        }));
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_price_tiers")
+          .insert(tierPayload);
+        if (error) throw error;
+      }
+
+      await supabase
+        .schema("tosho")
+        .from("catalog_model_methods")
+        .delete()
+        .eq("model_id", persistedModelId);
+
+      if (nextModel.methodIds && nextModel.methodIds.length > 0) {
+        const methodPayload = nextModel.methodIds.map((methodId) => ({
+          model_id: persistedModelId,
+          method_id: methodId,
+        }));
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_model_methods")
+          .insert(methodPayload);
+        if (error) throw error;
+      }
+
+      setCatalog((prevCatalog) => {
+        const cleanedCatalog = prevCatalog.map((type) => ({
           ...type,
-          kinds: type.kinds.map((kind) => {
-            if (kind.id !== draftKindId) return kind;
-            return { ...kind, models: [...kind.models, nextModel] };
-          }),
-        };
-      });
-    });
+          kinds: type.kinds.map((kind) => ({
+            ...kind,
+            models: kind.models.filter((model) => model.id !== persistedModelId),
+          })),
+        }));
 
-    setDrawerOpen(false);
+        return cleanedCatalog.map((type) => {
+          if (type.id !== draftTypeId) return type;
+          return {
+            ...type,
+            kinds: type.kinds.map((kind) => {
+              if (kind.id !== draftKindId) return kind;
+              return { ...kind, models: [...kind.models, { ...nextModel, id: persistedModelId }] };
+            }),
+          };
+        });
+      });
+
+      setDrawerOpen(false);
+    } catch (error) {
+      console.error("save model failed", error);
+    } finally {
+      setSavingModel(false);
+    }
   };
 
   const confirmDeleteModel = (modelId: string) => {
@@ -520,8 +1016,19 @@ export default function ProductCatalogPageBestVariant() {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteModel = () => {
+  const handleDeleteModel = async () => {
+    if (!teamId) return;
     if (!modelToDelete) return;
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .delete()
+      .eq("id", modelToDelete)
+      .eq("team_id", teamId);
+    if (error) {
+      console.error("delete model failed", error);
+      return;
+    }
     setCatalog((prev) =>
       prev.map((type) => ({
         ...type,
@@ -535,6 +1042,30 @@ export default function ProductCatalogPageBestVariant() {
     setDrawerOpen(false);
     setModelToDelete(null);
   };
+
+  if (teamLoading) {
+    return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
+  }
+
+  if (teamError) {
+    return <div className="p-6 text-sm text-destructive">{teamError}</div>;
+  }
+
+  if (!teamId) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        Немає доступної команди. Перевір членство або інвайт.
+      </div>
+    );
+  }
+
+  if (catalogLoading) {
+    return <div className="p-6 text-sm text-muted-foreground">Завантаження каталогу...</div>;
+  }
+
+  if (catalogError) {
+    return <div className="p-6 text-sm text-destructive">{catalogError}</div>;
+  }
 
   return (
     <div className="w-full h-screen flex flex-col bg-background">
@@ -585,6 +1116,34 @@ export default function ProductCatalogPageBestVariant() {
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
+              <div className="px-4 py-3 border-b border-border/30 bg-muted/5 space-y-2">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Тип прорахунку
+                </Label>
+                <div className="text-[11px] text-muted-foreground">
+                  Для категорії:{" "}
+                  <span className="text-foreground/90 font-medium">
+                    {selectedType?.name ?? "Оберіть категорію"}
+                  </span>
+                </div>
+                <Select
+                  value={selectedType?.quote_type ?? ""}
+                  onValueChange={(v) => selectedType && handleQuoteTypeUpdate(v as any)}
+                  disabled={!selectedType || typeQuoteTypeSaving}
+                >
+                  <SelectTrigger className="h-9 text-xs bg-background/70 border-border/60">
+                    <SelectValue placeholder="Не задано" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="merch">Мерч</SelectItem>
+                    <SelectItem value="print">Поліграфія</SelectItem>
+                    <SelectItem value="other">Інше</SelectItem>
+                  </SelectContent>
+                </Select>
+                {typeQuoteTypeError && (
+                  <div className="text-xs text-destructive">{typeQuoteTypeError}</div>
+                )}
+              </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                 {catalog.map((type) => (
                   <button
@@ -598,15 +1157,32 @@ export default function ProductCatalogPageBestVariant() {
                     )}
                   >
                     <span className="truncate">{type.name}</span>
-                    <Badge 
-                      variant="secondary" 
-                      className={cn(
-                        "h-5 px-2 text-[10px] font-medium transition-colors",
-                        selectedTypeId === type.id ? "bg-primary/20 text-primary" : "text-muted-foreground/70"
-                      )}
-                    >
-                      {type.kinds.length}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {type.quote_type ? (
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "h-5 px-2 text-[10px] font-medium capitalize",
+                            selectedTypeId === type.id ? "bg-primary/20 text-primary" : "text-muted-foreground/70"
+                          )}
+                        >
+                          {type.quote_type === "merch"
+                            ? "Мерч"
+                            : type.quote_type === "print"
+                            ? "Поліграфія"
+                            : "Інше"}
+                        </Badge>
+                      ) : null}
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "h-5 px-2 text-[10px] font-medium transition-colors",
+                          selectedTypeId === type.id ? "bg-primary/20 text-primary" : "text-muted-foreground/70"
+                        )}
+                      >
+                        {type.kinds.length}
+                      </Badge>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -625,6 +1201,54 @@ export default function ProductCatalogPageBestVariant() {
                   </Button>
                 )}
               </div>
+              <div className="px-4 py-3 border-b border-border/30 bg-muted/5 space-y-2">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Місця нанесення
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={newPrintPositionName}
+                    onChange={(e) => setNewPrintPositionName(e.target.value)}
+                    placeholder={selectedKind ? "Напр. З однієї сторони" : "Оберіть вид"}
+                    className="h-9 text-xs bg-background/70 border-border/60"
+                    disabled={!selectedKind}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => selectedKind && handleAddPrintPosition(selectedKind.id)}
+                    disabled={!selectedKind || !newPrintPositionName.trim() || printPositionSaving}
+                  >
+                    {printPositionSaving ? "..." : "Додати"}
+                  </Button>
+                </div>
+                {printPositionError && (
+                  <div className="text-xs text-destructive">{printPositionError}</div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {!selectedKind ? (
+                    <span className="text-xs text-muted-foreground">Оберіть вид, щоб додати варіанти</span>
+                  ) : selectedKind.printPositions.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">Немає варіантів</span>
+                  ) : (
+                    selectedKind.printPositions.map((pos) => (
+                      <div
+                        key={pos.id}
+                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-2.5 py-1 text-xs"
+                      >
+                        <span>{pos.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePrintPosition(selectedKind.id, pos.id)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                 {selectedKinds.length === 0 ? (
                   <div className="text-sm text-muted-foreground/60 px-2 py-8 text-center">Немає видів</div>
@@ -632,7 +1256,11 @@ export default function ProductCatalogPageBestVariant() {
                   selectedKinds.map((kind) => (
                     <button
                       key={kind.id}
-                      onClick={() => setSelectedKindId(kind.id)}
+                      onClick={() => {
+                        setSelectedKindId(kind.id);
+                        setNewPrintPositionName("");
+                        setPrintPositionError(null);
+                      }}
                       className={cn(
                         "group flex w-full items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-left text-sm transition-all duration-200",
                         selectedKindId === kind.id
@@ -679,7 +1307,7 @@ export default function ProductCatalogPageBestVariant() {
                       )}
                     </div>
                     <Button
-                      variant={showOnlyIncomplete ? "default" : "outline"}
+                      variant={showOnlyIncomplete ? "primary" : "outline"}
                       size="sm"
                       onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
                       className="gap-2 shrink-0"
@@ -709,7 +1337,7 @@ export default function ProductCatalogPageBestVariant() {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2 gap-4">
                     {filteredGlobalModels.map(({ model, typeName, kindName, validation }) => {
                       const hasTiers = model.priceTiers && model.priceTiers.length > 0;
                       const priceLabel = getPriceRange(model);
@@ -879,19 +1507,21 @@ export default function ProductCatalogPageBestVariant() {
 
       {/* Category Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {categoryMode === "type" ? <FolderPlus className="h-5 w-5" /> : <Tag className="h-5 w-5" />}
-              {categoryMode === "type" ? "Додати нову категорію" : "Додати новий вид"}
-            </DialogTitle>
-            <DialogDescription>
-              {categoryMode === "type" 
-                ? "Створіть нову категорію товарів (наприклад: Одяг, Аксесуари)"
-                : "Додайте новий вид у вибрану категорію"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+        <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden border border-border/60 bg-card text-foreground top-1/2 translate-y-[-50%]">
+          <div className="px-6 pt-6 pb-4 border-b border-border/40 bg-muted/5">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                {categoryMode === "type" ? <FolderPlus className="h-5 w-5" /> : <Tag className="h-5 w-5" />}
+                {categoryMode === "type" ? "Додати нову категорію" : "Додати новий вид"}
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground/90">
+                {categoryMode === "type"
+                  ? "Створіть нову категорію товарів (наприклад: Одяг, Аксесуари)"
+                  : "Додайте новий вид у вибрану категорію"}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="px-6 py-4 space-y-4">
             {categoryMode === "kind" && (
               <div className="space-y-2">
                 <Label>Категорія</Label>
@@ -905,41 +1535,124 @@ export default function ProductCatalogPageBestVariant() {
                 </Select>
               </div>
             )}
+            {categoryMode === "type" && (
+              <div className="space-y-2">
+                <Label>Тип прорахунку</Label>
+                <Select value={newTypeQuoteType} onValueChange={(v) => setNewTypeQuoteType(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Оберіть тип" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="merch">Мерч</SelectItem>
+                    <SelectItem value="print">Поліграфія</SelectItem>
+                    <SelectItem value="other">Інше</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Назва {categoryMode === "type" ? "категорії" : "виду"}</Label>
               <Input
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder={categoryMode === "type" ? "Наприклад: Сумки" : "Наприклад: Шопери"}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
                 autoFocus
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
-              Скасувати
-            </Button>
-            <Button onClick={handleAddCategory} disabled={!newCategoryName.trim() || (categoryMode === "kind" && !selectedTypeForKind)}>
-              Додати
-            </Button>
-          </DialogFooter>
+          <div className="px-6 py-4 border-t border-border/40 bg-muted/5">
+            <DialogFooter className="gap-3 sm:gap-2">
+              <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
+                Скасувати
+              </Button>
+              <Button
+                onClick={handleAddCategory}
+                disabled={!newCategoryName.trim() || (categoryMode === "kind" && !selectedTypeForKind) || categorySaving}
+              >
+                {categorySaving ? "Додавання..." : "Додати"}
+              </Button>
+            </DialogFooter>
+            {categoryError && (
+              <div className="mt-2 text-xs text-destructive">{categoryError}</div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Model Drawer */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-[540px] sm:w-[540px] p-0 flex flex-col bg-gradient-to-br from-background via-background to-muted/20 backdrop-blur-xl border-l border-border/40 overflow-hidden">
-          <SheetHeader className="px-6 py-5 border-b border-border/40 bg-gradient-to-r from-muted/10 to-transparent shrink-0">
-            <SheetTitle className="text-2xl font-bold">
-              {editingModelId ? "Редагування моделі" : "Створення моделі"}
-            </SheetTitle>
-            <SheetDescription className="text-sm text-muted-foreground/80">
-              Налаштуйте параметри моделі та її ціноутворення
-            </SheetDescription>
-          </SheetHeader>
+      {/* Model Dialog with Steps */}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="max-w-3xl p-0 gap-0 max-h-[90vh] overflow-hidden border border-border/60 bg-card top-1/2 translate-y-[-50%]">
+          <div className="px-6 py-5 border-b border-border/40 bg-muted/5">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">
+                {editingModelId ? "Редагування моделі" : "Створення моделі"}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground/80">
+                Налаштуйте параметри моделі та її ціноутворення
+              </DialogDescription>
+            </DialogHeader>
+            
+            {/* Progress Steps */}
+            <div className="flex items-center gap-3 mt-5">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
+                  draftName.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}>
+                  1
+                </div>
+                <span className={cn(
+                  "text-sm font-medium transition-colors",
+                  draftName.trim() ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  Базова інфо
+                </span>
+              </div>
+              
+              <div className={cn(
+                "h-0.5 w-12 transition-all",
+                draftName.trim() && draftKindId ? "bg-primary" : "bg-border"
+              )} />
+              
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
+                  draftName.trim() && draftKindId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}>
+                  2
+                </div>
+                <span className={cn(
+                  "text-sm font-medium transition-colors",
+                  draftName.trim() && draftKindId ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  Ціни
+                </span>
+              </div>
+              
+              <div className={cn(
+                "h-0.5 w-12 transition-all",
+                draftMethodIds.length > 0 ? "bg-primary" : "bg-border"
+              )} />
+              
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
+                  draftMethodIds.length > 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}>
+                  3
+                </div>
+                <span className={cn(
+                  "text-sm font-medium transition-colors",
+                  draftMethodIds.length > 0 ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  Методи
+                </span>
+              </div>
+            </div>
+          </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto max-h-[calc(90vh-200px)]">
             <div className="px-6 py-6 space-y-8">
 
               {/* Photo */}
@@ -1185,13 +1898,49 @@ export default function ProductCatalogPageBestVariant() {
                     <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
                     <p>Спочатку оберіть Вид товару</p>
                   </div>
-                ) : availableMethodsForDraft.length === 0 ? (
-                  <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-muted/10 flex flex-col items-center gap-3">
-                    <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-                    <p>У виді "{draftKind?.name}" ще немає методів</p>
-                  </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3">
+                    <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px_auto] sm:items-end">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium text-muted-foreground">Назва методу</Label>
+                          <Input
+                            value={newMethodName}
+                            onChange={(e) => setNewMethodName(e.target.value)}
+                            placeholder="Напр. DTF"
+                            className="bg-background/60 border-border/60"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium text-muted-foreground">Ціна (опціонально)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={newMethodPrice}
+                            onChange={(e) => setNewMethodPrice(e.target.value)}
+                            placeholder="0"
+                            className="bg-background/60 border-border/60 text-right font-mono"
+                          />
+                        </div>
+                        <Button
+                          onClick={handleAddMethod}
+                          disabled={!newMethodName.trim() || methodSaving}
+                          className="gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {methodSaving ? "Додавання..." : "Додати метод"}
+                        </Button>
+                      </div>
+                      {methodError && <div className="mt-2 text-xs text-destructive">{methodError}</div>}
+                    </div>
+
+                    {availableMethodsForDraft.length === 0 ? (
+                      <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-muted/10 flex flex-col items-center gap-3">
+                        <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
+                        <p>У виді "{draftKind?.name}" ще немає методів</p>
+                      </div>
+                    ) : null}
+
                     {availableMethodsForDraft.map((method) => {
                       const isSelected = draftMethodIds.includes(method.id);
                       return (
@@ -1229,7 +1978,7 @@ export default function ProductCatalogPageBestVariant() {
             </div>
           </div>
 
-          <SheetFooter className="px-6 py-4 border-t border-border/40 bg-gradient-to-r from-muted/10 to-transparent shrink-0 sm:justify-between">
+          <DialogFooter className="px-6 py-4 border-t border-border/40 bg-muted/5 shrink-0 sm:justify-between">
             {editingModelId ? (
               <Button 
                 variant="ghost" 
@@ -1246,39 +1995,28 @@ export default function ProductCatalogPageBestVariant() {
               </Button>
               <Button 
                 onClick={handleSaveModel} 
-                disabled={!draftName.trim() || !draftKindId}
+                disabled={!draftName.trim() || !draftKindId || savingModel}
                 className="shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all disabled:opacity-50"
               >
-                {editingModelId ? "Зберегти зміни" : "Створити модель"}
+                {savingModel ? "Збереження..." : editingModelId ? "Зберегти зміни" : "Створити модель"}
               </Button>
             </div>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="border-border/40 bg-gradient-to-br from-background to-muted/20">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              Підтвердження видалення
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              Ви впевнені, що хочете видалити цю модель? Цю дію не можна буде скасувати.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border/60">Скасувати</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteModel}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20"
-            >
-              Видалити
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Підтвердження видалення"
+        description="Ви впевнені, що хочете видалити цю модель? Цю дію не можна буде скасувати."
+        icon={<AlertCircle className="h-5 w-5 text-destructive" />}
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20"
+        onConfirm={handleDeleteModel}
+      />
     </div>
   );
 }
