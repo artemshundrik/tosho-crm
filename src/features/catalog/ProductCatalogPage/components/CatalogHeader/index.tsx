@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { AlertTriangle, Download, Plus, Search, X } from "lucide-react";
 import type { CatalogType } from "@/types/catalog";
 import { exportToCSV } from "@/utils/catalogUtils";
+import { ViewSwitcher, type ViewMode } from "../ViewSwitcher";
 
 interface CatalogHeaderProps {
   catalog: CatalogType[];
@@ -21,6 +22,8 @@ interface CatalogHeaderProps {
   setShowOnlyIncomplete: (value: boolean) => void;
   filteredModelsCount: number;
   onCreateModel: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
 }
 
 export function CatalogHeader({
@@ -33,6 +36,8 @@ export function CatalogHeader({
   setShowOnlyIncomplete,
   filteredModelsCount,
   onCreateModel,
+  viewMode,
+  onViewModeChange,
 }: CatalogHeaderProps) {
   return (
     <>
@@ -85,6 +90,7 @@ export function CatalogHeader({
       <div className="p-5 border-b border-border/40 shrink-0 bg-gradient-to-r from-background/80 to-muted/5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 max-w-2xl">
+            <ViewSwitcher view={viewMode} onViewChange={onViewModeChange} />
             <div className="relative flex-1 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
               <Input

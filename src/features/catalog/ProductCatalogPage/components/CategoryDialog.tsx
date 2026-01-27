@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderPlus, Tag } from "lucide-react";
+import { FolderPlus, Tag, Trash2 } from "lucide-react";
 import type { CatalogType, CategoryMode, QuoteType } from "@/types/catalog";
 
 interface CategoryDialogProps {
@@ -33,6 +33,9 @@ interface CategoryDialogProps {
   categorySaving: boolean;
   categoryError: string | null;
   onSave: () => void;
+  editingTypeId?: string | null; // If set, we're editing an existing type
+  editingKindId?: string | null; // If set, we're editing an existing kind
+  onDelete?: () => void; // Delete handler
 }
 
 export function CategoryDialog({
@@ -49,7 +52,14 @@ export function CategoryDialog({
   categorySaving,
   categoryError,
   onSave,
+  editingTypeId,
+  editingKindId,
+  onDelete,
 }: CategoryDialogProps) {
+  const isEditingType = mode === "type" && !!editingTypeId;
+  const isEditingKind = mode === "kind" && !!editingKindId;
+  const isEditing = isEditingType || isEditingKind;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden border border-border/60 bg-card text-foreground top-1/2 translate-y-[-50%]">
@@ -57,17 +67,27 @@ export function CategoryDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               {mode === "type" ? <FolderPlus className="h-5 w-5" /> : <Tag className="h-5 w-5" />}
-              {mode === "type" ? "Додати нову категорію" : "Додати новий вид"}
+              {isEditingType
+                ? "Редагувати категорію"
+                : isEditingKind
+                ? "Редагувати вид"
+                : mode === "type"
+                ? "Додати нову категорію"
+                : "Додати новий вид"}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground/90">
-              {mode === "type"
+              {isEditingType
+                ? "Змініть назву категорії або тип прорахунку"
+                : isEditingKind
+                ? "Змініть назву виду"
+                : mode === "type"
                 ? "Створіть нову категорію товарів (наприклад: Одяг, Аксесуари)"
                 : "Додайте новий вид у вибрану категорію"}
             </DialogDescription>
           </DialogHeader>
         </div>
         <div className="px-6 py-4 space-y-4">
-          {mode === "kind" && (
+          {mode === "kind" && !isEditingKind && (
             <div className="space-y-2">
               <Label>Категорія</Label>
               <Select value={selectedTypeForKind} onValueChange={onSelectedTypeForKindChange}>
@@ -82,6 +102,14 @@ export function CategoryDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+          {mode === "kind" && isEditingKind && (
+            <div className="space-y-2">
+              <Label>Категорія</Label>
+              <div className="px-3 py-2 rounded-md bg-muted text-sm text-muted-foreground">
+                {catalog.find((t) => t.id === selectedTypeForKind)?.name || "—"}
+              </div>
             </div>
           )}
           {mode === "type" && (
@@ -115,6 +143,17 @@ export function CategoryDialog({
         </div>
         <div className="px-6 py-4 border-t border-border/40 bg-muted/5">
           <DialogFooter className="gap-3 sm:gap-2">
+            {isEditing && onDelete && (
+              <Button
+                variant="destructive"
+                onClick={onDelete}
+                disabled={categorySaving}
+                className="mr-auto gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Видалити
+              </Button>
+            )}
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>
@@ -124,7 +163,7 @@ export function CategoryDialog({
                 !categoryName.trim() || (mode === "kind" && !selectedTypeForKind) || categorySaving
               }
             >
-              {categorySaving ? "Додавання..." : "Додати"}
+              {categorySaving ? (isEditing ? "Збереження..." : "Додавання...") : (isEditing ? "Зберегти" : "Додати")}
             </Button>
           </DialogFooter>
           {categoryError && <div className="mt-2 text-xs text-destructive">{categoryError}</div>}

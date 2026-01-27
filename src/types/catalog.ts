@@ -75,6 +75,7 @@ export type ModelWithContext = {
   typeName: string;
   kindId: string;
   kindName: string;
+  methods: CatalogMethod[]; // Available methods for this kind
   validation: ValidationResult;
 };
 

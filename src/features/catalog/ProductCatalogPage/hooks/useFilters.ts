@@ -33,6 +33,7 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
             typeName: type.name,
             kindId: kind.id,
             kindName: kind.name,
+            methods: kind.methods || [],
             validation: validateModel(model),
           });
         });

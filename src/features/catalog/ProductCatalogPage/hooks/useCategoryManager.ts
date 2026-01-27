@@ -32,6 +32,8 @@ export function useCategoryManager({
   const [selectedTypeForKind, setSelectedTypeForKind] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null); // Track if editing existing type
+  const [editingKindId, setEditingKindId] = useState<string | null>(null); // Track if editing existing kind
 
   const [typeQuoteTypeSaving, setTypeQuoteTypeSaving] = useState(false);
   const [typeQuoteTypeError, setTypeQuoteTypeError] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export function useCategoryManager({
     setCategoryMode("type");
     setNewCategoryName("");
     setNewTypeQuoteType("merch");
+    setEditingTypeId(null); // Clear editing state
     setCategoryError(null);
     setCategoryDialogOpen(true);
   };
@@ -53,8 +56,49 @@ export function useCategoryManager({
   const openAddKind = () => {
     setCategoryMode("kind");
     setNewCategoryName("");
+    setEditingKindId(null); // Clear editing state
     setCategoryError(null);
     setSelectedTypeForKind(selectedTypeId || catalog[0]?.id || "");
+    setCategoryDialogOpen(true);
+  };
+
+  /**
+   * Opens dialog to edit an existing kind
+   */
+  const openEditKind = (kindId: string) => {
+    // Find the kind and its parent type
+    let foundKind: CatalogKind | null = null;
+    let parentTypeId: string | null = null;
+    
+    for (const type of catalog) {
+      const kind = type.kinds.find((k) => k.id === kindId);
+      if (kind) {
+        foundKind = kind;
+        parentTypeId = type.id;
+        break;
+      }
+    }
+    
+    if (foundKind && parentTypeId) {
+      setCategoryMode("kind");
+      setNewCategoryName(foundKind.name);
+      setEditingKindId(kindId); // Set editing state
+      setSelectedTypeForKind(parentTypeId);
+      setCategoryError(null);
+      setCategoryDialogOpen(true);
+    }
+  };
+
+  /**
+   * Opens dialog to edit an existing type
+   */
+  const openEditType = (typeId: string, typeName: string, quoteType: QuoteType | null) => {
+    setCategoryMode("type");
+    setNewCategoryName(typeName);
+    setNewTypeQuoteType(quoteType || "merch");
+    setEditingTypeId(typeId); // Set editing state
+    setSelectedTypeId(typeId);
+    setCategoryError(null);
     setCategoryDialogOpen(true);
   };
 
@@ -75,54 +119,102 @@ export function useCategoryManager({
 
     try {
       if (categoryMode === "type") {
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("catalog_types")
-          .insert({ team_id: teamId, name, quote_type: newTypeQuoteType })
-          .select("id,name,quote_type")
-          .single();
-          
-        if (error || !data) throw error;
+        if (editingTypeId) {
+          // UPDATE existing type
+          const { error } = await supabase
+            .schema("tosho")
+            .from("catalog_types")
+            .update({ name, quote_type: newTypeQuoteType })
+            .eq("id", editingTypeId);
+            
+          if (error) throw error;
 
-        const newType: CatalogType = {
-          id: data.id,
-          name: data.name,
-          quote_type: data.quote_type ?? null,
-          kinds: [],
-        };
-        
-        setCatalog((prev) => [...prev, newType]);
-        setSelectedTypeId(data.id);
+          // Update local state
+          setCatalog((prev) =>
+            prev.map((type) =>
+              type.id === editingTypeId
+                ? { ...type, name, quote_type: newTypeQuoteType }
+                : type
+            )
+          );
+          setEditingTypeId(null); // Clear editing state
+        } else {
+          // INSERT new type
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("catalog_types")
+            .insert({ team_id: teamId, name, quote_type: newTypeQuoteType })
+            .select("id,name,quote_type")
+            .single();
+            
+          if (error || !data) throw error;
+
+          const newType: CatalogType = {
+            id: data.id,
+            name: data.name,
+            quote_type: data.quote_type ?? null,
+            kinds: [],
+          };
+          
+          setCatalog((prev) => [...prev, newType]);
+          setSelectedTypeId(data.id);
+        }
       } else {
+        // KIND mode
         if (!selectedTypeForKind) return;
         
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("catalog_kinds")
-          .insert({ team_id: teamId, type_id: selectedTypeForKind, name })
-          .select("id,name,type_id")
-          .single();
-          
-        if (error || !data) throw error;
+        if (editingKindId) {
+          // UPDATE existing kind
+          const { error } = await supabase
+            .schema("tosho")
+            .from("catalog_kinds")
+            .update({ name })
+            .eq("id", editingKindId);
+            
+          if (error) throw error;
 
-        const newKind: CatalogKind = {
-          id: data.id,
-          name: data.name,
-          models: [],
-          methods: [],
-          printPositions: [],
-        };
-        
-        setCatalog((prev) =>
-          prev.map((type) =>
-            type.id === selectedTypeForKind
-              ? { ...type, kinds: [...type.kinds, newKind] }
-              : type
-          )
-        );
-        
-        setSelectedTypeId(selectedTypeForKind);
-        setSelectedKindId(data.id);
+          // Update local state
+          setCatalog((prev) =>
+            prev.map((type) => ({
+              ...type,
+              kinds: type.kinds.map((kind) =>
+                kind.id === editingKindId
+                  ? { ...kind, name }
+                  : kind
+              ),
+            }))
+          );
+          setEditingKindId(null); // Clear editing state
+        } else {
+          // INSERT new kind
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("catalog_kinds")
+            .insert({ team_id: teamId, type_id: selectedTypeForKind, name })
+            .select("id,name,type_id")
+            .single();
+            
+          if (error || !data) throw error;
+
+          const newKind: CatalogKind = {
+            id: data.id,
+            name: data.name,
+            models: [],
+            methods: [],
+            printPositions: [],
+          };
+          
+          setCatalog((prev) =>
+            prev.map((type) =>
+              type.id === selectedTypeForKind
+                ? { ...type, kinds: [...type.kinds, newKind] }
+                : type
+            )
+          );
+          
+          setSelectedTypeId(selectedTypeForKind);
+          setSelectedKindId(data.id);
+        }
       }
 
       setCategoryDialogOpen(false);
@@ -165,10 +257,117 @@ export function useCategoryManager({
     setTypeQuoteTypeSaving(false);
   };
 
+  /**
+   * Handles deleting a kind
+   */
+  const handleDeleteKind = async (kindId: string) => {
+    if (!teamId) {
+      setCategoryError("Немає доступної команди.");
+      return;
+    }
+    
+    setCategorySaving(true);
+    setCategoryError(null);
+
+    try {
+      // Delete kind from database
+      const { error } = await supabase
+        .schema("tosho")
+        .from("catalog_kinds")
+        .delete()
+        .eq("id", kindId);
+        
+      if (error) throw error;
+
+      // Update local state - remove the deleted kind
+      setCatalog((prev) =>
+        prev.map((type) => ({
+          ...type,
+          kinds: type.kinds.filter((kind) => kind.id !== kindId),
+        }))
+      );
+      
+      // Close dialog and reset
+      setCategoryDialogOpen(false);
+      setEditingKindId(null);
+      
+      // Select first remaining kind in the type if the deleted one was selected
+      if (selectedKindId === kindId) {
+        const parentType = catalog.find((t) => t.kinds.some((k) => k.id === kindId));
+        if (parentType) {
+          const remainingKinds = parentType.kinds.filter((k) => k.id !== kindId);
+          if (remainingKinds.length > 0) {
+            setSelectedKindId(remainingKinds[0].id);
+          } else {
+            // No more kinds in this type, select first kind from first type
+            const firstTypeWithKinds = catalog.find((t) => t.kinds.length > 0 && t.id !== parentType.id);
+            if (firstTypeWithKinds && firstTypeWithKinds.kinds.length > 0) {
+              setSelectedTypeId(firstTypeWithKinds.id);
+              setSelectedKindId(firstTypeWithKinds.kinds[0].id);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("delete kind failed", error);
+      setCategoryError(error?.message ?? "Не вдалося видалити вид");
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  /**
+   * Handles deleting a type
+   */
+  const handleDeleteType = async (typeId: string) => {
+    if (!teamId) {
+      setCategoryError("Немає доступної команди.");
+      return;
+    }
+    
+    setCategorySaving(true);
+    setCategoryError(null);
+
+    try {
+      // Delete type from database
+      const { error } = await supabase
+        .schema("tosho")
+        .from("catalog_types")
+        .delete()
+        .eq("id", typeId);
+        
+      if (error) throw error;
+
+      // Update local state - remove the deleted type
+      setCatalog((prev) => prev.filter((type) => type.id !== typeId));
+      
+      // Close dialog and reset
+      setCategoryDialogOpen(false);
+      setEditingTypeId(null);
+      
+      // Select first remaining type if the deleted one was selected
+      if (selectedTypeId === typeId) {
+        const remainingTypes = catalog.filter((t) => t.id !== typeId);
+        if (remainingTypes.length > 0) {
+          setSelectedTypeId(remainingTypes[0].id);
+          if (remainingTypes[0].kinds.length > 0) {
+            setSelectedKindId(remainingTypes[0].kinds[0].id);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("delete type failed", error);
+      setCategoryError(error?.message ?? "Не вдалося видалити категорію");
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
   return {
     categoryDialogOpen,
     setCategoryDialogOpen,
     categoryMode,
+    setCategoryMode,
     newCategoryName,
     setNewCategoryName,
     newTypeQuoteType,
@@ -177,9 +376,15 @@ export function useCategoryManager({
     setSelectedTypeForKind,
     categorySaving,
     categoryError,
+    editingTypeId,
+    editingKindId,
     openAddType,
     openAddKind,
+    openEditType,
+    openEditKind,
     handleAddCategory,
+    handleDeleteType,
+    handleDeleteKind,
     typeQuoteTypeSaving,
     typeQuoteTypeError,
     handleQuoteTypeUpdate,

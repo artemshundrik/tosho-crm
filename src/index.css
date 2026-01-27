@@ -417,3 +417,25 @@
     background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));
   }
 }
+
+/* === SHIMMER ANIMATION FOR IMAGE LOADING === */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0)
+  );
+  background-size: 200% auto;
+  animation: shimmer 2s linear infinite;
+}

@@ -60,35 +60,22 @@ export function PricingSection({
 
       {draftPriceMode === "fixed" ? (
         <div className="bg-gradient-to-br from-muted/20 to-muted/5 p-5 rounded-xl border border-border/40">
-          <Label className="text-xs font-medium text-muted-foreground mb-2 block">
-            Базова ціна
-          </Label>
-          <div className="flex items-baseline gap-2">
-            <Input
-              type="number"
-              min="0"
-              className="w-40 h-12 text-right pr-3 font-mono text-2xl font-bold tabular-nums bg-background/80 border-border/60"
-              value={draftFixedPrice}
-              onChange={(e) => onFixedPriceChange(e.target.value)}
-            />
-            <span className="text-xl font-semibold text-muted-foreground/80">
-              {CURRENCY_SYMBOL}
-            </span>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Фіксована ціна буде встановлюватись під час створення прорахунку замовлення.
+          </p>
         </div>
       ) : (
         <div className="rounded-xl border border-border/40 bg-gradient-to-br from-muted/10 to-transparent overflow-hidden">
-          <div className="grid grid-cols-[1fr_1fr_1.5fr_48px] gap-3 px-5 py-3 bg-muted/30 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-[1fr_1fr_48px] gap-3 px-5 py-3 bg-muted/30 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             <div>Від (шт.)</div>
             <div>До (шт.)</div>
-            <div className="text-right pr-10">Ціна/од.</div>
             <div></div>
           </div>
           <div className="p-3 space-y-2.5">
             {draftTiers.map((tier, index) => (
               <div
                 key={tier.id}
-                className="grid grid-cols-[1fr_1fr_1.5fr_48px] gap-3 items-center relative group"
+                className="grid grid-cols-[1fr_1fr_48px] gap-3 items-center relative group"
               >
                 {index > 0 && (
                   <div className="absolute left-[48%] top-[-14px] h-5 w-0.5 bg-gradient-to-b from-border/30 to-border/60 -z-10"></div>
@@ -117,22 +104,6 @@ export function PricingSection({
                     });
                   }}
                 />
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    className="h-10 text-right font-mono font-bold tabular-nums bg-background/80 border-border/50 flex-1"
-                    value={tier.price}
-                    onChange={(e) =>
-                      onTierUpdate(tier.id, {
-                        price: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
-                  />
-                  <span className="text-sm font-semibold text-muted-foreground/80 w-6">
-                    {CURRENCY_SYMBOL}
-                  </span>
-                </div>
 
                 <Button
                   size="icon"
@@ -153,6 +124,11 @@ export function PricingSection({
             >
               <Plus className="h-4 w-4 mr-2" /> Додати рівень
             </Button>
+          </div>
+          <div className="px-5 pb-4">
+            <p className="text-xs text-muted-foreground italic">
+              Ціни для кожного тиражу будуть встановлюватись під час створення прорахунку замовлення.
+            </p>
           </div>
         </div>
       )}

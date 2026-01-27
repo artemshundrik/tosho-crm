@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { AlertCircle, Coins, Plus } from "lucide-react";
-import { CURRENCY_SYMBOL } from "@/constants/catalog";
-import { formatPrice } from "@/utils/catalogUtils";
 import type { CatalogMethod } from "@/types/catalog";
 
 interface MethodsSectionProps {
@@ -65,27 +63,14 @@ export function MethodsSection({
       ) : (
         <div className="grid grid-cols-1 gap-3">
           <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px_auto] sm:items-end">
-              <div className="space-y-2">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1 space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground">Назва методу</Label>
                 <Input
                   value={newMethodName}
                   onChange={(e) => onMethodNameChange(e.target.value)}
                   placeholder="Напр. DTF"
                   className="bg-background/60 border-border/60"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Ціна (опціонально)
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={newMethodPrice}
-                  onChange={(e) => onMethodPriceChange(e.target.value)}
-                  placeholder="0"
-                  className="bg-background/60 border-border/60 text-right font-mono"
                 />
               </div>
               <Button
@@ -113,29 +98,19 @@ export function MethodsSection({
               <label
                 key={method.id}
                 className={cn(
-                  "flex items-center justify-between gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all duration-200",
+                  "flex items-center gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all duration-200",
                   isSelected
                     ? "border-primary/50 bg-gradient-to-r from-primary/10 to-primary/5 shadow-md shadow-primary/10"
                     : "border-border/40 bg-card/50 hover:bg-muted/20 hover:border-border/60"
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={() => onToggleMethod(method.id)}
-                  />
-                  <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
-                    {method.name}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-base font-bold tabular-nums">
-                    {formatPrice(method.price ?? 0)}
-                  </span>
-                  <span className="text-sm font-semibold text-muted-foreground/80">
-                    {CURRENCY_SYMBOL}
-                  </span>
-                </div>
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => onToggleMethod(method.id)}
+                />
+                <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
+                  {method.name}
+                </span>
               </label>
             );
           })}
