@@ -1,5 +1,6 @@
-import { createElement, useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,10 +28,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import {
   getQuoteSummary,
+  listTeamMembers,
   listStatusHistory,
   setStatus,
+  type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
 } from "@/lib/toshoApi";
@@ -71,6 +75,27 @@ type QuoteDetailsPageProps = {
 
 const ITEM_VISUAL_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
+
+const MAX_QUOTE_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
+const ATTACHMENTS_ACCEPT =
+  ".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx";
+
+const formatFileSize = (bytes?: number | null) => {
+  const value = Number(bytes ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exp = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const size = value / 1024 ** exp;
+  return `${size.toFixed(size >= 10 || exp === 0 ? 0 : 1)} ${units[exp]}`;
+};
+
+const getFileExtension = (name?: string | null) => {
+  if (!name) return null;
+  const parts = name.split(".");
+  if (parts.length < 2) return null;
+  return parts[parts.length - 1]?.toUpperCase() ?? null;
+};
 
 type CatalogMethod = { id: string; name: string; price?: number };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
@@ -135,6 +160,10 @@ type QuoteAttachment = {
   size: string;
   created_at: string;
   url?: string;
+  uploadedBy?: string | null;
+  uploadedByLabel?: string;
+  storageBucket?: string | null;
+  storagePath?: string | null;
 };
 
 const STATUS_OPTIONS = ["draft", "sent", "approved", "rejected", "in_progress", "completed"];
@@ -306,6 +335,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  const [attachmentsUploadError, setAttachmentsUploadError] = useState<string | null>(null);
+  const [attachmentsDeletingId, setAttachmentsDeletingId] = useState<string | null>(null);
+  const [attachmentsDeleteError, setAttachmentsDeleteError] = useState<string | null>(null);
+  const [attachmentsDragActive, setAttachmentsDragActive] = useState(false);
+  const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
+  const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
+  const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
@@ -341,6 +379,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const itemsSubtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + item.qty * item.price, 0);
   }, [items]);
+
+  const memberById = useMemo(
+    () => new Map(teamMembers.map((member) => [member.id, member.label])),
+    [teamMembers]
+  );
 
   const totals = useMemo(() => {
     const subtotal = itemsSubtotal;
@@ -558,6 +601,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [teamId]);
 
+  useEffect(() => {
+    if (!teamId) return;
+    let active = true;
+    const loadMembers = async () => {
+      try {
+        const data = await listTeamMembers(teamId);
+        if (active) setTeamMembers(data);
+      } catch {
+        if (active) setTeamMembers([]);
+      }
+    };
+    void loadMembers();
+    return () => {
+      active = false;
+    };
+  }, [teamId]);
+
   const loadQuote = async () => {
     setLoading(true);
     setError(null);
@@ -651,11 +711,222 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
+  const loadAttachments = async () => {
+    setAttachmentsLoading(true);
+    setAttachmentsError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+        .eq("quote_id", quoteId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const mapped = await Promise.all(
+        rows.map(async (row) => {
+          let url: string | undefined;
+          if (row.storage_bucket && row.storage_path) {
+            const { data: signed } = await supabase.storage
+              .from(row.storage_bucket)
+              .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
+            url = signed?.signedUrl;
+          }
+          return {
+            id: row.id,
+            name: row.file_name ?? "Файл",
+            size: formatFileSize(row.file_size),
+            created_at: row.created_at ?? new Date().toISOString(),
+            url,
+            uploadedBy: row.uploaded_by ?? null,
+            uploadedByLabel:
+              memberById.get(row.uploaded_by ?? "") ??
+              (row.uploaded_by ? "Невідомий користувач" : undefined),
+            storageBucket: row.storage_bucket ?? null,
+            storagePath: row.storage_path ?? null,
+          } satisfies QuoteAttachment;
+        })
+      );
+
+      setAttachments(mapped);
+    } catch (e: any) {
+      setAttachmentsError(e?.message ?? "Не вдалося завантажити файли.");
+      setAttachments([]);
+    } finally {
+      setAttachmentsLoading(false);
+    }
+  };
+
+  const uploadAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (attachmentsUploading) return;
+    setAttachmentsUploadError(null);
+
+    const existingCount = attachments.length;
+    const remainingSlots = Math.max(0, MAX_QUOTE_ATTACHMENTS - existingCount);
+    if (remainingSlots === 0) {
+      setAttachmentsUploadError(`Можна додати не більше ${MAX_QUOTE_ATTACHMENTS} файлів.`);
+      return;
+    }
+
+    const selected = Array.from(files).slice(0, remainingSlots);
+    const oversized = selected.filter((file) => file.size > MAX_ATTACHMENT_SIZE_BYTES);
+    const allowed = selected.filter((file) => file.size <= MAX_ATTACHMENT_SIZE_BYTES);
+
+    if (oversized.length > 0) {
+      setAttachmentsUploadError("Деякі файли завеликі (максимум 50 MB).");
+    }
+    if (allowed.length === 0) return;
+
+    setAttachmentsUploading(true);
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        throw new Error(userError?.message ?? "Користувач не авторизований");
+      }
+      const uploadedBy = userData.user.id;
+
+      const failures: string[] = [];
+
+      for (const file of allowed) {
+        const safeName = file.name.replace(/[^\w.-]+/g, "_");
+        const baseName = `${Date.now()}-${safeName}`;
+        const candidatePaths = [
+          `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+          `${teamId}/quote-attachments/${quoteId}/${baseName}`,
+          `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
+          `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+        ];
+
+        let storagePath = "";
+        let lastError: unknown = null;
+        for (const candidate of candidatePaths) {
+          const { error: uploadError } = await supabase.storage
+            .from(ITEM_VISUAL_BUCKET)
+            .upload(candidate, file, { upsert: true, contentType: file.type });
+          if (!uploadError) {
+            storagePath = candidate;
+            lastError = null;
+            break;
+          }
+          lastError = uploadError;
+        }
+
+        if (!storagePath) {
+          failures.push(file.name);
+          console.error("Attachment upload failed", lastError);
+          continue;
+        }
+
+        const { error: insertError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .insert({
+            team_id: teamId,
+            quote_id: quoteId,
+            file_name: file.name,
+            mime_type: file.type || null,
+            file_size: file.size,
+            storage_bucket: ITEM_VISUAL_BUCKET,
+            storage_path: storagePath,
+            uploaded_by: uploadedBy,
+          });
+
+        if (insertError) {
+          failures.push(file.name);
+          console.error("Attachment insert failed", insertError);
+        }
+      }
+
+      if (failures.length > 0) {
+        setAttachmentsUploadError(
+          failures.length === allowed.length
+            ? "Не вдалося завантажити файли."
+            : `Не всі файли завантажилися (${failures.length}/${allowed.length}).`
+        );
+      }
+
+      await loadAttachments();
+    } catch (e: any) {
+      setAttachmentsUploadError(e?.message ?? "Не вдалося завантажити файли.");
+    } finally {
+      setAttachmentsUploading(false);
+      if (attachmentsInputRef.current) {
+        attachmentsInputRef.current.value = "";
+      }
+    }
+  };
+
+  const requestDeleteAttachment = (attachment: QuoteAttachment) => {
+    if (attachmentsDeletingId) return;
+    setDeleteAttachmentTarget(attachment);
+    setDeleteAttachmentOpen(true);
+  };
+
+  const confirmDeleteAttachment = async () => {
+    if (!deleteAttachmentTarget || attachmentsDeletingId) return;
+    const attachment = deleteAttachmentTarget;
+    setAttachmentsDeletingId(attachment.id);
+    setAttachmentsDeleteError(null);
+    try {
+      if (attachment.storageBucket && attachment.storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from(attachment.storageBucket)
+          .remove([attachment.storagePath]);
+        if (storageError) throw storageError;
+      }
+
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .delete()
+        .eq("id", attachment.id);
+      if (error) throw error;
+
+      setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
+      setDeleteAttachmentOpen(false);
+      setDeleteAttachmentTarget(null);
+      toast.success("Файл видалено");
+    } catch (e: any) {
+      const message = e?.message ?? "Не вдалося видалити файл.";
+      setAttachmentsDeleteError(message);
+      toast.error("Помилка видалення", { description: message });
+    } finally {
+      setAttachmentsDeletingId(null);
+    }
+  };
+
   useEffect(() => {
     void loadQuote();
     void loadHistory();
     void loadItems();
-  }, [quoteId, teamId]);
+    void loadAttachments();
+  }, [quoteId, teamId, memberById]);
+
+  useEffect(() => {
+    if (itemAttachmentUploading) return;
+    void loadAttachments();
+  }, [itemAttachmentUploading]);
+
+  const handleAttachmentsDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAttachmentsDragActive(false);
+    void uploadAttachments(event.dataTransfer.files);
+  };
+
+  const handleAttachmentsDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAttachmentsDragActive(true);
+  };
+
+  const handleAttachmentsDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAttachmentsDragActive(false);
+  };
 
   // Quick status change
   const handleQuickStatusChange = async (newStatus: string) => {
@@ -1624,16 +1895,37 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <Paperclip className="h-5 w-5" />
-                Файли
+                Файли від замовника
                 {attachments.length > 0 && (
                   <Badge variant="secondary" className="text-xs">{attachments.length}</Badge>
                 )}
               </div>
-              <Button size="sm" variant="outline" className="gap-2">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => attachmentsInputRef.current?.click()}
+                disabled={attachmentsUploading}
+                aria-label="Завантажити файли"
+              >
                 <Upload className="h-4 w-4" />
-                Завантажити
               </Button>
             </div>
+
+            <input
+              ref={attachmentsInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              accept={ATTACHMENTS_ACCEPT}
+              onChange={(event) => uploadAttachments(event.target.files)}
+            />
+
+            {attachmentsUploading && (
+              <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Завантаження файлів...
+              </div>
+            )}
             
             {attachmentsLoading ? (
               <div className="text-center py-6">
@@ -1644,46 +1936,112 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="text-sm text-destructive">{attachmentsError}</div>
             ) : attachments.length === 0 ? (
               <div 
-                className="border-2 border-dashed border-border/60 rounded-xl p-8 text-center hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer"
+                className={cn(
+                  "border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer",
+                  attachmentsDragActive
+                    ? "border-primary/60 bg-primary/10"
+                    : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                )}
+                onClick={() => attachmentsInputRef.current?.click()}
+                onDrop={handleAttachmentsDrop}
+                onDragOver={handleAttachmentsDragOver}
+                onDragLeave={handleAttachmentsDragLeave}
               >
                 <Upload className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
                 <p className="text-sm font-medium mb-1">Перетягніть файли сюди</p>
                 <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
+                </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {attachments.map((file) => (
-                  <div 
-                    key={file.id} 
-                    className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <Paperclip className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{file.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {file.size} · {new Date(file.created_at).toLocaleDateString("uk-UA")}
+              <div
+                className={cn(
+                  "space-y-2 rounded-xl border border-dashed border-border/50 p-2",
+                  attachmentsDragActive && "border-primary/60 bg-primary/5"
+                )}
+                onDrop={handleAttachmentsDrop}
+                onDragOver={handleAttachmentsDragOver}
+                onDragLeave={handleAttachmentsDragLeave}
+              >
+                {attachments.map((file) => {
+                  const extension = getFileExtension(file.name);
+                  return (
+                    <div 
+                      key={file.id} 
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Paperclip className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-sm truncate" title={file.name}>
+                              {file.name}
+                            </div>
+                            {extension && (
+                              <Badge variant="secondary" className="text-[10px] uppercase">
+                                {extension}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {file.size} · {new Date(file.created_at).toLocaleDateString("uk-UA")}
+                            {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
+                          </div>
                         </div>
                       </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        onClick={() => {
+                          if (file.url) window.open(file.url, "_blank", "noopener,noreferrer");
+                        }}
+                        disabled={!file.url}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive hover:text-destructive"
+                        onClick={() => requestDeleteAttachment(file)}
+                        disabled={attachmentsDeletingId === file.id}
+                      >
+                        {attachmentsDeletingId === file.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      onClick={() => {
-                        if (file.url) window.open(file.url, "_blank", "noopener,noreferrer");
-                      }}
-                      disabled={!file.url}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
+
+            {attachmentsUploadError && (
+              <div className="text-xs text-destructive mt-2">{attachmentsUploadError}</div>
+            )}
+            {attachmentsDeleteError && (
+              <div className="text-xs text-destructive mt-2">{attachmentsDeleteError}</div>
+            )}
           </Card>
+
+          <ConfirmDialog
+            open={deleteAttachmentOpen}
+            onOpenChange={setDeleteAttachmentOpen}
+            title="Видалити файл?"
+            description={deleteAttachmentTarget ? deleteAttachmentTarget.name : undefined}
+            icon={<Trash2 className="h-5 w-5 text-destructive" />}
+            confirmLabel="Видалити"
+            cancelLabel="Скасувати"
+            confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onConfirm={confirmDeleteAttachment}
+            loading={!!attachmentsDeletingId}
+          />
 
           {/* History Card - Timeline */}
           <Card className="p-5 bg-card/70 border-border/60 shadow-sm">

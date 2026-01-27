@@ -14,6 +14,7 @@ interface UseCategoryManagerProps {
   setCatalog: React.Dispatch<React.SetStateAction<CatalogType[]>>;
   selectedTypeId: string;
   setSelectedTypeId: (id: string) => void;
+  selectedKindId: string;
   setSelectedKindId: (id: string) => void;
 }
 
@@ -23,6 +24,7 @@ export function useCategoryManager({
   setCatalog,
   selectedTypeId,
   setSelectedTypeId,
+  selectedKindId,
   setSelectedKindId,
 }: UseCategoryManagerProps) {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);

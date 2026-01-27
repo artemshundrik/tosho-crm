@@ -109,7 +109,7 @@ export function CatalogHeader({
               )}
             </div>
             <Button
-              variant={showOnlyIncomplete ? "default" : "outline"}
+              variant={showOnlyIncomplete ? "primary" : "outline"}
               size="sm"
               onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
               className="gap-2 shrink-0"

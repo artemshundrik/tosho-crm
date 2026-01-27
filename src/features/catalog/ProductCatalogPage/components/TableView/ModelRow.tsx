@@ -87,7 +87,9 @@ export function ModelRow({
         <div className="flex items-center gap-2">
           <span className="font-medium">{model.name}</span>
           {!validation.isValid && (
-            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" title={validation.warnings.join(", ")} />
+            <div title={validation.warnings.join(", ")}>
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+            </div>
           )}
         </div>
       </td>

@@ -120,7 +120,7 @@ export function calculateDiscount(model: CatalogModel): number {
  * @param catalog - The full catalog to export
  */
 export function exportToCSV(catalog: CatalogType[]): void {
-  const rows: string[][] = [CSV_CONFIG.HEADERS];
+  const rows: string[][] = [[...CSV_CONFIG.HEADERS]];
 
   catalog.forEach((type) => {
     type.kinds.forEach((kind) => {

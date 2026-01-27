@@ -78,6 +78,7 @@ export default function ProductCatalogPage() {
     setCatalog,
     selectedTypeId: filters.selectedTypeId,
     setSelectedTypeId: filters.setSelectedTypeId,
+    selectedKindId: filters.selectedKindId,
     setSelectedKindId: filters.setSelectedKindId,
   });
 
@@ -422,10 +423,10 @@ export default function ProductCatalogPage() {
         }
         title="Видалити категорію?"
         description={`Ви впевнені, що хочете видалити категорію "${deleteTypeConfirm.typeName}"? Це видалить усі види та моделі в цій категорії. Цю дію неможливо скасувати.`}
-        confirmText="Видалити"
-        cancelText="Скасувати"
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
         onConfirm={handleConfirmDeleteType}
-        variant="destructive"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
       />
 
       {/* Delete Kind Confirmation Dialog */}
@@ -436,10 +437,10 @@ export default function ProductCatalogPage() {
         }
         title="Видалити вид?"
         description={`Ви впевнені, що хочете видалити вид "${deleteKindConfirm.kindName}"? Це видалить усі моделі в цьому виді. Цю дію неможливо скасувати.`}
-        confirmText="Видалити"
-        cancelText="Скасувати"
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
         onConfirm={handleConfirmDeleteKind}
-        variant="destructive"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
       />
 
       {/* Model Editor Dialog */}

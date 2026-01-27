@@ -37,7 +37,7 @@ export type QuoteStatusRow = {
   created_by?: string | null;
 };
 
-export type TeamMemberRow = { id: string; label: string };
+export type TeamMemberRow = { id: string; label: string; avatarUrl?: string | null };
 
 export type CustomerRow = { id: string; name?: string | null; legal_name?: string | null };
 
@@ -193,13 +193,14 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   try {
     const { data, error } = await supabase
       .from("team_members_view")
-      .select("user_id, full_name")
+      .select("user_id, full_name, avatar_url")
       .eq("team_id", teamId)
       .order("created_at", { ascending: true });
     handleError(error);
-    return ((data as { user_id: string; full_name?: string | null }[]) ?? []).map((row) => ({
+    return ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null }[]) ?? []).map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
+      avatarUrl: row.avatar_url ?? null,
     }));
   } catch (error: any) {
     const message = error?.message ?? "";
@@ -213,6 +214,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       return ((data as { user_id: string }[]) ?? []).map((row) => ({
         id: row.user_id,
         label: formatLabel(row),
+        avatarUrl: null,
       }));
     }
     throw error;

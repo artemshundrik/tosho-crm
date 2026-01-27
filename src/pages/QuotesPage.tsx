@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -44,7 +46,14 @@ import {
   UserPlus,
   Loader2,
   ArrowUpDown,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  Paperclip,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  PlayCircle,
+  Check,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -63,6 +72,15 @@ const statusLabels: Record<string, string> = {
   rejected: "Відхилено",
   in_progress: "В роботі",
   completed: "Завершено",
+};
+
+const statusIcons: Record<string, ComponentType<{ className?: string }>> = {
+  draft: Clock,
+  sent: PlayCircle,
+  approved: CheckCircle2,
+  rejected: XCircle,
+  in_progress: PlayCircle,
+  completed: Check,
 };
 
 const statusClasses: Record<string, string> = {
@@ -96,8 +114,22 @@ const QUOTE_TYPE_OPTIONS = [
   { id: "other", label: "Інше", icon: Layers },
 ];
 
-const quoteTypeLabel = (value?: string | null) =>
-  QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "—";
+  const quoteTypeLabel = (value?: string | null) =>
+    QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "—";
+
+  const quoteTypeIcon = (value?: string | null) =>
+    QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.icon;
+
+const QUOTE_ATTACHMENTS_BUCKET =
+  (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
+
+type PendingAttachment = {
+  id: string;
+  file: File;
+  previewUrl?: string;
+};
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const navigate = useNavigate();
@@ -134,12 +166,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [currency, setCurrency] = useState("UAH");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+  const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [quickFilter, setQuickFilter] = useState<"all" | "draft" | "sent">("all");
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
+    [teamMembers]
+  );
+  const memberAvatarById = useMemo(
+    () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
   );
 
@@ -171,6 +211,58 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const match = customers.find((c) => c.id === customerId);
     return match?.name || match?.legal_name || "";
   }, [customers, customerId]);
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return "—";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "—";
+    const first = parts[0][0] ?? "";
+    const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
+    return (first + last).toUpperCase();
+  };
+
+  const getDateLabels = (value?: string | null) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
+    const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+    if (diffDays === 0) return { primary: `Сьогодні, ${time}`, secondary: null };
+    if (diffDays === 1) return { primary: `Вчора, ${time}`, secondary: date.toLocaleDateString("uk-UA") };
+    return { primary: date.toLocaleDateString("uk-UA"), secondary: null };
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / 1024 ** exp;
+    return `${value.toFixed(value >= 10 || exp === 0 ? 0 : 1)} ${units[exp]}`;
+  };
+
+  const isImageFile = (file: File) => file.type.startsWith("image/");
+
+  const revokeAttachmentPreviews = (attachments: PendingAttachment[]) => {
+    attachments.forEach((attachment) => {
+      if (attachment.previewUrl) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (createOpen) return;
+    if (pendingAttachments.length === 0) return;
+    revokeAttachmentPreviews(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentsError(null);
+    if (attachmentsInputRef.current) {
+      attachmentsInputRef.current.value = "";
+    }
+  }, [createOpen, pendingAttachments]);
 
   useEffect(() => {
     let active = true;
@@ -351,9 +443,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     try {
       const data = await listQuotes({ teamId, search, status });
       setRows(data);
+      const ids = data.map((row) => row.id).filter(Boolean);
+      if (ids.length === 0) {
+        setAttachmentCounts({});
+      } else {
+        try {
+          const { data: attachmentRows, error: attachmentsError } = await supabase
+            .schema("tosho")
+            .from("quote_attachments")
+            .select("quote_id")
+            .in("quote_id", ids);
+          if (attachmentsError) throw attachmentsError;
+          const counts: Record<string, number> = {};
+          (attachmentRows ?? []).forEach((row) => {
+            const quoteId = row.quote_id as string | undefined;
+            if (!quoteId) return;
+            counts[quoteId] = (counts[quoteId] ?? 0) + 1;
+          });
+          setAttachmentCounts(counts);
+        } catch {
+          setAttachmentCounts({});
+        }
+      }
     } catch (e: any) {
       setError(e?.message ?? "Не вдалося завантажити список.");
       setRows([]);
+      setAttachmentCounts({});
     } finally {
       setLoading(false);
     }
@@ -386,6 +501,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   const openCreate = () => {
+    revokeAttachmentPreviews(pendingAttachments);
     setCreateOpen(true);
     setCustomerSearch("");
     setCustomerId("");
@@ -403,6 +519,164 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCurrency("UAH");
     setCreateError(null);
     setCustomers([]);
+    setPendingAttachments([]);
+    setAttachmentsError(null);
+    if (attachmentsInputRef.current) {
+      attachmentsInputRef.current.value = "";
+    }
+  };
+
+  const handleAttachmentSelect = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setAttachmentsError(null);
+
+    const currentCount = pendingAttachments.length;
+    const remainingSlots = Math.max(0, MAX_ATTACHMENTS - currentCount);
+
+    if (remainingSlots === 0) {
+      toast.error("Досягнуто ліміт файлів", {
+        description: `Можна додати не більше ${MAX_ATTACHMENTS} файлів.`,
+      });
+      return;
+    }
+
+    const selected = Array.from(files).slice(0, remainingSlots);
+    const rejectedBySize = selected.filter((file) => file.size > MAX_ATTACHMENT_SIZE_BYTES);
+    const accepted = selected.filter((file) => file.size <= MAX_ATTACHMENT_SIZE_BYTES);
+
+    if (rejectedBySize.length > 0) {
+      toast.error("Деякі файли завеликі", {
+        description: `Максимальний розмір одного файлу — 50 MB.`,
+      });
+    }
+
+    if (accepted.length === 0) return;
+
+    const nextAttachments: PendingAttachment[] = accepted.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: isImageFile(file) ? URL.createObjectURL(file) : undefined,
+    }));
+
+    setPendingAttachments((prev) => [...prev, ...nextAttachments]);
+
+    if (attachmentsInputRef.current) {
+      attachmentsInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setPendingAttachments((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
+  const uploadPendingAttachments = async (quoteId: string) => {
+    if (pendingAttachments.length === 0) return;
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      throw new Error(userError?.message ?? "Користувач не авторизований");
+    }
+
+    const uploadedBy = userData.user.id;
+
+    let membershipVerified = false;
+    let membershipFound = false;
+    try {
+      const { data: membership, error: membershipError } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", uploadedBy)
+        .eq("team_id", teamId)
+        .maybeSingle();
+      if (membershipError) {
+        const message = membershipError.message?.toLowerCase?.() ?? "";
+        if (!message.includes("does not exist") && !message.includes("relation")) {
+          throw membershipError;
+        }
+        membershipVerified = false;
+      }
+      if (!membershipError) {
+        membershipVerified = true;
+        membershipFound = !!membership;
+      }
+      if (membershipVerified && !membershipFound) {
+        throw new Error("Користувач не є членом команди для цього прорахунку.");
+      }
+    } catch (error: any) {
+      const message = error?.message?.toLowerCase?.() ?? "";
+      if (!message.includes("does not exist") && !message.includes("relation")) {
+        throw error;
+      }
+    }
+
+    const failures: string[] = [];
+
+    for (const attachment of pendingAttachments) {
+      const file = attachment.file;
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
+      const baseName = `${Date.now()}-${safeName}`;
+      const candidatePaths = [
+        `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+        `${teamId}/quote-attachments/${quoteId}/${baseName}`,
+        `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
+        `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+      ];
+
+      let storagePath = "";
+      let lastError: unknown = null;
+
+      for (const candidate of candidatePaths) {
+        const { error: uploadError } = await supabase.storage
+          .from(QUOTE_ATTACHMENTS_BUCKET)
+          .upload(candidate, file, { upsert: true, contentType: file.type });
+        if (!uploadError) {
+          storagePath = candidate;
+          lastError = null;
+          break;
+        }
+        lastError = uploadError;
+      }
+
+      if (!storagePath) {
+        failures.push(file.name);
+        console.error("Attachment upload failed", lastError);
+        continue;
+      }
+
+      const { error: insertError } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .insert({
+          team_id: teamId,
+          quote_id: quoteId,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          storage_bucket: QUOTE_ATTACHMENTS_BUCKET,
+          storage_path: storagePath,
+          uploaded_by: uploadedBy,
+        });
+
+      if (insertError) {
+        failures.push(file.name);
+        console.error("Attachment insert failed", insertError);
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new Error(
+        failures.length === pendingAttachments.length
+          ? "Не вдалося завантажити файли замовника."
+          : `Не всі файли завантажилися (${failures.length}/${pendingAttachments.length}).`
+      );
+    }
   };
 
   const handleCreate = async () => {
@@ -469,6 +743,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           methods: methodsPayload,
         });
       if (itemError) throw itemError;
+
+      let attachmentWarning: string | null = null;
+      try {
+        await uploadPendingAttachments(created.id);
+      } catch (attachmentError: any) {
+        attachmentWarning = attachmentError?.message ?? "Не вдалося завантажити файли замовника.";
+      }
+
+      revokeAttachmentPreviews(pendingAttachments);
       setCreateOpen(false);
       setCustomerId("");
       setCustomerSearch("");
@@ -484,8 +767,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setAssignedTo("unassigned");
       setCurrency("UAH");
       setCreateError(null);
+      setPendingAttachments([]);
+      setAttachmentsError(attachmentWarning);
       await loadQuotes();
       navigate(`/orders/estimates/${created.id}`);
+
+      if (attachmentWarning) {
+        toast.error("Файли не завантажено повністю", {
+          description: attachmentWarning,
+        });
+      } else if (pendingAttachments.length > 0) {
+        toast.success("Файли замовника додано");
+      }
     } catch (e: any) {
       setCreateError(e?.message ?? "Не вдалося створити прорахунок.");
     } finally {
@@ -682,7 +975,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30 border-b">
-                  <TableHead className="w-[100px]">
+                  <TableHead className="w-[140px] min-w-[140px] pl-6">
                     <button
                       onClick={() => handleSort("number")}
                       className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
@@ -694,7 +987,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       )}
                     </button>
                   </TableHead>
-                  <TableHead className="w-[180px]">
+                  <TableHead className="w-[160px]">
                     <button
                       onClick={() => handleSort("date")}
                       className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
@@ -706,33 +999,39 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       )}
                     </button>
                   </TableHead>
-                  <TableHead>
+                  <TableHead className="w-[220px]">
                     <div className="flex items-center gap-1.5 font-semibold">
                       <Building2 className="h-3.5 w-3.5" />
                       Замовник
                     </div>
                   </TableHead>
-                  <TableHead className="w-[160px]">
+                  <TableHead className="w-[200px]">
                     <div className="flex items-center gap-1.5 font-semibold">
                       <User className="h-3.5 w-3.5" />
                       Менеджер
                     </div>
                   </TableHead>
-                  <TableHead className="w-[140px] font-semibold">Статус</TableHead>
-                  <TableHead className="w-[160px] font-semibold">
-                    <div className="flex items-center gap-1.5">
+                  <TableHead className="w-[120px] font-semibold text-center">Статус</TableHead>
+                  <TableHead className="w-[80px] font-semibold text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Файли
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-[120px] font-semibold text-center">
+                    <div className="flex items-center justify-center gap-1.5">
                       <Shirt className="h-3.5 w-3.5" />
                       Тип
                     </div>
                   </TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
+                  <TableHead className="w-[60px] pr-6"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAndSortedRows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className="hover:bg-muted/20 cursor-pointer group transition-colors"
+                    className="hover:bg-muted/20 cursor-pointer group transition-colors odd:bg-muted/10"
                     onClick={() => navigate(`/orders/estimates/${row.id}`)}
                     role="button"
                     tabIndex={0}
@@ -743,52 +1042,96 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       }
                     }}
                   >
-                    <TableCell className="font-mono font-semibold text-sm">
-                      {row.number ?? "—"}
+                    <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px] pl-6">
+                      <span className="group-hover:underline underline-offset-2">
+                        {row.number ?? "—"}
+                      </span>
                     </TableCell>
                     <TableCell className="text-sm">
                       {row.created_at ? (
-                        <div>
-                          <div className="font-medium">
-                            {new Date(row.created_at).toLocaleDateString("uk-UA")}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(row.created_at).toLocaleTimeString("uk-UA", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        </div>
+                        (() => {
+                          const labels = getDateLabels(row.created_at);
+                          if (labels === "—") return "—";
+                          return (
+                            <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
+                              <div className="font-medium">{labels.primary}</div>
+                              {labels.secondary ? (
+                                <div className="text-xs text-muted-foreground">{labels.secondary}</div>
+                              ) : null}
+                            </div>
+                          );
+                        })()
                       ) : (
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {row.customer_name ?? "—"}
+                    <TableCell className="font-medium max-w-[220px] truncate">
+                      <span title={row.customer_name ?? "—"}>{row.customer_name ?? "—"}</span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                      <div className="flex items-center gap-2">
+                        <AvatarBase
+                          src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                          name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                          fallback={
+                            row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
+                          }
+                          size={28}
+                          className="text-[10px] font-semibold"
+                        />
+                        <span>
+                          {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                        </span>
+                      </div>
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
+                      {(() => {
+                        const Icon = statusIcons[row.status ?? "draft"] ?? Clock;
+                        return (
                       <Badge
                         className={cn("cursor-pointer transition-all hover:shadow-sm", statusClasses[row.status ?? "draft"])}
                         variant="outline"
                       >
+                        <Icon className="h-3.5 w-3.5 mr-1" />
                         {formatStatusLabel(row.status)}
                       </Badge>
+                        );
+                      })()}
                     </TableCell>
-                    <TableCell>
-                      <div className="text-sm font-medium">
-                        {quoteTypeLabel(row.quote_type)}
-                      </div>
+                    <TableCell className="text-center px-2">
+                      {attachmentCounts[row.id] ? (
+                        <div
+                          className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-xs font-medium"
+                          title={`Файлів: ${attachmentCounts[row.id]}`}
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          {attachmentCounts[row.id]}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Файлів немає">
+                          <Paperclip className="h-3 w-3 opacity-50" />
+                          0
+                        </span>
+                      )}
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="text-center px-2">
+                      {(() => {
+                        const Icon = quoteTypeIcon(row.quote_type);
+                        return (
+                          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                            {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                            {quoteTypeLabel(row.quote_type)}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()} className="pr-6">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-all"
+                            className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
                           >
                             <MoreVertical className="h-4 w-4" />
                           </Button>
@@ -1112,6 +1455,112 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <span>Максимум 200 символів</span>
                 <span>{comment.length}/200</span>
               </div>
+            </div>
+
+            {/* Customer Files */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Файл від замовника
+                </Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => attachmentsInputRef.current?.click()}
+                  disabled={creating || pendingAttachments.length >= MAX_ATTACHMENTS}
+                >
+                  <Upload className="h-4 w-4" />
+                  Додати
+                </Button>
+              </div>
+
+              <input
+                ref={attachmentsInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={(e) => handleAttachmentSelect(e.target.files)}
+              />
+
+              {pendingAttachments.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => attachmentsInputRef.current?.click()}
+                  disabled={creating}
+                  className={cn(
+                    "w-full rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors",
+                    "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-primary/5",
+                    creating && "opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                  <div className="text-sm font-medium text-foreground mb-1">
+                    Додайте файли для цього прорахунку
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    До {MAX_ATTACHMENTS} файлів, до 50 MB кожен
+                  </div>
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  {pendingAttachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/10 p-3"
+                    >
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted/40 flex items-center justify-center">
+                        {attachment.previewUrl ? (
+                          <img
+                            src={attachment.previewUrl}
+                            alt={attachment.file.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Paperclip className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{attachment.file.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatFileSize(attachment.file.size)}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleRemoveAttachment(attachment.id)}
+                        disabled={creating}
+                        aria-label={`Видалити ${attachment.file.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                    <span>
+                      Додано {pendingAttachments.length} / {MAX_ATTACHMENTS}
+                    </span>
+                    {pendingAttachments.length < MAX_ATTACHMENTS && (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => attachmentsInputRef.current?.click()}
+                        disabled={creating}
+                      >
+                        Додати ще
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {attachmentsError && (
+                <div className="text-xs text-destructive">{attachmentsError}</div>
+              )}
             </div>
 
             {/* Row with Assigned To and Currency */}
