@@ -178,12 +178,16 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusClasses: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground border-border",
-  sent: "bg-sky-500/15 text-sky-200 border-sky-500/40",
-  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
-  rejected: "bg-rose-500/15 text-rose-200 border-rose-500/40",
-  in_progress: "bg-amber-500/15 text-amber-200 border-amber-500/40",
-  completed: "bg-emerald-500/20 text-emerald-100 border-emerald-500/50",
+  draft: "bg-muted/40 text-muted-foreground border-border",
+  sent: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  approved:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
+  rejected:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
+  in_progress:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
+  completed:
+    "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-500/50",
 };
 
 const statusIcons: Record<string, any> = {
@@ -366,6 +370,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogSearchValue, setCatalogSearchValue] = useState("");
   const [lastAutoTitle, setLastAutoTitle] = useState("");
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineNote, setDeadlineNote] = useState("");
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
 
   // Inline editing for quantity
   const [editingQty, setEditingQty] = useState<string | null>(null);
@@ -379,6 +387,68 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const itemsSubtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + item.qty * item.price, 0);
   }, [items]);
+
+  const toDateInputValue = (value?: string | null) => {
+    if (!value) return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const formatDeadlineLabel = (value?: string | null) => {
+    if (!value) return "Без дедлайну";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Без дедлайну";
+    return date.toLocaleDateString("uk-UA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const getDeadlineBadge = (value?: string | null) => {
+    if (!value) {
+      return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
+    }
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return {
+        label: `Прострочено (${Math.abs(diffDays)} дн.)`,
+        className:
+          "border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-500/40 dark:text-rose-200 dark:bg-rose-500/15",
+      };
+    }
+    if (diffDays === 0) {
+      return {
+        label: "Сьогодні",
+        className:
+          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/40 dark:text-amber-200 dark:bg-amber-500/15",
+      };
+    }
+    if (diffDays <= 2) {
+      return {
+        label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
+        className:
+          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-100 dark:bg-amber-500/10",
+      };
+    }
+    return {
+      label: date.toLocaleDateString("uk-UA"),
+      className: "border-border/60 text-muted-foreground bg-muted/20",
+    };
+  };
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
@@ -628,6 +698,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
       setQuote(summary);
       setStatusValue(summary.status ?? "draft");
+      setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
+      setDeadlineNote(summary.deadline_note ?? "");
     } catch (e: any) {
       setError(e?.message ?? "Не вдалося завантажити прорахунок.");
       setQuote(null);
@@ -926,6 +998,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     event.preventDefault();
     event.stopPropagation();
     setAttachmentsDragActive(false);
+  };
+
+  const handleSaveDeadline = async () => {
+    if (!quote) return;
+    setDeadlineSaving(true);
+    setDeadlineError(null);
+    try {
+      const payload = {
+        deadline_at: deadlineDate || null,
+        deadline_note: deadlineNote.trim() || null,
+      };
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quotes")
+        .update(payload)
+        .eq("id", quote.id);
+      if (error) throw error;
+    } catch (e: any) {
+      setDeadlineError(e?.message ?? "Не вдалося оновити дедлайн.");
+    } finally {
+      setDeadlineSaving(false);
+    }
   };
 
   // Quick status change
@@ -1376,6 +1470,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <Badge className={cn("border", statusClasses[quote.status ?? "draft"])}>
                 {formatStatusLabel(quote.status)}
               </Badge>
+              {(() => {
+                const badge = getDeadlineBadge(quote.deadline_at ?? null);
+                const titleParts = [
+                  quote.deadline_at
+                    ? `Дата: ${new Date(quote.deadline_at).toLocaleDateString("uk-UA")}`
+                    : "Дедлайн не задано",
+                  quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
+                ].filter(Boolean);
+                return (
+                  <Badge
+                    variant="outline"
+                    className={cn("text-xs font-medium", badge.className)}
+                    title={titleParts.join(" · ")}
+                  >
+                    {badge.label}
+                  </Badge>
+                );
+              })()}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               {formatQuoteType(quote.quote_type)}
@@ -1513,6 +1625,42 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     Коментар
                   </div>
                   <div className="font-medium text-sm line-clamp-2">{quote.comment ?? "—"}</div>
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Дедлайн (готовність до відвантаження)
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[220px_1fr_auto]">
+                    <Input
+                      type="date"
+                      className="h-9"
+                      value={deadlineDate}
+                      onChange={(e) => setDeadlineDate(e.target.value)}
+                    />
+                    <Input
+                      className="h-9"
+                      placeholder="Коментар до дедлайну (опціонально)"
+                      value={deadlineNote}
+                      onChange={(e) => setDeadlineNote(e.target.value)}
+                      maxLength={200}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSaveDeadline}
+                      disabled={deadlineSaving}
+                    >
+                      {deadlineSaving ? "Збереження..." : "Зберегти"}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Поточний дедлайн: {formatDeadlineLabel(deadlineDate)}
+                  </div>
+                  {deadlineError && (
+                    <div className="text-xs text-destructive">{deadlineError}</div>
+                  )}
                 </div>
               </div>
               

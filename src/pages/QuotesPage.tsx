@@ -85,11 +85,15 @@ const statusIcons: Record<string, ComponentType<{ className?: string }>> = {
 
 const statusClasses: Record<string, string> = {
   draft: "bg-muted/40 text-muted-foreground border-border",
-  sent: "bg-sky-500/15 text-sky-200 border-sky-500/40",
-  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
-  rejected: "bg-rose-500/15 text-rose-200 border-rose-500/40",
-  in_progress: "bg-amber-500/15 text-amber-200 border-amber-500/40",
-  completed: "bg-emerald-500/20 text-emerald-100 border-emerald-500/50",
+  sent: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  approved:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
+  rejected:
+    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
+  in_progress:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
+  completed:
+    "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-500/50",
 };
 
 type QuotesPageProps = {
@@ -161,6 +165,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [selectedPrintPositionId, setSelectedPrintPositionId] = useState("");
   const [printWidthMm, setPrintWidthMm] = useState("");
   const [printHeightMm, setPrintHeightMm] = useState("");
+  const [itemQty, setItemQty] = useState("1");
+  const [itemUnit, setItemUnit] = useState("шт");
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineNote, setDeadlineNote] = useState("");
   const [comment, setComment] = useState("");
   const [assignedTo, setAssignedTo] = useState("unassigned");
   const [currency, setCurrency] = useState("UAH");
@@ -233,6 +241,56 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (diffDays === 0) return { primary: `Сьогодні, ${time}`, secondary: null };
     if (diffDays === 1) return { primary: `Вчора, ${time}`, secondary: date.toLocaleDateString("uk-UA") };
     return { primary: date.toLocaleDateString("uk-UA"), secondary: null };
+  };
+
+  const parseDateOnly = (value: string) => {
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+      return new Date(y, (m ?? 1) - 1, d ?? 1);
+    }
+    return new Date(value);
+  };
+
+  const getDeadlineBadge = (value?: string | null) => {
+    if (!value) return { label: "—", className: "text-muted-foreground", tone: "none" as const };
+    const date = parseDateOnly(value);
+    if (Number.isNaN(date.getTime())) {
+      return { label: "—", className: "text-muted-foreground", tone: "none" as const };
+    }
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return {
+        label: `Прострочено (${Math.abs(diffDays)} дн.)`,
+        className:
+          "border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-500/40 dark:text-rose-200 dark:bg-rose-500/15",
+        tone: "overdue" as const,
+      };
+    }
+    if (diffDays === 0) {
+      return {
+        label: "Сьогодні",
+        className:
+          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/40 dark:text-amber-200 dark:bg-amber-500/15",
+        tone: "today" as const,
+      };
+    }
+    if (diffDays <= 2) {
+      return {
+        label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
+        className:
+          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-100 dark:bg-amber-500/10",
+        tone: "soon" as const,
+      };
+    }
+    return {
+      label: date.toLocaleDateString("uk-UA"),
+      className: "border-border/60 text-muted-foreground bg-muted/20",
+      tone: "future" as const,
+    };
   };
 
   const formatFileSize = (bytes: number) => {
@@ -514,6 +572,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setSelectedPrintPositionId("");
     setPrintWidthMm("");
     setPrintHeightMm("");
+    setItemQty("1");
+    setItemUnit("шт");
+    setDeadlineDate("");
+    setDeadlineNote("");
     setComment("");
     setAssignedTo("unassigned");
     setCurrency("UAH");
@@ -701,6 +763,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCreateError("Оберіть місце нанесення.");
       return;
     }
+    const qtyValue = Number(itemQty);
+    if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+      setCreateError("Вкажіть коректну кількість.");
+      return;
+    }
     setCreating(true);
     try {
       const created = await createQuote({
@@ -710,9 +777,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         comment: comment.trim() || null,
         currency,
         assignedTo: assignedTo === "unassigned" ? null : assignedTo,
+        deadlineAt: deadlineDate || null,
+        deadlineNote: deadlineNote.trim() || null,
       });
       const basePrice = selectedModel?.price ?? 0;
-      const qty = 1;
+      const qty = Math.max(1, Math.floor(qtyValue));
       const width = printWidthMm.trim() ? Number(printWidthMm) : null;
       const height = printHeightMm.trim() ? Number(printHeightMm) : null;
       const methodsPayload =
@@ -741,6 +810,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           print_width_mm: width,
           print_height_mm: height,
           methods: methodsPayload,
+          unit: itemUnit,
         });
       if (itemError) throw itemError;
 
@@ -763,6 +833,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setSelectedPrintPositionId("");
       setPrintWidthMm("");
       setPrintHeightMm("");
+      setItemQty("1");
+      setItemUnit("шт");
+      setDeadlineDate("");
+      setDeadlineNote("");
       setComment("");
       setAssignedTo("unassigned");
       setCurrency("UAH");
@@ -1011,6 +1085,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       Менеджер
                     </div>
                   </TableHead>
+                  <TableHead className="w-[140px] font-semibold text-center">
+                    Дедлайн
+                  </TableHead>
                   <TableHead className="w-[120px] font-semibold text-center">Статус</TableHead>
                   <TableHead className="w-[80px] font-semibold text-center">
                     <div className="flex items-center justify-center gap-1.5">
@@ -1083,6 +1160,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center px-2">
+                      {(() => {
+                        const badge = getDeadlineBadge(row.deadline_at ?? null);
+                        const titleParts = [
+                          row.deadline_at
+                            ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
+                            : "Дедлайн не задано",
+                          row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
+                        ].filter(Boolean);
+                        return (
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs font-medium", badge.className)}
+                            title={titleParts.join(" · ")}
+                          >
+                            {badge.label}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
                       {(() => {
@@ -1438,6 +1535,51 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   inputMode="numeric"
                 />
               </div>
+            </div>
+
+            {/* Quantity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Кількість</Label>
+                <Input
+                  className="h-11"
+                  value={itemQty}
+                  onChange={(e) => setItemQty(e.target.value)}
+                  placeholder="Напр. 100"
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Одиниця</Label>
+                <Select value={itemUnit} onValueChange={setItemUnit}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="шт">шт</SelectItem>
+                    <SelectItem value="тираж">тираж</SelectItem>
+                    <SelectItem value="набір">набір</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Deadline */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Дедлайн (готовність до відвантаження)</Label>
+              <Input
+                type="date"
+                className="h-11"
+                value={deadlineDate}
+                onChange={(e) => setDeadlineDate(e.target.value)}
+              />
+              <Input
+                className="h-11"
+                value={deadlineNote}
+                onChange={(e) => setDeadlineNote(e.target.value)}
+                placeholder="Коментар до дедлайну (опціонально)"
+                maxLength={200}
+              />
             </div>
 
             {/* Comment */}

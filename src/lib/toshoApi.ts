@@ -22,6 +22,8 @@ export type QuoteListRow = {
   customer_name?: string | null;
   assigned_to?: string | null;
   processing_minutes?: number | null;
+  deadline_at?: string | null;
+  deadline_note?: string | null;
 };
 
 export type QuoteSummaryRow = QuoteListRow;
@@ -51,7 +53,7 @@ export async function listQuotes(params: ListQuotesParams) {
   let query = supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
@@ -98,6 +100,8 @@ export async function createQuote(params: {
   comment?: string | null;
   currency?: string | null;
   assignedTo?: string | null;
+  deadlineAt?: string | null;
+  deadlineNote?: string | null;
 }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   handleError(userError);
@@ -111,6 +115,8 @@ export async function createQuote(params: {
     assigned_to: params.assignedTo ?? null,
     quote_type: params.quoteType ?? null,
     print_type: params.printType ?? null,
+    deadline_at: params.deadlineAt ?? null,
+    deadline_note: params.deadlineNote ?? null,
   };
 
   if (userId) {
@@ -136,6 +142,11 @@ export async function createQuote(params: {
       delete payload.created_by;
       return await insertQuote(payload);
     }
+    if (message.includes("column") && message.includes("deadline_at")) {
+      delete payload.deadline_at;
+      delete payload.deadline_note;
+      return await insertQuote(payload);
+    }
     throw error;
   }
 }
@@ -144,7 +155,7 @@ export async function getQuoteSummary(quoteId: string) {
   const { data, error } = await supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("id", quoteId)
     .single();
   handleError(error);
