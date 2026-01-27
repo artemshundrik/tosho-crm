@@ -154,6 +154,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const customerDropdownTimer = useRef<number | null>(null);
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -178,6 +180,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+  const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [quickFilter, setQuickFilter] = useState<"all" | "draft" | "sent">("all");
@@ -583,8 +586,86 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCustomers([]);
     setPendingAttachments([]);
     setAttachmentsError(null);
+    setCreateStep(1);
+    setCustomerDropdownOpen(false);
     if (attachmentsInputRef.current) {
       attachmentsInputRef.current.value = "";
+    }
+  };
+
+  const validateStep1 = () => {
+    setCreateError(null);
+    if (!customerId) {
+      setCreateError("Оберіть клієнта.");
+      return false;
+    }
+    return true;
+  };
+
+  const closeCustomerDropdown = () => {
+    if (customerDropdownTimer.current) {
+      window.clearTimeout(customerDropdownTimer.current);
+      customerDropdownTimer.current = null;
+    }
+    setCustomerDropdownOpen(false);
+  };
+
+  const validateStep2 = () => {
+    setCreateError(null);
+    if (!selectedTypeId) {
+      setCreateError("Оберіть категорію.");
+      return false;
+    }
+    if (!selectedKindId) {
+      setCreateError("Оберіть вид продукції.");
+      return false;
+    }
+    if (!selectedModelId) {
+      setCreateError("Оберіть модель.");
+      return false;
+    }
+    const qtyValue = Number(itemQty);
+    if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+      setCreateError("Вкажіть коректну кількість.");
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep3 = () => {
+    setCreateError(null);
+    if (!selectedPrintPositionId) {
+      setCreateError("Оберіть місце нанесення.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleStepChange = (target: 1 | 2 | 3 | 4) => {
+    if (target <= createStep) {
+      setCreateStep(target);
+      return;
+    }
+    if (target === 2 && validateStep1()) {
+      setCreateStep(2);
+    }
+    if (target === 3 && validateStep1() && validateStep2()) {
+      setCreateStep(3);
+    }
+    if (target === 4 && validateStep1() && validateStep2() && validateStep3()) {
+      setCreateStep(4);
+    }
+  };
+
+  const handleNextStep = () => {
+    if (createStep === 1 && validateStep1()) {
+      setCreateStep(2);
+    }
+    if (createStep === 2 && validateStep2()) {
+      setCreateStep(3);
+    }
+    if (createStep === 3 && validateStep3()) {
+      setCreateStep(4);
     }
   };
 
@@ -743,31 +824,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const handleCreate = async () => {
     setCreateError(null);
-    if (!customerId) {
-      setCreateError("Оберіть клієнта.");
-      return;
-    }
-    if (!selectedTypeId) {
-      setCreateError("Оберіть категорію.");
-      return;
-    }
-    if (!selectedKindId) {
-      setCreateError("Оберіть вид продукції.");
-      return;
-    }
-    if (!selectedModelId) {
-      setCreateError("Оберіть модель.");
-      return;
-    }
-    if (!selectedPrintPositionId) {
-      setCreateError("Оберіть місце нанесення.");
-      return;
-    }
+    if (!validateStep1() || !validateStep2() || !validateStep3()) return;
     const qtyValue = Number(itemQty);
-    if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
-      setCreateError("Вкажіть коректну кількість.");
-      return;
-    }
     setCreating(true);
     try {
       const created = await createQuote({
@@ -800,7 +858,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           name: selectedModel?.name ?? "Позиція",
           description: null,
           qty,
-          unit: "шт",
           unit_price: basePrice,
           line_total: qty * basePrice,
           catalog_type_id: selectedTypeId,
@@ -1282,115 +1339,207 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Create Dialog - Improved */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 overflow-hidden sm:mx-6">
           <div className="p-6 border-b border-border bg-gradient-to-r from-muted/10 to-transparent">
-            <DialogHeader>
+            <DialogHeader className="space-y-3">
               <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                 <PlusIcon className="h-5 w-5" />
                 Новий прорахунок
               </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground mt-2">
-                Створіть прорахунок для клієнта. Після створення ви зможете додати позиції.
-              </DialogDescription>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3 text-xs font-semibold">
+                  {[1, 2, 3, 4].map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      onClick={() => handleStepChange(step as 1 | 2 | 3 | 4)}
+                      className={cn(
+                        "flex items-center gap-2 transition-colors",
+                        step === createStep
+                          ? "text-foreground"
+                          : step < createStep
+                          ? "text-muted-foreground"
+                          : "text-muted-foreground/70"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-7 w-7 rounded-full border flex items-center justify-center text-[11px] font-semibold",
+                          step === createStep
+                            ? "border-primary/40 bg-primary/10 text-foreground"
+                            : step < createStep
+                            ? "border-border/60 bg-muted/30 text-muted-foreground"
+                            : "border-border/50 bg-muted/10 text-muted-foreground/70"
+                        )}
+                      >
+                        {step}
+                      </span>
+                      {step === 1 && "Клієнт"}
+                      {step === 2 && "Продукція"}
+                      {step === 3 && "Технічні"}
+                      {step === 4 && "Додатково"}
+                    </button>
+                  ))}
+                </div>
+                <div className="ml-auto text-xs text-muted-foreground">
+                  Крок {createStep} з 4
+                </div>
+              </div>
             </DialogHeader>
           </div>
 
-          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-180px)]">
-            {/* Customer Search */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Клієнт <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="h-11 pl-10"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  placeholder="Почніть вводити назву клієнта..."
-                  disabled={creating}
-                />
-              </div>
-              
-              {customerSearch.trim() && (
-                <div className="max-h-48 overflow-auto rounded-lg border border-border bg-background">
-                  {customersLoading ? (
-                    <div className="px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Завантаження...
-                    </div>
-                  ) : customers.length === 0 ? (
-                    <div className="px-4 py-8 text-center">
-                      <p className="text-sm text-muted-foreground mb-3">Клієнтів не знайдено</p>
-                      <Button size="sm" variant="outline" className="gap-2">
-                        <UserPlus className="h-4 w-4" />
-                        Створити нового клієнта
-                      </Button>
-                    </div>
-                  ) : (
-                    customers.map((c) => {
-                      const label = c.name || c.legal_name || "Без назви";
-                      const isSelected = customerId === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setCustomerId(c.id);
-                            setCustomerSearch(label);
-                          }}
-                          className={cn(
-                            "w-full px-4 py-3 text-left text-sm hover:bg-muted/60 transition-colors flex items-center justify-between",
-                            isSelected && "bg-primary/10 hover:bg-primary/20"
-                          )}
-                          disabled={creating}
-                        >
-                          <span className="font-medium">{label}</span>
-                          {isSelected && <ChevronRight className="h-4 w-4 text-primary" />}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-              
-              {customerLabel && (
-                <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-2 rounded-md flex items-center gap-2">
-                  <Building2 className="h-3 w-3" />
-                  Обрано: <span className="font-medium">{customerLabel}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Quote Type */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Тип прорахунку</Label>
-              <Tabs value={quoteType} onValueChange={setQuoteType}>
-                <TabsList className="grid w-full grid-cols-3 gap-2 bg-transparent p-0">
-                  {QUOTE_TYPE_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    return (
-                      <TabsTrigger
-                        key={option.id}
-                        value={option.id}
-                        className={cn(
-                          "h-11 gap-2 rounded-xl border border-border/60 bg-muted/20 text-sm font-semibold",
-                          "data-[state=active]:bg-primary/10 data-[state=active]:border-primary/40 data-[state=active]:text-foreground",
-                          "hover:bg-muted/40"
-                        )}
+          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-190px)]">
+            {createStep === 1 && (
+              <>
+                {/* Customer Search */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Клієнт <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="h-11 pl-10"
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                        if (!e.target.value.trim()) {
+                          setCustomerId("");
+                        }
+                      }}
+                      onFocus={() => {
+                        if (customerDropdownTimer.current) {
+                          window.clearTimeout(customerDropdownTimer.current);
+                          customerDropdownTimer.current = null;
+                        }
+                        setCustomerDropdownOpen(true);
+                      }}
+                      onBlur={() => {
+                        customerDropdownTimer.current = window.setTimeout(() => {
+                          setCustomerDropdownOpen(false);
+                        }, 120);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          closeCustomerDropdown();
+                        }
+                      }}
+                      placeholder="Почніть вводити назву клієнта..."
+                      disabled={creating}
+                      aria-expanded={customerDropdownOpen}
+                    />
+                    {customerId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerId("");
+                          setCustomerSearch("");
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
-                        <Icon className="h-4 w-4" />
-                        {option.label}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-              </Tabs>
-            </div>
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
 
-            {/* Catalog Selection */}
-            <div className="space-y-3">
+                    {customerDropdownOpen && customerSearch.trim() && (
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1 z-30 max-h-52 overflow-auto rounded-lg border border-border bg-background shadow-lg"
+                        onMouseDown={(event) => event.preventDefault()}
+                      >
+                        {customersLoading ? (
+                          <div className="px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Завантаження...
+                          </div>
+                        ) : customers.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <p className="text-sm text-muted-foreground mb-3">Клієнтів не знайдено</p>
+                            <Button size="sm" variant="outline" className="gap-2">
+                              <UserPlus className="h-4 w-4" />
+                              Створити нового клієнта
+                            </Button>
+                          </div>
+                        ) : (
+                          customers.map((c) => {
+                            const label = c.name || c.legal_name || "Без назви";
+                            const isSelected = customerId === c.id;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setCustomerId(c.id);
+                                  setCustomerSearch(label);
+                                  closeCustomerDropdown();
+                                }}
+                                className={cn(
+                                  "w-full px-4 py-3 text-left text-sm hover:bg-muted/60 transition-colors flex items-center justify-between",
+                                  isSelected && "bg-primary/10 hover:bg-primary/20"
+                                )}
+                                disabled={creating}
+                              >
+                                <span className="font-medium">{label}</span>
+                                {isSelected && <ChevronRight className="h-4 w-4 text-primary" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quote Type */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">Тип прорахунку</Label>
+                  <Tabs value={quoteType} onValueChange={setQuoteType}>
+                    <TabsList className="grid w-full grid-cols-3 gap-2 bg-transparent p-0">
+                      {QUOTE_TYPE_OPTIONS.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <TabsTrigger
+                            key={option.id}
+                            value={option.id}
+                            className={cn(
+                              "h-11 gap-2 rounded-xl border border-border/60 bg-muted/20 text-sm font-semibold",
+                              "data-[state=active]:bg-primary/10 data-[state=active]:border-primary/40 data-[state=active]:text-foreground",
+                              "hover:bg-muted/40"
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {option.label}
+                          </TabsTrigger>
+                        );
+                      })}
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                {/* Deadline */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Дедлайн (готовність до відвантаження)</Label>
+                  <Input
+                    type="date"
+                    className="h-11"
+                    value={deadlineDate}
+                    onChange={(e) => setDeadlineDate(e.target.value)}
+                  />
+                  <Input
+                    className="h-11"
+                    value={deadlineNote}
+                    onChange={(e) => setDeadlineNote(e.target.value)}
+                    placeholder="Коментар до дедлайну (опціонально)"
+                    maxLength={200}
+                  />
+                </div>
+              </>
+            )}
+
+            {createStep === 2 && (
+              <>
+                {/* Catalog Selection */}
+                <div className="space-y-3">
               <Label className="text-sm font-semibold">Категорія</Label>
               <Select value={selectedTypeId} onValueChange={(value) => {
                 setSelectedTypeId(value);
@@ -1457,8 +1606,40 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </div>
             </div>
 
-            {/* Methods */}
-            <div className="space-y-2">
+            {/* Quantity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Кількість</Label>
+                <Input
+                  className="h-11"
+                  value={itemQty}
+                  onChange={(e) => setItemQty(e.target.value)}
+                  placeholder="Напр. 100"
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Одиниця</Label>
+                <Select value={itemUnit} onValueChange={setItemUnit}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="шт">шт</SelectItem>
+                    <SelectItem value="тираж">тираж</SelectItem>
+                    <SelectItem value="набір">набір</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+              </>
+            )}
+
+            {createStep === 3 && (
+              <>
+                {/* Methods */}
+                <div className="space-y-2">
               <Label className="text-sm font-semibold">Типи нанесення</Label>
               {availableMethods.length === 0 ? (
                 <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg px-3 py-2">
@@ -1537,210 +1718,161 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </div>
             </div>
 
-            {/* Quantity */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Кількість</Label>
-                <Input
-                  className="h-11"
-                  value={itemQty}
-                  onChange={(e) => setItemQty(e.target.value)}
-                  placeholder="Напр. 100"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Одиниця</Label>
-                <Select value={itemUnit} onValueChange={setItemUnit}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="шт">шт</SelectItem>
-                    <SelectItem value="тираж">тираж</SelectItem>
-                    <SelectItem value="набір">набір</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+              </>
+            )}
 
-            {/* Deadline */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Дедлайн (готовність до відвантаження)</Label>
-              <Input
-                type="date"
-                className="h-11"
-                value={deadlineDate}
-                onChange={(e) => setDeadlineDate(e.target.value)}
-              />
-              <Input
-                className="h-11"
-                value={deadlineNote}
-                onChange={(e) => setDeadlineNote(e.target.value)}
-                placeholder="Коментар до дедлайну (опціонально)"
-                maxLength={200}
-              />
-            </div>
-
-            {/* Comment */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Коментар (опціонально)</Label>
-              <Textarea
-                className="min-h-[80px] resize-none"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Додайте короткий опис або примітки..."
-                maxLength={200}
-                disabled={creating}
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Максимум 200 символів</span>
-                <span>{comment.length}/200</span>
-              </div>
-            </div>
-
-            {/* Customer Files */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Файл від замовника
-                </Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => attachmentsInputRef.current?.click()}
-                  disabled={creating || pendingAttachments.length >= MAX_ATTACHMENTS}
-                >
-                  <Upload className="h-4 w-4" />
-                  Додати
-                </Button>
-              </div>
-
-              <input
-                ref={attachmentsInputRef}
-                type="file"
-                className="hidden"
-                multiple
-                onChange={(e) => handleAttachmentSelect(e.target.files)}
-              />
-
-              {pendingAttachments.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => attachmentsInputRef.current?.click()}
-                  disabled={creating}
-                  className={cn(
-                    "w-full rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors",
-                    "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-primary/5",
-                    creating && "opacity-60 cursor-not-allowed"
-                  )}
-                >
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
-                  <div className="text-sm font-medium text-foreground mb-1">
-                    Додайте файли для цього прорахунку
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    До {MAX_ATTACHMENTS} файлів, до 50 MB кожен
-                  </div>
-                </button>
-              ) : (
+            {createStep === 4 && (
+              <>
+                {/* Comment */}
                 <div className="space-y-2">
-                  {pendingAttachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/10 p-3"
-                    >
-                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted/40 flex items-center justify-center">
-                        {attachment.previewUrl ? (
-                          <img
-                            src={attachment.previewUrl}
-                            alt={attachment.file.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Paperclip className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">{attachment.file.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatFileSize(attachment.file.size)}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleRemoveAttachment(attachment.id)}
-                        disabled={creating}
-                        aria-label={`Видалити ${attachment.file.name}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-                    <span>
-                      Додано {pendingAttachments.length} / {MAX_ATTACHMENTS}
-                    </span>
-                    {pendingAttachments.length < MAX_ATTACHMENTS && (
-                      <button
-                        type="button"
-                        className="text-primary hover:underline"
-                        onClick={() => attachmentsInputRef.current?.click()}
-                        disabled={creating}
-                      >
-                        Додати ще
-                      </button>
-                    )}
+                  <Label className="text-sm font-semibold">Коментар (опціонально)</Label>
+                  <Textarea
+                    className="min-h-[80px] resize-none"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Додайте короткий опис або примітки..."
+                    maxLength={200}
+                    disabled={creating}
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Максимум 200 символів</span>
+                    <span>{comment.length}/200</span>
                   </div>
                 </div>
-              )}
 
-              {attachmentsError && (
-                <div className="text-xs text-destructive">{attachmentsError}</div>
-              )}
-            </div>
+                {/* Customer Files */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Файл від замовника
+                    </Label>
+                  </div>
 
-            {/* Row with Assigned To and Currency */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Відповідальний
-                </Label>
-                <Select value={assignedTo} onValueChange={setAssignedTo} disabled={creating}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Не призначати" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Не призначати</SelectItem>
-                    {teamMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <input
+                    ref={attachmentsInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={(e) => handleAttachmentSelect(e.target.files)}
+                  />
 
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Валюта</Label>
-                <Select value={currency} onValueChange={setCurrency} disabled={creating}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UAH">UAH (₴)</SelectItem>
-                    <SelectItem value="USD">USD ($)</SelectItem>
-                    <SelectItem value="EUR">EUR (€)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                  {pendingAttachments.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => attachmentsInputRef.current?.click()}
+                      disabled={creating}
+                      className={cn(
+                        "w-full rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors",
+                        "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-primary/5",
+                        creating && "opacity-60 cursor-not-allowed"
+                      )}
+                    >
+                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                      <div className="text-sm font-medium text-foreground mb-1">
+                        Додайте файли для цього прорахунку
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        До {MAX_ATTACHMENTS} файлів, до 50 MB кожен
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingAttachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/10 p-3"
+                        >
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted/40 flex items-center justify-center">
+                            {attachment.previewUrl ? (
+                              <img
+                                src={attachment.previewUrl}
+                                alt={attachment.file.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Paperclip className="h-5 w-5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{attachment.file.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatFileSize(attachment.file.size)}
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRemoveAttachment(attachment.id)}
+                            disabled={creating}
+                            aria-label={`Видалити ${attachment.file.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                        <span>
+                          Додано {pendingAttachments.length} / {MAX_ATTACHMENTS}
+                        </span>
+                        {pendingAttachments.length < MAX_ATTACHMENTS && (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => attachmentsInputRef.current?.click()}
+                            disabled={creating}
+                          >
+                            Додати ще
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {attachmentsError && (
+                    <div className="text-xs text-destructive">{attachmentsError}</div>
+                  )}
+                </div>
+
+                {/* Row with Assigned To and Currency */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Відповідальний
+                    </Label>
+                    <Select value={assignedTo} onValueChange={setAssignedTo} disabled={creating}>
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Не призначати" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Не призначати</SelectItem>
+                        {teamMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Валюта</Label>
+                    <Select value={currency} onValueChange={setCurrency} disabled={creating}>
+                      <SelectTrigger className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UAH">UAH (₴)</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            )}
 
             {createError && (
               <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-start gap-2">
@@ -1754,30 +1886,48 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
               Скасувати
             </Button>
-            <Button
-              onClick={handleCreate}
-              disabled={
-                creating ||
-                !customerId ||
-                !selectedTypeId ||
-                !selectedKindId ||
-                !selectedModelId ||
-                !selectedPrintPositionId
-              }
-              className="gap-2"
-            >
-              {creating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Створення...
-                </>
-              ) : (
-                <>
-                  <PlusIcon className="h-4 w-4" />
-                  Створити
-                </>
+            <div className="flex items-center gap-2">
+              {createStep > 1 && (
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateStep((prev) => (prev - 1) as 1 | 2 | 3 | 4)}
+                  disabled={creating}
+                >
+                  Назад
+                </Button>
               )}
-            </Button>
+              {createStep < 4 && (
+                <Button onClick={handleNextStep} disabled={creating}>
+                  Далі
+                </Button>
+              )}
+              {createStep === 4 && (
+                <Button
+                  onClick={handleCreate}
+                  disabled={
+                    creating ||
+                    !customerId ||
+                    !selectedTypeId ||
+                    !selectedKindId ||
+                    !selectedModelId ||
+                    !selectedPrintPositionId
+                  }
+                  className="gap-2"
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Створення...
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon className="h-4 w-4" />
+                      Створити
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
