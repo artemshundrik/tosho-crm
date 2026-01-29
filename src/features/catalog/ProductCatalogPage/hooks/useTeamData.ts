@@ -24,7 +24,9 @@ export function useTeamData() {
     let cancelled = false;
 
     const loadTeamId = async () => {
-      setTeamLoading(true);
+      if (!teamId) {
+        setTeamLoading(true);
+      }
       setTeamError(null);
 
       const { data: userData, error: userError } = await supabase.auth.getUser();

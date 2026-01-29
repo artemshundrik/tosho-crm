@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { logActivity } from "@/lib/activityLogger";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import {
   getQuoteSummary,
@@ -50,7 +51,10 @@ import {
   MessageSquare,
   Check,
   Clock,
+  Hourglass,
+  PlusCircle,
   Send,
+  Sparkles,
   XCircle,
   PlayCircle,
   CheckCircle2,
@@ -95,6 +99,33 @@ const getFileExtension = (name?: string | null) => {
   const parts = name.split(".");
   if (parts.length < 2) return null;
   return parts[parts.length - 1]?.toUpperCase() ?? null;
+};
+
+const IMAGE_PREVIEW_EXTENSIONS = new Set(["PNG", "JPG", "JPEG", "WEBP", "GIF", "SVG"]);
+
+const canPreviewImage = (extension?: string | null) =>
+  !!extension && IMAGE_PREVIEW_EXTENSIONS.has(extension);
+
+const canPreviewPdf = (extension?: string | null) => extension === "PDF";
+
+const CANCEL_REASON_OPTIONS = [
+  "Бюджет не підходить",
+  "Обрали іншого підрядника",
+  "Змінились вимоги/бриф",
+  "Втрата актуальності",
+  "Немає відповіді від клієнта",
+];
+
+const normalizeStatus = (value?: string | null) => {
+  if (!value) return "new";
+  const legacy: Record<string, string> = {
+    draft: "new",
+    in_progress: "estimating",
+    sent: "estimated",
+    rejected: "cancelled",
+    completed: "approved",
+  };
+  return legacy[value] ?? value;
 };
 
 type CatalogMethod = { id: string; name: string; price?: number };
@@ -166,37 +197,51 @@ type QuoteAttachment = {
   storagePath?: string | null;
 };
 
-const STATUS_OPTIONS = ["draft", "sent", "approved", "rejected", "in_progress", "completed"];
+const STATUS_OPTIONS = [
+  "new",
+  "estimating",
+  "estimated",
+  "awaiting_approval",
+  "approved",
+  "cancelled",
+];
 
 const statusLabels: Record<string, string> = {
-  draft: "Чернетка",
-  sent: "Надіслано",
-  approved: "Погоджено",
-  rejected: "Відхилено",
-  in_progress: "В роботі",
-  completed: "Завершено",
+  new: "Новий",
+  estimating: "На прорахунку",
+  estimated: "Пораховано",
+  awaiting_approval: "На погодженні",
+  approved: "Затверджено",
+  cancelled: "Скасовано",
+  // legacy mapping (до міграції БД)
+  draft: "Новий",
+  in_progress: "На прорахунку",
+  sent: "Пораховано",
+  rejected: "Скасовано",
+  completed: "Затверджено",
 };
 
 const statusClasses: Record<string, string> = {
-  draft: "bg-muted/40 text-muted-foreground border-border",
-  sent: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  new: "bg-muted/40 text-muted-foreground border-border",
+  estimating:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
+  estimated:
+    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  awaiting_approval:
+    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/40",
   approved:
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
-  rejected:
+  cancelled:
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
-  in_progress:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
-  completed:
-    "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-500/50",
 };
 
 const statusIcons: Record<string, any> = {
-  draft: Clock,
-  sent: Send,
-  approved: Check,
-  rejected: XCircle,
-  in_progress: PlayCircle,
-  completed: CheckCircle2,
+  new: PlusCircle,
+  estimating: PlayCircle,
+  estimated: Send,
+  awaiting_approval: Hourglass,
+  approved: CheckCircle2,
+  cancelled: XCircle,
 };
 
 const QUOTE_TYPE_LABELS: Record<string, string> = {
@@ -318,10 +363,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusValue, setStatusValue] = useState("draft");
   const [statusNote, setStatusNote] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const [history, setHistory] = useState<QuoteStatusRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -454,6 +502,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
     [teamMembers]
   );
+  const currentStatus = normalizeStatus(quote?.status);
 
   const totals = useMemo(() => {
     const subtotal = itemsSubtotal;
@@ -697,7 +746,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         throw new Error("Немає доступу до цього прорахунку.");
       }
       setQuote(summary);
-      setStatusValue(summary.status ?? "draft");
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
       setDeadlineNote(summary.deadline_note ?? "");
     } catch (e: any) {
@@ -974,7 +1022,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadHistory();
     void loadItems();
     void loadAttachments();
-  }, [quoteId, teamId, memberById]);
+  }, [quoteId, teamId]);
+
+  useEffect(() => {
+    if (attachments.length === 0 || memberById.size === 0) return;
+    setAttachments((prev) =>
+      prev.map((item) => {
+        if (!item.uploadedBy) return item;
+        const nextLabel =
+          memberById.get(item.uploadedBy) ?? item.uploadedByLabel ?? "Невідомий користувач";
+        if (nextLabel === item.uploadedByLabel) return item;
+        return { ...item, uploadedByLabel: nextLabel };
+      })
+    );
+  }, [memberById, attachments.length]);
 
   useEffect(() => {
     if (itemAttachmentUploading) return;
@@ -1023,17 +1084,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   // Quick status change
-  const handleQuickStatusChange = async (newStatus: string) => {
-    setStatusValue(newStatus);
+  const handleQuickStatusChange = async (newStatus: string, noteOverride?: string) => {
+    const nextStatus = normalizeStatus(newStatus);
     setStatusBusy(true);
     setStatusError(null);
     try {
-      const note = statusNote.trim();
+      const note = (noteOverride ?? statusNote).trim();
       await setStatus({
         quoteId,
-        status: newStatus,
+        status: nextStatus,
         note: note ? note : undefined,
       });
+      if (nextStatus === "approved" && normalizeStatus(quote?.status) !== "approved") {
+        await Promise.allSettled([
+          logActivity({
+            teamId,
+            action: "створив задачу",
+            entityType: "quotes",
+            entityId: quoteId,
+            title: `Задача для дизайнера: макет для прорахунку ${quote?.number ?? ""}`.trim(),
+            href: `/orders/estimates/${quoteId}`,
+            metadata: { role: "designer", source: "quote_status", status: nextStatus },
+          }),
+          logActivity({
+            teamId,
+            action: "створив задачу",
+            entityType: "quotes",
+            entityId: quoteId,
+            title: `Задача для бухгалтера: рахунок для прорахунку ${quote?.number ?? ""}`.trim(),
+            href: `/orders/estimates/${quoteId}`,
+            metadata: { role: "accountant", source: "quote_status", status: nextStatus },
+          }),
+        ]);
+      }
       await loadQuote();
       await loadHistory();
       setStatusNote("");
@@ -1042,6 +1125,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     } finally {
       setStatusBusy(false);
     }
+  };
+
+  const buildCancelNote = () => {
+    const parts = [];
+    if (cancelReason.trim()) parts.push(cancelReason.trim());
+    if (cancelNote.trim()) parts.push(cancelNote.trim());
+    return parts.join(". ").trim();
+  };
+
+  const handleConfirmCancel = async () => {
+    const note = buildCancelNote();
+    if (!note) {
+      setCancelError("Оберіть причину або введіть її вручну.");
+      return;
+    }
+    setCancelError(null);
+    await handleQuickStatusChange("cancelled", note);
+    setCancelDialogOpen(false);
+    setCancelReason("");
+    setCancelNote("");
   };
 
   // Inline quantity editing
@@ -1467,8 +1570,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <h1 className="text-2xl font-bold">
                 Прорахунок #{quote.number ?? quote.id}
               </h1>
-              <Badge className={cn("border", statusClasses[quote.status ?? "draft"])}>
-                {formatStatusLabel(quote.status)}
+              <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
+                {formatStatusLabel(currentStatus)}
               </Badge>
               {(() => {
                 const badge = getDeadlineBadge(quote.deadline_at ?? null);
@@ -1501,7 +1604,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2" disabled={statusBusy}>
-                {createElement(statusIcons[quote.status ?? "draft"], { className: "h-4 w-4" })}
+                {createElement(statusIcons[currentStatus] ?? Clock, { className: "h-4 w-4" })}
                 Змінити статус
                 <ChevronDown className="h-3 w-3" />
               </Button>
@@ -1511,11 +1614,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <p className="text-xs text-muted-foreground mb-3 font-medium">Оберіть новий статус</p>
                 {STATUS_OPTIONS.map((s) => {
                   const Icon = statusIcons[s];
-                  const isActive = s === quote.status;
+                  const isActive = s === currentStatus;
                   return (
                     <DropdownMenuItem
                       key={s}
-                      onClick={() => !isActive && handleQuickStatusChange(s)}
+                      onClick={() => {
+                        if (isActive) return;
+                        if (s === "cancelled") {
+                          setCancelDialogOpen(true);
+                          setCancelReason("");
+                          setCancelNote("");
+                          setCancelError(null);
+                          return;
+                        }
+                        handleQuickStatusChange(s);
+                      }}
                       className={cn(
                         "gap-2 cursor-pointer",
                         isActive && "bg-primary/10 text-primary cursor-default"
@@ -1574,6 +1687,74 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           {statusError}
         </div>
       )}
+
+      <Dialog
+        open={cancelDialogOpen}
+        onOpenChange={(open) => {
+          setCancelDialogOpen(open);
+          if (!open) {
+            setCancelError(null);
+            setCancelReason("");
+            setCancelNote("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+          <DialogHeader className="p-5 border-b border-border/60 bg-muted/10">
+            <DialogTitle className="text-lg">Скасування прорахунку</DialogTitle>
+          </DialogHeader>
+          <div className="p-5 space-y-4">
+            <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+              Вкажи причину скасування — вона збережеться в історії та допоможе аналізу.
+            </div>
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm">Причина (з переліку)</Label>
+                <Select value={cancelReason} onValueChange={setCancelReason}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Оберіть причину" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANCEL_REASON_OPTIONS.map((reason) => (
+                      <SelectItem key={reason} value={reason}>
+                        {reason}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Коментар (опціонально)</Label>
+                <Textarea
+                  value={cancelNote}
+                  onChange={(e) => setCancelNote(e.target.value)}
+                  placeholder="Додай деталі, якщо потрібно..."
+                  className="min-h-[96px]"
+                />
+              </div>
+            </div>
+            {cancelError && <div className="text-xs text-destructive">{cancelError}</div>}
+          </div>
+          <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCancelDialogOpen(false)}
+              disabled={statusBusy}
+            >
+              Закрити
+            </Button>
+            <Button
+              size="sm"
+              variant="destructiveSolid"
+              onClick={handleConfirmCancel}
+              disabled={statusBusy || (!cancelReason.trim() && !cancelNote.trim())}
+            >
+              Підтвердити скасування
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)]">
         <div className="space-y-6">
@@ -2114,14 +2295,31 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               >
                 {attachments.map((file) => {
                   const extension = getFileExtension(file.name);
+                  const showImagePreview = !!file.url && canPreviewImage(extension);
+                  const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
                   return (
                     <div 
                       key={file.id} 
                       className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Paperclip className="h-5 w-5 text-primary" />
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-visible">
+                          {showImagePreview ? (
+                            <img
+                              src={file.url}
+                              alt={file.name}
+                              className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-150"
+                              loading="lazy"
+                            />
+                          ) : showPdfPreview ? (
+                            <iframe
+                              src={`${file.url}#page=1&view=FitH`}
+                              title={`Preview ${file.name}`}
+                              className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
+                            />
+                          ) : (
+                            <Paperclip className="h-5 w-5 text-primary" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -2135,7 +2333,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {file.size} · {new Date(file.created_at).toLocaleDateString("uk-UA")}
+                            {file.size} ·{" "}
+                            {new Date(file.created_at).toLocaleString("uk-UA", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                             {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
                           </div>
                         </div>
@@ -2214,7 +2419,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 
                 <div className="space-y-6">
                   {history.map((item) => {
-                    const Icon = statusIcons[item.to_status ?? "draft"] || Clock;
+                    const toStatus = normalizeStatus(item.to_status);
+                    const fromStatus = normalizeStatus(item.from_status);
+                    const Icon = statusIcons[toStatus] || Clock;
                     
                     return (
                       <div key={item.id} className="relative pl-12">
@@ -2222,7 +2429,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="absolute left-0 flex items-center justify-center">
                           <div className={cn(
                             "h-8 w-8 rounded-full border-2 bg-background flex items-center justify-center",
-                            statusClasses[item.to_status ?? "draft"]
+                            statusClasses[toStatus] ?? statusClasses.new
                           )}>
                             <Icon className="h-4 w-4" />
                           </div>
@@ -2232,7 +2439,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="rounded-lg border border-border/60 p-3 bg-card hover:bg-muted/20 transition-colors">
                           <div className="flex items-start justify-between mb-1">
                             <div className="font-medium text-sm">
-                              {formatStatusLabel(item.from_status)} → {formatStatusLabel(item.to_status)}
+                              {formatStatusLabel(fromStatus)} → {formatStatusLabel(toStatus)}
                             </div>
                             <div className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                               {item.created_at && new Date(item.created_at).toLocaleString("uk-UA", {

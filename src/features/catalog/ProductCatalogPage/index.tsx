@@ -11,7 +11,7 @@
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { exportToCSV } from "@/utils/catalogUtils";
 
 // Hooks
@@ -296,7 +296,12 @@ export default function ProductCatalogPage() {
 
   // Loading states
   if (teamLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
+    return (
+      <div className="p-12 text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
+        <p className="text-sm text-muted-foreground">Завантаження...</p>
+      </div>
+    );
   }
 
   if (teamError) {
@@ -311,8 +316,13 @@ export default function ProductCatalogPage() {
     );
   }
 
-  if (catalogLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Завантаження каталогу...</div>;
+  if (catalogLoading && catalog.length === 0) {
+    return (
+      <div className="p-12 text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
+        <p className="text-sm text-muted-foreground">Завантаження каталогу...</p>
+      </div>
+    );
   }
 
   if (catalogError) {

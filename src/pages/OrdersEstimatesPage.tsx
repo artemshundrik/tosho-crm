@@ -17,7 +17,9 @@ export default function OrdersEstimatesPage() {
     let cancelled = false;
 
     const loadTeamId = async () => {
-      setLoading(true);
+      if (!teamId) {
+        setLoading(true);
+      }
       setError(null);
 
       const { data: userData, error: userError } = await supabase.auth.getUser();

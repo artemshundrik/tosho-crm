@@ -524,7 +524,7 @@ function AppRoutes() {
 
 
   return (
-    <Routes location={location} key={location.pathname}>
+    <Routes location={location}>
       {/* public */}
       {import.meta.env.DEV ? (
         <>

@@ -116,7 +116,7 @@ const ROUTES = {
 const baseSidebarLinks: SidebarLink[] = [
   // Замовлення
   { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator },
-  { label: "У виробництві", to: ROUTES.ordersProduction, group: "orders", icon: Factory },
+  { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory },
   { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck },
 
   // Фінанси

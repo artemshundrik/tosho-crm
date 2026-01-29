@@ -23,7 +23,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,6 +53,8 @@ import {
   XCircle,
   PlayCircle,
   Check,
+  Hourglass,
+  PlusCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -63,37 +64,63 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const STATUS_OPTIONS = ["draft", "sent", "approved", "rejected", "in_progress", "completed"];
+const STATUS_OPTIONS = [
+  "new",
+  "estimating",
+  "estimated",
+  "awaiting_approval",
+  "approved",
+  "cancelled",
+];
 
 const statusLabels: Record<string, string> = {
-  draft: "Чернетка",
-  sent: "Надіслано",
-  approved: "Погоджено",
-  rejected: "Відхилено",
-  in_progress: "В роботі",
-  completed: "Завершено",
+  new: "Новий",
+  estimating: "На прорахунку",
+  estimated: "Пораховано",
+  awaiting_approval: "На погодженні",
+  approved: "Затверджено",
+  cancelled: "Скасовано",
+  // legacy mapping (до міграції БД)
+  draft: "Новий",
+  in_progress: "На прорахунку",
+  sent: "Пораховано",
+  rejected: "Скасовано",
+  completed: "Затверджено",
 };
 
 const statusIcons: Record<string, ComponentType<{ className?: string }>> = {
-  draft: Clock,
-  sent: PlayCircle,
+  new: PlusCircle,
+  estimating: PlayCircle,
+  estimated: Check,
+  awaiting_approval: Hourglass,
   approved: CheckCircle2,
-  rejected: XCircle,
-  in_progress: PlayCircle,
-  completed: Check,
+  cancelled: XCircle,
 };
 
 const statusClasses: Record<string, string> = {
-  draft: "bg-muted/40 text-muted-foreground border-border",
-  sent: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  new: "bg-muted/40 text-muted-foreground border-border",
+  estimating:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
+  estimated:
+    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
+  awaiting_approval:
+    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/40",
   approved:
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
-  rejected:
+  cancelled:
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
-  in_progress:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
-  completed:
-    "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-500/50",
+};
+
+const normalizeStatus = (value?: string | null) => {
+  if (!value) return "new";
+  const legacy: Record<string, string> = {
+    draft: "new",
+    in_progress: "estimating",
+    sent: "estimated",
+    rejected: "cancelled",
+    completed: "approved",
+  };
+  return legacy[value] ?? value;
 };
 
 type QuotesPageProps = {
@@ -183,7 +210,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [quickFilter, setQuickFilter] = useState<"all" | "draft" | "sent">("all");
+  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">("all");
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
@@ -211,11 +238,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const availableMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
 
-  const formatStatusLabel = (value: string | null | undefined) =>
-    (value && statusLabels[value]) || value || "—";
+  const formatStatusLabel = (value: string | null | undefined) => {
+    const normalized = normalizeStatus(value);
+    return (normalized && statusLabels[normalized]) || value || "—";
+  };
 
-  const statusPillClasses = (value: string | null | undefined) =>
-    statusClasses[value ?? ""] ?? "bg-muted/40 text-muted-foreground border-border";
+  const statusPillClasses = (value: string | null | undefined) => {
+    const normalized = normalizeStatus(value);
+    return statusClasses[normalized] ?? "bg-muted/40 text-muted-foreground border-border";
+  };
 
   const customerLabel = useMemo(() => {
     if (!customerId) return "";
@@ -536,15 +567,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   useEffect(() => {
-    void loadQuotes();
-  }, [teamId, status]);
-
-  useEffect(() => {
+    if (!teamId) return;
+    const delay = search.trim() ? 350 : 0;
     const id = window.setTimeout(() => {
       void loadQuotes();
-    }, 350);
+    }, delay);
     return () => window.clearTimeout(id);
-  }, [search]);
+  }, [teamId, status, search]);
 
   const handleRowStatusChange = async (quoteId: string, nextStatus: string) => {
     setRowStatusBusy(quoteId);
@@ -930,10 +959,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     let filtered = [...rows];
     
     // Quick filters
-    if (quickFilter === "draft") {
-      filtered = filtered.filter(row => row.status === "draft");
-    } else if (quickFilter === "sent") {
-      filtered = filtered.filter(row => row.status === "sent");
+    if (quickFilter === "new") {
+      filtered = filtered.filter(row => normalizeStatus(row.status) === "new");
+    } else if (quickFilter === "estimated") {
+      filtered = filtered.filter(row => normalizeStatus(row.status) === "estimated");
     }
     
     // Sorting
@@ -1033,20 +1062,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               Всі
             </Button>
             <Button
-              variant={quickFilter === "draft" ? "primary" : "outline"}
+              variant={quickFilter === "new" ? "primary" : "outline"}
               size="sm"
-              onClick={() => setQuickFilter("draft")}
+              onClick={() => setQuickFilter("new")}
               className="gap-1.5"
             >
               <FileText className="h-3 w-3" />
-              Чернетки
+              Нові
             </Button>
             <Button
-              variant={quickFilter === "sent" ? "primary" : "outline"}
+              variant={quickFilter === "estimated" ? "primary" : "outline"}
               size="sm"
-              onClick={() => setQuickFilter("sent")}
+              onClick={() => setQuickFilter("estimated")}
             >
-              Надіслані
+              Пораховано
             </Button>
             
             <div className="h-4 w-px bg-border mx-2" />
@@ -1240,14 +1269,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
                       {(() => {
-                        const Icon = statusIcons[row.status ?? "draft"] ?? Clock;
+                        const normalizedStatus = normalizeStatus(row.status);
+                        const Icon = statusIcons[normalizedStatus] ?? Clock;
                         return (
                       <Badge
-                        className={cn("cursor-pointer transition-all hover:shadow-sm", statusClasses[row.status ?? "draft"])}
+                        className={cn(
+                          "cursor-pointer transition-all hover:shadow-sm",
+                          statusClasses[normalizedStatus] ?? statusClasses.new
+                        )}
                         variant="outline"
                       >
                         <Icon className="h-3.5 w-3.5 mr-1" />
-                        {formatStatusLabel(row.status)}
+                        {formatStatusLabel(normalizedStatus)}
                       </Badge>
                         );
                       })()}
@@ -1932,18 +1965,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="Видалити прорахунок?"
-        description="Це видалить прорахунок і пов'язані дані. Дію не можна скасувати."
-        icon={<Trash2 className="h-5 w-5 text-destructive" />}
-        confirmLabel="Видалити"
-        cancelLabel="Скасувати"
-        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-        onConfirm={handleDelete}
-        loading={!!rowDeleteBusy}
-      />
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b border-border/60 bg-muted/10">
+            <DialogTitle className="text-lg">Видалити прорахунок?</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-3">
+            <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Це видалить прорахунок і пов'язані дані. Дію не можна скасувати.
+            </div>
+          </div>
+          <DialogFooter className="px-4 py-3 border-t border-border/60 bg-muted/5">
+            <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(false)} disabled={!!rowDeleteBusy}>
+              Скасувати
+            </Button>
+            <Button
+              variant="destructiveSolid"
+              size="sm"
+              onClick={handleDelete}
+              disabled={!!rowDeleteBusy}
+              className="gap-2"
+            >
+              {rowDeleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Видалити
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

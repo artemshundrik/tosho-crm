@@ -5,7 +5,7 @@
  * models, methods, price tiers, and print positions
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogType,
@@ -16,18 +16,36 @@ import type {
   CatalogPriceTier,
 } from "@/types/catalog";
 import { INITIAL_CATALOG } from "@/constants/catalog";
+import { usePageCache } from "@/hooks/usePageCache";
 
 export function useCatalogData(teamId: string | null) {
-  const [catalog, setCatalog] = useState<CatalogType[]>(INITIAL_CATALOG);
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const cacheKey = useMemo(() => (teamId ? `catalog:${teamId}` : "catalog:none"), [teamId]);
+  const { cached, setCache, isStale } = usePageCache<CatalogType[]>(cacheKey);
+  const [catalog, setCatalog] = useState<CatalogType[]>(cached ?? INITIAL_CATALOG);
+  const [catalogLoading, setCatalogLoading] = useState(!cached);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teamId) return;
+    if (cached) {
+      setCatalog(cached);
+      return;
+    }
+    setCatalog(INITIAL_CATALOG);
+  }, [teamId, cached]);
+
+  useEffect(() => {
+    if (!teamId) return;
     let cancelled = false;
+    const stale = isStale(5 * 60 * 1000);
+    const shouldLoad = !cached || stale;
+    if (!shouldLoad) return;
+    const isBackground = Boolean(cached);
 
     const loadCatalog = async () => {
-      setCatalogLoading(true);
+      if (!isBackground) {
+        setCatalogLoading(true);
+      }
       setCatalogError(null);
       
       try {
@@ -174,14 +192,17 @@ export function useCatalogData(teamId: string | null) {
 
         if (!cancelled) {
           setCatalog(nextCatalog);
+          setCache(nextCatalog);
         }
       } catch (e: any) {
         if (!cancelled) {
           setCatalogError(e?.message ?? "Не вдалося завантажити каталог");
-          setCatalog([]);
+          if (!isBackground) {
+            setCatalog([]);
+          }
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !isBackground) {
           setCatalogLoading(false);
         }
       }
@@ -192,7 +213,7 @@ export function useCatalogData(teamId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [teamId]);
+  }, [teamId, cached, isStale, setCache]);
 
   return { catalog, setCatalog, catalogLoading, catalogError };
 }
