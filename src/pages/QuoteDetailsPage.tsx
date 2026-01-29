@@ -154,6 +154,9 @@ type ItemMethod = {
   id: string;
   methodId: string;
   count: number;
+  printPositionId?: string;
+  printWidthMm?: number | null;
+  printHeightMm?: number | null;
 };
 type QuoteItem = {
   id: string;
@@ -772,12 +775,29 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         rows.map((row) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
           const parsedMethods: ItemMethod[] = rawMethods
-            .map((method: any) => ({
-              id: createLocalId(),
-              methodId: method?.method_id ?? method?.methodId ?? method?.id ?? "",
-              count: Number(method?.count ?? 1),
-            }))
-            .filter((method) => method.methodId);
+            .map((method: any) => {
+              const methodId = method?.method_id ?? method?.methodId ?? method?.id ?? "";
+              if (!methodId) return null;
+              const rawWidth = method?.print_width_mm ?? method?.printWidthMm ?? null;
+              const rawHeight = method?.print_height_mm ?? method?.printHeightMm ?? null;
+              const width =
+                rawWidth === null || rawWidth === undefined || rawWidth === ""
+                  ? null
+                  : Number(rawWidth);
+              const height =
+                rawHeight === null || rawHeight === undefined || rawHeight === ""
+                  ? null
+                  : Number(rawHeight);
+              return {
+                id: createLocalId(),
+                methodId,
+                count: Number(method?.count ?? 1) || 1,
+                printPositionId: method?.print_position_id ?? method?.printPositionId ?? undefined,
+                printWidthMm: Number.isNaN(width) ? null : width,
+                printHeightMm: Number.isNaN(height) ? null : height,
+              };
+            })
+            .filter(Boolean) as ItemMethod[];
           const attachment =
             row.attachment && typeof row.attachment === "object"
               ? {
@@ -1378,13 +1398,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return;
     }
 
-    const methodsPayload =
-      itemFormMode === "advanced" && itemMethods.length > 0
-        ? itemMethods.map((method) => ({
-            method_id: method.methodId,
-            count: method.count,
-          }))
-        : null;
+  const methodsPayload =
+    itemFormMode === "advanced" && itemMethods.length > 0
+      ? itemMethods.map((method) => ({
+          method_id: method.methodId,
+          count: method.count,
+          print_position_id: method.printPositionId ?? null,
+          print_width_mm: method.printWidthMm ?? null,
+          print_height_mm: method.printHeightMm ?? null,
+        }))
+      : null;
     const attachmentPayload = itemAttachment
       ? {
           name: itemAttachment.name,
@@ -1942,6 +1965,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           : item.printHeightMm
                           ? `${item.printHeightMm} мм`
                           : null;
+                      const hasMethodPrints = Boolean(
+                        item.methods?.some(
+                          (method) =>
+                            method.printPositionId || method.printWidthMm || method.printHeightMm
+                        )
+                      );
 
                       return (
                         <TableRow key={item.id} className="group">
@@ -1950,26 +1979,69 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {metaLine && (
                               <div className="text-xs text-muted-foreground mt-0.5">{metaLine}</div>
                             )}
-                            {(positionLabel || sizeLabel) && (
+                            {!hasMethodPrints && (positionLabel || sizeLabel) && (
                               <div className="text-xs text-muted-foreground mt-1">
                                 {positionLabel ? `Місце: ${positionLabel}` : "Місце: —"}
                                 {sizeLabel ? ` · ${sizeLabel}` : ""}
                               </div>
                             )}
                             {item.methods && item.methods.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {item.methods.map((method) => (
-                                  <Badge key={method.id} variant="outline" className="text-xs">
-                                    {getMethodLabel(
-                                      catalogTypes,
-                                      item.catalogTypeId,
-                                      item.catalogKindId,
-                                      method.methodId
-                                    ) ?? "—"}
-                                    {method.count > 1 && ` ×${method.count}`}
-                                  </Badge>
-                                ))}
-                              </div>
+                              <>
+                                {hasMethodPrints ? (
+                                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                    {item.methods.map((method) => {
+                                      const methodLabel =
+                                        getMethodLabel(
+                                          catalogTypes,
+                                          item.catalogTypeId,
+                                          item.catalogKindId,
+                                          method.methodId
+                                        ) ?? "—";
+                                      const methodCountLabel = method.count > 1 ? ` ×${method.count}` : "";
+                                      const methodPositionLabel = method.printPositionId
+                                        ? getPrintPositionLabel(
+                                            catalogTypes,
+                                            resolvedTypeId,
+                                            resolvedKindId,
+                                            method.printPositionId
+                                          )
+                                        : null;
+                                      const methodSizeLabel =
+                                        method.printWidthMm && method.printHeightMm
+                                          ? `${method.printWidthMm}×${method.printHeightMm} мм`
+                                          : method.printWidthMm
+                                          ? `${method.printWidthMm} мм`
+                                          : method.printHeightMm
+                                          ? `${method.printHeightMm} мм`
+                                          : null;
+                                      return (
+                                        <div key={method.id} className="flex flex-wrap items-center gap-1">
+                                          <span className="font-medium text-foreground/90">
+                                            {methodLabel}
+                                            {methodCountLabel}
+                                          </span>
+                                          {methodPositionLabel ? <span>· {methodPositionLabel}</span> : null}
+                                          {methodSizeLabel ? <span>· {methodSizeLabel}</span> : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {item.methods.map((method) => (
+                                      <Badge key={method.id} variant="outline" className="text-xs">
+                                        {getMethodLabel(
+                                          catalogTypes,
+                                          item.catalogTypeId,
+                                          item.catalogKindId,
+                                          method.methodId
+                                        ) ?? "—"}
+                                        {method.count > 1 && ` ×${method.count}`}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
                             )}
                             {item.attachment && (
                               <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">

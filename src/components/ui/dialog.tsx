@@ -48,7 +48,7 @@ const DialogContent = React.forwardRef<
         "max-h-[calc(100vh-16rem)]",
         // контейнер
         "rounded-[var(--radius-inner)] border border-border bg-background shadow-2xl outline-none",
-        "flex flex-col overflow-hidden",
+        "flex flex-col gap-4 overflow-hidden p-6",
         // ✅ м’яка анімація: fade + slide зверху, без zoom
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2",

@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { 
   Search, 
   X, 
@@ -138,6 +138,21 @@ type CatalogKind = {
   printPositions: CatalogPrintPosition[];
 };
 type CatalogType = { id: string; name: string; quote_type?: string | null; kinds: CatalogKind[] };
+type PrintConfig = {
+  id: string;
+  methodId: string;
+  positionId: string;
+  widthMm: string;
+  heightMm: string;
+};
+
+const createPrintConfig = (): PrintConfig => ({
+  id: crypto.randomUUID(),
+  methodId: "",
+  positionId: "",
+  widthMm: "",
+  heightMm: "",
+});
 
 const QUOTE_TYPE_OPTIONS = [
   { id: "merch", label: "Мерч", icon: Shirt },
@@ -190,10 +205,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const [selectedKindId, setSelectedKindId] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [selectedMethodIds, setSelectedMethodIds] = useState<string[]>([]);
-  const [selectedPrintPositionId, setSelectedPrintPositionId] = useState("");
-  const [printWidthMm, setPrintWidthMm] = useState("");
-  const [printHeightMm, setPrintHeightMm] = useState("");
+  const [printConfigs, setPrintConfigs] = useState<PrintConfig[]>(() => [createPrintConfig()]);
   const [itemQty, setItemQty] = useState("1");
   const [itemUnit, setItemUnit] = useState("шт");
   const [deadlineDate, setDeadlineDate] = useState("");
@@ -237,6 +249,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const availableMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
+  const hasValidPrintConfigs =
+    printConfigs.length > 0 && printConfigs.every((print) => print.methodId && print.positionId);
 
   const formatStatusLabel = (value: string | null | undefined) => {
     const normalized = normalizeStatus(value);
@@ -271,10 +285,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
+    const dateLabel = date.toLocaleDateString("uk-UA");
     const time = date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
-    if (diffDays === 0) return { primary: `Сьогодні, ${time}`, secondary: null };
-    if (diffDays === 1) return { primary: `Вчора, ${time}`, secondary: date.toLocaleDateString("uk-UA") };
-    return { primary: date.toLocaleDateString("uk-UA"), secondary: null };
+    if (diffDays === 0) return { primary: "Сьогодні", secondary: `${dateLabel} · ${time}` };
+    if (diffDays === 1) return { primary: "Вчора", secondary: `${dateLabel} · ${time}` };
+    return { primary: dateLabel, secondary: time };
   };
 
   const parseDateOnly = (value: string) => {
@@ -509,8 +524,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           setSelectedTypeId(nextTypeId);
           setSelectedKindId(nextKindId);
           setSelectedModelId(nextModelId);
-          setSelectedMethodIds([]);
-          setSelectedPrintPositionId("");
+          setPrintConfigs([createPrintConfig()]);
         }
       } catch (e: any) {
         if (!cancelled) {
@@ -600,10 +614,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setSelectedTypeId("");
     setSelectedKindId("");
     setSelectedModelId("");
-    setSelectedMethodIds([]);
-    setSelectedPrintPositionId("");
-    setPrintWidthMm("");
-    setPrintHeightMm("");
+    setPrintConfigs([createPrintConfig()]);
     setItemQty("1");
     setItemUnit("шт");
     setDeadlineDate("");
@@ -663,8 +674,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const validateStep3 = () => {
     setCreateError(null);
-    if (!selectedPrintPositionId) {
-      setCreateError("Оберіть місце нанесення.");
+    if (printConfigs.length === 0) {
+      setCreateError("Додайте хоча б одне нанесення.");
+      return false;
+    }
+    const invalidIndex = printConfigs.findIndex(
+      (print) => !print.methodId || !print.positionId
+    );
+    if (invalidIndex !== -1) {
+      const target = printConfigs[invalidIndex];
+      setCreateError(
+        !target.methodId
+          ? `Оберіть тип нанесення у блоці №${invalidIndex + 1}.`
+          : `Оберіть місце нанесення у блоці №${invalidIndex + 1}.`
+      );
+      return false;
+    }
+    const invalidSizeIndex = printConfigs.findIndex((print) => {
+      const width = print.widthMm.trim() ? Number(print.widthMm) : null;
+      const height = print.heightMm.trim() ? Number(print.heightMm) : null;
+      return (
+        (print.widthMm.trim() && Number.isNaN(width)) ||
+        (print.heightMm.trim() && Number.isNaN(height))
+      );
+    });
+    if (invalidSizeIndex !== -1) {
+      setCreateError(`Вкажіть коректні розміри у блоці №${invalidSizeIndex + 1}.`);
       return false;
     }
     return true;
@@ -869,12 +904,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       });
       const basePrice = selectedModel?.price ?? 0;
       const qty = Math.max(1, Math.floor(qtyValue));
-      const width = printWidthMm.trim() ? Number(printWidthMm) : null;
-      const height = printHeightMm.trim() ? Number(printHeightMm) : null;
       const methodsPayload =
-        selectedMethodIds.length > 0
-          ? selectedMethodIds.map((id) => ({ method_id: id, count: 1 }))
+        printConfigs.length > 0
+          ? printConfigs.map((print) => {
+              const width = print.widthMm.trim() ? Number(print.widthMm) : null;
+              const height = print.heightMm.trim() ? Number(print.heightMm) : null;
+              return {
+                method_id: print.methodId,
+                count: 1,
+                print_position_id: print.positionId || null,
+                print_width_mm: Number.isNaN(width) ? null : width,
+                print_height_mm: Number.isNaN(height) ? null : height,
+              };
+            })
           : null;
+      const primaryPrint = methodsPayload?.[0] ?? null;
 
       const { error: itemError } = await supabase
         .schema("tosho")
@@ -892,9 +936,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           catalog_type_id: selectedTypeId,
           catalog_kind_id: selectedKindId,
           catalog_model_id: selectedModelId,
-          print_position_id: selectedPrintPositionId,
-          print_width_mm: width,
-          print_height_mm: height,
+          print_position_id: primaryPrint?.print_position_id ?? null,
+          print_width_mm: primaryPrint?.print_width_mm ?? null,
+          print_height_mm: primaryPrint?.print_height_mm ?? null,
           methods: methodsPayload,
           unit: itemUnit,
         });
@@ -915,10 +959,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setSelectedTypeId("");
       setSelectedKindId("");
       setSelectedModelId("");
-      setSelectedMethodIds([]);
-      setSelectedPrintPositionId("");
-      setPrintWidthMm("");
-      setPrintHeightMm("");
+      setPrintConfigs([createPrintConfig()]);
       setItemQty("1");
       setItemUnit("шт");
       setDeadlineDate("");
@@ -1580,8 +1621,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 const nextModelId = catalogTypes.find((t) => t.id === value)?.kinds[0]?.models[0]?.id ?? "";
                 setSelectedKindId(nextKindId);
                 setSelectedModelId(nextModelId);
-                setSelectedMethodIds([]);
-                setSelectedPrintPositionId("");
+                setPrintConfigs([createPrintConfig()]);
               }}>
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder={catalogLoading ? "Завантаження..." : "Оберіть категорію"} />
@@ -1606,8 +1646,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   setSelectedKindId(value);
                   const nextModelId = selectedKinds.find((k) => k.id === value)?.models[0]?.id ?? "";
                   setSelectedModelId(nextModelId);
-                  setSelectedMethodIds([]);
-                  setSelectedPrintPositionId("");
+                  setPrintConfigs([createPrintConfig()]);
                 }}>
                   <SelectTrigger className="h-11" disabled={!selectedTypeId}>
                     <SelectValue placeholder={selectedTypeId ? "Оберіть вид" : "Спочатку категорія"} />
@@ -1671,86 +1710,150 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
             {createStep === 3 && (
               <>
-                {/* Methods */}
-                <div className="space-y-2">
-              <Label className="text-sm font-semibold">Типи нанесення</Label>
-              {availableMethods.length === 0 ? (
-                <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg px-3 py-2">
-                  Немає доступних методів для цього виду
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {availableMethods.map((method) => {
-                    const checked = selectedMethodIds.includes(method.id);
-                    return (
-                      <label
-                        key={method.id}
-                        className={cn(
-                          "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm",
-                          checked
-                            ? "border-primary/50 bg-primary/10 text-primary"
-                            : "border-border/60 bg-muted/20 text-foreground"
-                        )}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm font-semibold">Нанесення</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPrintConfigs((prev) => [...prev, createPrintConfig()])}
+                      className="gap-2"
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                      Додати нанесення
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Кожне нанесення — окремий блок: тип, місце та розміри. Додайте стільки, скільки потрібно.
+                  </div>
+
+                  <div className="space-y-4">
+                    {printConfigs.map((print, index) => (
+                      <div
+                        key={print.id}
+                        className="rounded-2xl border border-border/60 bg-muted/10 p-4 space-y-4"
                       >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => {
-                            setSelectedMethodIds((prev) =>
-                              prev.includes(method.id)
-                                ? prev.filter((id) => id !== method.id)
-                                : [...prev, method.id]
-                            );
-                          }}
-                        />
-                        <span>{method.name}</span>
-                      </label>
-                    );
-                  })}
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold">Нанесення {index + 1}</div>
+                          {printConfigs.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setPrintConfigs((prev) =>
+                                  prev.length > 1 ? prev.filter((item) => item.id !== print.id) : prev
+                                )
+                              }
+                              className="h-8 w-8"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Тип нанесення</Label>
+                          {availableMethods.length === 0 ? (
+                            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg px-3 py-2">
+                              Немає доступних методів для цього виду
+                            </div>
+                          ) : (
+                            <ToggleGroup
+                              type="single"
+                              value={print.methodId}
+                              onValueChange={(value) =>
+                                setPrintConfigs((prev) =>
+                                  prev.map((item) =>
+                                    item.id === print.id
+                                      ? { ...item, methodId: String(value) }
+                                      : item
+                                  )
+                                )
+                              }
+                              className="flex flex-wrap gap-2 justify-start"
+                            >
+                              {availableMethods.map((method) => (
+                                <ToggleGroupItem
+                                  key={method.id}
+                                  value={method.id}
+                                  className={cn(
+                                    "rounded-full border px-3 py-1.5 text-sm",
+                                    "data-[state=on]:border-primary/50 data-[state=on]:bg-primary/10",
+                                    "border-border/60 bg-muted/20"
+                                  )}
+                                >
+                                  {method.name}
+                                </ToggleGroupItem>
+                              ))}
+                            </ToggleGroup>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Місце нанесення</Label>
+                          <Select
+                            value={print.positionId}
+                            onValueChange={(value) =>
+                              setPrintConfigs((prev) =>
+                                prev.map((item) =>
+                                  item.id === print.id ? { ...item, positionId: value } : item
+                                )
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-11" disabled={!selectedKindId}>
+                              <SelectValue placeholder={selectedKindId ? "Оберіть місце" : "Спочатку вид"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availablePrintPositions.map((pos) => (
+                                <SelectItem key={pos.id} value={pos.id}>
+                                  {pos.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-semibold">Висота (мм)</Label>
+                            <Input
+                              className="h-11"
+                              value={print.heightMm}
+                              onChange={(e) =>
+                                setPrintConfigs((prev) =>
+                                  prev.map((item) =>
+                                    item.id === print.id ? { ...item, heightMm: e.target.value } : item
+                                  )
+                                )
+                              }
+                              placeholder="Напр. 80"
+                              inputMode="numeric"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-semibold">Ширина (мм)</Label>
+                            <Input
+                              className="h-11"
+                              value={print.widthMm}
+                              onChange={(e) =>
+                                setPrintConfigs((prev) =>
+                                  prev.map((item) =>
+                                    item.id === print.id ? { ...item, widthMm: e.target.value } : item
+                                  )
+                                )
+                              }
+                              placeholder="Напр. 120"
+                              inputMode="numeric"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* Print Position */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Місце нанесення</Label>
-              <Select value={selectedPrintPositionId} onValueChange={setSelectedPrintPositionId}>
-                <SelectTrigger className="h-11" disabled={!selectedKindId}>
-                  <SelectValue placeholder={selectedKindId ? "Оберіть місце" : "Спочатку вид"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availablePrintPositions.map((pos) => (
-                    <SelectItem key={pos.id} value={pos.id}>
-                      {pos.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Print size */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Висота (мм)</Label>
-                <Input
-                  className="h-11"
-                  value={printHeightMm}
-                  onChange={(e) => setPrintHeightMm(e.target.value)}
-                  placeholder="Напр. 80"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Ширина (мм)</Label>
-                <Input
-                  className="h-11"
-                  value={printWidthMm}
-                  onChange={(e) => setPrintWidthMm(e.target.value)}
-                  placeholder="Напр. 120"
-                  inputMode="numeric"
-                />
-              </div>
-            </div>
-
               </>
             )}
 
@@ -1943,7 +2046,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     !selectedTypeId ||
                     !selectedKindId ||
                     !selectedModelId ||
-                    !selectedPrintPositionId
+                    !hasValidPrintConfigs
                   }
                   className="gap-2"
                 >

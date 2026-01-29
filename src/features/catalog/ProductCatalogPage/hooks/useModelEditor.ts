@@ -184,26 +184,24 @@ export function useModelEditor({
   /**
    * Adds a new method to the current kind
    */
-  const handleAddMethod = async () => {
-    if (!teamId || !draftKindId || methodSaving) return;
+  const handleAddMethod = async (kindIdOverride?: string, nameOverride?: string) => {
+    const targetKindId = kindIdOverride ?? draftKindId;
+    if (!teamId || !targetKindId || methodSaving) return;
     
-    const name = newMethodName.trim();
+    const name = (nameOverride ?? newMethodName).trim();
     if (!name) return;
     
     setMethodSaving(true);
     setMethodError(null);
-    
-    const priceValue = newMethodPrice.trim();
-    const price = priceValue === "" ? null : Math.max(0, Number(priceValue) || 0);
 
     const { data, error } = await supabase
       .schema("tosho")
       .from("catalog_methods")
       .insert({
         team_id: teamId,
-        kind_id: draftKindId,
+        kind_id: targetKindId,
         name,
-        price,
+        price: null,
       })
       .select("id,name,price,kind_id")
       .single();
@@ -218,7 +216,7 @@ export function useModelEditor({
       prev.map((type) => ({
         ...type,
         kinds: type.kinds.map((kind) => {
-          if (kind.id !== draftKindId) return kind;
+          if (kind.id !== targetKindId) return kind;
           const nextMethods = [
             ...kind.methods,
             { id: data.id, name: data.name, price: data.price ?? undefined },
@@ -234,12 +232,118 @@ export function useModelEditor({
   };
 
   /**
+   * Updates an existing method
+   */
+  const handleUpdateMethod = async (
+    kindId: string,
+    methodId: string,
+    nextName: string
+  ): Promise<boolean> => {
+    if (!teamId || !kindId || !methodId || methodSaving) return false;
+
+    const name = nextName.trim();
+    if (!name) {
+      setMethodError("Вкажіть назву методу");
+      return false;
+    }
+
+    setMethodSaving(true);
+    setMethodError(null);
+
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_methods")
+      .update({ name })
+      .eq("id", methodId)
+      .eq("kind_id", kindId);
+
+    if (error) {
+      setMethodError(error.message);
+      setMethodSaving(false);
+      return false;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== kindId) return kind;
+          return {
+            ...kind,
+            methods: kind.methods.map((method) =>
+              method.id === methodId ? { ...method, name } : method
+            ),
+          };
+        }),
+      }))
+    );
+
+    setMethodSaving(false);
+    return true;
+  };
+
+  /**
+   * Deletes a method from a kind
+   */
+  const handleDeleteMethod = async (kindId: string, methodId: string) => {
+    if (!teamId || !kindId || !methodId || methodSaving) return;
+
+    setMethodSaving(true);
+    setMethodError(null);
+
+    const { error: mapError } = await supabase
+      .schema("tosho")
+      .from("catalog_model_methods")
+      .delete()
+      .eq("method_id", methodId);
+
+    if (mapError) {
+      setMethodError(mapError.message);
+      setMethodSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_methods")
+      .delete()
+      .eq("id", methodId)
+      .eq("kind_id", kindId);
+
+    if (error) {
+      setMethodError(error.message);
+      setMethodSaving(false);
+      return;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== kindId) return kind;
+          return {
+            ...kind,
+            methods: kind.methods.filter((method) => method.id !== methodId),
+            models: kind.models.map((model) => ({
+              ...model,
+              methodIds: model.methodIds?.filter((id) => id !== methodId),
+            })),
+          };
+        }),
+      }))
+    );
+
+    setDraftMethodIds((prev) => prev.filter((id) => id !== methodId));
+    setMethodSaving(false);
+  };
+
+  /**
    * Adds a print position to a kind
    */
-  const handleAddPrintPosition = async (kindId: string) => {
+  const handleAddPrintPosition = async (kindId: string, labelOverride?: string) => {
     if (!teamId || !kindId || printPositionSaving) return;
     
-    const label = newPrintPositionName.trim();
+    const label = (labelOverride ?? newPrintPositionName).trim();
     if (!label) return;
     
     setPrintPositionSaving(true);
@@ -311,6 +415,57 @@ export function useModelEditor({
         }),
       }))
     );
+  };
+
+  /**
+   * Updates a print position label
+   */
+  const handleUpdatePrintPosition = async (
+    kindId: string,
+    positionId: string,
+    nextLabel: string
+  ): Promise<boolean> => {
+    if (!teamId || !kindId || !positionId || printPositionSaving) return false;
+
+    const label = nextLabel.trim();
+    if (!label) {
+      setPrintPositionError("Вкажіть назву місця");
+      return false;
+    }
+
+    setPrintPositionSaving(true);
+    setPrintPositionError(null);
+
+    const { error } = await supabase
+      .schema("tosho")
+      .from("catalog_print_positions")
+      .update({ label })
+      .eq("id", positionId)
+      .eq("kind_id", kindId);
+
+    if (error) {
+      setPrintPositionError(error.message);
+      setPrintPositionSaving(false);
+      return false;
+    }
+
+    setCatalog((prev) =>
+      prev.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (kind.id !== kindId) return kind;
+          return {
+            ...kind,
+            printPositions: kind.printPositions.map((pos) =>
+              pos.id === positionId ? { ...pos, label } : pos
+            ),
+          };
+        }),
+      }))
+    );
+
+    setPrintPositionSaving(false);
+    return true;
   };
 
   /**
@@ -647,6 +802,7 @@ export function useModelEditor({
     setNewMethodPrice,
     methodSaving,
     methodError,
+    setMethodError,
     newPrintPositionName,
     setNewPrintPositionName,
     printPositionSaving,
@@ -665,8 +821,11 @@ export function useModelEditor({
     removeDraftTier,
     toggleDraftMethod,
     handleAddMethod,
+    handleUpdateMethod,
+    handleDeleteMethod,
     handleAddPrintPosition,
     handleDeletePrintPosition,
+    handleUpdatePrintPosition,
     handleImageFileUpload,
     handleSaveModel,
     confirmDeleteModel,

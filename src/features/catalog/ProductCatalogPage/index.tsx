@@ -173,6 +173,9 @@ export default function ProductCatalogPage() {
     filters.setGlobalSearch("");
     modelEditor.setNewPrintPositionName("");
     modelEditor.setPrintPositionError(null);
+    modelEditor.setNewMethodName("");
+    modelEditor.setNewMethodPrice("");
+    modelEditor.setMethodError(null);
   };
 
   // Handle kind selection
@@ -180,6 +183,9 @@ export default function ProductCatalogPage() {
     filters.setSelectedKindId(kindId);
     modelEditor.setNewPrintPositionName("");
     modelEditor.setPrintPositionError(null);
+    modelEditor.setNewMethodName("");
+    modelEditor.setNewMethodPrice("");
+    modelEditor.setMethodError(null);
   };
 
   // Handle edit type
@@ -368,17 +374,16 @@ export default function ProductCatalogPage() {
             <ContentHeader
               selectedType={filters.selectedType}
               selectedKind={filters.selectedKind}
-              newPrintPositionName={modelEditor.newPrintPositionName}
-              setNewPrintPositionName={modelEditor.setNewPrintPositionName}
+              printPositionError={modelEditor.printPositionError}
               printPositionSaving={modelEditor.printPositionSaving}
               onAddPrintPosition={modelEditor.handleAddPrintPosition}
               onDeletePrintPosition={modelEditor.handleDeletePrintPosition}
-              onAddMethod={() => {
-                // Open model editor to add method
-                // For now, we'll use the existing ModelEditor dialog
-                // which has method management built-in
-                modelEditor.openCreateDrawer();
-              }}
+              onUpdatePrintPosition={modelEditor.handleUpdatePrintPosition}
+              methodSaving={modelEditor.methodSaving}
+              methodError={modelEditor.methodError}
+              onAddMethod={modelEditor.handleAddMethod}
+              onUpdateMethod={modelEditor.handleUpdateMethod}
+              onDeleteMethod={modelEditor.handleDeleteMethod}
             />
 
             {/* Models Grid */}
