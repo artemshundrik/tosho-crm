@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -264,6 +265,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
@@ -1109,16 +1112,49 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  const hasActiveFilters = useMemo(
+    () => Boolean(search.trim()) || quickFilter !== "all" || status !== "all",
+    [search, quickFilter, status]
+  );
+
+  const clearFilters = () => {
+    setSearch("");
+    setQuickFilter("all");
+    setStatusFilter("all");
+  };
+
   const filteredAndSortedRows = useMemo(() => {
     let filtered = [...rows];
-    
+
+    const q = search.trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter((row) => {
+        const hay = [
+          row.number,
+          row.comment,
+          row.title,
+          row.customer_name,
+          row.quote_type,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
     // Quick filters
     if (quickFilter === "new") {
-      filtered = filtered.filter(row => normalizeStatus(row.status) === "new");
+      filtered = filtered.filter((row) => normalizeStatus(row.status) === "new");
     } else if (quickFilter === "estimated") {
-      filtered = filtered.filter(row => normalizeStatus(row.status) === "estimated");
+      filtered = filtered.filter((row) => normalizeStatus(row.status) === "estimated");
     }
-    
+
+    // Status dropdown
+    if (status && status !== "all") {
+      filtered = filtered.filter((row) => normalizeStatus(row.status) === status);
+    }
+
     // Sorting
     if (sortBy === "date") {
       filtered.sort((a, b) => {
@@ -1128,14 +1164,34 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       });
     } else if (sortBy === "number") {
       filtered.sort((a, b) => {
-        const numA = parseInt(a.number || "0");
-        const numB = parseInt(b.number || "0");
+        const numA = parseInt(a.number || "0", 10);
+        const numB = parseInt(b.number || "0", 10);
         return sortOrder === "asc" ? numA - numB : numB - numA;
       });
     }
-    
+
     return filtered;
-  }, [rows, quickFilter, sortBy, sortOrder]);
+  }, [rows, search, quickFilter, status, sortBy, sortOrder]);
+
+  const toggleSelectAll = () => {
+    const allIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
+    setSelectedIds((prev) => {
+      if (prev.size === allIds.length) return new Set();
+      return new Set(allIds);
+    });
+  };
+
+  const toggleRow = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const handleDuplicate = async (quoteId: string) => {
     // TODO: Implement duplicate functionality
@@ -1166,42 +1222,89 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  const handleBulkStatus = async (nextStatus: string) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(async (id) => {
+          await setQuoteStatus({ quoteId: id, status: nextStatus });
+          setRows((prev) =>
+            prev.map((row) => (row.id === id ? { ...row, status: nextStatus } : row))
+          );
+        })
+      );
+      toast.success(`Статус оновлено (${selectedIds.size})`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error("Не вдалося змінити статус", { description: e?.message });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => deleteQuote(id)));
+      setRows((prev) => prev.filter((row) => !selectedIds.has(row.id)));
+      toast.success(`Видалено ${selectedIds.size}`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error("Помилка видалення", { description: e?.message });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-[1400px] mx-auto pb-20">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Прорахунки</h1>
-          <p className="text-sm text-muted-foreground mt-1">Керуйте прорахунками та пропозиціями</p>
-        </div>
-        <Button onClick={openCreate} size="lg" className="gap-2">
-          <PlusIcon className="h-4 w-4" />
-          Новий прорахунок
-        </Button>
-      </div>
-
       {/* Filters and Search */}
-      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden mb-6">
-        <div className="p-4 space-y-4">
+      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden mb-6 sticky top-4 z-10 backdrop-blur">
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <h1 className="text-xl font-semibold">Прорахунки</h1>
+              <p className="text-sm text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
+            </div>
+            <Button onClick={openCreate} size="lg" className="gap-2">
+              <PlusIcon className="h-4 w-4" />
+              Новий прорахунок
+            </Button>
+          </div>
           {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Пошук за назвою, номером або замовником..."
-              className="pl-10 pr-10 h-11"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            {loading && search && (
-              <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Пошук за назвою, номером або замовником..."
+                className="pl-10 pr-12 h-11"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {loading && search && (
+                <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="hidden sm:inline">Знайдено:</span>
+              <Badge variant="secondary" className="font-semibold">
+                {filteredAndSortedRows.length}
+              </Badge>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                Скинути фільтри
+              </Button>
             )}
           </div>
 
@@ -1231,11 +1334,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               Пораховано
             </Button>
-            
+
             <div className="h-4 w-px bg-border mx-2" />
-            
+
             <Select value={status} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px] h-9">
+              <SelectTrigger className="w-[180px] h-9">
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>
               <SelectContent>
@@ -1248,15 +1351,62 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </SelectContent>
             </Select>
 
-            <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="hidden sm:inline">Знайдено:</span>
-              <Badge variant="secondary" className="font-semibold">
-                {filteredAndSortedRows.length}
-              </Badge>
-            </div>
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2 ml-auto text-xs">
+                {search.trim() && <Badge variant="outline">Пошук: “{search.trim()}”</Badge>}
+                {quickFilter !== "all" && (
+                  <Badge variant="outline">
+                    {quickFilter === "new" ? "Тільки нові" : "Тільки пораховано"}
+                  </Badge>
+                )}
+                {status !== "all" && <Badge variant="outline">{formatStatusLabel(status)}</Badge>}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Bulk actions */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
+          <div className="text-sm font-semibold">Вибрано: {selectedIds.size}</div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => handleBulkStatus("approved")}
+            >
+              Поставити “Затверджено”
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => handleBulkStatus("cancelled")}
+            >
+              Поставити “Скасовано”
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={handleBulkDelete}
+            >
+              Видалити
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-muted-foreground"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={bulkBusy}
+          >
+            Скасувати вибір
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden">
@@ -1289,6 +1439,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30 border-b">
+                  <TableHead className="w-[44px] pl-4">
+                    <Checkbox
+                      checked={
+                        selectedIds.size === 0
+                          ? false
+                          : selectedIds.size === filteredAndSortedRows.length
+                          ? true
+                          : "indeterminate"
+                      }
+                      onCheckedChange={() => toggleSelectAll()}
+                      aria-label="Вибрати всі"
+                    />
+                  </TableHead>
                   <TableHead className="w-[140px] min-w-[140px] pl-6">
                     <button
                       onClick={() => handleSort("number")}
@@ -1345,185 +1508,201 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAndSortedRows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="hover:bg-muted/20 cursor-pointer group transition-colors odd:bg-muted/10"
-                    onClick={() => navigate(`/orders/estimates/${row.id}`)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        navigate(`/orders/estimates/${row.id}`);
-                      }
-                    }}
-                  >
-                    <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px] pl-6">
-                      <span className="group-hover:underline underline-offset-2">
-                        {row.number ?? "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {row.created_at ? (
-                        (() => {
-                          const labels = getDateLabels(row.created_at);
-                          if (labels === "—") return "—";
+                {filteredAndSortedRows.map((row) => {
+                  const isSelected = selectedIds.has(row.id);
+                  return (
+                    <TableRow
+                      key={row.id}
+                      className={cn(
+                        "hover:bg-muted/15 cursor-pointer group transition-colors",
+                        isSelected && "bg-primary/5 border-primary/30"
+                      )}
+                      onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/orders/estimates/${row.id}`);
+                        }
+                      }}
+                    >
+                      <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleRow(row.id)}
+                          aria-label="Вибрати рядок"
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px] pl-6">
+                        <span className="group-hover:underline underline-offset-2">
+                          {row.number ?? "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {row.created_at ? (
+                          (() => {
+                            const labels = getDateLabels(row.created_at);
+                            if (labels === "—") return "—";
+                            return (
+                              <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
+                                <div className="font-medium">{labels.primary}</div>
+                                {labels.secondary ? (
+                                  <div className="text-xs text-muted-foreground">{labels.secondary}</div>
+                                ) : null}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium max-w-[260px]">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {row.customer_logo_url ? (
+                            <img
+                              src={row.customer_logo_url}
+                              alt={row.customer_name ?? "logo"}
+                              className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
+                              loading="lazy"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
+                              {getInitials(row.customer_name)}
+                            </div>
+                          )}
+                          <span className="truncate" title={row.customer_name ?? "—"}>
+                            {row.customer_name ?? "—"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <AvatarBase
+                            src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                            name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                            fallback={
+                              row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
+                            }
+                            size={28}
+                            className="text-[10px] font-semibold"
+                          />
+                          <span>
+                            {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center px-2">
+                        {(() => {
+                          const badge = getDeadlineBadge(row.deadline_at ?? null);
+                          const titleParts = [
+                            row.deadline_at
+                              ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
+                              : "Дедлайн не задано",
+                            row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
+                          ].filter(Boolean);
                           return (
-                            <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
-                              <div className="font-medium">{labels.primary}</div>
-                              {labels.secondary ? (
-                                <div className="text-xs text-muted-foreground">{labels.secondary}</div>
-                              ) : null}
+                            <Badge
+                              variant="outline"
+                              className={cn("text-xs font-medium", badge.className)}
+                              title={titleParts.join(" · ")}
+                            >
+                              {badge.label}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
+                        {(() => {
+                          const normalizedStatus = normalizeStatus(row.status);
+                          const Icon = statusIcons[normalizedStatus] ?? Clock;
+                          return (
+                            <Badge
+                              className={cn(
+                                "cursor-pointer transition-all hover:shadow-sm",
+                                statusClasses[normalizedStatus] ?? statusClasses.new
+                              )}
+                              variant="outline"
+                            >
+                              <Icon className="h-3.5 w-3.5 mr-1" />
+                              {formatStatusLabel(normalizedStatus)}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-center px-2">
+                        {attachmentCounts[row.id] ? (
+                          <div
+                            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-xs font-medium"
+                            title={`Файлів: ${attachmentCounts[row.id]}`}
+                          >
+                            <Paperclip className="h-3 w-3" />
+                            {attachmentCounts[row.id]}
+                          </div>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                            title="Файлів немає"
+                          >
+                            <Paperclip className="h-3 w-3 opacity-50" />
+                            0
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center px-2">
+                        {(() => {
+                          const Icon = quoteTypeIcon(row.quote_type);
+                          return (
+                            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                              {quoteTypeLabel(row.quote_type)}
                             </div>
                           );
-                        })()
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium max-w-[260px]">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {row.customer_logo_url ? (
-                          <img
-                            src={row.customer_logo_url}
-                            alt={row.customer_name ?? "logo"}
-                            className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
-                            loading="lazy"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
-                            {getInitials(row.customer_name)}
-                          </div>
-                        )}
-                        <span className="truncate" title={row.customer_name ?? "—"}>
-                          {row.customer_name ?? "—"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <AvatarBase
-                          src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                          name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
-                          fallback={
-                            row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
-                          }
-                          size={28}
-                          className="text-[10px] font-semibold"
-                        />
-                        <span>
-                          {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center px-2">
-                      {(() => {
-                        const badge = getDeadlineBadge(row.deadline_at ?? null);
-                        const titleParts = [
-                          row.deadline_at
-                            ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
-                            : "Дедлайн не задано",
-                          row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
-                        ].filter(Boolean);
-                        return (
-                          <Badge
-                            variant="outline"
-                            className={cn("text-xs font-medium", badge.className)}
-                            title={titleParts.join(" · ")}
-                          >
-                            {badge.label}
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
-                      {(() => {
-                        const normalizedStatus = normalizeStatus(row.status);
-                        const Icon = statusIcons[normalizedStatus] ?? Clock;
-                        return (
-                      <Badge
-                        className={cn(
-                          "cursor-pointer transition-all hover:shadow-sm",
-                          statusClasses[normalizedStatus] ?? statusClasses.new
-                        )}
-                        variant="outline"
-                      >
-                        <Icon className="h-3.5 w-3.5 mr-1" />
-                        {formatStatusLabel(normalizedStatus)}
-                      </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-center px-2">
-                      {attachmentCounts[row.id] ? (
-                        <div
-                          className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-xs font-medium"
-                          title={`Файлів: ${attachmentCounts[row.id]}`}
-                        >
-                          <Paperclip className="h-3 w-3" />
-                          {attachmentCounts[row.id]}
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Файлів немає">
-                          <Paperclip className="h-3 w-3 opacity-50" />
-                          0
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center px-2">
-                      {(() => {
-                        const Icon = quoteTypeIcon(row.quote_type);
-                        return (
-                          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
-                            {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                            {quoteTypeLabel(row.quote_type)}
-                          </div>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()} className="pr-6">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Відкрити
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Дублювати
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => requestDelete(row.id)}
-                            className="text-destructive focus:text-destructive"
-                            disabled={rowDeleteBusy === row.id}
-                          >
-                            {rowDeleteBusy === row.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="mr-2 h-4 w-4" />
-                            )}
-                            Видалити
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        })()}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()} className="pr-6">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Відкрити
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Дублювати
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => requestDelete(row.id)}
+                              className="text-destructive focus:text-destructive"
+                              disabled={rowDeleteBusy === row.id}
+                            >
+                              {rowDeleteBusy === row.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-2 h-4 w-4" />
+                              )}
+                              Видалити
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
