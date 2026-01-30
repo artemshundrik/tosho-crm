@@ -15,6 +15,7 @@ const routeImporters: Array<[RegExp, RouteImporter]> = [
   [/^\/settings\/members$/, () => import("../pages/TeamMembersPage")],
   [/^\/profile$/, () => import("../pages/ProfilePage")],
   [/^\/admin$/, () => import("../pages/AdminPage")],
+  [/^\/orders\/customers$/, () => import("../pages/OrdersCustomersPage")],
 ];
 
 const prefetched = new Set<string>();

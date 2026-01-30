@@ -111,6 +111,34 @@ const statusClasses: Record<string, string> = {
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
 };
 
+type OwnershipOption = {
+  value: string;
+  label: string;
+};
+
+type VatOption = {
+  value: string;
+  label: string;
+  rate: number | null;
+};
+
+const OWNERSHIP_OPTIONS: OwnershipOption[] = [
+  { value: "tov", label: "ТОВ" },
+  { value: "pp", label: "ПП" },
+  { value: "vp", label: "ВП" },
+  { value: "at", label: "АТ" },
+  { value: "dp", label: "ДП" },
+  { value: "fop", label: "ФОП" },
+];
+
+const VAT_OPTIONS: VatOption[] = [
+  { value: "none", label: "немає", rate: null },
+  { value: "0", label: "0%", rate: 0 },
+  { value: "7", label: "7%", rate: 7 },
+  { value: "14", label: "14%", rate: 14 },
+  { value: "20", label: "20%", rate: 20 },
+];
+
 const normalizeStatus = (value?: string | null) => {
   if (!value) return "new";
   const legacy: Record<string, string> = {
@@ -198,6 +226,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [customerId, setCustomerId] = useState("");
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const customerDropdownTimer = useRef<number | null>(null);
+  const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
+  const [customerCreateSaving, setCustomerCreateSaving] = useState(false);
+  const [customerCreateError, setCustomerCreateError] = useState<string | null>(null);
+  const [customerForm, setCustomerForm] = useState({
+    name: "",
+    legalName: "",
+    ownershipType: "",
+    vatRate: "none",
+    taxId: "",
+    website: "",
+    iban: "",
+    logoUrl: "",
+  });
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -648,6 +689,78 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       customerDropdownTimer.current = null;
     }
     setCustomerDropdownOpen(false);
+  };
+
+  const resetCustomerForm = (prefillName = "") => {
+    setCustomerForm({
+      name: prefillName,
+      legalName: "",
+      ownershipType: "",
+      vatRate: "none",
+      taxId: "",
+      website: "",
+      iban: "",
+      logoUrl: "",
+    });
+    setCustomerCreateError(null);
+  };
+
+  const openCustomerCreate = (prefillName = "") => {
+    resetCustomerForm(prefillName);
+    setCustomerCreateOpen(true);
+  };
+
+  const handleCustomerCreate = async () => {
+    if (!teamId) {
+      setCustomerCreateError("Не вдалося визначити команду.");
+      return;
+    }
+    if (!customerForm.name.trim()) {
+      setCustomerCreateError("Вкажіть назву компанії.");
+      return;
+    }
+
+    setCustomerCreateSaving(true);
+    setCustomerCreateError(null);
+
+    const vatOption = VAT_OPTIONS.find((option) => option.value === customerForm.vatRate);
+    const payload: Record<string, unknown> = {
+      team_id: teamId,
+      name: customerForm.name.trim(),
+      legal_name: customerForm.legalName.trim() || null,
+      ownership_type: customerForm.ownershipType || null,
+      vat_rate: vatOption?.rate ?? null,
+      tax_id: customerForm.taxId.trim() || null,
+      website: customerForm.website.trim() || null,
+      iban: customerForm.iban.trim() || null,
+      logo_url: customerForm.logoUrl.trim() || null,
+    };
+
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("customers")
+        .insert(payload)
+        .select("id,name,legal_name")
+        .single();
+      if (error) throw error;
+
+      const created = data as CustomerRow;
+      setCustomers((prev) => {
+        const exists = prev.some((row) => row.id === created.id);
+        if (exists) return prev;
+        return [created, ...prev];
+      });
+      const label = created.name || created.legal_name || customerForm.name.trim();
+      setCustomerId(created.id);
+      setCustomerSearch(label);
+      closeCustomerDropdown();
+      setCustomerCreateOpen(false);
+    } catch (err: any) {
+      setCustomerCreateError(err?.message ?? "Не вдалося створити клієнта.");
+    } finally {
+      setCustomerCreateSaving(false);
+    }
   };
 
   const validateStep2 = () => {
@@ -1269,8 +1382,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="font-medium max-w-[220px] truncate">
-                      <span title={row.customer_name ?? "—"}>{row.customer_name ?? "—"}</span>
+                    <TableCell className="font-medium max-w-[260px]">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {row.customer_logo_url ? (
+                          <img
+                            src={row.customer_logo_url}
+                            alt={row.customer_name ?? "logo"}
+                            className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
+                            loading="lazy"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
+                            {getInitials(row.customer_name)}
+                          </div>
+                        )}
+                        <span className="truncate" title={row.customer_name ?? "—"}>
+                          {row.customer_name ?? "—"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
@@ -1412,7 +1545,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       </div>
 
       {/* Create Dialog - Improved */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setCustomerCreateOpen(false);
+          }
+        }}
+      >
       <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 overflow-hidden sm:mx-6">
           <div className="p-6 border-b border-border bg-gradient-to-r from-muted/10 to-transparent">
             <DialogHeader className="space-y-3">
@@ -1529,7 +1670,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         ) : customers.length === 0 ? (
                           <div className="px-4 py-8 text-center">
                             <p className="text-sm text-muted-foreground mb-3">Клієнтів не знайдено</p>
-                            <Button size="sm" variant="outline" className="gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => {
+                                closeCustomerDropdown();
+                                openCustomerCreate(customerSearch.trim());
+                              }}
+                            >
                               <UserPlus className="h-4 w-4" />
                               Створити нового клієнта
                             </Button>
@@ -2064,6 +2213,143 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={customerCreateOpen}
+        onOpenChange={(open) => {
+          setCustomerCreateOpen(open);
+          if (!open) {
+            resetCustomerForm();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>Новий клієнт</DialogTitle>
+            <DialogDescription>Додайте всі дані клієнта, щоб одразу підхопити їх у прорахунку.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label>Назва компанії *</Label>
+              <Input
+                value={customerForm.name}
+                onChange={(e) => setCustomerForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Напр. ТОВ “Вектор”"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Юридична назва</Label>
+              <Input
+                value={customerForm.legalName}
+                onChange={(e) => setCustomerForm((prev) => ({ ...prev, legalName: e.target.value }))}
+                placeholder="Повна назва"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Тип власності</Label>
+                <Select
+                  value={customerForm.ownershipType}
+                  onValueChange={(value) => setCustomerForm((prev) => ({ ...prev, ownershipType: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Оберіть тип" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OWNERSHIP_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>ПДВ</Label>
+                <Select
+                  value={customerForm.vatRate}
+                  onValueChange={(value) => setCustomerForm((prev) => ({ ...prev, vatRate: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Оберіть ставку" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VAT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>ЄДРПОУ / ІПН</Label>
+              <Input
+                value={customerForm.taxId}
+                onChange={(e) => setCustomerForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                placeholder="Код або ІПН"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Сайт</Label>
+                <Input
+                  value={customerForm.website}
+                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>IBAN</Label>
+                <Input
+                  value={customerForm.iban}
+                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, iban: e.target.value }))}
+                  placeholder="UA..."
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Лого (URL)</Label>
+              <div className="flex items-center gap-3">
+                {customerForm.logoUrl.trim() ? (
+                  <img
+                    src={customerForm.logoUrl.trim()}
+                    alt={customerForm.name || "logo"}
+                    className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
+                    {getInitials(customerForm.name)}
+                  </div>
+                )}
+                <Input
+                  value={customerForm.logoUrl}
+                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, logoUrl: e.target.value }))}
+                  placeholder="Посилання на логотип"
+                />
+              </div>
+            </div>
+            {customerCreateError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {customerCreateError}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCustomerCreateOpen(false)} disabled={customerCreateSaving}>
+              Скасувати
+            </Button>
+            <Button onClick={handleCustomerCreate} disabled={customerCreateSaving}>
+              {customerCreateSaving ? "Збереження..." : "Створити клієнта"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

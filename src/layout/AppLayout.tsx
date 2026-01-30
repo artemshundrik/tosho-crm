@@ -3,6 +3,7 @@ import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  Building2,
   Calculator,
   ChevronRight,
   Factory,
@@ -93,6 +94,7 @@ const ROUTES = {
   trainingsAnalytics: "/admin/trainings/analytics",
 
   ordersEstimates: "/orders/estimates",
+  ordersCustomers: "/orders/customers",
   ordersProduction: "/orders/production",
   ordersReadyToShip: "/orders/ready-to-ship",
   catalogProducts: "/catalog/products",
@@ -115,6 +117,7 @@ const ROUTES = {
 // --- Sidebar Config ---
 const baseSidebarLinks: SidebarLink[] = [
   // Замовлення
+  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2 },
   { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory },
   { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck },
@@ -151,6 +154,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Підготовка розрахунків і комерційних пропозицій.",
       breadcrumbLabel: "Прорахунки замовлень",
       breadcrumbTo: ROUTES.ordersEstimates,
+    };
+  if (pathname.startsWith(ROUTES.ordersCustomers))
+    return {
+      title: "Замовники",
+      subtitle: "База компаній, реквізитів та контактної інформації.",
+      breadcrumbLabel: "Замовники",
+      breadcrumbTo: ROUTES.ordersCustomers,
     };
   if (pathname.startsWith(ROUTES.ordersProduction))
     return {

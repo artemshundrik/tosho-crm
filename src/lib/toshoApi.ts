@@ -20,6 +20,7 @@ export type QuoteListRow = {
   created_at?: string | null;
   updated_at?: string | null;
   customer_name?: string | null;
+  customer_logo_url?: string | null;
   assigned_to?: string | null;
   processing_minutes?: number | null;
   deadline_at?: string | null;
@@ -53,7 +54,7 @@ export async function listQuotes(params: ListQuotesParams) {
   let query = supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes,deadline_at,deadline_note")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
@@ -155,7 +156,7 @@ export async function getQuoteSummary(quoteId: string) {
   const { data, error } = await supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,assigned_to,processing_minutes,deadline_at,deadline_note")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("id", quoteId)
     .single();
   handleError(error);

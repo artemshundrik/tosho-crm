@@ -273,6 +273,15 @@ function shortenId(value: string | null | undefined) {
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }
 
+function getInitials(value?: string | null) {
+  if (!value) return "—";
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "—";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
+  return (first + last).toUpperCase();
+}
+
 function minutesAgo(value: string | null | undefined) {
   if (!value) return null;
   const diff = Date.now() - new Date(value).getTime();
@@ -1790,7 +1799,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <Building2 className="h-3.5 w-3.5" />
                     Замовник
                   </div>
-                  <div className="font-semibold text-base">{quote.customer_name ?? "—"}</div>
+                  <div className="flex items-center gap-3">
+                    {quote.customer_logo_url ? (
+                      <img
+                        src={quote.customer_logo_url}
+                        alt={quote.customer_name ?? "logo"}
+                        className="h-10 w-10 rounded-full object-cover border border-border/60 bg-muted/20"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
+                        {getInitials(quote.customer_name)}
+                      </div>
+                    )}
+                    <div className="font-semibold text-base">{quote.customer_name ?? "—"}</div>
+                  </div>
                 </div>
                 
                 <div className="space-y-1">

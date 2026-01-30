@@ -58,6 +58,7 @@ const TournamentsAdminPage = lazy(() =>
   import("./pages/TournamentsAdminPage").then((module) => ({ default: module.TournamentsAdminPage }))
 );
 const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
+const OrdersCustomersPage = lazy(() => import("./pages/OrdersCustomersPage"));
 const OrdersEstimateDetailsPage = lazy(() => import("./pages/OrdersEstimateDetailsPage"));
 const ProductCatalogPage = lazy(() => import("./features/catalog/ProductCatalogPage"));
 const OrdersProductionPage = lazy(() => import("./pages/OrdersProductionPage"));
@@ -621,6 +622,18 @@ function AppRoutes() {
       />
 
       {/* Orders */}
+      <Route
+        path="/orders/customers"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <OrdersCustomersPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
       <Route
         path="/orders/estimates"
         element={
