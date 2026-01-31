@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
+import type { CatalogType } from "@/types/catalog";
 
 /**
  * Quote statuses
@@ -150,17 +151,6 @@ export type TeamMember = {
   label: string;
   avatarUrl?: string | null;
 };
-
-/**
- * Catalog types for products
- */
-export type CatalogModel = { id: string; name: string; price?: number };
-export type CatalogKind = {
-  id: string;
-  name: string;
-  models: CatalogModel[];
-};
-export type CatalogType = { id: string; name: string; quote_type?: string | null; kinds: CatalogKind[] };
 
 /**
  * New Quote Dialog Props
