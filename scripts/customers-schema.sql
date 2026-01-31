@@ -8,7 +8,12 @@ alter table tosho.customers
   add column if not exists tax_id text,
   add column if not exists website text,
   add column if not exists iban text,
-  add column if not exists logo_url text;
+  add column if not exists logo_url text,
+  add column if not exists contact_name text,
+  add column if not exists contact_position text,
+  add column if not exists contact_phone text,
+  add column if not exists contact_email text,
+  add column if not exists contact_birthday date;
 
 create index if not exists customers_team_name_idx
   on tosho.customers (team_id, name);

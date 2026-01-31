@@ -22,9 +22,8 @@ import {
 } from "@/lib/toshoApi";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { CustomerDialog } from "@/components/customers";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,10 +32,6 @@ import {
   Search, 
   X, 
   Filter, 
-  Calendar, 
-  User, 
-  Building2, 
-  Hash,
   Shirt,
   Printer,
   Layers,
@@ -45,12 +40,10 @@ import {
   Trash2,
   FileText,
   Plus as PlusIcon,
-  UserPlus,
   Loader2,
   ArrowUpDown,
   ChevronRight,
   Upload,
-  Paperclip,
   Clock,
   CheckCircle2,
   XCircle,
@@ -241,6 +234,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     website: "",
     iban: "",
     logoUrl: "",
+    contactName: "",
+    contactPosition: "",
+    contactPhone: "",
+    contactEmail: "",
+    contactBirthday: "",
   });
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
@@ -871,6 +869,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       website: "",
       iban: "",
       logoUrl: "",
+      contactName: "",
+      contactPosition: "",
+      contactPhone: "",
+      contactEmail: "",
+      contactBirthday: "",
     });
     setCustomerCreateError(null);
   };
@@ -904,6 +907,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       website: customerForm.website.trim() || null,
       iban: customerForm.iban.trim() || null,
       logo_url: customerForm.logoUrl.trim() || null,
+      contact_name: customerForm.contactName.trim() || null,
+      contact_position: customerForm.contactPosition || null,
+      contact_phone: customerForm.contactPhone.trim() || null,
+      contact_email: customerForm.contactEmail.trim() || null,
+      contact_birthday: customerForm.contactBirthday || null,
     };
 
     try {
@@ -1982,7 +1990,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
 
-      <Dialog
+      <CustomerDialog
         open={customerCreateOpen}
         onOpenChange={(open) => {
           setCustomerCreateOpen(open);
@@ -1990,134 +1998,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             resetCustomerForm();
           }
         }}
-      >
-        <DialogContent className="sm:max-w-[620px]">
-          <DialogHeader>
-            <DialogTitle>Новий клієнт</DialogTitle>
-            <DialogDescription>Додайте всі дані клієнта, щоб одразу підхопити їх у прорахунку.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label>Назва компанії *</Label>
-              <Input
-                value={customerForm.name}
-                onChange={(e) => setCustomerForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Напр. ТОВ “Вектор”"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Юридична назва</Label>
-              <Input
-                value={customerForm.legalName}
-                onChange={(e) => setCustomerForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                placeholder="Повна назва"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Тип власності</Label>
-                <Select
-                  value={customerForm.ownershipType}
-                  onValueChange={(value) => setCustomerForm((prev) => ({ ...prev, ownershipType: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Оберіть тип" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OWNERSHIP_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>ПДВ</Label>
-                <Select
-                  value={customerForm.vatRate}
-                  onValueChange={(value) => setCustomerForm((prev) => ({ ...prev, vatRate: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Оберіть ставку" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VAT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>ЄДРПОУ / ІПН</Label>
-              <Input
-                value={customerForm.taxId}
-                onChange={(e) => setCustomerForm((prev) => ({ ...prev, taxId: e.target.value }))}
-                placeholder="Код або ІПН"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Сайт</Label>
-                <Input
-                  value={customerForm.website}
-                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, website: e.target.value }))}
-                  placeholder="https://"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>IBAN</Label>
-                <Input
-                  value={customerForm.iban}
-                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, iban: e.target.value }))}
-                  placeholder="UA..."
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Лого (URL)</Label>
-              <div className="flex items-center gap-3">
-                {customerForm.logoUrl.trim() ? (
-                  <img
-                    src={customerForm.logoUrl.trim()}
-                    alt={customerForm.name || "logo"}
-                    className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
-                    {getInitials(customerForm.name)}
-                  </div>
-                )}
-                <Input
-                  value={customerForm.logoUrl}
-                  onChange={(e) => setCustomerForm((prev) => ({ ...prev, logoUrl: e.target.value }))}
-                  placeholder="Посилання на логотип"
-                />
-              </div>
-            </div>
-            {customerCreateError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {customerCreateError}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCustomerCreateOpen(false)} disabled={customerCreateSaving}>
-              Скасувати
-            </Button>
-            <Button onClick={handleCustomerCreate} disabled={customerCreateSaving}>
-              {customerCreateSaving ? "Збереження..." : "Створити клієнта"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        form={customerForm}
+        setForm={setCustomerForm}
+        ownershipOptions={OWNERSHIP_OPTIONS}
+        vatOptions={VAT_OPTIONS}
+        saving={customerCreateSaving}
+        error={customerCreateError}
+        title="Новий замовник"
+        description="Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
+        submitLabel="Створити клієнта"
+        onSubmit={handleCustomerCreate}
+      />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">

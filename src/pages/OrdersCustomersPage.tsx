@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CustomerDialog } from "@/components/customers";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +36,11 @@ type CustomerRow = {
   website?: string | null;
   iban?: string | null;
   logo_url?: string | null;
+  contact_name?: string | null;
+  contact_position?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  contact_birthday?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -101,6 +105,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     website: "",
     iban: "",
     logoUrl: "",
+    contactName: "",
+    contactPosition: "",
+    contactPhone: "",
+    contactEmail: "",
+    contactBirthday: "",
   });
 
   const filteredRows = useMemo(() => {
@@ -123,6 +132,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: "",
       iban: "",
       logoUrl: "",
+      contactName: "",
+      contactPosition: "",
+      contactPhone: "",
+      contactEmail: "",
+      contactBirthday: "",
     });
     setFormError(null);
   };
@@ -145,6 +159,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: row.website ?? "",
       iban: row.iban ?? "",
       logoUrl: row.logo_url ?? "",
+      contactName: row.contact_name ?? "",
+      contactPosition: row.contact_position ?? "",
+      contactPhone: row.contact_phone ?? "",
+      contactEmail: row.contact_email ?? "",
+      contactBirthday: row.contact_birthday ?? "",
     });
     setFormError(null);
     setDialogOpen(true);
@@ -199,6 +218,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: form.website.trim() || null,
       iban: form.iban.trim() || null,
       logo_url: form.logoUrl.trim() || null,
+      contact_name: form.contactName.trim() || null,
+      contact_position: form.contactPosition || null,
+      contact_phone: form.contactPhone.trim() || null,
+      contact_email: form.contactEmail.trim() || null,
+      contact_birthday: form.contactBirthday || null,
     };
 
     const basePayload: Record<string, unknown> = {
@@ -214,6 +238,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.website;
       delete clone.iban;
       delete clone.logo_url;
+      delete clone.contact_name;
+      delete clone.contact_position;
+      delete clone.contact_phone;
+      delete clone.contact_email;
+      delete clone.contact_birthday;
       return clone;
     };
 
@@ -415,133 +444,29 @@ function CustomersPage({ teamId }: { teamId: string }) {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Редагувати замовника" : "Новий замовник"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label>Назва компанії *</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Напр. ТОВ “Вектор”"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Юридична назва</Label>
-              <Input
-                value={form.legalName}
-                onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                placeholder="Повна назва"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Тип власності</Label>
-                <Select
-                  value={form.ownershipType}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, ownershipType: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Оберіть тип" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OWNERSHIP_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>ПДВ</Label>
-                <Select
-                  value={form.vatRate}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, vatRate: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Оберіть ставку" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VAT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>ЄДРПОУ / ІПН</Label>
-              <Input
-                value={form.taxId}
-                onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
-                placeholder="Код або ІПН"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Сайт</Label>
-                <Input
-                  value={form.website}
-                  onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
-                  placeholder="https://"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>IBAN</Label>
-                <Input
-                  value={form.iban}
-                  onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
-                  placeholder="UA..."
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Лого (URL)</Label>
-              <div className="flex items-center gap-3">
-                {form.logoUrl.trim() ? (
-                  <img
-                    src={form.logoUrl.trim()}
-                    alt={form.name || "logo"}
-                    className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
-                    {getInitials(form.name)}
-                  </div>
-                )}
-                <Input
-                  value={form.logoUrl}
-                  onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value }))}
-                  placeholder="Посилання на логотип"
-                />
-              </div>
-            </div>
-            {formError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {formError}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-              Скасувати
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Збереження..." : "Зберегти"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CustomerDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open && !editingId) {
+            resetForm();
+          }
+        }}
+        form={form}
+        setForm={setForm}
+        ownershipOptions={OWNERSHIP_OPTIONS}
+        vatOptions={VAT_OPTIONS}
+        saving={saving}
+        error={formError}
+        title={editingId ? "Редагувати замовника" : "Новий замовник"}
+        description={
+          editingId
+            ? undefined
+            : "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
+        }
+        submitLabel={editingId ? "Зберегти" : "Створити клієнта"}
+        onSubmit={handleSave}
+      />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[420px]">
