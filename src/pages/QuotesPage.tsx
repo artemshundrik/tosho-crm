@@ -20,6 +20,8 @@ import {
   type TeamMemberRow,
   type CustomerRow,
 } from "@/lib/toshoApi";
+import { NewQuoteDialog } from "@/components/quotes";
+import type { NewQuoteFormData } from "@/components/quotes";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -267,6 +269,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>();
+
+  // Get current user ID
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id);
+    });
+  }, []);
 
   const memberById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
@@ -654,7 +664,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCustomerSearch("");
     setCustomerId("");
     setQuoteType("merch");
-    setCatalogTypes([]);
     setSelectedTypeId("");
     setSelectedKindId("");
     setSelectedModelId("");
@@ -674,6 +683,164 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCustomerDropdownOpen(false);
     if (attachmentsInputRef.current) {
       attachmentsInputRef.current.value = "";
+    }
+    // Load catalog for new form
+    loadCatalog();
+  };
+
+  const loadCatalog = async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_types")
+        .select(`
+          id,
+          name,
+          quote_type,
+          kinds:catalog_kinds!inner(
+            id,
+            name,
+            models:catalog_models!inner(id, name, price)
+          )
+        `)
+        .eq("team_id", teamId)
+        .order("name");
+      if (error) throw error;
+      setCatalogTypes((data as any[]) ?? []);
+    } catch (e: any) {
+      setCatalogError(e?.message ?? "Не вдалося завантажити каталог.");
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const handleCustomerSearchChange = async (search: string) => {
+    if (!search.trim()) {
+      setCustomers([]);
+      return;
+    }
+    setCustomersLoading(true);
+    try {
+      const data = await listCustomersBySearch(teamId, search);
+      setCustomers(data);
+    } catch {
+      setCustomers([]);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
+  // ✨ New Linear-style form submit handler
+  const handleNewFormSubmit = async (data: NewQuoteFormData) => {
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      if (!teamId) {
+        throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
+      }
+      // 1. Create quote
+      const created = await createQuote({
+        teamId,
+        customerId: data.customerId!,
+        quoteType: data.quoteType,
+        comment: data.deadlineNote?.trim() || null,
+        currency: data.currency,
+        assignedTo: data.managerId || null,
+        deadlineAt: data.deadline?.toISOString() || null,
+        deadlineNote: data.deadlineNote?.trim() || null,
+      });
+
+      if (!created?.id) {
+        throw new Error("Failed to create quote");
+      }
+
+      // 2. Create quote item if model is selected
+      if (data.modelId && data.quantity) {
+        // Find selected model details from catalog
+        const type = catalogTypes.find(t => t.id === data.categoryId);
+        const kind = type?.kinds.find(k => k.id === data.kindId);
+        const model = kind?.models.find(m => m.id === data.modelId);
+
+        // Prepare methods payload from print applications
+        const isUuid = (value?: string | null) =>
+          typeof value === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            value
+          );
+        const methodsPayload = data.printApplications.length > 0
+          ? data.printApplications.map((app) => ({
+              method_id: isUuid(app.method) ? app.method : null,
+              count: 1,
+              print_position_id: isUuid(app.position) ? app.position : null,
+              print_width_mm: app.width ? Number(app.width) : null,
+              print_height_mm: app.height ? Number(app.height) : null,
+            }))
+          : null;
+
+        const primaryPrint = methodsPayload?.[0] ?? null;
+
+        const { error: itemError } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .insert({
+            id: crypto.randomUUID(),
+            team_id: teamId,
+            quote_id: created.id,
+            position: 1,
+            name: model?.name ?? "Позиція",
+            description: null,
+            qty: data.quantity,
+            unit_price: model?.price ?? 0,
+            line_total: data.quantity * (model?.price ?? 0),
+            catalog_type_id: data.categoryId,
+            catalog_kind_id: data.kindId,
+            catalog_model_id: data.modelId,
+            print_position_id: primaryPrint?.print_position_id ?? null,
+            print_width_mm: primaryPrint?.print_width_mm ?? null,
+            print_height_mm: primaryPrint?.print_height_mm ?? null,
+            methods: methodsPayload,
+            unit: data.quantityUnit,
+          });
+        if (itemError) throw itemError;
+      }
+
+      // 3. Upload files if any
+      let attachmentWarning: string | null = null;
+      if (data.files.length > 0) {
+        try {
+          await uploadFilesForQuote(created.id, data.files);
+        } catch (attachmentError: any) {
+          attachmentWarning = attachmentError?.message ?? "Не вдалося завантажити файли.";
+        }
+      }
+
+      // 4. Success - close form and navigate
+      setCreateOpen(false);
+
+      await loadQuotes();
+      navigate(`/orders/estimates/${created.id}`);
+
+      // Show toast
+      if (attachmentWarning) {
+        toast.error("Файли не завантажено повністю", {
+          description: attachmentWarning,
+        });
+      } else {
+        toast.success("Прорахунок створено!", {
+          description: `#${created.id.slice(0, 8)}`,
+        });
+      }
+    } catch (e: any) {
+      console.error("Error creating quote:", e);
+      setCreateError(e?.message ?? "Не вдалося створити прорахунок.");
+      toast.error("Помилка створення прорахунку", {
+        description: e?.message,
+      });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -998,6 +1165,108 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         failures.length === pendingAttachments.length
           ? "Не вдалося завантажити файли замовника."
           : `Не всі файли завантажилися (${failures.length}/${pendingAttachments.length}).`
+      );
+    }
+  };
+
+  const uploadFilesForQuote = async (quoteId: string, files: File[]) => {
+    if (!files || files.length === 0) return;
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      throw new Error(userError?.message ?? "Користувач не авторизований");
+    }
+
+    const uploadedBy = userData.user.id;
+
+    let membershipVerified = false;
+    let membershipFound = false;
+    try {
+      const { data: membership, error: membershipError } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", uploadedBy)
+        .eq("team_id", teamId)
+        .maybeSingle();
+      if (membershipError) {
+        const message = membershipError.message?.toLowerCase?.() ?? "";
+        if (!message.includes("does not exist") && !message.includes("relation")) {
+          throw membershipError;
+        }
+        membershipVerified = false;
+      }
+      if (!membershipError) {
+        membershipVerified = true;
+        membershipFound = !!membership;
+      }
+      if (membershipVerified && !membershipFound) {
+        throw new Error("Користувач не є членом команди для цього прорахунку.");
+      }
+    } catch (error: any) {
+      const message = error?.message?.toLowerCase?.() ?? "";
+      if (!message.includes("does not exist") && !message.includes("relation")) {
+        throw error;
+      }
+    }
+
+    const failures: string[] = [];
+
+    for (const file of files) {
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
+      const baseName = `${Date.now()}-${safeName}`;
+      const candidatePaths = [
+        `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+        `${teamId}/quote-attachments/${quoteId}/${baseName}`,
+        `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
+        `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
+      ];
+
+      let storagePath = "";
+      let lastError: unknown = null;
+
+      for (const candidate of candidatePaths) {
+        const { error: uploadError } = await supabase.storage
+          .from(QUOTE_ATTACHMENTS_BUCKET)
+          .upload(candidate, file, { upsert: true, contentType: file.type });
+        if (!uploadError) {
+          storagePath = candidate;
+          lastError = null;
+          break;
+        }
+        lastError = uploadError;
+      }
+
+      if (!storagePath) {
+        failures.push(file.name);
+        console.error("Attachment upload failed", lastError);
+        continue;
+      }
+
+      const { error: insertError } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .insert({
+          team_id: teamId,
+          quote_id: quoteId,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          storage_bucket: QUOTE_ATTACHMENTS_BUCKET,
+          storage_path: storagePath,
+          uploaded_by: uploadedBy,
+        });
+
+      if (insertError) {
+        failures.push(file.name);
+        console.error("Attachment insert failed", insertError);
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new Error(
+        failures.length === files.length
+          ? "Не вдалося завантажити файли замовника."
+          : `Не всі файли завантажилися (${failures.length}/${files.length}).`
       );
     }
   };
@@ -1436,10 +1705,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="[&_th]:px-4 [&_td]:px-4">
               <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30 border-b">
-                  <TableHead className="w-[44px] pl-4">
+                <TableRow className="bg-muted/30 hover:bg-muted/30 border-b [&>th+th]:border-l [&>th+th]:border-border/50">
+                  <TableHead className="w-[44px]">
                     <Checkbox
                       checked={
                         selectedIds.size === 0
@@ -1452,12 +1721,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       aria-label="Вибрати всі"
                     />
                   </TableHead>
-                  <TableHead className="w-[140px] min-w-[140px] pl-6">
+                  <TableHead className="w-[140px] min-w-[140px]">
                     <button
                       onClick={() => handleSort("number")}
                       className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
                     >
-                      <Hash className="h-3.5 w-3.5" />
                       Номер
                       {sortBy === "number" && (
                         <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
@@ -1469,7 +1737,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       onClick={() => handleSort("date")}
                       className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
                     >
-                      <Calendar className="h-3.5 w-3.5" />
                       Дата
                       {sortBy === "date" && (
                         <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
@@ -1477,34 +1744,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </button>
                   </TableHead>
                   <TableHead className="w-[220px]">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      <Building2 className="h-3.5 w-3.5" />
+                    <div className="flex items-center font-semibold">
                       Замовник
                     </div>
                   </TableHead>
                   <TableHead className="w-[200px]">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      <User className="h-3.5 w-3.5" />
+                    <div className="flex items-center font-semibold">
                       Менеджер
                     </div>
                   </TableHead>
-                  <TableHead className="w-[140px] font-semibold text-center">
+                  <TableHead className="w-[140px] font-semibold">
                     Дедлайн
                   </TableHead>
-                  <TableHead className="w-[120px] font-semibold text-center">Статус</TableHead>
-                  <TableHead className="w-[80px] font-semibold text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      Файли
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[120px] font-semibold text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Shirt className="h-3.5 w-3.5" />
+                  <TableHead className="w-[120px] font-semibold">Статус</TableHead>
+                  <TableHead className="w-[120px] font-semibold">
+                    <div className="flex items-center">
                       Тип
                     </div>
                   </TableHead>
-                  <TableHead className="w-[60px] pr-6"></TableHead>
+                  <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1514,7 +1772,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableRow
                       key={row.id}
                       className={cn(
-                        "hover:bg-muted/15 cursor-pointer group transition-colors",
+                        "hover:bg-muted/15 cursor-pointer group transition-colors [&>td+td]:border-l [&>td+td]:border-border/50",
                         isSelected && "bg-primary/5 border-primary/30"
                       )}
                       onClick={() => navigate(`/orders/estimates/${row.id}`)}
@@ -1527,14 +1785,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         }
                       }}
                     >
-                      <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleRow(row.id)}
                           aria-label="Вибрати рядок"
                         />
                       </TableCell>
-                      <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px] pl-6">
+                      <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
                         <span className="group-hover:underline underline-offset-2">
                           {row.number ?? "—"}
                         </span>
@@ -1596,7 +1854,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center px-2">
+                      <TableCell>
                         {(() => {
                           const badge = getDeadlineBadge(row.deadline_at ?? null);
                           const titleParts = [
@@ -1616,7 +1874,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           );
                         })()}
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-2">
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const normalizedStatus = normalizeStatus(row.status);
                           const Icon = statusIcons[normalizedStatus] ?? Clock;
@@ -1634,26 +1892,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="text-center px-2">
-                        {attachmentCounts[row.id] ? (
-                          <div
-                            className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-xs font-medium"
-                            title={`Файлів: ${attachmentCounts[row.id]}`}
-                          >
-                            <Paperclip className="h-3 w-3" />
-                            {attachmentCounts[row.id]}
-                          </div>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-                            title="Файлів немає"
-                          >
-                            <Paperclip className="h-3 w-3 opacity-50" />
-                            0
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center px-2">
+                      <TableCell>
                         {(() => {
                           const Icon = quoteTypeIcon(row.quote_type);
                           return (
@@ -1664,7 +1903,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           );
                         })()}
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()} className="pr-6">
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1723,678 +1962,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         )}
       </div>
 
-      {/* Create Dialog - Improved */}
-      <Dialog
+      {/* ✨ New Linear-style Quote Form */}
+      <NewQuoteDialog
         open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) {
-            setCustomerCreateOpen(false);
-          }
+        onOpenChange={setCreateOpen}
+        onSubmit={handleNewFormSubmit}
+        teamId={teamId}
+        customers={customers}
+        customersLoading={customersLoading}
+        onCustomerSearch={handleCustomerSearchChange}
+        onCreateCustomer={(name) => {
+          resetCustomerForm(name || "");
+          setCustomerCreateOpen(true);
         }}
-      >
-      <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 overflow-hidden sm:mx-6">
-          <div className="p-6 border-b border-border bg-gradient-to-r from-muted/10 to-transparent">
-            <DialogHeader className="space-y-3">
-              <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                <PlusIcon className="h-5 w-5" />
-                Новий прорахунок
-              </DialogTitle>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-3 text-xs font-semibold">
-                  {[1, 2, 3, 4].map((step) => (
-                    <button
-                      key={step}
-                      type="button"
-                      onClick={() => handleStepChange(step as 1 | 2 | 3 | 4)}
-                      className={cn(
-                        "flex items-center gap-2 transition-colors",
-                        step === createStep
-                          ? "text-foreground"
-                          : step < createStep
-                          ? "text-muted-foreground"
-                          : "text-muted-foreground/70"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "h-7 w-7 rounded-full border flex items-center justify-center text-[11px] font-semibold",
-                          step === createStep
-                            ? "border-primary/40 bg-primary/10 text-foreground"
-                            : step < createStep
-                            ? "border-border/60 bg-muted/30 text-muted-foreground"
-                            : "border-border/50 bg-muted/10 text-muted-foreground/70"
-                        )}
-                      >
-                        {step}
-                      </span>
-                      {step === 1 && "Клієнт"}
-                      {step === 2 && "Продукція"}
-                      {step === 3 && "Технічні"}
-                      {step === 4 && "Додатково"}
-                    </button>
-                  ))}
-                </div>
-                <div className="ml-auto text-xs text-muted-foreground">
-                  Крок {createStep} з 4
-                </div>
-              </div>
-            </DialogHeader>
-          </div>
+        teamMembers={teamMembers}
+        catalogTypes={catalogTypes}
+        currentUserId={currentUserId}
+      />
 
-          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-190px)]">
-            {createStep === 1 && (
-              <>
-                {/* Customer Search */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Клієнт <span className="text-destructive">*</span>
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="h-11 pl-10"
-                      value={customerSearch}
-                      onChange={(e) => {
-                        setCustomerSearch(e.target.value);
-                        if (!e.target.value.trim()) {
-                          setCustomerId("");
-                        }
-                      }}
-                      onFocus={() => {
-                        if (customerDropdownTimer.current) {
-                          window.clearTimeout(customerDropdownTimer.current);
-                          customerDropdownTimer.current = null;
-                        }
-                        setCustomerDropdownOpen(true);
-                      }}
-                      onBlur={() => {
-                        customerDropdownTimer.current = window.setTimeout(() => {
-                          setCustomerDropdownOpen(false);
-                        }, 120);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") {
-                          closeCustomerDropdown();
-                        }
-                      }}
-                      placeholder="Почніть вводити назву клієнта..."
-                      disabled={creating}
-                      aria-expanded={customerDropdownOpen}
-                    />
-                    {customerId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomerId("");
-                          setCustomerSearch("");
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    {customerDropdownOpen && customerSearch.trim() && (
-                      <div
-                        className="absolute left-0 right-0 top-full mt-1 z-30 max-h-52 overflow-auto rounded-lg border border-border bg-background shadow-lg"
-                        onMouseDown={(event) => event.preventDefault()}
-                      >
-                        {customersLoading ? (
-                          <div className="px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Завантаження...
-                          </div>
-                        ) : customers.length === 0 ? (
-                          <div className="px-4 py-8 text-center">
-                            <p className="text-sm text-muted-foreground mb-3">Клієнтів не знайдено</p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => {
-                                closeCustomerDropdown();
-                                openCustomerCreate(customerSearch.trim());
-                              }}
-                            >
-                              <UserPlus className="h-4 w-4" />
-                              Створити нового клієнта
-                            </Button>
-                          </div>
-                        ) : (
-                          customers.map((c) => {
-                            const label = c.name || c.legal_name || "Без назви";
-                            const isSelected = customerId === c.id;
-                            return (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => {
-                                  setCustomerId(c.id);
-                                  setCustomerSearch(label);
-                                  closeCustomerDropdown();
-                                }}
-                                className={cn(
-                                  "w-full px-4 py-3 text-left text-sm hover:bg-muted/60 transition-colors flex items-center justify-between",
-                                  isSelected && "bg-primary/10 hover:bg-primary/20"
-                                )}
-                                disabled={creating}
-                              >
-                                <span className="font-medium">{label}</span>
-                                {isSelected && <ChevronRight className="h-4 w-4 text-primary" />}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quote Type */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-semibold">Тип прорахунку</Label>
-                  <Tabs value={quoteType} onValueChange={setQuoteType}>
-                    <TabsList className="grid w-full grid-cols-3 gap-2 bg-transparent p-0">
-                      {QUOTE_TYPE_OPTIONS.map((option) => {
-                        const Icon = option.icon;
-                        return (
-                          <TabsTrigger
-                            key={option.id}
-                            value={option.id}
-                            className={cn(
-                              "h-11 gap-2 rounded-xl border border-border/60 bg-muted/20 text-sm font-semibold",
-                              "data-[state=active]:bg-primary/10 data-[state=active]:border-primary/40 data-[state=active]:text-foreground",
-                              "hover:bg-muted/40"
-                            )}
-                          >
-                            <Icon className="h-4 w-4" />
-                            {option.label}
-                          </TabsTrigger>
-                        );
-                      })}
-                    </TabsList>
-                  </Tabs>
-                </div>
-
-                {/* Deadline */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Дедлайн (готовність до відвантаження)</Label>
-                  <Input
-                    type="date"
-                    className="h-11"
-                    value={deadlineDate}
-                    onChange={(e) => setDeadlineDate(e.target.value)}
-                  />
-                  <Input
-                    className="h-11"
-                    value={deadlineNote}
-                    onChange={(e) => setDeadlineNote(e.target.value)}
-                    placeholder="Коментар до дедлайну (опціонально)"
-                    maxLength={200}
-                  />
-                </div>
-              </>
-            )}
-
-            {createStep === 2 && (
-              <>
-                {/* Catalog Selection */}
-                <div className="space-y-3">
-              <Label className="text-sm font-semibold">Категорія</Label>
-              <Select value={selectedTypeId} onValueChange={(value) => {
-                setSelectedTypeId(value);
-                const nextKindId = catalogTypes.find((t) => t.id === value)?.kinds[0]?.id ?? "";
-                const nextModelId = catalogTypes.find((t) => t.id === value)?.kinds[0]?.models[0]?.id ?? "";
-                setSelectedKindId(nextKindId);
-                setSelectedModelId(nextModelId);
-                setPrintConfigs([createPrintConfig()]);
-              }}>
-                <SelectTrigger className="h-11">
-                  <SelectValue placeholder={catalogLoading ? "Завантаження..." : "Оберіть категорію"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalogTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {catalogError && (
-                <div className="text-xs text-destructive">{catalogError}</div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Вид продукції</Label>
-                <Select value={selectedKindId} onValueChange={(value) => {
-                  setSelectedKindId(value);
-                  const nextModelId = selectedKinds.find((k) => k.id === value)?.models[0]?.id ?? "";
-                  setSelectedModelId(nextModelId);
-                  setPrintConfigs([createPrintConfig()]);
-                }}>
-                  <SelectTrigger className="h-11" disabled={!selectedTypeId}>
-                    <SelectValue placeholder={selectedTypeId ? "Оберіть вид" : "Спочатку категорія"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedKinds.map((kind) => (
-                      <SelectItem key={kind.id} value={kind.id}>
-                        {kind.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Модель</Label>
-                <Select value={selectedModelId} onValueChange={setSelectedModelId}>
-                  <SelectTrigger className="h-11" disabled={!selectedKindId}>
-                    <SelectValue placeholder={selectedKindId ? "Оберіть модель" : "Спочатку вид"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Quantity */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Кількість</Label>
-                <Input
-                  className="h-11"
-                  value={itemQty}
-                  onChange={(e) => setItemQty(e.target.value)}
-                  placeholder="Напр. 100"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Одиниця</Label>
-                <Select value={itemUnit} onValueChange={setItemUnit}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="шт">шт</SelectItem>
-                    <SelectItem value="тираж">тираж</SelectItem>
-                    <SelectItem value="набір">набір</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-              </>
-            )}
-
-            {createStep === 3 && (
-              <>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm font-semibold">Нанесення</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPrintConfigs((prev) => [...prev, createPrintConfig()])}
-                      className="gap-2"
-                    >
-                      <PlusIcon className="h-4 w-4" />
-                      Додати нанесення
-                    </Button>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Кожне нанесення — окремий блок: тип, місце та розміри. Додайте стільки, скільки потрібно.
-                  </div>
-
-                  <div className="space-y-4">
-                    {printConfigs.map((print, index) => (
-                      <div
-                        key={print.id}
-                        className="rounded-2xl border border-border/60 bg-muted/10 p-4 space-y-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-semibold">Нанесення {index + 1}</div>
-                          {printConfigs.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setPrintConfigs((prev) =>
-                                  prev.length > 1 ? prev.filter((item) => item.id !== print.id) : prev
-                                )
-                              }
-                              className="h-8 w-8"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm font-semibold">Тип нанесення</Label>
-                          {availableMethods.length === 0 ? (
-                            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg px-3 py-2">
-                              Немає доступних методів для цього виду
-                            </div>
-                          ) : (
-                            <ToggleGroup
-                              type="single"
-                              value={print.methodId}
-                              onValueChange={(value) =>
-                                setPrintConfigs((prev) =>
-                                  prev.map((item) =>
-                                    item.id === print.id
-                                      ? { ...item, methodId: String(value) }
-                                      : item
-                                  )
-                                )
-                              }
-                              className="flex flex-wrap gap-2 justify-start"
-                            >
-                              {availableMethods.map((method) => (
-                                <ToggleGroupItem
-                                  key={method.id}
-                                  value={method.id}
-                                  className={cn(
-                                    "rounded-full border px-3 py-1.5 text-sm",
-                                    "data-[state=on]:border-primary/50 data-[state=on]:bg-primary/10",
-                                    "border-border/60 bg-muted/20"
-                                  )}
-                                >
-                                  {method.name}
-                                </ToggleGroupItem>
-                              ))}
-                            </ToggleGroup>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm font-semibold">Місце нанесення</Label>
-                          <Select
-                            value={print.positionId}
-                            onValueChange={(value) =>
-                              setPrintConfigs((prev) =>
-                                prev.map((item) =>
-                                  item.id === print.id ? { ...item, positionId: value } : item
-                                )
-                              )
-                            }
-                          >
-                            <SelectTrigger className="h-11" disabled={!selectedKindId}>
-                              <SelectValue placeholder={selectedKindId ? "Оберіть місце" : "Спочатку вид"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availablePrintPositions.map((pos) => (
-                                <SelectItem key={pos.id} value={pos.id}>
-                                  {pos.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold">Висота (мм)</Label>
-                            <Input
-                              className="h-11"
-                              value={print.heightMm}
-                              onChange={(e) =>
-                                setPrintConfigs((prev) =>
-                                  prev.map((item) =>
-                                    item.id === print.id ? { ...item, heightMm: e.target.value } : item
-                                  )
-                                )
-                              }
-                              placeholder="Напр. 80"
-                              inputMode="numeric"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-semibold">Ширина (мм)</Label>
-                            <Input
-                              className="h-11"
-                              value={print.widthMm}
-                              onChange={(e) =>
-                                setPrintConfigs((prev) =>
-                                  prev.map((item) =>
-                                    item.id === print.id ? { ...item, widthMm: e.target.value } : item
-                                  )
-                                )
-                              }
-                              placeholder="Напр. 120"
-                              inputMode="numeric"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {createStep === 4 && (
-              <>
-                {/* Comment */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Коментар (опціонально)</Label>
-                  <Textarea
-                    className="min-h-[80px] resize-none"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Додайте короткий опис або примітки..."
-                    maxLength={200}
-                    disabled={creating}
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Максимум 200 символів</span>
-                    <span>{comment.length}/200</span>
-                  </div>
-                </div>
-
-                {/* Customer Files */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm font-semibold flex items-center gap-2">
-                      <Paperclip className="h-4 w-4" />
-                      Файл від замовника
-                    </Label>
-                  </div>
-
-                  <input
-                    ref={attachmentsInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    onChange={(e) => handleAttachmentSelect(e.target.files)}
-                  />
-
-                  {pendingAttachments.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => attachmentsInputRef.current?.click()}
-                      disabled={creating}
-                      className={cn(
-                        "w-full rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors",
-                        "border-border/60 text-muted-foreground hover:border-primary/40 hover:bg-primary/5",
-                        creating && "opacity-60 cursor-not-allowed"
-                      )}
-                    >
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
-                      <div className="text-sm font-medium text-foreground mb-1">
-                        Додайте файли для цього прорахунку
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        До {MAX_ATTACHMENTS} файлів, до 50 MB кожен
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      {pendingAttachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/10 p-3"
-                        >
-                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted/40 flex items-center justify-center">
-                            {attachment.previewUrl ? (
-                              <img
-                                src={attachment.previewUrl}
-                                alt={attachment.file.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <Paperclip className="h-5 w-5 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">{attachment.file.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatFileSize(attachment.file.size)}
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleRemoveAttachment(attachment.id)}
-                            disabled={creating}
-                            aria-label={`Видалити ${attachment.file.name}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-                        <span>
-                          Додано {pendingAttachments.length} / {MAX_ATTACHMENTS}
-                        </span>
-                        {pendingAttachments.length < MAX_ATTACHMENTS && (
-                          <button
-                            type="button"
-                            className="text-primary hover:underline"
-                            onClick={() => attachmentsInputRef.current?.click()}
-                            disabled={creating}
-                          >
-                            Додати ще
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {attachmentsError && (
-                    <div className="text-xs text-destructive">{attachmentsError}</div>
-                  )}
-                </div>
-
-                {/* Row with Assigned To and Currency */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Відповідальний
-                    </Label>
-                    <Select value={assignedTo} onValueChange={setAssignedTo} disabled={creating}>
-                      <SelectTrigger className="h-11">
-                        <SelectValue placeholder="Не призначати" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Не призначати</SelectItem>
-                        {teamMembers.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Валюта</Label>
-                    <Select value={currency} onValueChange={setCurrency} disabled={creating}>
-                      <SelectTrigger className="h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="UAH">UAH (₴)</SelectItem>
-                        <SelectItem value="USD">USD ($)</SelectItem>
-                        <SelectItem value="EUR">EUR (€)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {createError && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-start gap-2">
-                <span className="text-base shrink-0">⚠️</span>
-                <span>{createError}</span>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="p-6 border-t border-border bg-gradient-to-r from-muted/10 to-transparent">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
-              Скасувати
-            </Button>
-            <div className="flex items-center gap-2">
-              {createStep > 1 && (
-                <Button
-                  variant="outline"
-                  onClick={() => setCreateStep((prev) => (prev - 1) as 1 | 2 | 3 | 4)}
-                  disabled={creating}
-                >
-                  Назад
-                </Button>
-              )}
-              {createStep < 4 && (
-                <Button onClick={handleNextStep} disabled={creating}>
-                  Далі
-                </Button>
-              )}
-              {createStep === 4 && (
-                <Button
-                  onClick={handleCreate}
-                  disabled={
-                    creating ||
-                    !customerId ||
-                    !selectedTypeId ||
-                    !selectedKindId ||
-                    !selectedModelId ||
-                    !hasValidPrintConfigs
-                  }
-                  className="gap-2"
-                >
-                  {creating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Створення...
-                    </>
-                  ) : (
-                    <>
-                      <PlusIcon className="h-4 w-4" />
-                      Створити
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Old multi-step form removed - using NewQuoteDialog instead */}
 
       <Dialog
         open={customerCreateOpen}

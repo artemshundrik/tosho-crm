@@ -164,10 +164,11 @@ const buttonVariants = cva(
       // ✅ Height (як ти хотів “як була”)
       size: {
         xxs: "h-7 px-2 text-[11px] leading-none",
-        xs: "h-8 px-4 text-sm",
-        sm: "h-9 px-3",          // 36
-        md: "h-10 px-5",         // 40 (default)
-        lg: "h-11 px-6",         // 44
+        xs: "h-8 px-3 text-[13px] leading-[18px]",
+        sm: "h-9 px-3.5 text-sm",
+        md: "h-10 px-4 text-[15px]",
+        lg: "h-11 px-5 text-[15px]",
+        compact: "h-8 px-3 text-[13px] leading-[18px]",
         iconXs: "h-8 w-8 px-0",
         iconSm: "h-7 w-7 px-0",
         iconMd: "h-9 w-9 px-0",

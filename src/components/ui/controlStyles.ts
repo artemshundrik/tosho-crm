@@ -7,7 +7,7 @@ export function cx(...arr: Array<string | undefined | false | null>) {
  * Всі кольори — тільки через design tokens.
  */
 export const CONTROL_BASE = cx(
-  "h-10 rounded-[var(--radius-lg)] bg-background",
+  "h-9 rounded-[var(--radius-md)] bg-background",
   "border border-input",
   "text-foreground placeholder:text-muted-foreground",
   "transition-colors",
@@ -19,7 +19,7 @@ export const CONTROL_BASE = cx(
 );
 
 export const CONTROL_ICON_BTN = cx(
-  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-lg)]",
+  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)]",
   "text-muted-foreground hover:text-foreground",
   "hover:bg-muted",
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"

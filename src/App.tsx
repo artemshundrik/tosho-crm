@@ -141,6 +141,7 @@ const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
 const TournamentImportLabPage = lazy(() => import("./pages/dev/TournamentImportLabPage"));
 const TournamentStandingsImportPage = lazy(() => import("./pages/dev/TournamentStandingsImportPage"));
+const NewQuoteFormDemo = lazy(() => import("./pages/NewQuoteFormDemo").then((module) => ({ default: module.NewQuoteFormDemo })));
 
 function RouteSuspense({
   children,
@@ -550,6 +551,16 @@ function AppRoutes() {
                 <TournamentStandingsImportPage />
               </RouteSuspense>
             </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dev/new-quote-form"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <RouteSuspense>
+              <NewQuoteFormDemo />
+            </RouteSuspense>
           </RequireAuth>
         }
       />
