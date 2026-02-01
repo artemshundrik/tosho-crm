@@ -15,6 +15,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { uk } from "date-fns/locale";
 import {
   Building2,
   Check,
@@ -112,10 +115,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     (option) => option.value === form.ownershipType
   );
   const currentVat = vatOptions.find((option) => option.value === form.vatRate);
+  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [vatOpen, setVatOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
+  const [birthdayOpen, setBirthdayOpen] = React.useState(false);
+
+  const birthdayDate = form.contactBirthday
+    ? new Date(form.contactBirthday)
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -358,12 +367,40 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
               <div className="grid gap-2">
                 <Label>День народження</Label>
-                <Input
-                  type="date"
-                  value={form.contactBirthday}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contactBirthday: e.target.value }))}
-                  className="h-9"
-                />
+                <Popover open={birthdayOpen} onOpenChange={setBirthdayOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-9 w-full justify-between px-3 text-sm font-normal",
+                        !form.contactBirthday && "text-muted-foreground"
+                      )}
+                    >
+                      {form.contactBirthday
+                        ? format(birthdayDate ?? new Date(), "dd.MM.yyyy", { locale: uk })
+                        : "dd.mm.yyyy"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={birthdayDate}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        setForm((prev) => ({
+                          ...prev,
+                          contactBirthday: format(date, "yyyy-MM-dd"),
+                        }));
+                        setBirthdayOpen(false);
+                      }}
+                      captionLayout="dropdown-buttons"
+                      fromYear={currentYear - 100}
+                      toYear={currentYear}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>
