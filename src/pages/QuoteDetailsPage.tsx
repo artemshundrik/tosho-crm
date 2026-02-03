@@ -111,6 +111,13 @@ const canPreviewImage = (extension?: string | null) =>
 
 const canPreviewPdf = (extension?: string | null) => extension === "PDF";
 
+const formatCurrencyCompact = (value: number, currency?: string | null) =>
+  new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: currency ?? "UAH",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
 const CANCEL_REASON_OPTIONS = [
   "Бюджет не підходить",
   "Обрали іншого підрядника",
@@ -2027,7 +2034,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 {items.length > 0 && (
                   <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                     <Package className="h-3 w-3" />
-                    {items.length} {items.length === 1 ? "позиція" : "позицій"}
+                    Модель обрана
                   </div>
                 )}
               </div>
@@ -2043,12 +2050,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             )}
           </Card>
 
-          {/* Items Card (single model) */}
+          {/* Model Summary */}
           <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Модель
+                Обрана модель
               </div>
               {items.length > 0 ? (
                 <Button variant="outline" size="sm" onClick={() => openEditItem(items[0])} className="gap-2">
@@ -2074,8 +2081,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/70 p-8 text-center">
                 <Package className="h-12 w-12 text-muted-foreground/30" />
                 <div>
-                  <p className="font-medium mb-1">Немає позицій</p>
-                  <p className="text-sm text-muted-foreground">Додайте першу позицію для розрахунку</p>
+                  <p className="font-medium mb-1">Модель не обрана</p>
+                  <p className="text-sm text-muted-foreground">Оберіть модель для розрахунку</p>
                 </div>
                 <Button size="sm" onClick={openNewItem} className="gap-2">
                   <Plus className="h-4 w-4" />
@@ -2083,191 +2090,81 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-6 px-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-b">
-                      <TableHead className="font-semibold">Назва</TableHead>
-                      <TableHead className="w-24 font-semibold">К-сть</TableHead>
-                      <TableHead className="w-20 font-semibold">Од.</TableHead>
-                      <TableHead className="w-32 text-right font-semibold">Ціна</TableHead>
-                      <TableHead className="w-32 text-right font-semibold">Сума</TableHead>
-                      <TableHead className="w-24 text-right font-semibold">Дії</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.slice(0, 1).map((item) => {
-                      const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
-                      const resolvedKindId = item.catalogKindId ?? item.productKindId;
-                      const resolvedModelId = item.catalogModelId ?? item.productModelId;
-                      const typeLabel = getTypeLabel(catalogTypes, resolvedTypeId);
-                      const kindLabel = getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
-                      const modelLabel = getModelLabel(
-                        catalogTypes,
-                        resolvedTypeId,
-                        resolvedKindId,
-                        resolvedModelId
-                      );
-                      const metaLine = [typeLabel, kindLabel, modelLabel].filter(Boolean).join(" / ");
-                      const positionLabel = getPrintPositionLabel(
-                        catalogTypes,
-                        resolvedTypeId,
-                        resolvedKindId,
-                        item.printPositionId
-                      );
-                      const sizeLabel =
-                        item.printWidthMm && item.printHeightMm
-                          ? `${item.printWidthMm}×${item.printHeightMm} мм`
-                          : item.printWidthMm
-                          ? `${item.printWidthMm} мм`
-                          : item.printHeightMm
-                          ? `${item.printHeightMm} мм`
-                          : null;
-                      const hasMethodPrints = Boolean(
-                        item.methods?.some(
-                          (method) =>
-                            method.printPositionId || method.printWidthMm || method.printHeightMm
-                        )
-                      );
+              items.slice(0, 1).map((item) => {
+                const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
+                const resolvedKindId = item.catalogKindId ?? item.productKindId;
+                const resolvedModelId = item.catalogModelId ?? item.productModelId;
+                const typeLabel = getTypeLabel(catalogTypes, resolvedTypeId);
+                const kindLabel = getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
+                const modelLabel = getModelLabel(
+                  catalogTypes,
+                  resolvedTypeId,
+                  resolvedKindId,
+                  resolvedModelId
+                );
+                const metaLine = [typeLabel, kindLabel, modelLabel].filter(Boolean).join(" / ");
+                const positionLabel = getPrintPositionLabel(
+                  catalogTypes,
+                  resolvedTypeId,
+                  resolvedKindId,
+                  item.printPositionId
+                );
+                const sizeLabel =
+                  item.printWidthMm && item.printHeightMm
+                    ? `${item.printWidthMm}×${item.printHeightMm} мм`
+                    : item.printWidthMm
+                    ? `${item.printWidthMm} мм`
+                    : item.printHeightMm
+                    ? `${item.printHeightMm} мм`
+                    : null;
+                const hasMethodPrints = Boolean(
+                  item.methods?.some(
+                    (method) =>
+                      method.printPositionId || method.printWidthMm || method.printHeightMm
+                  )
+                );
 
-                      return (
-                        <TableRow key={item.id} className="group">
-                          <TableCell>
-                            <div className="font-medium">{item.title}</div>
-                            {metaLine && (
-                              <div className="text-xs text-muted-foreground mt-0.5">{metaLine}</div>
-                            )}
-                            {!hasMethodPrints && (positionLabel || sizeLabel) && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {positionLabel ? `Місце: ${positionLabel}` : "Місце: —"}
-                                {sizeLabel ? ` · ${sizeLabel}` : ""}
-                              </div>
-                            )}
-                            {item.methods && item.methods.length > 0 && (
-                              <>
-                                {hasMethodPrints ? (
-                                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                    {item.methods.map((method) => {
-                                      const methodLabel =
-                                        getMethodLabel(
-                                          catalogTypes,
-                                          item.catalogTypeId,
-                                          item.catalogKindId,
-                                          method.methodId
-                                        ) ?? "—";
-                                      const methodCountLabel = method.count > 1 ? ` ×${method.count}` : "";
-                                      const methodPositionLabel = method.printPositionId
-                                        ? getPrintPositionLabel(
-                                            catalogTypes,
-                                            resolvedTypeId,
-                                            resolvedKindId,
-                                            method.printPositionId
-                                          )
-                                        : null;
-                                      const methodSizeLabel =
-                                        method.printWidthMm && method.printHeightMm
-                                          ? `${method.printWidthMm}×${method.printHeightMm} мм`
-                                          : method.printWidthMm
-                                          ? `${method.printWidthMm} мм`
-                                          : method.printHeightMm
-                                          ? `${method.printHeightMm} мм`
-                                          : null;
-                                      return (
-                                        <div key={method.id} className="flex flex-wrap items-center gap-1">
-                                          <span className="font-medium text-foreground/90">
-                                            {methodLabel}
-                                            {methodCountLabel}
-                                          </span>
-                                          {methodPositionLabel ? <span>· {methodPositionLabel}</span> : null}
-                                          {methodSizeLabel ? <span>· {methodSizeLabel}</span> : null}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {item.methods.map((method) => (
-                                      <Badge key={method.id} variant="outline" className="text-xs">
-                                        {getMethodLabel(
-                                          catalogTypes,
-                                          item.catalogTypeId,
-                                          item.catalogKindId,
-                                          method.methodId
-                                        ) ?? "—"}
-                                        {method.count > 1 && ` ×${method.count}`}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            {item.attachment && (
-                              <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
-                                <Paperclip className="h-3.5 w-3.5" />
-                                <a
-                                  href={item.attachment.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="underline decoration-dotted"
-                                >
-                                  {item.attachment.name}
-                                </a>
-                              </div>
-                            )}
-                            {item.description && (
-                              <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                                {item.description}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingQty === item.id ? (
-                              <Input
-                                type="number"
-                                value={qtyValue}
-                                onChange={(e) => setQtyValue(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") saveQtyEdit(item.id);
-                                  if (e.key === "Escape") setEditingQty(null);
-                                }}
-                                onBlur={() => saveQtyEdit(item.id)}
-                                className="h-8 w-20"
-                                autoFocus
-                              />
-                            ) : (
-                              <button
-                                onClick={() => startQtyEdit(item.id, item.qty)}
-                                className="hover:text-primary transition-colors font-semibold w-full text-left"
-                              >
-                                {item.qty}
-                              </button>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{item.unit}</TableCell>
-                          <TableCell className="text-right font-mono tabular-nums">
-                            {item.price.toLocaleString("uk-UA")}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold tabular-nums">
-                            {(item.qty * item.price).toLocaleString("uk-UA")}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => openEditItem(item)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                return (
+                  <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                        IMG
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-base font-semibold truncate">{item.title}</div>
+                        {metaLine && (
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">{metaLine}</div>
+                        )}
+                        {!hasMethodPrints && (positionLabel || sizeLabel) && (
+                          <div className="text-xs text-muted-foreground mt-2">
+                            {positionLabel ? `Місце: ${positionLabel}` : "Місце: —"}
+                            {sizeLabel ? ` · ${sizeLabel}` : ""}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="text-xs text-muted-foreground">Кількість</div>
+                        <div className="text-lg font-semibold tabular-nums">{item.qty}</div>
+                      </div>
+                    </div>
+                    {item.methods && item.methods.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        {item.methods.map((method) => (
+                          <Badge key={method.id} variant="outline" className="text-xs">
+                            {getMethodLabel(
+                              catalogTypes,
+                              item.catalogTypeId,
+                              item.catalogKindId,
+                              method.methodId
+                            ) ?? "—"}
+                            {method.count > 1 && ` ×${method.count}`}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </Card>
 
