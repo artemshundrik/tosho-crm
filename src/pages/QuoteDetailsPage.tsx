@@ -32,12 +32,15 @@ import { logActivity } from "@/lib/activityLogger";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import {
   getQuoteSummary,
+  getQuoteRuns,
+  upsertQuoteRuns,
   listTeamMembers,
   listStatusHistory,
   setStatus,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
+  type QuoteRun,
 } from "@/lib/toshoApi";
 import {
   ArrowLeft,
@@ -391,6 +394,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
 
+  const [runs, setRuns] = useState<QuoteRun[]>([]);
+  const [runsOriginal, setRunsOriginal] = useState<QuoteRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState<string | null>(null);
+  const [runsSaving, setRunsSaving] = useState(false);
+
   const [comments, setComments] = useState<QuoteComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
@@ -442,11 +451,85 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [discount, setDiscount] = useState("0");
   const [tax, setTax] = useState("0");
 
+  // Runs (tirages)
+  const addRun = () => {
+    setRuns((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        quantity: 1,
+        unit_price_model: 0,
+        unit_price_print: 0,
+        logistics_cost: 0,
+      },
+    ]);
+  };
+
+  const updateRun = (index: number, field: keyof QuoteRun, value: number) => {
+    setRuns((prev) =>
+      prev.map((run, i) => (i === index ? { ...run, [field]: value } : run))
+    );
+  };
+
+  const saveRuns = async (nextRuns?: QuoteRun[] | unknown) => {
+    const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
+    setRunsSaving(true);
+    setRunsError(null);
+    try {
+      const sanitized = targetRuns.map((run) => ({
+        ...run,
+        quantity: Math.max(1, Number(run.quantity) || 1),
+        unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+        unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
+        logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
+      }));
+      // delete missing (present before, absent now)
+      const originalIds = new Set(
+        runsOriginal.map((r) => r.id).filter((id): id is string => Boolean(id))
+      );
+      const keepIds = new Set(
+        sanitized.map((r) => r.id).filter((id): id is string => Boolean(id))
+      );
+      const idsToDelete = Array.from(originalIds).filter((id) => !keepIds.has(id));
+      if (idsToDelete.length > 0) {
+        await supabase.schema("tosho").from("quote_item_runs").delete().in("id", idsToDelete);
+      }
+
+      await upsertQuoteRuns(quoteId, sanitized);
+      await loadRuns();
+      toast.success("Тиражі збережено");
+    } catch (e: any) {
+      setRunsError(e?.message ?? "Не вдалося зберегти тиражі.");
+      toast.error("Помилка збереження");
+    } finally {
+      setRunsSaving(false);
+    }
+  };
+
+  const removeRun = async (index: number) => {
+    const next = runs.filter((_, i) => i !== index);
+    setRuns(next);
+    await saveRuns(next);
+  };
+
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
 
   const itemsSubtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + item.qty * item.price, 0);
   }, [items]);
+
+  const runsSubtotal = useMemo(() => {
+    if (!runs || runs.length === 0) return 0;
+    return runs.reduce((sum, run) => {
+      const qty = Number(run.quantity) || 0;
+      const model = Number(run.unit_price_model) || 0;
+      const print = Number(run.unit_price_print) || 0;
+      const logistics = Number(run.logistics_cost) || 0;
+      return sum + (model + print) * qty + logistics;
+    }, 0);
+  }, [runs]);
+
+  const [runsLoaded, setRunsLoaded] = useState(false);
 
   const toDateInputValue = (value?: string | null) => {
     if (!value) return "";
@@ -516,8 +599,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
   const currentStatus = normalizeStatus(quote?.status);
 
+  const canEditRuns = useMemo(
+    () =>
+      ["estimating", "estimated", "awaiting_approval", "approved"].includes(
+        currentStatus ?? ""
+      ),
+    [currentStatus]
+  );
+
   const totals = useMemo(() => {
-    const subtotal = itemsSubtotal;
+    const subtotal = runs.length > 0 ? runsSubtotal : itemsSubtotal;
     const discountPercent = Number(discount) || 0;
     const taxPercent = Number(tax) || 0;
     
@@ -846,6 +937,38 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
+  const loadRuns = async () => {
+    setRunsLoading(true);
+    setRunsError(null);
+    try {
+      const data = await getQuoteRuns(quoteId);
+      setRuns(data);
+      setRunsOriginal(data);
+    } catch (e: any) {
+      setRunsError(e?.message ?? "Не вдалося завантажити тиражі.");
+      setRuns([]);
+    } finally {
+      setRunsLoading(false);
+      setRunsLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!runsLoaded) return;
+    if (runs.length === 0 && items.length > 0) {
+      const firstQty = Number(items[0].qty) || 1;
+      setRuns([
+        {
+          id: crypto.randomUUID(),
+          quantity: firstQty,
+          unit_price_model: 0,
+          unit_price_print: 0,
+          logistics_cost: 0,
+        },
+      ]);
+    }
+  }, [runsLoaded, runs.length, items]);
+
   const loadHistory = async () => {
     setHistoryLoading(true);
     setHistoryError(null);
@@ -1050,6 +1173,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadQuote();
     void loadHistory();
     void loadItems();
+    void loadRuns();
     void loadAttachments();
   }, [quoteId, teamId]);
 
@@ -1919,17 +2043,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             )}
           </Card>
 
-          {/* Items Card */}
+          {/* Items Card (single model) */}
           <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Позиції
+                Модель
               </div>
-              <Button variant="outline" size="sm" onClick={openNewItem} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Додати позицію
-              </Button>
+              {items.length > 0 ? (
+                <Button variant="outline" size="sm" onClick={() => openEditItem(items[0])} className="gap-2">
+                  <Pencil className="h-4 w-4" />
+                  Змінити модель
+                </Button>
+              ) : (
+                <Button size="sm" onClick={openNewItem} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Обрати модель
+                </Button>
+              )}
             </div>
 
             {itemsLoading ? (
@@ -1948,7 +2079,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
                 <Button size="sm" onClick={openNewItem} className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Додати позицію
+                  Обрати модель
                 </Button>
               </div>
             ) : (
@@ -1965,7 +2096,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((item) => {
+                    {items.slice(0, 1).map((item) => {
                       const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
                       const resolvedKindId = item.catalogKindId ?? item.productKindId;
                       const resolvedModelId = item.catalogModelId ?? item.productModelId;
@@ -2120,22 +2251,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {(item.qty * item.price).toLocaleString("uk-UA")}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8"
                                 onClick={() => openEditItem(item)}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="h-8 w-8 hover:text-destructive"
-                                onClick={() => handleDeleteItem(item.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -2144,6 +2267,140 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     })}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+          </Card>
+
+          {/* Runs Card */}
+          <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-semibold flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Тиражі
+              </div>
+              {canEditRuns ? (
+                <Button variant="outline" size="sm" onClick={addRun} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Додати тираж
+                </Button>
+              ) : null}
+            </div>
+
+            {runsLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Завантаження...</p>
+              </div>
+            ) : runsError ? (
+              <div className="text-sm text-destructive py-4">{runsError}</div>
+            ) : runs.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/70 p-8 text-center">
+                <Package className="h-12 w-12 text-muted-foreground/30" />
+                <div>
+                  <p className="font-medium mb-1">Немає тиражів</p>
+                  <p className="text-sm text-muted-foreground">Додайте перший тираж для розрахунку</p>
+                </div>
+                {canEditRuns ? (
+                  <Button size="sm" onClick={addRun} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Додати тираж
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b">
+                      <TableHead className="font-semibold w-32">Кількість</TableHead>
+                      <TableHead className="font-semibold w-40">Ціна модель</TableHead>
+                      <TableHead className="font-semibold w-44">Ціна нанесення</TableHead>
+                      <TableHead className="font-semibold w-40">Логістика</TableHead>
+                      <TableHead className="font-semibold w-40 text-right">Разом</TableHead>
+                      <TableHead className="w-16"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {runs.map((run, idx) => {
+                      const qty = Number(run.quantity) || 0;
+                      const modelPrice = Number(run.unit_price_model) || 0;
+                      const printPrice = Number(run.unit_price_print) || 0;
+                      const logistics = Number(run.logistics_cost) || 0;
+                      const total = (modelPrice + printPrice) * qty + logistics;
+                      const disabled = !canEditRuns;
+                      return (
+                        <TableRow key={run.id ?? idx}>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={run.quantity}
+                              disabled={disabled}
+                              onChange={(e) => updateRun(idx, "quantity", Number(e.target.value))}
+                              min={1}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={run.unit_price_model}
+                              disabled={disabled}
+                              onChange={(e) => updateRun(idx, "unit_price_model", Number(e.target.value))}
+                              min={0}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={run.unit_price_print}
+                              disabled={disabled}
+                              onChange={(e) => updateRun(idx, "unit_price_print", Number(e.target.value))}
+                              min={0}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={run.logistics_cost}
+                              disabled={disabled}
+                              onChange={(e) => updateRun(idx, "logistics_cost", Number(e.target.value))}
+                              min={0}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums font-semibold">
+                            {total.toLocaleString("uk-UA")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!disabled && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:text-destructive"
+                                onClick={() => removeRun(idx)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {canEditRuns && (
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button variant="outline" size="sm" onClick={addRun}>
+                      <Plus className="h-4 w-4" />
+                      Додати тираж
+                    </Button>
+                    <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
+                      {runsSaving ? "Збереження..." : "Зберегти тиражі"}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </Card>

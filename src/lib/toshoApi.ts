@@ -29,6 +29,16 @@ export type QuoteListRow = {
 
 export type QuoteSummaryRow = QuoteListRow;
 
+export type QuoteRun = {
+  id?: string;
+  quote_id?: string;
+  quote_item_id?: string | null;
+  quantity: number;
+  unit_price_model: number;
+  unit_price_print: number;
+  logistics_cost: number;
+};
+
 export type QuoteStatusRow = {
   id: string;
   quote_id: string;
@@ -161,6 +171,43 @@ export async function getQuoteSummary(quoteId: string) {
     .single();
   handleError(error);
   return data as QuoteSummaryRow;
+}
+
+export async function getQuoteRuns(quoteId: string) {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quote_item_runs")
+    .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost")
+    .eq("quote_id", quoteId)
+    .order("created_at", { ascending: true });
+  handleError(error);
+  return (data as QuoteRun[]) ?? [];
+}
+
+export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
+  // Ensure quote_id present
+  const payload = runs.map((run) => {
+    const base = {
+      quote_id: quoteId,
+      quote_item_id: run.quote_item_id ?? null,
+      quantity: run.quantity,
+      unit_price_model: run.unit_price_model,
+      unit_price_print: run.unit_price_print,
+      logistics_cost: run.logistics_cost,
+    } as Record<string, unknown>;
+    if (run.id) {
+      base.id = run.id;
+    }
+    return base;
+  });
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quote_item_runs")
+    .upsert(payload, { onConflict: "id" })
+    .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost");
+  handleError(error);
+  return (data as QuoteRun[]) ?? [];
 }
 
 export async function listStatusHistory(quoteId: string) {
