@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,8 +30,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import {
   getQuoteSummary,
   getQuoteRuns,
@@ -42,6 +46,7 @@ import {
   type QuoteSummaryRow,
   type QuoteRun,
 } from "@/lib/toshoApi";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Copy,
@@ -197,6 +202,7 @@ type QuoteComment = {
   id: string;
   body: string;
   created_at: string;
+  created_by?: string | null;
 };
 type QuoteAttachment = {
   id: string;
@@ -208,6 +214,34 @@ type QuoteAttachment = {
   uploadedByLabel?: string;
   storageBucket?: string | null;
   storagePath?: string | null;
+};
+
+type ActivityIcon = LucideIcon;
+
+type ActivityEvent = {
+  id: string;
+  type: "status" | "comment" | "runs" | "other";
+  created_at: string;
+  title: string;
+  description?: string;
+  actorId?: string | null;
+  actorLabel?: string | null;
+  icon: ActivityIcon;
+  accentClass?: string;
+};
+
+const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === "object") return value as Record<string, unknown>;
+  return {};
 };
 
 const STATUS_OPTIONS = [
@@ -277,12 +311,6 @@ function formatCurrency(value: number | null | undefined, currency?: string | nu
   return `${value.toLocaleString("uk-UA")} ${label}`;
 }
 
-function shortenId(value: string | null | undefined) {
-  if (!value) return "Не призначено";
-  if (value.length <= 8) return value;
-  return `${value.slice(0, 4)}…${value.slice(-4)}`;
-}
-
 function getInitials(value?: string | null) {
   if (!value) return "—";
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -321,6 +349,17 @@ function getModelLabel(
   const type = catalog.find((item) => item.id === typeId);
   const kind = type?.kinds.find((item) => item.id === kindId);
   return kind?.models.find((model) => model.id === modelId)?.name;
+}
+
+function getModelImage(
+  catalog: CatalogType[],
+  typeId?: string,
+  kindId?: string,
+  modelId?: string
+) {
+  const type = catalog.find((item) => item.id === typeId);
+  const kind = type?.kinds.find((item) => item.id === kindId);
+  return kind?.models.find((model) => model.id === modelId)?.imageUrl ?? null;
 }
 
 function getMethodLabel(
@@ -406,11 +445,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [runsSaving, setRunsSaving] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const [comments, setComments] = useState<QuoteComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [commentSaving, setCommentSaving] = useState(false);
+
+  const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
@@ -450,6 +495,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [deadlineNote, setDeadlineNote] = useState("");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
+  const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
 
   // Inline editing for quantity
   const [editingQty, setEditingQty] = useState<string | null>(null);
@@ -458,18 +504,31 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [discount, setDiscount] = useState("0");
   const [tax, setTax] = useState("0");
 
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusTarget, setStatusTarget] = useState("new");
+
+  const getRunTotal = (run: QuoteRun) => {
+    const qty = Number(run.quantity) || 0;
+    const model = Number(run.unit_price_model) || 0;
+    const print = Number(run.unit_price_print) || 0;
+    const logistics = Number(run.logistics_cost) || 0;
+    return (model + print) * qty + logistics;
+  };
+
   // Runs (tirages)
   const addRun = () => {
+    const newId = crypto.randomUUID();
     setRuns((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: newId,
         quantity: 1,
         unit_price_model: 0,
         unit_price_print: 0,
         logistics_cost: 0,
       },
     ]);
+    setSelectedRunId(newId);
   };
 
   const updateRun = (index: number, field: keyof QuoteRun, value: number) => {
@@ -504,6 +563,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       await upsertQuoteRuns(quoteId, sanitized);
       await loadRuns();
+      await logActivity({
+        teamId,
+        action: "прорахував тиражі",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
+        href: `/orders/estimates/${quoteId}`,
+        metadata: { source: "quote_runs" },
+      });
+      await loadActivityLog();
       toast.success("Тиражі збережено");
     } catch (e: any) {
       setRunsError(e?.message ?? "Не вдалося зберегти тиражі.");
@@ -514,8 +583,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const removeRun = async (index: number) => {
+    const removed = runs[index];
     const next = runs.filter((_, i) => i !== index);
     setRuns(next);
+    if (removed?.id && removed.id === selectedRunId) {
+      setSelectedRunId(next[0]?.id ?? null);
+    }
     await saveRuns(next);
   };
 
@@ -525,16 +598,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return items.reduce((sum, item) => sum + item.qty * item.price, 0);
   }, [items]);
 
-  const runsSubtotal = useMemo(() => {
-    if (!runs || runs.length === 0) return 0;
-    return runs.reduce((sum, run) => {
-      const qty = Number(run.quantity) || 0;
-      const model = Number(run.unit_price_model) || 0;
-      const print = Number(run.unit_price_print) || 0;
-      const logistics = Number(run.logistics_cost) || 0;
-      return sum + (model + print) * qty + logistics;
-    }, 0);
-  }, [runs]);
+  const selectedRun = useMemo(
+    () => runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null,
+    [runs, selectedRunId]
+  );
+
+  const selectedRunTotal = useMemo(() => {
+    if (!selectedRun) return 0;
+    return getRunTotal(selectedRun);
+  }, [selectedRun]);
 
   const [runsLoaded, setRunsLoaded] = useState(false);
 
@@ -546,6 +618,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const toLocalDate = (value?: string | null) => {
+    if (!value) return undefined;
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return undefined;
+    const [, y, m, d] = match;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  };
+
+  const formatDateInput = (value?: Date | null) => {
+    if (!value) return "";
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   };
 
@@ -604,6 +692,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
     [teamMembers]
   );
+  const memberAvatarById = useMemo(
+    () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
+    [teamMembers]
+  );
   const currentStatus = normalizeStatus(quote?.status);
 
   const canEditRuns = useMemo(
@@ -614,8 +706,137 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [currentStatus]
   );
 
+  const activityEvents = useMemo<ActivityEvent[]>(() => {
+    const statusEvents: ActivityEvent[] = history.map((item) => {
+      const toStatus = normalizeStatus(item.to_status);
+      const fromStatus = normalizeStatus(item.from_status);
+      const Icon = statusIcons[toStatus] ?? Clock;
+      const title = item.from_status
+        ? `${formatStatusLabel(fromStatus)} → ${formatStatusLabel(toStatus)}`
+        : `Статус: ${formatStatusLabel(toStatus)}`;
+      return {
+        id: `status-${item.id}`,
+        type: "status",
+        created_at: item.created_at ?? new Date().toISOString(),
+        title,
+        description: item.note ?? undefined,
+        actorId: item.changed_by ?? null,
+        actorLabel: item.changed_by
+          ? memberById.get(item.changed_by) ?? "Невідомий користувач"
+          : "Система",
+        icon: Icon,
+        accentClass: statusClasses[toStatus] ?? statusClasses.new,
+      };
+    });
+
+    const commentEvents: ActivityEvent[] = comments.map((comment) => ({
+      id: `comment-${comment.id}`,
+      type: "comment",
+      created_at: comment.created_at,
+      title: "Додав коментар",
+      description: comment.body,
+      actorId: comment.created_by ?? null,
+      actorLabel: comment.created_by
+        ? memberById.get(comment.created_by) ?? "Невідомий користувач"
+        : "Невідомий користувач",
+      icon: MessageSquare as ActivityIcon,
+      accentClass: "bg-primary/10 text-primary border-primary/20",
+    }));
+
+    const hasHistory = history.length > 0;
+    const activityLogEvents: ActivityEvent[] = activityRows
+      .filter((row) => {
+        const metadata = parseActivityMetadata(row.metadata);
+        const source = typeof metadata?.source === "string" ? metadata.source : "";
+        if (source === "quote_comment") return false;
+        if (source === "quote_status" && hasHistory) return false;
+        return true;
+      })
+      .map((row) => {
+        const metadata = parseActivityMetadata(row.metadata);
+        const source = typeof metadata?.source === "string" ? metadata.source : "";
+        const type: ActivityEvent["type"] =
+          source === "quote_runs"
+            ? "runs"
+            : source === "quote_status"
+            ? "status"
+            : source === "quote_deadline"
+            ? "status"
+            : "other";
+        const actorLabel =
+          row.user_id && memberById.has(row.user_id)
+            ? memberById.get(row.user_id) ?? row.actor_name ?? "Користувач"
+            : row.actor_name ?? "Користувач";
+        const fromStatus =
+          typeof metadata?.from === "string" ? normalizeStatus(metadata.from) : null;
+        const toStatus =
+          typeof metadata?.to === "string" ? normalizeStatus(metadata.to) : null;
+        const fromDeadline =
+          typeof metadata?.from === "string" ? (metadata.from as string) : null;
+        const toDeadline =
+          typeof metadata?.to === "string" ? (metadata.to as string) : null;
+        const deadlineTitle =
+          source === "quote_deadline"
+            ? `Дедлайн: ${formatDeadlineLabel(fromDeadline)} → ${formatDeadlineLabel(toDeadline)}`
+            : null;
+        const title =
+          source === "quote_status" && fromStatus && toStatus
+            ? `${formatStatusLabel(fromStatus)} → ${formatStatusLabel(toStatus)}`
+            : source === "quote_deadline" && deadlineTitle
+            ? deadlineTitle
+            : row.title?.trim() || `${actorLabel} ${row.action ?? "оновив"}`.trim();
+        const description =
+          typeof metadata?.note === "string" ? metadata.note : undefined;
+        const Icon: ActivityIcon =
+          source === "quote_runs"
+            ? Sparkles
+            : source === "quote_status" && toStatus
+            ? (statusIcons[toStatus] as ActivityIcon) ?? Clock
+            : source === "quote_deadline"
+            ? Calendar
+            : Clock;
+        const accentClass =
+          source === "quote_runs"
+            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40"
+            : source === "quote_status" && toStatus
+            ? statusClasses[toStatus] ?? statusClasses.new
+            : source === "quote_deadline"
+            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40"
+            : "bg-muted/40 text-muted-foreground border-border";
+        return {
+          id: `activity-${row.id}`,
+          type,
+          created_at: row.created_at,
+          title,
+          description,
+          actorId: row.user_id ?? null,
+          actorLabel,
+          icon: Icon,
+          accentClass,
+        };
+      });
+
+    return [...statusEvents, ...commentEvents, ...activityLogEvents].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [activityRows, comments, history, memberById]);
+
+  const activityGroups = useMemo(() => {
+    const groups: { label: string; items: ActivityEvent[] }[] = [];
+    activityEvents.forEach((event) => {
+      const label = formatActivityDayLabel(event.created_at);
+      const lastGroup = groups[groups.length - 1];
+      if (!lastGroup || lastGroup.label !== label) {
+        groups.push({ label, items: [event] });
+      } else {
+        lastGroup.items.push(event);
+      }
+    });
+    return groups;
+  }, [activityEvents]);
+
   const totals = useMemo(() => {
-    const subtotal = runs.length > 0 ? runsSubtotal : itemsSubtotal;
+    const subtotal = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
     const discountPercent = Number(discount) || 0;
     const taxPercent = Number(tax) || 0;
     
@@ -630,7 +851,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       taxAmount, 
       total: Math.max(0, total) 
     };
-  }, [itemsSubtotal, discount, tax]);
+  }, [itemsSubtotal, discount, tax, selectedRunTotal, runs.length]);
 
   const selectedType = useMemo(
     () => catalogTypes.find((type) => type.id === itemTypeId) ?? null,
@@ -964,17 +1185,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!runsLoaded) return;
     if (runs.length === 0 && items.length > 0) {
       const firstQty = Number(items[0].qty) || 1;
+      const newId = crypto.randomUUID();
       setRuns([
         {
-          id: crypto.randomUUID(),
+          id: newId,
           quantity: firstQty,
           unit_price_model: 0,
           unit_price_print: 0,
           logistics_cost: 0,
         },
       ]);
+      setSelectedRunId(newId);
     }
   }, [runsLoaded, runs.length, items]);
+
+  useEffect(() => {
+    if (!runsLoaded) return;
+    if (runs.length === 0) {
+      setSelectedRunId(null);
+      return;
+    }
+    if (!selectedRunId || !runs.some((run) => run.id === selectedRunId)) {
+      setSelectedRunId(runs[0]?.id ?? null);
+    }
+  }, [runsLoaded, runs, selectedRunId]);
 
   const loadHistory = async () => {
     setHistoryLoading(true);
@@ -987,6 +1221,57 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setHistory([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const loadComments = async () => {
+    setCommentsLoading(true);
+    setCommentsError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("quote_comments")
+        .select("id,body,created_at,created_by")
+        .eq("quote_id", quoteId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setComments(
+        (data ?? []).map((row) => ({
+          id: row.id,
+          body: row.body ?? "",
+          created_at: row.created_at ?? new Date().toISOString(),
+          created_by: row.created_by ?? null,
+        }))
+      );
+    } catch (e: any) {
+      setCommentsError(e?.message ?? "Не вдалося завантажити коментарі.");
+      setComments([]);
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const loadActivityLog = async () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      let query = supabase
+        .from("activity_log")
+        .select("id,team_id,user_id,actor_name,action,entity_type,entity_id,title,href,metadata,created_at")
+        .eq("entity_type", "quotes")
+        .eq("entity_id", quoteId)
+        .order("created_at", { ascending: false });
+      if (teamId) {
+        query = query.eq("team_id", teamId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setActivityRows((data as ActivityRow[]) ?? []);
+    } catch (e: any) {
+      setActivityError(e?.message ?? "Не вдалося завантажити активність.");
+      setActivityRows([]);
+    } finally {
+      setActivityLoading(false);
     }
   };
 
@@ -1182,6 +1467,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadItems();
     void loadRuns();
     void loadAttachments();
+    void loadComments();
+    void loadActivityLog();
   }, [quoteId, teamId]);
 
   useEffect(() => {
@@ -1226,6 +1513,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDeadlineSaving(true);
     setDeadlineError(null);
     try {
+      const prevDate = toDateInputValue(quote.deadline_at ?? null);
+      const prevNote = quote.deadline_note ?? "";
+      const nextDate = deadlineDate || "";
+      const nextNote = deadlineNote.trim();
+      const deadlineChanged = prevDate !== nextDate || prevNote.trim() !== nextNote;
+
       const payload = {
         deadline_at: deadlineDate || null,
         deadline_note: deadlineNote.trim() || null,
@@ -1236,11 +1529,41 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .update(payload)
         .eq("id", quote.id);
       if (error) throw error;
+      if (deadlineChanged) {
+        await logActivity({
+          teamId,
+          action: "змінив дедлайн",
+          entityType: "quotes",
+          entityId: quoteId,
+          title: `Дедлайн: ${formatDeadlineLabel(prevDate)} → ${formatDeadlineLabel(nextDate)}`,
+          href: `/orders/estimates/${quoteId}`,
+          metadata: {
+            source: "quote_deadline",
+            from: prevDate || null,
+            to: nextDate || null,
+            note: nextNote || null,
+          },
+        });
+        await loadActivityLog();
+      }
+      await loadQuote();
     } catch (e: any) {
       setDeadlineError(e?.message ?? "Не вдалося оновити дедлайн.");
     } finally {
       setDeadlineSaving(false);
     }
+  };
+
+  const handleDeadlineQuickSet = (offsetDays: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+    setDeadlineDate(formatDateInput(date));
+    setDeadlinePopoverOpen(false);
+  };
+
+  const handleDeadlineClear = () => {
+    setDeadlineDate("");
+    setDeadlinePopoverOpen(false);
   };
 
   // Quick status change
@@ -1249,11 +1572,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setStatusBusy(true);
     setStatusError(null);
     try {
+      const previousStatus = normalizeStatus(quote?.status);
       const note = (noteOverride ?? statusNote).trim();
       await setStatus({
         quoteId,
         status: nextStatus,
         note: note ? note : undefined,
+      });
+      await logActivity({
+        teamId,
+        action: "змінив статус",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `Статус: ${formatStatusLabel(previousStatus)} → ${formatStatusLabel(nextStatus)}`,
+        href: `/orders/estimates/${quoteId}`,
+        metadata: { source: "quote_status", from: previousStatus, to: nextStatus, note },
       });
       if (nextStatus === "approved" && normalizeStatus(quote?.status) !== "approved") {
         await Promise.allSettled([
@@ -1279,6 +1612,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
       await loadQuote();
       await loadHistory();
+      await loadActivityLog();
       setStatusNote("");
     } catch (e: any) {
       setStatusError(e?.message ?? "Помилка зміни статусу");
@@ -1664,16 +1998,55 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const handleAddComment = () => {
-    if (!commentText.trim()) return;
-    
-    const newComment: QuoteComment = {
-      id: createLocalId(),
-      body: commentText.trim(),
-      created_at: new Date().toISOString(),
-    };
-    
-    setComments(prev => [newComment, ...prev]);
-    setCommentText("");
+    if (!commentText.trim() || commentSaving) return;
+    void saveComment(commentText.trim());
+  };
+
+  const saveComment = async (body: string) => {
+    setCommentSaving(true);
+    setCommentsError(null);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id ?? null;
+      if (!userId) {
+        throw new Error("Не вдалося визначити користувача.");
+      }
+      const effectiveTeamId = quote?.team_id ?? teamId;
+      if (!effectiveTeamId) {
+        throw new Error("Немає доступної команди.");
+      }
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("quote_comments")
+        .insert({
+          team_id: effectiveTeamId,
+          quote_id: quoteId,
+          body,
+          created_by: userId,
+        })
+        .select("id,body,created_at,created_by")
+        .single();
+      if (error) throw error;
+
+      const inserted = data as QuoteComment;
+      setComments((prev) => [
+        {
+          id: inserted.id,
+          body: inserted.body ?? body,
+          created_at: inserted.created_at ?? new Date().toISOString(),
+          created_by: inserted.created_by ?? userId,
+        },
+        ...prev,
+      ]);
+
+      setCommentText("");
+      await loadActivityLog();
+    } catch (e: any) {
+      setCommentsError(e?.message ?? "Не вдалося додати коментар.");
+    } finally {
+      setCommentSaving(false);
+    }
   };
 
   const toggleMethod = (methodId: string) => {
@@ -1763,61 +2136,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Quick Status Change Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2" disabled={statusBusy}>
-                {createElement(statusIcons[currentStatus] ?? Clock, { className: "h-4 w-4" })}
-                Змінити статус
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <div className="p-2">
-                <p className="text-xs text-muted-foreground mb-3 font-medium">Оберіть новий статус</p>
-                {STATUS_OPTIONS.map((s) => {
-                  const Icon = statusIcons[s];
-                  const isActive = s === currentStatus;
-                  return (
-                    <DropdownMenuItem
-                      key={s}
-                      onClick={() => {
-                        if (isActive) return;
-                        if (s === "cancelled") {
-                          setCancelDialogOpen(true);
-                          setCancelReason("");
-                          setCancelNote("");
-                          setCancelError(null);
-                          return;
-                        }
-                        handleQuickStatusChange(s);
-                      }}
-                      className={cn(
-                        "gap-2 cursor-pointer",
-                        isActive && "bg-primary/10 text-primary cursor-default"
-                      )}
-                      disabled={isActive}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {formatStatusLabel(s)}
-                      {isActive && <Check className="h-4 w-4 ml-auto" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
-              <DropdownMenuSeparator />
-              <div className="p-2">
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Примітка (опціонально)</Label>
-                <Input
-                  placeholder="Додати примітку..."
-                  value={statusNote}
-                  onChange={(e) => setStatusNote(e.target.value)}
-                  className="h-8 text-xs"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={statusBusy}
+            onClick={() => {
+              setStatusTarget(currentStatus ?? "new");
+              setStatusNote("");
+              setStatusDialogOpen(true);
+            }}
+          >
+            {createElement(statusIcons[currentStatus] ?? Clock, { className: "h-4 w-4" })}
+            Змінити статус
+            <ChevronDown className="h-3 w-3" />
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1850,6 +2183,92 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           {statusError}
         </div>
       )}
+
+      <Dialog
+        open={statusDialogOpen}
+        onOpenChange={(open) => {
+          setStatusDialogOpen(open);
+          if (!open) {
+            setStatusNote("");
+            setStatusTarget(currentStatus ?? "new");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+          <DialogHeader className="p-5 border-b border-border/60 bg-muted/10">
+            <DialogTitle className="text-lg">Зміна статусу</DialogTitle>
+          </DialogHeader>
+          <div className="p-5 space-y-4">
+            <div className="text-xs text-muted-foreground">
+              Оберіть новий статус та залиште примітку, якщо потрібно.
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {STATUS_OPTIONS.map((s) => {
+                const Icon = statusIcons[s] ?? Clock;
+                const isActive = s === statusTarget;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatusTarget(s)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all",
+                      isActive
+                        ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                        : "border-border/60 hover:border-border"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="font-medium">{formatStatusLabel(s)}</span>
+                    {isActive && <Check className="h-4 w-4 ml-auto" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">Примітка (опціонально)</Label>
+              <Textarea
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+                placeholder="Додайте примітку до зміни статусу..."
+                className="min-h-[88px]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setStatusDialogOpen(false)}
+              disabled={statusBusy}
+            >
+              Закрити
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                if (statusTarget === currentStatus) {
+                  setStatusDialogOpen(false);
+                  return;
+                }
+                if (statusTarget === "cancelled") {
+                  setStatusDialogOpen(false);
+                  setCancelDialogOpen(true);
+                  setCancelReason("");
+                  setCancelNote("");
+                  setCancelError(null);
+                  return;
+                }
+                void handleQuickStatusChange(statusTarget, statusNote);
+                setStatusDialogOpen(false);
+              }}
+              disabled={statusBusy || statusTarget === currentStatus}
+            >
+              Застосувати
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={cancelDialogOpen}
@@ -1970,7 +2389,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <User className="h-3.5 w-3.5" />
                     Менеджер
                   </div>
-                  <div className="font-medium">{shortenId(quote.assigned_to ?? null)}</div>
+                  <div className="flex items-center gap-2">
+                    <AvatarBase
+                      src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
+                      name={
+                        quote.assigned_to
+                          ? memberById.get(quote.assigned_to) ?? quote.assigned_to
+                          : "Не призначено"
+                      }
+                      fallback={
+                        quote.assigned_to
+                          ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
+                          : "—"
+                      }
+                      size={28}
+                      className="text-[10px] font-semibold"
+                    />
+                    <div className="font-medium">
+                      {quote.assigned_to
+                        ? memberById.get(quote.assigned_to) ?? quote.assigned_to
+                        : "Не призначено"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -1994,13 +2434,63 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <Calendar className="h-3.5 w-3.5" />
                     Дедлайн (готовність до відвантаження)
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[220px_1fr_auto]">
-                    <Input
-                      type="date"
-                      className="h-9"
-                      value={deadlineDate}
-                      onChange={(e) => setDeadlineDate(e.target.value)}
-                    />
+                  <div className="grid gap-2 sm:grid-cols-[240px_1fr_auto]">
+                    <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="h-9 justify-start gap-2 font-normal"
+                        >
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          {deadlineDate ? formatDeadlineLabel(deadlineDate) : "Оберіть дату"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="p-0 w-auto">
+                        <CalendarPicker
+                          mode="single"
+                          selected={toLocalDate(deadlineDate)}
+                          onSelect={(date) => {
+                            setDeadlineDate(formatDateInput(date ?? null));
+                            setDeadlinePopoverOpen(false);
+                          }}
+                          initialFocus
+                        />
+                        <div className="flex flex-wrap gap-2 p-3 border-t border-border/60">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeadlineQuickSet(0)}
+                          >
+                            Сьогодні
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeadlineQuickSet(1)}
+                          >
+                            Завтра
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeadlineQuickSet(7)}
+                          >
+                            +7 днів
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleDeadlineClear}
+                          >
+                            Очистити
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <Input
                       className="h-9"
                       placeholder="Коментар до дедлайну (опціонально)"
@@ -2057,12 +2547,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <Package className="h-5 w-5" />
                 Обрана модель
               </div>
-              {items.length > 0 ? (
-                <Button variant="outline" size="sm" onClick={() => openEditItem(items[0])} className="gap-2">
-                  <Pencil className="h-4 w-4" />
-                  Змінити модель
-                </Button>
-              ) : (
+              {items.length === 0 && (
                 <Button size="sm" onClick={openNewItem} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Обрати модель
@@ -2123,12 +2608,42 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       method.printPositionId || method.printWidthMm || method.printHeightMm
                   )
                 );
+                const attachmentExtension = getFileExtension(item.attachment?.name);
+                const catalogImage = getModelImage(
+                  catalogTypes,
+                  resolvedTypeId,
+                  resolvedKindId,
+                  resolvedModelId
+                );
+                const attachmentPreview =
+                  item.attachment?.url && canPreviewImage(attachmentExtension)
+                    ? { type: "image" as const, url: item.attachment.url }
+                    : item.attachment?.url && canPreviewPdf(attachmentExtension)
+                    ? { type: "pdf" as const, url: item.attachment.url }
+                    : catalogImage
+                    ? { type: "image" as const, url: catalogImage }
+                    : null;
 
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
                     <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
-                        IMG
+                      <div className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
+                        {attachmentPreview?.type === "image" ? (
+                          <img
+                            src={attachmentPreview.url}
+                            alt={item.attachment?.name ?? modelLabel ?? "Візуалізація"}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : attachmentPreview?.type === "pdf" ? (
+                          <iframe
+                            src={`${attachmentPreview.url}#page=1&view=FitH`}
+                            title={`Preview ${item.attachment?.name ?? "PDF"}`}
+                            className="h-full w-full pointer-events-none"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6 text-muted-foreground/60" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-base font-semibold truncate">{item.title}</div>
@@ -2141,25 +2656,78 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             {sizeLabel ? ` · ${sizeLabel}` : ""}
                           </div>
                         )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="text-xs text-muted-foreground">Кількість</div>
-                        <div className="text-lg font-semibold tabular-nums">{item.qty}</div>
+                        <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                          <div>
+                            Одиниця: <span className="text-foreground">{item.unit}</span>
+                          </div>
+                          {(positionLabel || sizeLabel) && (
+                            <div className="sm:col-span-2 flex items-center gap-2">
+                              <Badge variant="outline" className="text-[11px]">
+                                Місце нанесення
+                              </Badge>
+                              <span className="text-foreground">
+                                {positionLabel ?? "—"}
+                                {sizeLabel ? ` · ${sizeLabel}` : ""}
+                              </span>
+                            </div>
+                          )}
+                          {item.description ? (
+                            <div className="sm:col-span-2">
+                              Опис: <span className="text-foreground">{item.description}</span>
+                            </div>
+                          ) : null}
+                          {item.attachment ? (
+                            <div className="sm:col-span-2">
+                              Візуалізація:{" "}
+                              <span className="text-foreground">
+                                {item.attachment.name} ({formatFileSize(item.attachment.size)})
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     {item.methods && item.methods.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        {item.methods.map((method) => (
-                          <Badge key={method.id} variant="outline" className="text-xs">
-                            {getMethodLabel(
+                        {item.methods.map((method) => {
+                          const methodName =
+                            getMethodLabel(
                               catalogTypes,
                               item.catalogTypeId,
                               item.catalogKindId,
                               method.methodId
-                            ) ?? "—"}
-                            {method.count > 1 && ` ×${method.count}`}
-                          </Badge>
-                        ))}
+                            ) ?? "Метод";
+                          const place =
+                            getPrintPositionLabel(
+                              catalogTypes,
+                              item.catalogTypeId,
+                              item.catalogKindId,
+                              method.printPositionId
+                            ) ?? positionLabel ?? "Місце не вказано";
+                          const size =
+                            method.printWidthMm && method.printHeightMm
+                              ? `${method.printWidthMm}×${method.printHeightMm} мм`
+                              : method.printWidthMm
+                              ? `${method.printWidthMm} мм`
+                              : method.printHeightMm
+                              ? `${method.printHeightMm} мм`
+                              : sizeLabel;
+                          return (
+                            <div
+                              key={method.id}
+                              className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 flex items-center gap-2"
+                            >
+                              <Badge variant="secondary" className="text-[11px] font-semibold">
+                                {methodName}
+                                {method.count > 1 && ` ×${method.count}`}
+                              </Badge>
+                              <div className="text-[11px] text-muted-foreground">
+                                {place}
+                                {size ? ` · ${size}` : ""}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2209,6 +2777,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-b">
+                      <TableHead className="w-12"></TableHead>
                       <TableHead className="font-semibold w-32">Кількість</TableHead>
                       <TableHead className="font-semibold w-40">Ціна модель</TableHead>
                       <TableHead className="font-semibold w-44">Ціна нанесення</TableHead>
@@ -2225,8 +2794,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       const logistics = Number(run.logistics_cost) || 0;
                       const total = (modelPrice + printPrice) * qty + logistics;
                       const disabled = !canEditRuns;
+                      const isSelected = !!run.id && run.id === selectedRunId;
                       return (
-                        <TableRow key={run.id ?? idx}>
+                        <TableRow
+                          key={run.id ?? idx}
+                          className={cn(isSelected && "bg-primary/5")}
+                        >
+                          <TableCell className="w-12">
+                            <input
+                              type="radio"
+                              name="selected-run"
+                              className="h-4 w-4 accent-primary"
+                              checked={isSelected}
+                              onChange={() => setSelectedRunId(run.id ?? null)}
+                              aria-label="Обрати тираж"
+                            />
+                          </TableCell>
                           <TableCell>
                             <Input
                               type="number"
@@ -2268,7 +2851,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono tabular-nums font-semibold">
-                            {total.toLocaleString("uk-UA")}
+                            {formatCurrency(total, quote.currency)}
+                            <div className="text-[11px] text-muted-foreground font-normal font-sans">
+                              ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
+                              {formatCurrencyCompact(printPrice, quote.currency)}) × {qty} +{" "}
+                              {formatCurrencyCompact(logistics, quote.currency)}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             {!disabled && (
@@ -2287,6 +2875,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     })}
                   </TableBody>
                 </Table>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  У підсумку використовується обраний тираж.
+                </div>
                 {canEditRuns && (
                   <div className="flex justify-end gap-2 mt-4">
                     <Button variant="outline" size="sm" onClick={addRun}>
@@ -2368,6 +2959,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   {formatCurrency(totals.total, quote.currency)}
                 </span>
               </div>
+              <div className="text-xs text-muted-foreground">
+                Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Формула: (Підсумок − Знижка) + Податок
+              </div>
             </div>
             
             {/* Stats */}
@@ -2419,11 +3016,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <Button 
                   size="sm" 
                   onClick={handleAddComment} 
-                  disabled={!commentText.trim()}
+                  disabled={!commentText.trim() || commentSaving}
                   className="gap-2"
                 >
-                  <Send className="h-3 w-3" />
-                  Додати
+                  {commentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  {commentSaving ? "Збереження..." : "Додати"}
                 </Button>
               </div>
             </div>
@@ -2448,12 +3045,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className="rounded-lg border border-border/60 p-3 hover:bg-muted/20 transition-colors"
                   >
                     <div className="flex items-start gap-3 mb-2">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold shrink-0">
-                        👤
-                      </div>
+                      <AvatarBase
+                        src={comment.created_by ? memberAvatarById.get(comment.created_by) ?? null : null}
+                        name={
+                          comment.created_by
+                            ? memberById.get(comment.created_by) ?? comment.created_by
+                            : "Користувач"
+                        }
+                        fallback={
+                          comment.created_by
+                            ? getInitials(memberById.get(comment.created_by) ?? comment.created_by)
+                            : "—"
+                        }
+                        size={32}
+                        className="text-[10px] font-semibold"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-2">
-                          <div className="text-sm font-medium">Користувач</div>
+                          <div className="text-sm font-medium">
+                            {comment.created_by
+                              ? memberById.get(comment.created_by) ?? "Користувач"
+                              : "Користувач"}
+                          </div>
                           <div className="text-xs text-muted-foreground whitespace-nowrap">
                             {new Date(comment.created_at).toLocaleDateString("uk-UA", {
                               day: "numeric",
@@ -2649,68 +3262,72 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             loading={!!attachmentsDeletingId}
           />
 
-          {/* History Card - Timeline */}
+          {/* Activity Card */}
           <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
-            <div className="text-lg font-semibold mb-4">Історія змін</div>
-            
-            {historyLoading ? (
+            <div className="text-lg font-semibold mb-4">Активність</div>
+
+            {activityLoading || historyLoading || commentsLoading ? (
               <div className="text-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
                 <p className="text-xs text-muted-foreground">Завантаження...</p>
               </div>
-            ) : historyError ? (
-              <div className="text-sm text-destructive">{historyError}</div>
-            ) : history.length === 0 ? (
+            ) : activityEvents.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">Історія порожня</p>
+                <p className="text-sm text-muted-foreground">Активність порожня</p>
+                {(activityError || historyError || commentsError) && (
+                  <p className="text-xs text-destructive mt-2">
+                    {activityError ?? historyError ?? commentsError}
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="relative">
-                {/* Timeline line */}
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border/40" />
-                
-                <div className="space-y-6">
-                  {history.map((item) => {
-                    const toStatus = normalizeStatus(item.to_status);
-                    const fromStatus = normalizeStatus(item.from_status);
-                    const Icon = statusIcons[toStatus] || Clock;
-                    
-                    return (
-                      <div key={item.id} className="relative pl-12">
-                        {/* Timeline dot */}
-                        <div className="absolute left-0 flex items-center justify-center">
-                          <div className={cn(
-                            "h-8 w-8 rounded-full border-2 bg-background flex items-center justify-center",
-                            statusClasses[toStatus] ?? statusClasses.new
-                          )}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                        </div>
-                        
-                        {/* Content */}
-                        <div className="rounded-lg border border-border/60 p-3 bg-card hover:bg-muted/20 transition-colors">
-                          <div className="flex items-start justify-between mb-1">
-                            <div className="font-medium text-sm">
-                              {formatStatusLabel(fromStatus)} → {formatStatusLabel(toStatus)}
+              <div className="space-y-6">
+                {(activityError || historyError || commentsError) && (
+                  <div className="text-xs text-destructive">
+                    {activityError ?? historyError ?? commentsError}
+                  </div>
+                )}
+                {activityGroups.map((group) => (
+                  <div key={group.label} className="space-y-3">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {group.label}
+                    </div>
+                    <div className="space-y-4">
+                      {group.items.map((event) => {
+                        const Icon = event.icon;
+                        return (
+                          <div key={event.id} className="flex items-start gap-3">
+                            <div
+                              className={cn(
+                                "h-9 w-9 rounded-full border flex items-center justify-center shrink-0",
+                                event.accentClass ?? "bg-muted/20 text-muted-foreground border-border"
+                              )}
+                            >
+                              <Icon className="h-4 w-4" />
                             </div>
-                            <div className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                              {item.created_at && new Date(item.created_at).toLocaleString("uk-UA", {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit"
-                              })}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-sm font-medium">{event.title}</div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatActivityClock(event.created_at)}
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {event.actorLabel}
+                              </div>
+                              {event.description && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {event.description}
+                                </p>
+                              )}
                             </div>
                           </div>
-                          {item.note && (
-                            <p className="text-xs text-muted-foreground mt-1">{item.note}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </Card>

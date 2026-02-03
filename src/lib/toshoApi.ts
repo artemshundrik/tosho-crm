@@ -42,12 +42,11 @@ export type QuoteRun = {
 export type QuoteStatusRow = {
   id: string;
   quote_id: string;
-  status?: string | null;
   from_status?: string | null;
   to_status?: string | null;
   note?: string | null;
   created_at?: string | null;
-  created_by?: string | null;
+  changed_by?: string | null;
 };
 
 export type TeamMemberRow = { id: string; label: string; avatarUrl?: string | null };
@@ -214,7 +213,7 @@ export async function listStatusHistory(quoteId: string) {
   const { data, error } = await supabase
     .schema("tosho")
     .from("quote_status_history")
-    .select("*")
+    .select("id,quote_id,from_status,to_status,changed_by,note,created_at")
     .eq("quote_id", quoteId)
     .order("created_at", { ascending: false });
   handleError(error);
