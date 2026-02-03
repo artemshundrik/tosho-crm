@@ -78,6 +78,8 @@ import {
   TrendingUp,
   Package,
   Shirt,
+  Image,
+  Lock,
 } from "lucide-react";
 
 type QuoteDetailsPageProps = {
@@ -456,6 +458,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+
+  const [filesCustomerOpen, setFilesCustomerOpen] = useState(true);
+  const [filesDesignOpen, setFilesDesignOpen] = useState(true);
+  const [filesDocsOpen, setFilesDocsOpen] = useState(true);
 
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
@@ -2091,8 +2097,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   return (
     <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -2101,9 +2107,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold leading-tight">
                 Прорахунок #{quote.number ?? quote.id}
               </h1>
               <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
@@ -2123,15 +2129,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className={cn("text-xs font-medium", badge.className)}
                     title={titleParts.join(" · ")}
                   >
+                    <Calendar className="h-3 w-3 mr-1" />
                     {badge.label}
                   </Badge>
                 );
               })()}
             </div>
-            <p className="text-sm text-muted-foreground mt-1">
+            <div className="text-sm text-muted-foreground">
               {formatQuoteType(quote.quote_type)}
               {quote.print_type ? ` · ${quote.print_type}` : ""}
-            </p>
+            </div>
           </div>
         </div>
 
@@ -2421,13 +2428,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="font-medium">{formatQuoteType(quote.quote_type)}</div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    Коментар
+                {quote.comment ? (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      Коментар
+                    </div>
+                    <div className="font-medium text-sm line-clamp-2">{quote.comment}</div>
                   </div>
-                  <div className="font-medium text-sm line-clamp-2">{quote.comment ?? "—"}</div>
-                </div>
+                ) : null}
 
                 <div className="space-y-2 sm:col-span-2">
                   <div className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -2440,6 +2449,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <Button
                           variant="outline"
                           className="h-9 justify-start gap-2 font-normal"
+                          onClick={() => setDeadlinePopoverOpen(true)}
                         >
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           {deadlineDate ? formatDeadlineLabel(deadlineDate) : "Оберіть дату"}
@@ -2449,9 +2459,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <CalendarPicker
                           mode="single"
                           selected={toLocalDate(deadlineDate)}
-                          onSelect={(date) => {
+                          onSelect={async (date) => {
                             setDeadlineDate(formatDateInput(date ?? null));
                             setDeadlinePopoverOpen(false);
+                            await handleSaveDeadline();
                           }}
                           initialFocus
                         />
@@ -2460,7 +2471,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDeadlineQuickSet(0)}
+                            onClick={async () => {
+                              handleDeadlineQuickSet(0);
+                              await handleSaveDeadline();
+                            }}
                           >
                             Сьогодні
                           </Button>
@@ -2468,7 +2482,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDeadlineQuickSet(1)}
+                            onClick={async () => {
+                              handleDeadlineQuickSet(1);
+                              await handleSaveDeadline();
+                            }}
                           >
                             Завтра
                           </Button>
@@ -2476,7 +2493,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDeadlineQuickSet(7)}
+                            onClick={async () => {
+                              handleDeadlineQuickSet(7);
+                              await handleSaveDeadline();
+                            }}
                           >
                             +7 днів
                           </Button>
@@ -2484,7 +2504,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={handleDeadlineClear}
+                            onClick={async () => {
+                              handleDeadlineClear();
+                              await handleSaveDeadline();
+                            }}
                           >
                             Очистити
                           </Button>
@@ -2496,15 +2519,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       placeholder="Коментар до дедлайну (опціонально)"
                       value={deadlineNote}
                       onChange={(e) => setDeadlineNote(e.target.value)}
+                      onBlur={handleSaveDeadline}
                       maxLength={200}
                     />
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="outline"
+                      className="h-9 w-9"
                       onClick={handleSaveDeadline}
                       disabled={deadlineSaving}
+                      aria-label="Зберегти дедлайн"
                     >
-                      {deadlineSaving ? "Збереження..." : "Зберегти"}
+                      {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -2516,53 +2542,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
               
-              <div className="flex flex-col items-end justify-center px-6 py-4 rounded-xl bg-primary/5 border border-primary/20">
-                <div className="text-xs text-muted-foreground mb-1">Загальна сума</div>
-                <div className="text-3xl font-bold text-primary tabular-nums">
-                  {formatCurrency(totals.total, quote.currency)}
-                </div>
-                {items.length > 0 && (
-                  <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                    <Package className="h-3 w-3" />
-                    Модель обрана
-                  </div>
-                )}
-              </div>
             </div>
             
-            {updatedMinutes !== null && (
-              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border/40">
-                <Badge variant="outline" className="gap-1.5 text-xs">
-                  <Clock className="h-3 w-3" />
-                  Оновлено {updatedMinutes} хв тому
-                </Badge>
-              </div>
-            )}
+            {updatedMinutes !== null && <></>}
           </Card>
 
-          {/* Model Summary */}
-          <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
+          {/* Spec (read-only) */}
+          <Card className="p-6 bg-muted/10 border border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Обрана модель
+              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
+                <span role="img" aria-hidden="true">📋</span> Специфікація
               </div>
-              {items.length === 0 && (
-                <Button size="sm" onClick={openNewItem} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Обрати модель
-                </Button>
-              )}
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Lock className="h-3.5 w-3.5" />
+                Зафіксовано
+              </Badge>
             </div>
-
-            {itemsLoading ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : itemsError ? (
-              <div className="text-sm text-destructive py-4">{itemsError}</div>
-            ) : items.length === 0 ? (
+            {items.length === 0 && (
               <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/70 p-8 text-center">
                 <Package className="h-12 w-12 text-muted-foreground/30" />
                 <div>
@@ -2574,7 +2570,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   Обрати модель
                 </Button>
               </div>
-            ) : (
+            )}
+
+            {itemsLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Завантаження...</p>
+              </div>
+            ) : itemsError ? (
+              <div className="text-sm text-destructive py-4">{itemsError}</div>
+            ) : items.length === 0 ? null : (
               items.slice(0, 1).map((item) => {
                 const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
                 const resolvedKindId = item.catalogKindId ?? item.productKindId;
@@ -2734,14 +2739,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 );
               })
             )}
+            <div className="mt-4 text-xs text-muted-foreground">
+              Щоб змінити специфікацію — створіть новий прорахунок.
+            </div>
           </Card>
 
-          {/* Runs Card */}
+          {/* Visualization placeholder */}
+          <Card className="p-6 bg-muted/10 border border-border/60 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
+                <span role="img" aria-hidden="true">🎨</span> Візуалізація
+              </div>
+            </div>
+            <div className="border-2 border-dashed border-border/60 rounded-xl p-10 text-center bg-background/30">
+              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
+                  <Image className="h-6 w-6" />
+                </div>
+                <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
+                <div className="text-xs text-muted-foreground">
+                  Тут будуть макети від дизайнера після їх створення
+                </div>
+                <Badge variant="outline" className="text-[11px] px-3">
+                  Скоро буде доступно
+                </Badge>
+              </div>
+            </div>
+          </Card>
+
+          {/* Calculation (manager) */}
           <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Тиражі
+                💰 Розрахунок
               </div>
               {canEditRuns ? (
                 <Button variant="outline" size="sm" onClick={addRun} className="gap-2">
@@ -2781,8 +2811,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <TableHead className="font-semibold w-32">Кількість</TableHead>
                       <TableHead className="font-semibold w-40">Ціна модель</TableHead>
                       <TableHead className="font-semibold w-44">Ціна нанесення</TableHead>
-                      <TableHead className="font-semibold w-40">Логістика</TableHead>
-                      <TableHead className="font-semibold w-40 text-right">Разом</TableHead>
+                      <TableHead className="font-semibold w-40 text-right">Сума</TableHead>
                       <TableHead className="w-16"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2798,7 +2827,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       return (
                         <TableRow
                           key={run.id ?? idx}
-                          className={cn(isSelected && "bg-primary/5")}
+                          className={cn(isSelected && "bg-primary/5 ring-1 ring-primary/20")}
                         >
                           <TableCell className="w-12">
                             <input
@@ -2841,21 +2870,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={run.logistics_cost}
-                              disabled={disabled}
-                              onChange={(e) => updateRun(idx, "logistics_cost", Number(e.target.value))}
-                              min={0}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right font-mono tabular-nums font-semibold">
-                            {formatCurrency(total, quote.currency)}
-                            <div className="text-[11px] text-muted-foreground font-normal font-sans">
-                              ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
-                              {formatCurrencyCompact(printPrice, quote.currency)}) × {qty} +{" "}
-                              {formatCurrencyCompact(logistics, quote.currency)}
+                            <div className="text-right font-mono tabular-nums font-semibold">
+                              {formatCurrency((modelPrice + printPrice) * qty, quote.currency)}
+                              <div className="text-[11px] text-muted-foreground font-normal font-sans">
+                                ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
+                                {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -2881,7 +2901,73 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 {canEditRuns && (
                   <div className="flex justify-end gap-2 mt-4">
                     <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
-                      {runsSaving ? "Збереження..." : "Зберегти тиражі"}
+                      {runsSaving ? "Збереження..." : "Зберегти розрахунок"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Logistics */}
+          <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-semibold flex items-center gap-2">
+                🚚 Логістика
+              </div>
+            </div>
+            {runsLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Завантаження...</p>
+              </div>
+            ) : runsError ? (
+              <div className="text-sm text-destructive py-4">{runsError}</div>
+            ) : runs.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
+                🚚 Очікує розрахунок логістики<br />
+                Логіст ще не вніс вартість доставки
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b">
+                      <TableHead className="w-32 font-semibold">Кількість</TableHead>
+                      <TableHead className="w-48 font-semibold">Вартість доставки</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {runs.map((run, idx) => {
+                      const qty = Number(run.quantity) || 0;
+                      const disabled = !canEditRuns;
+                      const isSelected = !!run.id && run.id === selectedRunId;
+                      return (
+                        <TableRow key={`log-${run.id ?? idx}`} className={cn(isSelected && "bg-primary/5")}>
+                          <TableCell className="font-mono tabular-nums">{qty}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={run.logistics_cost}
+                              disabled={disabled}
+                              onChange={(e) => updateRun(idx, "logistics_cost", Number(e.target.value))}
+                              min={0}
+                              placeholder="очікує"
+                            />
+                            {(!run.logistics_cost || Number(run.logistics_cost) === 0) && (
+                              <div className="text-[11px] text-muted-foreground mt-1">очікує</div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {canEditRuns && (
+                  <div className="flex justify-end gap-2 mt-4">
+                    <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
+                      {runsSaving ? "Збереження..." : "Зберегти логістику"}
                     </Button>
                   </div>
                 )}
@@ -3081,25 +3167,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             )}
           </Card>
 
-          {/* Attachments Card - Improved */}
+          {/* Files Card - Categorized */}
           <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <Paperclip className="h-5 w-5" />
-                Файли від замовника
-                {attachments.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{attachments.length}</Badge>
-                )}
+                Файли
               </div>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => attachmentsInputRef.current?.click()}
-                disabled={attachmentsUploading}
-                aria-label="Завантажити файли"
-              >
-                <Upload className="h-4 w-4" />
-              </Button>
             </div>
 
             <input
@@ -3117,125 +3191,219 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 Завантаження файлів...
               </div>
             )}
-            
-            {attachmentsLoading ? (
-              <div className="text-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : attachmentsError ? (
-              <div className="text-sm text-destructive">{attachmentsError}</div>
-            ) : attachments.length === 0 ? (
-              <div 
-                className={cn(
-                  "border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer",
-                  attachmentsDragActive
-                    ? "border-primary/60 bg-primary/10"
-                    : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                )}
-                onClick={() => attachmentsInputRef.current?.click()}
-                onDrop={handleAttachmentsDrop}
-                onDragOver={handleAttachmentsDragOver}
-                onDragLeave={handleAttachmentsDragLeave}
-              >
-                <Upload className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-sm font-medium mb-1">Перетягніть файли сюди</p>
-                <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
-                </p>
-              </div>
-            ) : (
+
+            {/* Від замовника */}
+            <div className="mb-4">
               <div
-                className={cn(
-                  "space-y-2 rounded-xl border border-dashed border-border/50 p-2",
-                  attachmentsDragActive && "border-primary/60 bg-primary/5"
-                )}
-                onDrop={handleAttachmentsDrop}
-                onDragOver={handleAttachmentsDragOver}
-                onDragLeave={handleAttachmentsDragLeave}
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between text-left cursor-pointer"
+                onClick={() => setFilesCustomerOpen((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setFilesCustomerOpen((v) => !v);
+                  }
+                }}
               >
-                {attachments.map((file) => {
-                  const extension = getFileExtension(file.name);
-                  const showImagePreview = !!file.url && canPreviewImage(extension);
-                  const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
-                  return (
-                    <div 
-                      key={file.id} 
-                      className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-visible">
-                          {showImagePreview ? (
-                            <img
-                              src={file.url}
-                              alt={file.name}
-                              className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-150"
-                              loading="lazy"
-                            />
-                          ) : showPdfPreview ? (
-                            <iframe
-                              src={`${file.url}#page=1&view=FitH`}
-                              title={`Preview ${file.name}`}
-                              className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
-                            />
-                          ) : (
-                            <Paperclip className="h-5 w-5 text-primary" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium text-sm truncate" title={file.name}>
-                              {file.name}
-                            </div>
-                            {extension && (
-                              <Badge variant="secondary" className="text-[10px] uppercase">
-                                {extension}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {file.size} ·{" "}
-                            {new Date(file.created_at).toLocaleString("uk-UA", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                            {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
-                          </div>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        onClick={() => {
-                          if (file.url) window.open(file.url, "_blank", "noopener,noreferrer");
-                        }}
-                        disabled={!file.url}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive hover:text-destructive"
-                        onClick={() => requestDeleteAttachment(file)}
-                        disabled={attachmentsDeletingId === file.id}
-                      >
-                        {attachmentsDeletingId === file.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  );
-                })}
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  Від замовника
+                  {attachments.length > 0 && (
+                    <Badge variant="secondary" className="text-[11px]">{attachments.length}</Badge>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    attachmentsInputRef.current?.click();
+                  }}
+                  disabled={attachmentsUploading}
+                >
+                  <Upload className="h-4 w-4" />
+                  Додати
+                </Button>
               </div>
-            )}
+              {filesCustomerOpen && (
+                <div className="mt-2 space-y-2">
+                  {attachmentsLoading ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">Завантаження...</p>
+                    </div>
+                  ) : attachmentsError ? (
+                    <div className="text-sm text-destructive">{attachmentsError}</div>
+                  ) : attachments.length === 0 ? (
+                    <div
+                      className={cn(
+                        "border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer",
+                        attachmentsDragActive
+                          ? "border-primary/60 bg-primary/10"
+                          : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                      )}
+                      onClick={() => attachmentsInputRef.current?.click()}
+                      onDrop={handleAttachmentsDrop}
+                      onDragOver={handleAttachmentsDragOver}
+                      onDragLeave={handleAttachmentsDragLeave}
+                    >
+                      <Upload className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                      <p className="text-sm font-medium mb-1">Перетягніть файли сюди</p>
+                      <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        "space-y-2 rounded-xl border border-dashed border-border/50 p-2",
+                        attachmentsDragActive && "border-primary/60 bg-primary/5"
+                      )}
+                      onDrop={handleAttachmentsDrop}
+                      onDragOver={handleAttachmentsDragOver}
+                      onDragLeave={handleAttachmentsDragLeave}
+                    >
+                      {attachments.map((file) => {
+                        const extension = getFileExtension(file.name);
+                        const showImagePreview = !!file.url && canPreviewImage(extension);
+                        const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
+                        return (
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-visible">
+                                {showImagePreview ? (
+                                  <img
+                                    src={file.url}
+                                    alt={file.name}
+                                    className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-150"
+                                    loading="lazy"
+                                  />
+                                ) : showPdfPreview ? (
+                                  <iframe
+                                    src={`${file.url}#page=1&view=FitH`}
+                                    title={`Preview ${file.name}`}
+                                    className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
+                                  />
+                                ) : (
+                                  <Paperclip className="h-5 w-5 text-primary" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="font-medium text-sm truncate" title={file.name}>
+                                    {file.name}
+                                  </div>
+                                  {extension && (
+                                    <Badge variant="secondary" className="text-[10px] uppercase">
+                                      {extension}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {file.size} ·{" "}
+                                  {new Date(file.created_at).toLocaleString("uk-UA", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                  {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                              onClick={() => {
+                                if (file.url) window.open(file.url, "_blank", "noopener,noreferrer");
+                              }}
+                              disabled={!file.url}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive hover:text-destructive"
+                              onClick={() => requestDeleteAttachment(file)}
+                              disabled={attachmentsDeletingId === file.id}
+                            >
+                              {attachmentsDeletingId === file.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Візуалізації */}
+            <div className="mb-4">
+              <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between text-left cursor-pointer"
+                onClick={() => setFilesDesignOpen((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setFilesDesignOpen((v) => !v);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  Візуалізації
+                </div>
+                <Badge variant="outline" className="text-[11px]">скоро</Badge>
+              </div>
+              {filesDesignOpen && (
+                <div className="mt-2 border border-dashed border-border/50 rounded-xl p-4 text-center text-xs text-muted-foreground">
+                  Буде доступно після створення макетів дизайнером.
+                </div>
+              )}
+            </div>
+
+            {/* Документи */}
+            <div>
+              <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between text-left cursor-pointer"
+                onClick={() => setFilesDocsOpen((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setFilesDocsOpen((v) => !v);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  Документи
+                </div>
+                <Button size="sm" variant="ghost" className="gap-2" disabled>
+                  <Upload className="h-4 w-4" />
+                  Додати
+                </Button>
+              </div>
+              {filesDocsOpen && (
+                <div className="mt-2 border border-dashed border-border/50 rounded-xl p-4 text-xs text-muted-foreground">
+                  Рахунки, договори, акти — скоро буде доступно.
+                </div>
+              )}
+            </div>
 
             {attachmentsUploadError && (
               <div className="text-xs text-destructive mt-2">{attachmentsUploadError}</div>
