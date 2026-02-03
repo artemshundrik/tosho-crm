@@ -2880,10 +2880,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
                 {canEditRuns && (
                   <div className="flex justify-end gap-2 mt-4">
-                    <Button variant="outline" size="sm" onClick={addRun}>
-                      <Plus className="h-4 w-4" />
-                      Додати тираж
-                    </Button>
                     <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
                       {runsSaving ? "Збереження..." : "Зберегти тиражі"}
                     </Button>
