@@ -27,7 +27,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { 
   Search, 
   X, 
@@ -42,8 +41,6 @@ import {
   Plus as PlusIcon,
   Loader2,
   ArrowUpDown,
-  ChevronRight,
-  Upload,
   Clock,
   CheckCircle2,
   XCircle,
@@ -51,6 +48,9 @@ import {
   Check,
   Hourglass,
   PlusCircle,
+  CalendarClock,
+  CalendarDays,
+  Timer,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -106,6 +106,24 @@ const statusClasses: Record<string, string> = {
   cancelled:
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
 };
+
+const statusColorClass: Record<string, string> = {
+  new: "text-muted-foreground",
+  estimating: "text-sky-400",
+  estimated: "text-violet-400",
+  awaiting_approval: "text-amber-400",
+  approved: "text-emerald-400",
+  cancelled: "text-rose-400",
+};
+
+const KANBAN_COLUMNS = [
+  { id: "new", label: statusLabels.new, dotClass: "bg-muted-foreground/60" },
+  { id: "estimating", label: statusLabels.estimating, dotClass: "bg-sky-400" },
+  { id: "estimated", label: statusLabels.estimated, dotClass: "bg-violet-400" },
+  { id: "awaiting_approval", label: statusLabels.awaiting_approval, dotClass: "bg-amber-400" },
+  { id: "approved", label: statusLabels.approved, dotClass: "bg-emerald-400" },
+  { id: "cancelled", label: statusLabels.cancelled, dotClass: "bg-rose-400" },
+];
 
 type OwnershipOption = {
   value: string;
@@ -258,6 +276,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
+    const saved = localStorage.getItem("quotes_view_mode");
+    return saved === "kanban" ? "kanban" : "table";
+  });
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
@@ -392,6 +415,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       className: "border-border/60 text-muted-foreground bg-muted/20",
       tone: "future" as const,
     };
+  };
+
+  const formatDeadlineShort = (value: string) => {
+    const date = parseDateOnly(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1450,6 +1479,45 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return filtered;
   }, [rows, search, quickFilter, status, sortBy, sortOrder]);
 
+  useEffect(() => {
+    localStorage.setItem("quotes_view_mode", viewMode);
+  }, [viewMode]);
+
+  const groupedByStatus = useMemo(() => {
+    const buckets: Record<string, QuoteListRow[]> = {
+      new: [],
+      estimating: [],
+      estimated: [],
+      awaiting_approval: [],
+      approved: [],
+      cancelled: [],
+    };
+    filteredAndSortedRows.forEach((row) => {
+      const s = normalizeStatus(row.status);
+      if (!buckets[s]) buckets[s] = [];
+      buckets[s].push(row);
+    });
+    return buckets;
+  }, [filteredAndSortedRows]);
+
+  const handleDragStart = (id: string) => {
+    setDraggingId(id);
+  };
+
+  const handleDropToStatus = async (status: string) => {
+    if (!draggingId) return;
+    try {
+      await setQuoteStatus({ quoteId: draggingId, status });
+      setRows((prev) =>
+        prev.map((row) => (row.id === draggingId ? { ...row, status } : row))
+      );
+    } catch (e: any) {
+      toast.error("Не вдалося змінити статус", { description: e?.message });
+    } finally {
+      setDraggingId(null);
+    }
+  };
+
   const toggleSelectAll = () => {
     const allIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
     setSelectedIds((prev) => {
@@ -1545,10 +1613,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <h1 className="text-xl font-semibold">Прорахунки</h1>
               <p className="text-sm text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
             </div>
-            <Button onClick={openCreate} size="lg" className="gap-2">
-              <PlusIcon className="h-4 w-4" />
-              Новий прорахунок
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
+                <Button
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setViewMode("table")}
+                  aria-label="Табличний вигляд"
+                >
+                  ≡
+                </Button>
+                <Button
+                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setViewMode("kanban")}
+                  aria-label="Kanban вигляд"
+                >
+                  ▦
+                </Button>
+              </div>
+              <Button onClick={openCreate} size="lg" className="gap-2">
+                <PlusIcon className="h-4 w-4" />
+                Новий прорахунок
+              </Button>
+            </div>
           </div>
           {/* Search Bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
@@ -1685,290 +1775,478 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">Завантаження прорахунків...</p>
-          </div>
-        ) : error ? (
-          <div className="p-12 text-center">
-            <div className="text-destructive mb-2 text-2xl">⚠️</div>
-            <p className="text-sm text-destructive font-medium">{error}</p>
-          </div>
-        ) : filteredAndSortedRows.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Немає прорахунків</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для клієнта"}
-            </p>
-            {!search && (
-              <Button onClick={openCreate} variant="outline" className="gap-2">
-                <PlusIcon className="h-4 w-4" />
-                Створити прорахунок
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table className="[&_th]:px-4 [&_td]:px-4">
-              <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30 border-b [&>th+th]:border-l [&>th+th]:border-border/50">
-                  <TableHead className="w-[44px]">
-                    <Checkbox
-                      checked={
-                        selectedIds.size === 0
-                          ? false
-                          : selectedIds.size === filteredAndSortedRows.length
-                          ? true
-                          : "indeterminate"
-                      }
-                      onCheckedChange={() => toggleSelectAll()}
-                      aria-label="Вибрати всі"
-                    />
-                  </TableHead>
-                  <TableHead className="w-[140px] min-w-[140px]">
-                    <button
-                      onClick={() => handleSort("number")}
-                      className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
-                    >
-                      Номер
-                      {sortBy === "number" && (
-                        <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
-                      )}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[160px]">
-                    <button
-                      onClick={() => handleSort("date")}
-                      className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
-                    >
-                      Дата
-                      {sortBy === "date" && (
-                        <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
-                      )}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[220px]">
-                    <div className="flex items-center font-semibold">
-                      Замовник
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[200px]">
-                    <div className="flex items-center font-semibold">
-                      Менеджер
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[140px] font-semibold">
-                    Дедлайн
-                  </TableHead>
-                  <TableHead className="w-[120px] font-semibold">Статус</TableHead>
-                  <TableHead className="w-[120px] font-semibold">
-                    <div className="flex items-center">
-                      Тип
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAndSortedRows.map((row) => {
-                  const isSelected = selectedIds.has(row.id);
-                  return (
-                    <TableRow
-                      key={row.id}
-                      className={cn(
-                        "hover:bg-muted/15 cursor-pointer group transition-colors [&>td+td]:border-l [&>td+td]:border-border/50",
-                        isSelected && "bg-primary/5 border-primary/30"
-                      )}
-                      onClick={() => navigate(`/orders/estimates/${row.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate(`/orders/estimates/${row.id}`);
+      {/* Views */}
+      {viewMode === "table" ? (
+        <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="p-12 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">Завантаження прорахунків...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <div className="text-destructive mb-2 text-2xl">⚠️</div>
+              <p className="text-sm text-destructive font-medium">{error}</p>
+            </div>
+          ) : filteredAndSortedRows.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Немає прорахунків</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для клієнта"}
+              </p>
+              {!search && (
+                <Button onClick={openCreate} variant="outline" className="gap-2">
+                  <PlusIcon className="h-4 w-4" />
+                  Створити прорахунок
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="[&_th]:px-4 [&_td]:px-4">
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b [&>th+th]:border-l [&>th+th]:border-border/50">
+                    <TableHead className="w-[44px]">
+                      <Checkbox
+                        checked={
+                          selectedIds.size === 0
+                            ? false
+                            : selectedIds.size === filteredAndSortedRows.length
+                            ? true
+                            : "indeterminate"
                         }
-                      }}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleRow(row.id)}
-                          aria-label="Вибрати рядок"
-                        />
-                      </TableCell>
-                      <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
-                        <span className="group-hover:underline underline-offset-2">
-                          {row.number ?? "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {row.created_at ? (
-                          (() => {
-                            const labels = getDateLabels(row.created_at);
-                            if (labels === "—") return "—";
+                        onCheckedChange={() => toggleSelectAll()}
+                        aria-label="Вибрати всі"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[140px] min-w-[140px]">
+                      <button
+                        onClick={() => handleSort("number")}
+                        className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
+                      >
+                        Номер
+                        {sortBy === "number" && (
+                          <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[160px]">
+                      <button
+                        onClick={() => handleSort("date")}
+                        className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
+                      >
+                        Дата
+                        {sortBy === "date" && (
+                          <ArrowUpDown className={cn("h-3.5 w-3.5 transition-transform", sortOrder === "asc" && "rotate-180")} />
+                        )}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[220px]">
+                      <div className="flex items-center font-semibold">
+                        Замовник
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[200px]">
+                      <div className="flex items-center font-semibold">
+                        Менеджер
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[140px] font-semibold">
+                      Дедлайн
+                    </TableHead>
+                    <TableHead className="w-[120px] font-semibold">Статус</TableHead>
+                    <TableHead className="w-[120px] font-semibold">
+                      <div className="flex items-center">
+                        Тип
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[60px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedRows.map((row) => {
+                    const isSelected = selectedIds.has(row.id);
+                    return (
+                      <TableRow
+                        key={row.id}
+                        className={cn(
+                          "hover:bg-muted/15 cursor-pointer group transition-colors [&>td+td]:border-l [&>td+td]:border-border/50",
+                          isSelected && "bg-primary/5 border-primary/30"
+                        )}
+                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`/orders/estimates/${row.id}`);
+                          }
+                        }}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleRow(row.id)}
+                            aria-label="Вибрати рядок"
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
+                          <span className="group-hover:underline underline-offset-2">
+                            {row.number ?? "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {row.created_at ? (
+                            (() => {
+                              const labels = getDateLabels(row.created_at);
+                              if (labels === "—") return "—";
+                              return (
+                                <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
+                                  <div className="font-medium">{labels.primary}</div>
+                                  {labels.secondary ? (
+                                    <div className="text-xs text-muted-foreground">{labels.secondary}</div>
+                                  ) : null}
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium max-w-[260px]">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {row.customer_logo_url ? (
+                              <img
+                                src={row.customer_logo_url}
+                                alt={row.customer_name ?? "logo"}
+                                className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  target.style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
+                                {getInitials(row.customer_name)}
+                              </div>
+                            )}
+                            <span className="truncate" title={row.customer_name ?? "—"}>
+                              {row.customer_name ?? "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <AvatarBase
+                              src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                              name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                              fallback={
+                                row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
+                              }
+                              size={28}
+                              className="text-[10px] font-semibold"
+                            />
+                            <span>
+                              {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const badge = getDeadlineBadge(row.deadline_at ?? null);
+                            const titleParts = [
+                              row.deadline_at
+                                ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
+                                : "Дедлайн не задано",
+                              row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
+                            ].filter(Boolean);
                             return (
-                              <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
-                                <div className="font-medium">{labels.primary}</div>
-                                {labels.secondary ? (
-                                  <div className="text-xs text-muted-foreground">{labels.secondary}</div>
-                                ) : null}
+                              <Badge
+                                variant="outline"
+                                className={cn("text-xs font-medium", badge.className)}
+                                title={titleParts.join(" · ")}
+                              >
+                                {badge.label}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const normalizedStatus = normalizeStatus(row.status);
+                            const Icon = statusIcons[normalizedStatus] ?? Clock;
+                            return (
+                              <Badge
+                                className={cn(
+                                  "cursor-pointer transition-all hover:shadow-sm",
+                                  statusClasses[normalizedStatus] ?? statusClasses.new
+                                )}
+                                variant="outline"
+                              >
+                                <Icon className="h-3.5 w-3.5 mr-1" />
+                                {formatStatusLabel(normalizedStatus)}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const Icon = quoteTypeIcon(row.quote_type);
+                            return (
+                              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                                {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                                {quoteTypeLabel(row.quote_type)}
                               </div>
                             );
-                          })()
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium max-w-[260px]">
-                        <div className="flex items-center gap-3 min-w-0">
-                          {row.customer_logo_url ? (
-                            <img
-                              src={row.customer_logo_url}
-                              alt={row.customer_name ?? "logo"}
-                              className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
-                              {getInitials(row.customer_name)}
-                            </div>
-                          )}
-                          <span className="truncate" title={row.customer_name ?? "—"}>
-                            {row.customer_name ?? "—"}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                          })()}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                                <FileText className="mr-2 h-4 w-4" />
+                                Відкрити
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Дублювати
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => requestDelete(row.id)}
+                                className="text-destructive focus:text-destructive"
+                                disabled={rowDeleteBusy === row.id}
+                              >
+                                {rowDeleteBusy === row.id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                )}
+                                Видалити
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2">
+          {loading ? (
+            <div className="p-12 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">Завантаження прорахунків...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <div className="text-destructive mb-2 text-2xl">⚠️</div>
+              <p className="text-sm text-destructive font-medium">{error}</p>
+            </div>
+          ) : filteredAndSortedRows.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Немає прорахунків</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для клієнта"}
+              </p>
+              {!search && (
+                <Button onClick={openCreate} variant="outline" className="gap-2">
+                  <PlusIcon className="h-4 w-4" />
+                  Створити прорахунок
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="min-w-[1100px] flex gap-4 px-0 pb-6">
+                {KANBAN_COLUMNS.map((column) => {
+                  const items = groupedByStatus[column.id] ?? [];
+                  return (
+                    <div
+                      key={column.id}
+                      className="flex-1 min-w-[240px] max-w-[320px] bg-card/60 border border-border/60 rounded-lg shadow-sm flex flex-col"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDropToStatus(column.id);
+                      }}
+                    >
+                      <div className="flex items-center justify-between px-3 py-3 border-b border-border/70 text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
                         <div className="flex items-center gap-2">
-                          <AvatarBase
-                            src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                            name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
-                            fallback={
-                              row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
-                            }
-                            size={28}
-                            className="text-[10px] font-semibold"
-                          />
-                          <span>
-                            {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
-                          </span>
+                          {(() => {
+                            const Icon = statusIcons[column.id] ?? Clock;
+                            return <Icon className={cn("h-4 w-4", statusColorClass[column.id] ?? "text-muted-foreground")} />;
+                          })()}
+                          <span>{column.label}</span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const badge = getDeadlineBadge(row.deadline_at ?? null);
-                          const titleParts = [
-                            row.deadline_at
-                              ? `Дата: ${new Date(row.deadline_at).toLocaleDateString("uk-UA")}`
-                              : "Дедлайн не задано",
-                            row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
-                          ].filter(Boolean);
-                          return (
-                            <Badge
-                              variant="outline"
-                              className={cn("text-xs font-medium", badge.className)}
-                              title={titleParts.join(" · ")}
-                            >
-                              {badge.label}
-                            </Badge>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const normalizedStatus = normalizeStatus(row.status);
-                          const Icon = statusIcons[normalizedStatus] ?? Clock;
-                          return (
-                            <Badge
-                              className={cn(
-                                "cursor-pointer transition-all hover:shadow-sm",
-                                statusClasses[normalizedStatus] ?? statusClasses.new
-                              )}
-                              variant="outline"
-                            >
-                              <Icon className="h-3.5 w-3.5 mr-1" />
-                              {formatStatusLabel(normalizedStatus)}
-                            </Badge>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const Icon = quoteTypeIcon(row.quote_type);
-                          return (
-                            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
-                              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                              {quoteTypeLabel(row.quote_type)}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
-                              <FileText className="mr-2 h-4 w-4" />
-                              Відкрити
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Дублювати
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => requestDelete(row.id)}
-                              className="text-destructive focus:text-destructive"
-                              disabled={rowDeleteBusy === row.id}
-                            >
-                              {rowDeleteBusy === row.id ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="mr-2 h-4 w-4" />
-                              )}
-                              Видалити
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                        <Badge variant="secondary" className="text-[11px] px-2 py-0.5 font-semibold">
+                          {items.length}
+                        </Badge>
+                      </div>
+                      <div
+                        className={cn(
+                          "p-3 space-y-3 flex-1 overflow-y-auto",
+                          draggingId && "pb-5"
+                        )}
+                      >
+                        {items.length === 0 ? (
+                          <div className="rounded-lg border border-dashed border-border/70 bg-muted/30 text-muted-foreground text-xs p-4 text-center">
+                            Немає прорахунків
+                          </div>
+                        ) : (
+                          items.map((row) => {
+                            const badge = getDeadlineBadge(row.deadline_at ?? null);
+                            const Icon = quoteTypeIcon(row.quote_type);
+                            const normalizedStatus = normalizeStatus(row.status);
+                            const statusClass = statusClasses[normalizedStatus] ?? statusClasses.new;
+                            return (
+                              <div
+                                key={row.id}
+                                draggable
+                                onDragStart={() => handleDragStart(row.id)}
+                                onDragEnd={() => setDraggingId(null)}
+                                onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                                className={cn(
+                                  "rounded-lg border border-border/70 bg-card/80 p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer",
+                                  draggingId === row.id && "ring-2 ring-primary/40"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {(() => {
+                                      const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
+                                      return (
+                                        <StatusIcon
+                                          className={cn(
+                                            "h-4 w-4 shrink-0",
+                                            statusColorClass[normalizedStatus] ?? "text-muted-foreground"
+                                          )}
+                                        />
+                                      );
+                                    })()}
+                                    <span className="font-mono text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+                                      {row.number ?? "—"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                  <div className="flex items-center gap-2 text-sm font-medium">
+                                    {row.customer_logo_url ? (
+                                      <img
+                                        src={row.customer_logo_url}
+                                        alt={row.customer_name ?? "logo"}
+                                        className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20"
+                                        loading="lazy"
+                                        onError={(e) => {
+                                          const target = e.currentTarget;
+                                          target.style.display = "none";
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center">
+                                        {getInitials(row.customer_name)}
+                                      </div>
+                                    )}
+                                    <span className="truncate">{row.customer_name ?? "—"}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <AvatarBase
+                                      src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                                      name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                                      fallback={
+                                        row.assigned_to
+                                          ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to)
+                                          : "—"
+                                      }
+                                      size={22}
+                                      className="text-[9px] font-semibold"
+                                    />
+                                    <span className="truncate">
+                                      {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                                  <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-2 py-1 font-semibold">
+                                    {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                                    {quoteTypeLabel(row.quote_type)}
+                                  </div>
+                                  {row.deadline_at ? (
+                                    (() => {
+                                      const shortLabel = formatDeadlineShort(row.deadline_at!);
+                                      const pillTone = badge.tone;
+                                      const pillClass = {
+                                        overdue:
+                                          "border-rose-500/30 bg-rose-500/10 text-rose-200",
+                                        today:
+                                          "border-amber-400/40 bg-amber-500/10 text-amber-100",
+                                        soon:
+                                          "border-amber-400/30 bg-amber-500/10 text-amber-100",
+                                        future:
+                                          "border-border/60 bg-muted/20 text-muted-foreground",
+                                        none: "hidden",
+                                      }[pillTone] ?? "border-border/60 bg-muted/20 text-muted-foreground";
+                                      const pillIcon = {
+                                        overdue: XCircle,
+                                        today: CalendarClock,
+                                        soon: Timer,
+                                        future: CalendarDays,
+                                        none: CalendarDays,
+                                      }[pillTone] ?? CalendarDays;
+                                      const PillIcon = pillIcon;
+                                      if (!shortLabel) return null;
+                                      return (
+                                        <div className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-semibold", pillClass)}>
+                                          <PillIcon className="h-3.5 w-3.5" />
+                                          <span className="leading-tight">{shortLabel}</span>
+                                        </div>
+                                      );
+                                    })()
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-        {rowStatusError && (
-          <div className="px-6 pb-4 text-sm text-destructive flex items-center gap-2">
-            <span className="text-lg">⚠️</span>
-            {rowStatusError}
-          </div>
-        )}
+      {rowStatusError && (
+        <div className="px-6 pb-4 text-sm text-destructive flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          {rowStatusError}
+        </div>
+      )}
 
-        {rowDeleteError && (
-          <div className="px-6 pb-4 text-sm text-destructive flex items-center gap-2">
-            <span className="text-lg">⚠️</span>
-            {rowDeleteError}
-          </div>
-        )}
-      </div>
+      {rowDeleteError && (
+        <div className="px-6 pb-4 text-sm text-destructive flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          {rowDeleteError}
+        </div>
+      )}
 
       {/* ✨ New Linear-style Quote Form */}
       <NewQuoteDialog
