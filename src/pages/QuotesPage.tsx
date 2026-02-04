@@ -266,6 +266,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [selectedKindId, setSelectedKindId] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [printConfigs, setPrintConfigs] = useState<PrintConfig[]>(() => [createPrintConfig()]);
+  const [printMode, setPrintMode] = useState<"with_print" | "no_print">("with_print");
   const [itemQty, setItemQty] = useState("1");
   const [itemUnit, setItemUnit] = useState("шт");
   const [deadlineDate, setDeadlineDate] = useState("");
@@ -994,33 +995,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const validateStep3 = () => {
     setCreateError(null);
-    if (printConfigs.length === 0) {
-      setCreateError("Додайте хоча б одне нанесення.");
-      return false;
-    }
-    const invalidIndex = printConfigs.findIndex(
-      (print) => !print.methodId || !print.positionId
-    );
-    if (invalidIndex !== -1) {
-      const target = printConfigs[invalidIndex];
-      setCreateError(
-        !target.methodId
-          ? `Оберіть тип нанесення у блоці №${invalidIndex + 1}.`
-          : `Оберіть місце нанесення у блоці №${invalidIndex + 1}.`
+    if (printMode === "with_print") {
+      if (printConfigs.length === 0) {
+        setCreateError("Додайте хоча б одне нанесення або оберіть “Без нанесення”.");
+        return false;
+      }
+      const invalidIndex = printConfigs.findIndex(
+        (print) => !print.methodId || !print.positionId
       );
-      return false;
-    }
-    const invalidSizeIndex = printConfigs.findIndex((print) => {
-      const width = print.widthMm.trim() ? Number(print.widthMm) : null;
-      const height = print.heightMm.trim() ? Number(print.heightMm) : null;
-      return (
-        (print.widthMm.trim() && Number.isNaN(width)) ||
-        (print.heightMm.trim() && Number.isNaN(height))
-      );
-    });
-    if (invalidSizeIndex !== -1) {
-      setCreateError(`Вкажіть коректні розміри у блоці №${invalidSizeIndex + 1}.`);
-      return false;
+      if (invalidIndex !== -1) {
+        const target = printConfigs[invalidIndex];
+        setCreateError(
+          !target.methodId
+            ? `Оберіть тип нанесення у блоці №${invalidIndex + 1}.`
+            : `Оберіть місце нанесення у блоці №${invalidIndex + 1}.`
+        );
+        return false;
+      }
+      const invalidSizeIndex = printConfigs.findIndex((print) => {
+        const width = print.widthMm.trim() ? Number(print.widthMm) : null;
+        const height = print.heightMm.trim() ? Number(print.heightMm) : null;
+        return (
+          (print.widthMm.trim() && Number.isNaN(width)) ||
+          (print.heightMm.trim() && Number.isNaN(height))
+        );
+      });
+      if (invalidSizeIndex !== -1) {
+        setCreateError(`Вкажіть коректні розміри у блоці №${invalidSizeIndex + 1}.`);
+        return false;
+      }
     }
     return true;
   };
@@ -1327,7 +1330,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const basePrice = selectedModel?.price ?? 0;
       const qty = Math.max(1, Math.floor(qtyValue));
       const methodsPayload =
-        printConfigs.length > 0
+        printMode === "with_print" && printConfigs.length > 0
           ? printConfigs.map((print) => {
               const width = print.widthMm.trim() ? Number(print.widthMm) : null;
               const height = print.heightMm.trim() ? Number(print.heightMm) : null;

@@ -221,6 +221,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [quantity, setQuantity] = React.useState<number>();
   const [quantityUnit, setQuantityUnit] = React.useState("pcs");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
+  const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("with_print");
   const [files, setFiles] = React.useState<File[]>([]);
 
   // Popover states
@@ -251,6 +252,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   // Add print application
   const handleAddPrintApplication = () => {
+    if (printMode === "no_print") return;
     setPrintApplications([
       ...printApplications,
       {
@@ -305,6 +307,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       return;
     }
 
+    const finalPrints = printMode === "no_print" ? [] : printApplications;
+
     const formData: NewQuoteFormData = {
       status,
       customerId,
@@ -318,7 +322,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       modelId,
       quantity,
       quantityUnit,
-      printApplications,
+      printApplications: finalPrints,
       files,
     };
 
@@ -674,11 +678,31 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               Нанесення
             </span>
             <Separator className="flex-1 bg-border/40" />
+            <ToggleGroup
+              type="single"
+              value={printMode}
+              onValueChange={(value) => {
+                const next = (value as "with_print" | "no_print" | null) ?? "with_print";
+                setPrintMode(next);
+                if (next === "no_print") {
+                  setPrintApplications([]);
+                }
+              }}
+              className="hidden sm:flex"
+            >
+              <ToggleGroupItem value="with_print" className="px-3 py-1 text-xs">
+                З нанесенням
+              </ToggleGroupItem>
+              <ToggleGroupItem value="no_print" className="px-3 py-1 text-xs">
+                Без нанесення
+              </ToggleGroupItem>
+            </ToggleGroup>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleAddPrintApplication}
               className="h-7 gap-1.5 text-xs -mr-2"
+              disabled={printMode === "no_print"}
             >
               <Plus className="h-3.5 w-3.5" />
               Додати
@@ -762,11 +786,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               </div>
             ))}
 
-            {printApplications.length === 0 && (
+            {printMode === "no_print" ? (
               <div className="text-center py-6 text-sm text-muted-foreground">
-                Немає нанесень. Натисніть "Додати" щоб створити.
+                Нанесення не потрібне для цього прорахунку.
               </div>
-            )}
+            ) : printApplications.length === 0 ? (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                Немає нанесень. Натисніть "Додати", щоб створити.
+              </div>
+            ) : null}
           </div>
         </div>
 
