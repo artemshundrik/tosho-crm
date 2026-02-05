@@ -68,6 +68,7 @@ const FinanceExpenseInvoicesPage = lazy(() => import("./pages/FinanceExpenseInvo
 const FinanceActsPage = lazy(() => import("./pages/FinanceActsPage"));
 const LogisticsPage = lazy(() => import("./pages/LogisticsPage"));
 const DesignPage = lazy(() => import("./pages/DesignPage"));
+const DesignTaskPage = lazy(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazy(() => import("./pages/ContractorsPage"));
 const StatsPage = lazy(() =>
   import("./pages/StatsPage").then((module) => ({ default: module.StatsPage }))
@@ -764,6 +765,18 @@ function AppRoutes() {
             <AppLayout>
               <RouteSuspense shell>
                 <DesignPage />
+              </RouteSuspense>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/design/:id"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RouteSuspense shell>
+                <DesignTaskPage />
               </RouteSuspense>
             </AppLayout>
           </RequireAuth>

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import {
   Select,
@@ -186,6 +187,7 @@ export type NewQuoteFormData = {
   quantity?: number;
   quantityUnit: string;
   printApplications: PrintApplication[];
+  createDesignTask?: boolean;
   files: File[];
 };
 
@@ -222,6 +224,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [quantityUnit, setQuantityUnit] = React.useState("pcs");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
   const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("with_print");
+  const [createDesignTask, setCreateDesignTask] = React.useState(false);
   const [files, setFiles] = React.useState<File[]>([]);
 
   // Popover states
@@ -323,6 +326,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       quantity,
       quantityUnit,
       printApplications: finalPrints,
+      createDesignTask,
       files,
     };
 
@@ -862,6 +866,21 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <Plus className="h-3.5 w-3.5" />
               Створити
             </Button>
+          </div>
+        </div>
+
+        {/* Design task toggle */}
+        <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-border/40 bg-muted/5 px-4 py-3">
+          <Checkbox
+            checked={createDesignTask}
+            onCheckedChange={(checked) => setCreateDesignTask(!!checked)}
+            className="mt-1"
+          />
+          <div className="space-y-1 text-sm">
+            <div className="font-medium">Створити задачу дизайну</div>
+            <p className="text-muted-foreground text-xs">
+              Якщо потрібен макет: увімкніть, додайте метод нанесення та файли/коментар для дизайнера.
+            </p>
           </div>
         </div>
       </DialogContent>

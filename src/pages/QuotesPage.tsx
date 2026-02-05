@@ -16,6 +16,7 @@ import {
   deleteQuote,
   listTeamMembers,
   setStatus as setQuoteStatus,
+  updateQuote,
   type QuoteListRow,
   type TeamMemberRow,
   type CustomerRow,
@@ -23,7 +24,7 @@ import {
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { CustomerDialog } from "@/components/customers";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +52,7 @@ import {
   CalendarClock,
   CalendarDays,
   Timer,
+  Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -231,6 +233,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [rowStatusError, setRowStatusError] = useState<string | null>(null);
   const [rowDeleteBusy, setRowDeleteBusy] = useState<string | null>(null);
   const [rowDeleteError, setRowDeleteError] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<QuoteListRow | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    status: "new",
+    comment: "",
+    assignedTo: "unassigned",
+    deadlineAt: "",
+    deadlineNote: "",
+  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -785,12 +798,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         throw new Error("Failed to create quote");
       }
 
+      // Resolve catalog selections (may be reused below)
+      const type = catalogTypes.find((t) => t.id === data.categoryId);
+      const kind = type?.kinds.find((k) => k.id === data.kindId);
+      const model = kind?.models.find((m) => m.id === data.modelId);
+
       // 2. Create quote item if model is selected
       if (data.modelId && data.quantity) {
-        // Find selected model details from catalog
-        const type = catalogTypes.find(t => t.id === data.categoryId);
-        const kind = type?.kinds.find(k => k.id === data.kindId);
-        const model = kind?.models.find(m => m.id === data.modelId);
 
         // Prepare methods payload from print applications
         const isUuid = (value?: string | null) =>
@@ -833,6 +847,40 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit: data.quantityUnit,
           });
         if (itemError) throw itemError;
+      }
+
+      // 3. Optionally create design task (lightweight, via activity_log)
+      const shouldCreateDesignTask =
+        data.createDesignTask &&
+        (data.printApplications.length > 0 || data.files.length > 0);
+      if (shouldCreateDesignTask && teamId) {
+        const actorName =
+          currentUserId && memberById.get(currentUserId)
+            ? (memberById.get(currentUserId) as string)
+            : "System";
+        const modelName = model?.name ?? "Позиція";
+        const designDeadline = data.deadline?.toISOString() ?? null;
+        await supabase
+          .from("activity_log")
+          .insert({
+            team_id: teamId,
+            user_id: currentUserId ?? null,
+            actor_name: actorName,
+            action: "design_task",
+            entity_type: "design_task",
+            entity_id: created.id,
+            title: `Дизайн: ${modelName}`,
+            metadata: {
+              status: "new",
+              quote_id: created.id,
+              quote_type: data.quoteType,
+              methods_count: data.printApplications.length,
+              has_files: data.files.length > 0,
+              design_deadline: designDeadline,
+              deadline: designDeadline,
+              model: modelName,
+            },
+          });
       }
 
       // 3. Upload files if any
@@ -1551,12 +1599,65 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setDeleteDialogOpen(true);
   };
 
+  const openEdit = (row: QuoteListRow) => {
+    setEditTarget(row);
+    setEditForm({
+      status: normalizeStatus(row.status),
+      comment: row.comment ?? "",
+      assignedTo: row.assigned_to ?? "unassigned",
+      deadlineAt: row.deadline_at ? row.deadline_at.slice(0, 10) : "",
+      deadlineNote: row.deadline_note ?? "",
+    });
+    setEditError(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditChange = (field: keyof typeof editForm, value: string) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editTarget) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await updateQuote({
+        quoteId: editTarget.id,
+        teamId,
+        status: editForm.status,
+        comment: editForm.comment.trim() || null,
+        assignedTo: editForm.assignedTo === "unassigned" ? null : editForm.assignedTo,
+        deadlineAt: editForm.deadlineAt || null,
+        deadlineNote: editForm.deadlineNote.trim() || null,
+      });
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === editTarget.id
+            ? {
+                ...row,
+                status: editForm.status,
+                comment: editForm.comment.trim() || null,
+                assigned_to: editForm.assignedTo === "unassigned" ? null : editForm.assignedTo,
+                deadline_at: editForm.deadlineAt || null,
+                deadline_note: editForm.deadlineNote.trim() || null,
+              }
+            : row
+        )
+      );
+      setEditDialogOpen(false);
+    } catch (e: any) {
+      setEditError(e?.message ?? "Не вдалося оновити прорахунок.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTargetId) return;
     setRowDeleteBusy(deleteTargetId);
     setRowDeleteError(null);
     try {
-      await deleteQuote(deleteTargetId);
+      await deleteQuote(deleteTargetId, teamId);
       setRows((prev) => prev.filter((row) => row.id !== deleteTargetId));
       toast.success("Прорахунок видалено");
       setDeleteDialogOpen(false);
@@ -1595,7 +1696,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (selectedIds.size === 0) return;
     setBulkBusy(true);
     try {
-      await Promise.all(Array.from(selectedIds).map((id) => deleteQuote(id)));
+      await Promise.all(Array.from(selectedIds).map((id) => deleteQuote(id, teamId)));
       setRows((prev) => prev.filter((row) => !selectedIds.has(row.id)));
       toast.success(`Видалено ${selectedIds.size}`);
       setSelectedIds(new Set());
@@ -2017,15 +2118,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
-                                <FileText className="mr-2 h-4 w-4" />
-                                Відкрити
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
-                                <Copy className="mr-2 h-4 w-4" />
-                                Дублювати
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Відкрити
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(row)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Редагувати
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Дублювати
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => requestDelete(row.id)}
                                 className="text-destructive focus:text-destructive"
@@ -2295,6 +2400,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">
           <DialogHeader className="p-4 border-b border-border/60 bg-muted/10">
             <DialogTitle className="text-lg">Видалити прорахунок?</DialogTitle>
+            <DialogDescription>Це видалить прорахунок і пов’язані дані. Дію не можна скасувати.</DialogDescription>
           </DialogHeader>
           <div className="p-4 space-y-3">
             <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
@@ -2314,6 +2420,97 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               {rowDeleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Видалити
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden">
+          <DialogHeader className="p-4 border-b border-border/60 bg-muted/10">
+            <DialogTitle className="text-lg">Редагувати прорахунок</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Статус</label>
+              <Select value={editForm.status} onValueChange={(v) => handleEditChange("status", v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {formatStatusLabel(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Менеджер</label>
+              <Select
+                value={editForm.assignedTo}
+                onValueChange={(v) => handleEditChange("assignedTo", v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Не призначено</SelectItem>
+                  {teamMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">Дедлайн</label>
+                <Input
+                  type="date"
+                  value={editForm.deadlineAt}
+                  onChange={(e) => handleEditChange("deadlineAt", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">Нотатка до дедлайну</label>
+                <Input
+                  value={editForm.deadlineNote}
+                  onChange={(e) => handleEditChange("deadlineNote", e.target.value)}
+                  placeholder="Напр. Макет о 12:00"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Коментар</label>
+              <textarea
+                className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                rows={3}
+                value={editForm.comment}
+                onChange={(e) => handleEditChange("comment", e.target.value)}
+                placeholder="Внутрішній коментар"
+              />
+            </div>
+
+            {editError && (
+              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+                {editError}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="px-4 py-3 border-t border-border/60 bg-muted/5">
+            <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(false)} disabled={editSaving}>
+              Скасувати
+            </Button>
+            <Button size="sm" onClick={handleEditSubmit} disabled={editSaving} className="gap-2">
+              {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Зберегти
             </Button>
           </DialogFooter>
         </DialogContent>

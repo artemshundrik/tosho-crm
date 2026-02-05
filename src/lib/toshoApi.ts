@@ -279,37 +279,72 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   }
 }
 
-export async function deleteQuote(quoteId: string) {
-  const attemptDelete = async () => {
-    const { error } = await supabase
-      .schema("tosho")
-      .from("quotes")
-      .delete()
-      .eq("id", quoteId);
+export async function deleteQuote(quoteId: string, teamId?: string | null) {
+  const schema = supabase.schema("tosho");
+
+  const deleteChildren = async (withTeam: boolean) => {
+    const tables = ["quote_items", "quote_comments", "quote_attachments", "quote_status_history"];
+    for (const table of tables) {
+      const q = schema.from(table).delete().eq("quote_id", quoteId);
+      const { error } = withTeam && teamId ? await q.eq("team_id", teamId) : await q;
+      handleError(error);
+    }
+  };
+
+  const deleteQuoteRow = async (withTeam: boolean) => {
+    const q = schema.from("quotes").delete().eq("id", quoteId);
+    const { error } = withTeam && teamId ? await q.eq("team_id", teamId) : await q;
     handleError(error);
   };
 
   try {
-    await attemptDelete();
+    await deleteQuoteRow(true);
   } catch (error: any) {
-    const message = error?.message ?? "";
-    if (!message.toLowerCase().includes("foreign key")) {
-      throw error;
+    const message = (error?.message ?? "").toLowerCase();
+    const isFk = message.includes("foreign key");
+    const isNotFound = message.includes("not found") || message.includes("no rows");
+
+    if (isFk) {
+      await deleteChildren(true);
+      await deleteQuoteRow(true);
+      return;
     }
-    const cleanupTables = [
-      "quote_items",
-      "quote_comments",
-      "quote_attachments",
-      "quote_status_history",
-    ];
-    for (const table of cleanupTables) {
-      const { error: cleanupError } = await supabase
-        .schema("tosho")
-        .from(table)
-        .delete()
-        .eq("quote_id", quoteId);
-      if (cleanupError) throw cleanupError;
+
+    // fallback if team filter mismatched
+    if (isNotFound || !teamId) {
+      await deleteChildren(false);
+      await deleteQuoteRow(false);
+      return;
     }
-    await attemptDelete();
+
+    throw error;
   }
+}
+
+export async function updateQuote(params: {
+  quoteId: string;
+  teamId: string;
+  comment?: string | null;
+  assignedTo?: string | null;
+  deadlineAt?: string | null;
+  deadlineNote?: string | null;
+  status?: string | null;
+}) {
+  const payload: Record<string, unknown> = {};
+  if (params.comment !== undefined) payload.comment = params.comment;
+  if (params.assignedTo !== undefined) payload.assigned_to = params.assignedTo;
+  if (params.deadlineAt !== undefined) payload.deadline_at = params.deadlineAt;
+  if (params.deadlineNote !== undefined) payload.deadline_note = params.deadlineNote;
+  if (params.status !== undefined) payload.status = params.status;
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .update(payload)
+    .eq("id", params.quoteId)
+    .eq("team_id", params.teamId)
+    .select("id,status,comment,assigned_to,deadline_at,deadline_note,updated_at")
+    .single();
+  handleError(error);
+  return data;
 }
