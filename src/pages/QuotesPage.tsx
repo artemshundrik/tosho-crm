@@ -783,14 +783,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       }
       // 1. Create quote
+      const formatDateOnly = (date: Date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      };
+      const deadlineAt = data.deadline ? formatDateOnly(data.deadline) : null;
+
       const created = await createQuote({
         teamId,
         customerId: data.customerId!,
         quoteType: data.quoteType,
+        deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         comment: data.deadlineNote?.trim() || null,
         currency: data.currency,
         assignedTo: data.managerId || null,
-        deadlineAt: data.deadline?.toISOString() || null,
+        deadlineAt,
         deadlineNote: data.deadlineNote?.trim() || null,
       });
 
@@ -859,7 +868,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ? (memberById.get(currentUserId) as string)
             : "System";
         const modelName = model?.name ?? "Позиція";
-        const designDeadline = data.deadline?.toISOString() ?? null;
+        const designDeadline = deadlineAt;
         await supabase
           .from("activity_log")
           .insert({

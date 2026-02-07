@@ -46,6 +46,9 @@ import {
   Check,
   Hourglass,
   XCircle,
+  Truck,
+  MapPin,
+  Car,
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -79,6 +82,15 @@ const QUOTE_TYPES = [
   { value: "merch", label: "Мерч", icon: Shirt },
   { value: "print", label: "Поліграфія", icon: Printer },
   { value: "other", label: "Інше", icon: Package },
+];
+
+/**
+ * Delivery options
+ */
+const DELIVERY_OPTIONS = [
+  { value: "nova_poshta", label: "Нова пошта", icon: Truck },
+  { value: "pickup", label: "Самовивіз", icon: MapPin },
+  { value: "taxi", label: "Таксі", icon: Car },
 ];
 
 /**
@@ -181,6 +193,7 @@ export type NewQuoteFormData = {
   deadlineNote?: string;
   currency: string;
   quoteType: string;
+  deliveryType?: string;
   categoryId?: string;
   kindId?: string;
   modelId?: string;
@@ -217,6 +230,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [deadlineNote, setDeadlineNote] = React.useState("");
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
+  const [deliveryType, setDeliveryType] = React.useState("");
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
@@ -233,6 +247,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [managerPopoverOpen, setManagerPopoverOpen] = React.useState(false);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = React.useState(false);
+  const [deliveryPopoverOpen, setDeliveryPopoverOpen] = React.useState(false);
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
   const selectedType = React.useMemo(
@@ -320,6 +335,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       deadlineNote,
       currency,
       quoteType,
+      deliveryType,
       categoryId,
       kindId,
       modelId,
@@ -544,6 +560,33 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             </PopoverContent>
           </Popover>
 
+          {/* Delivery */}
+          <Popover open={deliveryPopoverOpen} onOpenChange={setDeliveryPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Chip size="md" icon={<Truck />} active={!!deliveryType}>
+                {DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType)?.label || "Логістика"}
+              </Chip>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-2" align="start">
+              <div className="space-y-1">
+                {DELIVERY_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start gap-2 h-9 text-sm"
+                    onClick={() => {
+                      setDeliveryType(option.value);
+                      setDeliveryPopoverOpen(false);
+                    }}
+                  >
+                    <option.icon className="h-3.5 w-3.5" />
+                    <span className="text-sm">{option.label}</span>
+                  </Button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Product section */}

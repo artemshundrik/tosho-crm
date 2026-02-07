@@ -15,6 +15,7 @@ export type QuoteListRow = {
   title?: string | null;
   quote_type?: string | null;
   print_type?: string | null;
+  delivery_type?: string | null;
   currency?: string | null;
   total?: number | null;
   created_at?: string | null;
@@ -63,7 +64,7 @@ export async function listQuotes(params: ListQuotesParams) {
   let query = supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
@@ -107,6 +108,7 @@ export async function createQuote(params: {
   customerId: string;
   quoteType?: string | null;
   printType?: string | null;
+  deliveryType?: string | null;
   comment?: string | null;
   currency?: string | null;
   assignedTo?: string | null;
@@ -125,6 +127,7 @@ export async function createQuote(params: {
     assigned_to: params.assignedTo ?? null,
     quote_type: params.quoteType ?? null,
     print_type: params.printType ?? null,
+    delivery_type: params.deliveryType ?? null,
     deadline_at: params.deadlineAt ?? null,
     deadline_note: params.deadlineNote ?? null,
   };
@@ -157,6 +160,10 @@ export async function createQuote(params: {
       delete payload.deadline_note;
       return await insertQuote(payload);
     }
+    if (message.includes("column") && message.includes("delivery_type")) {
+      delete payload.delivery_type;
+      return await insertQuote(payload);
+    }
     throw error;
   }
 }
@@ -165,7 +172,7 @@ export async function getQuoteSummary(quoteId: string) {
   const { data, error } = await supabase
     .schema("tosho")
     .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+    .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
     .eq("id", quoteId)
     .single();
   handleError(error);
@@ -329,6 +336,7 @@ export async function updateQuote(params: {
   deadlineAt?: string | null;
   deadlineNote?: string | null;
   status?: string | null;
+  deliveryType?: string | null;
 }) {
   const payload: Record<string, unknown> = {};
   if (params.comment !== undefined) payload.comment = params.comment;
@@ -336,6 +344,7 @@ export async function updateQuote(params: {
   if (params.deadlineAt !== undefined) payload.deadline_at = params.deadlineAt;
   if (params.deadlineNote !== undefined) payload.deadline_note = params.deadlineNote;
   if (params.status !== undefined) payload.status = params.status;
+  if (params.deliveryType !== undefined) payload.delivery_type = params.deliveryType;
 
   const { data, error } = await supabase
     .schema("tosho")

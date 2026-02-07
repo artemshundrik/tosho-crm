@@ -67,6 +67,7 @@ import {
   PlayCircle,
   CheckCircle2,
   Building2,
+  Truck,
   Calendar,
   User,
   Upload,
@@ -543,6 +544,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   };
 
+  const updateRunRaw = (index: number, field: keyof QuoteRun, raw: string) => {
+    const parsed = raw === "" ? null : Number(raw);
+    setRuns((prev) =>
+      prev.map((run, i) => (i === index ? { ...run, [field]: parsed as any } : run))
+    );
+  };
+
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown) => {
     const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
     setRunsSaving(true);
@@ -614,6 +622,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return getRunTotal(selectedRun);
   }, [selectedRun]);
 
+  const selectedUnitCost = useMemo(() => {
+    if (!selectedRun) return null;
+    const qty = Number(selectedRun.quantity) || 0;
+    if (qty <= 0) return null;
+    const modelPrice = Number(selectedRun.unit_price_model) || 0;
+    const printPrice = Number(selectedRun.unit_price_print) || 0;
+    const logistics = Number(selectedRun.logistics_cost) || 0;
+    return modelPrice + printPrice + logistics / qty;
+  }, [selectedRun]);
+
   const [runsLoaded, setRunsLoaded] = useState(false);
 
   const toDateInputValue = (value?: string | null) => {
@@ -643,10 +661,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return `${y}-${m}-${d}`;
   };
 
-  const formatDeadlineLabel = (value?: string | null) => {
-    if (!value) return "Без дедлайну";
+  const parseDeadlineDate = (value?: string | null) => {
+    if (!value) return null;
+    const local = toLocalDate(value);
+    if (local) return local;
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Без дедлайну";
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const formatDeadlineLabel = (value?: string | null) => {
+    const date = parseDeadlineDate(value);
+    if (!date) return "Без дедлайну";
     return date.toLocaleDateString("uk-UA", {
       day: "numeric",
       month: "long",
@@ -654,12 +680,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     });
   };
 
+  const formatDeliveryLabel = (value?: string | null) => {
+    if (!value) return "—";
+    const map: Record<string, string> = {
+      nova_poshta: "Нова пошта",
+      pickup: "Самовивіз",
+      taxi: "Таксі",
+    };
+    return map[value] ?? value;
+  };
+
   const getDeadlineBadge = (value?: string | null) => {
     if (!value) {
       return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
     }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
+    const date = parseDeadlineDate(value);
+    if (!date) {
       return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
     }
     const today = new Date();
@@ -2117,9 +2153,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </Badge>
               {(() => {
                 const badge = getDeadlineBadge(quote.deadline_at ?? null);
+                const deadlineDate = parseDeadlineDate(quote.deadline_at ?? null);
                 const titleParts = [
-                  quote.deadline_at
-                    ? `Дата: ${new Date(quote.deadline_at).toLocaleDateString("uk-UA")}`
+                  deadlineDate
+                    ? `Дата: ${deadlineDate.toLocaleDateString("uk-UA")}`
                     : "Дедлайн не задано",
                   quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
                 ].filter(Boolean);
@@ -2137,7 +2174,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
             <div className="text-sm text-muted-foreground">
               {formatQuoteType(quote.quote_type)}
-              {quote.print_type ? ` · ${quote.print_type}` : ""}
+              {(quote.delivery_type ?? quote.print_type)
+                ? ` · ${formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}`
+                : ""}
             </div>
           </div>
         </div>
@@ -2426,6 +2465,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     Тип прорахунку
                   </div>
                   <div className="font-medium">{formatQuoteType(quote.quote_type)}</div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5" />
+                    Доставка
+                  </div>
+                  <div className="font-medium">
+                    {formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}
+                  </div>
                 </div>
 
                 {quote.comment ? (
@@ -2803,174 +2852,185 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 ) : null}
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-6 px-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-b">
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead className="font-semibold w-32">Кількість</TableHead>
-                      <TableHead className="font-semibold w-40">Ціна модель</TableHead>
-                      <TableHead className="font-semibold w-44">Ціна нанесення</TableHead>
-                      <TableHead className="font-semibold w-40 text-right">Сума</TableHead>
-                      <TableHead className="w-16"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {runs.map((run, idx) => {
-                      const qty = Number(run.quantity) || 0;
-                      const modelPrice = Number(run.unit_price_model) || 0;
-                      const printPrice = Number(run.unit_price_print) || 0;
-                      const logistics = Number(run.logistics_cost) || 0;
-                      const total = (modelPrice + printPrice) * qty + logistics;
-                      const disabled = !canEditRuns;
-                      const isSelected = !!run.id && run.id === selectedRunId;
-                      return (
-                        <TableRow
-                          key={run.id ?? idx}
-                          className={cn(isSelected && "bg-primary/5 ring-1 ring-primary/20")}
-                        >
-                          <TableCell className="w-12">
-                            <input
-                              type="radio"
-                              name="selected-run"
-                              className="h-4 w-4 accent-primary"
-                              checked={isSelected}
-                              onChange={() => setSelectedRunId(run.id ?? null)}
-                              aria-label="Обрати тираж"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={run.quantity}
-                              disabled={disabled}
-                              onChange={(e) => updateRun(idx, "quantity", Number(e.target.value))}
-                              min={1}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={run.unit_price_model}
-                              disabled={disabled}
-                              onChange={(e) => updateRun(idx, "unit_price_model", Number(e.target.value))}
-                              min={0}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={run.unit_price_print}
-                              disabled={disabled}
-                              onChange={(e) => updateRun(idx, "unit_price_print", Number(e.target.value))}
-                              min={0}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-right font-mono tabular-nums font-semibold">
-                              {formatCurrency((modelPrice + printPrice) * qty, quote.currency)}
-                              <div className="text-[11px] text-muted-foreground font-normal font-sans">
-                                ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
-                                {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+              <div className="space-y-6">
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-b">
+                        <TableHead className="w-12"></TableHead>
+                        <TableHead className="font-semibold w-32">Кількість</TableHead>
+                        <TableHead className="font-semibold w-40">
+                          Ціна модель, {quote.currency}
+                        </TableHead>
+                        <TableHead className="font-semibold w-44">
+                          Ціна нанесення, {quote.currency}
+                        </TableHead>
+                        <TableHead className="font-semibold w-40 text-right">Сума</TableHead>
+                        <TableHead className="w-16"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {runs.map((run, idx) => {
+                        const qty = Number(run.quantity) || 0;
+                        const modelPrice = Number(run.unit_price_model) || 0;
+                        const printPrice = Number(run.unit_price_print) || 0;
+                        const logistics = Number(run.logistics_cost) || 0;
+                        const total = (modelPrice + printPrice) * qty + logistics;
+                        const disabled = !canEditRuns;
+                        const isSelected = !!run.id && run.id === selectedRunId;
+                        return (
+                          <TableRow
+                            key={run.id ?? idx}
+                            className={cn(isSelected && "bg-primary/5 ring-1 ring-primary/20")}
+                          >
+                            <TableCell className="w-12">
+                              <input
+                                type="radio"
+                                name="selected-run"
+                                className="h-4 w-4 accent-primary"
+                                checked={isSelected}
+                                onChange={() => setSelectedRunId(run.id ?? null)}
+                                aria-label="Обрати тираж"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                className="h-9"
+                                value={run.quantity ?? ""}
+                                disabled={disabled}
+                                onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.quantity === 0) e.target.select();
+                                }}
+                                min={1}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                className="h-9"
+                                value={run.unit_price_model ?? ""}
+                                disabled={disabled}
+                                onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.unit_price_model === 0) e.target.select();
+                                }}
+                                min={0}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                className="h-9"
+                                value={run.unit_price_print ?? ""}
+                                disabled={disabled}
+                                onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.unit_price_print === 0) e.target.select();
+                                }}
+                                min={0}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-right font-mono tabular-nums font-semibold">
+                                {formatCurrency((modelPrice + printPrice) * qty, quote.currency)}
+                                <div className="text-[11px] text-muted-foreground font-normal font-sans">
+                                  ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
+                                  {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {!disabled && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 hover:text-destructive"
-                                onClick={() => removeRun(idx)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-                <div className="mt-3 text-xs text-muted-foreground">
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {!disabled && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:text-destructive"
+                                  onClick={() => removeRun(idx)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="text-xs text-muted-foreground">
                   У підсумку використовується обраний тираж.
                 </div>
+                {selectedUnitCost !== null && (
+                  <div className="text-sm text-muted-foreground">
+                    Собівартість / од.:{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {formatCurrency(selectedUnitCost, quote.currency)}
+                    </span>
+                  </div>
+                )}
                 {canEditRuns && (
-                  <div className="flex justify-end gap-2 mt-4">
+                  <div className="flex justify-end gap-2">
                     <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
                       {runsSaving ? "Збереження..." : "Зберегти розрахунок"}
                     </Button>
                   </div>
                 )}
-              </div>
-            )}
-          </Card>
 
-          {/* Logistics */}
-          <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold flex items-center gap-2">
-                🚚 Логістика
-              </div>
-            </div>
-            {runsLoading ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : runsError ? (
-              <div className="text-sm text-destructive py-4">{runsError}</div>
-            ) : runs.length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
-                🚚 Очікує розрахунок логістики<br />
-                Логіст ще не вніс вартість доставки
-              </div>
-            ) : (
-              <div className="overflow-x-auto -mx-6 px-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-b">
-                      <TableHead className="w-32 font-semibold">Кількість</TableHead>
-                      <TableHead className="w-48 font-semibold">Вартість доставки</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {runs.map((run, idx) => {
-                      const qty = Number(run.quantity) || 0;
-                      const disabled = !canEditRuns;
-                      const isSelected = !!run.id && run.id === selectedRunId;
-                      return (
-                        <TableRow key={`log-${run.id ?? idx}`} className={cn(isSelected && "bg-primary/5")}>
-                          <TableCell className="font-mono tabular-nums">{qty}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={run.logistics_cost}
-                              disabled={disabled}
-                              onChange={(e) => updateRun(idx, "logistics_cost", Number(e.target.value))}
-                              min={0}
-                              placeholder="очікує"
-                            />
-                            {(!run.logistics_cost || Number(run.logistics_cost) === 0) && (
-                              <div className="text-[11px] text-muted-foreground mt-1">очікує</div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-                {canEditRuns && (
-                  <div className="flex justify-end gap-2 mt-4">
-                    <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
-                      {runsSaving ? "Збереження..." : "Зберегти логістику"}
-                    </Button>
+                <div className="border-t border-border/60 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-base font-semibold flex items-center gap-2">
+                      🚚 Логістика
+                    </div>
                   </div>
-                )}
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent border-b">
+                          <TableHead className="w-32 font-semibold">Кількість</TableHead>
+                          <TableHead className="w-48 font-semibold">Вартість доставки</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {runs.map((run, idx) => {
+                          const qty = Number(run.quantity) || 0;
+                          const disabled = !canEditRuns;
+                          const isSelected = !!run.id && run.id === selectedRunId;
+                          return (
+                            <TableRow key={`log-${run.id ?? idx}`} className={cn(isSelected && "bg-primary/5")}>
+                              <TableCell className="font-mono tabular-nums">{qty}</TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  className="h-9"
+                                  value={run.logistics_cost ?? ""}
+                                  disabled={disabled}
+                                  onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
+                                  min={0}
+                                  placeholder="очікує"
+                                  onFocus={(e) => {
+                                    if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
+                                  }}
+                                />
+                                {(!run.logistics_cost || Number(run.logistics_cost) === 0) && (
+                                  <div className="text-[11px] text-muted-foreground mt-1">очікує</div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    {canEditRuns && (
+                      <div className="flex justify-end gap-2 mt-4">
+                        <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
+                          {runsSaving ? "Збереження..." : "Зберегти логістику"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </Card>
