@@ -750,21 +750,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             label="Замовлення"
             links={sidebarLinks.filter((l) => l.group === "orders")}
             currentPath={location.pathname}
+            notificationsUnreadCount={unreadCount}
           />
           <SidebarGroup
             label="Фінанси"
             links={sidebarLinks.filter((l) => l.group === "finance")}
             currentPath={location.pathname}
+            notificationsUnreadCount={unreadCount}
           />
           <SidebarGroup
             label="Операції"
             links={sidebarLinks.filter((l) => l.group === "operations")}
             currentPath={location.pathname}
+            notificationsUnreadCount={unreadCount}
           />
           <SidebarGroup
             label="Акаунт"
             links={sidebarLinks.filter((l) => l.group === "account")}
             currentPath={location.pathname}
+            notificationsUnreadCount={unreadCount}
           />
         </nav>
 
@@ -829,24 +833,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         links={sidebarLinks.filter((l) => l.group === "orders")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
+                        notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Фінанси"
                         links={sidebarLinks.filter((l) => l.group === "finance")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
+                        notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Операції"
                         links={sidebarLinks.filter((l) => l.group === "operations")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
+                        notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Акаунт"
                         links={sidebarLinks.filter((l) => l.group === "account")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
+                        notificationsUnreadCount={unreadCount}
                       />
                       <div className="mt-6 pt-2 border-t border-border">
                         <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
@@ -910,8 +918,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   >
                     <Bell className="h-4.5 w-4.5" />
                     {unreadCount > 0 ? (
-                      <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                        {unreadCount}
+                      <span className="pointer-events-none absolute right-0 top-0 inline-flex h-5 min-w-5 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                        {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     ) : null}
                   </Button>
@@ -1036,11 +1044,13 @@ function SidebarGroup({
   links,
   currentPath,
   onNavigate,
+  notificationsUnreadCount = 0,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
   onNavigate?: () => void;
+  notificationsUnreadCount?: number;
 }) {
   if (links.length === 0) return null;
 
@@ -1054,6 +1064,7 @@ function SidebarGroup({
         {links.map((link) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
+          const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
 
           return (
             <Link
@@ -1086,6 +1097,11 @@ function SidebarGroup({
               />
 
               <span className="truncate">{link.label}</span>
+              {showNotificationsBadge ? (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                  {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}

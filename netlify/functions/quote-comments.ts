@@ -7,6 +7,12 @@ type RequestBody = {
   mentionedUserIds?: string[];
 };
 
+type TeamMemberIdentity = {
+  user_id: string;
+  full_name?: string | null;
+  email?: string | null;
+};
+
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -23,6 +29,37 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
 const isMissingColumnError = (message: string, columnName: string) => {
   const normalized = message.toLowerCase();
   return normalized.includes("column") && normalized.includes(columnName.toLowerCase());
+};
+
+const MENTION_REGEX = /(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu;
+
+const normalizeMentionKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
+
+const toEmailLocalPart = (value?: string | null) => {
+  const text = (value ?? "").trim();
+  if (!text.includes("@")) return "";
+  return text.split("@")[0]?.trim() ?? "";
+};
+
+const sanitizeMentionAlias = (value: string) =>
+  value
+    .trim()
+    .replace(/\s+/g, ".")
+    .replace(/[^\p{L}\p{N}._-]+/gu, "");
+
+const buildMentionAlias = (label: string, userId: string) => {
+  const base = toEmailLocalPart(label) || label;
+  const alias = sanitizeMentionAlias(base);
+  return alias || userId.slice(0, 8);
+};
+
+const extractMentionKeys = (text: string) => {
+  const keys = new Set<string>();
+  for (const match of text.matchAll(MENTION_REGEX)) {
+    const key = normalizeMentionKey(match[2]);
+    if (key) keys.add(key);
+  }
+  return Array.from(keys);
 };
 
 export const handler = async (event: any) => {
@@ -94,13 +131,78 @@ export const handler = async (event: any) => {
   }
 
   const sendMentionNotifications = async (mentionedUserIdsRaw: unknown, bodyRaw: unknown) => {
-    const mentionedUserIds = Array.from(
+    const explicitMentionedUserIds = Array.from(
       new Set(
         (Array.isArray(mentionedUserIdsRaw) ? mentionedUserIdsRaw : [])
           .filter((value): value is string => typeof value === "string")
           .map((value) => value.trim())
           .filter((value) => value.length > 0 && value !== userData.user.id)
       )
+    );
+
+    const text = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
+    const mentionKeys = extractMentionKeys(text);
+    let inferredMentionedUserIds: string[] = [];
+
+    if (mentionKeys.length > 0 && quoteData.team_id) {
+      let members: TeamMemberIdentity[] = [];
+
+      const { data: viewData, error: viewError } = await adminClient
+        .from("team_members_view")
+        .select("user_id, full_name, email")
+        .eq("team_id", quoteData.team_id);
+
+      if (!viewError && Array.isArray(viewData)) {
+        members = viewData as TeamMemberIdentity[];
+      } else {
+        const { data: fallbackData, error: fallbackError } = await adminClient
+          .from("team_members_view")
+          .select("user_id, full_name")
+          .eq("team_id", quoteData.team_id);
+
+        if (!fallbackError && Array.isArray(fallbackData)) {
+          members = fallbackData as TeamMemberIdentity[];
+        }
+      }
+
+      const mentionLookup = new Map<string, Set<string>>();
+      const addKey = (raw: string | null | undefined, userId: string) => {
+        const key = normalizeMentionKey(raw);
+        if (!key) return;
+        const set = mentionLookup.get(key) ?? new Set<string>();
+        set.add(userId);
+        mentionLookup.set(key, set);
+      };
+
+      for (const member of members) {
+        const userId = member.user_id;
+        const fullName = (member.full_name ?? "").trim();
+        const emailLocal = toEmailLocalPart(member.email);
+        const label = fullName || emailLocal || userId;
+        const alias = buildMentionAlias(label, userId);
+
+        addKey(userId, userId);
+        addKey(label, userId);
+        addKey(alias, userId);
+        addKey(emailLocal, userId);
+        addKey(label.replace(/\s+/g, ""), userId);
+        addKey(label.replace(/\s+/g, "."), userId);
+        addKey(label.replace(/\s+/g, "_"), userId);
+
+        for (const part of label.split(/\s+/).filter((token) => token.length >= 2)) {
+          addKey(part, userId);
+        }
+      }
+
+      inferredMentionedUserIds = mentionKeys
+        .map((key) => mentionLookup.get(key))
+        .filter((set): set is Set<string> => !!set && set.size === 1)
+        .map((set) => Array.from(set)[0])
+        .filter((id) => id && id !== userData.user.id);
+    }
+
+    const mentionedUserIds = Array.from(
+      new Set([...explicitMentionedUserIds, ...inferredMentionedUserIds])
     );
 
     if (mentionedUserIds.length === 0) {
@@ -114,7 +216,6 @@ export const handler = async (event: any) => {
 
     const quoteNumber = (quoteData as any)?.number as string | null | undefined;
     const quoteLabel = quoteNumber ? `#${quoteNumber}` : quoteId;
-    const text = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
     const trimmedBody = text.length > 220 ? `${text.slice(0, 217)}...` : text;
     const bodyText = trimmedBody
       ? `Прорахунок ${quoteLabel}: ${trimmedBody}`

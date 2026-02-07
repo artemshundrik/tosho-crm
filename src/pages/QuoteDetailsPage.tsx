@@ -2411,6 +2411,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
 
       const mentionKeys = extractMentionKeys(body);
+      const hasMentionsInBody = mentionKeys.length > 0;
       const mentionedUserIds = new Set<string>();
       for (const mentionKey of mentionKeys) {
         const candidates = mentionLookup.get(mentionKey);
@@ -2443,7 +2444,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             mentionedUserIds: mentionUserIdsList,
           });
           data = fallback?.comment as any;
-          mentionsHandledViaServer = mentionUserIdsList.length > 0;
+          if (hasMentionsInBody) {
+            mentionsHandledViaServer = !fallback?.mentionError;
+          }
           error = null;
         } else {
           throw error;
@@ -2461,7 +2464,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         ...prev,
       ]);
 
-      if (mentionUserIdsList.length > 0 && !mentionsHandledViaServer) {
+      if (hasMentionsInBody && !mentionsHandledViaServer) {
         try {
           await invokeQuoteCommentsFunction({
             mode: "notify_mentions",
