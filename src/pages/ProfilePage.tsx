@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
+import { resolveWorkspaceId } from "@/lib/workspace";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -24,8 +25,6 @@ type ProfileCache = {
   initials: string;
   avatarUrl: string | null;
 };
-
-type WorkspaceIdResult = { id: string };
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
@@ -105,30 +104,9 @@ export function ProfilePage() {
           .substring(0, 2).toUpperCase();
         setInitials(i);
 
-        let resolvedWorkspaceId: string | null = null;
+        const resolvedWorkspaceId = await resolveWorkspaceId(user.id);
         let resolvedAccessRole = "member";
         let resolvedJobRole: string | null = null;
-
-        const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
-          .schema("tosho")
-          .rpc("my_workspace_id");
-
-        if (!workspaceRpcError && workspaceRpcData) {
-          resolvedWorkspaceId = workspaceRpcData as string;
-        }
-
-        if (!resolvedWorkspaceId) {
-          const { data, error } = await supabase
-            .schema("tosho")
-            .from("workspaces")
-            .select("id")
-            .limit(1)
-            .single<WorkspaceIdResult>();
-
-          if (!error) {
-            resolvedWorkspaceId = data?.id ?? null;
-          }
-        }
 
         if (resolvedWorkspaceId) {
           const { data: membership } = await supabase

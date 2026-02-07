@@ -134,6 +134,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Підрядники", to: ROUTES.contractors, group: "operations", icon: Users },
 
   // Акаунт
+  { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Доступ / Ролі", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert },
 ];
 
@@ -458,40 +459,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
 
-  // Стан для динамічного логотипу команди
-  const [workspaceLogo, setWorkspaceLogo] = useState<string | null>(null);
-
-useEffect(() => {
-  async function fetchLogo() {
-    try {
-      // 1. Отримуємо ID команди (з таблиці team_members)
-      const { data: teamId } = await supabase.rpc('current_team_id');
-      if (!teamId) return;
-
-      // 2. Отримуємо логотип через зв'язок: Team -> Club
-      const { data, error } = await supabase
-        .from('teams')
-        .select(`
-          club:clubs (
-            logo_url
-          )
-        `)
-        .eq('id', teamId)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      // Дістаємо вкладений logo_url
-      const logoUrl = (data as any)?.club?.logo_url;
-      if (logoUrl) {
-        setWorkspaceLogo(logoUrl);
-      }
-    } catch (err) {
-      console.error("Помилка завантаження лого через зв'язок:", err);
-    }
-  }
-  fetchLogo();
-}, []);
+  // Optional workspace logo (kept null by default to avoid heavy legacy team queries)
+  const [workspaceLogo] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;

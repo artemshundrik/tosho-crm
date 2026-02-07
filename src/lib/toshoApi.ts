@@ -61,27 +61,63 @@ function handleError(error: unknown) {
 
 export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status } = params;
-  let query = supabase
-    .schema("tosho")
-    .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
-    .eq("team_id", teamId)
-    .order("created_at", { ascending: false });
-
   const q = search?.trim() ?? "";
-  if (q.length > 0) {
-    query = query.or(
-      `number.ilike.%${q}%,comment.ilike.%${q}%,customer_name.ilike.%${q}%`
-    );
-  }
 
-  if (status && status !== "all") {
-    query = query.eq("status", status);
-  }
+  try {
+    let query = supabase
+      .schema("tosho")
+      .from("v_quotes_list")
+      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
 
-  const { data, error } = await query;
-  handleError(error);
-  return (data as QuoteListRow[]) ?? [];
+    if (q.length > 0) {
+      query = query.or(
+        `number.ilike.%${q}%,comment.ilike.%${q}%,customer_name.ilike.%${q}%`
+      );
+    }
+
+    if (status && status !== "all") {
+      query = query.eq("status", status);
+    }
+
+    const { data, error } = await query;
+    handleError(error);
+    return (data as QuoteListRow[]) ?? [];
+  } catch (error: any) {
+    const message = (error?.message ?? "").toLowerCase();
+    const shouldFallbackToQuotes =
+      message.includes("stack depth limit exceeded") ||
+      message.includes("statement timeout") ||
+      message.includes("v_quotes_list");
+
+    if (!shouldFallbackToQuotes) {
+      throw error;
+    }
+
+    let query = supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
+
+    if (q.length > 0) {
+      query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+    }
+
+    if (status && status !== "all") {
+      query = query.eq("status", status);
+    }
+
+    const { data, error: fallbackError } = await query;
+    handleError(fallbackError);
+    return ((data as QuoteListRow[]) ?? []).map((row) => ({
+      ...row,
+      customer_name: row.customer_name ?? null,
+      customer_logo_url: row.customer_logo_url ?? null,
+    }));
+  }
 }
 
 export async function listCustomersBySearch(teamId: string, search: string) {
@@ -169,23 +205,92 @@ export async function createQuote(params: {
 }
 
 export async function getQuoteSummary(quoteId: string) {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("v_quotes_list")
-    .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
-    .eq("id", quoteId)
-    .single();
-  handleError(error);
-  return data as QuoteSummaryRow;
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("v_quotes_list")
+      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .eq("id", quoteId)
+      .single();
+    handleError(error);
+    return data as QuoteSummaryRow;
+  } catch (error: any) {
+    const message = (error?.message ?? "").toLowerCase();
+    const shouldFallbackToQuotes =
+      message.includes("stack depth limit exceeded") ||
+      message.includes("statement timeout") ||
+      message.includes("v_quotes_list");
+
+    if (!shouldFallbackToQuotes) {
+      throw error;
+    }
+
+    const { data: row, error: rowError } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("*")
+      .eq("id", quoteId)
+      .single();
+    handleError(rowError);
+
+    const fallback = (row ?? {}) as Record<string, any>;
+    return {
+      id: String(fallback.id ?? quoteId),
+      team_id: (fallback.team_id as string | null | undefined) ?? null,
+      number: (fallback.number as string | null | undefined) ?? null,
+      status: (fallback.status as string | null | undefined) ?? null,
+      comment: (fallback.comment as string | null | undefined) ?? null,
+      title: (fallback.title as string | null | undefined) ?? null,
+      quote_type: (fallback.quote_type as string | null | undefined) ?? null,
+      print_type: (fallback.print_type as string | null | undefined) ?? null,
+      delivery_type: (fallback.delivery_type as string | null | undefined) ?? null,
+      currency: (fallback.currency as string | null | undefined) ?? null,
+      total:
+        typeof fallback.total === "number"
+          ? fallback.total
+          : fallback.total
+          ? Number(fallback.total)
+          : null,
+      created_at: (fallback.created_at as string | null | undefined) ?? null,
+      updated_at: (fallback.updated_at as string | null | undefined) ?? null,
+      customer_name: (fallback.customer_name as string | null | undefined) ?? null,
+      customer_logo_url: (fallback.customer_logo_url as string | null | undefined) ?? null,
+      assigned_to: (fallback.assigned_to as string | null | undefined) ?? null,
+      processing_minutes:
+        typeof fallback.processing_minutes === "number"
+          ? fallback.processing_minutes
+          : fallback.processing_minutes
+          ? Number(fallback.processing_minutes)
+          : null,
+      deadline_at: (fallback.deadline_at as string | null | undefined) ?? null,
+      deadline_note: (fallback.deadline_note as string | null | undefined) ?? null,
+    } as QuoteSummaryRow;
+  }
 }
 
-export async function getQuoteRuns(quoteId: string) {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("quote_item_runs")
-    .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost")
-    .eq("quote_id", quoteId)
-    .order("created_at", { ascending: true });
+export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
+  const runQuery = async (withTeamFilter: boolean) => {
+    let query = supabase
+      .schema("tosho")
+      .from("quote_item_runs")
+      .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost")
+      .eq("quote_id", quoteId)
+      .order("created_at", { ascending: true });
+    if (withTeamFilter && teamId) {
+      query = query.eq("team_id", teamId);
+    }
+    return await query;
+  };
+
+  let { data, error } = await runQuery(!!teamId);
+  if (
+    error &&
+    teamId &&
+    /column/i.test(error.message ?? "") &&
+    /team_id/i.test(error.message ?? "")
+  ) {
+    ({ data, error } = await runQuery(false));
+  }
   handleError(error);
   return (data as QuoteRun[]) ?? [];
 }
@@ -216,13 +321,29 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   return (data as QuoteRun[]) ?? [];
 }
 
-export async function listStatusHistory(quoteId: string) {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("quote_status_history")
-    .select("id,quote_id,from_status,to_status,changed_by,note,created_at")
-    .eq("quote_id", quoteId)
-    .order("created_at", { ascending: false });
+export async function listStatusHistory(quoteId: string, teamId?: string | null) {
+  const historyQuery = async (withTeamFilter: boolean) => {
+    let query = supabase
+      .schema("tosho")
+      .from("quote_status_history")
+      .select("id,quote_id,from_status,to_status,changed_by,note,created_at")
+      .eq("quote_id", quoteId)
+      .order("created_at", { ascending: false });
+    if (withTeamFilter && teamId) {
+      query = query.eq("team_id", teamId);
+    }
+    return await query;
+  };
+
+  let { data, error } = await historyQuery(!!teamId);
+  if (
+    error &&
+    teamId &&
+    /column/i.test(error.message ?? "") &&
+    /team_id/i.test(error.message ?? "")
+  ) {
+    ({ data, error } = await historyQuery(false));
+  }
   handleError(error);
   return (data as QuoteStatusRow[]) ?? [];
 }
@@ -252,17 +373,68 @@ export async function setStatus(params: { quoteId: string; status: string; note?
 }
 
 export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
-  const formatLabel = (row: { user_id?: string | null; full_name?: string | null }) =>
-    row.full_name?.trim() || row.user_id || "Невідомий користувач";
+  const toEmailLocalPart = (email?: string | null) => {
+    if (!email) return "";
+    const localPart = email.split("@")[0]?.trim();
+    return localPart || "";
+  };
+
+  const isUuid = (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+  let currentUserId: string | null = null;
+  let currentUserEmailLocalPart = "";
 
   try {
-    const { data, error } = await supabase
+    const { data: currentUserData, error: currentUserError } = await supabase.auth.getUser();
+    if (!currentUserError && currentUserData.user) {
+      currentUserId = currentUserData.user.id ?? null;
+      currentUserEmailLocalPart = toEmailLocalPart(currentUserData.user.email);
+    }
+  } catch {
+    // Ignore auth lookup errors and keep generic fallback labels.
+  }
+
+  const formatLabel = (row: { user_id?: string | null; full_name?: string | null; email?: string | null }) => {
+    const fullName = row.full_name?.trim();
+    if (fullName) return fullName;
+
+    const emailLocalPart = toEmailLocalPart(row.email);
+    if (emailLocalPart) return emailLocalPart;
+
+    if (row.user_id && currentUserId && row.user_id === currentUserId && currentUserEmailLocalPart) {
+      return currentUserEmailLocalPart;
+    }
+
+    if (row.user_id && isUuid(row.user_id)) {
+      return `Користувач ${row.user_id.slice(0, 8)}`;
+    }
+
+    return row.user_id || "Невідомий користувач";
+  };
+
+  try {
+    let data:
+      | { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]
+      | null = null;
+
+    let error: any = null;
+    ({ data, error } = await supabase
       .from("team_members_view")
-      .select("user_id, full_name, avatar_url")
+      .select("user_id, full_name, avatar_url, email")
       .eq("team_id", teamId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true }));
+
+    if (error && /column/i.test(error.message || "") && /email/i.test(error.message || "")) {
+      ({ data, error } = await supabase
+        .from("team_members_view")
+        .select("user_id, full_name, avatar_url")
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: true }));
+    }
+
     handleError(error);
-    return ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null }[]) ?? []).map((row) => ({
+    return ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]) ?? []).map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
       avatarUrl: row.avatar_url ?? null,

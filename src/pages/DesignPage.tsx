@@ -42,8 +42,7 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: st
 
 export default function DesignPage() {
   const { teamId } = useAuth();
-  const storedTeamId = typeof localStorage !== "undefined" ? localStorage.getItem("tosho.teamId") : null;
-  const effectiveTeamId = teamId ?? storedTeamId;
+  const effectiveTeamId = teamId;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<DesignTask[]>([]);

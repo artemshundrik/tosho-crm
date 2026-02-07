@@ -95,6 +95,46 @@ const MAX_QUOTE_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 const ATTACHMENTS_ACCEPT =
   ".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx";
+const MENTION_REGEX = /(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu;
+
+const normalizeMentionKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
+const isMentionTerminator = (char: string) => /[\s,;:!?()[\]{}<>]/u.test(char);
+
+const toEmailLocalPart = (value?: string | null) => {
+  const text = (value ?? "").trim();
+  if (!text.includes("@")) return "";
+  return text.split("@")[0]?.trim() ?? "";
+};
+
+const sanitizeMentionAlias = (value: string) =>
+  value
+    .trim()
+    .replace(/\s+/g, ".")
+    .replace(/[^\p{L}\p{N}._-]+/gu, "");
+
+const buildMentionAlias = (label: string, userId: string) => {
+  const base = toEmailLocalPart(label) || label;
+  const alias = sanitizeMentionAlias(base);
+  return alias || userId.slice(0, 8);
+};
+
+const extractMentionKeys = (text: string) => {
+  const keys = new Set<string>();
+  for (const match of text.matchAll(MENTION_REGEX)) {
+    const key = normalizeMentionKey(match[2]);
+    if (key) keys.add(key);
+  }
+  return Array.from(keys);
+};
+
+const shouldUseCommentsFallback = (message?: string | null) => {
+  const normalized = (message ?? "").toLowerCase();
+  return (
+    normalized.includes("stack depth limit exceeded") ||
+    normalized.includes("statement timeout") ||
+    normalized.includes("canceling statement due to statement timeout")
+  );
+};
 
 const formatFileSize = (bytes?: number | null) => {
   const value = Number(bytes ?? 0);
@@ -206,6 +246,17 @@ type QuoteComment = {
   body: string;
   created_at: string;
   created_by?: string | null;
+};
+type MentionContext = {
+  start: number;
+  end: number;
+  query: string;
+};
+type MentionSuggestion = {
+  id: string;
+  label: string;
+  alias: string;
+  avatarUrl: string | null;
 };
 type QuoteAttachment = {
   id: string;
@@ -455,6 +506,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
+  const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -738,6 +792,72 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
   );
+  const mentionSuggestions = useMemo<MentionSuggestion[]>(
+    () =>
+      teamMembers.map((member) => {
+        const label = (member.label ?? "").trim() || "Користувач";
+        return {
+          id: member.id,
+          label,
+          alias: buildMentionAlias(label, member.id),
+          avatarUrl: member.avatarUrl ?? null,
+        };
+      }),
+    [teamMembers]
+  );
+  const mentionLookup = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+
+    const addKey = (raw: string | null | undefined, userId: string) => {
+      const key = normalizeMentionKey(raw);
+      if (!key) return;
+      const existing = map.get(key) ?? new Set<string>();
+      existing.add(userId);
+      map.set(key, existing);
+    };
+
+    for (const suggestion of mentionSuggestions) {
+      const label = suggestion.label;
+      if (!label) continue;
+
+      addKey(suggestion.id, suggestion.id);
+      addKey(suggestion.alias, suggestion.id);
+      addKey(label, suggestion.id);
+      addKey(label.replace(/\s+/g, ""), suggestion.id);
+      addKey(label.replace(/\s+/g, "."), suggestion.id);
+      addKey(label.replace(/\s+/g, "_"), suggestion.id);
+      addKey(toEmailLocalPart(label), suggestion.id);
+
+      for (const part of label.split(/\s+/).filter((token) => token.length >= 2)) {
+        addKey(part, suggestion.id);
+      }
+    }
+
+    return map;
+  }, [mentionSuggestions]);
+  const filteredMentionSuggestions = useMemo(() => {
+    if (!mentionContext) return [];
+    const query = normalizeMentionKey(mentionContext.query);
+    return mentionSuggestions
+      .filter((member) => {
+        if (!query) return true;
+        return (
+          normalizeMentionKey(member.alias).includes(query) ||
+          normalizeMentionKey(member.label).includes(query)
+        );
+      })
+      .slice(0, 8);
+  }, [mentionContext, mentionSuggestions]);
+
+  useEffect(() => {
+    if (filteredMentionSuggestions.length === 0) {
+      setMentionActiveIndex(0);
+      return;
+    }
+    setMentionActiveIndex((prev) =>
+      Math.max(0, Math.min(prev, filteredMentionSuggestions.length - 1))
+    );
+  }, [filteredMentionSuggestions.length]);
   const currentStatus = normalizeStatus(quote?.status);
 
   const canEditRuns = useMemo(
@@ -1113,6 +1233,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadQuote = async () => {
     setLoading(true);
     setError(null);
+    setQuote(null);
     try {
       const summary = await getQuoteSummary(quoteId);
       if (summary.team_id && summary.team_id !== teamId) {
@@ -1122,7 +1243,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
       setDeadlineNote(summary.deadline_note ?? "");
     } catch (e: any) {
-      setError(e?.message ?? "Не вдалося завантажити прорахунок.");
+      const message = e?.message ?? "Не вдалося завантажити прорахунок.";
+      if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
+        setError("Помилка БД (stack depth limit exceeded). Перевірте RLS/policy у таблицях quote_*.");
+      } else {
+        setError(message);
+      }
       setQuote(null);
     } finally {
       setLoading(false);
@@ -1133,12 +1259,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemsLoading(true);
     setItemsError(null);
     try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("quote_items")
-        .select("id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm")
-        .eq("quote_id", quoteId)
-        .order("position", { ascending: true });
+      const loadRows = async (withTeamFilter: boolean) => {
+        let query = supabase
+          .schema("tosho")
+          .from("quote_items")
+          .select("id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm")
+          .eq("quote_id", quoteId)
+          .order("position", { ascending: true });
+        if (withTeamFilter && teamId) {
+          query = query.eq("team_id", teamId);
+        }
+        return await query;
+      };
+
+      let { data, error } = await loadRows(!!teamId);
+      if (
+        error &&
+        teamId &&
+        /column/i.test(error.message ?? "") &&
+        /team_id/i.test(error.message ?? "")
+      ) {
+        ({ data, error } = await loadRows(false));
+      }
       if (error) throw error;
       const rows = data ?? [];
       setItems(
@@ -1211,7 +1353,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setRunsLoading(true);
     setRunsError(null);
     try {
-      const data = await getQuoteRuns(quoteId);
+      const data = await getQuoteRuns(quoteId, teamId);
       setRuns(data);
       setRunsOriginal(data);
     } catch (e: any) {
@@ -1256,7 +1398,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const data = await listStatusHistory(quoteId);
+      const data = await listStatusHistory(quoteId, teamId);
       setHistory(data);
     } catch (e: any) {
       setHistoryError(e?.message ?? "Не вдалося завантажити історію.");
@@ -1270,13 +1412,78 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setCommentsLoading(true);
     setCommentsError(null);
     try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("quote_comments")
-        .select("id,body,created_at,created_by")
-        .eq("quote_id", quoteId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const invokeQuoteCommentsFunction = async (payload: Record<string, unknown>) => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("Не вдалося визначити сесію користувача.");
+
+        const response = await fetch("/.netlify/functions/quote-comments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const rawText = await response.text();
+        let parsed: any = {};
+        if (rawText) {
+          try {
+            parsed = JSON.parse(rawText);
+          } catch {
+            parsed = {};
+          }
+        }
+
+        if (!response.ok) {
+          throw new Error(parsed?.error || `HTTP ${response.status}`);
+        }
+
+        return parsed;
+      };
+
+      const loadRows = async (withTeamFilter: boolean) => {
+        let query = supabase
+          .schema("tosho")
+          .from("quote_comments")
+          .select("id,body,created_at,created_by")
+          .eq("quote_id", quoteId)
+          .order("created_at", { ascending: false });
+        if (withTeamFilter && teamId) {
+          query = query.eq("team_id", teamId);
+        }
+        return await query;
+      };
+
+      let { data, error } = await loadRows(!!teamId);
+      if (
+        error &&
+        teamId &&
+        /column/i.test(error.message ?? "") &&
+        /team_id/i.test(error.message ?? "")
+      ) {
+        ({ data, error } = await loadRows(false));
+      }
+      if (error) {
+        if (shouldUseCommentsFallback(error.message)) {
+          const fallback = await invokeQuoteCommentsFunction({
+            mode: "list",
+            quoteId,
+          });
+          const comments = Array.isArray(fallback?.comments) ? fallback.comments : [];
+          setComments(
+            comments.map((row: any) => ({
+              id: row.id,
+              body: row.body ?? "",
+              created_at: row.created_at ?? new Date().toISOString(),
+              created_by: row.created_by ?? null,
+            }))
+          );
+          return;
+        }
+        throw error;
+      }
       setComments(
         (data ?? []).map((row) => ({
           id: row.id,
@@ -1321,12 +1528,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAttachmentsLoading(true);
     setAttachmentsError(null);
     try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("quote_attachments")
-        .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
-        .eq("quote_id", quoteId)
-        .order("created_at", { ascending: false });
+      const loadRows = async (withTeamFilter: boolean) => {
+        let query = supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+          .eq("quote_id", quoteId)
+          .order("created_at", { ascending: false });
+        if (withTeamFilter && teamId) {
+          query = query.eq("team_id", teamId);
+        }
+        return await query;
+      };
+
+      let { data, error } = await loadRows(!!teamId);
+      if (
+        error &&
+        teamId &&
+        /column/i.test(error.message ?? "") &&
+        /team_id/i.test(error.message ?? "")
+      ) {
+        ({ data, error } = await loadRows(false));
+      }
       if (error) throw error;
 
       const rows = data ?? [];
@@ -1505,13 +1728,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     void loadQuote();
+  }, [quoteId, teamId]);
+
+  useEffect(() => {
+    if (!quote || quote.id !== quoteId || error) return;
     void loadHistory();
     void loadItems();
     void loadRuns();
     void loadAttachments();
     void loadComments();
     void loadActivityLog();
-  }, [quoteId, teamId]);
+  }, [quote?.id, quoteId, error]);
 
   useEffect(() => {
     if (attachments.length === 0 || memberById.size === 0) return;
@@ -2044,10 +2271,135 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void saveComment(commentText.trim());
   };
 
+  const resolveMentionContext = (text: string, cursor: number): MentionContext | null => {
+    if (!text || cursor <= 0) return null;
+
+    const start = text.lastIndexOf("@", Math.max(0, cursor - 1));
+    if (start < 0) return null;
+
+    const prevChar = start > 0 ? text[start - 1] : "";
+    if (start > 0 && !/[\s(]/u.test(prevChar)) return null;
+
+    const query = text.slice(start + 1, cursor);
+    if (!query || query.includes("@")) return null;
+    if ([...query].some((char) => isMentionTerminator(char))) return null;
+
+    let end = cursor;
+    while (end < text.length && !isMentionTerminator(text[end])) {
+      end += 1;
+    }
+
+    return { start, end, query };
+  };
+
+  const syncMentionContext = (text: string, cursor: number) => {
+    const nextContext = resolveMentionContext(text, cursor);
+    setMentionContext(nextContext);
+    if (
+      !nextContext ||
+      !mentionContext ||
+      mentionContext.start !== nextContext.start ||
+      mentionContext.end !== nextContext.end ||
+      mentionContext.query !== nextContext.query
+    ) {
+      setMentionActiveIndex(0);
+    }
+  };
+
+  const applyMentionSuggestion = (suggestion: MentionSuggestion) => {
+    if (!mentionContext) return;
+
+    const before = commentText.slice(0, mentionContext.start);
+    const after = commentText.slice(mentionContext.end);
+    const mentionToken = `@${suggestion.alias}`;
+    const needsSpaceAfter =
+      after.length > 0 && !/^[\s,;:!?()[\]{}<>]/u.test(after);
+    const insertText = `${mentionToken}${needsSpaceAfter ? " " : ""}`;
+    const nextValue = `${before}${insertText}${after}`;
+    const caretPosition = before.length + insertText.length;
+
+    setCommentText(nextValue);
+    setMentionContext(null);
+    setMentionActiveIndex(0);
+
+    requestAnimationFrame(() => {
+      const input = commentTextareaRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caretPosition, caretPosition);
+    });
+  };
+
+  const handleCommentTextKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!mentionContext || filteredMentionSuggestions.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMentionActiveIndex((prev) => (prev + 1) % filteredMentionSuggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMentionActiveIndex((prev) =>
+        prev === 0 ? filteredMentionSuggestions.length - 1 : prev - 1
+      );
+      return;
+    }
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      const selected =
+        filteredMentionSuggestions[Math.max(0, mentionActiveIndex)] ??
+        filteredMentionSuggestions[0];
+      if (selected) {
+        applyMentionSuggestion(selected);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionContext(null);
+      setMentionActiveIndex(0);
+    }
+  };
+
   const saveComment = async (body: string) => {
     setCommentSaving(true);
     setCommentsError(null);
     try {
+      const invokeQuoteCommentsFunction = async (payload: Record<string, unknown>) => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("Не вдалося визначити сесію користувача.");
+
+        const response = await fetch("/.netlify/functions/quote-comments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const rawText = await response.text();
+        let parsed: any = {};
+        if (rawText) {
+          try {
+            parsed = JSON.parse(rawText);
+          } catch {
+            parsed = {};
+          }
+        }
+
+        if (!response.ok) {
+          throw new Error(parsed?.error || `HTTP ${response.status}`);
+        }
+
+        return parsed;
+      };
+
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id ?? null;
       if (!userId) {
@@ -2058,7 +2410,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         throw new Error("Немає доступної команди.");
       }
 
-      const { data, error } = await supabase
+      const mentionKeys = extractMentionKeys(body);
+      const mentionedUserIds = new Set<string>();
+      for (const mentionKey of mentionKeys) {
+        const candidates = mentionLookup.get(mentionKey);
+        if (!candidates || candidates.size !== 1) continue;
+        const [mentionedUserId] = Array.from(candidates);
+        if (mentionedUserId && mentionedUserId !== userId) {
+          mentionedUserIds.add(mentionedUserId);
+        }
+      }
+      const mentionUserIdsList = Array.from(mentionedUserIds);
+      let mentionsHandledViaServer = false;
+
+      let { data, error } = await supabase
         .schema("tosho")
         .from("quote_comments")
         .insert({
@@ -2069,7 +2434,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         })
         .select("id,body,created_at,created_by")
         .single();
-      if (error) throw error;
+      if (error) {
+        if (shouldUseCommentsFallback(error.message)) {
+          const fallback = await invokeQuoteCommentsFunction({
+            mode: "add",
+            quoteId,
+            body,
+            mentionedUserIds: mentionUserIdsList,
+          });
+          data = fallback?.comment as any;
+          mentionsHandledViaServer = mentionUserIdsList.length > 0;
+          error = null;
+        } else {
+          throw error;
+        }
+      }
 
       const inserted = data as QuoteComment;
       setComments((prev) => [
@@ -2082,7 +2461,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         ...prev,
       ]);
 
+      if (mentionUserIdsList.length > 0 && !mentionsHandledViaServer) {
+        try {
+          await invokeQuoteCommentsFunction({
+            mode: "notify_mentions",
+            quoteId,
+            body,
+            mentionedUserIds: mentionUserIdsList,
+          });
+          mentionsHandledViaServer = true;
+        } catch (notifyError) {
+          const actorLabel = memberById.get(userId) ?? "Користувач";
+          const quoteLabel = quote?.number ? `#${quote.number}` : quoteId;
+          const trimmedBody = body.length > 220 ? `${body.slice(0, 217)}...` : body;
+          const notificationRows = mentionUserIdsList.map((mentionedUserId) => ({
+            user_id: mentionedUserId,
+            title: `${actorLabel} згадав(ла) вас у коментарі`,
+            body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
+            href: `/orders/estimates/${quoteId}`,
+            type: "info",
+          }));
+          const { error: notificationsError } = await supabase.from("notifications").insert(notificationRows);
+          if (notificationsError) {
+            console.warn("Failed to send mention notifications", notificationsError, notifyError);
+          }
+        }
+      }
+
       setCommentText("");
+      setMentionContext(null);
+      setMentionActiveIndex(0);
       await loadActivityLog();
     } catch (e: any) {
       setCommentsError(e?.message ?? "Не вдалося додати коментар.");
@@ -3145,12 +3553,63 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             
             {/* Add comment form first */}
             <div className="space-y-3 mb-4 pb-4 border-b border-border/40">
-              <Textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Напишіть коментар..."
-                className="min-h-[80px] resize-none"
-              />
+              <div className="relative">
+                <Textarea
+                  ref={commentTextareaRef}
+                  value={commentText}
+                  onChange={(event) => {
+                    const cursor = event.target.selectionStart ?? event.target.value.length;
+                    setCommentText(event.target.value);
+                    syncMentionContext(event.target.value, cursor);
+                  }}
+                  onSelect={(event) => {
+                    const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                    syncMentionContext(event.currentTarget.value, cursor);
+                  }}
+                  onKeyDown={handleCommentTextKeyDown}
+                  placeholder="Напишіть коментар... (використовуйте @ім'я для згадки)"
+                  className="min-h-[80px] resize-none"
+                />
+
+                {mentionContext ? (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                    {filteredMentionSuggestions.length > 0 ? (
+                      <div className="max-h-56 overflow-y-auto py-1">
+                        {filteredMentionSuggestions.map((member, index) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
+                              index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                            )}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              applyMentionSuggestion(member);
+                            }}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={24}
+                              className="text-[10px] font-semibold"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">{member.label}</div>
+                              <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        Немає збігів для @{mentionContext.query}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground">
                   {commentText.length} символів

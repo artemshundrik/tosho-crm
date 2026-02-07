@@ -1,5 +1,5 @@
 // src/App.tsx
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -13,7 +13,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabaseClient";
-import { AuthProvider } from "@/auth/AuthProvider"; 
+import { useAuth } from "@/auth/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -25,11 +25,6 @@ import { AppShell } from "@/components/app/AppShell";
 // Types
 // =======================
 type TeamRole = "super_admin" | "manager" | "viewer" | null;
-
-type TeamContext = {
-  teamId: string | null;
-  role: TeamRole;
-};
 
 // =======================
 // Helpers UI
@@ -152,124 +147,6 @@ function RouteSuspense({
   shell?: boolean;
 }) {
   return <Suspense fallback={shell ? <AppShell /> : <PageSkeleton />}>{children}</Suspense>;
-}
-
-// =======================
-// Auth + Team context hook
-// =======================
-function useAuthAndTeam() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [team, setTeam] = useState<TeamContext>({ teamId: null, role: null });
-  const [loading, setLoading] = useState(true);
-
-  const refreshTeamContext = useMemo(() => {
-    return async () => {
-      const s = (await supabase.auth.getSession()).data.session;
-      if (!s) {
-        setTeam({ teamId: null, role: null });
-        return;
-      }
-
-      let workspaceId: string | null = null;
-
-      const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
-        .schema("tosho")
-        .rpc("current_workspace_id");
-
-      if (!workspaceRpcError && workspaceRpcData) {
-        workspaceId = workspaceRpcData as string;
-      }
-
-      if (!workspaceId) {
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("workspaces")
-          .select("id")
-          .limit(1)
-          .single();
-
-        if (!error) {
-          workspaceId = (data as { id?: string } | null)?.id ?? null;
-        }
-      }
-
-      let roleValue: TeamRole = null;
-      if (workspaceId) {
-        const { data: membership, error: membershipError } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("access_role")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", s.user.id)
-          .single();
-
-        if (membershipError) {
-          console.error("memberships_view error", membershipError);
-        } else {
-          const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
-          if (accessRole === "owner") roleValue = "super_admin";
-          else if (accessRole === "admin") roleValue = "manager";
-          else if (accessRole) roleValue = "viewer";
-        }
-      }
-
-      setTeam({
-        teamId: null,
-        role: roleValue,
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const safetyTimer = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("⚠️ Auth took too long - releasing UI");
-        setLoading(false);
-      }
-    }, 1500);
-
-    const init = async () => {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (!mounted) return;
-        
-        setSession(session);
-
-        if (session) {
-          refreshTeamContext().finally(() => {
-             if (mounted) setLoading(false);
-          });
-        } else {
-          setTeam({ teamId: null, role: null });
-          if (mounted) setLoading(false);
-        }
-      });
-
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (mounted && data.session) {
-           setSession(data.session);
-           await refreshTeamContext();
-           if (mounted) setLoading(false);
-        }
-      } catch (err) {
-        console.error("Session check error", err);
-      }
-      
-      return subscription;
-    };
-
-    let sub: any;
-    init().then(s => sub = s);
-
-    return () => {
-      mounted = false;
-      clearTimeout(safetyTimer);
-      if (sub) sub.unsubscribe();
-    };
-  }, [refreshTeamContext]);
-  return { session, team, loading, refreshTeamContext };
 }
 
 // =======================
@@ -520,7 +397,7 @@ function ScrollToTop() {
 }
 
 function AppRoutes() {
-  const { session, team, loading } = useAuthAndTeam();
+  const { session, role, loading } = useAuth();
   const location = useLocation();
 
 
@@ -829,7 +706,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={team.role}>
+              <RoleGate allow={["super_admin", "manager"]} role={role}>
                 <RouteSuspense shell>
                   <MatchEventsAdminPage />
                 </RouteSuspense>
@@ -845,7 +722,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={team.role}>
+              <RoleGate allow={["super_admin", "manager"]} role={role}>
                 <RouteSuspense shell>
                   <CreateMatchPage />
                 </RouteSuspense>
@@ -873,7 +750,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={team.role}>
+              <RoleGate allow={["super_admin", "manager"]} role={role}>
                 <RouteSuspense shell>
                   <TrainingCreatePage />
                 </RouteSuspense>
@@ -926,7 +803,7 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin"]} role={team.role}>
+              <RoleGate allow={["super_admin"]} role={role}>
                 <RouteSuspense shell>
                   <TeamMembersPage />
                 </RouteSuspense>

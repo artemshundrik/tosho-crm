@@ -55,6 +55,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import { resolveWorkspaceId } from "@/lib/workspace";
 
 // --- TYPES ---
 type Member = {
@@ -75,8 +76,6 @@ type Invite = {
   expires_at: string;
   accepted_at: string | null;
 };
-
-type WorkspaceIdResult = { id: string };
 
 type TeamMembersPageCache = {
   workspaceId: string | null;
@@ -111,6 +110,11 @@ const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
   { value: "owner", label: "Super Admin" },
 ];
 
+const MEMBER_ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
+  { value: "member", label: "Member" },
+  ...ACCESS_ROLE_OPTIONS,
+];
+
 const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "member", label: "Member" },
   { value: "manager", label: "Менеджер" },
@@ -136,6 +140,27 @@ function getAccessBadgeClass(role: string | null) {
 function getJobBadgeClass(role: string | null) {
   if (!role) return "bg-muted/50 border-border text-muted-foreground";
   return "bg-muted/30 border-border text-muted-foreground";
+}
+
+async function parseJsonSafe<T>(response: Response): Promise<T | null> {
+  const raw = await response.text();
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isRecoverableRoleUpdateError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("does not exist") ||
+    normalized.includes("relation") ||
+    normalized.includes("column") ||
+    normalized.includes("cannot update view") ||
+    normalized.includes("could not find the table")
+  );
 }
 
 export function TeamMembersPage() {
@@ -170,6 +195,10 @@ export function TeamMembersPage() {
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
+  const [editMember, setEditMember] = useState<Member | null>(null);
+  const [editAccessRole, setEditAccessRole] = useState("member");
+  const [editJobRole, setEditJobRole] = useState("member");
+  const [editBusy, setEditBusy] = useState(false);
 
   useEffect(() => {
     const tab = params.get("tab");
@@ -178,11 +207,12 @@ export function TeamMembersPage() {
     }
   }, [params]);
 
-  const canManage = useMemo(() => {
-    if (!currentUserId) return false;
-    const me = members.find((m) => m.user_id === currentUserId);
-    return me?.access_role === "owner" || me?.access_role === "admin";
-  }, [currentUserId, members]);
+  const currentMembership = useMemo(
+    () => members.find((m) => m.user_id === currentUserId) ?? null,
+    [currentUserId, members]
+  );
+  const isSuperAdmin = currentMembership?.access_role === "owner";
+  const canManage = currentMembership?.access_role === "owner" || currentMembership?.access_role === "admin";
 
   const headerActions = useMemo(() => {
     if (!canManage) return null;
@@ -239,28 +269,11 @@ export function TeamMembersPage() {
       let resolvedId: string | null = null;
 
       try {
-        const { data: rpcData, error: rpcError } = await supabase
-          .schema("tosho")
-          .rpc("my_workspace_id");
-
-        if (!rpcError && rpcData) {
-          resolvedId = rpcData as string;
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          throw userError;
         }
-
-        if (!resolvedId) {
-          const { data, error } = await supabase
-            .schema("tosho")
-            .from("workspaces")
-            .select("id")
-            .limit(1)
-            .single<WorkspaceIdResult>();
-
-          if (error) {
-            if (!cancelled) setWorkspaceError(error.message);
-          } else {
-            resolvedId = data?.id ?? null;
-          }
-        }
+        resolvedId = await resolveWorkspaceId(userData.user?.id ?? null);
       } catch (error: any) {
         if (!cancelled) setWorkspaceError(error?.message ?? "Unknown error");
       } finally {
@@ -416,6 +429,146 @@ export function TeamMembersPage() {
     setParams(next === "invites" ? { tab: "invites" } : {});
   };
 
+  const openEditRolesDialog = (member: Member) => {
+    setEditMember(member);
+    setEditAccessRole(member.access_role ?? "member");
+    setEditJobRole(member.job_role ?? "member");
+  };
+
+  const saveMemberRoles = async () => {
+    if (!editMember || !workspaceId || !isSuperAdmin) return;
+    const nextAccessRole = editAccessRole;
+    const nextJobRole = editJobRole;
+    const normalizedAccessRole = nextAccessRole === "member" ? null : nextAccessRole;
+    const normalizedJobRole = nextJobRole === "member" ? null : nextJobRole;
+    const roleDidChange =
+      (editMember.access_role ?? "member") !== nextAccessRole || (editMember.job_role ?? "member") !== nextJobRole;
+    if (!roleDidChange) {
+      setEditMember(null);
+      return;
+    }
+
+    setEditBusy(true);
+    try {
+      const fallbackUpdateRolesDirectly = async () => {
+        const verify = async () => {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select("access_role,job_role")
+            .eq("workspace_id", workspaceId)
+            .eq("user_id", editMember.user_id)
+            .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+
+          if (error) throw new Error(error.message);
+          if (!data) return false;
+
+          const currentAccessRole = data.access_role ?? null;
+          const currentJobRole = data.job_role ?? null;
+          return currentAccessRole === normalizedAccessRole && currentJobRole === normalizedJobRole;
+        };
+
+        const attempts: Array<{ tableName: string; payload: Record<string, string | null> }> = [
+          { tableName: "memberships", payload: { access_role: normalizedAccessRole, job_role: normalizedJobRole } },
+          { tableName: "memberships", payload: { role: normalizedAccessRole, job_role: normalizedJobRole } },
+          { tableName: "workspace_members", payload: { access_role: normalizedAccessRole, job_role: normalizedJobRole } },
+          { tableName: "workspace_members", payload: { role: normalizedAccessRole, job_role: normalizedJobRole } },
+          { tableName: "workspace_memberships", payload: { access_role: normalizedAccessRole, job_role: normalizedJobRole } },
+          { tableName: "workspace_memberships", payload: { role: normalizedAccessRole, job_role: normalizedJobRole } },
+        ];
+
+        let lastRecoverableError = "Не вдалося оновити ролі напряму";
+        for (const attempt of attempts) {
+          const { error } = await supabase
+            .schema("tosho")
+            .from(attempt.tableName)
+            .update(attempt.payload)
+            .eq("workspace_id", workspaceId)
+            .eq("user_id", editMember.user_id);
+
+          if (error) {
+            if (!isRecoverableRoleUpdateError(error.message)) {
+              throw new Error(error.message);
+            }
+            lastRecoverableError = `${attempt.tableName}: ${error.message}`;
+            continue;
+          }
+
+          const updated = await verify();
+          if (updated) return;
+        }
+
+        throw new Error(lastRecoverableError);
+      };
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Не вдалося підтвердити авторизацію");
+      }
+
+      const response = await fetch("/.netlify/functions/create-workspace-invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          mode: "update_member_roles",
+          userId: editMember.user_id,
+          accessRole: nextAccessRole,
+          jobRole: nextJobRole,
+        }),
+      });
+
+      const payload = await parseJsonSafe<{
+        error?: string;
+        accessRole?: string | null;
+        jobRole?: string | null;
+      }>(response);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          await fallbackUpdateRolesDirectly();
+        } else {
+          throw new Error(payload?.error || `Не вдалося оновити ролі (HTTP ${response.status})`);
+        }
+      }
+
+      if (response.ok) {
+        const savedAccessRole: string | null = payload?.accessRole ?? normalizedAccessRole;
+        const savedJobRole: string | null = payload?.jobRole ?? normalizedJobRole;
+
+        setMembers((prev) =>
+          prev.map((member) =>
+            member.user_id === editMember.user_id
+              ? { ...member, access_role: savedAccessRole, job_role: savedJobRole }
+              : member
+          )
+        );
+      } else {
+        setMembers((prev) =>
+          prev.map((member) =>
+            member.user_id === editMember.user_id
+              ? { ...member, access_role: normalizedAccessRole, job_role: normalizedJobRole }
+              : member
+          )
+        );
+      }
+
+      if (!response.ok && response.status === 404) {
+        toast.success("Ролі учасника оновлено (fallback)");
+      } else {
+        toast.success("Ролі учасника оновлено");
+      }
+      setEditMember(null);
+    } catch (error: any) {
+      toast.error("Не вдалося змінити ролі", { description: error?.message ?? "Unknown error" });
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   const createInvite = async () => {
     if (!workspaceId) return;
     if (!inviteEmail) {
@@ -446,9 +599,9 @@ export function TeamMembersPage() {
         }),
       });
 
-      const payload = await response.json();
+      const payload = await parseJsonSafe<{ error?: string; token?: string }>(response);
       if (!response.ok) {
-        throw new Error(payload?.error || "Invite failed");
+        throw new Error(payload?.error || `Invite failed (HTTP ${response.status})`);
       }
 
       const token = payload?.token as string | undefined;
@@ -656,7 +809,19 @@ export function TeamMembersPage() {
                             items={[
                               { type: "label", label: "Дії" },
                               { type: "separator" },
-                              { label: "Тільки перегляд", disabled: true, muted: true },
+                              isSuperAdmin && m.user_id !== currentUserId
+                                ? {
+                                    label: "Змінити ролі",
+                                    onSelect: () => openEditRolesDialog(m),
+                                  }
+                                : {
+                                    label:
+                                      isSuperAdmin && m.user_id === currentUserId
+                                        ? "Неможна змінити себе"
+                                        : "Тільки перегляд",
+                                    disabled: true,
+                                    muted: true,
+                                  },
                             ]}
                           />
                         </TableActionCell>
@@ -879,6 +1044,73 @@ export function TeamMembersPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editMember}
+        onOpenChange={(open) => {
+          if (!open && !editBusy) setEditMember(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
+          <div className="p-6 border-b border-border bg-muted/10">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-foreground">Змінити ролі учасника</DialogTitle>
+              <DialogDescription className="mt-1.5 text-muted-foreground">
+                Ця дія доступна тільки Super Admin.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="p-6 space-y-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Користувач</Label>
+              <Input value={editMember?.email ?? "—"} disabled className="h-11" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
+              <Select value={editAccessRole} onValueChange={setEditAccessRole}>
+                <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                  {MEMBER_ACCESS_ROLE_OPTIONS.find((o) => o.value === editAccessRole)?.label}
+                </SelectTrigger>
+                <SelectContent>
+                  {MEMBER_ACCESS_ROLE_OPTIONS.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Роль у команді</Label>
+              <Select value={editJobRole} onValueChange={setEditJobRole}>
+                <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                  {JOB_ROLE_OPTIONS.find((o) => o.value === editJobRole)?.label}
+                </SelectTrigger>
+                <SelectContent>
+                  {JOB_ROLE_OPTIONS.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 h-11"
+                onClick={() => setEditMember(null)}
+                disabled={editBusy}
+              >
+                Скасувати
+              </Button>
+              <Button className="flex-1 h-11" onClick={saveMemberRoles} disabled={editBusy}>
+                {editBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

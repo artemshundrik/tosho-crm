@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { resolveWorkspaceId } from '@/lib/workspace';
 
 type TeamRole = 'super_admin' | 'manager' | 'viewer' | null;
 
@@ -16,6 +17,45 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const isMissingRelationError = (message?: string | null) => {
+  const normalized = (message ?? "").toLowerCase();
+  return normalized.includes("does not exist") || normalized.includes("relation");
+};
+
+async function resolveOperationalTeamId(userId: string, workspaceId: string | null) {
+  const attempts = [
+    () =>
+      supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle<{ team_id?: string | null }>(),
+    () =>
+      supabase
+        .schema("tosho")
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle<{ team_id?: string | null }>(),
+  ];
+
+  for (const run of attempts) {
+    const { data, error } = await run();
+    if (!error && data?.team_id) {
+      return data.team_id;
+    }
+    if (error && !isMissingRelationError(error.message)) {
+      throw error;
+    }
+  }
+
+  return workspaceId;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -24,35 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const userId = session?.user?.id ?? null;
 
-  const refreshTeamContext = async () => {
-    if (!userId) {
+  const refreshTeamContext = useCallback(async (targetUserId?: string | null) => {
+    const effectiveUserId = targetUserId ?? userId;
+    if (!effectiveUserId) {
       setTeamId(null);
       setRole(null);
       return;
     }
 
-    let workspaceId: string | null = null;
-
-    const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
-      .schema("tosho")
-      .rpc("current_workspace_id");
-
-    if (!workspaceRpcError && workspaceRpcData) {
-      workspaceId = workspaceRpcData as string;
-    }
-
-    if (!workspaceId) {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("workspaces")
-        .select("id")
-        .limit(1)
-        .single();
-
-      if (!error) {
-        workspaceId = (data as { id?: string } | null)?.id ?? null;
-      }
-    }
+    const workspaceId = await resolveWorkspaceId(effectiveUserId);
 
     let roleValue: TeamRole = null;
     if (workspaceId) {
@@ -61,12 +81,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from("memberships_view")
         .select("access_role")
         .eq("workspace_id", workspaceId)
-        .eq("user_id", userId)
-        .single();
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
 
-      if (membershipError) {
-        console.error("memberships_view error", membershipError);
-      } else {
+      if (!membershipError) {
         const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
         if (accessRole === "owner") roleValue = "super_admin";
         else if (accessRole === "admin") roleValue = "manager";
@@ -74,9 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setTeamId(null);
+    const operationalTeamId = await resolveOperationalTeamId(effectiveUserId, workspaceId);
+    setTeamId(operationalTeamId);
     setRole(roleValue);
-  };
+  }, [userId]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -88,19 +107,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      setSession(data.session ?? null);
+      const nextSession = data.session ?? null;
+      setSession(nextSession);
+      if (nextSession?.user?.id) {
+        await refreshTeamContext(nextSession.user.id);
+      } else {
+        setTeamId(null);
+        setRole(null);
+      }
       setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
       setSession(nextSession ?? null);
+      setLoading(true);
+      void (async () => {
+        if (nextSession?.user?.id) {
+          await refreshTeamContext(nextSession.user.id);
+        } else {
+          setTeamId(null);
+          setRole(null);
+        }
+        if (mounted) setLoading(false);
+      })();
     });
 
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshTeamContext]);
 
   useEffect(() => {
     (async () => {
@@ -109,10 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(null);
         return;
       }
-      await refreshTeamContext();
+      await refreshTeamContext(session.user.id);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id]);
+  }, [session?.user?.id, refreshTeamContext]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -124,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshTeamContext,
       signOut,
     }),
-    [session, userId, teamId, role, loading],
+    [session, userId, teamId, role, loading, refreshTeamContext],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

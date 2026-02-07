@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -496,73 +497,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
 }
 
 export default function OrdersCustomersPage() {
-  const [teamId, setTeamId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem("tosho.teamId");
-    } catch {
-      return null;
-    }
-  });
-  const [loading, setLoading] = useState(!teamId);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTeamId = async () => {
-      if (!teamId) {
-        setLoading(true);
-      }
-      setError(null);
-
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        if (!cancelled) {
-          setError(userError?.message ?? "User not authenticated");
-          setTeamId(null);
-          setLoading(false);
-        }
-        return;
-      }
-
-      const { data, error: teamError } = await supabase
-        .from("team_members")
-        .select("team_id")
-        .eq("user_id", userData.user.id)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (!cancelled) {
-        if (teamError) {
-          setError(teamError.message);
-          setTeamId(null);
-        } else {
-          const nextTeamId = (data as { team_id?: string } | null)?.team_id ?? null;
-          setTeamId(nextTeamId);
-          try {
-            if (nextTeamId) localStorage.setItem("tosho.teamId", nextTeamId);
-          } catch {
-            // ignore storage errors
-          }
-        }
-        setLoading(false);
-      }
-    };
-
-    void loadTeamId();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { teamId, loading, session } = useAuth();
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
   }
 
-  if (error) {
-    return <div className="p-6 text-sm text-destructive">{error}</div>;
+  if (!session) {
+    return <div className="p-6 text-sm text-destructive">User not authenticated</div>;
   }
 
   if (!teamId) {

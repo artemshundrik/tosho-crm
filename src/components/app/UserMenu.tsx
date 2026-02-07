@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
+import { resolveWorkspaceId } from "@/lib/workspace";
 
 // Словник для красивого відображення ролей
 const ROLE_NAMES: Record<string, string> = {
@@ -63,28 +64,7 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
           .substring(0, 2)
           .toUpperCase();
 
-        let workspaceId: string | null = null;
-
-        const { data: workspaceRpcData, error: workspaceRpcError } = await supabase
-          .schema("tosho")
-          .rpc("my_workspace_id");
-
-        if (!workspaceRpcError && workspaceRpcData) {
-          workspaceId = workspaceRpcData as string;
-        }
-
-        if (!workspaceId) {
-          const { data, error } = await supabase
-            .schema("tosho")
-            .from("workspaces")
-            .select("id")
-            .limit(1)
-            .single();
-
-          if (!error) {
-            workspaceId = (data as { id?: string } | null)?.id ?? null;
-          }
-        }
+        const workspaceId = await resolveWorkspaceId(user.id);
 
         let rawRole = "viewer";
         if (workspaceId) {
@@ -94,7 +74,7 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
             .select("access_role")
             .eq("workspace_id", workspaceId)
             .eq("user_id", user.id)
-            .single();
+            .maybeSingle();
 
           const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
           if (accessRole === "owner") rawRole = "super_admin";

@@ -77,7 +77,7 @@ export default function DesignTaskPage() {
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
 
-  const effectiveTeamId = teamId ?? (typeof localStorage !== "undefined" ? localStorage.getItem("tosho.teamId") : null);
+  const effectiveTeamId = teamId;
 
   useEffect(() => {
     const load = async () => {
