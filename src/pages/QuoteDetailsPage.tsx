@@ -96,6 +96,7 @@ const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 const ATTACHMENTS_ACCEPT =
   ".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx";
 const MENTION_REGEX = /(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu;
+const MENTION_TOKEN_REGEX = /(@[^\s@,;:!?()[\]{}<>]+)/g;
 
 const normalizeMentionKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
 const isMentionTerminator = (char: string) => /[\s,;:!?()[\]{}<>]/u.test(char);
@@ -125,6 +126,19 @@ const extractMentionKeys = (text: string) => {
     if (key) keys.add(key);
   }
   return Array.from(keys);
+};
+
+const renderTextWithMentions = (text: string) => {
+  const parts = text.split(MENTION_TOKEN_REGEX);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    if (!part.startsWith("@")) return <span key={`text-${index}`}>{part}</span>;
+    return (
+      <span key={`mention-${index}`} className="font-semibold text-primary">
+        {part}
+      </span>
+    );
+  });
 };
 
 const shouldUseCommentsFallback = (message?: string | null) => {
@@ -3682,7 +3696,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
                       </div>
                     </div>
-                    <p className="text-sm leading-relaxed pl-11">{comment.body}</p>
+                    <p className="text-sm leading-relaxed pl-11">{renderTextWithMentions(comment.body ?? "")}</p>
                   </div>
                 ))}
               </div>

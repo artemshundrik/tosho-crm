@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
@@ -19,6 +19,21 @@ type NotificationsPageCache = {
   notifications: NotificationItem[];
 };
 
+const MENTION_TOKEN_REGEX = /(@[^\s@,;:!?()[\]{}<>]+)/g;
+
+function renderNotificationDescription(text: string): ReactNode {
+  const parts = text.split(MENTION_TOKEN_REGEX);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    if (!part.startsWith("@")) return <span key={`part-${index}`}>{part}</span>;
+    return (
+      <span key={`part-${index}`} className="font-semibold text-primary">
+        {part}
+      </span>
+    );
+  });
+}
+
 export default function NotificationsPage() {
   const { userId } = useAuth();
   const navigate = useNavigate();
@@ -35,10 +50,10 @@ export default function NotificationsPage() {
     }
   }, [hasCache, loading]);
 
-  useEffect(() => {
-    async function load() {
+  const loadNotifications = useCallback(
+    async (showLoader = false) => {
       if (!userId) return;
-      if (!hasCache) {
+      if (showLoader) {
         setLoading(true);
       }
       const { data, error } = await supabase
@@ -55,12 +70,38 @@ export default function NotificationsPage() {
         setNotifications([]);
         setCache({ notifications: [] });
       }
-      setLoading(false);
-    }
-    if (!hasCache && userId) {
-      load();
-    }
-  }, [hasCache, userId]);
+      if (showLoader) {
+        setLoading(false);
+      }
+    },
+    [setCache, userId]
+  );
+
+  useEffect(() => {
+    void loadNotifications(!hasCache);
+  }, [hasCache, loadNotifications]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`notifications-page:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void loadNotifications(false);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadNotifications, userId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -180,7 +221,9 @@ export default function NotificationsPage() {
                     {!n.read ? <Badge variant="secondary">Нове</Badge> : null}
                   </div>
                   {n.description ? (
-                    <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{n.description}</div>
+                    <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                      {renderNotificationDescription(n.description)}
+                    </div>
                   ) : null}
                 </div>
                 <div className="text-xs text-muted-foreground whitespace-nowrap">{n.time}</div>

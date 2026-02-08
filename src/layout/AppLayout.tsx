@@ -1098,7 +1098,7 @@ function SidebarGroup({
 
               <span className="truncate">{link.label}</span>
               {showNotificationsBadge ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                <span className="ml-2 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
                   {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
                 </span>
               ) : null}

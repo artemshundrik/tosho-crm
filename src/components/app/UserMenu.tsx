@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, MoreVertical, SlidersHorizontal, User } from "lucide-react";
+import { LogOut, MoreVertical, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,18 @@ import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
 import { resolveWorkspaceId } from "@/lib/workspace";
 
-// Словник для красивого відображення ролей
-const ROLE_NAMES: Record<string, string> = {
-  super_admin: "Super Admin",
+const ACCESS_ROLE_NAMES: Record<string, string> = {
+  owner: "Super Admin",
+  admin: "Admin",
+  member: "Member",
+};
+
+const JOB_ROLE_NAMES: Record<string, string> = {
   manager: "Менеджер",
-  viewer: "Глядач",
-  player: "Гравець"
+  designer: "Дизайнер",
+  logistics: "Логіст",
+  accountant: "Бухгалтер",
+  member: "Member",
 };
 
 type UserMenuProps = {
@@ -26,7 +32,8 @@ type UserMenuProps = {
 
 type UserState = {
   name: string;
-  role: string;
+  accessRole: string;
+  jobRole: string | null;
   initials: string;
   avatarUrl: string | null;
   roleKey: string;
@@ -40,7 +47,8 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
   const [userData, setUserData] = useState<UserState>(
     cachedUserData ?? {
       name: "Завантаження...",
-      role: "...",
+      accessRole: "...",
+      jobRole: null,
       initials: "..",
       avatarUrl: null,
       roleKey: "viewer",
@@ -67,26 +75,35 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
         const workspaceId = await resolveWorkspaceId(user.id);
 
         let rawRole = "viewer";
+        let accessRoleLabel = ACCESS_ROLE_NAMES.member;
+        let jobRoleLabel: string | null = null;
         if (workspaceId) {
           const { data: membership } = await supabase
             .schema("tosho")
             .from("memberships_view")
-            .select("access_role")
+            .select("access_role,job_role")
             .eq("workspace_id", workspaceId)
             .eq("user_id", user.id)
             .maybeSingle();
 
-          const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
+          const membershipData = (membership as { access_role?: string | null; job_role?: string | null } | null) ?? null;
+          const accessRole = membershipData?.access_role ?? "member";
+          const jobRole = membershipData?.job_role ?? null;
+
+          accessRoleLabel = ACCESS_ROLE_NAMES[accessRole] ?? "Member";
+          if (jobRole && jobRole !== "member") {
+            jobRoleLabel = JOB_ROLE_NAMES[jobRole] ?? jobRole;
+          }
+
           if (accessRole === "owner") rawRole = "super_admin";
           else if (accessRole === "admin") rawRole = "manager";
-          else if (accessRole) rawRole = "viewer";
+          else rawRole = "viewer";
         }
-
-        const displayRole = ROLE_NAMES[rawRole] || rawRole;
 
         const nextData: UserState = {
           name: fullName,
-          role: displayRole,
+          accessRole: accessRoleLabel,
+          jobRole: jobRoleLabel,
           initials: initials,
           avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
           roleKey: rawRole
@@ -141,10 +158,16 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
           />
           <div className="min-w-0 flex-1 text-left">
             <div className="truncate text-[13px] font-semibold">{userData.name}</div>
-            <div
-              className={cn("truncate text-[11px]", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}
-            >
-              {userData.role}
+            <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+              <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
+                {userData.accessRole}
+              </span>
+              {userData.jobRole ? (
+                <>
+                  <span className="text-muted-foreground/70">•</span>
+                  <span className="truncate text-muted-foreground">{userData.jobRole}</span>
+                </>
+              ) : null}
             </div>
           </div>
         </Button>
@@ -206,13 +229,16 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-[13px] font-semibold">{userData.name}</div>
-              <div
-                className={cn(
-                  "truncate text-[11px] mt-0.5",
-                  ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground"
-                )}
-              >
-                {userData.role}
+              <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+                <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
+                  {userData.accessRole}
+                </span>
+                {userData.jobRole ? (
+                  <>
+                    <span className="text-muted-foreground/70">•</span>
+                    <span className="truncate text-muted-foreground">{userData.jobRole}</span>
+                  </>
+                ) : null}
               </div>
             </div>
 
