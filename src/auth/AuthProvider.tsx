@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { resolveWorkspaceId } from '@/lib/workspace';
@@ -63,6 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const userId = session?.user?.id ?? null;
+  const userIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   const refreshTeamContext = useCallback(async (targetUserId?: string | null) => {
     const effectiveUserId = targetUserId ?? userId;
@@ -118,17 +123,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession ?? null);
+
+      // Do not block UI on token refresh events. They happen in background and
+      // should not remount protected routes.
+      if (event === "TOKEN_REFRESHED") {
+        return;
+      }
+
+      // Lightweight handling for sign-out.
+      if (event === "SIGNED_OUT") {
+        setTeamId(null);
+        setRole(null);
+        setLoading(false);
+        return;
+      }
+
+      const nextUserId = nextSession?.user?.id ?? null;
+      if (!nextUserId) {
+        setTeamId(null);
+        setRole(null);
+        setLoading(false);
+        return;
+      }
+
+      // Keep UI stable for any auth event affecting the same user
+      // (token refresh, session sync, user profile updates, etc).
+      if (nextUserId === userIdRef.current) {
+        void refreshTeamContext(nextUserId);
+        return;
+      }
+
+      // Only block UI when auth context switches to another user.
       setLoading(true);
       void (async () => {
-        if (nextSession?.user?.id) {
-          await refreshTeamContext(nextSession.user.id);
-        } else {
-          setTeamId(null);
-          setRole(null);
-        }
+        await refreshTeamContext(nextUserId);
         if (mounted) setLoading(false);
       })();
     });

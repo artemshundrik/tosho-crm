@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
+import { resolveWorkspaceId } from "@/lib/workspace";
+import { notifyUsers } from "@/lib/designTaskActivity";
 import {
   listQuotes,
   listCustomersBySearch,
@@ -862,6 +864,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const shouldCreateDesignTask =
         data.createDesignTask &&
         (data.printApplications.length > 0 || data.files.length > 0);
+      let createdDesignTaskId: string | null = null;
       if (shouldCreateDesignTask && teamId) {
         const actorName =
           currentUserId && memberById.get(currentUserId)
@@ -869,7 +872,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             : "System";
         const modelName = model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
-        await supabase
+        const { data: designTaskRow, error: designTaskError } = await supabase
           .from("activity_log")
           .insert({
             team_id: teamId,
@@ -880,8 +883,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             entity_id: created.id,
             title: `Дизайн: ${modelName}`,
             metadata: {
+              source: "design_task_created",
               status: "new",
               quote_id: created.id,
+              design_task_id: null,
+              assignee_user_id: null,
+              assigned_at: null,
               quote_type: data.quoteType,
               methods_count: data.printApplications.length,
               has_files: data.files.length > 0,
@@ -889,7 +896,51 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               deadline: designDeadline,
               model: modelName,
             },
-          });
+          })
+          .select("id")
+          .single();
+        if (designTaskError) throw designTaskError;
+
+        createdDesignTaskId = (designTaskRow as { id?: string } | null)?.id ?? null;
+
+        if (createdDesignTaskId) {
+          try {
+            const workspaceId = currentUserId ? await resolveWorkspaceId(currentUserId) : null;
+            if (workspaceId) {
+              const { data: membersData, error: membersError } = await supabase
+                .schema("tosho")
+                .from("memberships_view")
+                .select("user_id,job_role")
+                .eq("workspace_id", workspaceId);
+              if (membersError) throw membersError;
+
+              const designerUserIds = Array.from(
+                new Set(
+                  ((membersData as Array<{ user_id: string; job_role: string | null }> | null) ?? [])
+                    .filter((row) => {
+                      const normalized = (row.job_role ?? "").trim().toLowerCase();
+                      return normalized === "designer" || normalized === "дизайнер";
+                    })
+                    .map((row) => row.user_id)
+                    .filter((userId) => !!userId && userId !== currentUserId)
+                )
+              );
+
+              if (designerUserIds.length > 0) {
+                const quoteLabel = `#${created.id.slice(0, 8)}`;
+                await notifyUsers({
+                  userIds: designerUserIds,
+                  title: "Нова дизайн-задача",
+                  body: `${actorName} створив(ла) дизайн-задачу по прорахунку ${quoteLabel}.`,
+                  href: `/design/${createdDesignTaskId}`,
+                  type: "info",
+                });
+              }
+            }
+          } catch (notifyError) {
+            console.warn("Failed to notify designers about new design task", notifyError);
+          }
+        }
       }
 
       // 3. Upload files if any
