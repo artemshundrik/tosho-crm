@@ -75,6 +75,8 @@ export default function DesignPage() {
   const [tasks, setTasks] = useState<DesignTask[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetStatus, setDropTargetStatus] = useState<DesignStatus | null>(null);
+  const [suppressCardClick, setSuppressCardClick] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<DesignTask | null>(null);
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
@@ -282,6 +284,28 @@ export default function DesignPage() {
     });
     return bucket;
   }, [filteredTasks]);
+
+  const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
+    setDraggingId(taskId);
+    setSuppressCardClick(true);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", taskId);
+  };
+
+  const stopDraggingTask = () => {
+    setDraggingId(null);
+    setDropTargetStatus(null);
+    // Prevent accidental navigation when mouseup fires click right after drag end.
+    window.setTimeout(() => setSuppressCardClick(false), 100);
+  };
+
+  const dropTaskToStatus = (nextStatus: DesignStatus) => {
+    if (!draggingId) return;
+    const draggedTask = tasks.find((task) => task.id === draggingId);
+    if (!draggedTask) return;
+    if (draggedTask.status === nextStatus) return;
+    void handleStatusChange(draggedTask, nextStatus);
+  };
 
   const handleStatusChange = async (task: DesignTask, next: DesignStatus) => {
     if (!effectiveTeamId || task.status === next) return;
@@ -564,7 +588,31 @@ export default function DesignPage() {
             return (
               <div
                 key={col.id}
-                className="w-[240px] flex-shrink-0 bg-card/70 border border-border/60 rounded-lg shadow-sm flex flex-col"
+                className={cn(
+                  "w-[240px] flex-shrink-0 bg-card/70 border border-border/60 rounded-lg shadow-sm flex flex-col transition-colors",
+                  draggingId && "border-primary/35",
+                  dropTargetStatus === col.id && "border-primary bg-primary/5"
+                )}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                }}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                    setDropTargetStatus((current) => (current === col.id ? null : current));
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDropTargetStatus(null);
+                  dropTaskToStatus(col.id);
+                  stopDraggingTask();
+                }}
               >
                 <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
@@ -578,18 +626,7 @@ export default function DesignPage() {
                     {items.length}
                   </Badge>
                 </div>
-                <div
-                  className="p-3 space-y-3 overflow-y-auto max-h-[70vh]"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (draggingId) {
-                      const draggedTask = tasks.find((t) => t.id === draggingId);
-                      if (draggedTask) void handleStatusChange(draggedTask, col.id);
-                    }
-                    setDraggingId(null);
-                  }}
-                >
+                <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
                   {items.length === 0 ? (
                     <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
                       Немає задач
@@ -599,9 +636,12 @@ export default function DesignPage() {
                       <div
                         key={task.id}
                         draggable
-                        onDragStart={() => setDraggingId(task.id)}
-                        onDragEnd={() => setDraggingId(null)}
-                        onClick={() => navigate(`/design/${task.id}`)}
+                        onDragStart={(event) => startDraggingTask(event, task.id)}
+                        onDragEnd={stopDraggingTask}
+                        onClick={() => {
+                          if (suppressCardClick) return;
+                          navigate(`/design/${task.id}`);
+                        }}
                         className={cn(
                           "rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer",
                           draggingId === task.id && "ring-2 ring-primary/40"

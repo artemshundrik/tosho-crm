@@ -1,413 +1,403 @@
-// src/pages/OverviewPage.tsx
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/lib/supabaseClient";
-import { cn } from "@/lib/utils";
-import { mapActivityRow, type ActivityItem, type ActivityRow } from "@/lib/activity";
-import { useAuth } from "@/auth/AuthProvider";
-import { formatUpdatedAgo, getContextRows, type StandingsRowView } from "@/features/standingsImport/standingsUtils";
+import { ArrowRight, Clock3, FileText, LayoutGrid, Palette, Plus, RefreshCw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { TableHeaderCell, TableNumericCell } from "@/components/app/table-kit";
-import { Separator } from "@/components/ui/separator";
-import { OperationalSummary } from "@/components/app/OperationalSummary";
-import { NewMatchPrimarySplitCta } from "@/components/app/NewMatchPrimarySplitCta";
+import { useAuth } from "@/auth/AuthProvider";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
 import { usePageData } from "@/hooks/usePageData";
 
-import {
-  BarChart3,
-  CalendarDays,
-  MapPin,
-  Swords,
-  LayoutGrid,
-  Plus,
-  ArrowRight,
-  Activity,
-  Trophy,
-  Target,
-  RotateCw,
-} from "lucide-react";
+type QuoteStatus =
+  | "new"
+  | "estimating"
+  | "estimated"
+  | "awaiting_approval"
+  | "approved"
+  | "cancelled";
 
-/* ================== TYPES ================== */
+type DesignStatus =
+  | "new"
+  | "changes"
+  | "in_progress"
+  | "pm_review"
+  | "client_review"
+  | "approved"
+  | "cancelled";
 
-type MatchStatus = "scheduled" | "played" | "canceled";
-
-type MatchRow = {
+type QuoteRow = {
   id: string;
-  opponent_name: string;
-  opponent_logo_url?: string | null;
-  match_date: string;
-  status: MatchStatus | null;
-  home_away: "home" | "away" | "neutral" | null;
-  score_team: number | null;
-  score_opponent: number | null;
+  number?: string | null;
+  status?: string | null;
+  customer_name?: string | null;
+  assigned_to?: string | null;
+  created_at?: string | null;
 };
 
-type TrainingRow = {
+type DesignTaskRow = {
   id: string;
-  date: string;
-  time: string | null;
-  location: string | null;
+  quoteId: string;
+  quoteNumber: string | null;
+  title: string | null;
+  status: DesignStatus;
+  assigneeUserId: string | null;
+  createdAt: string | null;
 };
 
-type PrimaryTournament = {
+type ActivityRow = {
   id: string;
-  name: string;
-  season: string | null;
+  title?: string | null;
+  action?: string | null;
+  href?: string | null;
+  created_at?: string | null;
 };
 
-type StandingsRow = StandingsRowView & {
-  updated_at: string | null;
+type OverviewData = {
+  quoteCounts: Record<QuoteStatus, number>;
+  totalQuotesCount: number;
+  myQuotesCount: number;
+  recentQuotes: QuoteRow[];
+  designCounts: Record<DesignStatus, number>;
+  myDesignCounts: Record<DesignStatus, number>;
+  unassignedActiveDesignCount: number;
+  managerDesignQueue: DesignTaskRow[];
+  myDesignQueue: DesignTaskRow[];
+  activity: ActivityRow[];
 };
 
+const QUOTE_STATUSES: QuoteStatus[] = [
+  "new",
+  "estimating",
+  "estimated",
+  "awaiting_approval",
+  "approved",
+  "cancelled",
+];
 
-type KPI = {
-  matches: number;
-  wins: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  attendanceRate: number;
+const DESIGN_STATUSES: DesignStatus[] = [
+  "new",
+  "changes",
+  "in_progress",
+  "pm_review",
+  "client_review",
+  "approved",
+  "cancelled",
+];
+
+const quoteStatusLabel: Record<QuoteStatus, string> = {
+  new: "Нові",
+  estimating: "На прорахунку",
+  estimated: "Пораховано",
+  awaiting_approval: "На погодженні",
+  approved: "Затверджено",
+  cancelled: "Скасовано",
 };
 
-/* ================== HELPERS ================== */
+const quoteStatusClass: Record<QuoteStatus, string> = {
+  new: "bg-muted/40 text-muted-foreground border-border",
+  estimating: "bg-sky-500/15 text-sky-200 border-sky-500/40",
+  estimated: "bg-violet-500/15 text-violet-200 border-violet-500/40",
+  awaiting_approval: "bg-amber-500/15 text-amber-200 border-amber-500/40",
+  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
+  cancelled: "bg-rose-500/15 text-rose-200 border-rose-500/40",
+};
 
-function formatDateTimeUA(iso: string) {
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+const designStatusLabel: Record<DesignStatus, string> = {
+  new: "Новий",
+  changes: "Правки",
+  in_progress: "В роботі",
+  pm_review: "На перевірці",
+  client_review: "На погодженні",
+  approved: "Затверджено",
+  cancelled: "Скасовано",
+};
+
+const designStatusClass: Record<DesignStatus, string> = {
+  new: "bg-muted/40 text-muted-foreground border-border",
+  changes: "bg-amber-500/15 text-amber-200 border-amber-500/40",
+  in_progress: "bg-sky-500/15 text-sky-200 border-sky-500/40",
+  pm_review: "bg-indigo-500/15 text-indigo-200 border-indigo-500/40",
+  client_review: "bg-yellow-500/15 text-yellow-200 border-yellow-500/40",
+  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
+  cancelled: "bg-rose-500/15 text-rose-200 border-rose-500/40",
+};
+
+const quoteStatusFromDb = (value?: string | null): QuoteStatus => {
+  if (!value) return "new";
+  const legacyMap: Record<string, QuoteStatus> = {
+    draft: "new",
+    in_progress: "estimating",
+    sent: "estimated",
+    rejected: "cancelled",
+    completed: "approved",
+  };
+  return (legacyMap[value] ?? value) as QuoteStatus;
+};
+
+const isActiveDesignStatus = (status: DesignStatus) => status !== "approved" && status !== "cancelled";
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("uk-UA", {
+    day: "numeric",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(iso));
-}
+  });
+};
 
-function outcome(scoreTeam: number, scoreOpp: number) {
-  if (scoreTeam > scoreOpp) return { label: "W", tone: "success" as const };
-  if (scoreTeam < scoreOpp) return { label: "L", tone: "danger" as const };
-  return { label: "D", tone: "neutral" as const };
-}
+const emptyCounts = <T extends string>(statuses: readonly T[]): Record<T, number> =>
+  statuses.reduce((acc, status) => {
+    acc[status] = 0;
+    return acc;
+  }, {} as Record<T, number>);
 
-function normalizeLogoUrl(url?: string | null) {
-  if (!url) return null;
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "");
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  if (!supabaseUrl || !supabaseAnonKey) return trimmed;
-  const looksRelative = trimmed.startsWith("/") || !/^https?:\/\//i.test(trimmed);
-  const absoluteUrl = looksRelative ? `${supabaseUrl}/${trimmed.replace(/^\/+/, "")}` : trimmed;
-  if (!absoluteUrl.startsWith(supabaseUrl)) return absoluteUrl;
-  if (absoluteUrl.includes("apikey=")) return absoluteUrl;
-  const sep = absoluteUrl.includes("?") ? "&" : "?";
-  return `${absoluteUrl}${sep}apikey=${supabaseAnonKey}`;
-}
+const createEmptyOverviewData = (): OverviewData => ({
+  quoteCounts: emptyCounts(QUOTE_STATUSES),
+  totalQuotesCount: 0,
+  myQuotesCount: 0,
+  recentQuotes: [],
+  designCounts: emptyCounts(DESIGN_STATUSES),
+  myDesignCounts: emptyCounts(DESIGN_STATUSES),
+  unassignedActiveDesignCount: 0,
+  managerDesignQueue: [],
+  myDesignQueue: [],
+  activity: [],
+});
 
-function LogoCircle({ src, alt, size = 36, className }: { src?: string | null; alt: string; size?: number; className?: string }) {
-  return (
-    <div
-      className={cn("shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border", className)}
-      style={{ width: size, height: size }}
-    >
-      {src ? <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" /> : null}
-    </div>
-  );
-}
+const parseDesignTask = (row: {
+  id: string;
+  entity_id?: string | null;
+  title?: string | null;
+  metadata?: unknown;
+  created_at?: string | null;
+}): DesignTaskRow => {
+  const metadata = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
+  const quoteIdFromMeta = typeof metadata.quote_id === "string" && metadata.quote_id ? metadata.quote_id : null;
+  const quoteNumber =
+    typeof metadata.quote_number === "string" && metadata.quote_number.trim() ? metadata.quote_number.trim() : null;
+  const statusRaw = typeof metadata.status === "string" ? metadata.status : "new";
+  const status = (DESIGN_STATUSES.includes(statusRaw as DesignStatus) ? statusRaw : "new") as DesignStatus;
+  const assigneeUserId =
+    typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id ? metadata.assignee_user_id : null;
 
+  return {
+    id: row.id,
+    quoteId: quoteIdFromMeta ?? (row.entity_id ?? ""),
+    quoteNumber,
+    title: row.title ?? null,
+    status,
+    assigneeUserId,
+    createdAt: row.created_at ?? null,
+  };
+};
 
-/* ================== PAGE ================== */
+const loadRecentQuotes = async (teamId: string): Promise<QuoteRow[]> => {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("v_quotes_list")
+      .select("id,number,status,customer_name,assigned_to,created_at")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (error) throw error;
+    return (data as QuoteRow[] | null) ?? [];
+  } catch {
+    const { data: quoteRows, error: quoteError } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("id,number,status,customer_id,assigned_to,created_at")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (quoteError) throw quoteError;
 
-type OverviewPageCache = {
-  teamLogo: string | null;
-  primaryTournament: PrimaryTournament | null;
-  standingsRows: StandingsRow[];
-  standingsUpdatedAt: string | null;
-  nextMatch: MatchRow | null;
-  lastMatch: MatchRow | null;
-  nextTraining: TrainingRow | null;
-  lastFive: MatchRow[];
-  activity: ActivityItem[];
-  kpi: KPI;
+    const rows = (quoteRows as Array<QuoteRow & { customer_id?: string | null }> | null) ?? [];
+    const customerIds = Array.from(new Set(rows.map((row) => row.customer_id).filter(Boolean) as string[]));
+
+    let customerNameById = new Map<string, string>();
+    if (customerIds.length > 0) {
+      const { data: customers } = await supabase
+        .schema("tosho")
+        .from("customers")
+        .select("id,name,legal_name")
+        .in("id", customerIds);
+      customerNameById = new Map(
+        ((customers as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? []).map((c) => [
+          c.id,
+          c.name ?? c.legal_name ?? "—",
+        ])
+      );
+    }
+
+    return rows.map((row) => ({
+      id: row.id,
+      number: row.number ?? null,
+      status: row.status ?? null,
+      assigned_to: row.assigned_to ?? null,
+      created_at: row.created_at ?? null,
+      customer_name: row.customer_id ? customerNameById.get(row.customer_id) ?? "—" : "—",
+    }));
+  }
 };
 
 export function OverviewPage() {
-  const { role } = useAuth();
-  const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
-  const TEAM_NAME = "FAYNA TEAM";
-  const { data, loading, showSkeleton } = usePageData<OverviewPageCache>({
-    cacheKey: "overview",
+  const { teamId, userId, role } = useAuth();
+
+  const isManagerView = role === "manager" || role === "super_admin";
+
+  const {
+    data,
+    loading,
+    showSkeleton,
+    refetch,
+  } = usePageData<OverviewData>({
+    cacheKey: `overview-crm:${teamId ?? "none"}:${userId ?? "none"}:${role ?? "none"}`,
     loadFn: async () => {
-      const now = new Date().toISOString();
-      const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const sinceDate = since14d.slice(0, 10);
+      if (!teamId) return createEmptyOverviewData();
 
-      const [playedRes, upcomingRes, trainingsRes] = await Promise.all([
-        supabase
-          .from("matches")
-          .select("id, opponent_name, opponent_logo_url, match_date, status, home_away, score_team, score_opponent")
-          .eq("team_id", TEAM_ID)
-          .eq("status", "played")
-          .order("match_date", { ascending: false })
-          .limit(120),
+      const quoteCountPromises = QUOTE_STATUSES.map(async (status) => {
+        const { count, error } = await supabase
+          .schema("tosho")
+          .from("quotes")
+          .select("id", { head: true, count: "exact" })
+          .eq("team_id", teamId)
+          .eq("status", status);
+        if (error) throw error;
+        return { status, count: count ?? 0 };
+      });
 
-        supabase
-          .from("matches")
-          .select("id, opponent_name, opponent_logo_url, match_date, status, home_away, score_team, score_opponent")
-          .eq("team_id", TEAM_ID)
-          .neq("status", "canceled")
-          .gte("match_date", now)
-          .order("match_date", { ascending: true })
-          .limit(1),
+      const totalQuotesPromise = supabase
+        .schema("tosho")
+        .from("quotes")
+        .select("id", { head: true, count: "exact" })
+        .eq("team_id", teamId);
 
-        supabase
-          .from("trainings")
-          .select("id, date, time, location")
-          .eq("team_id", TEAM_ID)
-          .order("date", { ascending: true })
-          .order("time", { ascending: true })
-          .limit(24),
+      const myQuotesPromise =
+        userId
+          ? supabase
+              .schema("tosho")
+              .from("quotes")
+              .select("id", { head: true, count: "exact" })
+              .eq("team_id", teamId)
+              .eq("assigned_to", userId)
+          : Promise.resolve({ count: 0, error: null } as { count: number | null; error: null });
+
+      const designTasksPromise = supabase
+        .from("activity_log")
+        .select("id,entity_id,title,metadata,created_at")
+        .eq("team_id", teamId)
+        .eq("action", "design_task")
+        .order("created_at", { ascending: false })
+        .limit(400);
+
+      const activityPromise = supabase
+        .from("activity_log")
+        .select("id,title,action,href,created_at")
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false })
+        .limit(8);
+
+      const [
+        quoteCountsRows,
+        totalQuotesRes,
+        myQuotesRes,
+        recentQuotes,
+        designTasksRes,
+        activityRes,
+      ] = await Promise.all([
+        Promise.all(quoteCountPromises),
+        totalQuotesPromise,
+        myQuotesPromise,
+        loadRecentQuotes(teamId),
+        designTasksPromise,
+        activityPromise,
       ]);
 
-      if (playedRes.error) {
-        console.error("Overview played matches load error", playedRes.error);
-      }
-      if (upcomingRes.error) {
-        console.error("Overview upcoming matches load error", upcomingRes.error);
-      }
-      if (trainingsRes.error) {
-        console.error("Overview trainings load error", trainingsRes.error);
-      }
+      if (totalQuotesRes.error) throw totalQuotesRes.error;
+      if (myQuotesRes.error) throw myQuotesRes.error;
+      if (designTasksRes.error) throw designTasksRes.error;
+      if (activityRes.error) throw activityRes.error;
 
-      const playedMatches = ((playedRes.data as MatchRow[]) ?? []).map((m) => ({
-        ...m,
-        opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
-      }));
-      const upcomingMatch = ((upcomingRes.data as MatchRow[]) ?? []).map((m) => ({
-        ...m,
-        opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
-      }))[0] ?? null;
-      let logo: string | null = null;
-      const { data: teamData, error: teamError } = await supabase
-        .from("teams")
-        .select("club_id, clubs(logo_url)")
-        .eq("id", TEAM_ID)
-        .single();
+      const quoteCounts = emptyCounts(QUOTE_STATUSES);
+      quoteCountsRows.forEach((row) => {
+        quoteCounts[row.status] = row.count;
+      });
 
-      if (!teamError) {
-        const club = Array.isArray(teamData?.clubs) ? teamData?.clubs[0] : teamData?.clubs;
-        const raw = (club as { logo_url?: string | null } | null)?.logo_url || null;
-        logo = normalizeLogoUrl(raw);
-      }
+      const designCounts = emptyCounts(DESIGN_STATUSES);
+      const myDesignCounts = emptyCounts(DESIGN_STATUSES);
 
-      const { data: primaryRow, error: primaryError } = await supabase
-        .from("team_tournaments")
-        .select("tournament:tournament_id (id, name, season)")
-        .eq("team_id", TEAM_ID)
-        .eq("is_primary", true)
-        .maybeSingle();
+      const designTasks = ((designTasksRes.data as Array<{
+        id: string;
+        entity_id?: string | null;
+        title?: string | null;
+        metadata?: unknown;
+        created_at?: string | null;
+      }> | null) ?? []).map(parseDesignTask);
 
-      const tournamentRaw = Array.isArray(primaryRow?.tournament)
-        ? primaryRow?.tournament[0]
-        : primaryRow?.tournament;
-
-      let primaryTournament: PrimaryTournament | null = null;
-      let standingsRows: StandingsRow[] = [];
-      let standingsUpdatedAt: string | null = null;
-
-      if (!primaryError && tournamentRaw) {
-        primaryTournament = tournamentRaw as PrimaryTournament;
-
-        const { data: standingsData, error: standingsError } = await supabase
-          .from("tournament_standings_current")
-          .select("team_name, position, played, points, wins, draws, losses, goals_for, goals_against, logo_url, updated_at")
-          .eq("tournament_id", primaryTournament.id)
-          .order("position", { ascending: true });
-
-        if (!standingsError) {
-          const rows = (standingsData ?? []) as StandingsRow[];
-          standingsRows = rows;
-          standingsUpdatedAt = rows.reduce<string | null>((latest, row) => {
-            if (!row.updated_at) return latest;
-            if (!latest || row.updated_at > latest) return row.updated_at;
-            return latest;
-          }, null);
-        } else {
-          console.error("Overview standings load error", standingsError);
+      for (const task of designTasks) {
+        designCounts[task.status] += 1;
+        if (userId && task.assigneeUserId === userId) {
+          myDesignCounts[task.status] += 1;
         }
-      } else if (primaryError) {
-        console.error("Overview primary tournament load error", primaryError);
       }
 
-      const scoredMatches = playedMatches.filter(
-        (m) => m.score_team !== null && m.score_opponent !== null
-      );
+      const unassignedActiveDesignCount = designTasks.filter(
+        (task) => !task.assigneeUserId && isActiveDesignStatus(task.status)
+      ).length;
 
-      const nextMatchItem = upcomingMatch;
-      const lastMatchItem = playedMatches[0] ?? null;
-      const lastFiveList = playedMatches.slice(0, 5);
+      const managerDesignQueue = designTasks
+        .filter(
+          (task) =>
+            isActiveDesignStatus(task.status) &&
+            (!task.assigneeUserId || task.status === "pm_review" || task.status === "client_review")
+        )
+        .slice(0, 8);
 
-      const trainingsList = (trainingsRes.data as TrainingRow[]) ?? [];
-      const nextTrainingItem =
-        trainingsList.find((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() >= Date.now()) || null;
-
-      const [activityRes, recentTrainingsRes] = await Promise.all([
-        supabase
-          .from("activity_log")
-          .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, created_at")
-          .eq("team_id", TEAM_ID)
-          .order("created_at", { ascending: false })
-          .limit(6),
-        supabase
-          .from("trainings")
-          .select("id")
-          .eq("team_id", TEAM_ID)
-          .gte("date", sinceDate),
-      ]);
-
-      const recentTrainingIds = ((recentTrainingsRes.data as { id: string }[]) ?? []).map((t) => t.id);
-      const attendanceRes = recentTrainingIds.length
-        ? await supabase
-            .from("training_attendance")
-            .select("status")
-            .in("training_id", recentTrainingIds)
-        : { data: [] };
-
-      const wins = scoredMatches.filter((m) => (m.score_team ?? 0) > (m.score_opponent ?? 0)).length;
-      const finalKpi = {
-        matches: playedMatches.length,
-        wins,
-        goalsFor: scoredMatches.reduce((s, m) => s + (m.score_team ?? 0), 0),
-        goalsAgainst: scoredMatches.reduce((s, m) => s + (m.score_opponent ?? 0), 0),
-        attendanceRate: attendanceRes.data ? (() => {
-          const total = attendanceRes.data.length;
-          const present = attendanceRes.data.filter((a) => a.status === "present").length;
-          return total ? Math.round((present / total) * 100) : 0;
-        })() : 0,
-      };
+      const myDesignQueue = designTasks
+        .filter((task) => userId && task.assigneeUserId === userId && isActiveDesignStatus(task.status))
+        .slice(0, 8);
 
       return {
-        teamLogo: logo,
-        primaryTournament,
-        standingsRows,
-        standingsUpdatedAt,
-        nextMatch: nextMatchItem,
-        lastMatch: lastMatchItem,
-        nextTraining: nextTrainingItem,
-        lastFive: lastFiveList,
-        activity: activityRes.error ? [] : ((activityRes.data || []) as ActivityRow[]).map(mapActivityRow),
-        kpi: finalKpi,
+        quoteCounts,
+        totalQuotesCount: totalQuotesRes.count ?? 0,
+        myQuotesCount: myQuotesRes.count ?? 0,
+        recentQuotes,
+        designCounts,
+        myDesignCounts,
+        unassignedActiveDesignCount,
+        managerDesignQueue,
+        myDesignQueue,
+        activity: ((activityRes.data as ActivityRow[] | null) ?? []).map((row) => ({
+          ...row,
+          title: row.title?.trim() || row.action?.trim() || "Подія",
+        })),
       };
     },
+    cacheTTL: 60 * 1000,
+    showSkeletonOnStale: false,
+    backgroundRefetch: true,
+    refetchInterval: 60 * 1000,
   });
 
-  const teamLogo = data?.teamLogo ?? null;
-  const primaryTournament = data?.primaryTournament ?? null;
-  const standingsRows = data?.standingsRows ?? [];
-  const standingsUpdatedAt = data?.standingsUpdatedAt ?? null;
-  const nextMatch = data?.nextMatch ?? null;
-  const lastMatch = data?.lastMatch ?? null;
-  const nextTraining = data?.nextTraining ?? null;
-  
-  const lastFive = data?.lastFive ?? [];
-  const activity = data?.activity ?? [];
-  const kpi = data?.kpi ?? {
-    matches: 0,
-    wins: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    attendanceRate: 0,
-  };
-
-  /* ================== DERIVED ================== */
-
-  const formBadges = useMemo(
-    () =>
-      lastFive
-        .slice()
-        .reverse()
-        .map((m) =>
-          m.score_team !== null && m.score_opponent !== null
-            ? outcome(m.score_team, m.score_opponent)
-            : { label: "—", tone: "neutral" as const }
-        ),
-    [lastFive]
-  );
-
-  const canWrite = role === "manager" || role === "super_admin";
-  const standingsContext = useMemo(
-    () => getContextRows(standingsRows, TEAM_NAME, 2),
-    [standingsRows]
-  );
-
-  /* ================== UI ================== */
-
-  const kpis = useMemo(
-    () => [
-      {
-        key: "matches",
-        label: "Матчі",
-        value: String(kpi.matches),
-        icon: Swords,
-        iconTone: "bg-sky-500/10 text-sky-600",
-      },
-      {
-        key: "wins",
-        label: "Перемоги",
-        value: String(kpi.wins),
-        icon: Trophy,
-        iconTone: "bg-emerald-500/10 text-emerald-600",
-      },
-      {
-        key: "goals",
-        label: "Голи",
-        value: `${kpi.goalsFor}/${kpi.goalsAgainst}`,
-        icon: Target,
-        iconTone: "bg-amber-500/10 text-amber-600",
-      },
-      {
-        key: "attendance",
-        label: "Відвідуваність",
-        value: String(kpi.attendanceRate),
-        unit: "%",
-        icon: BarChart3,
-        iconTone: "bg-indigo-500/10 text-indigo-600",
-      },
-    ],
-    [kpi]
-  );
-
-  const nextMatchSides = useMemo(() => {
-    if (!nextMatch) return null;
-    const ha = nextMatch.home_away ?? "home";
-    if (ha === "away") {
-      return {
-        left: { name: nextMatch.opponent_name, logo: nextMatch.opponent_logo_url ?? null },
-        right: { name: TEAM_NAME, logo: teamLogo },
-      };
-    }
-    return {
-      left: { name: TEAM_NAME, logo: teamLogo },
-      right: { name: nextMatch.opponent_name, logo: nextMatch.opponent_logo_url ?? null },
-    };
-  }, [nextMatch, teamLogo]);
+  const safeData = data ?? createEmptyOverviewData();
 
   const headerActions = useMemo(
     () => (
       <>
         <Button asChild variant="secondary">
-          <Link to="/admin/trainings/create">Нове тренування</Link>
+          <Link to="/design">Дизайн</Link>
         </Button>
-        <NewMatchPrimarySplitCta baseTo="/matches/new" />
+        <Button asChild>
+          <Link to="/orders/estimates">Прорахунки</Link>
+        </Button>
       </>
     ),
     []
@@ -415,320 +405,211 @@ export function OverviewPage() {
 
   usePageHeaderActions(headerActions, []);
 
-  if (showSkeleton) {
+  const topStats = useMemo(() => {
+    if (isManagerView) {
+      return [
+        { label: "Прорахунків всього", value: safeData.totalQuotesCount, icon: FileText },
+        { label: "Нові прорахунки", value: safeData.quoteCounts.new, icon: Plus },
+        { label: "На погодженні", value: safeData.quoteCounts.awaiting_approval, icon: Clock3 },
+        { label: "Дизайн без виконавця", value: safeData.unassignedActiveDesignCount, icon: Palette },
+      ];
+    }
+
+    const myDesignActive = DESIGN_STATUSES.reduce((sum, status) => {
+      if (!isActiveDesignStatus(status)) return sum;
+      return sum + (safeData.myDesignCounts[status] ?? 0);
+    }, 0);
+
+    const myReviewCount = (safeData.myDesignCounts.pm_review ?? 0) + (safeData.myDesignCounts.client_review ?? 0);
+
+    return [
+      { label: "Мої дизайн-задачі", value: myDesignActive, icon: Palette },
+      { label: "Вільні задачі", value: safeData.unassignedActiveDesignCount, icon: LayoutGrid },
+      { label: "Мої прорахунки", value: safeData.myQuotesCount, icon: FileText },
+      { label: "Очікують перевірки", value: myReviewCount, icon: Clock3 },
+    ];
+  }, [isManagerView, safeData]);
+
+  const designStatusView = isManagerView ? safeData.designCounts : safeData.myDesignCounts;
+  const designQueue = isManagerView ? safeData.managerDesignQueue : safeData.myDesignQueue;
+
+  if (showSkeleton || loading) {
     return <DashboardSkeleton />;
   }
 
   return (
     <div className="space-y-6">
-      <OperationalSummary
-        title="Огляд команди"
-        subtitle="Ключові події команди та загальні показники."
-        titleVariant="hidden"
-        sectionLabel="Пульс команди"
-        sectionIcon={LayoutGrid}
-        nextUpLoading={showSkeleton}
-        nextUp={
-          !showSkeleton && nextMatch && nextMatchSides
-            ? {
-                primary: formatDateTimeUA(nextMatch.match_date),
-                secondary: `${nextMatchSides.left.name} — ${nextMatchSides.right.name}`,
-                to: `/matches/${nextMatch.id}`,
-                tournamentName: "Найближчий матч",
-                avatars: [
-                  { name: nextMatchSides.left.name, src: nextMatchSides.left.logo },
-                  { name: nextMatchSides.right.name, src: nextMatchSides.right.logo },
-                ],
-              }
-            : undefined
-        }
-        nextUpCtaLabel="Перейти до матчу"
-        emptyState={{
-          badgeLabel: "НАСТУПНИЙ МАТЧ",
-          title: "Немає запланованих матчів",
-          description: "Додай новий матч, щоб команда бачила час і суперника.",
-          actionLabel: "Новий матч",
-        }}
-        kpis={kpis}
-      />
-
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] min-w-0">
-        <div className="space-y-4 min-w-0">
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">Останній результат</CardTitle>
-              {lastMatch ? (
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {formatDateTimeUA(lastMatch.match_date)}
-                </div>
-              ) : null}
-            </CardHeader>
-            <CardContent className="min-w-0">
-              {lastMatch ? (
-                <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
-                  <div className="flex items-center justify-center gap-3 text-center min-w-0 sm:justify-end sm:text-right">
-                    <div className="truncate text-sm font-semibold text-foreground">{TEAM_NAME}</div>
-                    <LogoCircle src={teamLogo} alt={TEAM_NAME} size={48} />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {topStats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="border-border/60 bg-card/80">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-muted-foreground">{stat.label}</div>
+                    <div className="mt-1 text-2xl font-semibold tracking-tight">{stat.value}</div>
                   </div>
-
-                  <div className="flex flex-col items-center">
-                    <div className="text-3xl font-bold tracking-tight text-foreground tabular-nums">
-                      {lastMatch.score_team ?? "—"}:{lastMatch.score_opponent ?? "—"}
-                    </div>
-                    {lastMatch.score_team !== null && lastMatch.score_opponent !== null ? (
-                      <Badge tone={outcome(lastMatch.score_team, lastMatch.score_opponent).tone} className="mt-2">
-                        {outcome(lastMatch.score_team, lastMatch.score_opponent).label}
-                      </Badge>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center justify-center gap-3 min-w-0 sm:justify-start">
-                    <LogoCircle src={lastMatch.opponent_logo_url} alt={lastMatch.opponent_name} size={48} />
-                    <div className="truncate text-sm font-semibold text-foreground">{lastMatch.opponent_name}</div>
+                  <div className="h-9 w-9 rounded-lg border border-border/60 bg-muted/30 flex items-center justify-center">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Ще не грали</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-base">Стан у лізі</CardTitle>
-                <div className="text-xs text-muted-foreground">
-                  {primaryTournament ? `${primaryTournament.name} ${primaryTournament.season ?? ""}`.trim() : "Немає основного турніру"}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {canWrite && primaryTournament ? (
-                  <Button asChild variant="ghost" size="icon" aria-label="Оновити">
-                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
-                      <RotateCw className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                ) : null}
-                {primaryTournament ? (
-                  <Button asChild variant="outline" size="sm" className="gap-2">
-                    <Link to={`/admin/tournaments/${primaryTournament.id}?tab=standings`}>
-                      Відкрити турнір
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 min-w-0">
-              <div className="text-xs text-muted-foreground">{formatUpdatedAgo(standingsUpdatedAt)}</div>
-              {standingsContext.rows.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Таблиця поки недоступна.</div>
-              ) : (
-                <div className="-mx-2 overflow-x-auto sm:mx-0 w-full">
-                  <Table variant="analytics" size="sm" className="min-w-[520px] sm:min-w-[640px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHeaderCell align="center" widthClass="w-10">#</TableHeaderCell>
-                        <TableHeaderCell>Команда</TableHeaderCell>
-                        <TableHeaderCell align="center">І</TableHeaderCell>
-                        <TableHeaderCell align="center">В</TableHeaderCell>
-                        <TableHeaderCell align="center">Н</TableHeaderCell>
-                        <TableHeaderCell align="center">П</TableHeaderCell>
-                        <TableHeaderCell align="center">Г</TableHeaderCell>
-                        <TableHeaderCell align="center">О</TableHeaderCell>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {standingsContext.rows.map((row) => {
-                        const isOurTeam = row.team_name.toLowerCase().includes(TEAM_NAME.toLowerCase());
-                        return (
-                          <TableRow key={row.team_name} className={cn(isOurTeam && "bg-primary/10")}>
-                            <TableNumericCell align="center" className="w-10 font-semibold text-muted-foreground">
-                              {row.position}
-                            </TableNumericCell>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                {row.logo_url ? (
-                                  <img
-                                    src={row.logo_url}
-                                    alt={row.team_name}
-                                    className="h-6 w-6 rounded-full border border-border object-cover"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <div className="h-6 w-6 rounded-full border border-border bg-muted/60" />
-                                )}
-                                <span className="font-semibold text-foreground">{row.team_name}</span>
-                              </div>
-                            </TableCell>
-                            <TableNumericCell align="center" className="text-muted-foreground">
-                              {row.played ?? "—"}
-                            </TableNumericCell>
-                            <TableNumericCell align="center" className="text-muted-foreground">
-                              {row.wins ?? "—"}
-                            </TableNumericCell>
-                            <TableNumericCell align="center" className="text-muted-foreground">
-                              {row.draws ?? "—"}
-                            </TableNumericCell>
-                            <TableNumericCell align="center" className="text-muted-foreground">
-                              {row.losses ?? "—"}
-                            </TableNumericCell>
-                            <TableNumericCell align="center" className="text-muted-foreground">
-                              {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
-                            </TableNumericCell>
-                            <TableNumericCell align="center" className="font-semibold text-foreground">
-                              {row.points ?? "—"}
-                            </TableNumericCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">Форма (5 матчів)</CardTitle>
-              <div className="text-xs text-muted-foreground">Останні 5</div>
-            </CardHeader>
-            <CardContent className="space-y-4 min-w-0">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <div className="flex flex-wrap gap-1.5">
-                  {formBadges.map((b, i) => (
-                    <Badge key={i} tone={b.tone} className="h-6 w-6 justify-center rounded-full p-0 text-[11px]">
-                      {b.label}
-                    </Badge>
-                  ))}
-                </div>
-                <span>Останні 5</span>
-              </div>
-              <Separator />
-              {lastFive.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Матчів поки немає</p>
-              ) : (
-                <div className="space-y-2">
-                  {lastFive.map((m) => {
-                    const badge =
-                      m.score_team !== null && m.score_opponent !== null
-                        ? outcome(m.score_team, m.score_opponent)
-                        : { label: "—", tone: "neutral" as const };
-                    return (
-                      <Link
-                          key={m.id}
-                          to={`/matches/${m.id}`}
-                          className={cn(
-                          "flex items-center justify-between rounded-[var(--radius-inner)] border border-border px-3 py-2 min-w-0",
-                          "bg-muted/20 transition-all hover:-translate-y-[1px] hover:bg-muted/40 hover:shadow-[var(--shadow-floating)]"
-                          )}
-                        >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <Badge tone={badge.tone} className="h-7 w-7 justify-center rounded-full p-0">
-                            {badge.label}
-                          </Badge>
-                          <LogoCircle src={m.opponent_logo_url} alt={m.opponent_name} size={36} />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-foreground">{m.opponent_name}</div>
-                            <div className="text-xs text-muted-foreground">{formatDateTimeUA(m.match_date)}</div>
-                          </div>
-                        </div>
-                        <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">
-                          {m.score_team ?? "—"}:{m.score_opponent ?? "—"}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4 min-w-0">
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="h-4 w-4" /> Наступне тренування
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="min-w-0">
-              {nextTraining ? (
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold text-foreground">
-                    {formatDateTimeUA(`${nextTraining.date}T${nextTraining.time || "00:00"}`)}
-                  </div>
-                  {nextTraining.location ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {nextTraining.location}
-                    </div>
-                  ) : null}
-                  <Button asChild size="sm" variant="secondary">
-                    <Link to="/admin/trainings">Перейти</Link>
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Немає тренувань</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Activity className="h-4 w-4" /> Останні дії
-                </CardTitle>
-                <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                  <Link to="/activity">Всі</Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="min-w-0">
-              {activity.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Подій поки немає — почніть з матчу або тренування
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {activity.map((a) => (
-                    <div key={a.id} className="flex items-start gap-3 text-sm text-muted-foreground">
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]" />
-                      <div className="min-w-0">
-                        <div className="text-sm text-foreground truncate">{a.title}</div>
-                        {a.subtitle ? <div className="text-xs text-muted-foreground">{a.subtitle}</div> : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none min-w-0">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Plus className="h-4 w-4" /> Швидкі дії
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button asChild className="w-full justify-between">
-                <Link to="/matches/new">
-                  Новий матч <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="secondary" className="w-full justify-between">
-                <Link to="/admin/trainings/create">
-                  Нове тренування <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Прорахунки</CardTitle>
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <Link to="/orders/estimates">
+                  Відкрити <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {QUOTE_STATUSES.map((status) => (
+                <Badge key={status} variant="outline" className={cn("text-xs", quoteStatusClass[status])}>
+                  {quoteStatusLabel[status]}: {safeData.quoteCounts[status]}
+                </Badge>
+              ))}
+            </div>
+
+            {safeData.recentQuotes.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Ще немає прорахунків.</div>
+            ) : (
+              <div className="space-y-2">
+                {safeData.recentQuotes.map((quote) => {
+                  const status = quoteStatusFromDb(quote.status);
+                  return (
+                    <Link
+                      key={quote.id}
+                      to={`/orders/estimates/${quote.id}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 hover:bg-muted/20 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{quote.number ?? quote.id.slice(0, 8)}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {quote.customer_name ?? "Без замовника"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className={cn("text-[11px]", quoteStatusClass[status])}>
+                          {quoteStatusLabel[status]}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{formatDateTime(quote.created_at)}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">{isManagerView ? "Дизайн по команді" : "Мої дизайн-задачі"}</CardTitle>
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <Link to="/design">
+                  Дошка дизайну <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {DESIGN_STATUSES.map((status) => (
+                <Badge key={status} variant="outline" className={cn("text-xs", designStatusClass[status])}>
+                  {designStatusLabel[status]}: {designStatusView[status]}
+                </Badge>
+              ))}
+            </div>
+
+            {designQueue.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                {isManagerView ? "У черзі немає задач, що потребують уваги." : "У вас немає активних дизайн-задач."}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {designQueue.map((task) => (
+                  <Link
+                    key={task.id}
+                    to={`/design/${task.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {task.quoteNumber ?? task.quoteId.slice(0, 8)}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{task.title ?? "Дизайн-задача"}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="outline" className={cn("text-[11px]", designStatusClass[task.status])}>
+                        {designStatusLabel[task.status]}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{formatDateTime(task.createdAt)}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/60 bg-card/80">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">Останні дії</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Оновити"
+                onClick={() => {
+                  void refetch();
+                }}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <Link to="/activity">
+                  Всі події <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {safeData.activity.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Подій поки немає.</div>
+          ) : (
+            <div className="space-y-2">
+              {safeData.activity.map((row) => {
+                const destination = row.href ?? "/activity";
+                return (
+                  <Link
+                    key={row.id}
+                    to={destination}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="min-w-0 text-sm truncate">{row.title ?? "Подія"}</div>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatDateTime(row.created_at)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

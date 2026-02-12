@@ -10,12 +10,12 @@ import {
   FileCheck,
   FileMinus,
   FolderKanban,
+  LayoutGrid,
   Menu,
   Moon,
   Palette,
   ReceiptText,
   Search,
-  Settings,
   ShieldAlert,
   Sun,
   Truck,
@@ -53,7 +53,7 @@ type AppLayoutProps = {
   children: ReactNode;
 };
 
-type SidebarGroupKey = "orders" | "finance" | "operations" | "account";
+type SidebarGroupKey = "overview" | "orders" | "finance" | "operations" | "account";
 
 type SidebarLink = {
   label: string;
@@ -116,6 +116,9 @@ const ROUTES = {
 
 // --- Sidebar Config ---
 const baseSidebarLinks: SidebarLink[] = [
+  // Головне
+  { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid },
+
   // Замовлення
   { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2 },
   { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator },
@@ -676,48 +679,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
         <div className="px-4 pt-5">
-          <AppDropdown
-            align="start"
-            contentClassName="w-[250px]"
-            triggerClassName="flex w-full"
-            trigger={
-                <Button
-                  type="button"
-                  variant="menu"
-                  size="md"
-                  className={cn(
-                  "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left hover:bg-transparent active:bg-transparent"
-                  )}
-                >
-                <div className="flex items-center">
-                  <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
-                </div>
-              </Button>
-            }
-            items={[
-              { type: "label", label: "Workspace" },
-              { type: "separator" },
-              {
-                label: (
-                  <>
-                    <FolderKanban className="mr-2 h-4 w-4" />
-                    FAYNA TEAM
-                  </>
-                ),
-                onSelect: () => navigate(ROUTES.overview),
-              },
-              { type: "separator" },
-              {
-                label: (
-                  <>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Налаштування workspace
-                  </>
-                ),
-                onSelect: () => navigate(ROUTES.workspaceSettings),
-              },
-            ]}
-          />
+          <Link
+            to={ROUTES.overview}
+            onMouseEnter={() => preloadRoute(ROUTES.overview)}
+            onFocus={() => preloadRoute(ROUTES.overview)}
+            onTouchStart={() => preloadRoute(ROUTES.overview)}
+            className={cn(
+              "flex w-full rounded-[var(--radius-lg)] px-2 py-2.5",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            )}
+            aria-label="ToSho CRM"
+          >
+            <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
+          </Link>
         </div>
 
         {/* Search (Cmd+K) */}
@@ -746,6 +720,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+          <SidebarGroup
+            label="Головне"
+            links={sidebarLinks.filter((l) => l.group === "overview")}
+            currentPath={location.pathname}
+            notificationsUnreadCount={unreadCount}
+          />
           <SidebarGroup
             label="Замовлення"
             links={sidebarLinks.filter((l) => l.group === "orders")}
@@ -828,6 +808,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     </div>
 
                     <div className="border-t border-border px-4 py-4 pb-8">
+                      <SidebarGroup
+                        label="Головне"
+                        links={sidebarLinks.filter((l) => l.group === "overview")}
+                        currentPath={location.pathname}
+                        onNavigate={() => setMobileMenuOpen(false)}
+                        notificationsUnreadCount={unreadCount}
+                      />
                       <SidebarGroup
                         label="Замовлення"
                         links={sidebarLinks.filter((l) => l.group === "orders")}
