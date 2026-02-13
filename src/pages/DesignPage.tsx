@@ -332,11 +332,12 @@ export default function DesignPage() {
             : t
         )
       );
-      await supabase
+      const { error: updateError } = await supabase
         .from("activity_log")
         .update({ metadata: baseMetadata })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
