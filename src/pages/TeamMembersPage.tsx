@@ -56,7 +56,6 @@ import {
 } from "@/components/ui/select";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { listTeamMembers } from "@/lib/toshoApi";
 
 // --- TYPES ---
 type Member = {
@@ -385,7 +384,7 @@ export function TeamMembersPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId) {
+    if (!workspaceId || members.length === 0) {
       setMemberProfilesByUserId({});
       return;
     }
@@ -394,18 +393,85 @@ export function TeamMembersPage() {
 
     const loadMemberProfiles = async () => {
       try {
-        const rows = await listTeamMembers(workspaceId);
+        const memberIds = Array.from(
+          new Set(
+            members
+              .map((member) => member.user_id)
+              .filter((id): id is string => Boolean(id))
+          )
+        );
+
+        if (memberIds.length === 0) {
+          setMemberProfilesByUserId({});
+          return;
+        }
+
+        let rows:
+          | Array<{ user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }>
+          | null = null;
+        let queryError: { message?: string } | null = null;
+
+        ({ data: rows, error: queryError } = await supabase
+          .from("team_members_view")
+          .select("user_id, full_name, avatar_url, email")
+          .in("user_id", memberIds));
+
+        if (queryError && /column/i.test(queryError.message || "") && /email/i.test(queryError.message || "")) {
+          ({ data: rows, error: queryError } = await supabase
+            .from("team_members_view")
+            .select("user_id, full_name, avatar_url")
+            .in("user_id", memberIds));
+        }
+
+        if (queryError) throw new Error(queryError.message || "Не вдалося завантажити профілі учасників");
+
         if (cancelled) return;
-        const nextMap = rows.reduce<Record<string, { label: string; avatarUrl: string | null }>>((acc, row) => {
-          acc[row.id] = {
-            label: row.label,
-            avatarUrl: row.avatarUrl ?? null,
+
+        const nextMap = memberIds.reduce<Record<string, { label: string; avatarUrl: string | null }>>((acc, id) => {
+          const dbRow = (rows ?? []).find((row) => row.user_id === id);
+          const baseMember = members.find((member) => member.user_id === id);
+          const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
+
+          acc[id] = {
+            label: dbRow?.full_name?.trim() || dbRow?.email?.split("@")[0]?.trim() || emailFallback,
+            avatarUrl: dbRow?.avatar_url ?? null,
           };
           return acc;
         }, {});
+
+        const { data: currentUserData } = await supabase.auth.getUser();
+        const currentUserId = currentUserData.user?.id ?? null;
+        const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
+        if (currentUserId && currentUserAvatar) {
+          const existing = nextMap[currentUserId];
+          nextMap[currentUserId] = {
+            label: existing?.label || currentUserData.user?.email?.split("@")[0] || "Користувач",
+            avatarUrl: existing?.avatarUrl ?? currentUserAvatar,
+          };
+        }
+
         setMemberProfilesByUserId(nextMap);
       } catch {
-        if (!cancelled) setMemberProfilesByUserId({});
+        if (cancelled) return;
+        try {
+          const { data: currentUserData } = await supabase.auth.getUser();
+          const currentUserId = currentUserData.user?.id ?? null;
+          const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
+          const currentUserLabel = currentUserData.user?.user_metadata?.full_name || currentUserData.user?.email?.split("@")[0] || "Користувач";
+
+          if (currentUserId && currentUserAvatar) {
+            setMemberProfilesByUserId({
+              [currentUserId]: {
+                label: currentUserLabel,
+                avatarUrl: currentUserAvatar,
+              },
+            });
+            return;
+          }
+        } catch {
+          // ignore fallback load errors
+        }
+        setMemberProfilesByUserId({});
       }
     };
 
@@ -414,7 +480,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId]);
+  }, [workspaceId, members]);
 
   useEffect(() => {
     if (!workspaceId || !canManage) {
