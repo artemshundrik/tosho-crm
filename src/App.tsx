@@ -22,11 +22,6 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
 
 // =======================
-// Types
-// =======================
-type TeamRole = "super_admin" | "manager" | "viewer" | null;
-
-// =======================
 // Helpers UI
 // =======================
 function cx(...classes: Array<string | false | undefined | null>) {
@@ -173,39 +168,31 @@ function RequireAuth({
   return <>{children}</>;
 }
 
-function RoleGate({
-  allow,
-  role,
+function PermissionGate({
+  allowed,
+  requirement,
+  accessRole,
+  jobRole,
   children,
 }: {
-  allow: Array<Exclude<TeamRole, null>>;
-  role: TeamRole;
+  allowed: boolean;
+  requirement: string;
+  accessRole: string | null;
+  jobRole: string | null;
   children: React.ReactNode;
 }) {
-  if (!role) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border bg-card p-4 text-sm">
-          <div className="font-semibold">Немає ролі в команді</div>
-          <div className="text-muted-foreground mt-1">
-            Або ти ще не доданий у <code className="px-1 py-0.5 rounded bg-muted">team_members</code>,
-            або не вибрано команду/контекст.
-          </div>
-          <div className="text-muted-foreground mt-1">
-            Відкрий сторінку інвайту або додай себе в <code className="px-1 py-0.5 rounded bg-muted">team_members</code>.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!allow.includes(role as Exclude<TeamRole, null>)) {
+  if (!allowed) {
     return (
       <div className="p-6">
         <div className="rounded-xl border bg-card p-4 text-sm">
           <div className="font-semibold">Немає доступу</div>
           <div className="text-muted-foreground mt-1">
-            Твоя роль: <code className="px-1 py-0.5 rounded bg-muted">{role}</code>
+            Потрібно: <code className="px-1 py-0.5 rounded bg-muted">{requirement}</code>
+          </div>
+          <div className="text-muted-foreground mt-1">
+            Твій доступ: <code className="px-1 py-0.5 rounded bg-muted">{accessRole ?? "member"}</code>
+            {" · "}
+            роль у команді: <code className="px-1 py-0.5 rounded bg-muted">{jobRole ?? "member"}</code>
           </div>
         </div>
       </div>
@@ -397,7 +384,7 @@ function ScrollToTop() {
 }
 
 function AppRoutes() {
-  const { session, role, loading } = useAuth();
+  const { session, loading, accessRole, jobRole, permissions } = useAuth();
   const location = useLocation();
 
 
@@ -706,11 +693,16 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={role}>
+              <PermissionGate
+                allowed={permissions.canManageMembers || permissions.isManagerJob}
+                requirement="access_role: owner/admin або job_role: manager"
+                accessRole={accessRole}
+                jobRole={jobRole}
+              >
                 <RouteSuspense shell>
                   <MatchEventsAdminPage />
                 </RouteSuspense>
-              </RoleGate>
+              </PermissionGate>
             </AppLayout>
           </RequireAuth>
         }
@@ -722,11 +714,16 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={role}>
+              <PermissionGate
+                allowed={permissions.canManageMembers || permissions.isManagerJob}
+                requirement="access_role: owner/admin або job_role: manager"
+                accessRole={accessRole}
+                jobRole={jobRole}
+              >
                 <RouteSuspense shell>
                   <CreateMatchPage />
                 </RouteSuspense>
-              </RoleGate>
+              </PermissionGate>
             </AppLayout>
           </RequireAuth>
         }
@@ -750,11 +747,16 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin", "manager"]} role={role}>
+              <PermissionGate
+                allowed={permissions.canManageMembers || permissions.isManagerJob}
+                requirement="access_role: owner/admin або job_role: manager"
+                accessRole={accessRole}
+                jobRole={jobRole}
+              >
                 <RouteSuspense shell>
                   <TrainingCreatePage />
                 </RouteSuspense>
-              </RoleGate>
+              </PermissionGate>
             </AppLayout>
           </RequireAuth>
         }
@@ -803,11 +805,16 @@ function AppRoutes() {
         element={
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
-              <RoleGate allow={["super_admin"]} role={role}>
+              <PermissionGate
+                allowed={permissions.canEditMemberRoles}
+                requirement="access_role: owner"
+                accessRole={accessRole}
+                jobRole={jobRole}
+              >
                 <RouteSuspense shell>
                   <TeamMembersPage />
                 </RouteSuspense>
-              </RoleGate>
+              </PermissionGate>
             </AppLayout>
           </RequireAuth>
         }

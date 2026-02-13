@@ -249,9 +249,9 @@ const loadRecentQuotes = async (teamId: string): Promise<QuoteRow[]> => {
 };
 
 export function OverviewPage() {
-  const { teamId, userId, role } = useAuth();
+  const { teamId, userId, role, accessRole, jobRole, permissions } = useAuth();
 
-  const isManagerView = role === "manager" || role === "super_admin";
+  const isManagerView = permissions.canViewManagerOverview;
 
   const {
     data,
@@ -259,7 +259,7 @@ export function OverviewPage() {
     showSkeleton,
     refetch,
   } = usePageData<OverviewData>({
-    cacheKey: `overview-crm:${teamId ?? "none"}:${userId ?? "none"}:${role ?? "none"}`,
+    cacheKey: `overview-crm:${teamId ?? "none"}:${userId ?? "none"}:${role ?? "none"}:${accessRole ?? "none"}:${jobRole ?? "none"}`,
     loadFn: async () => {
       if (!teamId) return createEmptyOverviewData();
 

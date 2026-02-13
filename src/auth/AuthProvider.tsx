@@ -2,14 +2,16 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { resolveWorkspaceId } from '@/lib/workspace';
-
-type TeamRole = 'super_admin' | 'manager' | 'viewer' | null;
+import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
 
 type AuthState = {
   session: Session | null;
   userId: string | null;
   teamId: string | null;
   role: TeamRole;
+  accessRole: AccessRole;
+  jobRole: JobRole;
+  permissions: AppPermissions;
   loading: boolean;
   refreshTeamContext: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -60,6 +62,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [role, setRole] = useState<TeamRole>(null);
+  const [accessRole, setAccessRole] = useState<AccessRole>(null);
+  const [jobRole, setJobRole] = useState<JobRole>(null);
   const [loading, setLoading] = useState(true);
 
   const userId = session?.user?.id ?? null;
@@ -74,32 +78,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!effectiveUserId) {
       setTeamId(null);
       setRole(null);
+      setAccessRole(null);
+      setJobRole(null);
       return;
     }
 
     const workspaceId = await resolveWorkspaceId(effectiveUserId);
 
     let roleValue: TeamRole = null;
+    let accessRoleValue: AccessRole = null;
+    let jobRoleValue: JobRole = null;
     if (workspaceId) {
       const { data: membership, error: membershipError } = await supabase
         .schema("tosho")
         .from("memberships_view")
-        .select("access_role")
+        .select("access_role,job_role")
         .eq("workspace_id", workspaceId)
         .eq("user_id", effectiveUserId)
         .maybeSingle();
 
       if (!membershipError) {
-        const accessRole = (membership as { access_role?: string } | null)?.access_role ?? null;
-        if (accessRole === "owner") roleValue = "super_admin";
-        else if (accessRole === "admin") roleValue = "manager";
-        else if (accessRole) roleValue = "viewer";
+        const membershipData = (membership as { access_role?: string | null; job_role?: string | null } | null) ?? null;
+        accessRoleValue = membershipData?.access_role ?? null;
+        jobRoleValue = membershipData?.job_role ?? null;
+        roleValue = mapAccessRoleToTeamRole(accessRoleValue);
       }
     }
 
     const operationalTeamId = await resolveOperationalTeamId(effectiveUserId, workspaceId);
     setTeamId(operationalTeamId);
     setRole(roleValue);
+    setAccessRole(accessRoleValue);
+    setJobRole(jobRoleValue);
   }, [userId]);
 
   const signOut = async () => {
@@ -137,6 +147,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_OUT") {
         setTeamId(null);
         setRole(null);
+        setAccessRole(null);
+        setJobRole(null);
         setLoading(false);
         return;
       }
@@ -145,6 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!nextUserId) {
         setTeamId(null);
         setRole(null);
+        setAccessRole(null);
+        setJobRole(null);
         setLoading(false);
         return;
       }
@@ -175,11 +189,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!session?.user?.id) {
         setTeamId(null);
         setRole(null);
+        setAccessRole(null);
+        setJobRole(null);
         return;
       }
       await refreshTeamContext(session.user.id);
     })();
   }, [session?.user?.id, refreshTeamContext]);
+
+  const permissions = useMemo(
+    () => buildPermissions({ role, accessRole, jobRole }),
+    [role, accessRole, jobRole],
+  );
 
   const value = useMemo<AuthState>(
     () => ({
@@ -187,11 +208,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userId,
       teamId,
       role,
+      accessRole,
+      jobRole,
+      permissions,
       loading,
       refreshTeamContext,
       signOut,
     }),
-    [session, userId, teamId, role, loading, refreshTeamContext],
+    [session, userId, teamId, role, accessRole, jobRole, permissions, loading, refreshTeamContext],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

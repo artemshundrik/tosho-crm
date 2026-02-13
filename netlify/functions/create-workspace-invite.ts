@@ -31,7 +31,10 @@ const isRecoverableError = (message: string) => {
   );
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const resolveWorkspaceId = async (userClient: ReturnType<typeof createClient>, userId: string) => {
+  const membershipSchemas = ["tosho", "public"] as const;
   const rpcCandidates = ["my_workspace_id", "current_workspace_id"] as const;
 
   for (const rpcName of rpcCandidates) {
@@ -54,17 +57,19 @@ const resolveWorkspaceId = async (userClient: ReturnType<typeof createClient>, u
   }
 
   const membershipTables = ["memberships", "workspace_memberships"] as const;
-  for (const tableName of membershipTables) {
-    const { data } = await userClient
-      .schema("tosho")
-      .from(tableName)
-      .select("workspace_id")
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle<{ workspace_id?: string | null }>();
+  for (const schemaName of membershipSchemas) {
+    for (const tableName of membershipTables) {
+      const { data } = await userClient
+        .schema(schemaName)
+        .from(tableName)
+        .select("workspace_id")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle<{ workspace_id?: string | null }>();
 
-    if (data?.workspace_id) {
-      return data.workspace_id;
+      if (data?.workspace_id) {
+        return data.workspace_id;
+      }
     }
   }
 
@@ -165,6 +170,32 @@ export const handler = async (event: any) => {
     }
 
     const recoverableErrors: string[] = [];
+    const { data: membershipTarget, error: membershipTargetError } = await adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("id,access_role,job_role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", targetUserId)
+      .maybeSingle<{ id?: string | null; access_role?: string | null; job_role?: string | null }>();
+
+    if (membershipTargetError) {
+      return jsonResponse(500, { error: membershipTargetError.message });
+    }
+
+    const membershipId = membershipTarget?.id ?? null;
+    const currentAccessRole = membershipTarget?.access_role ?? null;
+    const currentJobRole = membershipTarget?.job_role ?? null;
+    const accessRoleChanged = !sameRole(currentAccessRole, nextAccessRole);
+    const jobRoleChanged = !sameRole(currentJobRole, nextJobRole);
+
+    if (!accessRoleChanged && !jobRoleChanged) {
+      return jsonResponse(200, {
+        success: true,
+        userId: targetUserId,
+        accessRole: currentAccessRole,
+        jobRole: currentJobRole,
+      });
+    }
 
     const verifyUpdated = async () => {
       const { data: row, error: checkError } = await adminClient
@@ -181,43 +212,168 @@ export const handler = async (event: any) => {
       return ok;
     };
 
+    const verifyUpdatedEventually = async (attempts = 5, delayMs = 120) => {
+      for (let i = 0; i < attempts; i += 1) {
+        const ok = await verifyUpdated();
+        if (ok) return true;
+        if (i < attempts - 1) {
+          await sleep(delayMs);
+        }
+      }
+      return false;
+    };
+
+    const membershipUpdateSchemas = ["tosho", "public"] as const;
     const tryUpdateWorkspaceScoped = async (
       tableName: string,
-      updatePayload: Record<string, string | null>
+      updatePayload: Record<string, string | null>,
+      scope: "workspace_user" | "membership_id" | "team_user"
     ) => {
-      const { error } = await adminClient
-        .schema("tosho")
-        .from(tableName)
-        .update(updatePayload)
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", targetUserId);
+      let wroteData = false;
+      for (const schemaName of membershipUpdateSchemas) {
+        if (scope === "membership_id" && !membershipId) {
+          continue;
+        }
 
-      if (error) {
-        if (!isRecoverableError(error.message)) throw new Error(error.message);
-        recoverableErrors.push(`${tableName}(${Object.keys(updatePayload).join(",")}): ${error.message}`);
-        return false;
+        const { error } =
+          scope === "workspace_user"
+            ? await adminClient
+                .schema(schemaName)
+                .from(tableName)
+                .update(updatePayload)
+                .eq("workspace_id", workspaceId)
+                .eq("user_id", targetUserId)
+            : scope === "membership_id"
+              ? await adminClient
+                  .schema(schemaName)
+                  .from(tableName)
+                  .update(updatePayload)
+                  .eq("id", membershipId as string)
+              : await adminClient
+                  .schema(schemaName)
+                  .from(tableName)
+                  .update(updatePayload)
+                  .eq("team_id", workspaceId)
+                  .eq("user_id", targetUserId);
+
+        if (error) {
+          if (!isRecoverableError(error.message)) throw new Error(error.message);
+          recoverableErrors.push(
+            `${schemaName}.${tableName}[${scope}](${Object.keys(updatePayload).join(",")}): ${error.message}`
+          );
+          continue;
+        }
+
+        wroteData = true;
+        const updated = await verifyUpdatedEventually();
+        if (updated) return { updated: true, wroteData: true };
+
+        // A successful write in one schema is enough for this attempt.
+        // Do not continue to another schema just to avoid noisy recoverable errors.
+        return { updated: false, wroteData: true };
       }
 
-      return verifyUpdated();
+      return { updated: false, wroteData };
     };
 
     try {
-      const updateAttempts: Array<{ tableName: string; payload: Record<string, string | null> }> = [
-        { tableName: "memberships", payload: { access_role: nextAccessRole, job_role: nextJobRole } },
-        { tableName: "memberships", payload: { role: nextAccessRole, job_role: nextJobRole } },
-        { tableName: "workspace_members", payload: { access_role: nextAccessRole, job_role: nextJobRole } },
-        { tableName: "workspace_members", payload: { role: nextAccessRole, job_role: nextJobRole } },
-        { tableName: "workspace_memberships", payload: { access_role: nextAccessRole, job_role: nextJobRole } },
-        { tableName: "workspace_memberships", payload: { role: nextAccessRole, job_role: nextJobRole } },
-      ];
+      const updateAttempts: Array<{
+        tableName: string;
+        payload: Record<string, string | null>;
+        scopes: Array<"workspace_user" | "membership_id" | "team_user">;
+      }> = [
+        {
+          tableName: "memberships",
+          payload: {
+            ...(accessRoleChanged ? { access_role: nextAccessRole } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "memberships",
+          payload: {
+            ...(accessRoleChanged ? { role: nextAccessRole ?? "member" } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "workspace_members",
+          payload: {
+            ...(accessRoleChanged ? { access_role: nextAccessRole } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "workspace_members",
+          payload: {
+            ...(accessRoleChanged ? { role: nextAccessRole ?? "member" } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "workspace_memberships",
+          payload: {
+            ...(accessRoleChanged ? { access_role: nextAccessRole } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "workspace_memberships",
+          payload: {
+            ...(accessRoleChanged ? { role: nextAccessRole ?? "member" } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["workspace_user", "membership_id"],
+        },
+        {
+          tableName: "team_members",
+          payload: {
+            ...(accessRoleChanged ? { access_role: nextAccessRole } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["membership_id", "team_user"],
+        },
+        {
+          tableName: "team_members",
+          payload: {
+            ...(accessRoleChanged ? { role: nextAccessRole ?? "member" } : {}),
+            ...(jobRoleChanged ? { job_role: nextJobRole } : {}),
+          },
+          scopes: ["membership_id", "team_user"],
+        },
+      ].filter((attempt) => Object.keys(attempt.payload).length > 0);
 
       let updated = false;
+      let wroteData = false;
       for (const attempt of updateAttempts) {
-        updated = await tryUpdateWorkspaceScoped(attempt.tableName, attempt.payload);
+        for (const scope of attempt.scopes) {
+          const result = await tryUpdateWorkspaceScoped(attempt.tableName, attempt.payload, scope);
+          wroteData = wroteData || result.wroteData;
+          updated = result.updated;
+          if (updated) break;
+        }
         if (updated) break;
       }
 
+      if (!updated && wroteData) {
+        updated = await verifyUpdatedEventually(8, 150);
+      }
+
       if (!updated) {
+        if (wroteData) {
+          return jsonResponse(200, {
+            success: true,
+            userId: targetUserId,
+            accessRole: nextAccessRole,
+            jobRole: nextJobRole,
+            verified: false,
+          });
+        }
         return jsonResponse(500, {
           error:
             recoverableErrors[recoverableErrors.length - 1] ||

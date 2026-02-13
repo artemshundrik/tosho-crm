@@ -23,6 +23,8 @@ const tryRpcWorkspaceId = async (rpcName: string): Promise<string | null> => {
 };
 
 export async function resolveWorkspaceId(userId?: string | null): Promise<string | null> {
+  const membershipSchemas = ["tosho", "public"] as const;
+
   for (const rpcName of WORKSPACE_RPC_CANDIDATES) {
     const workspaceId = await tryRpcWorkspaceId(rpcName);
     if (workspaceId) return workspaceId;
@@ -43,17 +45,19 @@ export async function resolveWorkspaceId(userId?: string | null): Promise<string
   }
 
   const membershipTables = ["memberships", "workspace_memberships"] as const;
-  for (const tableName of membershipTables) {
-    const { data, error } = await supabase
-      .schema("tosho")
-      .from(tableName)
-      .select("workspace_id")
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle<{ workspace_id?: string | null }>();
+  for (const schemaName of membershipSchemas) {
+    for (const tableName of membershipTables) {
+      const { data, error } = await supabase
+        .schema(schemaName)
+        .from(tableName)
+        .select("workspace_id")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle<{ workspace_id?: string | null }>();
 
-    if (!error && data?.workspace_id) {
-      return data.workspace_id;
+      if (!error && data?.workspace_id) {
+        return data.workspace_id;
+      }
     }
   }
 

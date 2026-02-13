@@ -228,7 +228,7 @@ const formatQuantityWithUnit = (qty?: number | null, unit?: string | null) => {
 
 export default function DesignTaskPage() {
   const { id } = useParams();
-  const { teamId, userId, role: authRole } = useAuth();
+  const { teamId, userId, permissions } = useAuth();
   const navigate = useNavigate();
   const [task, setTask] = useState<DesignTask | null>(null);
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(null);
@@ -240,8 +240,6 @@ export default function DesignTaskPage() {
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
-  const [currentAccessRole, setCurrentAccessRole] = useState<string | null>(null);
-  const [currentJobRole, setCurrentJobRole] = useState<string | null>(null);
   const [assigningSelf, setAssigningSelf] = useState(false);
   const [assigningMemberId, setAssigningMemberId] = useState<string | null>(null);
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
@@ -261,17 +259,8 @@ export default function DesignTaskPage() {
   const outputInputRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveTeamId = teamId;
-  const normalizedAccessRole = (currentAccessRole ?? "").toLowerCase();
-  const normalizedJobRole = (currentJobRole ?? "").toLowerCase();
-  const canManageAssignments =
-    authRole === "super_admin" ||
-    authRole === "manager" ||
-    normalizedAccessRole === "owner" ||
-    normalizedAccessRole === "admin" ||
-    normalizedAccessRole === "super_admin" ||
-    normalizedAccessRole === "manager" ||
-    normalizedJobRole === "manager";
-  const canSelfAssign = normalizedJobRole === "designer" || canManageAssignments;
+  const canManageAssignments = permissions.canManageAssignments;
+  const canSelfAssign = permissions.canSelfAssignDesign;
   const isAssignedToMe = !!userId && task?.assigneeUserId === userId;
 
   const getMemberLabel = (id: string | null | undefined) => {
@@ -316,10 +305,6 @@ export default function DesignTaskPage() {
             .filter((row) => isDesignerRole(row.job_role))
             .map((row) => ({ id: row.user_id, label: labels[row.user_id] ?? row.user_id }))
         );
-
-        const me = rows.find((row) => row.user_id === userId) ?? null;
-        setCurrentAccessRole(me?.access_role ?? null);
-        setCurrentJobRole(me?.job_role ?? null);
       } catch {
         // Optional UI context; keep page functional even if membership lookup fails.
       }

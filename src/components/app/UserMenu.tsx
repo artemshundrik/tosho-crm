@@ -22,6 +22,7 @@ const JOB_ROLE_NAMES: Record<string, string> = {
   designer: "Дизайнер",
   logistics: "Логіст",
   accountant: "Бухгалтер",
+  seo: "SEO",
   member: "Member",
 };
 

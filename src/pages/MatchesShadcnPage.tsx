@@ -372,7 +372,7 @@ function safeParseListState(raw: string | null): ListState | null {
 }
 
 export function MatchesShadcnPage() {
-  const { role } = useAuth();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigationType = useNavigationType();
@@ -827,7 +827,7 @@ export function MatchesShadcnPage() {
   const nextMatchTo = nextMatch ? `/matches/${nextMatch.id}` : null;
 
   const leagueLogoUrl = currentLeagueLogoUrl ?? (nextMatch?.tournament?.logoUrl ?? null);
-  const canWrite = role === "manager" || role === "super_admin";
+  const canWrite = permissions.canWriteStandings;
 
   const headerActions = React.useMemo(() => {
     if (!canWrite) return null;

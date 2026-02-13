@@ -8,14 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 
 export default function AdminInvitesPage() {
-  const { role } = useAuth();
+  const { permissions } = useAuth();
   const [inviteRole, setInviteRole] = useState<"manager" | "viewer">("viewer");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const canManage = useMemo(() => role === "super_admin" || role === "manager", [role]);
+  const canManage = useMemo(() => permissions.canManageMembers, [permissions.canManageMembers]);
 
   const inviteLink = useMemo(() => {
     if (!code) return null;

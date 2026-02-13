@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { resolveWorkspaceId } from "@/lib/workspace";
 
 type ListQuotesParams = {
   teamId: string;
@@ -384,12 +385,30 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 
   let currentUserId: string | null = null;
   let currentUserEmailLocalPart = "";
+  let workspaceMemberIds: Set<string> | null = null;
 
   try {
     const { data: currentUserData, error: currentUserError } = await supabase.auth.getUser();
     if (!currentUserError && currentUserData.user) {
       currentUserId = currentUserData.user.id ?? null;
       currentUserEmailLocalPart = toEmailLocalPart(currentUserData.user.email);
+
+      const workspaceId = await resolveWorkspaceId(currentUserId);
+      if (workspaceId) {
+        const { data: workspaceMembers, error: workspaceMembersError } = await supabase
+          .schema("tosho")
+          .from("memberships_view")
+          .select("user_id")
+          .eq("workspace_id", workspaceId);
+        if (!workspaceMembersError) {
+          const ids = ((workspaceMembers as Array<{ user_id?: string | null }> | null) ?? [])
+            .map((row) => row.user_id ?? null)
+            .filter((id): id is string => !!id);
+          if (ids.length > 0) {
+            workspaceMemberIds = new Set(ids);
+          }
+        }
+      }
     }
   } catch {
     // Ignore auth lookup errors and keep generic fallback labels.
@@ -434,7 +453,10 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     }
 
     handleError(error);
-    return ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]) ?? []).map((row) => ({
+    const filteredRows = ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]) ?? [])
+      .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
+
+    return filteredRows.map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
       avatarUrl: row.avatar_url ?? null,
@@ -448,7 +470,10 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         .eq("team_id", teamId)
         .order("created_at", { ascending: true });
       handleError(fallbackError);
-      return ((data as { user_id: string }[]) ?? []).map((row) => ({
+      const filteredRows = ((data as { user_id: string }[]) ?? [])
+        .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
+
+      return filteredRows.map((row) => ({
         id: row.user_id,
         label: formatLabel(row),
         avatarUrl: null,

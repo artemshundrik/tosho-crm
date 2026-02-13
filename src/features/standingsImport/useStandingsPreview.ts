@@ -32,7 +32,7 @@ type Actions = {
 };
 
 export function useStandingsPreview({ tournamentId }: { tournamentId: string }): PreviewState & Actions {
-  const { userId, teamId } = useAuth();
+  const { userId, teamId, permissions } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,27 +44,8 @@ export function useStandingsPreview({ tournamentId }: { tournamentId: string }):
   const [linkRequired, setLinkRequired] = useState(false);
 
   const resolveAccess = useCallback(async () => {
-    if (!teamId || !userId) {
-      setCanWrite(false);
-      return;
-    }
-
-    const { data: memberRow, error: memberError } = await supabase
-      .from("team_members")
-      .select("role")
-      .eq("team_id", teamId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (memberError) {
-      console.error("team_members lookup failed", memberError);
-      setCanWrite(false);
-      return;
-    }
-
-    const role = memberRow?.role ?? null;
-    setCanWrite(role === "manager" || role === "super_admin");
-  }, [teamId, userId]);
+    setCanWrite(Boolean(teamId && userId && permissions.canWriteStandings));
+  }, [permissions.canWriteStandings, teamId, userId]);
 
   const ensureTournamentLink = useCallback(async () => {
     if (!teamId) {

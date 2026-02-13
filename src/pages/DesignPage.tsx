@@ -67,7 +67,7 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: st
 ];
 
 export default function DesignPage() {
-  const { teamId, userId, role: authRole } = useAuth();
+  const { teamId, userId, permissions } = useAuth();
   const effectiveTeamId = teamId;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -82,21 +82,8 @@ export default function DesignPage() {
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
-  const [currentAccessRole, setCurrentAccessRole] = useState<string | null>(null);
-  const [currentJobRole, setCurrentJobRole] = useState<string | null>(null);
-
-  const normalizedAccessRole = (currentAccessRole ?? "").toLowerCase();
-  const normalizedJobRole = (currentJobRole ?? "").toLowerCase();
-
-  const canManageAssignments =
-    authRole === "super_admin" ||
-    authRole === "manager" ||
-    normalizedAccessRole === "owner" ||
-    normalizedAccessRole === "admin" ||
-    normalizedAccessRole === "super_admin" ||
-    normalizedAccessRole === "manager" ||
-    normalizedJobRole === "manager";
-  const canSelfAssign = normalizedJobRole === "designer" || canManageAssignments;
+  const canManageAssignments = permissions.canManageAssignments;
+  const canSelfAssign = permissions.canSelfAssignDesign;
 
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
@@ -112,8 +99,6 @@ export default function DesignPage() {
         if (!workspaceId) {
           setMemberById({});
           setDesignerMembers([]);
-          setCurrentAccessRole(null);
-          setCurrentJobRole(null);
           return;
         }
 
@@ -137,10 +122,6 @@ export default function DesignPage() {
             .filter((row) => isDesignerRole(row.job_role))
             .map((row) => ({ id: row.user_id, label: labelById[row.user_id] ?? row.user_id }))
         );
-
-        const me = rows.find((row) => row.user_id === userId) ?? null;
-        setCurrentAccessRole(me?.access_role ?? null);
-        setCurrentJobRole(me?.job_role ?? null);
       } catch (e: any) {
         setError(e?.message ?? "Не вдалося завантажити учасників команди");
       } finally {
@@ -151,10 +132,10 @@ export default function DesignPage() {
   }, [userId]);
 
   useEffect(() => {
-    if (normalizedJobRole === "designer") {
+    if (permissions.isDesigner) {
       setAssignmentFilter((prev) => (prev === "all" ? "mine" : prev));
     }
-  }, [normalizedJobRole]);
+  }, [permissions.isDesigner]);
 
   const loadTasks = async () => {
     if (!effectiveTeamId) return;
