@@ -34,6 +34,8 @@ import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@
 import { logActivity } from "@/lib/activityLogger";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import {
   getQuoteSummary,
   getQuoteRuns,
@@ -487,6 +489,11 @@ function getMethodPrice(
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
+  const { getEntityViewers } = useWorkspacePresence();
+  const quoteViewers = useMemo(
+    () => getEntityViewers("quote", quoteId),
+    [getEntityViewers, quoteId]
+  );
 
   const [quote, setQuote] = useState<QuoteSummaryRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2603,6 +2610,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 ? ` · ${formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}`
                 : ""}
             </div>
+            <EntityViewersBar
+              entries={quoteViewers}
+              label="Переглядають прорахунок"
+              className="mt-2"
+            />
           </div>
         </div>
 

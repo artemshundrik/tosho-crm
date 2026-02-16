@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { toast } from "sonner";
 
 type DesignTask = {
@@ -68,6 +70,7 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: st
 
 export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
+  const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -529,6 +532,8 @@ export default function DesignPage() {
           <p className="text-sm text-muted-foreground">Задачі на макети, правки та погодження.</p>
         </div>
       </div>
+
+      <ActiveHereCard entries={workspacePresence.activeHereEntries} />
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

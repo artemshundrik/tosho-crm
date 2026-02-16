@@ -63,6 +63,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 
 const STATUS_OPTIONS = [
   "new",
@@ -225,6 +227,7 @@ type PendingAttachment = {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const navigate = useNavigate();
+  const workspacePresence = useWorkspacePresence();
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1804,6 +1807,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </Button>
             </div>
           </div>
+
+          <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+
           {/* Search Bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="relative flex-1">

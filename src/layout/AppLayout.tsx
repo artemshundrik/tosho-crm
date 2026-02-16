@@ -38,6 +38,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { getAgencyLogo } from "@/lib/agencyAssets";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
+import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
+import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
+import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 
@@ -429,7 +432,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId } = useAuth();
+  const { userId, teamId, session } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
   const sidebarRoutes = useMemo(() => sidebarLinks.map((link) => link.to), []);
@@ -527,6 +530,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       breadcrumbTo: ROUTES.matches,
     };
   }, [baseHeader, matchId, matchMeta, matchEventsRoute]);
+
+  const workspacePresence = useWorkspacePresenceState({
+    teamId,
+    userId,
+    session,
+    pathname: location.pathname,
+    currentLabel: header.title,
+  });
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -675,7 +686,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+    <WorkspacePresenceProvider value={workspacePresence}>
+      <div className="min-h-screen min-h-[100dvh] bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
         <div className="px-4 pt-5">
@@ -877,6 +889,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="flex items-center gap-2.5">
+              <OnlineNowDropdown entries={workspacePresence.onlineEntries} loading={workspacePresence.loading} />
+
               {/* Theme toggle */}
               <Button
                 variant="control"
@@ -1022,7 +1036,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
       <TabBar hidden={mobileMenuOpen} />
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
-    </div>
+      </div>
+    </WorkspacePresenceProvider>
   );
 }
 

@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { toast } from "sonner";
@@ -230,6 +232,11 @@ export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, permissions } = useAuth();
   const navigate = useNavigate();
+  const { getEntityViewers } = useWorkspacePresence();
+  const designTaskViewers = useMemo(
+    () => (id ? getEntityViewers("design_task", id) : []),
+    [getEntityViewers, id]
+  );
   const [task, setTask] = useState<DesignTask | null>(null);
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(null);
   const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(null);
@@ -1358,6 +1365,10 @@ export default function DesignTaskPage() {
                 {task.customerName ?? "Клієнт"} · {quoteItem?.name ?? "Позиція"}
               </p>
             </div>
+            <EntityViewersBar
+              entries={designTaskViewers}
+              label="Переглядають задачу"
+            />
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
                 {statusLabels[task.status]}
