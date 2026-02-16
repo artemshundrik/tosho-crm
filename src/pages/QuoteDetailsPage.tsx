@@ -40,6 +40,7 @@ import {
   getQuoteSummary,
   getQuoteRuns,
   upsertQuoteRuns,
+  deleteQuote,
   listTeamMembers,
   listStatusHistory,
   setStatus,
@@ -502,6 +503,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [statusNote, setStatusNote] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [deleteQuoteDialogOpen, setDeleteQuoteDialogOpen] = useState(false);
+  const [deleteQuoteBusy, setDeleteQuoteBusy] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
@@ -679,6 +682,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setSelectedRunId(next[0]?.id ?? null);
     }
     await saveRuns(next);
+  };
+
+  const handleDeleteQuote = async () => {
+    if (deleteQuoteBusy) return;
+    setDeleteQuoteBusy(true);
+    setStatusError(null);
+    try {
+      await deleteQuote(quoteId, teamId);
+      toast.success("Прорахунок видалено");
+      navigate("/orders/estimates", { replace: true });
+    } catch (e: any) {
+      const message = e?.message ?? "Не вдалося видалити прорахунок";
+      setStatusError(message);
+      toast.error(message);
+    } finally {
+      setDeleteQuoteBusy(false);
+      setDeleteQuoteDialogOpen(false);
+    }
   };
 
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
@@ -2651,7 +2672,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 Дублювати
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled className="text-destructive">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setDeleteQuoteDialogOpen(true);
+                }}
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Видалити
               </DropdownMenuItem>
@@ -2666,6 +2693,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           {statusError}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteQuoteDialogOpen}
+        onOpenChange={setDeleteQuoteDialogOpen}
+        title="Видалити прорахунок?"
+        description={`Прорахунок #${quote.number ?? quote.id} буде видалено без можливості відновлення.`}
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={handleDeleteQuote}
+        loading={deleteQuoteBusy}
+      />
 
       <Dialog
         open={statusDialogOpen}
