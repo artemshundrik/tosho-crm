@@ -391,6 +391,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   let currentUserId: string | null = null;
   let currentUserEmailLocalPart = "";
   let workspaceMemberIds: Set<string> | null = null;
+  let workspaceId: string | null = null;
 
   try {
     const { data: currentUserData, error: currentUserError } = await supabase.auth.getUser();
@@ -398,7 +399,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       currentUserId = currentUserData.user.id ?? null;
       currentUserEmailLocalPart = toEmailLocalPart(currentUserData.user.email);
 
-      const workspaceId = await resolveWorkspaceId(currentUserId);
+      workspaceId = await resolveWorkspaceId(currentUserId);
       if (workspaceId) {
         const { data: workspaceMembers, error: workspaceMembersError } = await supabase
           .schema("tosho")
@@ -470,11 +471,51 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       }[]) ?? [])
       .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
 
-    return filteredRows.map((row) => ({
+    const baseMembers = filteredRows.map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
       avatarUrl: row.avatar_url ?? null,
       jobRole: (row as { job_role?: string | null }).job_role ?? null,
+    }));
+
+    // If team_members_view doesn't expose job_role, hydrate it from memberships_view
+    // (this is the canonical source used by TeamMembersPage).
+    const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
+    if (hasAnyJobRole || !workspaceId || baseMembers.length === 0) {
+      return baseMembers;
+    }
+
+    const ids = baseMembers.map((m) => m.id);
+    const columnsToTryMemberships = ["user_id, job_role", "user_id"];
+    let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+    let membershipError: any = null;
+    for (const columns of columnsToTryMemberships) {
+      ({ data: membershipRows, error: membershipError } = await supabase
+        .schema("tosho")
+        .from("memberships_view")
+        .select(columns)
+        .eq("workspace_id", workspaceId)
+        .in("user_id", ids));
+      if (!membershipError) break;
+      const message = (membershipError?.message ?? "").toLowerCase();
+      if (!message.includes("column") && !message.includes("does not exist")) {
+        break;
+      }
+    }
+    if (membershipError) {
+      return baseMembers;
+    }
+
+    const jobRoleById = new Map(
+      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null }>).map((row) => [
+        row.user_id,
+        row.job_role ?? null,
+      ])
+    );
+
+    return baseMembers.map((member) => ({
+      ...member,
+      jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
     }));
   } catch (error: any) {
     const message = error?.message ?? "";
@@ -498,11 +539,49 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       const filteredRows = ((data as { user_id: string; job_role?: string | null }[]) ?? [])
         .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
 
-      return filteredRows.map((row) => ({
+      const baseMembers = filteredRows.map((row) => ({
         id: row.user_id,
         label: formatLabel(row),
         avatarUrl: null,
         jobRole: row.job_role ?? null,
+      }));
+
+      const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
+      if (hasAnyJobRole || !workspaceId || baseMembers.length === 0) {
+        return baseMembers;
+      }
+
+      const ids = baseMembers.map((m) => m.id);
+      const columnsToTryMemberships = ["user_id, job_role", "user_id"];
+      let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+      let membershipError: any = null;
+      for (const columns of columnsToTryMemberships) {
+        ({ data: membershipRows, error: membershipError } = await supabase
+          .schema("tosho")
+          .from("memberships_view")
+          .select(columns)
+          .eq("workspace_id", workspaceId)
+          .in("user_id", ids));
+        if (!membershipError) break;
+        const message = (membershipError?.message ?? "").toLowerCase();
+        if (!message.includes("column") && !message.includes("does not exist")) {
+          break;
+        }
+      }
+      if (membershipError) {
+        return baseMembers;
+      }
+
+      const jobRoleById = new Map(
+        ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null }>).map((row) => [
+          row.user_id,
+          row.job_role ?? null,
+        ])
+      );
+
+      return baseMembers.map((member) => ({
+        ...member,
+        jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
       }));
     }
     throw error;

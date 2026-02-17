@@ -50,6 +50,7 @@ import {
   type QuoteSummaryRow,
   type QuoteRun,
 } from "@/lib/toshoApi";
+import { isDesignerJobRole } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
@@ -847,12 +848,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
   const hasRoleInfo = useMemo(() => teamMembers.some((member) => !!member.jobRole), [teamMembers]);
   const designerMembers = useMemo(() => {
-    const isDesignerRole = (value?: string | null) => {
-      const normalized = (value ?? "").trim().toLowerCase();
-      return normalized === "designer" || normalized === "дизайнер";
-    };
-    const filtered = teamMembers.filter((member) => isDesignerRole(member.jobRole));
-    return filtered.length > 0 ? filtered : teamMembers;
+    return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
   }, [teamMembers]);
   const getMemberLabel = (userId?: string | null) => {
     if (!userId) return "—";
@@ -3905,7 +3901,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ))
                     ) : (
                       <SelectItem value="empty" disabled>
-                        {hasRoleInfo ? "Немає дизайнерів" : "Немає учасників"}
+                        {teamMembers.length === 0
+                          ? "Немає учасників"
+                          : hasRoleInfo
+                            ? "Немає дизайнерів"
+                            : "Ролі не налаштовані"}
                       </SelectItem>
                     )}
                   </SelectContent>

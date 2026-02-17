@@ -29,6 +29,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { isDesignerJobRole } from "@/lib/permissions";
 import {
   Building2,
   User,
@@ -283,12 +284,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     [teamMembers]
   );
   const designerMembers = React.useMemo(() => {
-    const isDesignerRole = (value?: string | null) => {
-      const normalized = (value ?? "").trim().toLowerCase();
-      return normalized === "designer" || normalized === "дизайнер";
-    };
-    const filtered = teamMembers.filter((member) => isDesignerRole(member.jobRole));
-    return filtered.length > 0 ? filtered : teamMembers;
+    return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
   }, [teamMembers]);
 
   React.useEffect(() => {
@@ -1076,7 +1072,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     ))
                   ) : (
                     <SelectItem value="empty" disabled>
-                      {hasRoleInfo ? "Немає дизайнерів" : "Немає учасників"}
+                      {teamMembers.length === 0
+                        ? "Немає учасників"
+                        : hasRoleInfo
+                          ? "Немає дизайнерів"
+                          : "Ролі не налаштовані"}
                     </SelectItem>
                   )}
                 </SelectContent>
