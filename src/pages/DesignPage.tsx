@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Loader2, Palette, CheckCircle2, Paperclip, Clock, MoreVertical, Trash2, Plus } from "lucide-react";
+import { Loader2, Palette, CheckCircle2, Paperclip, Clock, Timer, MoreVertical, Trash2, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -95,11 +95,32 @@ const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
   approved: "bg-emerald-400/25 border-emerald-300/50",
   cancelled: "bg-rose-400/20 border-rose-300/45",
 };
+const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
+  new: 0,
+  changes: 0.15,
+  in_progress: 0.55,
+  pm_review: 0.75,
+  client_review: 0.9,
+  approved: 1,
+  cancelled: 0.3,
+};
 
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 
 const MAX_BRIEF_FILES = 5;
+const formatEstimateMinutes = (minutes?: number | null) => {
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "—";
+  const value = Math.round(minutes);
+  const days = Math.floor(value / 480);
+  const hours = Math.floor((value % 480) / 60);
+  const mins = value % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} д`);
+  if (hours) parts.push(`${hours} год`);
+  if (mins) parts.push(`${mins} хв`);
+  return parts.length > 0 ? parts.join(" ") : "0 хв";
+};
 
 export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
@@ -125,8 +146,20 @@ export default function DesignPage() {
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
+  const [estimateInput, setEstimateInput] = useState("2");
+  const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
+  const [estimateReason, setEstimateReason] = useState("");
+  const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [estimatePendingAction, setEstimatePendingAction] = useState<{
+    mode: "assign" | "status" | "reestimate";
+    task: DesignTask;
+    nextAssigneeUserId?: string | null;
+    nextStatus?: DesignStatus;
+  } | null>(null);
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [viewMode, setViewMode] = useState<DesignViewMode>("kanban");
+  const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const canManageAssignments = permissions.canManageAssignments;
@@ -313,6 +346,49 @@ export default function DesignPage() {
     return bucket;
   }, [filteredTasks]);
 
+  const getTaskEstimateMinutes = (task: DesignTask) => {
+    const raw = (task.metadata ?? {}).estimate_minutes;
+    const parsed = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.round(parsed);
+  };
+
+  const requestEstimateBeforeAction = (params: {
+    mode: "assign" | "status";
+    task: DesignTask;
+    nextAssigneeUserId?: string | null;
+    nextStatus?: DesignStatus;
+  }) => {
+    setEstimatePendingAction(params);
+    setEstimateInput("2");
+    setEstimateUnit("hours");
+    setEstimateReason("");
+    setEstimateError(null);
+    setEstimateDialogOpen(true);
+  };
+
+  const requestReestimate = (task: DesignTask) => {
+    const current = getTaskEstimateMinutes(task);
+    if (!current) {
+      requestEstimateBeforeAction({ mode: "status", task, nextStatus: task.status });
+      return;
+    }
+    if (current % 480 === 0) {
+      setEstimateInput(String(current / 480));
+      setEstimateUnit("days");
+    } else if (current % 60 === 0) {
+      setEstimateInput(String(current / 60));
+      setEstimateUnit("hours");
+    } else {
+      setEstimateInput(String(current));
+      setEstimateUnit("minutes");
+    }
+    setEstimateReason("");
+    setEstimateError(null);
+    setEstimatePendingAction({ mode: "reestimate", task });
+    setEstimateDialogOpen(true);
+  };
+
   const timelineData = useMemo(() => {
     const normalizeDate = (value: string | null | undefined): Date | null => {
       if (!value) return null;
@@ -321,29 +397,78 @@ export default function DesignPage() {
       return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
     };
     const addDays = (base: Date, days: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
+    const isWeekend = (day: Date) => {
+      const w = day.getDay();
+      return w === 0 || w === 6;
+    };
     const daysDiff = (from: Date, to: Date) =>
       Math.round(
         (new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime() -
           new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) /
           (1000 * 60 * 60 * 24)
       );
+    const subtractWorkingDays = (deadline: Date, workingDays: number) => {
+      const safeDays = Math.max(1, workingDays);
+      let cursor = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
+      let remaining = safeDays;
+      while (remaining > 1) {
+        cursor = addDays(cursor, -1);
+        if (!isWeekend(cursor)) remaining -= 1;
+      }
+      return cursor;
+    };
+    const today = normalizeDate(new Date().toISOString()) as Date;
 
     const timelineTasks = filteredTasks
       .map((task) => {
         const deadline = normalizeDate(task.designDeadline ?? null);
         if (!deadline) return null;
-        const created = normalizeDate(task.createdAt ?? null);
-        const startCandidate = created ?? addDays(deadline, -2);
-        const start = startCandidate.getTime() <= deadline.getTime() ? startCandidate : deadline;
-        return { task, start, end: deadline };
+        const estimateMinutes = getTaskEstimateMinutes(task);
+        const hasEstimate = !!estimateMinutes;
+        const estimateWorkingDays = hasEstimate ? Math.max(1, Math.ceil((estimateMinutes as number) / 480)) : 1;
+        const start = hasEstimate ? subtractWorkingDays(deadline, estimateWorkingDays) : deadline;
+        const isDone = task.status === "approved" || task.status === "cancelled";
+        const isStartRisk = (task.status === "new" || task.status === "changes") && today.getTime() > start.getTime();
+        const isOverdue = !isDone && today.getTime() > deadline.getTime();
+        return {
+          task,
+          start,
+          end: deadline,
+          hasEstimate,
+          estimateMinutes: estimateMinutes ?? null,
+          estimateWorkingDays,
+          isStartRisk,
+          isOverdue,
+        };
       })
-      .filter(Boolean) as Array<{ task: DesignTask; start: Date; end: Date }>;
+      .filter(Boolean) as Array<{
+        task: DesignTask;
+        start: Date;
+        end: Date;
+        hasEstimate: boolean;
+        estimateMinutes: number | null;
+        estimateWorkingDays: number;
+        isStartRisk: boolean;
+        isOverdue: boolean;
+      }>;
 
     const noDeadlineTasks = filteredTasks.filter((task) => !normalizeDate(task.designDeadline ?? null));
     if (timelineTasks.length === 0) {
       return {
-        rows: [] as Array<{ task: DesignTask; start: Date; end: Date; offset: number; span: number }>,
+        rows: [] as Array<{
+          task: DesignTask;
+          start: Date;
+          end: Date;
+          offset: number;
+          span: number;
+          hasEstimate: boolean;
+          estimateMinutes: number | null;
+          estimateWorkingDays: number;
+          isStartRisk: boolean;
+          isOverdue: boolean;
+        }>,
         days: [] as Date[],
+        todayOffset: -1,
         noDeadlineTasks,
       };
     }
@@ -354,12 +479,16 @@ export default function DesignPage() {
       return a.start.getTime() - b.start.getTime();
     });
 
-    const minStart = sorted.reduce((acc, item) => (item.start.getTime() < acc.getTime() ? item.start : acc), sorted[0].start);
+    const minStart = sorted.reduce(
+      (acc, item) => (item.start.getTime() < acc.getTime() ? item.start : acc),
+      sorted[0].start
+    );
     const maxEnd = sorted.reduce((acc, item) => (item.end.getTime() > acc.getTime() ? item.end : acc), sorted[0].end);
     const windowStart = addDays(minStart, -1);
-    const windowEnd = addDays(maxEnd, 1);
+    const windowEnd = addDays(maxEnd.getTime() < today.getTime() ? today : maxEnd, 1);
     const totalDays = Math.max(1, daysDiff(windowStart, windowEnd) + 1);
     const days = Array.from({ length: totalDays }, (_, index) => addDays(windowStart, index));
+    const todayOffset = Math.max(0, Math.min(totalDays - 1, daysDiff(windowStart, today)));
 
     const rows = sorted.map((item) => {
       const offset = Math.max(0, daysDiff(windowStart, item.start));
@@ -367,11 +496,26 @@ export default function DesignPage() {
       return { ...item, offset, span };
     });
 
-    return { rows, days, noDeadlineTasks };
+    return { rows, days, todayOffset, noDeadlineTasks };
   }, [filteredTasks]);
 
+  const timelineAxis = useMemo(() => {
+    const bucketSize = timelineZoom === "day" ? 1 : timelineZoom === "week" ? 7 : 30;
+    const columnCount = Math.max(1, Math.ceil((timelineData.days.length || 1) / bucketSize));
+    const columns = Array.from({ length: columnCount }, (_, idx) => {
+      const startIndex = idx * bucketSize;
+      const start = timelineData.days[startIndex] ?? timelineData.days[timelineData.days.length - 1] ?? new Date();
+      const end = timelineData.days[Math.min(startIndex + bucketSize - 1, timelineData.days.length - 1)] ?? start;
+      return { start, end };
+    });
+    return { bucketSize, columnCount, columns };
+  }, [timelineData.days, timelineZoom]);
+
   const assigneeGrouped = useMemo(() => {
-    const map = new Map<string, { id: string | null; label: string; tasks: DesignTask[] }>();
+    const map = new Map<
+      string,
+      { id: string | null; label: string; tasks: DesignTask[]; estimateMinutesTotal: number; tasksWithoutEstimate: number }
+    >();
     filteredTasks.forEach((task) => {
       const key = task.assigneeUserId ?? "__unassigned__";
       if (!map.has(key)) {
@@ -379,9 +523,16 @@ export default function DesignPage() {
           id: task.assigneeUserId ?? null,
           label: task.assigneeUserId ? getMemberLabel(task.assigneeUserId) : "Без виконавця",
           tasks: [],
+          estimateMinutesTotal: 0,
+          tasksWithoutEstimate: 0,
         });
       }
-      map.get(key)?.tasks.push(task);
+      const group = map.get(key);
+      if (!group) return;
+      group.tasks.push(task);
+      const estimate = getTaskEstimateMinutes(task);
+      if (estimate) group.estimateMinutesTotal += estimate;
+      else group.tasksWithoutEstimate += 1;
     });
 
     return Array.from(map.values()).sort((a, b) => {
@@ -414,9 +565,23 @@ export default function DesignPage() {
     void handleStatusChange(draggedTask, nextStatus);
   };
 
-  const handleStatusChange = async (task: DesignTask, next: DesignStatus) => {
+  const handleStatusChange = async (task: DesignTask, next: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!effectiveTeamId || task.status === next) return;
+    const existingEstimateMinutes = getTaskEstimateMinutes(task);
+    if (next === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
+      requestEstimateBeforeAction({ mode: "status", task, nextStatus: next });
+      return;
+    }
     const previousStatus = task.status;
+    const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const estimateSetAt =
+      options?.estimateMinutes != null
+        ? new Date().toISOString()
+        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+    const estimatedByUserId =
+      options?.estimateMinutes != null
+        ? (userId ?? null)
+        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
     const baseMetadata = {
       ...(task.metadata ?? {}),
       status: next,
@@ -426,6 +591,9 @@ export default function DesignPage() {
       design_deadline: task.designDeadline ?? null,
       assignee_user_id: task.assigneeUserId ?? null,
       assigned_at: task.assignedAt ?? null,
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: estimateSetAt,
+      estimated_by_user_id: estimatedByUserId,
     };
     try {
       setTasks((prev) =>
@@ -448,6 +616,21 @@ export default function DesignPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (options?.estimateMinutes != null) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_estimate",
+            title: `Естімейт: ${formatEstimateMinutes(options.estimateMinutes)}`,
+            metadata: {
+              source: "design_task_estimate",
+              estimate_minutes: options.estimateMinutes,
+            },
+          });
+        }
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
           designTaskId: task.id,
@@ -473,7 +656,11 @@ export default function DesignPage() {
     }
   };
 
-  const applyAssignee = async (task: DesignTask, nextAssigneeUserId: string | null) => {
+  const applyAssignee = async (
+    task: DesignTask,
+    nextAssigneeUserId: string | null,
+    options?: { estimateMinutes?: number }
+  ) => {
     if (!effectiveTeamId) return;
     if (!canManageAssignments) {
       if (!userId || nextAssigneeUserId !== userId) {
@@ -485,7 +672,21 @@ export default function DesignPage() {
         return;
       }
     }
+    const existingEstimateMinutes = getTaskEstimateMinutes(task);
+    if (nextAssigneeUserId && !existingEstimateMinutes && !options?.estimateMinutes) {
+      requestEstimateBeforeAction({ mode: "assign", task, nextAssigneeUserId });
+      return;
+    }
     const nextAssignedAt = nextAssigneeUserId ? new Date().toISOString() : null;
+    const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const estimateSetAt =
+      options?.estimateMinutes != null
+        ? new Date().toISOString()
+        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+    const estimatedByUserId =
+      options?.estimateMinutes != null
+        ? (userId ?? null)
+        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: task.status,
@@ -495,6 +696,9 @@ export default function DesignPage() {
       design_deadline: task.designDeadline ?? null,
       assignee_user_id: nextAssigneeUserId,
       assigned_at: nextAssignedAt,
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: estimateSetAt,
+      estimated_by_user_id: estimatedByUserId,
     };
 
     const previousAssignee = task.assigneeUserId ?? null;
@@ -537,6 +741,21 @@ export default function DesignPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (options?.estimateMinutes != null) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_estimate",
+            title: `Естімейт: ${formatEstimateMinutes(options.estimateMinutes)}`,
+            metadata: {
+              source: "design_task_estimate",
+              estimate_minutes: options.estimateMinutes,
+            },
+          });
+        }
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
           designTaskId: task.id,
@@ -826,6 +1045,83 @@ export default function DesignPage() {
     }
   };
 
+  const updateTaskEstimate = async (task: DesignTask, estimateMinutes: number, reason?: string) => {
+    if (!effectiveTeamId) return;
+    const previousEstimate = getTaskEstimateMinutes(task);
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: new Date().toISOString(),
+      estimated_by_user_id: userId ?? null,
+    };
+    if (reason && reason.trim()) nextMetadata.reestimate_reason = reason.trim();
+
+    setTasks((prev) => prev.map((row) => (row.id === task.id ? { ...row, metadata: nextMetadata } : row)));
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_estimate",
+        title: previousEstimate
+          ? `Естімейт: ${formatEstimateMinutes(previousEstimate)} → ${formatEstimateMinutes(estimateMinutes)}`
+          : `Естімейт: ${formatEstimateMinutes(estimateMinutes)}`,
+        metadata: {
+          source: "design_task_estimate",
+          from_estimate_minutes: previousEstimate,
+          to_estimate_minutes: estimateMinutes,
+          reestimate_reason: reason?.trim() || null,
+        },
+      });
+      toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
+    } catch (e: any) {
+      setError(e?.message ?? "Не вдалося оновити естімейт");
+      toast.error(e?.message ?? "Не вдалося оновити естімейт");
+      setTasks((prev) => prev.map((row) => (row.id === task.id ? task : row)));
+    }
+  };
+
+  const submitEstimateDialog = async () => {
+    if (!estimatePendingAction) return;
+    const amount = Number(estimateInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEstimateError("Вкажіть коректний естімейт.");
+      return;
+    }
+    const unitMultiplier = estimateUnit === "minutes" ? 1 : estimateUnit === "hours" ? 60 : 480;
+    const normalized = Math.round(amount * unitMultiplier);
+    if (estimatePendingAction.mode === "reestimate" && !estimateReason.trim()) {
+      setEstimateError("Вкажіть причину зміни естімейту.");
+      return;
+    }
+    setEstimateError(null);
+    setEstimateDialogOpen(false);
+
+    if (estimatePendingAction.mode === "assign") {
+      await applyAssignee(estimatePendingAction.task, estimatePendingAction.nextAssigneeUserId ?? null, {
+        estimateMinutes: normalized,
+      });
+    } else if (estimatePendingAction.mode === "status" && estimatePendingAction.nextStatus) {
+      await handleStatusChange(estimatePendingAction.task, estimatePendingAction.nextStatus, {
+        estimateMinutes: normalized,
+      });
+    } else if (estimatePendingAction.mode === "reestimate") {
+      await updateTaskEstimate(estimatePendingAction.task, normalized, estimateReason);
+    }
+    setEstimatePendingAction(null);
+    setEstimateReason("");
+  };
+
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
     return (
@@ -891,6 +1187,7 @@ export default function DesignPage() {
               {!task.assigneeUserId && canSelfAssign && userId ? (
                 <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>Взяти в роботу</DropdownMenuItem>
               ) : null}
+              <DropdownMenuItem onClick={() => requestReestimate(task)}>Оновити естімейт</DropdownMenuItem>
               {canManageAssignments ? (
                 <>
                   <DropdownMenuSeparator />
@@ -977,6 +1274,15 @@ export default function DesignPage() {
               })}
             </span>
           ) : null}
+          {getTaskEstimateMinutes(task) ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+              <Timer className="h-3.5 w-3.5" /> {formatEstimateMinutes(getTaskEstimateMinutes(task))}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-1 text-amber-300">
+              <Timer className="h-3.5 w-3.5" /> Без естімейту
+            </span>
+          )}
         </div>
       </div>
     );
@@ -1106,6 +1412,33 @@ export default function DesignPage() {
 
       {viewMode === "timeline" ? (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+                <span className="h-2 w-2 rounded-full bg-rose-400" />
+                Лінія сьогодні
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                Ризик старту
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                Прострочено
+              </span>
+            </div>
+            <div className="flex items-center gap-1 rounded-md border border-border/60 bg-card/70 p-1">
+              <Button size="sm" variant={timelineZoom === "day" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("day")}>
+                День
+              </Button>
+              <Button size="sm" variant={timelineZoom === "week" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("week")}>
+                Тиждень
+              </Button>
+              <Button size="sm" variant={timelineZoom === "month" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("month")}>
+                Місяць
+              </Button>
+            </div>
+          </div>
           {timelineData.rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
               Немає задач із дедлайном для Timeline.
@@ -1114,23 +1447,50 @@ export default function DesignPage() {
             <div className="rounded-lg border border-border/60 bg-card/60 overflow-auto">
               <div
                 className="grid min-w-[980px]"
-                style={{ gridTemplateColumns: `320px repeat(${timelineData.days.length}, minmax(44px, 1fr))` }}
+                style={{ gridTemplateColumns: `320px repeat(${timelineAxis.columnCount}, minmax(44px, 1fr))` }}
               >
                 <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Задача
                 </div>
-                {timelineData.days.map((day, index) => (
+                {timelineAxis.columns.map((column, index) => (
                   <div
-                    key={`timeline-head-${day.toISOString()}-${index}`}
+                    key={`timeline-head-${column.start.toISOString()}-${index}`}
                     className="border-b border-r border-border/40 px-1 py-2 text-center text-[11px] text-muted-foreground bg-card/80"
                   >
-                    <div className="font-medium text-foreground">{day.toLocaleDateString("uk-UA", { day: "2-digit" })}</div>
-                    <div>{day.toLocaleDateString("uk-UA", { month: "short" })}</div>
+                    {timelineZoom === "day" ? (
+                      <>
+                        <div className="font-medium text-foreground">
+                          {column.start.toLocaleDateString("uk-UA", { day: "2-digit" })}
+                        </div>
+                        <div>{column.start.toLocaleDateString("uk-UA", { month: "short" })}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-medium text-foreground">
+                          {column.start.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
+                        </div>
+                        <div>{column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</div>
+                      </>
+                    )}
                   </div>
                 ))}
 
                 {timelineData.rows.map((row) => {
                   const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
+                  const offsetUnits = row.offset / timelineAxis.bucketSize;
+                  const spanUnits = Math.max(timelineZoom === "day" ? 1 : 0.6, row.span / timelineAxis.bucketSize);
+                  const barLeft = `calc(${offsetUnits} * (100% / ${timelineAxis.columnCount}))`;
+                  const barWidth = `calc(${spanUnits} * (100% / ${timelineAxis.columnCount}))`;
+                  const progressRatio = TIMELINE_PROGRESS_BY_STATUS[row.task.status] ?? 0;
+                  const progressWidth = `calc(${spanUnits * progressRatio} * (100% / ${timelineAxis.columnCount}))`;
+                  const barTitle = [
+                    `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${
+                      isUuid(row.task.quoteId) ? row.task.quoteNumber ?? row.task.quoteId.slice(0, 8) : row.task.title ?? row.task.quoteId.slice(0, 8)
+                    }`,
+                    `Статус: ${statusLabel}`,
+                    `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
+                    `Дедлайн: ${row.end.toLocaleDateString("uk-UA")}`,
+                  ].join(" • ");
                   return (
                     <div key={row.task.id} className="contents">
                       <button
@@ -1143,25 +1503,59 @@ export default function DesignPage() {
                             : row.task.title ?? row.task.quoteId.slice(0, 8)}
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {row.task.customerName ?? "—"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)}
+                          {row.task.customerName ?? "—"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)} ·{" "}
+                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
                         </div>
                       </button>
                       <div
                         className="relative border-b border-border/40"
-                        style={{ gridColumn: `2 / span ${timelineData.days.length}` }}
+                        style={{ gridColumn: `2 / span ${timelineAxis.columnCount}` }}
                       >
+                        <div
+                          className="absolute inset-y-0 border-l border-rose-400/55 pointer-events-none"
+                          style={{ left: `calc(${timelineData.todayOffset / timelineAxis.bucketSize} * (100% / ${timelineAxis.columnCount}))` }}
+                        />
                         <div className="absolute inset-y-2 left-0 right-0">
                           <div className="relative h-full">
                             <div
                               className={cn(
                                 "absolute top-1/2 -translate-y-1/2 h-6 rounded-md border",
-                                TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40"
+                                row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "bg-transparent border-border/70 border-dashed",
+                                row.isStartRisk && "ring-2 ring-amber-400/50",
+                                row.isOverdue && "ring-2 ring-rose-400/65"
                               )}
+                              title={barTitle}
                               style={{
-                                left: `calc(${row.offset} * (100% / ${timelineData.days.length}))`,
-                                width: `calc(${row.span} * (100% / ${timelineData.days.length}))`,
+                                left: barLeft,
+                                width: barWidth,
                               }}
                             />
+                            {row.hasEstimate ? (
+                              <div
+                                className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md bg-foreground/20"
+                                style={{
+                                  left: barLeft,
+                                  width: progressWidth,
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="absolute top-1/2 -translate-y-1/2 px-2 text-[10px] font-medium text-foreground/95 truncate pointer-events-none"
+                              style={{
+                                left: barLeft,
+                                width: barWidth,
+                              }}
+                            >
+                              {row.hasEstimate
+                                ? `${formatEstimateMinutes(row.estimateMinutes)} · до ${row.end.toLocaleDateString("uk-UA", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}`
+                                : `Без естімейту · до ${row.end.toLocaleDateString("uk-UA", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}`}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1196,16 +1590,27 @@ export default function DesignPage() {
             assigneeGrouped.map((group) => (
               <div key={group.id ?? "unassigned"} className="rounded-lg border border-border/60 bg-card/60">
                 <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
-                  <div className="text-sm font-semibold">{group.label}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold">{group.label}</div>
+                    <Badge variant="outline" className="text-[11px]">
+                      {formatEstimateMinutes(group.estimateMinutesTotal)}
+                    </Badge>
+                    {group.tasksWithoutEstimate > 0 ? (
+                      <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-300">
+                        Без естімейту: {group.tasksWithoutEstimate}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <Badge variant="secondary">{group.tasks.length}</Badge>
                 </div>
                 <div className="overflow-x-auto">
                   <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <div className="grid grid-cols-[1.2fr_1.1fr_0.9fr_0.9fr_0.7fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
                       <div>Задача</div>
                       <div>Клієнт</div>
                       <div>Статус</div>
                       <div>Дедлайн</div>
+                      <div>Естімейт</div>
                       <div className="text-right">Дії</div>
                     </div>
                     {group.tasks.map((task) => {
@@ -1216,7 +1621,7 @@ export default function DesignPage() {
                       return (
                         <div
                           key={task.id}
-                          className="grid grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
+                          className="grid grid-cols-[1.2fr_1.1fr_0.9fr_0.9fr_0.7fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
                         >
                           <button
                             className="text-left min-w-0"
@@ -1248,6 +1653,7 @@ export default function DesignPage() {
                               </span>
                             )}
                           </div>
+                          <div className="text-muted-foreground">{formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
                           <div className="flex justify-end">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -1261,6 +1667,9 @@ export default function DesignPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
                                   Редагувати
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => requestReestimate(task)}>
+                                  Оновити естімейт
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {DESIGN_COLUMNS.map((target) => (
@@ -1298,6 +1707,70 @@ export default function DesignPage() {
           )}
         </div>
       ) : null}
+
+      <Dialog
+        open={estimateDialogOpen}
+        onOpenChange={(open) => {
+          setEstimateDialogOpen(open);
+          if (!open) {
+            setEstimateError(null);
+            setEstimateReason("");
+            setEstimatePendingAction(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Вкажіть естімейт задачі</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="design-estimate-value">Естімейт</Label>
+            <div className="grid grid-cols-[1fr_150px] gap-2">
+              <Input
+                id="design-estimate-value"
+                type="number"
+                min={0.25}
+                step={0.25}
+                value={estimateInput}
+                onChange={(event) => setEstimateInput(event.target.value)}
+                placeholder="Напр. 2"
+              />
+              <Select value={estimateUnit} onValueChange={(value) => setEstimateUnit(value as "minutes" | "hours" | "days")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minutes">Хвилини</SelectItem>
+                  <SelectItem value="hours">Години</SelectItem>
+                  <SelectItem value="days">Дні</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Без естімейту не можна призначити виконавця або перевести задачу у «В роботі». 1 день = 8 годин.
+            </div>
+            {estimatePendingAction?.mode === "reestimate" ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="design-estimate-reason">Причина зміни</Label>
+                <Textarea
+                  id="design-estimate-reason"
+                  value={estimateReason}
+                  onChange={(event) => setEstimateReason(event.target.value)}
+                  className="min-h-[90px]"
+                  placeholder="Чому змінюємо естімейт?"
+                />
+              </div>
+            ) : null}
+            {estimateError ? <div className="text-sm text-destructive">{estimateError}</div> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEstimateDialogOpen(false)}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void submitEstimateDialog()}>Зберегти естімейт</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {(loading || membersLoading) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

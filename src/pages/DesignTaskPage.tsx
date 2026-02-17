@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -229,6 +230,19 @@ const formatQuantityWithUnit = (qty?: number | null, unit?: string | null) => {
   return `${qtyText} ${normalizedUnit}`;
 };
 
+const formatEstimateMinutes = (minutes?: number | null) => {
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "—";
+  const value = Math.round(minutes);
+  const days = Math.floor(value / 480);
+  const hours = Math.floor((value % 480) / 60);
+  const mins = value % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} д`);
+  if (hours) parts.push(`${hours} год`);
+  if (mins) parts.push(`${mins} хв`);
+  return parts.length > 0 ? parts.join(" ") : "0 хв";
+};
+
 export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, permissions } = useAuth();
@@ -260,6 +274,16 @@ export default function DesignTaskPage() {
   const [addLinkUrl, setAddLinkUrl] = useState("https://");
   const [addLinkLabel, setAddLinkLabel] = useState("");
   const [addLinkError, setAddLinkError] = useState<string | null>(null);
+  const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
+  const [estimateInput, setEstimateInput] = useState("2");
+  const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
+  const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [estimatePendingAction, setEstimatePendingAction] = useState<
+    | { mode: "assign"; nextAssigneeUserId: string | null }
+    | { mode: "assign_self"; alsoStart: boolean }
+    | { mode: "status"; nextStatus: DesignStatus }
+    | null
+  >(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingTask, setDeletingTask] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -644,6 +668,10 @@ export default function DesignTaskPage() {
     if (diff === 1) return { label: "Завтра", className: "text-amber-200" };
     return { label: d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }), className: "text-muted-foreground" };
   }, [task?.designDeadline]);
+  const estimateLabel = useMemo(() => {
+    const minutes = getTaskEstimateMinutes(task);
+    return formatEstimateMinutes(minutes);
+  }, [task?.metadata]);
 
   const methods = useMemo(() => {
     const raw = quoteItem?.methods;
@@ -743,6 +771,24 @@ export default function DesignTaskPage() {
   }, [effectiveTeamId, methods]);
 
   const quickActions = task ? statusQuickActions[task.status] ?? [] : [];
+  function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
+    if (!sourceTask) return null;
+    const raw = (sourceTask.metadata ?? {}).estimate_minutes;
+    const parsed = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.round(parsed);
+  }
+
+  const requestEstimateDialog = (
+    pending: { mode: "assign"; nextAssigneeUserId: string | null } | { mode: "assign_self"; alsoStart: boolean } | { mode: "status"; nextStatus: DesignStatus }
+  ) => {
+    setEstimatePendingAction(pending);
+    setEstimateInput("2");
+    setEstimateUnit("hours");
+    setEstimateError(null);
+    setEstimateDialogOpen(true);
+  };
+
   const quantityLabel = useMemo(
     () => formatQuantityWithUnit(quoteItem?.qty ?? null, quoteItem?.unit ?? null),
     [quoteItem?.qty, quoteItem?.unit]
@@ -791,6 +837,20 @@ export default function DesignTaskPage() {
           actorLabel,
           icon: CalendarClock,
           accentClass: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+        };
+      }
+
+      if (source === "design_task_estimate") {
+        const raw = metadata.estimate_minutes;
+        const estimateMinutes =
+          typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: `Естімейт: ${formatEstimateMinutes(Number.isFinite(estimateMinutes) ? estimateMinutes : null)}`,
+          actorLabel,
+          icon: Clock,
+          accentClass: "bg-sky-500/15 text-sky-200 border-sky-500/30",
         };
       }
 
@@ -1003,10 +1063,24 @@ export default function DesignTaskPage() {
     }
   };
 
-  const updateTaskStatus = async (nextStatus: DesignStatus) => {
+  const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
+    const existingEstimateMinutes = getTaskEstimateMinutes(task);
+    if (nextStatus === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
+      requestEstimateDialog({ mode: "status", nextStatus });
+      return;
+    }
     const previousStatus = task.status;
     const previousTask = task;
+    const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const estimateSetAt =
+      options?.estimateMinutes != null
+        ? new Date().toISOString()
+        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+    const estimatedByUserId =
+      options?.estimateMinutes != null
+        ? (userId ?? null)
+        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: nextStatus,
@@ -1016,6 +1090,9 @@ export default function DesignTaskPage() {
       design_deadline: task.designDeadline ?? null,
       assignee_user_id: task.assigneeUserId ?? null,
       assigned_at: task.assignedAt ?? null,
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: estimateSetAt,
+      estimated_by_user_id: estimatedByUserId,
     };
 
     setTask((prev) =>
@@ -1039,6 +1116,21 @@ export default function DesignTaskPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (options?.estimateMinutes != null) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_estimate",
+            title: `Естімейт: ${formatEstimateMinutes(options.estimateMinutes)}`,
+            metadata: {
+              source: "design_task_estimate",
+              estimate_minutes: options.estimateMinutes,
+            },
+          });
+        }
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
           designTaskId: task.id,
@@ -1068,14 +1160,28 @@ export default function DesignTaskPage() {
     }
   };
 
-  const applyAssignee = async (nextAssigneeUserId: string | null) => {
+  const applyAssignee = async (nextAssigneeUserId: string | null, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !canManageAssignments) return;
     if (nextAssigneeUserId === task.assigneeUserId) return;
+    const existingEstimateMinutes = getTaskEstimateMinutes(task);
+    if (nextAssigneeUserId && !existingEstimateMinutes && !options?.estimateMinutes) {
+      requestEstimateDialog({ mode: "assign", nextAssigneeUserId });
+      return;
+    }
 
     const previousAssignee = task.assigneeUserId ?? null;
     const previousAssigneeLabel = getMemberLabel(previousAssignee);
     const nextAssigneeLabel = getMemberLabel(nextAssigneeUserId);
     const nextAssignedAt = nextAssigneeUserId ? new Date().toISOString() : null;
+    const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const estimateSetAt =
+      options?.estimateMinutes != null
+        ? new Date().toISOString()
+        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+    const estimatedByUserId =
+      options?.estimateMinutes != null
+        ? (userId ?? null)
+        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: task.status,
@@ -1085,6 +1191,9 @@ export default function DesignTaskPage() {
       design_deadline: task.designDeadline ?? null,
       assignee_user_id: nextAssigneeUserId,
       assigned_at: nextAssignedAt,
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: estimateSetAt,
+      estimated_by_user_id: estimatedByUserId,
     };
 
     const previousTask = task;
@@ -1119,6 +1228,21 @@ export default function DesignTaskPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (options?.estimateMinutes != null) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_estimate",
+            title: `Естімейт: ${formatEstimateMinutes(options.estimateMinutes)}`,
+            metadata: {
+              source: "design_task_estimate",
+              estimate_minutes: options.estimateMinutes,
+            },
+          });
+        }
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
           designTaskId: task.id,
@@ -1185,7 +1309,7 @@ export default function DesignTaskPage() {
     }
   };
 
-  const assignTaskToMe = async (options?: { alsoStart?: boolean }) => {
+  const assignTaskToMe = async (options?: { alsoStart?: boolean; estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !userId || !canSelfAssign || isAssignedToMe || assigningSelf) return;
     if (!canManageAssignments && task.assigneeUserId && task.assigneeUserId !== userId) {
       toast.error("Задача вже призначена іншому дизайнеру");
@@ -1196,8 +1320,22 @@ export default function DesignTaskPage() {
     const alsoStart = !!options?.alsoStart;
     const nextStatus: DesignStatus =
       alsoStart && (task.status === "new" || task.status === "changes") ? "in_progress" : task.status;
+    const existingEstimateMinutes = getTaskEstimateMinutes(task);
+    if (!existingEstimateMinutes && !options?.estimateMinutes) {
+      requestEstimateDialog({ mode: "assign_self", alsoStart });
+      return;
+    }
     setAssigningSelf(true);
     const nextAssignedAt = new Date().toISOString();
+    const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const estimateSetAt =
+      options?.estimateMinutes != null
+        ? new Date().toISOString()
+        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+    const estimatedByUserId =
+      options?.estimateMinutes != null
+        ? userId
+        : (((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? userId);
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: nextStatus,
@@ -1207,6 +1345,9 @@ export default function DesignTaskPage() {
       design_deadline: task.designDeadline ?? null,
       assignee_user_id: userId,
       assigned_at: nextAssignedAt,
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: estimateSetAt,
+      estimated_by_user_id: estimatedByUserId,
     };
 
     const previousTask = task;
@@ -1242,6 +1383,21 @@ export default function DesignTaskPage() {
 
       const actorLabel = getMemberLabel(userId);
       try {
+        if (options?.estimateMinutes != null) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_estimate",
+            title: `Естімейт: ${formatEstimateMinutes(options.estimateMinutes)}`,
+            metadata: {
+              source: "design_task_estimate",
+              estimate_minutes: options.estimateMinutes,
+            },
+          });
+        }
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
           designTaskId: task.id,
@@ -1311,6 +1467,28 @@ export default function DesignTaskPage() {
     } finally {
       setAssigningSelf(false);
     }
+  };
+
+  const submitEstimateDialog = async () => {
+    if (!estimatePendingAction) return;
+    const amount = Number(estimateInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEstimateError("Вкажіть коректний естімейт.");
+      return;
+    }
+    const unitMultiplier = estimateUnit === "minutes" ? 1 : estimateUnit === "hours" ? 60 : 480;
+    const normalized = Math.round(amount * unitMultiplier);
+    setEstimateError(null);
+    setEstimateDialogOpen(false);
+
+    if (estimatePendingAction.mode === "assign") {
+      await applyAssignee(estimatePendingAction.nextAssigneeUserId, { estimateMinutes: normalized });
+    } else if (estimatePendingAction.mode === "assign_self") {
+      await assignTaskToMe({ alsoStart: estimatePendingAction.alsoStart, estimateMinutes: normalized });
+    } else if (estimatePendingAction.mode === "status") {
+      await updateTaskStatus(estimatePendingAction.nextStatus, { estimateMinutes: normalized });
+    }
+    setEstimatePendingAction(null);
   };
 
   const requestDeleteTask = () => {
@@ -1479,6 +1657,10 @@ export default function DesignTaskPage() {
               <Badge variant="outline" className={cn("px-2.5 py-1 text-xs gap-1", deadlineLabel.className)}>
                 <CalendarClock className="h-3.5 w-3.5" />
                 Дедлайн: {deadlineLabel.label}
+              </Badge>
+              <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                Естімейт: {estimateLabel}
               </Badge>
             </div>
           </div>
@@ -2065,6 +2247,57 @@ export default function DesignTaskPage() {
           </div>
         </aside>
       </div>
+
+      <Dialog
+        open={estimateDialogOpen}
+        onOpenChange={(open) => {
+          setEstimateDialogOpen(open);
+          if (!open) {
+            setEstimateError(null);
+            setEstimatePendingAction(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Вкажіть естімейт задачі</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="task-estimate-value">Естімейт</Label>
+            <div className="grid grid-cols-[1fr_150px] gap-2">
+              <Input
+                id="task-estimate-value"
+                type="number"
+                min={0.25}
+                step={0.25}
+                value={estimateInput}
+                onChange={(event) => setEstimateInput(event.target.value)}
+                placeholder="Напр. 2"
+              />
+              <Select value={estimateUnit} onValueChange={(value) => setEstimateUnit(value as "minutes" | "hours" | "days")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minutes">Хвилини</SelectItem>
+                  <SelectItem value="hours">Години</SelectItem>
+                  <SelectItem value="days">Дні</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Потрібно вказати естімейт, щоб призначити виконавця або почати роботу. 1 день = 8 годин.
+            </p>
+            {estimateError ? <p className="text-sm text-destructive">{estimateError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEstimateDialogOpen(false)}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void submitEstimateDialog()}>Зберегти естімейт</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={addLinkOpen}
