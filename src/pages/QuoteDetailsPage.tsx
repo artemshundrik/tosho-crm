@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
+import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
@@ -554,6 +555,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
   const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [designTask, setDesignTask] = useState<{
+    id: string;
+    assigneeUserId: string | null;
+    assignedAt: string | null;
+    metadata: Record<string, unknown>;
+  } | null>(null);
+  const [designTaskLoading, setDesignTaskLoading] = useState(false);
+  const [designTaskError, setDesignTaskError] = useState<string | null>(null);
+  const [designTaskSaving, setDesignTaskSaving] = useState(false);
+  const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
@@ -834,6 +845,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
   );
+  const hasRoleInfo = useMemo(() => teamMembers.some((member) => !!member.jobRole), [teamMembers]);
+  const designerMembers = useMemo(() => {
+    const isDesignerRole = (value?: string | null) => {
+      const normalized = (value ?? "").trim().toLowerCase();
+      return normalized === "designer" || normalized === "дизайнер";
+    };
+    const filtered = teamMembers.filter((member) => isDesignerRole(member.jobRole));
+    return filtered.length > 0 ? filtered : teamMembers;
+  }, [teamMembers]);
+  const getMemberLabel = (userId?: string | null) => {
+    if (!userId) return "—";
+    return memberById.get(userId) ?? userId;
+  };
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       teamMembers.map((member) => {
@@ -1294,6 +1318,229 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setQuote(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDesignTask = async () => {
+    if (!quoteId || !teamId) {
+      setDesignTask(null);
+      setDesignAssigneeId(null);
+      return;
+    }
+    setDesignTaskLoading(true);
+    setDesignTaskError(null);
+    try {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("id, metadata, created_at")
+        .eq("action", "design_task")
+        .eq("entity_id", quoteId)
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+      if (!row) {
+        setDesignTask(null);
+        setDesignAssigneeId(null);
+        return;
+      }
+      const metadata = row.metadata ?? {};
+      const assigneeUserId = (metadata as { assignee_user_id?: string | null }).assignee_user_id ?? null;
+      const assignedAt = (metadata as { assigned_at?: string | null }).assigned_at ?? null;
+      setDesignTask({
+        id: row.id,
+        assigneeUserId,
+        assignedAt,
+        metadata,
+      });
+      setDesignAssigneeId(assigneeUserId);
+    } catch (e: any) {
+      setDesignTaskError(e?.message ?? "Не вдалося завантажити дизайн-задачу.");
+      setDesignTask(null);
+    } finally {
+      setDesignTaskLoading(false);
+    }
+  };
+
+  const createDesignTask = async () => {
+    if (!teamId) return;
+    setDesignTaskSaving(true);
+    setDesignTaskError(null);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id ?? null;
+      const actorName =
+        (userId ? memberById.get(userId) : null) ||
+        authData.user?.email ||
+        "System";
+      const modelName = items[0]?.title ?? "Позиція";
+      const methodsCount = items[0]?.methods?.length ?? 0;
+      const designDeadline = quote?.deadline_at ?? null;
+      const assigneeUserId = designAssigneeId ?? null;
+      const assignedAt = assigneeUserId ? new Date().toISOString() : null;
+
+      const { data, error } = await supabase
+        .from("activity_log")
+        .insert({
+          team_id: teamId,
+          user_id: userId ?? null,
+          actor_name: actorName,
+          action: "design_task",
+          entity_type: "design_task",
+          entity_id: quoteId,
+          title: `Дизайн: ${modelName}`,
+          metadata: {
+            source: "design_task_created",
+            status: "new",
+            quote_id: quoteId,
+            design_task_id: null,
+            assignee_user_id: assigneeUserId,
+            assigned_at: assignedAt,
+            quote_type: quote?.quote_type ?? null,
+            methods_count: methodsCount,
+            has_files: attachments.length > 0,
+            design_deadline: designDeadline,
+            deadline: designDeadline,
+            model: modelName,
+          },
+        })
+        .select("id, metadata")
+        .single();
+      if (error) throw error;
+
+      const meta = (data as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+      const nextAssignee = (meta as { assignee_user_id?: string | null }).assignee_user_id ?? assigneeUserId;
+      const nextAssignedAt = (meta as { assigned_at?: string | null }).assigned_at ?? assignedAt;
+      setDesignTask({
+        id: (data as { id: string }).id,
+        assigneeUserId: nextAssignee ?? null,
+        assignedAt: nextAssignedAt ?? null,
+        metadata: meta,
+      });
+      setDesignAssigneeId(nextAssignee ?? null);
+
+      if (assigneeUserId && assigneeUserId !== userId) {
+        const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
+        try {
+          await notifyUsers({
+            userIds: [assigneeUserId],
+            title: "Вас призначено на дизайн-задачу",
+            body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+            href: `/design/${(data as { id: string }).id}`,
+            type: "info",
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify designer about new task", notifyError);
+        }
+      }
+      toast.success("Дизайн-задачу створено");
+    } catch (e: any) {
+      const message = e?.message ?? "Не вдалося створити дизайн-задачу.";
+      setDesignTaskError(message);
+      toast.error(message);
+    } finally {
+      setDesignTaskSaving(false);
+    }
+  };
+
+  const updateDesignAssignee = async (nextAssigneeUserId: string | null) => {
+    if (!designTask || !teamId) return;
+    setDesignTaskSaving(true);
+    setDesignTaskError(null);
+    const previousAssignee = designTask.assigneeUserId ?? null;
+    const previousAssignedAt = designTask.assignedAt ?? null;
+    const nextAssignedAt = nextAssigneeUserId ? new Date().toISOString() : null;
+    const nextMetadata: Record<string, unknown> = {
+      ...(designTask.metadata ?? {}),
+      assignee_user_id: nextAssigneeUserId,
+      assigned_at: nextAssignedAt,
+    };
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id ?? null;
+      const actorName =
+        (userId ? memberById.get(userId) : null) ||
+        authData.user?.email ||
+        "System";
+
+      const { error } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", designTask.id)
+        .eq("team_id", teamId);
+      if (error) throw error;
+
+      setDesignTask({
+        ...designTask,
+        assigneeUserId: nextAssigneeUserId,
+        assignedAt: nextAssignedAt,
+        metadata: nextMetadata,
+      });
+      setDesignAssigneeId(nextAssigneeUserId);
+
+      try {
+        await logDesignTaskActivity({
+          teamId,
+          designTaskId: designTask.id,
+          quoteId,
+          userId,
+          actorName,
+          action: "design_task_assignment",
+          title: nextAssigneeUserId
+            ? `Призначено виконавця: ${getMemberLabel(nextAssigneeUserId)}`
+            : `Знято виконавця (${getMemberLabel(previousAssignee)})`,
+          metadata: {
+            source: "design_task_assignment",
+            from_assignee_user_id: previousAssignee,
+            from_assignee_label: getMemberLabel(previousAssignee),
+            to_assignee_user_id: nextAssigneeUserId,
+            to_assignee_label: nextAssigneeUserId ? getMemberLabel(nextAssigneeUserId) : null,
+          },
+        });
+      } catch (logError) {
+        console.warn("Failed to log design task assignment event", logError);
+      }
+
+      const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
+      try {
+        if (nextAssigneeUserId && nextAssigneeUserId !== userId) {
+          await notifyUsers({
+            userIds: [nextAssigneeUserId],
+            title: "Вас призначено на дизайн-задачу",
+            body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+            href: `/design/${designTask.id}`,
+            type: "info",
+          });
+        }
+        if (previousAssignee && previousAssignee !== userId && previousAssignee !== nextAssigneeUserId) {
+          await notifyUsers({
+            userIds: [previousAssignee],
+            title: "Вас знято з дизайн-задачі",
+            body: `${actorName} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
+            href: `/design/${designTask.id}`,
+            type: "warning",
+          });
+        }
+      } catch (notifyError) {
+        console.warn("Failed to notify design task assignment change", notifyError);
+      }
+
+      toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
+    } catch (e: any) {
+      setDesignTask({
+        ...designTask,
+        assigneeUserId: previousAssignee,
+        assignedAt: previousAssignedAt,
+        metadata: designTask.metadata,
+      });
+      setDesignAssigneeId(previousAssignee);
+      const message = e?.message ?? "Не вдалося оновити виконавця.";
+      setDesignTaskError(message);
+      toast.error(message);
+    } finally {
+      setDesignTaskSaving(false);
     }
   };
 
@@ -1770,6 +2017,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     void loadQuote();
+  }, [quoteId, teamId]);
+
+  useEffect(() => {
+    void loadDesignTask();
   }, [quoteId, teamId]);
 
   useEffect(() => {
@@ -3608,6 +3859,70 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         {/* Right Column */}
         <div className="space-y-6">
+          {/* Design task */}
+          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                <Sparkles className="h-5 w-5" />
+                Дизайн-задача
+              </div>
+              {designTask ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/design/${designTask.id}`)}
+                >
+                  Відкрити
+                </Button>
+              ) : null}
+            </div>
+
+            {designTaskLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Завантаження...
+              </div>
+            ) : designTaskError ? (
+              <div className="text-sm text-destructive">{designTaskError}</div>
+            ) : designTask ? (
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
+                <Select
+                  value={designAssigneeId ?? "none"}
+                  onValueChange={(value) => void updateDesignAssignee(value === "none" ? null : value)}
+                  disabled={designTaskSaving}
+                >
+                  <SelectTrigger className="h-9 max-w-[280px]">
+                    <SelectValue placeholder="Без виконавця" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без виконавця</SelectItem>
+                    {designerMembers.length > 0 ? (
+                      designerMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.label}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="empty" disabled>
+                        {hasRoleInfo ? "Немає дизайнерів" : "Немає учасників"}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  Дизайн-задача ще не створена для цього прорахунку.
+                </div>
+                <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>
+                  {designTaskSaving ? "Створення..." : "Створити задачу"}
+                </Button>
+              </div>
+            )}
+          </Card>
+
           {/* Comments Card - Improved */}
           <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">

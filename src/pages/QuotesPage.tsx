@@ -16,6 +16,7 @@ import {
   listCustomersBySearch,
   createQuote,
   deleteQuote,
+  getQuoteSummary,
   listTeamMembers,
   setStatus as setQuoteStatus,
   updateQuote,
@@ -208,6 +209,12 @@ const QUOTE_TYPE_OPTIONS = [
   { id: "other", label: "Інше", icon: Layers },
 ];
 
+const DELIVERY_TYPE_OPTIONS = [
+  { id: "nova_poshta", label: "Нова пошта" },
+  { id: "pickup", label: "Самовивіз" },
+  { id: "taxi", label: "Таксі" },
+];
+
   const quoteTypeLabel = (value?: string | null) =>
     QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "—";
 
@@ -240,15 +247,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [rowDeleteError, setRowDeleteError] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<QuoteListRow | null>(null);
+  const [editInitialValues, setEditInitialValues] = useState<Partial<NewQuoteFormData> | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    status: "new",
-    comment: "",
-    assignedTo: "unassigned",
-    deadlineAt: "",
-    deadlineNote: "",
-  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -801,7 +803,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         customerId: data.customerId!,
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
-        comment: data.deadlineNote?.trim() || null,
+        comment: data.comment?.trim() || data.deadlineNote?.trim() || null,
         currency: data.currency,
         assignedTo: data.managerId || null,
         deadlineAt,
@@ -875,6 +877,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             : "System";
         const modelName = model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
+        const assigneeUserId = data.designAssigneeId ?? null;
+        const assignedAt = assigneeUserId ? new Date().toISOString() : null;
         const { data: designTaskRow, error: designTaskError } = await supabase
           .from("activity_log")
           .insert({
@@ -890,8 +894,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               status: "new",
               quote_id: created.id,
               design_task_id: null,
-              assignee_user_id: null,
-              assigned_at: null,
+              assignee_user_id: assigneeUserId,
+              assigned_at: assignedAt,
               quote_type: data.quoteType,
               methods_count: data.printApplications.length,
               has_files: data.files.length > 0,
@@ -929,8 +933,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 )
               );
 
-              if (designerUserIds.length > 0) {
-                const quoteLabel = `#${created.id.slice(0, 8)}`;
+              const quoteLabel = `#${created.id.slice(0, 8)}`;
+              if (assigneeUserId) {
+                if (assigneeUserId !== currentUserId) {
+                  await notifyUsers({
+                    userIds: [assigneeUserId],
+                    title: "Вас призначено на дизайн-задачу",
+                    body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+                    href: `/design/${createdDesignTaskId}`,
+                    type: "info",
+                  });
+                }
+              } else if (designerUserIds.length > 0) {
                 await notifyUsers({
                   userIds: designerUserIds,
                   title: "Нова дизайн-задача",
@@ -1662,24 +1676,66 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setDeleteDialogOpen(true);
   };
 
-  const openEdit = (row: QuoteListRow) => {
+  const openEdit = async (row: QuoteListRow) => {
+    setEditLoading(true);
     setEditTarget(row);
-    setEditForm({
+    const initialDeadline =
+      row.deadline_at && row.deadline_at.length >= 10
+        ? new Date(
+            Number(row.deadline_at.slice(0, 4)),
+            Number(row.deadline_at.slice(5, 7)) - 1,
+            Number(row.deadline_at.slice(8, 10))
+          )
+        : undefined;
+    setEditInitialValues({
       status: normalizeStatus(row.status),
       comment: row.comment ?? "",
-      assignedTo: row.assigned_to ?? "unassigned",
-      deadlineAt: row.deadline_at ? row.deadline_at.slice(0, 10) : "",
+      managerId: row.assigned_to ?? "",
+      deadline: initialDeadline,
       deadlineNote: row.deadline_note ?? "",
+      currency: row.currency ?? "UAH",
+      quoteType: row.quote_type ?? "merch",
+      deliveryType: row.delivery_type ?? row.print_type ?? "",
     });
     setEditError(null);
     setEditDialogOpen(true);
+    try {
+      const fresh = await getQuoteSummary(row.id);
+      setEditTarget((prev) => ({ ...(prev ?? row), ...fresh }));
+      const freshDeadline =
+        fresh.deadline_at && fresh.deadline_at.length >= 10
+          ? new Date(
+              Number(fresh.deadline_at.slice(0, 4)),
+              Number(fresh.deadline_at.slice(5, 7)) - 1,
+              Number(fresh.deadline_at.slice(8, 10))
+            )
+          : undefined;
+      setEditInitialValues({
+        status: normalizeStatus(fresh.status),
+        comment: fresh.comment ?? row.comment ?? "",
+        managerId: fresh.assigned_to ?? "",
+        deadline: freshDeadline,
+        deadlineNote: fresh.deadline_note ?? "",
+        currency: fresh.currency ?? row.currency ?? "UAH",
+        quoteType: fresh.quote_type ?? "merch",
+        deliveryType: fresh.delivery_type ?? fresh.print_type ?? "",
+      });
+    } catch (e: any) {
+      setEditError(e?.message ?? "Не вдалося завантажити актуальні дані прорахунку.");
+    } finally {
+      setEditLoading(false);
+    }
   };
 
-  const handleEditChange = (field: keyof typeof editForm, value: string) => {
-    setEditForm((prev) => ({ ...prev, [field]: value }));
+  const formatDateOnly = (date?: Date) => {
+    if (!date) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   };
 
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async (data: NewQuoteFormData) => {
     if (!editTarget) return;
     setEditSaving(true);
     setEditError(null);
@@ -1687,27 +1743,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       await updateQuote({
         quoteId: editTarget.id,
         teamId,
-        status: editForm.status,
-        comment: editForm.comment.trim() || null,
-        assignedTo: editForm.assignedTo === "unassigned" ? null : editForm.assignedTo,
-        deadlineAt: editForm.deadlineAt || null,
-        deadlineNote: editForm.deadlineNote.trim() || null,
+        status: data.status,
+        comment: data.comment?.trim() || null,
+        assignedTo: data.managerId?.trim() ? data.managerId : null,
+        deadlineAt: formatDateOnly(data.deadline),
+        deadlineNote: data.deadlineNote?.trim() || null,
+        quoteType: data.quoteType?.trim() ? data.quoteType : null,
+        deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
       });
       setRows((prev) =>
         prev.map((row) =>
           row.id === editTarget.id
             ? {
                 ...row,
-                status: editForm.status,
-                comment: editForm.comment.trim() || null,
-                assigned_to: editForm.assignedTo === "unassigned" ? null : editForm.assignedTo,
-                deadline_at: editForm.deadlineAt || null,
-                deadline_note: editForm.deadlineNote.trim() || null,
+                status: data.status,
+                comment: data.comment?.trim() || null,
+                assigned_to: data.managerId?.trim() ? data.managerId : null,
+                deadline_at: formatDateOnly(data.deadline),
+                deadline_note: data.deadlineNote?.trim() || null,
+                quote_type: data.quoteType?.trim() ? data.quoteType : null,
+                delivery_type: data.deliveryType?.trim() ? data.deliveryType : null,
               }
             : row
         )
       );
       setEditDialogOpen(false);
+      setEditInitialValues(null);
+      toast.success("Прорахунок оновлено");
     } catch (e: any) {
       setEditError(e?.message ?? "Не вдалося оновити прорахунок.");
     } finally {
@@ -2491,96 +2553,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden">
-          <DialogHeader className="p-4 border-b border-border/60 bg-muted/10">
-            <DialogTitle className="text-lg">Редагувати прорахунок</DialogTitle>
-          </DialogHeader>
-          <div className="p-4 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Статус</label>
-              <Select value={editForm.status} onValueChange={(v) => handleEditChange("status", v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {formatStatusLabel(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Менеджер</label>
-              <Select
-                value={editForm.assignedTo}
-                onValueChange={(v) => handleEditChange("assignedTo", v)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Не призначено</SelectItem>
-                  {teamMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">Дедлайн</label>
-                <Input
-                  type="date"
-                  value={editForm.deadlineAt}
-                  onChange={(e) => handleEditChange("deadlineAt", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">Нотатка до дедлайну</label>
-                <Input
-                  value={editForm.deadlineNote}
-                  onChange={(e) => handleEditChange("deadlineNote", e.target.value)}
-                  placeholder="Напр. Макет о 12:00"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Коментар</label>
-              <textarea
-                className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                rows={3}
-                value={editForm.comment}
-                onChange={(e) => handleEditChange("comment", e.target.value)}
-                placeholder="Внутрішній коментар"
-              />
-            </div>
-
-            {editError && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
-                {editError}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="px-4 py-3 border-t border-border/60 bg-muted/5">
-            <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(false)} disabled={editSaving}>
-              Скасувати
-            </Button>
-            <Button size="sm" onClick={handleEditSubmit} disabled={editSaving} className="gap-2">
-              {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Зберегти
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Edit dialog (reused create dialog) */}
+      <NewQuoteDialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditTarget(null);
+            setEditInitialValues(null);
+            setEditError(null);
+            setEditLoading(false);
+          }
+        }}
+        onSubmit={handleEditSubmit}
+        mode="edit"
+        submitting={editSaving || editLoading}
+        submitError={editError}
+        quoteLabel={editTarget?.number ? `#${editTarget.number}` : editTarget?.id ?? null}
+        customerLabel={editTarget?.customer_name ?? null}
+        initialValues={editInitialValues ?? undefined}
+        teamId={teamId}
+        customers={customers}
+        customersLoading={customersLoading}
+        onCustomerSearch={handleCustomerSearchChange}
+        teamMembers={teamMembers}
+        catalogTypes={catalogTypes}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 }

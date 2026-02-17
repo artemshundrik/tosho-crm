@@ -32,9 +32,6 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
               className="border-background shadow-sm"
               fallbackClassName="text-[10px] font-semibold"
             />
-            {entry.online ? (
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background bg-emerald-400" />
-            ) : null}
           </div>
         ))}
       </div>

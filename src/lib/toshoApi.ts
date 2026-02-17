@@ -51,7 +51,12 @@ export type QuoteStatusRow = {
   changed_by?: string | null;
 };
 
-export type TeamMemberRow = { id: string; label: string; avatarUrl?: string | null };
+export type TeamMemberRow = {
+  id: string;
+  label: string;
+  avatarUrl?: string | null;
+  jobRole?: string | null;
+};
 
 export type CustomerRow = { id: string; name?: string | null; legal_name?: string | null };
 
@@ -433,50 +438,71 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   };
 
   try {
-    let data:
-      | { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]
-      | null = null;
-
+    let data: any = null;
     let error: any = null;
-    ({ data, error } = await supabase
-      .from("team_members_view")
-      .select("user_id, full_name, avatar_url, email")
-      .eq("team_id", teamId)
-      .order("created_at", { ascending: true }));
-
-    if (error && /column/i.test(error.message || "") && /email/i.test(error.message || "")) {
+    const columnsToTry = [
+      "user_id, full_name, avatar_url, email, job_role",
+      "user_id, full_name, avatar_url, email",
+      "user_id, full_name, avatar_url, job_role",
+      "user_id, full_name, avatar_url",
+    ];
+    for (const columns of columnsToTry) {
       ({ data, error } = await supabase
         .from("team_members_view")
-        .select("user_id, full_name, avatar_url")
+        .select(columns)
         .eq("team_id", teamId)
         .order("created_at", { ascending: true }));
+      if (!error) break;
+      const message = (error?.message ?? "").toLowerCase();
+      if (!message.includes("column") && !message.includes("does not exist")) {
+        break;
+      }
     }
 
     handleError(error);
-    const filteredRows = ((data as { user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }[]) ?? [])
+    const filteredRows =
+      ((data as {
+        user_id: string;
+        full_name?: string | null;
+        avatar_url?: string | null;
+        email?: string | null;
+        job_role?: string | null;
+      }[]) ?? [])
       .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
 
     return filteredRows.map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
       avatarUrl: row.avatar_url ?? null,
+      jobRole: (row as { job_role?: string | null }).job_role ?? null,
     }));
   } catch (error: any) {
     const message = error?.message ?? "";
     if (message.includes("does not exist") || message.includes("relation")) {
-      const { data, error: fallbackError } = await supabase
-        .from("team_members")
-        .select("user_id")
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: true });
+      let data: any = null;
+      let fallbackError: any = null;
+      const fallbackColumns = ["user_id, job_role", "user_id"];
+      for (const columns of fallbackColumns) {
+        ({ data, error: fallbackError } = await supabase
+          .from("team_members")
+          .select(columns)
+          .eq("team_id", teamId)
+          .order("created_at", { ascending: true }));
+        if (!fallbackError) break;
+        const message = (fallbackError?.message ?? "").toLowerCase();
+        if (!message.includes("column") && !message.includes("does not exist")) {
+          break;
+        }
+      }
       handleError(fallbackError);
-      const filteredRows = ((data as { user_id: string }[]) ?? [])
+      const filteredRows = ((data as { user_id: string; job_role?: string | null }[]) ?? [])
         .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
 
       return filteredRows.map((row) => ({
         id: row.user_id,
         label: formatLabel(row),
         avatarUrl: null,
+        jobRole: row.job_role ?? null,
       }));
     }
     throw error;
@@ -533,6 +559,7 @@ export async function updateQuote(params: {
   deadlineAt?: string | null;
   deadlineNote?: string | null;
   status?: string | null;
+  quoteType?: string | null;
   deliveryType?: string | null;
 }) {
   const payload: Record<string, unknown> = {};
@@ -541,16 +568,39 @@ export async function updateQuote(params: {
   if (params.deadlineAt !== undefined) payload.deadline_at = params.deadlineAt;
   if (params.deadlineNote !== undefined) payload.deadline_note = params.deadlineNote;
   if (params.status !== undefined) payload.status = params.status;
+  if (params.quoteType !== undefined) payload.quote_type = params.quoteType;
   if (params.deliveryType !== undefined) payload.delivery_type = params.deliveryType;
 
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("quotes")
-    .update(payload)
-    .eq("id", params.quoteId)
-    .eq("team_id", params.teamId)
-    .select("id,status,comment,assigned_to,deadline_at,deadline_note,updated_at")
-    .single();
-  handleError(error);
-  return data;
+  const executeUpdate = async (nextPayload: Record<string, unknown>) => {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .update(nextPayload)
+      .eq("id", params.quoteId)
+      .eq("team_id", params.teamId)
+      .select("id,status,comment,quote_type,delivery_type,assigned_to,deadline_at,deadline_note,updated_at")
+      .single();
+    handleError(error);
+    return data;
+  };
+
+  try {
+    return await executeUpdate(payload);
+  } catch (error: any) {
+    const message = (error?.message ?? "").toLowerCase();
+    const fallbackPayload = { ...payload };
+    let changed = false;
+
+    if (message.includes("column") && message.includes("quote_type")) {
+      delete fallbackPayload.quote_type;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("delivery_type")) {
+      delete fallbackPayload.delivery_type;
+      changed = true;
+    }
+    if (!changed) throw error;
+
+    return await executeUpdate(fallbackPayload);
+  }
 }

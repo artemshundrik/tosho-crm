@@ -163,6 +163,7 @@ export type TeamMember = {
   id: string;
   label: string;
   avatarUrl?: string | null;
+  jobRole?: string | null;
 };
 
 /**
@@ -171,8 +172,14 @@ export type TeamMember = {
 export interface NewQuoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit?: (data: NewQuoteFormData) => void;
+  onSubmit?: (data: NewQuoteFormData) => void | Promise<void>;
   teamId: string;
+  mode?: "create" | "edit";
+  initialValues?: Partial<NewQuoteFormData>;
+  submitting?: boolean;
+  submitError?: string | null;
+  customerLabel?: string | null;
+  quoteLabel?: string | null;
   customers?: Customer[];
   customersLoading?: boolean;
   onCustomerSearch?: (search: string) => void;
@@ -187,8 +194,10 @@ export interface NewQuoteDialogProps {
  */
 export type NewQuoteFormData = {
   status: string;
+  comment?: string;
   customerId?: string;
   managerId?: string;
+  designAssigneeId?: string | null;
   deadline?: Date;
   deadlineNote?: string;
   currency: string;
@@ -213,6 +222,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   onOpenChange,
   onSubmit,
   teamId,
+  mode = "create",
+  initialValues,
+  submitting = false,
+  submitError = null,
+  customerLabel = null,
+  quoteLabel = null,
   customers = [],
   customersLoading = false,
   onCustomerSearch,
@@ -221,8 +236,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   catalogTypes = [],
   currentUserId,
 }) => {
+  const isEditMode = mode === "edit";
   // Form state
   const [status, setStatus] = React.useState("new");
+  const [comment, setComment] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
   const [customerSearch, setCustomerSearch] = React.useState("");
   const [managerId, setManagerId] = React.useState<string>("");
@@ -231,6 +248,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
   const [deliveryType, setDeliveryType] = React.useState("");
+  const [designAssigneeId, setDesignAssigneeId] = React.useState<string | null>(null);
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
@@ -260,13 +278,63 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   );
   const availablePrintMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
+  const hasRoleInfo = React.useMemo(
+    () => teamMembers.some((member) => !!member.jobRole),
+    [teamMembers]
+  );
+  const designerMembers = React.useMemo(() => {
+    const isDesignerRole = (value?: string | null) => {
+      const normalized = (value ?? "").trim().toLowerCase();
+      return normalized === "designer" || normalized === "дизайнер";
+    };
+    const filtered = teamMembers.filter((member) => isDesignerRole(member.jobRole));
+    return filtered.length > 0 ? filtered : teamMembers;
+  }, [teamMembers]);
 
-  // Set default manager to current user when dialog opens
   React.useEffect(() => {
-    if (open && currentUserId && !managerId) {
-      setManagerId(currentUserId);
+    if (!open) return;
+    const nextPrintApplications = (initialValues?.printApplications ?? []).map((app, index) => ({
+      id: app.id || `${Date.now()}-${index}`,
+      method: app.method ?? "",
+      position: app.position ?? "",
+      width: app.width ?? "",
+      height: app.height ?? "",
+    }));
+
+    setStatus(initialValues?.status ?? "new");
+    setComment(initialValues?.comment ?? "");
+    setCustomerId(initialValues?.customerId ?? "");
+    setCustomerSearch("");
+    setManagerId(initialValues?.managerId ?? currentUserId ?? "");
+    setDeadline(initialValues?.deadline);
+    setDeadlineNote(initialValues?.deadlineNote ?? "");
+    setCurrency(initialValues?.currency ?? "UAH");
+    setQuoteType(initialValues?.quoteType ?? "merch");
+    setDeliveryType(initialValues?.deliveryType ?? "");
+    setCategoryId(initialValues?.categoryId ?? "");
+    setKindId(initialValues?.kindId ?? "");
+    setModelId(initialValues?.modelId ?? "");
+    setQuantity(initialValues?.quantity);
+    setQuantityUnit(initialValues?.quantityUnit ?? "pcs");
+    setPrintApplications(nextPrintApplications);
+    const nextPrintMode = nextPrintApplications.length > 0 ? "with_print" : "no_print";
+    setPrintMode(nextPrintMode);
+    if (nextPrintMode === "no_print") {
+      setCreateDesignTask(false);
+      setDesignAssigneeId(null);
+    } else {
+      setCreateDesignTask(!!initialValues?.createDesignTask);
+      setDesignAssigneeId(initialValues?.designAssigneeId ?? null);
     }
-  }, [open, currentUserId, managerId]);
+    setFiles(initialValues?.files ?? []);
+
+    setStatusPopoverOpen(false);
+    setCustomerPopoverOpen(false);
+    setManagerPopoverOpen(false);
+    setDeadlinePopoverOpen(false);
+    setCurrencyPopoverOpen(false);
+    setDeliveryPopoverOpen(false);
+  }, [open, initialValues, currentUserId]);
 
   // Add print application
   const handleAddPrintApplication = () => {
@@ -317,20 +385,23 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   };
 
   // Handle submit
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation
-    if (!customerId) {
+    if (!isEditMode && !customerId) {
       alert("Оберіть клієнта");
       setCustomerPopoverOpen(true);
       return;
     }
 
     const finalPrints = printMode === "no_print" ? [] : printApplications;
+    const shouldCreateDesignTask = printMode !== "no_print" && createDesignTask;
 
     const formData: NewQuoteFormData = {
       status,
+      comment,
       customerId,
       managerId,
+      designAssigneeId: shouldCreateDesignTask ? designAssigneeId : null,
       deadline,
       deadlineNote,
       currency,
@@ -342,13 +413,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       quantity,
       quantityUnit,
       printApplications: finalPrints,
-      createDesignTask,
+      createDesignTask: shouldCreateDesignTask,
       files,
     };
 
-    onSubmit?.(formData);
-
-    onOpenChange(false);
+    await onSubmit?.(formData);
   };
 
   // Get current status
@@ -361,12 +430,21 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="text-base font-medium flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            Новий прорахунок
+            {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
           </DialogTitle>
           <DialogDescription>
-            Заповніть параметри замовлення, щоб створити прорахунок.
+            {isEditMode
+              ? "Оновіть актуальні параметри прорахунку."
+              : "Заповніть параметри замовлення, щоб створити прорахунок."}
           </DialogDescription>
         </DialogHeader>
+
+        {isEditMode ? (
+          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+            {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
+            {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
+          </div>
+        ) : null}
 
         {/* Main chips row */}
         <div className="flex flex-wrap items-center gap-2">
@@ -406,68 +484,74 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </Popover>
 
           {/* Customer */}
-          <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Chip size="md" icon={<Building2 />} active={!!customerId}>
-                {customerId
-                  ? customers.find((c) => c.id === customerId)?.name || "Клієнт обрано"
-                  : "Клієнт"}
-              </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-2" align="start">
-              <div className="space-y-2">
-                <Input
-                  placeholder="Пошук клієнта..."
-                  value={customerSearch}
-                  onChange={(e) => {
-                    setCustomerSearch(e.target.value);
-                    onCustomerSearch?.(e.target.value);
-                  }}
-                  className="h-8"
-                />
-                <div className="max-h-60 overflow-y-auto space-y-1">
-                  {customersLoading ? (
-                    <div className="text-xs text-muted-foreground p-2">Завантаження...</div>
-                  ) : customers.length > 0 ? (
-                    customers.map((customer) => (
-                      <Button
-                        key={customer.id}
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start h-9 text-sm truncate"
-                        onClick={() => {
-                          setCustomerId(customer.id);
-                          setCustomerPopoverOpen(false);
-                        }}
-                        title={customer.name || customer.legal_name || "Без назви"}
-                      >
-                        <span className="truncate max-w-[220px]">
-                          {customer.name || customer.legal_name || "Без назви"}
-                        </span>
-                      </Button>
-                    ))
-                  ) : customerSearch ? (
-                    <div className="space-y-2 p-2">
-                      <div className="text-xs text-muted-foreground">Клієнтів не знайдено</div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full justify-center text-sm h-9"
-                        onClick={() => {
-                          onCreateCustomer?.(customerSearch.trim());
-                          setCustomerPopoverOpen(false);
-                        }}
-                      >
-                        Додати нового клієнта
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground p-2">Введіть назву для пошуку</div>
-                  )}
+          {isEditMode ? (
+            <Chip size="md" icon={<Building2 />} active>
+              {customerLabel || "Клієнт"}
+            </Chip>
+          ) : (
+            <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Chip size="md" icon={<Building2 />} active={!!customerId}>
+                  {customerId
+                    ? customers.find((c) => c.id === customerId)?.name || "Клієнт обрано"
+                    : "Клієнт"}
+                </Chip>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-2" align="start">
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Пошук клієнта..."
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value);
+                      onCustomerSearch?.(e.target.value);
+                    }}
+                    className="h-8"
+                  />
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {customersLoading ? (
+                      <div className="text-xs text-muted-foreground p-2">Завантаження...</div>
+                    ) : customers.length > 0 ? (
+                      customers.map((customer) => (
+                        <Button
+                          key={customer.id}
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-9 text-sm truncate"
+                          onClick={() => {
+                            setCustomerId(customer.id);
+                            setCustomerPopoverOpen(false);
+                          }}
+                          title={customer.name || customer.legal_name || "Без назви"}
+                        >
+                          <span className="truncate max-w-[220px]">
+                            {customer.name || customer.legal_name || "Без назви"}
+                          </span>
+                        </Button>
+                      ))
+                    ) : customerSearch ? (
+                      <div className="space-y-2 p-2">
+                        <div className="text-xs text-muted-foreground">Клієнтів не знайдено</div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full justify-center text-sm h-9"
+                          onClick={() => {
+                            onCreateCustomer?.(customerSearch.trim());
+                            setCustomerPopoverOpen(false);
+                          }}
+                        >
+                          Додати нового клієнта
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground p-2">Введіть назву для пошуку</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          )}
 
           {/* Manager */}
           <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
@@ -589,6 +673,28 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </Popover>
         </div>
 
+        <div className="space-y-4">
+          <SectionHeader>Деталі</SectionHeader>
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">Коментар</div>
+            <textarea
+              className="w-full min-h-[88px] rounded-[var(--radius-md)] border border-border/40 bg-background px-3 py-2 text-sm outline-none ring-0 focus:border-primary/50"
+              placeholder="Внутрішній коментар"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">Нотатка до дедлайну</div>
+            <Input
+              value={deadlineNote}
+              onChange={(e) => setDeadlineNote(e.target.value)}
+              placeholder="Напр. До 12:00 погодити макет"
+              className="h-9"
+            />
+          </div>
+        </div>
+
         {/* Product section */}
         <div className="space-y-4">
           <SectionHeader>Продукція</SectionHeader>
@@ -627,98 +733,107 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               </ToggleGroup>
             </div>
 
-            {/* Cascading selects */}
-            <div className="grid grid-cols-3 gap-3">
-              <Select 
-                value={categoryId} 
-                onValueChange={(value) => {
-                  setCategoryId(value);
-                  setKindId("");
-                  setModelId("");
-                }}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Категорія" />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalogTypes
-                    .filter(type => !quoteType || type.quote_type === quoteType || !type.quote_type)
-                    .map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+            {!isEditMode ? (
+              <>
+                {/* Cascading selects */}
+                <div className="grid grid-cols-3 gap-3">
+                  <Select 
+                    value={categoryId} 
+                    onValueChange={(value) => {
+                      setCategoryId(value);
+                      setKindId("");
+                      setModelId("");
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Категорія" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalogTypes
+                        .filter(type => !quoteType || type.quote_type === quoteType || !type.quote_type)
+                        .map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
 
-              <Select 
-                value={kindId} 
-                onValueChange={(value) => {
-                  setKindId(value);
-                  setModelId("");
-                }}
-                disabled={!categoryId}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Вид" />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalogTypes
-                    .find(t => t.id === categoryId)
-                    ?.kinds.map((kind) => (
-                      <SelectItem key={kind.id} value={kind.id}>
-                        {kind.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+                  <Select 
+                    value={kindId} 
+                    onValueChange={(value) => {
+                      setKindId(value);
+                      setModelId("");
+                    }}
+                    disabled={!categoryId}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Вид" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalogTypes
+                        .find(t => t.id === categoryId)
+                        ?.kinds.map((kind) => (
+                          <SelectItem key={kind.id} value={kind.id}>
+                            {kind.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
 
-              <Select value={modelId} onValueChange={setModelId} disabled={!kindId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Модель" />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalogTypes
-                    .find(t => t.id === categoryId)
-                    ?.kinds.find(k => k.id === kindId)
-                    ?.models.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  <Select value={modelId} onValueChange={setModelId} disabled={!kindId}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Модель" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalogTypes
+                        .find(t => t.id === categoryId)
+                        ?.kinds.find(k => k.id === kindId)
+                        ?.models.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* Quantity */}
-            <div className="grid grid-cols-[auto_1fr] items-center gap-2">
-              <span className="text-sm text-muted-foreground">Кількість:</span>
-              <div className="flex gap-2 flex-1">
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={quantity || ""}
-                  onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
-                  className="h-9 max-w-[120px]"
-                />
-                <Select value={quantityUnit} onValueChange={setQuantityUnit}>
-                  <SelectTrigger className="h-9 w-[100px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUANTITY_UNITS.map((unit) => (
-                      <SelectItem key={unit.value} value={unit.value}>
-                        {unit.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Quantity */}
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Кількість:</span>
+                  <div className="flex gap-2 flex-1">
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={quantity || ""}
+                      onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
+                      className="h-9 max-w-[120px]"
+                    />
+                    <Select value={quantityUnit} onValueChange={setQuantityUnit}>
+                      <SelectTrigger className="h-9 w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {QUANTITY_UNITS.map((unit) => (
+                          <SelectItem key={unit.value} value={unit.value}>
+                            {unit.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                Категорія/вид/модель і кількість редагуються в деталях прорахунку.
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Print applications section */}
+        {!isEditMode ? (
         <div className="space-y-4">
           <div className="flex items-center gap-3 -mx-6 px-6">
             <span className="text-xs uppercase tracking-wider text-muted-foreground font-normal">
@@ -733,6 +848,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 setPrintMode(next);
                 if (next === "no_print") {
                   setPrintApplications([]);
+                  setFiles([]);
+                  setCreateDesignTask(false);
+                  setDesignAssigneeId(null);
                 }
               }}
               className="hidden sm:flex"
@@ -761,65 +879,86 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             {printApplications.map((app) => (
               <div
                 key={app.id}
-                className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] border border-border/40 bg-muted/5"
+                className="flex items-end gap-3 p-3 rounded-[var(--radius-md)] border border-border/40 bg-muted/5"
               >
-                <Select
-                  value={app.method}
-                  onValueChange={(value) =>
-                    handleUpdatePrintApplication(app.id, "method", value)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[140px]">
-                    <SelectValue placeholder="Метод" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availablePrintMethods.map((method) => (
-                      <SelectItem key={method.id} value={method.id}>
-                        {method.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={app.position}
-                  onValueChange={(value) =>
-                    handleUpdatePrintApplication(app.id, "position", value)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[140px]">
-                    <SelectValue placeholder="Місце" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availablePrintPositions.map((pos) => (
-                      <SelectItem key={pos.id} value={pos.id}>
-                        {pos.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={app.width}
-                    onChange={(e) =>
-                      handleUpdatePrintApplication(app.id, "width", e.target.value)
+                <div className="space-y-1">
+                  <div className="px-1 text-[11px] font-medium text-foreground/80">
+                    Метод
+                  </div>
+                  <Select
+                    value={app.method}
+                    onValueChange={(value) =>
+                      handleUpdatePrintApplication(app.id, "method", value)
                     }
-                    className="h-8 w-[70px]"
-                  />
-                  <span className="text-sm text-muted-foreground">×</span>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={app.height}
-                    onChange={(e) =>
-                      handleUpdatePrintApplication(app.id, "height", e.target.value)
+                  >
+                    <SelectTrigger className="h-8 w-[140px]">
+                      <SelectValue placeholder="Метод" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePrintMethods.map((method) => (
+                        <SelectItem key={method.id} value={method.id}>
+                          {method.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="px-1 text-[11px] font-medium text-foreground/80">
+                    Місце
+                  </div>
+                  <Select
+                    value={app.position}
+                    onValueChange={(value) =>
+                      handleUpdatePrintApplication(app.id, "position", value)
                     }
-                    className="h-8 w-[70px]"
-                  />
-                  <span className="text-xs text-muted-foreground">мм</span>
+                  >
+                    <SelectTrigger className="h-8 w-[140px]">
+                      <SelectValue placeholder="Місце" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePrintPositions.map((pos) => (
+                        <SelectItem key={pos.id} value={pos.id}>
+                          {pos.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-end gap-1.5">
+                  <div className="space-y-1">
+                    <div className="px-1 text-[11px] font-medium text-foreground/80">
+                      Ширина, мм
+                    </div>
+                    <Input
+                      type="number"
+                      aria-label="Ширина нанесення, мм"
+                      placeholder="0"
+                      value={app.width}
+                      onChange={(e) =>
+                        handleUpdatePrintApplication(app.id, "width", e.target.value)
+                      }
+                      className="h-8 w-[84px]"
+                    />
+                  </div>
+                  <span className="mb-2 text-sm text-muted-foreground">×</span>
+                  <div className="space-y-1">
+                    <div className="px-1 text-[11px] font-medium text-foreground/80">
+                      Висота, мм
+                    </div>
+                    <Input
+                      type="number"
+                      aria-label="Висота нанесення, мм"
+                      placeholder="0"
+                      value={app.height}
+                      onChange={(e) =>
+                        handleUpdatePrintApplication(app.id, "height", e.target.value)
+                      }
+                      className="h-8 w-[84px]"
+                    />
+                  </div>
                 </div>
 
                 <Button
@@ -844,8 +983,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             ) : null}
           </div>
         </div>
+        ) : null}
 
         {/* Files section */}
+        {!isEditMode && printMode !== "no_print" ? (
         <div className="space-y-4">
           <SectionHeader>Файли</SectionHeader>
 
@@ -892,38 +1033,85 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             </div>
           )}
         </div>
+        ) : null}
+
+        {/* Design task */}
+        {!isEditMode && printMode !== "no_print" ? (
+          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/5 px-4 py-3 space-y-3">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                checked={createDesignTask}
+                onCheckedChange={(checked) => {
+                  const next = !!checked;
+                  setCreateDesignTask(next);
+                  if (!next) setDesignAssigneeId(null);
+                }}
+                className="mt-1"
+              />
+              <div className="space-y-1 text-sm">
+                <div className="font-medium">Створити задачу на дизайн</div>
+                <p className="text-muted-foreground text-xs">
+                  Якщо потрібен макет: увімкніть, додайте метод нанесення та файли/коментар для дизайнера.
+                </p>
+              </div>
+            </div>
+
+            <div className="pl-8 space-y-1">
+              <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
+              <Select
+                value={designAssigneeId ?? "none"}
+                onValueChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
+                disabled={!createDesignTask}
+              >
+                <SelectTrigger className="h-9 max-w-[280px]">
+                  <SelectValue placeholder={createDesignTask ? "Без виконавця" : "Увімкніть задачу"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Без виконавця</SelectItem>
+                  {designerMembers.length > 0 ? (
+                    designerMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="empty" disabled>
+                      {hasRoleInfo ? "Немає дизайнерів" : "Немає учасників"}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+
+        {submitError ? (
+          <div className="rounded-[var(--radius-md)] border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {submitError}
+          </div>
+        ) : null}
 
         {/* Footer */}
         <Separator className="bg-border/40 -mx-6 w-[calc(100%+3rem)]" />
         <div className="flex items-center justify-between -mb-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Paperclip className="h-3.5 w-3.5" />
-            <span>{files.length} файлів</span>
+            {printMode !== "no_print" && files.length > 0 ? (
+              <>
+                <Paperclip className="h-3.5 w-3.5" />
+                <span>{files.length} файлів</span>
+              </>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <Button
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
               size="sm"
+              disabled={submitting}
               className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] shadow-md shadow-primary/20"
             >
               <Plus className="h-3.5 w-3.5" />
-              Створити
+              {isEditMode ? "Зберегти" : "Створити"}
             </Button>
-          </div>
-        </div>
-
-        {/* Design task toggle */}
-        <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-border/40 bg-muted/5 px-4 py-3">
-          <Checkbox
-            checked={createDesignTask}
-            onCheckedChange={(checked) => setCreateDesignTask(!!checked)}
-            className="mt-1"
-          />
-          <div className="space-y-1 text-sm">
-            <div className="font-medium">Створити задачу дизайну</div>
-            <p className="text-muted-foreground text-xs">
-              Якщо потрібен макет: увімкніть, додайте метод нанесення та файли/коментар для дизайнера.
-            </p>
           </div>
         </div>
       </DialogContent>
