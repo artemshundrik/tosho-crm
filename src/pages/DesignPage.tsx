@@ -5,7 +5,14 @@ import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Palette, CheckCircle2, Paperclip, Clock, MoreVertical, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Loader2, Palette, CheckCircle2, Paperclip, Clock, MoreVertical, Trash2, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -13,6 +20,8 @@ import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { uk } from "date-fns/locale";
 
 type DesignTask = {
   id: string;
@@ -68,6 +77,11 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: st
   { id: "cancelled", label: "Скасовано", hint: "Скасовано", color: "bg-rose-400" },
 ];
 
+const DESIGN_FILES_BUCKET =
+  (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
+
+const MAX_BRIEF_FILES = 5;
+
 export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
@@ -82,6 +96,16 @@ export default function DesignPage() {
   const [suppressCardClick, setSuppressCardClick] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<DesignTask | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createBrief, setCreateBrief] = useState("");
+  const [createCustomer, setCreateCustomer] = useState("");
+  const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
+  const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
+  const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string>("none");
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
@@ -487,6 +511,186 @@ export default function DesignPage() {
     setTaskToDelete(task);
   };
 
+  const addFilesToCreate = (incoming: FileList | File[] | null | undefined) => {
+    if (!incoming) return;
+    const next = Array.from(incoming);
+    if (next.length === 0) return;
+    setCreateFiles((prev) => [...prev, ...next].slice(0, MAX_BRIEF_FILES));
+  };
+
+  const removeCreateFile = (index: number) => {
+    setCreateFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadStandaloneBriefFiles = async (params: {
+    teamId: string;
+    taskId: string;
+    userId: string | null;
+    files: File[];
+  }) => {
+    const uploaded: Array<Record<string, unknown>> = [];
+    for (const file of params.files) {
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
+      const baseName = `${Date.now()}-${safeName}`;
+      const candidatePaths = [
+        `teams/${params.teamId}/design-briefs/${params.taskId}/${baseName}`,
+        `${params.teamId}/design-briefs/${params.taskId}/${baseName}`,
+        `${params.userId ?? "unknown"}/design-briefs/${params.taskId}/${baseName}`,
+      ];
+
+      let storagePath = "";
+      let lastError: unknown = null;
+      for (const candidate of candidatePaths) {
+        const { error: uploadError } = await supabase.storage
+          .from(DESIGN_FILES_BUCKET)
+          .upload(candidate, file, { upsert: true, contentType: file.type || undefined });
+        if (!uploadError) {
+          storagePath = candidate;
+          lastError = null;
+          break;
+        }
+        lastError = uploadError;
+      }
+
+      if (!storagePath) {
+        console.error("Failed to upload standalone design brief file", lastError);
+        throw new Error(`Не вдалося завантажити файл: ${file.name}`);
+      }
+
+      uploaded.push({
+        id: crypto.randomUUID(),
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type || null,
+        storage_bucket: DESIGN_FILES_BUCKET,
+        storage_path: storagePath,
+        uploaded_by: params.userId,
+        created_at: new Date().toISOString(),
+      });
+    }
+    return uploaded;
+  };
+
+  const createStandaloneTask = async () => {
+    if (!effectiveTeamId || createSaving) return;
+    const subject = createTitle.trim();
+    if (!subject) {
+      setCreateError("Вкажіть назву задачі.");
+      return;
+    }
+
+    setCreateSaving(true);
+    setCreateError(null);
+    try {
+      const assigneeUserId = createAssigneeUserId === "none" ? null : createAssigneeUserId;
+      const assignedAt = assigneeUserId ? new Date().toISOString() : null;
+      const entityId = `standalone-${crypto.randomUUID()}`;
+      const actorName = userId ? getMemberLabel(userId) : "System";
+      const brief = createBrief.trim();
+      const customerName = createCustomer.trim();
+      const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
+
+      const { data, error: insertError } = await supabase
+        .from("activity_log")
+        .insert({
+          team_id: effectiveTeamId,
+          user_id: userId ?? null,
+          actor_name: actorName,
+          action: "design_task",
+          entity_type: "design_task",
+          entity_id: entityId,
+          title: subject,
+          metadata: {
+            source: "design_task_created_manual",
+            task_kind: "standalone",
+            status: "new",
+            quote_id: null,
+            assignee_user_id: assigneeUserId,
+            assigned_at: assignedAt,
+            customer_name: customerName || null,
+            design_brief: brief || null,
+            standalone_brief_files: [],
+            design_deadline: deadline,
+            deadline,
+            methods_count: 0,
+            has_files: createFiles.length > 0,
+          },
+        })
+        .select("id,entity_id,metadata,title,created_at")
+        .single();
+      if (insertError) throw insertError;
+
+      const metadata = ((data as any)?.metadata ?? {}) as Record<string, unknown>;
+      let briefFiles: Array<Record<string, unknown>> = [];
+      if (createFiles.length > 0) {
+        briefFiles = await uploadStandaloneBriefFiles({
+          teamId: effectiveTeamId,
+          taskId: (data as any).id as string,
+          userId: userId ?? null,
+          files: createFiles,
+        });
+        const patchedMetadata = {
+          ...metadata,
+          standalone_brief_files: briefFiles,
+          has_files: true,
+        };
+        const { error: patchError } = await supabase
+          .from("activity_log")
+          .update({ metadata: patchedMetadata })
+          .eq("team_id", effectiveTeamId)
+          .eq("id", (data as any).id as string);
+        if (patchError) throw patchError;
+        Object.assign(metadata, patchedMetadata);
+      }
+      const createdTask: DesignTask = {
+        id: (data as any).id as string,
+        quoteId: ((data as any).entity_id as string) || entityId,
+        title: ((data as any).title as string) ?? subject,
+        status: ((metadata.status as DesignStatus) ?? "new") as DesignStatus,
+        assigneeUserId:
+          typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
+            ? (metadata.assignee_user_id as string)
+            : null,
+        assignedAt: typeof metadata.assigned_at === "string" ? (metadata.assigned_at as string) : null,
+        metadata,
+        quoteNumber: null,
+        customerName: typeof metadata.customer_name === "string" ? (metadata.customer_name as string) : null,
+        methodsCount: 0,
+        hasFiles: createFiles.length > 0,
+        designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
+        createdAt: (data as any).created_at as string,
+      };
+      setTasks((prev) => [createdTask, ...prev]);
+
+      if (assigneeUserId && assigneeUserId !== userId) {
+        try {
+          await notifyUsers({
+            userIds: [assigneeUserId],
+            title: "Вас призначено на дизайн-задачу",
+            body: `${actorName} призначив(ла) вас на нову дизайн-задачу.`,
+            href: `/design/${createdTask.id}`,
+            type: "info",
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify assignee about standalone design task", notifyError);
+        }
+      }
+
+      setCreateDialogOpen(false);
+      setCreateTitle("");
+      setCreateBrief("");
+      setCreateCustomer("");
+      setCreateDeadline(undefined);
+      setCreateAssigneeUserId("none");
+      setCreateFiles([]);
+      toast.success("Дизайн-задачу створено");
+    } catch (e: any) {
+      setCreateError(e?.message ?? "Не вдалося створити дизайн-задачу");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
   const handleDeleteTask = async () => {
     if (!effectiveTeamId || !taskToDelete || !canManageAssignments) return;
     const targetTask = taskToDelete;
@@ -536,6 +740,10 @@ export default function DesignPage() {
       <ActiveHereCard entries={workspacePresence.activeHereEntries} />
 
       <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" className="gap-2 mr-1" onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4" />
+          Нова дизайн-задача
+        </Button>
         <Button
           size="sm"
           variant={assignmentFilter === "mine" ? "secondary" : "outline"}
@@ -634,19 +842,28 @@ export default function DesignPage() {
                           draggingId === task.id && "ring-2 ring-primary/40"
                         )}
                       >
+                        {(() => {
+                          const isLinkedQuote = isUuid(task.quoteId);
+                          return (
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-muted-foreground">Прорахунок</div>
-                            <button
-                              className="text-sm font-mono font-semibold hover:underline truncate"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                navigate(`/orders/estimates/${task.quoteId}`);
-                              }}
-                              title={task.quoteNumber ?? task.quoteId}
-                            >
-                              {task.quoteNumber ?? task.quoteId.slice(0, 8)}
-                            </button>
+                            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
+                            {isLinkedQuote ? (
+                              <button
+                                className="text-sm font-mono font-semibold hover:underline truncate"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/orders/estimates/${task.quoteId}`);
+                                }}
+                                title={task.quoteNumber ?? task.quoteId}
+                              >
+                                {task.quoteNumber ?? task.quoteId.slice(0, 8)}
+                              </button>
+                            ) : (
+                              <div className="text-sm font-semibold truncate" title={task.title ?? task.quoteId}>
+                                {task.title ?? task.quoteId.slice(0, 8)}
+                              </div>
+                            )}
                             <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
                               {task.customerName ?? "—"}
                             </div>
@@ -723,6 +940,8 @@ export default function DesignPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
+                          );
+                        })()}
                         {task.title ? <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div> : null}
                         <div className="mt-2">
                           <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
@@ -783,6 +1002,164 @@ export default function DesignPage() {
         </div>
       )}
 
+      <Dialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) {
+            setCreateError(null);
+            setCreateSaving(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Нова дизайн-задача (без прорахунку)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="standalone-design-title">Назва задачі</Label>
+              <Input
+                id="standalone-design-title"
+                value={createTitle}
+                onChange={(event) => setCreateTitle(event.target.value)}
+                placeholder="Напр. Розробити брендбук / Пост для Instagram"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="standalone-design-customer">Клієнт (опційно)</Label>
+              <Input
+                id="standalone-design-customer"
+                value={createCustomer}
+                onChange={(event) => setCreateCustomer(event.target.value)}
+                placeholder="Назва клієнта"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="standalone-design-deadline">Дедлайн (опційно)</Label>
+                <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="standalone-design-deadline"
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      {createDeadline ? format(createDeadline, "d MMM yyyy", { locale: uk }) : "Оберіть дедлайн"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={createDeadline}
+                      onSelect={(date) => {
+                        setCreateDeadline(date);
+                        setCreateDeadlinePopoverOpen(false);
+                      }}
+                      captionLayout="dropdown-buttons"
+                      fromYear={new Date().getFullYear() - 3}
+                      toYear={new Date().getFullYear() + 5}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Виконавець (дизайнер)</Label>
+                <Select value={createAssigneeUserId} onValueChange={setCreateAssigneeUserId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Без виконавця" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без виконавця</SelectItem>
+                    {designerMembers.length > 0 ? (
+                      designerMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.label}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="empty" disabled>
+                        Немає дизайнерів
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
+              <Textarea
+                id="standalone-design-brief"
+                value={createBrief}
+                onChange={(event) => setCreateBrief(event.target.value)}
+                className="min-h-[140px]"
+                placeholder="Опишіть задачу: ціль, референси, формат, текст, обмеження."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Файли / картинки</Label>
+              <div
+                onDrop={(event) => {
+                  event.preventDefault();
+                  addFilesToCreate(event.dataTransfer.files);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                className="relative border-2 border-dashed border-border/40 rounded-[var(--radius-md)] p-6 text-center transition-colors hover:border-border/60 cursor-pointer"
+              >
+                <input
+                  type="file"
+                  multiple
+                  onChange={(event) => addFilesToCreate(event.target.files)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept="*/*"
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  <div className="text-sm text-foreground">Перетягніть або клікніть для вибору</div>
+                  <div className="text-xs text-muted-foreground">до {MAX_BRIEF_FILES} файлів</div>
+                </div>
+              </div>
+              {createFiles.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {createFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30 text-sm"
+                    >
+                      <Paperclip className="h-3 w-3" />
+                      <span className="text-xs">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeCreateFile(index)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {createError ? (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {createError}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={createSaving}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void createStandaloneTask()} disabled={createSaving} className="gap-2">
+              {createSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {createSaving ? "Створення..." : "Створити задачу"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={!!taskToDelete}
         onOpenChange={(open) => {
@@ -791,7 +1168,9 @@ export default function DesignPage() {
         title="Видалити дизайн-задачу?"
         description={
           taskToDelete
-            ? `Задача по прорахунку ${taskToDelete.quoteNumber ?? taskToDelete.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`
+            ? isUuid(taskToDelete.quoteId)
+              ? `Задача по прорахунку ${taskToDelete.quoteNumber ?? taskToDelete.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`
+              : `Дизайн-задача «${taskToDelete.title ?? taskToDelete.quoteId.slice(0, 8)}» буде видалена без можливості відновлення.`
             : undefined
         }
         confirmLabel="Видалити"

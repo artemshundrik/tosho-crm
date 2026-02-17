@@ -414,15 +414,17 @@ export default function DesignTaskPage() {
           customerLogoUrl = cust?.logo_url ?? null;
         }
 
-        // first quote item
-        const { data: item } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .select("name, qty, unit, methods, attachment, catalog_model_id, catalog_kind_id")
-          .eq("quote_id", quoteId)
-          .order("position", { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        // first quote item (only for quote-linked tasks)
+        const { data: item } = isUuid(quoteId)
+          ? await supabase
+              .schema("tosho")
+              .from("quote_items")
+              .select("name, qty, unit, methods, attachment, catalog_model_id, catalog_kind_id")
+              .eq("quote_id", quoteId)
+              .order("position", { ascending: true })
+              .limit(1)
+              .maybeSingle()
+          : { data: null };
 
         let itemPreviewUrl: string | null = null;
         const attachmentUrlCandidate =
@@ -441,16 +443,52 @@ export default function DesignTaskPage() {
           itemPreviewUrl = (modelRow as { image_url?: string | null } | null)?.image_url ?? null;
         }
 
-        // customer attachments
-        const { data: files } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
-          .eq("quote_id", quoteId);
+        // customer attachments (only for quote-linked tasks)
+        const { data: files } = isUuid(quoteId)
+          ? await supabase
+              .schema("tosho")
+              .from("quote_attachments")
+              .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+              .eq("quote_id", quoteId)
+          : { data: [] };
 
         const attachmentRows = (files as AttachmentRow[] | null) ?? [];
         const attachmentsWithUrls = await Promise.all(
           attachmentRows.map(async (file) => {
+            let signedUrl: string | null = null;
+            if (file.storage_bucket && file.storage_path) {
+              const { data: signed } = await supabase.storage
+                .from(file.storage_bucket)
+                .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
+              signedUrl = signed?.signedUrl ?? null;
+            }
+            return { ...file, signed_url: signedUrl };
+          })
+        );
+
+        const rawStandaloneBriefFiles = Array.isArray(meta.standalone_brief_files)
+          ? meta.standalone_brief_files
+          : [];
+        const parsedStandaloneBriefFiles = rawStandaloneBriefFiles
+          .map((row: any) => {
+            const fileName = typeof row?.file_name === "string" && row.file_name ? row.file_name : null;
+            const storageBucket = typeof row?.storage_bucket === "string" && row.storage_bucket ? row.storage_bucket : null;
+            const storagePath = typeof row?.storage_path === "string" && row.storage_path ? row.storage_path : null;
+            if (!fileName || !storageBucket || !storagePath) return null;
+            return {
+              id: typeof row?.id === "string" && row.id ? row.id : crypto.randomUUID(),
+              file_name: fileName,
+              file_size: row?.file_size == null ? null : Number(row.file_size),
+              created_at: typeof row?.created_at === "string" ? row.created_at : new Date().toISOString(),
+              storage_bucket: storageBucket,
+              storage_path: storagePath,
+              uploaded_by: typeof row?.uploaded_by === "string" ? row.uploaded_by : null,
+            } satisfies AttachmentRow;
+          })
+          .filter(Boolean) as AttachmentRow[];
+
+        const standaloneBriefFilesWithUrls = await Promise.all(
+          parsedStandaloneBriefFiles.map(async (file) => {
             let signedUrl: string | null = null;
             if (file.storage_bucket && file.storage_path) {
               const { data: signed } = await supabase.storage
@@ -531,11 +569,13 @@ export default function DesignTaskPage() {
             quote?.design_brief ??
             quote?.comment ??
             null,
-          createdAt: quote?.created_at as string | null,
+          createdAt:
+            (typeof row?.created_at === "string" && row.created_at ? row.created_at : null) ??
+            (quote?.created_at as string | null),
         });
         setQuoteItem(item ?? null);
         setProductPreviewUrl(itemPreviewUrl);
-        setAttachments(attachmentsWithUrls);
+        setAttachments([...standaloneBriefFilesWithUrls, ...attachmentsWithUrls]);
         setDesignOutputFiles(designFilesWithUrls);
         setDesignOutputLinks(parsedDesignLinks);
       } catch (e: any) {
@@ -1101,13 +1141,20 @@ export default function DesignTaskPage() {
         console.warn("Failed to log design task assignment event", logError);
       }
 
-      const quoteLabel = task.quoteNumber ? `#${task.quoteNumber}` : task.quoteId.slice(0, 8);
+      const isLinkedQuoteTask = isUuid(task.quoteId);
+      const taskLabel = isLinkedQuoteTask
+        ? task.quoteNumber
+          ? `#${task.quoteNumber}`
+          : task.quoteId.slice(0, 8)
+        : `«${task.title ?? task.quoteId.slice(0, 8)}»`;
       try {
         if (nextAssigneeUserId && nextAssigneeUserId !== userId) {
           await notifyUsers({
             userIds: [nextAssigneeUserId],
             title: "Вас призначено на дизайн-задачу",
-            body: `${actorLabel} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+            body: isLinkedQuoteTask
+              ? `${actorLabel} призначив(ла) вас на задачу по прорахунку ${taskLabel}.`
+              : `${actorLabel} призначив(ла) вас на дизайн-задачу ${taskLabel}.`,
             href: `/design/${task.id}`,
             type: "info",
           });
@@ -1116,7 +1163,9 @@ export default function DesignTaskPage() {
           await notifyUsers({
             userIds: [previousAssignee],
             title: "Вас знято з дизайн-задачі",
-            body: `${actorLabel} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
+            body: isLinkedQuoteTask
+              ? `${actorLabel} зняв(ла) вас із задачі по прорахунку ${taskLabel}.`
+              : `${actorLabel} зняв(ла) вас із дизайн-задачі ${taskLabel}.`,
             href: `/design/${task.id}`,
             type: "warning",
           });
@@ -1228,11 +1277,18 @@ export default function DesignTaskPage() {
         }
 
         if (previousAssignee && previousAssignee !== userId) {
-          const quoteLabel = task.quoteNumber ? `#${task.quoteNumber}` : task.quoteId.slice(0, 8);
+          const isLinkedQuoteTask = isUuid(task.quoteId);
+          const taskLabel = isLinkedQuoteTask
+            ? task.quoteNumber
+              ? `#${task.quoteNumber}`
+              : task.quoteId.slice(0, 8)
+            : `«${task.title ?? task.quoteId.slice(0, 8)}»`;
           await notifyUsers({
             userIds: [previousAssignee],
             title: "Вас знято з дизайн-задачі",
-            body: `${actorLabel} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
+            body: isLinkedQuoteTask
+              ? `${actorLabel} зняв(ла) вас із задачі по прорахунку ${taskLabel}.`
+              : `${actorLabel} зняв(ла) вас із дизайн-задачі ${taskLabel}.`,
             href: `/design/${task.id}`,
             type: "warning",
           });
@@ -1383,6 +1439,12 @@ export default function DesignTaskPage() {
     );
   }
 
+  const isLinkedQuote = isUuid(task.quoteId);
+  const taskHeaderTitle = task.quoteNumber ?? task.title ?? task.quoteId;
+  const taskHeaderSubtitle = isLinkedQuote
+    ? `${task.customerName ?? "Клієнт"} · ${quoteItem?.name ?? "Позиція"}`
+    : `${task.customerName ?? "Клієнт"} · Дизайн-задача без прорахунку`;
+
   return (
     <div className="w-full max-w-none px-0 pb-20 space-y-4">
       <section className="rounded-xl border border-border/60 bg-gradient-to-br from-card/95 via-card/80 to-primary/5 p-4 md:p-5">
@@ -1399,10 +1461,8 @@ export default function DesignTaskPage() {
               </Badge>
             </div>
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-tight">{task.quoteNumber ?? task.quoteId}</h1>
-              <p className="text-sm text-muted-foreground">
-                {task.customerName ?? "Клієнт"} · {quoteItem?.name ?? "Позиція"}
-              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">{taskHeaderTitle}</h1>
+              <p className="text-sm text-muted-foreground">{taskHeaderSubtitle}</p>
             </div>
             <EntityViewersBar
               entries={designTaskViewers}
@@ -1424,10 +1484,12 @@ export default function DesignTaskPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button variant="outline" className="gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
-              <ExternalLink className="h-4 w-4" />
-              Відкрити прорахунок
-            </Button>
+            {isLinkedQuote ? (
+              <Button variant="outline" className="gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
+                <ExternalLink className="h-4 w-4" />
+                Відкрити прорахунок
+              </Button>
+            ) : null}
             <Button disabled={primaryActionDisabled} onClick={primaryActionClick ?? undefined}>
               {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {primaryActionLabel}
@@ -1442,9 +1504,11 @@ export default function DesignTaskPage() {
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Бриф задачі</div>
-              <Badge variant="outline" className="text-xs">
-                {quantityLabel}
-              </Badge>
+              {isLinkedQuote && quantityLabel !== "—" ? (
+                <Badge variant="outline" className="text-xs">
+                  {quantityLabel}
+                </Badge>
+              ) : null}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
@@ -1460,28 +1524,32 @@ export default function DesignTaskPage() {
                   <div className="font-medium">{task.customerName ?? "—"}</div>
                 </div>
               </div>
-              <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-                <div className="text-xs text-muted-foreground mb-1">Позиція</div>
-                <div className="flex items-center gap-2.5">
-                  <div className="h-10 w-10 rounded-md border border-border/60 bg-muted/30 overflow-hidden shrink-0 flex items-center justify-center">
-                    {productPreviewUrl ? (
-                      <img
-                        src={productPreviewUrl}
-                        alt={quoteItem?.name ?? "Товар"}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                    )}
+              {isLinkedQuote ? (
+                <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
+                  <div className="text-xs text-muted-foreground mb-1">Позиція</div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-10 w-10 rounded-md border border-border/60 bg-muted/30 overflow-hidden shrink-0 flex items-center justify-center">
+                      {productPreviewUrl ? (
+                        <img
+                          src={productPreviewUrl}
+                          alt={quoteItem?.name ?? "Товар"}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="font-medium">{quoteItem?.name ?? "—"}</div>
                   </div>
-                  <div className="font-medium">{quoteItem?.name ?? "—"}</div>
                 </div>
-              </div>
-              <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-                <div className="text-xs text-muted-foreground mb-1">Прорахунок</div>
-                <div className="font-mono font-medium">{task.quoteNumber ?? task.quoteId.slice(0, 8)}</div>
-              </div>
+              ) : null}
+              {isLinkedQuote ? (
+                <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
+                  <div className="text-xs text-muted-foreground mb-1">Прорахунок</div>
+                  <div className="font-mono font-medium">{task.quoteNumber ?? task.quoteId.slice(0, 8)}</div>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                 <div className="text-xs text-muted-foreground mb-1">Створено</div>
                 <div className="font-medium">{formatDate(task.createdAt, true)}</div>
@@ -1497,34 +1565,36 @@ export default function DesignTaskPage() {
               {task.designBrief ? (
                 <div className="text-sm whitespace-pre-wrap">{task.designBrief}</div>
               ) : (
-                <div className="text-sm text-muted-foreground">ТЗ поки не заповнено у прорахунку.</div>
+                <div className="text-sm text-muted-foreground">ТЗ поки не заповнено.</div>
               )}
             </div>
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Нанесення</div>
-              {task.methodsCount ? <Badge variant="outline">{task.methodsCount} нанес.</Badge> : null}
-            </div>
-            {methods.length > 0 ? (
-              <div className="space-y-2">
-                {methods.map((method, idx) => (
-                  <div key={idx} className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm">
-                    <div className="font-medium">Метод {idx + 1}: {getMethodLabel(method.method_id ?? null)}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Позиція: {getPrintPositionLabel(method.print_position_id ?? null)} · Розмір: {method.print_width_mm ?? "—"} ×{" "}
-                      {method.print_height_mm ?? "—"} мм
+          {isLinkedQuote ? (
+            <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Нанесення</div>
+                {task.methodsCount ? <Badge variant="outline">{task.methodsCount} нанес.</Badge> : null}
+              </div>
+              {methods.length > 0 ? (
+                <div className="space-y-2">
+                  {methods.map((method, idx) => (
+                    <div key={idx} className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm">
+                      <div className="font-medium">Метод {idx + 1}: {getMethodLabel(method.method_id ?? null)}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Позиція: {getPrintPositionLabel(method.print_position_id ?? null)} · Розмір: {method.print_width_mm ?? "—"} ×{" "}
+                        {method.print_height_mm ?? "—"} мм
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-                Немає даних про нанесення для цієї задачі.
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                  Немає даних про нанесення для цієї задачі.
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1814,7 +1884,9 @@ export default function DesignTaskPage() {
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-2">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Файли від замовника</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
+            </div>
             {attachments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
                 Немає вкладень
@@ -1898,8 +1970,13 @@ export default function DesignTaskPage() {
                 <span className="font-medium text-right">{task.customerName ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" />Прорахунок</span>
-                <span className="font-medium text-right">{task.quoteNumber ?? task.quoteId.slice(0, 8)}</span>
+                <span className="text-muted-foreground inline-flex items-center gap-1">
+                  <Hash className="h-3.5 w-3.5" />
+                  {isLinkedQuote ? "Прорахунок" : "Контекст"}
+                </span>
+                <span className="font-medium text-right">
+                  {isLinkedQuote ? task.quoteNumber ?? task.quoteId.slice(0, 8) : "Без прорахунку"}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Виконавець</span>
@@ -1970,13 +2047,21 @@ export default function DesignTaskPage() {
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Коментарі та згадки</div>
-            <p className="text-sm text-muted-foreground">
-              Обговорення і @згадки ведуться в деталях прорахунку, щоб команда та сповіщення працювали в одному потоці.
-            </p>
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
-              <ExternalLink className="h-4 w-4" />
-              Відкрити коментарі прорахунку
-            </Button>
+            {isLinkedQuote ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Обговорення і @згадки ведуться в деталях прорахунку, щоб команда та сповіщення працювали в одному потоці.
+                </p>
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
+                  <ExternalLink className="h-4 w-4" />
+                  Відкрити коментарі прорахунку
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Для standalone задачі обговорення ведіть у ТЗ цієї задачі та в історії змін.
+              </p>
+            )}
           </div>
         </aside>
       </div>
@@ -2041,7 +2126,11 @@ export default function DesignTaskPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Видалити дизайн-задачу?"
-        description={`Задача по прорахунку ${task.quoteNumber ?? task.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`}
+        description={
+          isLinkedQuote
+            ? `Задача по прорахунку ${task.quoteNumber ?? task.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`
+            : `Дизайн-задача «${task.title ?? task.quoteId.slice(0, 8)}» буде видалена без можливості відновлення.`
+        }
         confirmLabel="Видалити"
         cancelLabel="Скасувати"
         icon={<Trash2 className="h-5 w-5 text-destructive" />}

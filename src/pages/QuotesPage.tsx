@@ -241,6 +241,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [search, setSearch] = useState("");
   const [status, setStatusFilter] = useState("all");
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [teamMembersLoaded, setTeamMembersLoaded] = useState(false);
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
   const [rowStatusError, setRowStatusError] = useState<string | null>(null);
   const [rowDeleteBusy, setRowDeleteBusy] = useState<string | null>(null);
@@ -328,6 +329,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
   );
+  const getManagerLabel = (assignedTo?: string | null) => {
+    if (!assignedTo) return "—";
+    const label = memberById.get(assignedTo);
+    if (label) return label;
+    return teamMembersLoaded ? "Користувач" : "—";
+  };
 
   const selectedType = useMemo(
     () => catalogTypes.find((t) => t.id === selectedTypeId),
@@ -476,11 +483,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   useEffect(() => {
     let active = true;
     const loadMembers = async () => {
+      if (active) setTeamMembersLoaded(false);
       try {
         const data = await listTeamMembers(teamId);
-        if (active) setTeamMembers(data);
+        if (active) {
+          setTeamMembers(data);
+          setTeamMembersLoaded(true);
+        }
       } catch {
-        if (active) setTeamMembers([]);
+        if (active) {
+          setTeamMembers([]);
+          setTeamMembersLoaded(true);
+        }
       }
     };
     if (teamId) void loadMembers();
@@ -2175,18 +2189,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <AvatarBase
                               src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                              name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                              name={getManagerLabel(row.assigned_to)}
                               fallback={
-                                row.assigned_to ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to) : "—"
+                                row.assigned_to ? getInitials(getManagerLabel(row.assigned_to)) : "—"
                               }
                               size={28}
                               className="text-[10px] font-semibold"
                             />
-                            <span>
-                              {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                            <span className="truncate">
+                              {getManagerLabel(row.assigned_to)}
                             </span>
                           </div>
                         </TableCell>
@@ -2409,17 +2423,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <AvatarBase
                                       src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                                      name={row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                                      name={getManagerLabel(row.assigned_to)}
                                       fallback={
                                         row.assigned_to
-                                          ? getInitials(memberById.get(row.assigned_to) ?? row.assigned_to)
+                                          ? getInitials(getManagerLabel(row.assigned_to))
                                           : "—"
                                       }
                                       size={22}
                                       className="text-[9px] font-semibold"
                                     />
                                     <span className="truncate">
-                                      {row.assigned_to ? memberById.get(row.assigned_to) ?? row.assigned_to : "—"}
+                                      {getManagerLabel(row.assigned_to)}
                                     </span>
                                   </div>
                                 </div>
