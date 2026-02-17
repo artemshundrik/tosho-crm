@@ -487,7 +487,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 
     const ids = baseMembers.map((m) => m.id);
     const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-    let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+    let membershipRows: any = null;
     let membershipError: any = null;
     for (const columns of columnsToTryMemberships) {
       ({ data: membershipRows, error: membershipError } = await supabase
@@ -553,7 +553,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 
       const ids = baseMembers.map((m) => m.id);
       const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-      let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+      let membershipRows: any = null;
       let membershipError: any = null;
       for (const columns of columnsToTryMemberships) {
         ({ data: membershipRows, error: membershipError } = await supabase
