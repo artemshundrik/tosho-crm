@@ -48,6 +48,7 @@ type MembershipRow = {
 };
 
 type AssignmentFilter = "mine" | "all" | "unassigned";
+type DesignViewMode = "kanban" | "timeline" | "assignee";
 
 const isDesignerRole = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -76,6 +77,24 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: st
   { id: "approved", label: "Затверджено", hint: "Готово", color: "bg-emerald-400" },
   { id: "cancelled", label: "Скасовано", hint: "Скасовано", color: "bg-rose-400" },
 ];
+const STATUS_BADGE_CLASS_BY_STATUS: Record<DesignStatus, string> = {
+  new: "border-slate-400/40 bg-slate-500/12 text-slate-200",
+  changes: "border-amber-400/40 bg-amber-500/15 text-amber-200",
+  in_progress: "border-sky-400/40 bg-sky-500/15 text-sky-200",
+  pm_review: "border-indigo-400/40 bg-indigo-500/15 text-indigo-200",
+  client_review: "border-yellow-400/40 bg-yellow-500/15 text-yellow-200",
+  approved: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
+  cancelled: "border-rose-400/40 bg-rose-500/15 text-rose-200",
+};
+const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
+  new: "bg-slate-400/25 border-slate-300/50",
+  changes: "bg-amber-400/25 border-amber-300/50",
+  in_progress: "bg-sky-400/25 border-sky-300/50",
+  pm_review: "bg-indigo-400/25 border-indigo-300/50",
+  client_review: "bg-yellow-400/25 border-yellow-300/50",
+  approved: "bg-emerald-400/25 border-emerald-300/50",
+  cancelled: "bg-rose-400/20 border-rose-300/45",
+};
 
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
@@ -107,6 +126,7 @@ export default function DesignPage() {
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
+  const [viewMode, setViewMode] = useState<DesignViewMode>("kanban");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const canManageAssignments = permissions.canManageAssignments;
@@ -292,6 +312,85 @@ export default function DesignPage() {
     });
     return bucket;
   }, [filteredTasks]);
+
+  const timelineData = useMemo(() => {
+    const normalizeDate = (value: string | null | undefined): Date | null => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    };
+    const addDays = (base: Date, days: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
+    const daysDiff = (from: Date, to: Date) =>
+      Math.round(
+        (new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime() -
+          new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+
+    const timelineTasks = filteredTasks
+      .map((task) => {
+        const deadline = normalizeDate(task.designDeadline ?? null);
+        if (!deadline) return null;
+        const created = normalizeDate(task.createdAt ?? null);
+        const startCandidate = created ?? addDays(deadline, -2);
+        const start = startCandidate.getTime() <= deadline.getTime() ? startCandidate : deadline;
+        return { task, start, end: deadline };
+      })
+      .filter(Boolean) as Array<{ task: DesignTask; start: Date; end: Date }>;
+
+    const noDeadlineTasks = filteredTasks.filter((task) => !normalizeDate(task.designDeadline ?? null));
+    if (timelineTasks.length === 0) {
+      return {
+        rows: [] as Array<{ task: DesignTask; start: Date; end: Date; offset: number; span: number }>,
+        days: [] as Date[],
+        noDeadlineTasks,
+      };
+    }
+
+    const sorted = [...timelineTasks].sort((a, b) => {
+      const byEnd = a.end.getTime() - b.end.getTime();
+      if (byEnd !== 0) return byEnd;
+      return a.start.getTime() - b.start.getTime();
+    });
+
+    const minStart = sorted.reduce((acc, item) => (item.start.getTime() < acc.getTime() ? item.start : acc), sorted[0].start);
+    const maxEnd = sorted.reduce((acc, item) => (item.end.getTime() > acc.getTime() ? item.end : acc), sorted[0].end);
+    const windowStart = addDays(minStart, -1);
+    const windowEnd = addDays(maxEnd, 1);
+    const totalDays = Math.max(1, daysDiff(windowStart, windowEnd) + 1);
+    const days = Array.from({ length: totalDays }, (_, index) => addDays(windowStart, index));
+
+    const rows = sorted.map((item) => {
+      const offset = Math.max(0, daysDiff(windowStart, item.start));
+      const span = Math.max(1, daysDiff(item.start, item.end) + 1);
+      return { ...item, offset, span };
+    });
+
+    return { rows, days, noDeadlineTasks };
+  }, [filteredTasks]);
+
+  const assigneeGrouped = useMemo(() => {
+    const map = new Map<string, { id: string | null; label: string; tasks: DesignTask[] }>();
+    filteredTasks.forEach((task) => {
+      const key = task.assigneeUserId ?? "__unassigned__";
+      if (!map.has(key)) {
+        map.set(key, {
+          id: task.assigneeUserId ?? null,
+          label: task.assigneeUserId ? getMemberLabel(task.assigneeUserId) : "Без виконавця",
+          tasks: [],
+        });
+      }
+      map.get(key)?.tasks.push(task);
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (!a.id && b.id) return 1;
+      if (a.id && !b.id) return -1;
+      if (b.tasks.length !== a.tasks.length) return b.tasks.length - a.tasks.length;
+      return a.label.localeCompare(b.label, "uk");
+    });
+  }, [filteredTasks, memberById]);
 
   const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
     setDraggingId(taskId);
@@ -727,6 +826,162 @@ export default function DesignPage() {
     }
   };
 
+  const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
+    const isLinkedQuote = isUuid(task.quoteId);
+    return (
+      <div
+        key={task.id}
+        draggable={options?.draggable}
+        onDragStart={
+          options?.draggable ? (event) => startDraggingTask(event as React.DragEvent<HTMLDivElement>, task.id) : undefined
+        }
+        onDragEnd={options?.draggable ? stopDraggingTask : undefined}
+        onClick={() => {
+          if (suppressCardClick) return;
+          navigate(`/design/${task.id}`);
+        }}
+        className={cn(
+          "rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer",
+          draggingId === task.id && "ring-2 ring-primary/40"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
+            {isLinkedQuote ? (
+              <button
+                className="text-sm font-mono font-semibold hover:underline truncate"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(`/orders/estimates/${task.quoteId}`);
+                }}
+                title={task.quoteNumber ?? task.quoteId}
+              >
+                {task.quoteNumber ?? task.quoteId.slice(0, 8)}
+              </button>
+            ) : (
+              <div className="text-sm font-semibold truncate" title={task.title ?? task.quoteId}>
+                {task.title ?? task.quoteId.slice(0, 8)}
+              </div>
+            )}
+            <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
+              {task.customerName ?? "—"}
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+              {canSelfAssign &&
+              userId &&
+              task.assigneeUserId &&
+              (canManageAssignments || task.assigneeUserId === userId) ? (
+                <DropdownMenuItem onClick={() => applyAssignee(task, userId)} disabled={task.assigneeUserId === userId}>
+                  {task.assigneeUserId === userId ? "Призначено на мене" : "Призначити на мене"}
+                </DropdownMenuItem>
+              ) : null}
+              {!task.assigneeUserId && canSelfAssign && userId ? (
+                <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>Взяти в роботу</DropdownMenuItem>
+              ) : null}
+              {canManageAssignments ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Призначити дизайнеру</DropdownMenuLabel>
+                  {designerMembers.length === 0 ? (
+                    <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
+                  ) : (
+                    designerMembers.map((member) => (
+                      <DropdownMenuItem
+                        key={member.id}
+                        onClick={() => applyAssignee(task, member.id)}
+                        disabled={task.assigneeUserId === member.id}
+                      >
+                        {member.label}
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                  <DropdownMenuItem onClick={() => applyAssignee(task, null)} disabled={!task.assigneeUserId}>
+                    Зняти виконавця
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+              <DropdownMenuSeparator />
+              {DESIGN_COLUMNS.map((target) => (
+                <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
+                  {target.label}
+                </DropdownMenuItem>
+              ))}
+              {canManageAssignments ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={deletingTaskId === task.id}
+                    onClick={() => requestDeleteTask(task)}
+                  >
+                    {deletingTaskId === task.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    Видалити задачу
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {task.title ? <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div> : null}
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+            Виконавець:{" "}
+            <span className={cn("font-medium", task.assigneeUserId ? "text-foreground" : "text-amber-300")}>
+              {getMemberLabel(task.assigneeUserId)}
+            </span>
+          </span>
+          {!task.assigneeUserId && canSelfAssign && userId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 w-full text-xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                void applyAssignee(task, userId);
+              }}
+            >
+              Взяти в роботу
+            </Button>
+          ) : null}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+          {task.methodsCount ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> {task.methodsCount} нанес.
+            </span>
+          ) : null}
+          {task.hasFiles ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+              <Paperclip className="h-3.5 w-3.5" /> Файли
+            </span>
+          ) : null}
+          {task.designDeadline ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+              <Clock className="h-3.5 w-3.5" />
+              {new Date(task.designDeadline).toLocaleDateString("uk-UA", {
+                day: "numeric",
+                month: "short",
+              })}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-3">
@@ -768,6 +1023,17 @@ export default function DesignPage() {
         <Badge variant="outline" className="ml-1">
           {filteredTasks.length} задач
         </Badge>
+        <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
+          <Button size="sm" variant={viewMode === "kanban" ? "secondary" : "ghost"} onClick={() => setViewMode("kanban")}>
+            Kanban
+          </Button>
+          <Button size="sm" variant={viewMode === "timeline" ? "secondary" : "ghost"} onClick={() => setViewMode("timeline")}>
+            Timeline
+          </Button>
+          <Button size="sm" variant={viewMode === "assignee" ? "secondary" : "ghost"} onClick={() => setViewMode("assignee")}>
+            По дизайнерах
+          </Button>
+        </div>
       </div>
 
       {error ? (
@@ -776,224 +1042,262 @@ export default function DesignPage() {
         </div>
       ) : null}
 
-      <div className="overflow-x-auto">
-        <div className="flex gap-4 min-w-[1100px]">
-          {DESIGN_COLUMNS.map((col) => {
-            const items = grouped[col.id] ?? [];
-            return (
-              <div
-                key={col.id}
-                className={cn(
-                  "w-[240px] flex-shrink-0 bg-card/70 border border-border/60 rounded-lg shadow-sm flex flex-col transition-colors",
-                  draggingId && "border-primary/35",
-                  dropTargetStatus === col.id && "border-primary bg-primary/5"
-                )}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "move";
-                  if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                }}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                    setDropTargetStatus((current) => (current === col.id ? null : current));
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDropTargetStatus(null);
-                  dropTaskToStatus(col.id);
-                  stopDraggingTask();
-                }}
-              >
-                <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("h-2.5 w-2.5 rounded-full", col.color)} />
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-foreground">{col.label}</div>
-                      <div className="text-[11px] text-muted-foreground">{col.hint}</div>
+      {viewMode === "kanban" ? (
+        <div className="overflow-x-auto">
+          <div className="flex gap-4 min-w-[1100px]">
+            {DESIGN_COLUMNS.map((col) => {
+              const items = grouped[col.id] ?? [];
+              return (
+                <div
+                  key={col.id}
+                  className={cn(
+                    "w-[240px] flex-shrink-0 bg-card/70 border border-border/60 rounded-lg shadow-sm flex flex-col transition-colors",
+                    draggingId && "border-primary/35",
+                    dropTargetStatus === col.id && "border-primary bg-primary/5"
+                  )}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                      setDropTargetStatus((current) => (current === col.id ? null : current));
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDropTargetStatus(null);
+                    dropTaskToStatus(col.id);
+                    stopDraggingTask();
+                  }}
+                >
+                  <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2.5 w-2.5 rounded-full", col.color)} />
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-foreground">{col.label}</div>
+                        <div className="text-[11px] text-muted-foreground">{col.hint}</div>
+                      </div>
                     </div>
+                    <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
+                      {items.length}
+                    </Badge>
                   </div>
-                  <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
-                    {items.length}
-                  </Badge>
+                  <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
+                    {items.length === 0 ? (
+                      <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+                        Немає задач
+                      </div>
+                    ) : (
+                      items.map((task) => renderTaskCard(task, { draggable: true }))
+                    )}
+                  </div>
                 </div>
-                <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
-                  {items.length === 0 ? (
-                    <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
-                      Немає задач
-                    </div>
-                  ) : (
-                    items.map((task) => (
-                      <div
-                        key={task.id}
-                        draggable
-                        onDragStart={(event) => startDraggingTask(event, task.id)}
-                        onDragEnd={stopDraggingTask}
-                        onClick={() => {
-                          if (suppressCardClick) return;
-                          navigate(`/design/${task.id}`);
-                        }}
-                        className={cn(
-                          "rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer",
-                          draggingId === task.id && "ring-2 ring-primary/40"
-                        )}
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {viewMode === "timeline" ? (
+        <div className="space-y-3">
+          {timelineData.rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+              Немає задач із дедлайном для Timeline.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border/60 bg-card/60 overflow-auto">
+              <div
+                className="grid min-w-[980px]"
+                style={{ gridTemplateColumns: `320px repeat(${timelineData.days.length}, minmax(44px, 1fr))` }}
+              >
+                <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Задача
+                </div>
+                {timelineData.days.map((day, index) => (
+                  <div
+                    key={`timeline-head-${day.toISOString()}-${index}`}
+                    className="border-b border-r border-border/40 px-1 py-2 text-center text-[11px] text-muted-foreground bg-card/80"
+                  >
+                    <div className="font-medium text-foreground">{day.toLocaleDateString("uk-UA", { day: "2-digit" })}</div>
+                    <div>{day.toLocaleDateString("uk-UA", { month: "short" })}</div>
+                  </div>
+                ))}
+
+                {timelineData.rows.map((row) => {
+                  const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
+                  return (
+                    <div key={row.task.id} className="contents">
+                      <button
+                        className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-3 py-2 text-left hover:bg-muted/20"
+                        onClick={() => navigate(`/design/${row.task.id}`)}
                       >
-                        {(() => {
-                          const isLinkedQuote = isUuid(task.quoteId);
-                          return (
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
-                            {isLinkedQuote ? (
-                              <button
-                                className="text-sm font-mono font-semibold hover:underline truncate"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(`/orders/estimates/${task.quoteId}`);
-                                }}
-                                title={task.quoteNumber ?? task.quoteId}
-                              >
-                                {task.quoteNumber ?? task.quoteId.slice(0, 8)}
-                              </button>
-                            ) : (
-                              <div className="text-sm font-semibold truncate" title={task.title ?? task.quoteId}>
-                                {task.title ?? task.quoteId.slice(0, 8)}
-                              </div>
-                            )}
-                            <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
-                              {task.customerName ?? "—"}
-                            </div>
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                              {canSelfAssign &&
-                              userId &&
-                              task.assigneeUserId &&
-                              (canManageAssignments || task.assigneeUserId === userId) ? (
-                                <DropdownMenuItem
-                                  onClick={() => applyAssignee(task, userId)}
-                                  disabled={task.assigneeUserId === userId}
-                                >
-                                  {task.assigneeUserId === userId ? "Призначено на мене" : "Призначити на мене"}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {!task.assigneeUserId && canSelfAssign && userId ? (
-                                <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>
-                                  Взяти в роботу
-                                </DropdownMenuItem>
-                              ) : null}
-                              {canManageAssignments ? (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuLabel>Призначити дизайнеру</DropdownMenuLabel>
-                                  {designerMembers.length === 0 ? (
-                                    <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
-                                  ) : (
-                                    designerMembers.map((member) => (
-                                      <DropdownMenuItem
-                                        key={member.id}
-                                        onClick={() => applyAssignee(task, member.id)}
-                                        disabled={task.assigneeUserId === member.id}
-                                      >
-                                        {member.label}
-                                      </DropdownMenuItem>
-                                    ))
-                                  )}
-                                  <DropdownMenuItem onClick={() => applyAssignee(task, null)} disabled={!task.assigneeUserId}>
-                                    Зняти виконавця
-                                  </DropdownMenuItem>
-                                </>
-                              ) : null}
-                              <DropdownMenuSeparator />
-                              {DESIGN_COLUMNS.map((target) => (
-                                <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
-                                  {target.label}
-                                </DropdownMenuItem>
-                              ))}
-                              {canManageAssignments ? (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    disabled={deletingTaskId === task.id}
-                                    onClick={() => requestDeleteTask(task)}
-                                  >
-                                    {deletingTaskId === task.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                    Видалити задачу
-                                  </DropdownMenuItem>
-                                </>
-                              ) : null}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        <div className="truncate text-sm font-medium">
+                          {isUuid(row.task.quoteId)
+                            ? row.task.quoteNumber ?? row.task.quoteId.slice(0, 8)
+                            : row.task.title ?? row.task.quoteId.slice(0, 8)}
                         </div>
-                          );
-                        })()}
-                        {task.title ? <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div> : null}
-                        <div className="mt-2">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                            Виконавець:{" "}
-                            <span className={cn("font-medium", task.assigneeUserId ? "text-foreground" : "text-amber-300")}>
-                              {getMemberLabel(task.assigneeUserId)}
-                            </span>
-                          </span>
-                          {!task.assigneeUserId && canSelfAssign && userId ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2 h-7 w-full text-xs"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void applyAssignee(task, userId);
+                        <div className="truncate text-xs text-muted-foreground">
+                          {row.task.customerName ?? "—"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)}
+                        </div>
+                      </button>
+                      <div
+                        className="relative border-b border-border/40"
+                        style={{ gridColumn: `2 / span ${timelineData.days.length}` }}
+                      >
+                        <div className="absolute inset-y-2 left-0 right-0">
+                          <div className="relative h-full">
+                            <div
+                              className={cn(
+                                "absolute top-1/2 -translate-y-1/2 h-6 rounded-md border",
+                                TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40"
+                              )}
+                              style={{
+                                left: `calc(${row.offset} * (100% / ${timelineData.days.length}))`,
+                                width: `calc(${row.span} * (100% / ${timelineData.days.length}))`,
                               }}
-                            >
-                              Взяти в роботу
-                            </Button>
-                          ) : null}
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                          {task.methodsCount ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> {task.methodsCount} нанес.
-                            </span>
-                          ) : null}
-                          {task.hasFiles ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                              <Paperclip className="h-3.5 w-3.5" /> Файли
-                            </span>
-                          ) : null}
-                          {task.designDeadline ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                              <Clock className="h-3.5 w-3.5" />
-                              {new Date(task.designDeadline).toLocaleDateString("uk-UA", {
-                                day: "numeric",
-                                month: "short",
-                              })}
-                            </span>
-                          ) : null}
+                            />
+                          </div>
                         </div>
                       </div>
-                    ))
-                  )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {timelineData.noDeadlineTasks.length > 0 ? (
+            <div className="rounded-lg border border-border/60 bg-card/60">
+              <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
+                <div className="text-sm font-semibold">Без дедлайну</div>
+                <Badge variant="secondary">{timelineData.noDeadlineTasks.length}</Badge>
+              </div>
+              <div className="p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {timelineData.noDeadlineTasks.map((task) => renderTaskCard(task))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {viewMode === "assignee" ? (
+        <div className="space-y-3">
+          {assigneeGrouped.length === 0 ? (
+            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+              Немає задач
+            </div>
+          ) : (
+            assigneeGrouped.map((group) => (
+              <div key={group.id ?? "unassigned"} className="rounded-lg border border-border/60 bg-card/60">
+                <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
+                  <div className="text-sm font-semibold">{group.label}</div>
+                  <Badge variant="secondary">{group.tasks.length}</Badge>
+                </div>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <div>Задача</div>
+                      <div>Клієнт</div>
+                      <div>Статус</div>
+                      <div>Дедлайн</div>
+                      <div className="text-right">Дії</div>
+                    </div>
+                    {group.tasks.map((task) => {
+                      const isLinkedQuote = isUuid(task.quoteId);
+                      const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
+                      const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
+                      const hasValidDeadline = !!deadlineDate && !Number.isNaN(deadlineDate.getTime());
+                      return (
+                        <div
+                          key={task.id}
+                          className="grid grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
+                        >
+                          <button
+                            className="text-left min-w-0"
+                            onClick={() => navigate(`/design/${task.id}`)}
+                            title={task.title ?? task.quoteNumber ?? task.quoteId}
+                          >
+                            <div className="font-medium truncate">
+                              {isLinkedQuote
+                                ? task.quoteNumber ?? task.quoteId.slice(0, 8)
+                                : task.title ?? task.quoteId.slice(0, 8)}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{isLinkedQuote ? "Прорахунок" : "Standalone"}</div>
+                          </button>
+                          <div className="truncate">{task.customerName ?? "—"}</div>
+                          <div>
+                            <Badge
+                              variant="outline"
+                              className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}
+                            >
+                              {statusLabel}
+                            </Badge>
+                          </div>
+                          <div className="text-muted-foreground">
+                            {hasValidDeadline ? (
+                              deadlineDate.toLocaleDateString("uk-UA", { day: "numeric", month: "short" })
+                            ) : (
+                              <span className="inline-flex items-center rounded-full border border-border/50 px-2 py-0.5 text-[11px]">
+                                Без дедлайну
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex justify-end">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
+                                  Відкрити
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
+                                  Редагувати
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {DESIGN_COLUMNS.map((target) => (
+                                  <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
+                                    Статус: {target.label}
+                                  </DropdownMenuItem>
+                                ))}
+                                {canManageAssignments ? (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      disabled={deletingTaskId === task.id}
+                                      onClick={() => requestDeleteTask(task)}
+                                    >
+                                      {deletingTaskId === task.id ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                      )}
+                                      Видалити
+                                    </DropdownMenuItem>
+                                  </>
+                                ) : null}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
-      </div>
+      ) : null}
 
       {(loading || membersLoading) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
