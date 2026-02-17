@@ -66,6 +66,7 @@ type DesignTask = {
   quoteNumber?: string | null;
   customerName?: string | null;
   customerLogoUrl?: string | null;
+  designBrief?: string | null;
   createdAt?: string | null;
 };
 
@@ -339,16 +340,49 @@ export default function DesignTaskPage() {
         const quoteId = metadataQuoteId ?? entityQuoteId;
 
         // quote basics
-        let quote: { number?: string | null; customer_id?: string | null; created_at?: string | null } | null = null;
+        let quote: {
+          number?: string | null;
+          customer_id?: string | null;
+          created_at?: string | null;
+          design_brief?: string | null;
+          comment?: string | null;
+        } | null = null;
         if (isUuid(quoteId)) {
           const { data: quoteData, error: quoteError } = await supabase
             .schema("tosho")
             .from("quotes")
-            .select("number, customer_id, created_at")
+            .select("number, customer_id, created_at, design_brief, comment")
             .eq("id", quoteId)
             .maybeSingle();
-          if (quoteError) throw quoteError;
-          quote = quoteData as { number?: string | null; customer_id?: string | null; created_at?: string | null } | null;
+          if (
+            quoteError &&
+            /column/i.test(quoteError.message ?? "") &&
+            /design_brief/i.test(quoteError.message ?? "")
+          ) {
+            const { data: quoteFallback, error: quoteFallbackError } = await supabase
+              .schema("tosho")
+              .from("quotes")
+              .select("number, customer_id, created_at, comment")
+              .eq("id", quoteId)
+              .maybeSingle();
+            if (quoteFallbackError) throw quoteFallbackError;
+            quote = quoteFallback as {
+              number?: string | null;
+              customer_id?: string | null;
+              created_at?: string | null;
+              comment?: string | null;
+            } | null;
+          } else if (quoteError) {
+            throw quoteError;
+          } else {
+            quote = quoteData as {
+              number?: string | null;
+              customer_id?: string | null;
+              created_at?: string | null;
+              design_brief?: string | null;
+              comment?: string | null;
+            } | null;
+          }
         }
 
         let customerName: string | null =
@@ -492,6 +526,11 @@ export default function DesignTaskPage() {
             null,
           customerName,
           customerLogoUrl,
+          designBrief:
+            (typeof meta.design_brief === "string" && meta.design_brief.trim() ? meta.design_brief.trim() : null) ??
+            quote?.design_brief ??
+            quote?.comment ??
+            null,
           createdAt: quote?.created_at as string | null,
         });
         setQuoteItem(item ?? null);
@@ -1453,6 +1492,14 @@ export default function DesignTaskPage() {
                 {task.title ?? "Клієнт надіслав правки, перевірте деталі та оновіть макет."}
               </div>
             ) : null}
+            <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
+              <div className="text-xs text-muted-foreground mb-1">ТЗ для дизайнера</div>
+              {task.designBrief ? (
+                <div className="text-sm whitespace-pre-wrap">{task.designBrief}</div>
+              ) : (
+                <div className="text-sm text-muted-foreground">ТЗ поки не заповнено у прорахунку.</div>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">

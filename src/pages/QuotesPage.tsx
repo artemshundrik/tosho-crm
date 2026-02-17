@@ -804,6 +804,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         comment: data.comment?.trim() || data.deadlineNote?.trim() || null,
+        designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
         currency: data.currency,
         assignedTo: data.managerId || null,
         deadlineAt,
@@ -901,6 +902,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               has_files: data.files.length > 0,
               design_deadline: designDeadline,
               deadline: designDeadline,
+              design_brief: data.comment?.trim() || data.deadlineNote?.trim() || null,
               model: modelName,
             },
           })
@@ -1447,6 +1449,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         customerId,
         quoteType,
         comment: comment.trim() || null,
+        designBrief: comment.trim() || null,
         currency,
         assignedTo: assignedTo === "unassigned" ? null : assignedTo,
         deadlineAt: deadlineDate || null,
@@ -1689,7 +1692,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         : undefined;
     setEditInitialValues({
       status: normalizeStatus(row.status),
-      comment: row.comment ?? "",
+      comment: row.design_brief ?? row.comment ?? "",
       managerId: row.assigned_to ?? "",
       deadline: initialDeadline,
       deadlineNote: row.deadline_note ?? "",
@@ -1712,7 +1715,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           : undefined;
       setEditInitialValues({
         status: normalizeStatus(fresh.status),
-        comment: fresh.comment ?? row.comment ?? "",
+        comment: fresh.design_brief ?? fresh.comment ?? row.design_brief ?? row.comment ?? "",
         managerId: fresh.assigned_to ?? "",
         deadline: freshDeadline,
         deadlineNote: fresh.deadline_note ?? "",
@@ -1745,6 +1748,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         teamId,
         status: data.status,
         comment: data.comment?.trim() || null,
+        designBrief: data.comment?.trim() || null,
         assignedTo: data.managerId?.trim() ? data.managerId : null,
         deadlineAt: formatDateOnly(data.deadline),
         deadlineNote: data.deadlineNote?.trim() || null,
@@ -1758,6 +1762,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 ...row,
                 status: data.status,
                 comment: data.comment?.trim() || null,
+                design_brief: data.comment?.trim() || null,
                 assigned_to: data.managerId?.trim() ? data.managerId : null,
                 deadline_at: formatDateOnly(data.deadline),
                 deadline_note: data.deadlineNote?.trim() || null,

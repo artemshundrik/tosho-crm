@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import {
@@ -368,12 +369,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Handle file drop
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    if (printMode === "no_print") return;
     const droppedFiles = Array.from(e.dataTransfer.files);
     setFiles([...files, ...droppedFiles].slice(0, 5));
   };
 
   // Handle file select
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (printMode === "no_print") return;
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
       setFiles([...files, ...selectedFiles].slice(0, 5));
@@ -671,15 +674,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
         <div className="space-y-4">
           <SectionHeader>Деталі</SectionHeader>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Коментар</div>
-            <textarea
-              className="w-full min-h-[88px] rounded-[var(--radius-md)] border border-border/40 bg-background px-3 py-2 text-sm outline-none ring-0 focus:border-primary/50"
-              placeholder="Внутрішній коментар"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-          </div>
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Нотатка до дедлайну</div>
             <Input
@@ -981,108 +975,122 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         </div>
         ) : null}
 
-        {/* Files section */}
+        {/* Design section */}
         {!isEditMode && printMode !== "no_print" ? (
         <div className="space-y-4">
-          <SectionHeader>Файли</SectionHeader>
-
-          <div
-            onDrop={handleFileDrop}
-            onDragOver={(e) => e.preventDefault()}
-            className="relative border-2 border-dashed border-border/40 rounded-[var(--radius-md)] p-8 text-center hover:border-border/60 transition-colors cursor-pointer"
-          >
-            <input
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              accept="*/*"
-            />
-            <div className="flex flex-col items-center gap-2">
-              <Paperclip className="h-5 w-5 text-muted-foreground" />
-              <div className="text-sm text-foreground">
-                Перетягніть або клікніть для вибору
+          <SectionHeader>Дизайн</SectionHeader>
+          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/5 p-4 space-y-4">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,1fr)]">
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
+                <Textarea
+                  className="min-h-[120px] resize-y text-foreground placeholder:text-muted-foreground"
+                  placeholder="Опишіть задачу для дизайнера: референси, текст, побажання, обмеження"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                />
               </div>
-              <div className="text-xs text-muted-foreground">
-                до 5 файлів, до 50MB
-              </div>
-            </div>
-          </div>
 
-          {files.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {files.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30 text-sm"
-                >
-                  <Paperclip className="h-3 w-3" />
-                  <span className="text-xs">{file.name}</span>
-                  <button
-                    onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={createDesignTask}
+                    onCheckedChange={(checked) => {
+                      const next = !!checked;
+                      setCreateDesignTask(next);
+                      if (!next) setDesignAssigneeId(null);
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="space-y-1 text-sm">
+                    <div className="font-medium">Створити задачу на дизайн</div>
+                    <p className="text-muted-foreground text-xs">
+                      Використайте, коли потрібен макет від дизайнера.
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-        ) : null}
 
-        {/* Design task */}
-        {!isEditMode && printMode !== "no_print" ? (
-          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/5 px-4 py-3 space-y-3">
-            <div className="flex items-start gap-3">
-              <Checkbox
-                checked={createDesignTask}
-                onCheckedChange={(checked) => {
-                  const next = !!checked;
-                  setCreateDesignTask(next);
-                  if (!next) setDesignAssigneeId(null);
-                }}
-                className="mt-1"
-              />
-              <div className="space-y-1 text-sm">
-                <div className="font-medium">Створити задачу на дизайн</div>
-                <p className="text-muted-foreground text-xs">
-                  Якщо потрібен макет: увімкніть, додайте метод нанесення та файли/коментар для дизайнера.
-                </p>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
+                  <Select
+                    value={designAssigneeId ?? "none"}
+                    onValueChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
+                    disabled={!createDesignTask}
+                  >
+                    <SelectTrigger className="h-9 w-full text-foreground">
+                      <SelectValue
+                        className="text-foreground"
+                        placeholder={createDesignTask ? "Без виконавця" : "Увімкніть задачу"}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Без виконавця</SelectItem>
+                      {designerMembers.length > 0 ? (
+                        designerMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="empty" disabled>
+                          {teamMembers.length === 0
+                            ? "Немає учасників"
+                            : hasRoleInfo
+                              ? "Немає дизайнерів"
+                              : "Ролі не налаштовані"}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <div className="pl-8 space-y-1">
-              <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
-              <Select
-                value={designAssigneeId ?? "none"}
-                onValueChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
-                disabled={!createDesignTask}
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Файли для дизайнера</div>
+              <div
+                onDrop={handleFileDrop}
+                onDragOver={(e) => e.preventDefault()}
+                className="relative border-2 border-dashed border-border/40 rounded-[var(--radius-md)] p-6 text-center transition-colors hover:border-border/60 cursor-pointer"
               >
-                <SelectTrigger className="h-9 max-w-[280px]">
-                  <SelectValue placeholder={createDesignTask ? "Без виконавця" : "Увімкніть задачу"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Без виконавця</SelectItem>
-                  {designerMembers.length > 0 ? (
-                    designerMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.label}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="empty" disabled>
-                      {teamMembers.length === 0
-                        ? "Немає учасників"
-                        : hasRoleInfo
-                          ? "Немає дизайнерів"
-                          : "Ролі не налаштовані"}
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept="*/*"
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  <div className="text-sm text-foreground">Перетягніть або клікніть для вибору</div>
+                  <div className="text-xs text-muted-foreground">
+                    до 5 файлів, до 50MB
+                  </div>
+                </div>
+              </div>
+
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30 text-sm"
+                    >
+                      <Paperclip className="h-3 w-3" />
+                      <span className="text-xs">{file.name}</span>
+                      <button
+                        onClick={() => setFiles(files.filter((_, i) => i !== index))}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+        </div>
         ) : null}
 
         {submitError ? (
@@ -1095,7 +1103,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         <Separator className="bg-border/40 -mx-6 w-[calc(100%+3rem)]" />
         <div className="flex items-center justify-between -mb-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {printMode !== "no_print" && files.length > 0 ? (
+            {files.length > 0 ? (
               <>
                 <Paperclip className="h-3.5 w-3.5" />
                 <span>{files.length} файлів</span>

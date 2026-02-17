@@ -45,6 +45,7 @@ import {
   listTeamMembers,
   listStatusHistory,
   setStatus,
+  updateQuote,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
@@ -56,6 +57,7 @@ import {
   ArrowLeft,
   Copy,
   FileDown,
+  FileText,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -535,6 +537,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [briefText, setBriefText] = useState("");
+  const [briefDirty, setBriefDirty] = useState(false);
+  const [briefSaving, setBriefSaving] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -711,6 +717,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     } finally {
       setDeleteQuoteBusy(false);
       setDeleteQuoteDialogOpen(false);
+    }
+  };
+
+  const saveBrief = async () => {
+    if (!quote || !teamId || briefSaving) return;
+    setBriefSaving(true);
+    setBriefError(null);
+    try {
+      const nextBrief = briefText.trim();
+      const data = await updateQuote({
+        quoteId,
+        teamId,
+        comment: nextBrief ? nextBrief : null,
+        designBrief: nextBrief ? nextBrief : null,
+      });
+      setQuote((prev) =>
+        prev
+          ? {
+              ...prev,
+              comment: (data as any)?.comment ?? nextBrief ?? null,
+              design_brief: (data as any)?.design_brief ?? nextBrief ?? null,
+              updated_at: (data as any)?.updated_at ?? prev.updated_at,
+            }
+          : prev
+      );
+      setBriefDirty(false);
+      await logActivity({
+        teamId,
+        action: "оновив ТЗ",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `Оновив ТЗ для дизайнера${quote?.number ? ` (#${quote.number})` : ""}`,
+        href: `/orders/estimates/${quoteId}`,
+        metadata: { source: "quote_brief" },
+      });
+      await loadActivityLog();
+      toast.success("ТЗ збережено");
+    } catch (e: any) {
+      const message = e?.message ?? "Не вдалося зберегти ТЗ.";
+      setBriefError(message);
+      toast.error(message);
+    } finally {
+      setBriefSaving(false);
     }
   };
 
@@ -920,6 +969,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       Math.max(0, Math.min(prev, filteredMentionSuggestions.length - 1))
     );
   }, [filteredMentionSuggestions.length]);
+  useEffect(() => {
+    if (!quote) return;
+    if (briefDirty) return;
+    setBriefText(quote.design_brief ?? quote.comment ?? "");
+    setBriefError(null);
+  }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
   const currentStatus = normalizeStatus(quote?.status);
 
   const canEditRuns = useMemo(
@@ -1398,6 +1453,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             has_files: attachments.length > 0,
             design_deadline: designDeadline,
             deadline: designDeadline,
+            design_brief: quote?.design_brief ?? quote?.comment ?? null,
             model: modelName,
           },
         })
@@ -3201,13 +3257,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </div>
 
-                {quote.comment ? (
+                {quote.design_brief || quote.comment ? (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <MessageSquare className="h-3.5 w-3.5" />
-                      Коментар
+                      ТЗ (коротко)
                     </div>
-                    <div className="font-medium text-sm line-clamp-2">{quote.comment}</div>
+                    <div className="font-medium text-sm line-clamp-2">{quote.design_brief ?? quote.comment}</div>
                   </div>
                 ) : null}
 
@@ -3855,6 +3911,87 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         {/* Right Column */}
         <div className="space-y-6">
+          {/* Designer brief */}
+          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                <FileText className="h-5 w-5" />
+                ТЗ для дизайнера
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setBriefText(
+                      [
+                        "Мета:",
+                        "Аудиторія:",
+                        "Формат/носій:",
+                        "Розмір/пропорції:",
+                        "Лого/брендгайд:",
+                        "Кольори/шрифти:",
+                        "Референси:",
+                        "Текст/копі:",
+                        "Обмеження:",
+                        "Дедлайн:",
+                      ].join("\n")
+                    );
+                    setBriefDirty(true);
+                    setBriefError(null);
+                  }}
+                >
+                  Шаблон
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Textarea
+                value={briefText}
+                onChange={(event) => {
+                  setBriefText(event.target.value);
+                  setBriefDirty(true);
+                }}
+                placeholder="Опишіть задачу для дизайнера. Це основне ТЗ, яке бачить команда."
+                className="min-h-[180px] resize-y"
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{briefText.length} символів</span>
+                {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
+              </div>
+              {briefError ? (
+                <div className="text-sm text-destructive">{briefError}</div>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBriefText(quote?.design_brief ?? quote?.comment ?? "");
+                    setBriefDirty(false);
+                    setBriefError(null);
+                  }}
+                  disabled={!briefDirty}
+                >
+                  Скинути
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void saveBrief()}
+                  disabled={!briefDirty || briefSaving}
+                  className="gap-2"
+                >
+                  {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
+                </Button>
+              </div>
+            </div>
+          </Card>
+
           {/* Design task */}
           <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
             <div className="flex items-center justify-between mb-4">

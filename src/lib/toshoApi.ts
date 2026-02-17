@@ -13,6 +13,7 @@ export type QuoteListRow = {
   number?: string | null;
   status?: string | null;
   comment?: string | null;
+  design_brief?: string | null;
   title?: string | null;
   quote_type?: string | null;
   print_type?: string | null;
@@ -101,27 +102,42 @@ export async function listQuotes(params: ListQuotesParams) {
       throw error;
     }
 
-    let query = supabase
-      .schema("tosho")
-      .from("quotes")
-      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note")
-      .eq("team_id", teamId)
-      .order("created_at", { ascending: false });
+    const listFromQuotes = async (withDesignBrief: boolean) => {
+      const columns = withDesignBrief
+        ? "id,team_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note"
+        : "id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note";
+      let query: any = (supabase as any)
+        .schema("tosho")
+        .from("quotes")
+        .select(columns)
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false });
 
-    if (q.length > 0) {
-      query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+      if (q.length > 0) {
+        query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+      }
+
+      if (status && status !== "all") {
+        query = query.eq("status", status);
+      }
+
+      return await query;
+    };
+
+    let { data, error: fallbackError } = await listFromQuotes(true);
+    if (
+      fallbackError &&
+      /column/i.test(fallbackError.message ?? "") &&
+      /design_brief/i.test(fallbackError.message ?? "")
+    ) {
+      ({ data, error: fallbackError } = await listFromQuotes(false));
     }
-
-    if (status && status !== "all") {
-      query = query.eq("status", status);
-    }
-
-    const { data, error: fallbackError } = await query;
     handleError(fallbackError);
     return ((data as QuoteListRow[]) ?? []).map((row) => ({
       ...row,
       customer_name: row.customer_name ?? null,
       customer_logo_url: row.customer_logo_url ?? null,
+      design_brief: row.design_brief ?? null,
     }));
   }
 }
@@ -152,6 +168,7 @@ export async function createQuote(params: {
   printType?: string | null;
   deliveryType?: string | null;
   comment?: string | null;
+  designBrief?: string | null;
   currency?: string | null;
   assignedTo?: string | null;
   deadlineAt?: string | null;
@@ -165,6 +182,7 @@ export async function createQuote(params: {
     team_id: params.teamId,
     customer_id: params.customerId,
     comment: params.comment ?? null,
+    design_brief: params.designBrief ?? null,
     currency: params.currency ?? null,
     assigned_to: params.assignedTo ?? null,
     quote_type: params.quoteType ?? null,
@@ -206,6 +224,10 @@ export async function createQuote(params: {
       delete payload.delivery_type;
       return await insertQuote(payload);
     }
+    if (message.includes("column") && message.includes("design_brief")) {
+      delete payload.design_brief;
+      return await insertQuote(payload);
+    }
     throw error;
   }
 }
@@ -219,7 +241,26 @@ export async function getQuoteSummary(quoteId: string) {
       .eq("id", quoteId)
       .single();
     handleError(error);
-    return data as QuoteSummaryRow;
+    const summary = (data as QuoteSummaryRow) ?? null;
+    if (!summary) return summary;
+
+    const { data: briefRow, error: briefError } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("design_brief")
+      .eq("id", quoteId)
+      .maybeSingle();
+    if (
+      briefError &&
+      !(/column/i.test(briefError.message ?? "") && /design_brief/i.test(briefError.message ?? ""))
+    ) {
+      handleError(briefError);
+    }
+
+    return {
+      ...summary,
+      design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
+    } as QuoteSummaryRow;
   } catch (error: any) {
     const message = (error?.message ?? "").toLowerCase();
     const shouldFallbackToQuotes =
@@ -246,6 +287,7 @@ export async function getQuoteSummary(quoteId: string) {
       number: (fallback.number as string | null | undefined) ?? null,
       status: (fallback.status as string | null | undefined) ?? null,
       comment: (fallback.comment as string | null | undefined) ?? null,
+      design_brief: (fallback.design_brief as string | null | undefined) ?? null,
       title: (fallback.title as string | null | undefined) ?? null,
       quote_type: (fallback.quote_type as string | null | undefined) ?? null,
       print_type: (fallback.print_type as string | null | undefined) ?? null,
@@ -634,6 +676,7 @@ export async function updateQuote(params: {
   quoteId: string;
   teamId: string;
   comment?: string | null;
+  designBrief?: string | null;
   assignedTo?: string | null;
   deadlineAt?: string | null;
   deadlineNote?: string | null;
@@ -643,6 +686,7 @@ export async function updateQuote(params: {
 }) {
   const payload: Record<string, unknown> = {};
   if (params.comment !== undefined) payload.comment = params.comment;
+  if (params.designBrief !== undefined) payload.design_brief = params.designBrief;
   if (params.assignedTo !== undefined) payload.assigned_to = params.assignedTo;
   if (params.deadlineAt !== undefined) payload.deadline_at = params.deadlineAt;
   if (params.deadlineNote !== undefined) payload.deadline_note = params.deadlineNote;
@@ -657,7 +701,7 @@ export async function updateQuote(params: {
       .update(nextPayload)
       .eq("id", params.quoteId)
       .eq("team_id", params.teamId)
-      .select("id,status,comment,quote_type,delivery_type,assigned_to,deadline_at,deadline_note,updated_at")
+      .select("id,status,comment,design_brief,quote_type,delivery_type,assigned_to,deadline_at,deadline_note,updated_at")
       .single();
     handleError(error);
     return data;
@@ -676,6 +720,10 @@ export async function updateQuote(params: {
     }
     if (message.includes("column") && message.includes("delivery_type")) {
       delete fallbackPayload.delivery_type;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("design_brief")) {
+      delete fallbackPayload.design_brief;
       changed = true;
     }
     if (!changed) throw error;
