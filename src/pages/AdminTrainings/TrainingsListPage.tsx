@@ -82,7 +82,7 @@ function TrainingCard({
   const { month, day, weekday, time } = formatDateParts(date);
   const Icon = typeIcons[training.type];
   const typeLabel = typeLabels[training.type];
-  const location = training.location || "—";
+  const location = training.location || "Не вказано";
   
   const progress = total ? Math.min(100, Math.round((present / total) * 100)) : 0;
   const weekdayLabel = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}`;
@@ -179,11 +179,11 @@ function TrainingCard({
                     />
                   )}
                   <span className="line-clamp-1 text-sm font-semibold text-foreground">
-                    {training.sparring_opponent || "—"}
+                    {training.sparring_opponent || "Не вказано"}
                   </span>
                 </>
               ) : (
-                <span className="text-sm font-medium text-muted-foreground">—</span>
+                <span className="text-sm font-medium text-muted-foreground">Н/Д</span>
               )}
             </div>
           </div>

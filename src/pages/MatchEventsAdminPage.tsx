@@ -129,11 +129,11 @@ function formatDateTimeUA(iso: string) {
 }
 
 function safeDateTimeUA(iso: string | null | undefined) {
-  if (!iso) return "—";
+  if (!iso) return "Не вказано";
   try {
     return formatDateTimeUA(iso);
   } catch {
-    return "—";
+    return "Не вказано";
   }
 }
 
@@ -309,9 +309,9 @@ export function MatchEventsAdminPage() {
     const our = match?.score_team;
     const opp = match?.score_opponent;
     if (typeof our === "number" && typeof opp === "number") return `${our} : ${opp}`;
-    if (typeof our === "number" && (opp === null || opp === undefined)) return `${our} : —`;
-    if ((our === null || our === undefined) && typeof opp === "number") return `— : ${opp}`;
-    return "— : —";
+    if (typeof our === "number" && (opp === null || opp === undefined)) return `${our} : Н/Д`;
+    if ((our === null || our === undefined) && typeof opp === "number") return `Н/Д : ${opp}`;
+    return "Н/Д : Н/Д";
   }, [match?.score_team, match?.score_opponent]);
 
   function resetFormKeepType() {
@@ -808,7 +808,7 @@ if (minute !== null && Number.isNaN(minute)) {
   inputMode="numeric"
   type="number"
   min={0}
-  placeholder="—"
+  placeholder="Не вказано"
   value={scoreOpponentDraft}
   onChange={(e) => setScoreOpponentDraft(e.target.value)}
 />
@@ -938,7 +938,7 @@ if (minute !== null && Number.isNaN(minute)) {
   inputMode="numeric"
   type="number"
   min={0}
-  placeholder="—"
+  placeholder="Не вказано"
   value={form.minute}
   onChange={(e) => setForm((prev) => ({ ...prev, minute: e.target.value }))}
   onKeyDown={(e) => {
@@ -1063,14 +1063,14 @@ if (minute !== null && Number.isNaN(minute)) {
 
     <TableBody>
       {sortedEvents.map((ev) => {
-        const author = ev.player_id ? playerLabelById.get(ev.player_id) || "—" : "—";
-        const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "—" : "—";
+        const author = ev.player_id ? playerLabelById.get(ev.player_id) || "Не вказано" : "Не вказано";
+        const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "Не вказано" : "Не вказано";
 
         return (
           <TableRow key={ev.id} className="hover:bg-muted/40 transition-colors">
             {/* Хвилина — сильний акцент */}
             <TableNumericCell align="left" className="align-middle font-medium text-foreground">
-              {typeof ev.minute === "number" ? ev.minute : "—"}
+              {typeof ev.minute === "number" ? ev.minute : "Не вказано"}
             </TableNumericCell>
 
             {/* Тип події — іконка + назва (назва medium) */}
@@ -1095,7 +1095,7 @@ if (minute !== null && Number.isNaN(minute)) {
 
             {/* Асист — вторинний (↳ …) */}
             <TableCell className="align-middle text-sm text-muted-foreground">
-              {assist !== "—" ? `${assist}` : "—"}
+              {assist !== "Не вказано" ? `${assist}` : "Не вказано"}
             </TableCell>
 
             {/* Створено — менш помітно */}
@@ -1158,8 +1158,8 @@ if (minute !== null && Number.isNaN(minute)) {
                     <div className="rounded-[var(--radius-inner)] border border-border bg-background p-4">
                       <div className="space-y-2">
                         {sortedEvents.map((ev) => {
-                          const author = ev.player_id ? playerLabelById.get(ev.player_id) || "—" : "—";
-                          const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "—" : null;
+                          const author = ev.player_id ? playerLabelById.get(ev.player_id) || "Не вказано" : "Не вказано";
+                          const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "Не вказано" : null;
 
                           return (
                             <div
@@ -1171,7 +1171,7 @@ if (minute !== null && Number.isNaN(minute)) {
                                   {ev.minute !== null ? (
                                     <span className="text-sm font-semibold tabular-nums">{ev.minute}</span>
                                   ) : (
-                                    <span className="text-xs text-muted-foreground">—</span>
+                                    <span className="text-xs text-muted-foreground">Н/Д</span>
                                   )}
                                 </div>
 

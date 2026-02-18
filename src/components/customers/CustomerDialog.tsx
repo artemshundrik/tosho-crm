@@ -78,9 +78,9 @@ const SectionHeader = ({ children }: { children: React.ReactNode }) => (
 );
 
 const getInitials = (value?: string) => {
-  if (!value) return "—";
+  if (!value) return "Не вказано";
   const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "—";
+  if (parts.length === 0) return "Не вказано";
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();

@@ -96,7 +96,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(positionChange), row.kind),
                       )}
                     >
-                      {next?.position ?? "—"}
+                      {next?.position ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -104,7 +104,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(playedChange), row.kind),
                       )}
                     >
-                      {next?.played ?? "—"}
+                      {next?.played ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -112,7 +112,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(winsChange), row.kind),
                       )}
                     >
-                      {next?.wins ?? "—"}
+                      {next?.wins ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -120,7 +120,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(drawsChange), row.kind),
                       )}
                     >
-                      {next?.draws ?? "—"}
+                      {next?.draws ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -128,7 +128,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(lossesChange), row.kind),
                       )}
                     >
-                      {next?.losses ?? "—"}
+                      {next?.losses ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -136,7 +136,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(goalsForChange || goalsAgainstChange), row.kind),
                       )}
                     >
-                      {next?.goals_for ?? "—"}-{next?.goals_against ?? "—"}
+                      {next?.goals_for ?? "Н/Д"}-{next?.goals_against ?? "Н/Д"}
                     </TableNumericCell>
                     <TableNumericCell
                       className={cn(
@@ -144,7 +144,7 @@ export function StandingsPreviewModal({
                         cellClass(Boolean(pointsChange), row.kind),
                       )}
                     >
-                      {next?.points ?? "—"}
+                      {next?.points ?? "Н/Д"}
                     </TableNumericCell>
                     <TableCell className="text-center">
                       <Badge tone={statusTone(row.kind)} size="sm" pill>

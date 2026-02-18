@@ -829,14 +829,14 @@ export function TournamentDetailsPage() {
                                 <span className="font-medium">{row.team_name}</span>
                               </div>
                             </TableCell>
-                            <TableNumericCell align="center">{row.played ?? "—"}</TableNumericCell>
-                            <TableNumericCell align="center">{row.wins ?? "—"}</TableNumericCell>
-                            <TableNumericCell align="center">{row.draws ?? "—"}</TableNumericCell>
-                            <TableNumericCell align="center">{row.losses ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.played ?? "Не вказано"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.wins ?? "Не вказано"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.draws ?? "Не вказано"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.losses ?? "Не вказано"}</TableNumericCell>
                             <TableNumericCell align="center">
-                              {row.goals_for ?? "—"}-{row.goals_against ?? "—"}
+                              {row.goals_for ?? "Не вказано"}-{row.goals_against ?? "Не вказано"}
                             </TableNumericCell>
-                            <TableNumericCell align="center">{row.points ?? "—"}</TableNumericCell>
+                            <TableNumericCell align="center">{row.points ?? "Не вказано"}</TableNumericCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -872,7 +872,7 @@ export function TournamentDetailsPage() {
                         </div>
 
                         <div className="text-lg font-bold">
-                          {m.score_team != null ? `${m.score_team}:${m.score_opponent}` : "—"}
+                          {m.score_team != null ? `${m.score_team}:${m.score_opponent}` : "Не вказано"}
                         </div>
                       </div>
                       <Separator className="mt-3" />

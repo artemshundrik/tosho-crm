@@ -220,7 +220,7 @@ const isDesignerRole = (value?: string | null) => {
 };
 
 const formatQuantityWithUnit = (qty?: number | null, unit?: string | null) => {
-  if (qty == null || Number.isNaN(Number(qty))) return "—";
+  if (qty == null || Number.isNaN(Number(qty))) return "Не вказано";
   const qtyText = new Intl.NumberFormat("uk-UA").format(Number(qty));
   const rawUnit = (unit ?? "").trim().toLowerCase();
   const normalizedUnit =
@@ -231,7 +231,7 @@ const formatQuantityWithUnit = (qty?: number | null, unit?: string | null) => {
 };
 
 const formatEstimateMinutes = (minutes?: number | null) => {
-  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "—";
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
   const days = Math.floor(value / 480);
   const hours = Math.floor((value % 480) / 60);
@@ -282,6 +282,7 @@ export default function DesignTaskPage() {
     | { mode: "assign"; nextAssigneeUserId: string | null }
     | { mode: "assign_self"; alsoStart: boolean }
     | { mode: "status"; nextStatus: DesignStatus }
+    | { mode: "manual" }
     | null
   >(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -301,13 +302,13 @@ export default function DesignTaskPage() {
   };
 
   const getMethodLabel = (value: string | null | undefined) => {
-    if (!value) return "—";
+    if (!value) return "Не вказано";
     if (methodLabelById[value]) return methodLabelById[value];
     return isUuid(value) ? "Метод з каталогу" : value;
   };
 
   const getPrintPositionLabel = (value: string | null | undefined) => {
-    if (!value) return "—";
+    if (!value) return "Не вказано";
     if (positionLabelById[value]) return positionLabelById[value];
     return isUuid(value) ? "Позиція з каталогу" : value;
   };
@@ -658,9 +659,9 @@ export default function DesignTaskPage() {
   }, [task?.id, effectiveTeamId]);
 
   const deadlineLabel = useMemo(() => {
-    if (!task?.designDeadline) return { label: "—", className: "text-muted-foreground" };
+    if (!task?.designDeadline) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const d = new Date(task.designDeadline);
-    if (Number.isNaN(d.getTime())) return { label: "—", className: "text-muted-foreground" };
+    if (Number.isNaN(d.getTime())) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const today = new Date();
     const diff = Math.round((d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
     if (diff < 0) return { label: `Прострочено ${Math.abs(diff)} дн.`, className: "text-rose-400" };
@@ -795,9 +796,9 @@ export default function DesignTaskPage() {
   );
 
   const formatDate = (value: string | null | undefined, withTime = false) => {
-    if (!value) return "—";
+    if (!value) return "Не вказано";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
+    if (Number.isNaN(date.getTime())) return "Не вказано";
     return withTime
       ? date.toLocaleString("uk-UA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
       : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
@@ -1469,6 +1470,72 @@ export default function DesignTaskPage() {
     }
   };
 
+  const openManualEstimateDialog = () => {
+    const currentEstimate = getTaskEstimateMinutes(task);
+    if (currentEstimate && currentEstimate % 480 === 0) {
+      setEstimateInput(String(currentEstimate / 480));
+      setEstimateUnit("days");
+    } else if (currentEstimate && currentEstimate % 60 === 0) {
+      setEstimateInput(String(currentEstimate / 60));
+      setEstimateUnit("hours");
+    } else if (currentEstimate) {
+      setEstimateInput(String(currentEstimate));
+      setEstimateUnit("minutes");
+    } else {
+      setEstimateInput("2");
+      setEstimateUnit("hours");
+    }
+    setEstimateError(null);
+    setEstimatePendingAction({ mode: "manual" });
+    setEstimateDialogOpen(true);
+  };
+
+  const updateTaskEstimate = async (estimateMinutes: number) => {
+    if (!task || !effectiveTeamId) return;
+    const previousEstimate = getTaskEstimateMinutes(task);
+    const previousTask = task;
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      estimate_minutes: estimateMinutes,
+      estimate_set_at: new Date().toISOString(),
+      estimated_by_user_id: userId ?? null,
+    };
+
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_estimate",
+        title: previousEstimate
+          ? `Естімейт: ${formatEstimateMinutes(previousEstimate)} → ${formatEstimateMinutes(estimateMinutes)}`
+          : `Естімейт: ${formatEstimateMinutes(estimateMinutes)}`,
+        metadata: {
+          source: "design_task_estimate",
+          from_estimate_minutes: previousEstimate,
+          to_estimate_minutes: estimateMinutes,
+        },
+      });
+      await loadHistory(task.id);
+      toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
+    } catch (e: any) {
+      setTask(previousTask);
+      setError(e?.message ?? "Не вдалося оновити естімейт");
+      toast.error(e?.message ?? "Не вдалося оновити естімейт");
+    }
+  };
+
   const submitEstimateDialog = async () => {
     if (!estimatePendingAction) return;
     const amount = Number(estimateInput);
@@ -1487,6 +1554,8 @@ export default function DesignTaskPage() {
       await assignTaskToMe({ alsoStart: estimatePendingAction.alsoStart, estimateMinutes: normalized });
     } else if (estimatePendingAction.mode === "status") {
       await updateTaskStatus(estimatePendingAction.nextStatus, { estimateMinutes: normalized });
+    } else if (estimatePendingAction.mode === "manual") {
+      await updateTaskEstimate(normalized);
     }
     setEstimatePendingAction(null);
   };
@@ -1658,10 +1727,15 @@ export default function DesignTaskPage() {
                 <CalendarClock className="h-3.5 w-3.5" />
                 Дедлайн: {deadlineLabel.label}
               </Badge>
-              <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 px-2.5 text-xs"
+                onClick={() => void openManualEstimateDialog()}
+              >
                 <Clock className="h-3.5 w-3.5" />
-                Естімейт: {estimateLabel}
-              </Badge>
+                {estimateLabel === "Не вказано" ? "Додати естімейт" : `Естімейт: ${estimateLabel}`}
+              </Button>
             </div>
           </div>
 
@@ -1686,7 +1760,7 @@ export default function DesignTaskPage() {
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Бриф задачі</div>
-              {isLinkedQuote && quantityLabel !== "—" ? (
+              {isLinkedQuote && quantityLabel !== "Не вказано" ? (
                 <Badge variant="outline" className="text-xs">
                   {quantityLabel}
                 </Badge>
@@ -1703,7 +1777,7 @@ export default function DesignTaskPage() {
                     size={28}
                     className="border-border/70"
                   />
-                  <div className="font-medium">{task.customerName ?? "—"}</div>
+                  <div className="font-medium">{task.customerName ?? "Не вказано"}</div>
                 </div>
               </div>
               {isLinkedQuote ? (
@@ -1722,7 +1796,7 @@ export default function DesignTaskPage() {
                         <ImageIcon className="h-4 w-4 text-muted-foreground" />
                       )}
                     </div>
-                    <div className="font-medium">{quoteItem?.name ?? "—"}</div>
+                    <div className="font-medium">{quoteItem?.name ?? "Не вказано"}</div>
                   </div>
                 </div>
               ) : null}
@@ -1764,8 +1838,8 @@ export default function DesignTaskPage() {
                     <div key={idx} className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm">
                       <div className="font-medium">Метод {idx + 1}: {getMethodLabel(method.method_id ?? null)}</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        Позиція: {getPrintPositionLabel(method.print_position_id ?? null)} · Розмір: {method.print_width_mm ?? "—"} ×{" "}
-                        {method.print_height_mm ?? "—"} мм
+                      Позиція: {getPrintPositionLabel(method.print_position_id ?? null)} · Розмір: {method.print_width_mm ?? "не вказано"} ×{" "}
+                      {method.print_height_mm ?? "не вказано"} мм
                       </div>
                     </div>
                   ))}
@@ -2149,7 +2223,7 @@ export default function DesignTaskPage() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />Клієнт</span>
-                <span className="font-medium text-right">{task.customerName ?? "—"}</span>
+                <span className="font-medium text-right">{task.customerName ?? "Не вказано"}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground inline-flex items-center gap-1">

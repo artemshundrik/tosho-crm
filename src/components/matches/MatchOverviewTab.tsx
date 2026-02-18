@@ -60,7 +60,7 @@ const eventLabels: Record<string, string> = {
 };
 
 function playerLabel(player: Player | undefined) {
-  if (!player) return '—';
+  if (!player) return 'Н/Д';
   return `${player.shirt_number ? `#${player.shirt_number} ` : ''}${player.last_name} ${player.first_name}`;
 }
 

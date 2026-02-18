@@ -141,9 +141,9 @@ const quoteStatusFromDb = (value?: string | null): QuoteStatus => {
 const isActiveDesignStatus = (status: DesignStatus) => status !== "approved" && status !== "cancelled";
 
 const formatDateTime = (value?: string | null) => {
-  if (!value) return "—";
+  if (!value) return "Не вказано";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Не вказано";
   return date.toLocaleString("uk-UA", {
     day: "numeric",
     month: "short",
@@ -232,7 +232,7 @@ const loadRecentQuotes = async (teamId: string): Promise<QuoteRow[]> => {
       customerNameById = new Map(
         ((customers as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? []).map((c) => [
           c.id,
-          c.name ?? c.legal_name ?? "—",
+          c.name ?? c.legal_name ?? "Не вказано",
         ])
       );
     }
@@ -243,7 +243,7 @@ const loadRecentQuotes = async (teamId: string): Promise<QuoteRow[]> => {
       status: row.status ?? null,
       assigned_to: row.assigned_to ?? null,
       created_at: row.created_at ?? null,
-      customer_name: row.customer_id ? customerNameById.get(row.customer_id) ?? "—" : "—",
+      customer_name: row.customer_id ? customerNameById.get(row.customer_id) ?? "Не вказано" : "Не вказано",
     }));
   }
 };

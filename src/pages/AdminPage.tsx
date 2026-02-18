@@ -476,8 +476,8 @@ export function AdminPage() {
                     readOnly
                     value={
                       mode === "edit"
-                        ? String(matches.find((m) => m.id === editingId)?.score_team ?? "—")
-                        : "—"
+                        ? String(matches.find((m) => m.id === editingId)?.score_team ?? "Не вказано")
+                        : "Не вказано"
                     }
                   />
                 </div>
@@ -531,7 +531,7 @@ export function AdminPage() {
                     const score =
                       m.score_team !== null && m.score_opponent !== null
                         ? `${m.score_team} : ${m.score_opponent}`
-                        : "— : —";
+                        : "Н/Д : Н/Д";
 
                     const statusLabel = statusLabels[m.status];
 

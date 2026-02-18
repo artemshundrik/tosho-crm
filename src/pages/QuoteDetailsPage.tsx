@@ -366,6 +366,55 @@ const statusIcons: Record<string, any> = {
   cancelled: XCircle,
 };
 
+const STATUS_FLOW: string[] = ["new", "estimating", "estimated", "awaiting_approval", "approved"];
+
+const STATUS_NEXT_ACTION: Record<
+  string,
+  {
+    ctaLabel: string;
+    title: string;
+    description: string;
+    nextStatus: string | null;
+  }
+> = {
+  new: {
+    ctaLabel: "Почати прорахунок",
+    title: "Етап старту",
+    description: "Підготуйте позиції та дедлайн, після чого переведіть у роботу.",
+    nextStatus: "estimating",
+  },
+  estimating: {
+    ctaLabel: "Позначити як пораховано",
+    title: "Етап розрахунку",
+    description: "Зафіксуйте ціну та підсумок, коли розрахунок готовий.",
+    nextStatus: "estimated",
+  },
+  estimated: {
+    ctaLabel: "Відправити на погодження",
+    title: "Етап узгодження",
+    description: "Після фінальної перевірки переведіть прорахунок у погодження.",
+    nextStatus: "awaiting_approval",
+  },
+  awaiting_approval: {
+    ctaLabel: "Підтвердити",
+    title: "Етап погодження",
+    description: "Зафіксуйте фінальне рішення клієнта.",
+    nextStatus: "approved",
+  },
+  approved: {
+    ctaLabel: "Змінити статус",
+    title: "Прорахунок завершено",
+    description: "Статус затверджено. За потреби можна змінити вручну.",
+    nextStatus: null,
+  },
+  cancelled: {
+    ctaLabel: "Змінити статус",
+    title: "Прорахунок скасовано",
+    description: "Прорахунок зупинено. За потреби можна перевести в інший статус.",
+    nextStatus: null,
+  },
+};
+
 const QUOTE_TYPE_LABELS: Record<string, string> = {
   merch: "Мерч",
   print: "Поліграфія",
@@ -373,23 +422,23 @@ const QUOTE_TYPE_LABELS: Record<string, string> = {
 };
 
 function formatStatusLabel(value: string | null | undefined) {
-  return (value && statusLabels[value]) || value || "—";
+  return (value && statusLabels[value]) || value || "Не вказано";
 }
 
 function formatQuoteType(value: string | null | undefined) {
-  return (value && QUOTE_TYPE_LABELS[value]) || value || "—";
+  return (value && QUOTE_TYPE_LABELS[value]) || value || "Не вказано";
 }
 
 function formatCurrency(value: number | null | undefined, currency?: string | null) {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "Не вказано";
   const label = currency ?? "UAH";
   return `${value.toLocaleString("uk-UA")} ${label}`;
 }
 
 function getInitials(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "Не вказано";
   const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "—";
+  if (parts.length === 0) return "Не вказано";
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();
@@ -838,7 +887,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const formatDeliveryLabel = (value?: string | null) => {
-    if (!value) return "—";
+    if (!value) return "Не вказано";
     const map: Record<string, string> = {
       nova_poshta: "Нова пошта",
       pickup: "Самовивіз",
@@ -900,7 +949,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
   }, [teamMembers]);
   const getMemberLabel = (userId?: string | null) => {
-    if (!userId) return "—";
+    if (!userId) return "Не вказано";
     return memberById.get(userId) ?? userId;
   };
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
@@ -976,6 +1025,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setBriefError(null);
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
   const currentStatus = normalizeStatus(quote?.status);
+  const baseTotalForStatus = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
+  const nextAction = STATUS_NEXT_ACTION[currentStatus] ?? STATUS_NEXT_ACTION.new;
+
+  const stageHints = useMemo(() => {
+    const hasItems = items.length > 0;
+    const hasDeadline = Boolean(quote?.deadline_at);
+    const hasTotal = baseTotalForStatus > 0;
+    const hasBrief = Boolean(briefText.trim());
+
+    if (currentStatus === "new") {
+      return [
+        { label: "Додано хоча б одну позицію", done: hasItems },
+        { label: "Вказано дедлайн", done: hasDeadline },
+      ];
+    }
+    if (currentStatus === "estimating") {
+      return [
+        { label: "Позиції заповнені", done: hasItems },
+        { label: "Пораховано підсумок", done: hasTotal },
+      ];
+    }
+    if (currentStatus === "estimated") {
+      return [
+        { label: "Є фінальна сума", done: hasTotal },
+        { label: "Заповнено ТЗ/коментар", done: hasBrief },
+      ];
+    }
+    if (currentStatus === "awaiting_approval") {
+      return [{ label: "Після відповіді клієнта зафіксуйте результат", done: false }];
+    }
+    if (currentStatus === "approved") {
+      return [{ label: "Готово. Можна переходити до наступного процесу", done: true }];
+    }
+    return [{ label: "Прорахунок скасовано", done: true }];
+  }, [currentStatus, items.length, quote?.deadline_at, baseTotalForStatus, briefText]);
+
+  const pendingHintsCount = stageHints.filter((item) => !item.done).length;
 
   const canEditRuns = useMemo(
     () =>
@@ -984,6 +1070,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ),
     [currentStatus]
   );
+
+  const openStatusDialog = () => {
+    setStatusTarget(currentStatus ?? "new");
+    setStatusNote("");
+    setStatusDialogOpen(true);
+  };
+
+  const handlePrimaryStatusAction = () => {
+    if (statusBusy) return;
+    if (!nextAction.nextStatus) {
+      openStatusDialog();
+      return;
+    }
+    void handleQuickStatusChange(nextAction.nextStatus, "");
+  };
 
   const activityEvents = useMemo<ActivityEvent[]>(() => {
     const statusEvents: ActivityEvent[] = history.map((item) => {
@@ -2944,17 +3045,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         <div className="flex items-center gap-2">
           <Button
+            variant="primary"
+            size="sm"
+            className="gap-2 shadow-sm"
+            disabled={statusBusy}
+            onClick={handlePrimaryStatusAction}
+          >
+            {createElement(
+              statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock,
+              { className: "h-4 w-4" }
+            )}
+            {nextAction.ctaLabel}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             className="gap-2"
             disabled={statusBusy}
-            onClick={() => {
-              setStatusTarget(currentStatus ?? "new");
-              setStatusNote("");
-              setStatusDialogOpen(true);
-            }}
+            onClick={openStatusDialog}
           >
-            {createElement(statusIcons[currentStatus] ?? Clock, { className: "h-4 w-4" })}
             Змінити статус
             <ChevronDown className="h-3 w-3" />
           </Button>
@@ -2989,6 +3098,70 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </DropdownMenu>
         </div>
       </div>
+
+      <Card className="border-border/70 bg-card/60 p-4 sm:p-5">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {STATUS_FLOW.map((status, index) => {
+              const reached = STATUS_FLOW.indexOf(currentStatus) >= index;
+              const active = currentStatus === status;
+              return (
+                <div key={status} className="flex items-center gap-2">
+                  {index > 0 ? (
+                    <div className={cn("h-px w-5", reached ? "bg-primary/40" : "bg-border")} />
+                  ) : null}
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold",
+                      active
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : reached
+                        ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-600"
+                        : "border-border text-muted-foreground"
+                    )}
+                  >
+                    {reached ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                    {formatStatusLabel(status)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-foreground">{nextAction.title}</div>
+              <div className="text-sm text-muted-foreground">{nextAction.description}</div>
+              <div className="space-y-1.5 pt-1">
+                {stageHints.map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 text-xs">
+                    {item.done ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    ) : (
+                      <Clock className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    <span className={item.done ? "text-foreground/90" : "text-muted-foreground"}>
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge variant={pendingHintsCount > 0 ? "secondary" : "outline"} className="text-xs">
+                {pendingHintsCount > 0 ? `Потрібно: ${pendingHintsCount}` : "Готово"}
+              </Badge>
+              <Button size="sm" className="gap-2" disabled={statusBusy} onClick={handlePrimaryStatusAction}>
+                {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Sparkles, {
+                  className: "h-4 w-4",
+                })}
+                {nextAction.ctaLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {statusError && (
         <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-center gap-2">
@@ -3192,7 +3365,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         {getInitials(quote.customer_name)}
                       </div>
                     )}
-                    <div className="font-semibold text-base">{quote.customer_name ?? "—"}</div>
+                    <div className="font-semibold text-base">{quote.customer_name ?? "Не вказано"}</div>
                   </div>
                 </div>
                 
@@ -3206,7 +3379,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       day: "numeric",
                       month: "long",
                       year: "numeric"
-                    }) : "—"}
+                    }) : "Не вказано"}
                   </div>
                 </div>
                 
@@ -3226,7 +3399,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       fallback={
                         quote.assigned_to
                           ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
-                          : "—"
+                          : "Не вказано"
                       }
                       size={28}
                       className="text-[10px] font-semibold"
@@ -3486,7 +3659,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         )}
                         {!hasMethodPrints && (positionLabel || sizeLabel) && (
                           <div className="text-xs text-muted-foreground mt-2">
-                            {positionLabel ? `Місце: ${positionLabel}` : "Місце: —"}
+                            {positionLabel ? `Місце: ${positionLabel}` : "Місце: Н/Д"}
                             {sizeLabel ? ` · ${sizeLabel}` : ""}
                           </div>
                         )}
@@ -3500,7 +3673,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 Місце нанесення
                               </Badge>
                               <span className="text-foreground">
-                                {positionLabel ?? "—"}
+                                {positionLabel ?? "Не вказано"}
                                 {sizeLabel ? ` · ${sizeLabel}` : ""}
                               </span>
                             </div>
@@ -4177,7 +4350,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         fallback={
                           comment.created_by
                             ? getInitials(memberById.get(comment.created_by) ?? comment.created_by)
-                            : "—"
+                            : "Не вказано"
                         }
                         size={32}
                         className="text-[10px] font-semibold"

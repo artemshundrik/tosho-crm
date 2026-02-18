@@ -266,7 +266,7 @@ function computeTournamentSummary(params: { cardsInTournament: MatchCardData[] }
   const streakParts = played.slice(0, streakN).map((m) => {
     const a = m.scoreTeam;
     const b = m.scoreOpponent;
-    if (typeof a !== "number" || typeof b !== "number") return "—";
+    if (typeof a !== "number" || typeof b !== "number") return "Не вказано";
     if (a > b) return "W";
     if (a < b) return "L";
     return "D";
@@ -275,7 +275,7 @@ function computeTournamentSummary(params: { cardsInTournament: MatchCardData[] }
   return {
     wdlText: `${w}–${d}–${l}`,
     goalsText: `${gf} / ${ga}`,
-    streakText: streakParts.length ? streakParts.join(" ") : "—",
+    streakText: streakParts.length ? streakParts.join(" ") : "Не вказано",
     streakCount: streakN,
     playedCount: played.length,
     totalCount,
@@ -913,16 +913,16 @@ export function MatchesShadcnPage() {
                 const base = [tournamentLabel, leagueLabel].filter(Boolean).join(" · ").trim();
                 return [base, seasonLabel].filter(Boolean).join(" ").trim() || "Турнір";
               })(),
-              value: standingsRow?.position ? `#${standingsRow.position}` : "—",
+              value: standingsRow?.position ? `#${standingsRow.position}` : "Не вказано",
               secondaryValue:
-                typeof standingsRow?.points === "number" ? `${standingsRow.points} очок` : "—",
+                typeof standingsRow?.points === "number" ? `${standingsRow.points} очок` : "Не вказано",
               icon: Trophy,
               iconTone: "bg-amber-500/10 text-amber-600",
               hint: standingsUpdatedAt
                 ? formatUpdatedAgo(standingsUpdatedAt)
                     .replace(/^Оновлено\s*/i, "")
                     .replace(/\b1 дн\b/i, "1 день")
-                : "—",
+                : "Не вказано",
               footerCta: primaryTournament
                 ? {
                     label: "Таблиця",

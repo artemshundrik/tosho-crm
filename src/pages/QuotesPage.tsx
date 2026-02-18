@@ -216,7 +216,7 @@ const DELIVERY_TYPE_OPTIONS = [
 ];
 
   const quoteTypeLabel = (value?: string | null) =>
-    QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "—";
+    QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "Не вказано";
 
   const quoteTypeIcon = (value?: string | null) =>
     QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.icon;
@@ -330,10 +330,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [teamMembers]
   );
   const getManagerLabel = (assignedTo?: string | null) => {
-    if (!assignedTo) return "—";
+    if (!assignedTo) return "Не вказано";
     const label = memberById.get(assignedTo);
     if (label) return label;
-    return teamMembersLoaded ? "Користувач" : "—";
+    return teamMembersLoaded ? "Користувач" : "Не вказано";
   };
 
   const selectedType = useMemo(
@@ -357,7 +357,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const formatStatusLabel = (value: string | null | undefined) => {
     const normalized = normalizeStatus(value);
-    return (normalized && statusLabels[normalized]) || value || "—";
+    return (normalized && statusLabels[normalized]) || value || "Не вказано";
   };
 
   const statusPillClasses = (value: string | null | undefined) => {
@@ -372,18 +372,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [customers, customerId]);
 
   const getInitials = (name?: string | null) => {
-    if (!name) return "—";
+    if (!name) return "Не вказано";
     const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "—";
+    if (parts.length === 0) return "Не вказано";
     const first = parts[0][0] ?? "";
     const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
     return (first + last).toUpperCase();
   };
 
   const getDateLabels = (value?: string | null) => {
-    if (!value) return "—";
+    if (!value) return "Не вказано";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
+    if (Number.isNaN(date.getTime())) return "Не вказано";
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -404,10 +404,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   const getDeadlineBadge = (value?: string | null) => {
-    if (!value) return { label: "—", className: "text-muted-foreground", tone: "none" as const };
+    if (!value) return { label: "Не вказано", className: "text-muted-foreground", tone: "none" as const };
     const date = parseDateOnly(value);
     if (Number.isNaN(date.getTime())) {
-      return { label: "—", className: "text-muted-foreground", tone: "none" as const };
+      return { label: "Не вказано", className: "text-muted-foreground", tone: "none" as const };
     }
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -2144,14 +2144,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                         <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
                           <span className="group-hover:underline underline-offset-2">
-                            {row.number ?? "—"}
+                            {row.number ?? "Не вказано"}
                           </span>
                         </TableCell>
                         <TableCell className="text-sm">
                           {row.created_at ? (
                             (() => {
                               const labels = getDateLabels(row.created_at);
-                              if (labels === "—") return "—";
+                              if (labels === "Не вказано") return "Не вказано";
                               return (
                                 <div title={new Date(row.created_at).toLocaleString("uk-UA")}>
                                   <div className="font-medium">{labels.primary}</div>
@@ -2162,7 +2162,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               );
                             })()
                           ) : (
-                            "—"
+                            "Не вказано"
                           )}
                         </TableCell>
                         <TableCell className="font-medium max-w-[260px]">
@@ -2183,8 +2183,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 {getInitials(row.customer_name)}
                               </div>
                             )}
-                            <span className="truncate" title={row.customer_name ?? "—"}>
-                              {row.customer_name ?? "—"}
+                            <span className="truncate" title={row.customer_name ?? "Не вказано"}>
+                              {row.customer_name ?? "Не вказано"}
                             </span>
                           </div>
                         </TableCell>
@@ -2194,7 +2194,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
                               name={getManagerLabel(row.assigned_to)}
                               fallback={
-                                row.assigned_to ? getInitials(getManagerLabel(row.assigned_to)) : "—"
+                                row.assigned_to ? getInitials(getManagerLabel(row.assigned_to)) : "Не вказано"
                               }
                               size={28}
                               className="text-[10px] font-semibold"
@@ -2396,7 +2396,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       );
                                     })()}
                                     <span className="font-mono text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-                                      {row.number ?? "—"}
+                                      {row.number ?? "Не вказано"}
                                     </span>
                                   </div>
                                 </div>
@@ -2418,7 +2418,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         {getInitials(row.customer_name)}
                                       </div>
                                     )}
-                                    <span className="truncate">{row.customer_name ?? "—"}</span>
+                                    <span className="truncate">{row.customer_name ?? "Не вказано"}</span>
                                   </div>
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <AvatarBase
@@ -2427,7 +2427,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       fallback={
                                         row.assigned_to
                                           ? getInitials(getManagerLabel(row.assigned_to))
-                                          : "—"
+                                          : "Не вказано"
                                       }
                                       size={22}
                                       className="text-[9px] font-semibold"

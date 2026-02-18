@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Dumbbell, Home, Trophy, Wallet } from "lucide-react";
+import { Calculator, Palette, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 
@@ -13,22 +13,22 @@ type TabItem = {
 
 const TAB_ITEMS: TabItem[] = [
   {
-    label: "Огляд",
-    to: "/overview",
-    icon: Home,
-    isActive: (pathname) => pathname === "/overview",
+    label: "Прорахунки",
+    to: "/orders/estimates",
+    icon: Calculator,
+    isActive: (pathname) => pathname.startsWith("/orders/estimates"),
   },
   {
-    label: "Матчі",
-    to: "/matches-shadcn",
-    icon: Trophy,
-    isActive: (pathname) => pathname.startsWith("/matches"),
+    label: "Замовники",
+    to: "/orders/customers",
+    icon: Users,
+    isActive: (pathname) => pathname.startsWith("/orders/customers"),
   },
   {
-    label: "Тренування",
-    to: "/admin/trainings",
-    icon: Dumbbell,
-    isActive: (pathname) => pathname.startsWith("/admin/trainings"),
+    label: "Дизайн",
+    to: "/design",
+    icon: Palette,
+    isActive: (pathname) => pathname.startsWith("/design"),
   },
   {
     label: "Фінанси",

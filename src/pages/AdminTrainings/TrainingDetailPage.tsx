@@ -615,7 +615,7 @@ const dbIds = new Set<string>();
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1">
                   <Clock className="h-4 w-4" />
-                  {timeLabel || "—"}
+                  {timeLabel || "Не вказано"}
                 </span>
                 {training.location ? (
                   <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1">

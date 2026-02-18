@@ -31,7 +31,7 @@ export default function TournamentStandingsImportPage() {
           </label>
           {preview.tournament ? (
             <div className="text-xs text-muted-foreground">
-              Loaded: {preview.tournament.name} · {preview.tournament.season ?? "—"}
+              Loaded: {preview.tournament.name} · {preview.tournament.season ?? "Не вказано"}
             </div>
           ) : null}
         </CardContent>

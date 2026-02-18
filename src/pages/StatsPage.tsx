@@ -1965,7 +1965,7 @@ export function StatsPage() {
       const list = [...playerStats].sort((a, b) => getValue(b) - getValue(a));
       const top = list[0];
       const topValue = top ? getValue(top) : 0;
-      const topRating = top ? String(top.rating) : "—";
+      const topRating = top ? String(top.rating) : "Не вказано";
 
       const filtered = options?.hideZeros ? list.filter((p) => getValue(p) > 0) : list;
       const listWithoutTop = top ? filtered.filter((p) => p.playerId !== top.playerId) : filtered;
@@ -2045,10 +2045,10 @@ export function StatsPage() {
                   const top = board.top;
                   const topNumber =
                     board.key === "eff"
-                      ? (board.topValue ? board.topValue.toFixed(1) : "—")
+                      ? (board.topValue ? board.topValue.toFixed(1) : "Не вказано")
                       : board.key === "discipline"
-                        ? (top ? formatDisciplineNode(top) : "—")
-                        : (top ? String(board.topValue) : "—");
+                        ? (top ? formatDisciplineNode(top) : "Не вказано")
+                        : (top ? String(board.topValue) : "Не вказано");
 
                   const badgeTone =
                     board.key === "goals"
@@ -2102,7 +2102,7 @@ export function StatsPage() {
                               {top ? (
                                 <LeaderName player={{ name: top.name }} />
                               ) : (
-                                <div className="text-sm font-semibold text-foreground truncate">—</div>
+                                <div className="text-sm font-semibold text-foreground truncate">Н/Д</div>
                               )}
                             </div>
                           </div>
@@ -2350,13 +2350,13 @@ export function StatsPage() {
                         </TableCell>
 
                         <TableCell className="text-center font-medium text-foreground/90">
-                          {p.matches || <span className="text-muted-foreground/30">—</span>}
+                          {p.matches || <span className="text-muted-foreground/30">Н/Д</span>}
                         </TableCell>
                         <TableCell className="text-center font-medium text-foreground/90">
-                          {p.goals || <span className="text-muted-foreground/30">—</span>}
+                          {p.goals || <span className="text-muted-foreground/30">Н/Д</span>}
                         </TableCell>
                         <TableCell className="text-center font-medium text-foreground/90">
-                          {p.assists || <span className="text-muted-foreground/30">—</span>}
+                          {p.assists || <span className="text-muted-foreground/30">Н/Д</span>}
                         </TableCell>
 
                         <TableCell className="text-center text-muted-foreground">
@@ -2369,7 +2369,7 @@ export function StatsPage() {
                               {p.yellow}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground/30">—</span>
+                            <span className="text-muted-foreground/30">Н/Д</span>
                           )}
                         </TableCell>
 
@@ -2379,7 +2379,7 @@ export function StatsPage() {
                               {p.red}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground/30">—</span>
+                            <span className="text-muted-foreground/30">Н/Д</span>
                           )}
                         </TableCell>
 

@@ -445,15 +445,15 @@ function formatDateTimeUA(iso: string) {
 }
 
 function safeDateTimeUA(iso: string | null | undefined) {
-  if (!iso) return "—";
+  if (!iso) return "Не вказано";
   try {
     return formatDateTimeUA(iso);
   } catch {
-    return "—";
+    return "Не вказано";
   }
 }
 function formatTimeOnly(iso: string | null | undefined) {
-  if (!iso) return "—";
+  if (!iso) return "Не вказано";
   try {
     const d = new Date(iso);
     return new Intl.DateTimeFormat("uk-UA", {
@@ -461,12 +461,12 @@ function formatTimeOnly(iso: string | null | undefined) {
       minute: "2-digit",
     }).format(d);
   } catch {
-    return "—";
+    return "Не вказано";
   }
 }
 
 function formatPlayerLabel(p?: Player | null) {
-  if (!p) return "—";
+  if (!p) return "Не вказано";
   const num = p.shirt_number !== null && p.shirt_number !== undefined ? `№${p.shirt_number} ` : "";
   return `${num}${p.last_name} ${p.first_name}`.trim();
 }
@@ -1099,11 +1099,11 @@ export function MatchDetailsPage() {
     if (!match) {
       return {
         leftName: TEAM_NAME,
-        rightName: "—",
+        rightName: "Не вказано",
         leftLogo: null as string | null,
         rightLogo: null as string | null,
-        leftScore: "—",
-        rightScore: "—",
+        leftScore: "Не вказано",
+        rightScore: "Не вказано",
         leftTag: "Дім",
         rightTag: "Гості",
       };
@@ -1114,8 +1114,8 @@ export function MatchDetailsPage() {
     const teamLogoUrl = normalizeLogoUrl(teamLogo);
 
     // scores
-    const teamScore = typeof match.score_team === "number" ? String(match.score_team) : "—";
-    const oppScore = typeof match.score_opponent === "number" ? String(match.score_opponent) : "—";
+    const teamScore = typeof match.score_team === "number" ? String(match.score_team) : "Не вказано";
+    const oppScore = typeof match.score_opponent === "number" ? String(match.score_opponent) : "Не вказано";
 
     // left/right must reflect home/away
     if (match.home_away === "away") {
@@ -1864,7 +1864,7 @@ export function MatchDetailsPage() {
                       return (
                         <TableRow key={ev.id} className="hover:bg-muted/40 transition-colors">
                           <TableNumericCell align="left" className="align-middle font-medium text-foreground">
-                            {typeof ev.minute === "number" ? ev.minute : "—"}
+                            {typeof ev.minute === "number" ? ev.minute : "Не вказано"}
                           </TableNumericCell>
 
                           <TableCell className="align-middle">
@@ -1881,7 +1881,7 @@ export function MatchDetailsPage() {
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(authorPlayer)}</span>
                               </Link>
                             ) : (
-                              "—"
+                              "Не вказано"
                             )}
                           </TableCell>
 
@@ -1892,7 +1892,7 @@ export function MatchDetailsPage() {
                                 <span className="underline underline-offset-4 decoration-border hover:decoration-foreground">{formatPlayerLabel(assistPlayer)}</span>
                               </Link>
                             ) : (
-                              "—"
+                              "Не вказано"
                             )}
                           </TableCell>
 

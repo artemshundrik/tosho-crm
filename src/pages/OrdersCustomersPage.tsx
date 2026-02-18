@@ -64,7 +64,7 @@ const VAT_OPTIONS: VatOption[] = [
 ];
 
 const formatOwnership = (value?: string | null) => {
-  if (!value) return "—";
+  if (!value) return "Не вказано";
   const match = OWNERSHIP_OPTIONS.find((option) => option.value === value);
   return match?.label ?? value;
 };
@@ -76,9 +76,9 @@ const formatVat = (value?: number | null) => {
 };
 
 const getInitials = (value?: string | null) => {
-  if (!value) return "—";
+  if (!value) return "Не вказано";
   const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "—";
+  if (parts.length === 0) return "Не вказано";
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();
@@ -388,7 +388,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         </div>
                       )}
                       <div>
-                        <div className="font-medium">{row.name ?? "—"}</div>
+                        <div className="font-medium">{row.name ?? "Не вказано"}</div>
                         {row.legal_name && (
                           <div className="text-xs text-muted-foreground">{row.legal_name}</div>
                         )}
@@ -397,7 +397,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   </TableCell>
                   <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
                   <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
-                  <TableCell>{row.tax_id ?? "—"}</TableCell>
+                  <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
                   <TableCell className="truncate max-w-[200px]">
                     {row.website ? (
                       <a
@@ -409,10 +409,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         {row.website}
                       </a>
                     ) : (
-                      "—"
+                      "Не вказано"
                     )}
                   </TableCell>
-                  <TableCell className="truncate max-w-[200px]">{row.iban ?? "—"}</TableCell>
+                  <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
                   <TableCell
                     className="text-right pr-4"
                     onClick={(event) => event.stopPropagation()}

@@ -13,9 +13,9 @@ export type StandingsRowView = {
 };
 
 export function formatUpdatedAgo(updatedAt: string | null): string {
-  if (!updatedAt) return "Оновлено —";
+  if (!updatedAt) return "Оновлено: Н/Д";
   const updatedMs = new Date(updatedAt).getTime();
-  if (Number.isNaN(updatedMs)) return "Оновлено —";
+  if (Number.isNaN(updatedMs)) return "Оновлено: Н/Д";
 
   const diffMs = Date.now() - updatedMs;
   if (diffMs < 60_000) return "Оновлено щойно";

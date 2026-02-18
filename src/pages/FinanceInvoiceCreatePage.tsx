@@ -175,7 +175,7 @@ export function FinanceInvoiceCreatePage() {
                 onValueChange={(val) => setForm((prev) => ({ ...prev, player_id: val }))}
               >
                 <SelectTrigger className={CONTROL_BASE}>
-                  <SelectValue placeholder="— Без гравця —" />
+                  <SelectValue placeholder="Без гравця" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Без гравця —</SelectItem>

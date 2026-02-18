@@ -564,7 +564,7 @@ export function TeamMembersPage() {
   });
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return "—";
+    if (!dateStr) return "Не вказано";
     return new Date(dateStr).toLocaleString("uk-UA", {
       dateStyle: "short",
       timeStyle: "short",
@@ -1065,7 +1065,7 @@ export function TeamMembersPage() {
                               </span>
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Mail className="w-3 h-3 opacity-70" />
-                                <span className="truncate max-w-[200px]">{m.email || "—"}</span>
+                                <span className="truncate max-w-[200px]">{m.email || "Не вказано"}</span>
                               </div>
                             </div>
                           </div>
@@ -1361,7 +1361,7 @@ export function TeamMembersPage() {
           <div className="p-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">Користувач</Label>
-              <Input value={editMember?.email ?? "—"} disabled className="h-11" />
+              <Input value={editMember?.email ?? "Не вказано"} disabled className="h-11" />
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>

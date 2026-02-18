@@ -272,7 +272,7 @@ function ScoreBox({
     );
   }
 
-  const text = hasScore ? `${a}:${b}` : "—";
+  const text = hasScore ? `${a}:${b}` : "Н/Д";
 
   return (
     <div className="flex h-[64px] items-center justify-center">

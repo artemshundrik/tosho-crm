@@ -507,7 +507,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     const score =
       matchMeta && matchMeta.score_team !== null && matchMeta.score_opponent !== null
         ? `${matchMeta.score_team}:${matchMeta.score_opponent}`
-        : "—:—";
+        : "Н/Д:Н/Д";
 
     const metaSubtitle = matchMeta
       ? `${matchMeta.opponent_name} • ${formatDateTimeUA(matchMeta.match_date)} • ${score}`
@@ -983,11 +983,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     title="USD/UAH · EUR/UAH"
                   >
                     <span className="font-medium tabular-nums text-foreground/90">
-                      USD {usdUahRate ? usdUahRate.toFixed(2) : "—"}
+                      USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
                     </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="font-medium tabular-nums text-foreground/90">
-                      EUR {eurUahRate ? eurUahRate.toFixed(2) : "—"}
+                      EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
                     </span>
                   </button>
                 }
@@ -1011,13 +1011,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       <div className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2">
                         <div className="text-[11px] text-muted-foreground">USD/UAH</div>
                         <div className="text-base font-semibold tabular-nums text-foreground">
-                          {usdUahRate ? usdUahRate.toFixed(2) : "—"}
+                          {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
                         </div>
                       </div>
                       <div className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2">
                         <div className="text-[11px] text-muted-foreground">EUR/UAH</div>
                         <div className="text-base font-semibold tabular-nums text-foreground">
-                          {eurUahRate ? eurUahRate.toFixed(2) : "—"}
+                          {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
                         </div>
                       </div>
                     </div>

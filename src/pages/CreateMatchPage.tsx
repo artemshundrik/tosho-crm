@@ -121,14 +121,14 @@ const eventTypes: EventType[] = [
 ];
 
 function safeDateTimeUA(iso: string | null | undefined) {
-  if (!iso) return "—";
+  if (!iso) return "Не вказано";
   try {
     const d = new Date(iso);
     const date = new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
     const time = new Intl.DateTimeFormat("uk-UA", { hour: "2-digit", minute: "2-digit" }).format(d);
     return `${date} • ${time}`;
   } catch {
-    return "—";
+    return "Не вказано";
   }
 }
 
@@ -499,7 +499,7 @@ function parseSmartDateTime(input: string, now = new Date()): { date: Date; conf
 
 function formatPosition(pos: string | null | undefined) {
   const p = (pos || "").trim().toUpperCase();
-  if (!p) return "—";
+  if (!p) return "Не вказано";
   if (p === "GK") return "Воротар";
   if (p === "UNIV") return "Універсал";
   return p;
@@ -1329,7 +1329,7 @@ if (minute !== null && Number.isNaN(minute)) {
                 inputMode="numeric"
                 type="number"
                 min={0}
-                placeholder="—"
+                placeholder="Не вказано"
                 value={form.minute}
                 onChange={(e) => setForm((prev) => ({ ...prev, minute: e.target.value }))}
                 onKeyDown={(e) => {
@@ -1439,13 +1439,13 @@ if (minute !== null && Number.isNaN(minute)) {
 
                     <TableBody>
                       {sortedEvents.map((ev) => {
-                        const author = ev.player_id ? playerLabelById.get(ev.player_id) || "—" : "—";
-                        const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "—" : "—";
+                        const author = ev.player_id ? playerLabelById.get(ev.player_id) || "Не вказано" : "Не вказано";
+                        const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "Не вказано" : "Не вказано";
 
                         return (
                           <TableRow key={ev.id} className="hover:bg-muted/40 transition-colors">
                             <TableNumericCell align="left" className="align-middle font-medium text-foreground">
-                              {typeof ev.minute === "number" ? ev.minute : "—"}
+                              {typeof ev.minute === "number" ? ev.minute : "Не вказано"}
                             </TableNumericCell>
 
                             <TableCell className="align-middle">
@@ -1456,7 +1456,7 @@ if (minute !== null && Number.isNaN(minute)) {
                             </TableCell>
 
                             <TableCell className="align-middle font-medium text-foreground">{author}</TableCell>
-                            <TableCell className="align-middle text-sm text-muted-foreground">{assist !== "—" ? `${assist}` : "—"}</TableCell>
+                            <TableCell className="align-middle text-sm text-muted-foreground">{assist !== "Не вказано" ? `${assist}` : "Не вказано"}</TableCell>
                             <TableCell className="align-middle text-sm text-muted-foreground">{safeDateTimeUA(ev.created_at)}</TableCell>
 
                             <TableActionCell className="align-middle">
@@ -1511,14 +1511,14 @@ if (minute !== null && Number.isNaN(minute)) {
                 <div className="rounded-[var(--radius-inner)] border border-border bg-background p-4">
                   <div className="space-y-2">
                     {sortedEvents.map((ev) => {
-                      const author = ev.player_id ? playerLabelById.get(ev.player_id) || "—" : "—";
-                      const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "—" : null;
+                      const author = ev.player_id ? playerLabelById.get(ev.player_id) || "Не вказано" : "Не вказано";
+                      const assist = ev.assist_player_id ? playerLabelById.get(ev.assist_player_id) || "Не вказано" : null;
 
                       return (
                         <div key={ev.id} className="group flex items-start justify-between gap-3 rounded-[var(--radius-inner)] border border-border bg-card p-4 hover:bg-muted/20">
                           <div className="flex min-w-0 items-start gap-3">
                             <div className="grid h-9 w-9 place-items-center rounded-[var(--radius-md)] border bg-background">
-                              {ev.minute !== null ? <span className="text-sm font-semibold tabular-nums">{ev.minute}</span> : <span className="text-xs text-muted-foreground">—</span>}
+                              {ev.minute !== null ? <span className="text-sm font-semibold tabular-nums">{ev.minute}</span> : <span className="text-xs text-muted-foreground">Н/Д</span>}
                             </div>
 
                             <div className="min-w-0">

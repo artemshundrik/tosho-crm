@@ -484,7 +484,7 @@ export default function TournamentImportLabPage() {
   const coverageLine = useMemo(() => {
     if (!runSummary) return null;
     const unknown = coverage.matches_per_tab.unknown ?? 0;
-    return `Tabs: ${runSummary.tabs_found} • Fetched: ${coverage.fetched_tabs} • Skipped: ${coverage.skipped_tabs} • Matches: ${runSummary.matches_found} • Unknown-tab: ${unknown} • Season: ${runSummary.season_label ?? "—"}`;
+    return `Tabs: ${runSummary.tabs_found} • Fetched: ${coverage.fetched_tabs} • Skipped: ${coverage.skipped_tabs} • Matches: ${runSummary.matches_found} • Unknown-tab: ${unknown} • Season: ${runSummary.season_label ?? "Не вказано"}`;
   }, [coverage.fetched_tabs, coverage.matches_per_tab.unknown, coverage.skipped_tabs, runSummary]);
 
   const progressLine = useMemo(() => {

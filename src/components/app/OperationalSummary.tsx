@@ -146,7 +146,7 @@ function AvatarCircle({
 
 function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
   const Icon = kpi.icon;
-  const showUnit = Boolean(kpi.unit && kpi.value !== "—");
+  const showUnit = Boolean(kpi.unit && kpi.value !== "Н/Д");
 
   const trendTone =
     kpi.trend?.direction === "up"
@@ -176,13 +176,13 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
         <div className="mt-2 flex items-baseline gap-2">
           <div className="text-[28px] font-bold tracking-tight tabular-nums text-foreground">{kpi.value}</div>
           <span className="text-[28px] font-bold text-muted-foreground">•</span>
-          <div className="text-[28px] font-bold tracking-tight text-foreground">{kpi.secondaryValue ?? "—"}</div>
+          <div className="text-[28px] font-bold tracking-tight text-foreground">{kpi.secondaryValue ?? "Н/Д"}</div>
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
           <div className="inline-flex items-center gap-1 leading-none">
             <RotateCw className="h-3 w-3" />
-            <span>{kpi.hint ?? "—"}</span>
+            <span>{kpi.hint ?? "Н/Д"}</span>
           </div>
           {kpi.footerCta ? (
             kpi.footerCta.to ? (
@@ -213,7 +213,7 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
 
   const wdlParts =
     kpi.key === "wdl" ? kpi.value.split(/[–-]/).map((v) => v.trim()).filter(Boolean) : [];
-  const wdlValues = wdlParts.length === 3 ? wdlParts : ["—", "—", "—"];
+  const wdlValues = wdlParts.length === 3 ? wdlParts : ["Н/Д", "Н/Д", "Н/Д"];
   const wdlColors = ["text-emerald-500 dark:text-emerald-400", "text-muted-foreground", "text-red-500 dark:text-red-400"];
 
   return (

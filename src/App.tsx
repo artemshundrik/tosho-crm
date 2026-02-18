@@ -38,15 +38,6 @@ const AdminPage = lazy(() =>
 const ProfilePage = lazy(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
-const PlayersAdminPage = lazy(() =>
-  import("./pages/PlayersAdminPage").then((module) => ({ default: module.PlayersAdminPage }))
-);
-const MatchEventsAdminPage = lazy(() =>
-  import("./pages/MatchEventsAdminPage").then((module) => ({ default: module.MatchEventsAdminPage }))
-);
-const TournamentsAdminPage = lazy(() =>
-  import("./pages/TournamentsAdminPage").then((module) => ({ default: module.TournamentsAdminPage }))
-);
 const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
 const OrdersCustomersPage = lazy(() => import("./pages/OrdersCustomersPage"));
 const OrdersEstimateDetailsPage = lazy(() => import("./pages/OrdersEstimateDetailsPage"));
@@ -60,48 +51,8 @@ const LogisticsPage = lazy(() => import("./pages/LogisticsPage"));
 const DesignPage = lazy(() => import("./pages/DesignPage"));
 const DesignTaskPage = lazy(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazy(() => import("./pages/ContractorsPage"));
-const StatsPage = lazy(() =>
-  import("./pages/StatsPage").then((module) => ({ default: module.StatsPage }))
-);
-const PlayerPage = lazy(() =>
-  import("./pages/PlayerPage").then((module) => ({ default: module.PlayerPage }))
-);
-const MatchDetailsPage = lazy(() =>
-  import("./pages/MatchDetailsPage").then((module) => ({ default: module.MatchDetailsPage }))
-);
-const TrainingsListPage = lazy(() =>
-  import("./pages/AdminTrainings/TrainingsListPage").then((module) => ({
-    default: module.TrainingsListPage,
-  }))
-);
-const TrainingCreatePage = lazy(() =>
-  import("./pages/AdminTrainings/TrainingCreatePage").then((module) => ({
-    default: module.TrainingCreatePage,
-  }))
-);
-const TrainingDetailPage = lazy(() =>
-  import("./pages/AdminTrainings/TrainingDetailPage").then((module) => ({
-    default: module.TrainingDetailPage,
-  }))
-);
-const TrainingsAnalyticsPage = lazy(() =>
-  import("./pages/AdminTrainings/TrainingsAnalyticsPage").then((module) => ({
-    default: module.TrainingsAnalyticsPage,
-  }))
-);
-const MatchesShadcnPage = lazy(() =>
-  import("./pages/MatchesShadcnPage").then((module) => ({ default: module.MatchesShadcnPage }))
-);
-const CreateMatchPage = lazy(() =>
-  import("./pages/CreateMatchPage").then((module) => ({ default: module.CreateMatchPage }))
-);
 const OverviewPage = lazy(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
-);
-const TournamentDetailsPage = lazy(() =>
-  import("./pages/TournamentDetailsPage").then((module) => ({
-    default: module.TournamentDetailsPage,
-  }))
 );
 const FinancePage = lazy(() =>
   import("./pages/FinancePage").then((module) => ({ default: module.FinancePage }))
@@ -130,8 +81,6 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const UpdatePasswordPage = lazy(() => import("./pages/UpdatePasswordPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
-const TournamentImportLabPage = lazy(() => import("./pages/dev/TournamentImportLabPage"));
-const TournamentStandingsImportPage = lazy(() => import("./pages/dev/TournamentStandingsImportPage"));
 const NewQuoteFormDemo = lazy(() => import("./pages/NewQuoteFormDemo").then((module) => ({ default: module.NewQuoteFormDemo })));
 
 function RouteSuspense({
@@ -394,42 +343,16 @@ function AppRoutes() {
     <Routes location={location}>
       {/* public */}
       {import.meta.env.DEV ? (
-        <>
-      <Route
-        path="/dev/tournament-import-lab"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TournamentImportLabPage />
+        <Route
+          path="/dev/new-quote-form"
+          element={
+            <RequireAuth session={session} loading={loading}>
+              <RouteSuspense>
+                <NewQuoteFormDemo />
               </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/dev/tournament-standings"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TournamentStandingsImportPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/dev/new-quote-form"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <RouteSuspense>
-              <NewQuoteFormDemo />
-            </RouteSuspense>
-          </RequireAuth>
-        }
-      />
-        </>
+            </RequireAuth>
+          }
+        />
       ) : null}
       <Route path="/login" element={<LoginPage />} />
       <Route
@@ -483,7 +406,7 @@ function AppRoutes() {
         }
       />
 
-      {/* Overview */}
+      {/* Orders */}
       <Route
         path="/overview"
         element={
@@ -496,8 +419,6 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
-
-      {/* Orders */}
       <Route
         path="/orders/customers"
         element={
@@ -659,147 +580,6 @@ function AppRoutes() {
         }
       />
 
-      {/* Матчі */}
-      <Route
-        path="/matches-shadcn"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <MatchesShadcnPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Деталі матчу */}
-      <Route
-        path="/matches/:matchId"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <MatchDetailsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Події матчу (manager/super_admin) */}
-      <Route
-        path="/matches/:matchId/events"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <PermissionGate
-                allowed={permissions.canManageMembers || permissions.isManagerJob}
-                requirement="access_role: owner/admin або job_role: manager"
-                accessRole={accessRole}
-                jobRole={jobRole}
-              >
-                <RouteSuspense shell>
-                  <MatchEventsAdminPage />
-                </RouteSuspense>
-              </PermissionGate>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Створення матчу (manager/super_admin) */}
-      <Route
-        path="/matches/new"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <PermissionGate
-                allowed={permissions.canManageMembers || permissions.isManagerJob}
-                requirement="access_role: owner/admin або job_role: manager"
-                accessRole={accessRole}
-                jobRole={jobRole}
-              >
-                <RouteSuspense shell>
-                  <CreateMatchPage />
-                </RouteSuspense>
-              </PermissionGate>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Trainings */}
-      <Route
-        path="/admin/trainings"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TrainingsListPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin/trainings/create"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <PermissionGate
-                allowed={permissions.canManageMembers || permissions.isManagerJob}
-                requirement="access_role: owner/admin або job_role: manager"
-                accessRole={accessRole}
-                jobRole={jobRole}
-              >
-                <RouteSuspense shell>
-                  <TrainingCreatePage />
-                </RouteSuspense>
-              </PermissionGate>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin/trainings/:id"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TrainingDetailPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin/trainings/analytics"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TrainingsAnalyticsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Players */}
-      <Route
-        path="/admin/players"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <PlayersAdminPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
       <Route
         path="/settings/members"
         element={
@@ -819,71 +599,6 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/player/:playerId"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <PlayerPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Tournaments */}
-      <Route
-        path="/admin/tournaments"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TournamentsAdminPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin/tournaments/:id"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <TournamentDetailsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Analytics */}
-      <Route
-        path="/analytics/players"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <StatsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/analytics/team"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <StatsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
       {/* Finance (viewer read-only ок) */}
       <Route
         path="/finance"

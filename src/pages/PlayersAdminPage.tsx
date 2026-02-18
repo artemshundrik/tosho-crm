@@ -115,14 +115,14 @@ function getAgeFromBirthday(birthday: string | null): number | null {
 }
 
 function formatBirthday(birthday: string | null): string {
-  if (!birthday) return "—";
+  if (!birthday) return "Не вказано";
   const date = new Date(birthday);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Не вказано";
   return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", year: "numeric" }).format(date);
 }
 
 function JerseyNumber({ number }: { number: number | null }) {
-  if (number === null) return <span className="text-muted-foreground/20 text-lg font-bold">—</span>;
+  if (number === null) return <span className="text-muted-foreground/20 text-lg font-bold">Н/Д</span>;
   return (
     <div className="relative flex h-9 w-9 items-center justify-center select-none">
        <Shirt className="absolute h-7 w-7 text-muted-foreground/10" strokeWidth={1.5} />
@@ -234,7 +234,7 @@ export function PlayersAdminPage() {
   const stats = useMemo(() => {
     const total = players.length;
     const withAge = players.map(p => getAgeFromBirthday(p.birthday ?? null)).filter((a): a is number => a !== null);
-    const avgAge = withAge.length ? (withAge.reduce((a, b) => a + b, 0) / withAge.length).toFixed(1) : "—";
+    const avgAge = withAge.length ? (withAge.reduce((a, b) => a + b, 0) / withAge.length).toFixed(1) : "Не вказано";
     const activeGk = players.filter(p => p.position === 'GK' && p.status !== 'inactive').length;
     return { total, avgAge, gk: activeGk, univ: total - activeGk };
   }, [players]);
@@ -407,7 +407,7 @@ export function PlayersAdminPage() {
                         </Badge>
                       </TableCell>
                       <TableNumericCell align="left" className="text-sm font-medium text-muted-foreground">
-                        {getAgeFromBirthday(player.birthday || null) || "—"} р.
+                        {getAgeFromBirthday(player.birthday || null) || "Не вказано"} р.
                       </TableNumericCell>
                       <TableActionCell className="pr-6">
                         <AppDropdown

@@ -579,7 +579,7 @@ export function FinancePage() {
                     <div className="flex items-center gap-3 text-sm">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <CalendarDays className="h-4 w-4" />
-                        {rule.next_run_date ? formatDate(rule.next_run_date) : "—"}
+                        {rule.next_run_date ? formatDate(rule.next_run_date) : "Не вказано"}
                       </div>
                       <Badge variant="outline" className="rounded-full">
                         {rule.status}
@@ -621,7 +621,7 @@ export function FinancePage() {
                       return (
                         <tr key={row.id} className="border-t border-border">
                           <td className="py-3 text-muted-foreground">{row.id.slice(0, 6).toUpperCase()}</td>
-                          <td className="py-3 text-foreground font-medium">{name || "—"}</td>
+                          <td className="py-3 text-foreground font-medium">{name || "Не вказано"}</td>
                           <td className="py-3 text-muted-foreground">{typeLabel}</td>
                           <td className="py-3 text-right font-semibold tabular-nums">
                             {sign}

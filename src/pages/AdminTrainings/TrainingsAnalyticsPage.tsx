@@ -437,7 +437,7 @@ export function TrainingsAnalyticsPage() {
                     onChange={(e) => setFromDate(e.target.value)}
                     className="h-8 w-[96px] cursor-pointer border-none bg-transparent p-0 text-right text-xs font-medium tabular-nums shadow-none focus-visible:ring-0"
                   />
-                  <span className="text-muted-foreground mx-1">—</span>
+                  <span className="text-muted-foreground mx-1">до</span>
                   <Input
                     type="date"
                     value={toDate}

@@ -108,7 +108,7 @@ export function CategoryDialog({
             <div className="space-y-2">
               <Label>Категорія</Label>
               <div className="px-3 py-2 rounded-md bg-muted text-sm text-muted-foreground">
-                {catalog.find((t) => t.id === selectedTypeForKind)?.name || "—"}
+                {catalog.find((t) => t.id === selectedTypeForKind)?.name || "Н/Д"}
               </div>
             </div>
           )}

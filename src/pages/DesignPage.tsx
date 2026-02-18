@@ -110,7 +110,7 @@ const DESIGN_FILES_BUCKET =
 
 const MAX_BRIEF_FILES = 5;
 const formatEstimateMinutes = (minutes?: number | null) => {
-  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "—";
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
   const days = Math.floor(value / 480);
   const hours = Math.floor((value % 480) / 60);
@@ -1161,7 +1161,7 @@ export default function DesignPage() {
               </div>
             )}
             <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
-              {task.customerName ?? "—"}
+              {task.customerName ?? "Не вказано"}
             </div>
           </div>
           <DropdownMenu>
@@ -1503,7 +1503,7 @@ export default function DesignPage() {
                             : row.task.title ?? row.task.quoteId.slice(0, 8)}
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {row.task.customerName ?? "—"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)} ·{" "}
+                          {row.task.customerName ?? "Не вказано"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)} ·{" "}
                           {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
                         </div>
                       </button>
@@ -1635,7 +1635,7 @@ export default function DesignPage() {
                             </div>
                             <div className="text-xs text-muted-foreground truncate">{isLinkedQuote ? "Прорахунок" : "Standalone"}</div>
                           </button>
-                          <div className="truncate">{task.customerName ?? "—"}</div>
+                          <div className="truncate">{task.customerName ?? "Не вказано"}</div>
                           <div>
                             <Badge
                               variant="outline"
