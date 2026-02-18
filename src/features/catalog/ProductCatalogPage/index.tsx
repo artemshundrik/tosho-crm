@@ -10,8 +10,9 @@
 
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { PageHeader } from "@/components/app/headers/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, FolderKanban, Loader2 } from "lucide-react";
 import { exportToCSV } from "@/utils/catalogUtils";
 
 // Hooks
@@ -25,7 +26,6 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useBulkSelection } from "./hooks/useBulkSelection";
 
 // Components
-import { CatalogHeader } from "./components/CatalogHeader";
 import { CatalogSidebar } from "./components/CatalogSidebar";
 import { ModelGrid } from "./components/ModelGrid";
 import { TableView } from "./components/TableView";
@@ -336,7 +336,12 @@ export default function ProductCatalogPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+      <PageHeader
+        title="Каталог продукції"
+        subtitle="Довідники типів, видів, моделей та методів нанесення."
+        icon={<FolderKanban className="h-5 w-5" />}
+      />
       <div className="rounded-[var(--radius-section)] border border-border bg-card/60 overflow-hidden">
         {/* Main Layout: Sidebar + Content */}
         <div className="flex h-[calc(100vh-120px)]">

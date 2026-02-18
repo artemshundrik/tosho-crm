@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CustomerDialog } from "@/components/customers";
+import { PageHeader } from "@/components/app/headers/PageHeader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search, Trash2 } from "lucide-react";
+import { Building2, MoreHorizontal, PlusCircle, Search, Trash2 } from "lucide-react";
 
 type OwnershipOption = {
   value: string;
@@ -323,9 +324,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative min-w-[240px] flex-1 max-w-[360px]">
+    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+      <PageHeader
+        title="Замовники"
+        subtitle="База компаній, реквізитів та контактної інформації."
+        icon={<Building2 className="h-5 w-5" />}
+        actions={
+          <Button onClick={openCreate} className="gap-2">
+            <PlusCircle className="h-4 w-4" />
+            Новий замовник
+          </Button>
+        }
+      >
+        <div className="relative min-w-[240px] max-w-[420px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -334,11 +345,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             className="pl-9"
           />
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <PlusCircle className="h-4 w-4" />
-          Новий замовник
-        </Button>
-      </div>
+      </PageHeader>
 
       <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
         {loading ? (

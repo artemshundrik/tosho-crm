@@ -40,6 +40,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
+import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { toast } from "sonner";
@@ -1694,52 +1695,48 @@ export default function DesignTaskPage() {
 
   return (
     <div className="w-full max-w-none px-0 pb-20 space-y-4">
-      <section className="rounded-xl border border-border/60 bg-gradient-to-br from-card/95 via-card/80 to-primary/5 p-4 md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/design")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                До дошки
-              </Button>
-              <Badge variant="outline" className="gap-1 text-xs">
-                <Palette className="h-3.5 w-3.5" />
-                Дизайн задача
-              </Badge>
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-tight">{taskHeaderTitle}</h1>
-              <p className="text-sm text-muted-foreground">{taskHeaderSubtitle}</p>
-            </div>
-            <EntityViewersBar
-              entries={designTaskViewers}
-              label="Переглядають задачу"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
-                {statusLabels[task.status]}
-              </Badge>
-              <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1">
-                <UserRound className="h-3.5 w-3.5" />
-                {getMemberLabel(task.assigneeUserId)}
-              </Badge>
-              <Badge variant="outline" className={cn("px-2.5 py-1 text-xs gap-1", deadlineLabel.className)}>
-                <CalendarClock className="h-3.5 w-3.5" />
-                Дедлайн: {deadlineLabel.label}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1 px-2.5 text-xs"
-                onClick={() => void openManualEstimateDialog()}
-              >
-                <Clock className="h-3.5 w-3.5" />
-                {estimateLabel === "Не вказано" ? "Додати естімейт" : `Естімейт: ${estimateLabel}`}
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 lg:justify-end">
+      <EntityHeader
+        topBar={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/design")} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              До дошки
+            </Button>
+            <Badge variant="outline" className="gap-1 text-xs">
+              <Palette className="h-3.5 w-3.5" />
+              Дизайн задача
+            </Badge>
+          </>
+        }
+        title={taskHeaderTitle}
+        subtitle={taskHeaderSubtitle}
+        viewers={<EntityViewersBar entries={designTaskViewers} label="Переглядають задачу" />}
+        meta={
+          <>
+            <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
+              {statusLabels[task.status]}
+            </Badge>
+            <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1">
+              <UserRound className="h-3.5 w-3.5" />
+              {getMemberLabel(task.assigneeUserId)}
+            </Badge>
+            <Badge variant="outline" className={cn("px-2.5 py-1 text-xs gap-1", deadlineLabel.className)}>
+              <CalendarClock className="h-3.5 w-3.5" />
+              Дедлайн: {deadlineLabel.label}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 px-2.5 text-xs"
+              onClick={() => void openManualEstimateDialog()}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {estimateLabel === "Не вказано" ? "Додати естімейт" : `Естімейт: ${estimateLabel}`}
+            </Button>
+          </>
+        }
+        actions={
+          <>
             {isLinkedQuote ? (
               <Button variant="outline" className="gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
                 <ExternalLink className="h-4 w-4" />
@@ -1750,10 +1747,10 @@ export default function DesignTaskPage() {
               {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {primaryActionLabel}
             </Button>
-          </div>
-        </div>
-        <div className="mt-3 text-xs text-muted-foreground">{primaryActionHint}</div>
-      </section>
+          </>
+        }
+        hint={primaryActionHint}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)] gap-4">
         <div className="space-y-4">

@@ -12,6 +12,8 @@ import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
+import { PageHeader } from "@/components/app/headers/PageHeader";
+import { Bell } from "lucide-react";
 
 type FilterMode = "all" | "unread";
 
@@ -140,41 +142,12 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
-            <TabsList
-              className={cn(
-                "inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1",
-                "bg-muted border border-border"
-              )}
-            >
-              <TabsTrigger
-                value="all"
-                className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Всі
-              </TabsTrigger>
-              <TabsTrigger
-                value="unread"
-                className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Непрочитані
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
+    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+      <PageHeader
+        title="Сповіщення"
+        subtitle="Всі події та оновлення в одному місці."
+        icon={<Bell className="h-5 w-5" />}
+        actions={
           <Button
             variant="secondary"
             className="h-10 px-4"
@@ -183,8 +156,40 @@ export default function NotificationsPage() {
           >
             Позначити всі
           </Button>
-        </div>
-      </div>
+        }
+      >
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
+          <TabsList
+            className={cn(
+              "inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1",
+              "bg-muted border border-border"
+            )}
+          >
+            <TabsTrigger
+              value="all"
+              className={cn(
+                "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+                "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
+              )}
+            >
+              Всі
+            </TabsTrigger>
+            <TabsTrigger
+              value="unread"
+              className={cn(
+                "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+                "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
+              )}
+            >
+              Непрочитані
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </PageHeader>
 
       {filtered.length === 0 ? (
         <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">

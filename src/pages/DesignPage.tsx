@@ -19,6 +19,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
+import { PageHeader } from "@/components/app/headers/PageHeader";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -1290,57 +1291,57 @@ export default function DesignPage() {
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-3">
-        <Palette className="h-5 w-5 text-primary" />
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Дизайн</h2>
-          <p className="text-sm text-muted-foreground">Задачі на макети, правки та погодження.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Дизайн"
+        subtitle="Задачі на макети, правки та погодження."
+        icon={<Palette className="h-5 w-5" />}
+        actions={
+          <Button size="lg" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Нова дизайн-задача
+          </Button>
+        }
+      >
+        <ActiveHereCard entries={workspacePresence.activeHereEntries} />
 
-      <ActiveHereCard entries={workspacePresence.activeHereEntries} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" className="gap-2 mr-1" onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Нова дизайн-задача
-        </Button>
-        <Button
-          size="sm"
-          variant={assignmentFilter === "mine" ? "secondary" : "outline"}
-          onClick={() => setAssignmentFilter("mine")}
-        >
-          Мої
-        </Button>
-        <Button
-          size="sm"
-          variant={assignmentFilter === "all" ? "secondary" : "outline"}
-          onClick={() => setAssignmentFilter("all")}
-        >
-          Всі
-        </Button>
-        <Button
-          size="sm"
-          variant={assignmentFilter === "unassigned" ? "secondary" : "outline"}
-          onClick={() => setAssignmentFilter("unassigned")}
-        >
-          Без виконавця
-        </Button>
-        <Badge variant="outline" className="ml-1">
-          {filteredTasks.length} задач
-        </Badge>
-        <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
-          <Button size="sm" variant={viewMode === "kanban" ? "secondary" : "ghost"} onClick={() => setViewMode("kanban")}>
-            Kanban
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant={assignmentFilter === "mine" ? "secondary" : "outline"}
+            onClick={() => setAssignmentFilter("mine")}
+          >
+            Мої
           </Button>
-          <Button size="sm" variant={viewMode === "timeline" ? "secondary" : "ghost"} onClick={() => setViewMode("timeline")}>
-            Timeline
+          <Button
+            size="sm"
+            variant={assignmentFilter === "all" ? "secondary" : "outline"}
+            onClick={() => setAssignmentFilter("all")}
+          >
+            Всі
           </Button>
-          <Button size="sm" variant={viewMode === "assignee" ? "secondary" : "ghost"} onClick={() => setViewMode("assignee")}>
-            По дизайнерах
+          <Button
+            size="sm"
+            variant={assignmentFilter === "unassigned" ? "secondary" : "outline"}
+            onClick={() => setAssignmentFilter("unassigned")}
+          >
+            Без виконавця
           </Button>
+          <Badge variant="outline" className="ml-1">
+            {filteredTasks.length} задач
+          </Badge>
+          <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
+            <Button size="sm" variant={viewMode === "kanban" ? "secondary" : "ghost"} onClick={() => setViewMode("kanban")}>
+              Kanban
+            </Button>
+            <Button size="sm" variant={viewMode === "timeline" ? "secondary" : "ghost"} onClick={() => setViewMode("timeline")}>
+              Timeline
+            </Button>
+            <Button size="sm" variant={viewMode === "assignee" ? "secondary" : "ghost"} onClick={() => setViewMode("assignee")}>
+              По дизайнерах
+            </Button>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       {error ? (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">

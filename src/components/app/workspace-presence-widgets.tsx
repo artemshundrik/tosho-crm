@@ -115,18 +115,22 @@ type ActiveHereCardProps = {
 
 export function ActiveHereCard({ entries, className, title = "Активні тут" }: ActiveHereCardProps) {
   return (
-    <div className={cn("rounded-xl border border-border/60 bg-card/60 px-3 py-2.5", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{entries.length}</div>
-      </div>
-      <div className="mt-2">
-        {entries.length === 0 ? (
-          <div className="text-xs text-muted-foreground">Нікого на цій сторінці зараз немає.</div>
-        ) : (
-          <PresenceAvatarStack entries={entries} max={6} />
-        )}
-      </div>
+    <div
+      className={cn(
+        "inline-flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1.5",
+        className
+      )}
+    >
+      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="text-xs font-medium text-muted-foreground">{title}:</span>
+      {entries.length === 0 ? (
+        <span className="text-xs text-muted-foreground">0</span>
+      ) : (
+        <PresenceAvatarStack entries={entries} max={4} size={20} />
+      )}
+      {entries.length > 0 ? (
+        <span className="text-xs text-muted-foreground">{entries.length}</span>
+      ) : null}
     </div>
   );
 }

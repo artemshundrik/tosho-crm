@@ -36,7 +36,7 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { PageHeader } from "@/components/app/headers/PageHeader";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -235,27 +235,6 @@ export function TeamMembersPage() {
   );
   const isSuperAdmin = currentMembership?.access_role === "owner";
   const canManage = currentMembership?.access_role === "owner" || currentMembership?.access_role === "admin";
-
-  const headerActions = useMemo(() => {
-    if (!canManage) return null;
-    return (
-      <Button
-        variant="primary"
-        onClick={() => {
-          setActiveTab("invites");
-          setInviteOpen(true);
-          setGeneratedLink(null);
-          setInviteEmail("");
-          setInviteAccessRole("admin");
-          setInviteJobRole("member");
-          setParams({ tab: "invites" });
-        }}
-      >
-        Інвайт
-      </Button>
-    );
-  }, [canManage, setParams]);
-  usePageHeaderActions(headerActions, [canManage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -963,20 +942,32 @@ export function TeamMembersPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20">
+      <PageHeader
+        title="Доступ до команди"
+        subtitle="Керування учасниками та рівнями доступу в workspace."
+        icon={<ShieldAlert className="h-5 w-5" />}
+        actions={
+          canManage ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setActiveTab("invites");
+                setInviteOpen(true);
+                setGeneratedLink(null);
+                setInviteEmail("");
+                setInviteAccessRole("admin");
+                setInviteJobRole("member");
+                setParams({ tab: "invites" });
+              }}
+            >
+              Інвайт
+            </Button>
+          ) : null
+        }
+      />
+
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
         <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
-              <ShieldAlert className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-foreground">Доступ до команди</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">
-                Керування учасниками та рівнями доступу в workspace.
-              </div>
-            </div>
-          </div>
-
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
               <Button

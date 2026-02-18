@@ -155,6 +155,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Пульс команди, найближчі події та швидкі дії.",
       breadcrumbLabel: "Огляд",
       breadcrumbTo: ROUTES.overview,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.ordersEstimates))
     return {
@@ -162,6 +163,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Підготовка розрахунків і комерційних пропозицій.",
       breadcrumbLabel: "Прорахунки замовлень",
       breadcrumbTo: ROUTES.ordersEstimates,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.ordersCustomers))
     return {
@@ -169,6 +171,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "База компаній, реквізитів та контактної інформації.",
       breadcrumbLabel: "Замовники",
       breadcrumbTo: ROUTES.ordersCustomers,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.ordersProduction))
     return {
@@ -190,6 +193,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Довідники типів, видів, моделей та методів нанесення.",
       breadcrumbLabel: "Каталог продукції",
       breadcrumbTo: ROUTES.catalogProducts,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.financeInvoices))
     return {
@@ -197,6 +201,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Рахунки для клієнтів і статуси оплат.",
       breadcrumbLabel: "Рахунки",
       breadcrumbTo: ROUTES.financeInvoices,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.financeExpenseInvoices))
     return {
@@ -225,6 +230,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Макети, правки та задачі на дизайн.",
       breadcrumbLabel: "Дизайн",
       breadcrumbTo: ROUTES.design,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.contractors))
     return {
@@ -343,6 +349,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Всі події та оновлення в одному місці.",
       breadcrumbLabel: "Сповіщення",
       breadcrumbTo: ROUTES.notifications,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.activity))
     return {
@@ -357,6 +364,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Керування учасниками та запрошеннями команди.",
       breadcrumbLabel: "Доступ / Ролі",
       breadcrumbTo: ROUTES.membersAccess,
+      showPageHeader: false,
     };
 if (pathname === ROUTES.profile)
     return {

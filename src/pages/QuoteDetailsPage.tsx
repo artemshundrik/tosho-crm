@@ -35,6 +35,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import {
@@ -2989,115 +2990,117 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   return (
     <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
+      <EntityHeader
+        topBar={
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => navigate("/orders/estimates")}
-            className="shrink-0"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold leading-tight">
-                Прорахунок #{quote.number ?? quote.id}
-              </h1>
-              <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
-                {formatStatusLabel(currentStatus)}
-              </Badge>
-              {(() => {
-                const badge = getDeadlineBadge(quote.deadline_at ?? null);
-                const deadlineDate = parseDeadlineDate(quote.deadline_at ?? null);
-                const titleParts = [
-                  deadlineDate
-                    ? `Дата: ${deadlineDate.toLocaleDateString("uk-UA")}`
-                    : "Дедлайн не задано",
-                  quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
-                ].filter(Boolean);
-                return (
-                  <Badge
-                    variant="outline"
-                    className={cn("text-xs font-medium", badge.className)}
-                    title={titleParts.join(" · ")}
-                  >
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {badge.label}
-                  </Badge>
-                );
-              })()}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {formatQuoteType(quote.quote_type)}
-              {(quote.delivery_type ?? quote.print_type)
-                ? ` · ${formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}`
-                : ""}
-            </div>
-            <EntityViewersBar
-              entries={quoteViewers}
-              label="Переглядають прорахунок"
-              className="mt-2"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            className="gap-2 shadow-sm"
-            disabled={statusBusy}
-            onClick={handlePrimaryStatusAction}
-          >
-            {createElement(
-              statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock,
-              { className: "h-4 w-4" }
-            )}
-            {nextAction.ctaLabel}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
             className="gap-2"
-            disabled={statusBusy}
-            onClick={openStatusDialog}
           >
-            Змінити статус
-            <ChevronDown className="h-3 w-3" />
+            <ArrowLeft className="h-4 w-4" />
+            До прорахунків
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled>
-                <FileDown className="mr-2 h-4 w-4" />
-                Експорт PDF
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <Copy className="mr-2 h-4 w-4" />
-                Дублювати
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setDeleteQuoteDialogOpen(true);
-                }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Видалити
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+        }
+        title={`Прорахунок #${quote.number ?? quote.id}`}
+        subtitle={
+          <>
+            {formatQuoteType(quote.quote_type)}
+            {(quote.delivery_type ?? quote.print_type)
+              ? ` · ${formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}`
+              : ""}
+          </>
+        }
+        viewers={
+          <EntityViewersBar
+            entries={quoteViewers}
+            label="Переглядають прорахунок"
+            className="mt-1"
+          />
+        }
+        meta={
+          <>
+            <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
+              {formatStatusLabel(currentStatus)}
+            </Badge>
+            {(() => {
+              const badge = getDeadlineBadge(quote.deadline_at ?? null);
+              const deadlineDate = parseDeadlineDate(quote.deadline_at ?? null);
+              const titleParts = [
+                deadlineDate
+                  ? `Дата: ${deadlineDate.toLocaleDateString("uk-UA")}`
+                  : "Дедлайн не задано",
+                quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
+              ].filter(Boolean);
+              return (
+                <Badge
+                  variant="outline"
+                  className={cn("text-xs font-medium", badge.className)}
+                  title={titleParts.join(" · ")}
+                >
+                  <Calendar className="h-3 w-3 mr-1" />
+                  {badge.label}
+                </Badge>
+              );
+            })()}
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              className="gap-2 shadow-sm"
+              disabled={statusBusy}
+              onClick={handlePrimaryStatusAction}
+            >
+              {createElement(
+                statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock,
+                { className: "h-4 w-4" }
+              )}
+              {nextAction.ctaLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={statusBusy}
+              onClick={openStatusDialog}
+            >
+              Змінити статус
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Експорт PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Дублювати
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setDeleteQuoteDialogOpen(true);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Видалити
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
       <Card className="border-border/70 bg-card/60 p-4 sm:p-5">
         <div className="flex flex-col gap-4">
@@ -3152,12 +3155,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <Badge variant={pendingHintsCount > 0 ? "secondary" : "outline"} className="text-xs">
                 {pendingHintsCount > 0 ? `Потрібно: ${pendingHintsCount}` : "Готово"}
               </Badge>
-              <Button size="sm" className="gap-2" disabled={statusBusy} onClick={handlePrimaryStatusAction}>
-                {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Sparkles, {
-                  className: "h-4 w-4",
-                })}
-                {nextAction.ctaLabel}
-              </Button>
             </div>
           </div>
         </div>

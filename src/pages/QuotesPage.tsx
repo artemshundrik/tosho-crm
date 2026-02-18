@@ -56,6 +56,7 @@ import {
   CalendarDays,
   Timer,
   Pencil,
+  Calculator,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -66,6 +67,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
+import { PageHeader } from "@/components/app/headers/PageHeader";
 
 const STATUS_OPTIONS = [
   "new",
@@ -1852,44 +1854,46 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20">
-      {/* Filters and Search */}
-      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden mb-6 sticky top-4 z-10 backdrop-blur">
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <h1 className="text-xl font-semibold">Прорахунки</h1>
-              <p className="text-sm text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
-                <Button
-                  variant={viewMode === "table" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setViewMode("table")}
-                  aria-label="Табличний вигляд"
-                >
-                  ≡
-                </Button>
-                <Button
-                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setViewMode("kanban")}
-                  aria-label="Kanban вигляд"
-                >
-                  ▦
-                </Button>
-              </div>
-              <Button onClick={openCreate} size="lg" className="gap-2">
-                <PlusIcon className="h-4 w-4" />
-                Новий прорахунок
+    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+      <PageHeader
+        title="Прорахунки"
+        subtitle="Керуйте прорахунками та пропозиціями"
+        icon={<Calculator className="h-5 w-5" />}
+        actions={
+          <>
+            <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
+              <Button
+                variant={viewMode === "table" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode("table")}
+                aria-label="Табличний вигляд"
+              >
+                ≡
+              </Button>
+              <Button
+                variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode("kanban")}
+                aria-label="Kanban вигляд"
+              >
+                ▦
               </Button>
             </div>
-          </div>
+            <Button onClick={openCreate} size="lg" className="gap-2">
+              <PlusIcon className="h-4 w-4" />
+              Новий прорахунок
+            </Button>
+          </>
+        }
+      >
+        <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+      </PageHeader>
 
-          <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+      {/* Filters and Search */}
+      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden sticky top-4 z-10 backdrop-blur">
+        <div className="p-4 space-y-3">
 
           {/* Search Bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
