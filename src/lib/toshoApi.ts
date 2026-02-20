@@ -18,6 +18,7 @@ export type QuoteListRow = {
   quote_type?: string | null;
   print_type?: string | null;
   delivery_type?: string | null;
+  delivery_details?: Record<string, unknown> | null;
   currency?: string | null;
   total?: number | null;
   created_at?: string | null;
@@ -167,6 +168,7 @@ export async function createQuote(params: {
   quoteType?: string | null;
   printType?: string | null;
   deliveryType?: string | null;
+  deliveryDetails?: Record<string, unknown> | null;
   comment?: string | null;
   designBrief?: string | null;
   currency?: string | null;
@@ -188,6 +190,7 @@ export async function createQuote(params: {
     quote_type: params.quoteType ?? null,
     print_type: params.printType ?? null,
     delivery_type: params.deliveryType ?? null,
+    delivery_details: params.deliveryDetails ?? null,
     deadline_at: params.deadlineAt ?? null,
     deadline_note: params.deadlineNote ?? null,
   };
@@ -210,22 +213,30 @@ export async function createQuote(params: {
   try {
     return await insertQuote(payload);
   } catch (error: any) {
-    const message = error?.message ?? "";
+    const message = (error?.message ?? "").toLowerCase();
+    let changed = false;
     if (message.includes("column") && message.includes("created_by")) {
       delete payload.created_by;
-      return await insertQuote(payload);
+      changed = true;
     }
     if (message.includes("column") && message.includes("deadline_at")) {
       delete payload.deadline_at;
       delete payload.deadline_note;
-      return await insertQuote(payload);
+      changed = true;
     }
     if (message.includes("column") && message.includes("delivery_type")) {
       delete payload.delivery_type;
-      return await insertQuote(payload);
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("delivery_details")) {
+      delete payload.delivery_details;
+      changed = true;
     }
     if (message.includes("column") && message.includes("design_brief")) {
       delete payload.design_brief;
+      changed = true;
+    }
+    if (changed) {
       return await insertQuote(payload);
     }
     throw error;
@@ -244,22 +255,32 @@ export async function getQuoteSummary(quoteId: string) {
     const summary = (data as QuoteSummaryRow) ?? null;
     if (!summary) return summary;
 
-    const { data: briefRow, error: briefError } = await supabase
-      .schema("tosho")
-      .from("quotes")
-      .select("design_brief")
-      .eq("id", quoteId)
-      .maybeSingle();
+    const readExtras = async (columns: string) => {
+      return await supabase.schema("tosho").from("quotes").select(columns).eq("id", quoteId).maybeSingle();
+    };
+
+    let { data: briefRow, error: briefError } = await readExtras("design_brief,delivery_details");
     if (
       briefError &&
-      !(/column/i.test(briefError.message ?? "") && /design_brief/i.test(briefError.message ?? ""))
+      /column/i.test(briefError.message ?? "") &&
+      (/design_brief/i.test(briefError.message ?? "") || /delivery_details/i.test(briefError.message ?? ""))
     ) {
-      handleError(briefError);
+      ({ data: briefRow, error: briefError } = await readExtras("design_brief"));
     }
+    if (
+      briefError &&
+      /column/i.test(briefError.message ?? "") &&
+      /design_brief/i.test(briefError.message ?? "")
+    ) {
+      ({ data: briefRow, error: briefError } = await readExtras("id"));
+    }
+    handleError(briefError);
 
     return {
       ...summary,
       design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
+      delivery_details:
+        (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
     } as QuoteSummaryRow;
   } catch (error: any) {
     const message = (error?.message ?? "").toLowerCase();
@@ -292,6 +313,8 @@ export async function getQuoteSummary(quoteId: string) {
       quote_type: (fallback.quote_type as string | null | undefined) ?? null,
       print_type: (fallback.print_type as string | null | undefined) ?? null,
       delivery_type: (fallback.delivery_type as string | null | undefined) ?? null,
+      delivery_details:
+        (fallback.delivery_details as Record<string, unknown> | null | undefined) ?? null,
       currency: (fallback.currency as string | null | undefined) ?? null,
       total:
         typeof fallback.total === "number"
@@ -683,6 +706,7 @@ export async function updateQuote(params: {
   status?: string | null;
   quoteType?: string | null;
   deliveryType?: string | null;
+  deliveryDetails?: Record<string, unknown> | null;
 }) {
   const payload: Record<string, unknown> = {};
   if (params.comment !== undefined) payload.comment = params.comment;
@@ -693,6 +717,7 @@ export async function updateQuote(params: {
   if (params.status !== undefined) payload.status = params.status;
   if (params.quoteType !== undefined) payload.quote_type = params.quoteType;
   if (params.deliveryType !== undefined) payload.delivery_type = params.deliveryType;
+  if (params.deliveryDetails !== undefined) payload.delivery_details = params.deliveryDetails;
 
   const executeUpdate = async (nextPayload: Record<string, unknown>) => {
     const { data, error } = await supabase
@@ -701,7 +726,7 @@ export async function updateQuote(params: {
       .update(nextPayload)
       .eq("id", params.quoteId)
       .eq("team_id", params.teamId)
-      .select("id,status,comment,design_brief,quote_type,delivery_type,assigned_to,deadline_at,deadline_note,updated_at")
+      .select("id,status,comment,design_brief,quote_type,delivery_type,delivery_details,assigned_to,deadline_at,deadline_note,updated_at")
       .single();
     handleError(error);
     return data;
@@ -720,6 +745,10 @@ export async function updateQuote(params: {
     }
     if (message.includes("column") && message.includes("delivery_type")) {
       delete fallbackPayload.delivery_type;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("delivery_details")) {
+      delete fallbackPayload.delivery_details;
       changed = true;
     }
     if (message.includes("column") && message.includes("design_brief")) {

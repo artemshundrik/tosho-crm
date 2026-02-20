@@ -92,7 +92,19 @@ const QUOTE_TYPES = [
 const DELIVERY_OPTIONS = [
   { value: "nova_poshta", label: "Нова пошта", icon: Truck },
   { value: "pickup", label: "Самовивіз", icon: MapPin },
-  { value: "taxi", label: "Таксі", icon: Car },
+  { value: "taxi", label: "Таксі / Uklon", icon: Car },
+  { value: "cargo", label: "Вантажне перевезення", icon: Truck },
+];
+
+const NOVA_POSHTA_DELIVERY_TYPES = [
+  { value: "branch", label: "Відділення" },
+  { value: "locker", label: "Поштомат" },
+  { value: "address", label: "Адресна" },
+];
+
+const DELIVERY_PAYER_OPTIONS = [
+  { value: "company", label: "Ми" },
+  { value: "client", label: "Клієнт" },
 ];
 
 /**
@@ -135,6 +147,15 @@ type PrintApplication = {
   position: string;
   width: string;
   height: string;
+};
+
+type DeliveryDetails = {
+  region: string;
+  city: string;
+  address: string;
+  street: string;
+  npDeliveryType: string;
+  payer: string;
 };
 
 /**
@@ -205,6 +226,7 @@ export type NewQuoteFormData = {
   currency: string;
   quoteType: string;
   deliveryType?: string;
+  deliveryDetails?: DeliveryDetails;
   categoryId?: string;
   kindId?: string;
   modelId?: string;
@@ -250,6 +272,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
   const [deliveryType, setDeliveryType] = React.useState("");
+  const [deliveryDetails, setDeliveryDetails] = React.useState<DeliveryDetails>({
+    region: "",
+    city: "",
+    address: "",
+    street: "",
+    npDeliveryType: "",
+    payer: "",
+  });
   const [designAssigneeId, setDesignAssigneeId] = React.useState<string | null>(null);
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
@@ -308,6 +338,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCurrency(initialValues?.currency ?? "UAH");
     setQuoteType(initialValues?.quoteType ?? "merch");
     setDeliveryType(initialValues?.deliveryType ?? "");
+    setDeliveryDetails({
+      region: initialValues?.deliveryDetails?.region ?? "",
+      city: initialValues?.deliveryDetails?.city ?? "",
+      address: initialValues?.deliveryDetails?.address ?? "",
+      street: initialValues?.deliveryDetails?.street ?? "",
+      npDeliveryType: initialValues?.deliveryDetails?.npDeliveryType ?? "",
+      payer: initialValues?.deliveryDetails?.payer ?? "",
+    });
     setCategoryId(initialValues?.categoryId ?? "");
     setKindId(initialValues?.kindId ?? "");
     setModelId(initialValues?.modelId ?? "");
@@ -392,8 +430,84 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       return;
     }
 
+    const trim = (value?: string) => value?.trim() ?? "";
+    const hasRegion = trim(deliveryDetails.region).length > 0;
+    const hasCity = trim(deliveryDetails.city).length > 0;
+    const hasAddress = trim(deliveryDetails.address).length > 0;
+    const hasStreet = trim(deliveryDetails.street).length > 0;
+    const hasNpDeliveryType = trim(deliveryDetails.npDeliveryType).length > 0;
+
+    if (deliveryType === "nova_poshta") {
+      if (!hasRegion) {
+        alert("Для Нової пошти заповніть область");
+        return;
+      }
+      if (!hasCity) {
+        alert("Для Нової пошти заповніть місто");
+        return;
+      }
+      if (!hasNpDeliveryType) {
+        alert("Для Нової пошти оберіть тип доставки");
+        return;
+      }
+      if (deliveryDetails.npDeliveryType === "address" && !hasStreet) {
+        alert("Для адресної доставки заповніть вулицю");
+        return;
+      }
+    }
+
+    if (deliveryType === "taxi") {
+      if (!hasCity) {
+        alert("Для таксі / Uklon заповніть місто");
+        return;
+      }
+      if (!hasAddress) {
+        alert("Для таксі / Uklon заповніть адресу");
+        return;
+      }
+    }
+
+    if (deliveryType === "cargo") {
+      if (!hasRegion) {
+        alert("Для вантажного перевезення заповніть область");
+        return;
+      }
+      if (!hasCity) {
+        alert("Для вантажного перевезення заповніть місто");
+        return;
+      }
+      if (!hasAddress) {
+        alert("Для вантажного перевезення заповніть адресу");
+        return;
+      }
+    }
+
     const finalPrints = printMode === "no_print" ? [] : printApplications;
     const shouldCreateDesignTask = printMode !== "no_print" && createDesignTask;
+    const sanitizedDeliveryDetails: DeliveryDetails = {
+      region: "",
+      city: "",
+      address: "",
+      street: "",
+      npDeliveryType: "",
+      payer: trim(deliveryDetails.payer),
+    };
+    if (deliveryType === "nova_poshta") {
+      sanitizedDeliveryDetails.region = trim(deliveryDetails.region);
+      sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
+      sanitizedDeliveryDetails.npDeliveryType = trim(deliveryDetails.npDeliveryType);
+      sanitizedDeliveryDetails.street =
+        sanitizedDeliveryDetails.npDeliveryType === "address" ? trim(deliveryDetails.street) : "";
+    }
+    if (deliveryType === "taxi") {
+      sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
+      sanitizedDeliveryDetails.address = trim(deliveryDetails.address);
+    }
+    if (deliveryType === "cargo") {
+      sanitizedDeliveryDetails.region = trim(deliveryDetails.region);
+      sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
+      sanitizedDeliveryDetails.address = trim(deliveryDetails.address);
+    }
 
     const formData: NewQuoteFormData = {
       status,
@@ -406,6 +520,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       currency,
       quoteType,
       deliveryType,
+      deliveryDetails: sanitizedDeliveryDetails,
       categoryId,
       kindId,
       modelId,
@@ -660,6 +775,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     className="w-full justify-start gap-2 h-9 text-sm"
                     onClick={() => {
                       setDeliveryType(option.value);
+                      setDeliveryDetails({
+                        region: "",
+                        city: "",
+                        address: "",
+                        street: "",
+                        npDeliveryType: "",
+                        payer: "",
+                      });
                       setDeliveryPopoverOpen(false);
                     }}
                   >
@@ -684,6 +807,196 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             />
           </div>
         </div>
+
+        {deliveryType ? (
+          <div className="space-y-4">
+            <SectionHeader>Логістика</SectionHeader>
+            <div className="grid gap-3 md:grid-cols-2">
+              {deliveryType === "nova_poshta" ? (
+                <>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Область *</div>
+                    <Input
+                      value={deliveryDetails.region}
+                      onChange={(e) =>
+                        setDeliveryDetails((prev) => ({ ...prev, region: e.target.value }))
+                      }
+                      placeholder="Київська"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Місто *</div>
+                    <Input
+                      value={deliveryDetails.city}
+                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
+                      placeholder="Київ"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Тип доставки *</div>
+                    <Select
+                      value={deliveryDetails.npDeliveryType}
+                      onValueChange={(value) =>
+                        setDeliveryDetails((prev) => ({
+                          ...prev,
+                          npDeliveryType: value,
+                          street: value === "address" ? prev.street : "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть тип доставки" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NOVA_POSHTA_DELIVERY_TYPES.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Хто платить</div>
+                    <Select
+                      value={deliveryDetails.payer}
+                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть варіант" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DELIVERY_PAYER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {deliveryDetails.npDeliveryType === "address" ? (
+                    <div className="space-y-1 md:col-span-2">
+                      <div className="text-sm text-muted-foreground">Вулиця *</div>
+                      <Input
+                        value={deliveryDetails.street}
+                        onChange={(e) =>
+                          setDeliveryDetails((prev) => ({ ...prev, street: e.target.value }))
+                        }
+                        placeholder="Вул. Хрещатик, 1"
+                        className="h-9"
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {deliveryType === "taxi" ? (
+                <>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Місто *</div>
+                    <Input
+                      value={deliveryDetails.city}
+                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
+                      placeholder="Київ"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Хто платить</div>
+                    <Select
+                      value={deliveryDetails.payer}
+                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть варіант" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DELIVERY_PAYER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <div className="text-sm text-muted-foreground">Адреса *</div>
+                    <Input
+                      value={deliveryDetails.address}
+                      onChange={(e) =>
+                        setDeliveryDetails((prev) => ({ ...prev, address: e.target.value }))
+                      }
+                      placeholder="Вул. Хрещатик, 1"
+                      className="h-9"
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              {deliveryType === "cargo" ? (
+                <>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Область *</div>
+                    <Input
+                      value={deliveryDetails.region}
+                      onChange={(e) =>
+                        setDeliveryDetails((prev) => ({ ...prev, region: e.target.value }))
+                      }
+                      placeholder="Київська"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Місто *</div>
+                    <Input
+                      value={deliveryDetails.city}
+                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
+                      placeholder="Київ"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <div className="text-sm text-muted-foreground">Адреса *</div>
+                    <Input
+                      value={deliveryDetails.address}
+                      onChange={(e) =>
+                        setDeliveryDetails((prev) => ({ ...prev, address: e.target.value }))
+                      }
+                      placeholder="Вул. Хрещатик, 1"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Хто платить</div>
+                    <Select
+                      value={deliveryDetails.payer}
+                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть варіант" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DELIVERY_PAYER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : null}
+
+              {deliveryType === "pickup" ? (
+                <div className="text-sm text-muted-foreground md:col-span-2">
+                  Для самовивозу додаткові поля не потрібні.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {/* Product section */}
         <div className="space-y-4">

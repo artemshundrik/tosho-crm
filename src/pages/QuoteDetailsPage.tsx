@@ -892,7 +892,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const map: Record<string, string> = {
       nova_poshta: "Нова пошта",
       pickup: "Самовивіз",
-      taxi: "Таксі",
+      taxi: "Таксі / Uklon",
+      cargo: "Вантажне перевезення",
     };
     return map[value] ?? value;
   };

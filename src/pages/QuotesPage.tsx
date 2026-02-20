@@ -197,6 +197,24 @@ type PrintConfig = {
   heightMm: string;
 };
 
+type DeliveryDetailsForm = {
+  region: string;
+  city: string;
+  address: string;
+  street: string;
+  npDeliveryType: string;
+  payer: string;
+};
+
+const emptyDeliveryDetails = (): DeliveryDetailsForm => ({
+  region: "",
+  city: "",
+  address: "",
+  street: "",
+  npDeliveryType: "",
+  payer: "",
+});
+
 const createPrintConfig = (): PrintConfig => ({
   id: crypto.randomUUID(),
   methodId: "",
@@ -214,7 +232,8 @@ const QUOTE_TYPE_OPTIONS = [
 const DELIVERY_TYPE_OPTIONS = [
   { id: "nova_poshta", label: "Нова пошта" },
   { id: "pickup", label: "Самовивіз" },
-  { id: "taxi", label: "Таксі" },
+  { id: "taxi", label: "Таксі / Uklon" },
+  { id: "cargo", label: "Вантажне перевезення" },
 ];
 
   const quoteTypeLabel = (value?: string | null) =>
@@ -819,6 +838,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         customerId: data.customerId!,
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
+        deliveryDetails: data.deliveryDetails ?? null,
         comment: data.comment?.trim() || data.deadlineNote?.trim() || null,
         designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
         currency: data.currency,
@@ -1715,6 +1735,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       currency: row.currency ?? "UAH",
       quoteType: row.quote_type ?? "merch",
       deliveryType: row.delivery_type ?? row.print_type ?? "",
+      deliveryDetails: emptyDeliveryDetails(),
     });
     setEditError(null);
     setEditDialogOpen(true);
@@ -1738,6 +1759,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         currency: fresh.currency ?? row.currency ?? "UAH",
         quoteType: fresh.quote_type ?? "merch",
         deliveryType: fresh.delivery_type ?? fresh.print_type ?? "",
+        deliveryDetails: {
+          ...emptyDeliveryDetails(),
+          ...((fresh.delivery_details as Record<string, string> | null) ?? {}),
+        },
       });
     } catch (e: any) {
       setEditError(e?.message ?? "Не вдалося завантажити актуальні дані прорахунку.");
@@ -1770,6 +1795,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         deadlineNote: data.deadlineNote?.trim() || null,
         quoteType: data.quoteType?.trim() ? data.quoteType : null,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
+        deliveryDetails: data.deliveryDetails ?? null,
       });
       setRows((prev) =>
         prev.map((row) =>
@@ -1784,6 +1810,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 deadline_note: data.deadlineNote?.trim() || null,
                 quote_type: data.quoteType?.trim() ? data.quoteType : null,
                 delivery_type: data.deliveryType?.trim() ? data.deliveryType : null,
+                delivery_details: data.deliveryDetails ?? null,
               }
             : row
         )
