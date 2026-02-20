@@ -870,7 +870,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           key={theme}
           className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl"
         >
-          <div className="flex h-16 items-center justify-between px-3 md:px-6">
+          <div className="flex h-14 items-center justify-between px-4 md:px-5 lg:px-6">
             <div className="flex items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
@@ -1165,8 +1165,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </header>
 
         {/* CONTENT */}
-        <main className="w-full overflow-x-hidden px-4 py-6 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:px-6 md:pb-6 lg:px-8 xl:px-8">
-          <div className="mx-auto max-w-[1320px] space-y-8 min-w-0">
+        <main className="w-full overflow-x-hidden px-4 py-5 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:px-5 md:pb-5 lg:px-6">
+          <div className="mx-auto max-w-[1600px] space-y-6 min-w-0">
             {/* Page header (desktop) */}
             {header.showPageHeader === false ? (
               header.eyebrow ? (

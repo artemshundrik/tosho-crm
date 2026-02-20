@@ -70,6 +70,8 @@ import {
   Timer,
   Pencil,
   Calculator,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -2411,123 +2413,170 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [quickAddAvailableSets, quickAddOpen]);
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
-      <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden sticky top-4 z-10 backdrop-blur">
-        <div className="p-4 space-y-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl border border-primary/40 bg-primary/10 text-primary flex items-center justify-center shrink-0">
+    <div className="w-full pb-16 space-y-5">
+      {/* Modern Linea-style Header Block */}
+      <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden sticky top-0 z-10">
+        <div className="px-5 py-5 space-y-4">
+          {/* Header Section */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="h-11 w-11 rounded-[var(--radius-lg)] border border-primary/30 bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Calculator className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold leading-none">Прорахунки</h1>
-                <p className="text-sm text-muted-foreground mt-1">Керуйте прорахунками та пропозиціями</p>
+                <h1 className="text-2xl font-semibold leading-tight tracking-tight">Прорахунки</h1>
+                <p className="text-sm text-muted-foreground mt-1.5">Керуйте прорахунками та пропозиціями</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
+            <div className="flex items-center gap-2 shrink-0">
+              {/* View Mode Switcher */}
+              <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
                 <Button
-                  variant={viewMode === "table" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={viewMode === "table"}
                   onClick={() => setViewMode("table")}
-                  aria-label="Табличний вигляд"
+                  className="gap-1.5"
                 >
-                  ≡
+                  <List className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Список</span>
                 </Button>
                 <Button
-                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={viewMode === "kanban"}
                   onClick={() => setViewMode("kanban")}
-                  aria-label="Kanban вигляд"
+                  className="gap-1.5"
                 >
-                  ▦
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Kanban</span>
                 </Button>
               </div>
-              <Button onClick={openCreate} size="lg" className="gap-2">
+              <Button onClick={openCreate} size="sm" className="gap-2 h-10">
                 <PlusIcon className="h-4 w-4" />
                 Новий прорахунок
               </Button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={contentView === "sets" ? quoteSetSearch : search}
-                onChange={(e) =>
-                  contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
-                }
-                placeholder={
-                  contentView === "sets"
-                    ? "Пошук по КП та наборах..."
-                    : "Пошук за назвою, номером або замовником..."
-                }
-                className="pl-10 pr-12 h-11"
-              />
-              {(contentView === "sets" ? quoteSetSearch : search) && (
-                <button
-                  onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              {loading && contentView !== "sets" && search && (
-                <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="hidden sm:inline">Знайдено:</span>
-              <Badge variant="secondary" className="font-semibold">
-                {foundCount}
-              </Badge>
-            </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                Скинути фільтри
+          {/* Search and Filters Row */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Content Type Tabs */}
+            <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border sm:w-auto">
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={contentView === "quotes"}
+                onClick={() => setContentView("quotes")}
+              >
+                Прорахунки
               </Button>
-            )}
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={contentView === "sets"}
+                onClick={() => setContentView("sets")}
+              >
+                КП та набори
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={contentView === "all"}
+                onClick={() => setContentView("all")}
+              >
+                Все
+              </Button>
+            </div>
+
+            {/* Right Side: Search, Results Count, Clear Filters */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-1 sm:justify-end">
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[240px] max-w-[520px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={contentView === "sets" ? quoteSetSearch : search}
+                  onChange={(e) =>
+                    contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
+                  }
+                  placeholder={
+                    contentView === "sets"
+                      ? "Пошук по КП та наборах..."
+                      : "Пошук за назвою, номером або замовником..."
+                  }
+                  className="h-10 pl-9 pr-9 bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40 transition-colors"
+                />
+                {(contentView === "sets" ? quoteSetSearch : search) && (
+                  <Button
+                    type="button"
+                    variant="control"
+                    size="iconSm"
+                    aria-label="Очистити пошук"
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                    onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+                {loading && contentView !== "sets" && search && (
+                  <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Results Count */}
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="outline" className="font-semibold px-2.5 py-1 h-10 flex items-center gap-1.5">
+                  <span className="tabular-nums">{foundCount}</span>
+                  <span className="text-muted-foreground text-xs hidden sm:inline">знайдено</span>
+                </Badge>
+              </div>
+
+              {/* Clear Filters */}
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground shrink-0">
+                  Скинути фільтри
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-3 lg:flex-row lg:items-center lg:justify-between">
-            <Tabs value={contentView} onValueChange={(value) => setContentView(value as "quotes" | "sets" | "all")}>
-              <TabsList>
-                <TabsTrigger value="quotes">Прорахунки</TabsTrigger>
-                <TabsTrigger value="sets">КП та набори</TabsTrigger>
-                <TabsTrigger value="all">Все</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          {/* Status Filters Row */}
+          <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               {contentView !== "sets" ? (
                 <>
-                  <Button
-                    variant={quickFilter === "all" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuickFilter("all")}
-                  >
-                    Всі
-                  </Button>
-                  <Button
-                    variant={quickFilter === "new" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuickFilter("new")}
-                    className="gap-1.5"
-                  >
-                    <FileText className="h-3 w-3" />
-                    Нові
-                  </Button>
-                  <Button
-                    variant={quickFilter === "estimated" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuickFilter("estimated")}
-                  >
-                    Пораховано
-                  </Button>
+                  {/* Quick Filter Buttons */}
+                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quickFilter === "all"}
+                      onClick={() => setQuickFilter("all")}
+                    >
+                      Всі
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quickFilter === "new"}
+                      onClick={() => setQuickFilter("new")}
+                      className="gap-1.5"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Нові
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quickFilter === "estimated"}
+                      onClick={() => setQuickFilter("estimated")}
+                    >
+                      Пораховано
+                    </Button>
+                  </div>
+                  {/* Status Select */}
                   <Select value={status} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px] h-9">
+                    <SelectTrigger className="h-9 w-[180px] bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40">
                       <SelectValue placeholder="Статус" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2542,40 +2591,57 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </>
               ) : (
                 <>
-                  <Button
-                    variant={quoteSetKindFilter === "all" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuoteSetKindFilter("all")}
-                  >
-                    Всі
-                  </Button>
-                  <Button
-                    variant={quoteSetKindFilter === "kp" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuoteSetKindFilter("kp")}
-                  >
-                    КП
-                  </Button>
-                  <Button
-                    variant={quoteSetKindFilter === "set" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setQuoteSetKindFilter("set")}
-                  >
-                    Набори
-                  </Button>
+                  {/* Quote Set Kind Filters */}
+                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quoteSetKindFilter === "all"}
+                      onClick={() => setQuoteSetKindFilter("all")}
+                    >
+                      Всі
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quoteSetKindFilter === "kp"}
+                      onClick={() => setQuoteSetKindFilter("kp")}
+                    >
+                      КП
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quoteSetKindFilter === "set"}
+                      onClick={() => setQuoteSetKindFilter("set")}
+                    >
+                      Набори
+                    </Button>
+                  </div>
                 </>
               )}
             </div>
+
+            {/* List Mode Toggle (only for table view) */}
             {contentView !== "sets" && viewMode === "table" ? (
-              <Tabs
-                value={quoteListMode}
-                onValueChange={(value) => setQuoteListMode(value as "flat" | "grouped")}
-              >
-                <TabsList>
-                  <TabsTrigger value="flat">Список</TabsTrigger>
-                  <TabsTrigger value="grouped">Group Mode</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={quoteListMode === "flat"}
+                  onClick={() => setQuoteListMode("flat")}
+                >
+                  Список
+                </Button>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={quoteListMode === "grouped"}
+                  onClick={() => setQuoteListMode("grouped")}
+                >
+                  Group Mode
+                </Button>
+              </div>
             ) : null}
           </div>
         </div>
@@ -2583,18 +2649,29 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Bulk actions */}
       {contentView !== "sets" && selectedIds.size > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
-          <div className="text-sm font-semibold">Вибрано: {selectedIds.size}</div>
-          {bulkValidationMessage ? (
-            <div className="text-xs text-amber-500">{bulkValidationMessage}</div>
-          ) : (
-            <div className="text-xs text-emerald-500">Можна виконувати об'єднані дії</div>
-          )}
-          <div className="flex items-center gap-2">
+        <div className="rounded-[var(--radius-section)] border border-border bg-card px-5 py-4 shadow-none">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-semibold px-2.5 py-1 h-9">
+                  Вибрано: {selectedIds.size}
+                </Badge>
+                {bulkValidationMessage ? (
+                  <Badge variant="outline" className="h-9 border-amber-500/40 text-amber-300 bg-amber-500/10">
+                    {bulkValidationMessage}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="h-9 border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                    Можна виконувати об'єднані дії
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
               onClick={handleBulkCreateKp}
+              className="h-9"
             >
               Створити КП
             </Button>
@@ -2603,6 +2680,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="sm"
               disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
               onClick={openQuoteSetDialog}
+              className="h-9"
             >
               Сформувати набір
             </Button>
@@ -2611,6 +2689,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="sm"
               disabled={bulkBusy || quoteSetSaving}
               onClick={() => handleBulkStatus("approved")}
+              className="h-9"
             >
               Поставити “Затверджено”
             </Button>
@@ -2619,6 +2698,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="sm"
               disabled={bulkBusy || quoteSetSaving}
               onClick={() => handleBulkStatus("cancelled")}
+              className="h-9"
             >
               Поставити “Скасовано”
             </Button>
@@ -2627,49 +2707,62 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="sm"
               disabled={bulkBusy || quoteSetSaving}
               onClick={handleBulkDelete}
+              className="h-9"
             >
               Видалити
             </Button>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground shrink-0 h-9"
+              onClick={() => setSelectedIds(new Set())}
+              disabled={bulkBusy || quoteSetSaving}
+            >
+              Скасувати вибір
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto text-muted-foreground"
-            onClick={() => setSelectedIds(new Set())}
-            disabled={bulkBusy || quoteSetSaving}
-          >
-            Скасувати вибір
-          </Button>
         </div>
       )}
 
       {contentView !== "quotes" && (
-      <div className="rounded-xl border border-border bg-card/60 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+      <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div>
-            <div className="text-sm font-semibold">КП та набори</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Натисніть на рядок, щоб подивитися склад</div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span>КП: {quoteSetKpCount}</span>
-              <span>•</span>
-              <span>Набори: {quoteSetSetCount}</span>
+            <div className="text-base font-semibold">КП та набори</div>
+            <div className="text-sm text-muted-foreground mt-1">Натисніть на рядок, щоб подивитися склад</div>
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                КП: {quoteSetKpCount}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                Набори: {quoteSetSetCount}
+              </Badge>
             </div>
           </div>
-          <Badge variant="secondary" className="font-semibold">
+          <Badge variant="outline" className="font-semibold px-2.5 py-1 h-9">
             {filteredQuoteSets.length}
           </Badge>
         </div>
         {quoteSetsLoading ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">Завантаження...</div>
+          <div className="px-5 py-12 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">Завантаження...</p>
+          </div>
         ) : filteredQuoteSets.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">
-            Поки немає створених КП або наборів.
+          <div className="px-5 py-12 text-center">
+            <Layers className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Немає КП або наборів</h3>
+            <p className="text-sm text-muted-foreground">
+              Поки немає створених КП або наборів.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table className="[&_th]:px-4 [&_td]:px-4">
+            <Table className="[&_th]:px-5 [&_td]:px-5">
               <TableHeader>
-                <TableRow className="bg-muted/20">
+                <TableRow className="bg-muted/30 border-b border-border/60">
                   <TableHead className="w-[12px]"></TableHead>
                   <TableHead>Назва</TableHead>
                   <TableHead>Тип</TableHead>
@@ -2684,7 +2777,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <TableRow
                     key={set.id}
                     className={cn(
-                      "cursor-pointer hover:bg-muted/15 transition-colors",
+                      "cursor-pointer hover:bg-muted/10 transition-colors border-b border-border/50",
                       (set.kind ?? "set") === "kp"
                         ? "data-[state=selected]:bg-primary/5"
                         : "data-[state=selected]:bg-emerald-500/5"
@@ -2799,7 +2892,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
-        <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden">
+        <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -2825,10 +2918,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : quoteListMode === "grouped" ? (
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {groupedQuotesView.groups.map((group) => (
-                <div key={group.id} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60">
+                <div key={group.id} className="rounded-[var(--radius-lg)] border border-border bg-card overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/60">
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         className={cn(
@@ -2850,13 +2943,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </Badge>
                       <div className="truncate text-sm font-semibold">{group.name}</div>
                     </div>
-                    <Badge variant="secondary">{group.rows.length}</Badge>
+                    <Badge variant="outline" className="font-semibold">{group.rows.length}</Badge>
                   </div>
                   <div className="divide-y divide-border/50">
                     {group.rows.map((row) => (
                       <div
                         key={`${group.id}-${row.id}`}
-                        className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer"
+                        className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer transition-colors"
                         onClick={() => navigate(`/orders/estimates/${row.id}`)}
                       >
                         <div className="min-w-0">
@@ -2877,13 +2970,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               ))}
 
               {groupedQuotesView.ungrouped.length > 0 ? (
-                <div className="rounded-xl border border-border/60 bg-card/50 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-border/60 text-sm font-semibold">Без групи</div>
+                <div className="rounded-[var(--radius-lg)] border border-border bg-card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border/60 text-sm font-semibold">Без групи</div>
                   <div className="divide-y divide-border/50">
                     {groupedQuotesView.ungrouped.map((row) => (
                       <div
                         key={`ungrouped-${row.id}`}
-                        className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer"
+                        className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer transition-colors"
                         onClick={() => navigate(`/orders/estimates/${row.id}`)}
                       >
                         <div className="min-w-0">
@@ -2903,9 +2996,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table className="[&_th]:px-4 [&_td]:px-4">
+              <Table className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
-                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b [&>th+th]:border-l [&>th+th]:border-border/50">
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
                     <TableHead className="w-[44px]">
                       <Checkbox
                         checked={
@@ -2971,8 +3064,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <TableRow
                         key={row.id}
                         className={cn(
-                          "hover:bg-muted/15 cursor-pointer group transition-colors [&>td+td]:border-l [&>td+td]:border-border/50",
-                          isSelected && "bg-primary/5 border-primary/30"
+                          "hover:bg-muted/10 cursor-pointer group transition-colors border-b border-border/50",
+                          isSelected && "bg-primary/5"
                         )}
                         onClick={() => navigate(`/orders/estimates/${row.id}`)}
                         role="button"
@@ -3195,7 +3288,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           )}
         </div>
       ) : (
-        <div className="mt-2">
+        <div className="mt-1">
           {loading ? (
             <div className="p-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -3221,40 +3314,42 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="min-w-[1100px] flex gap-4 px-0 pb-6">
+            <div className="overflow-x-auto -mx-1">
+              <div className="min-w-[1000px] flex gap-3 px-1 pb-4">
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
                     <div
                       key={column.id}
-                      className="flex-1 min-w-[240px] max-w-[320px] bg-card/60 border border-border/60 rounded-lg shadow-sm flex flex-col"
+                      className="flex-1 min-w-[220px] max-w-[280px] rounded-[var(--radius-lg)] bg-muted/30 border border-border/50 flex flex-col"
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         e.preventDefault();
                         handleDropToStatus(column.id);
                       }}
                     >
-                      <div className="flex items-center justify-between px-3 py-3 border-b border-border/70 text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2 px-3 py-2.5 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           {(() => {
                             const Icon = statusIcons[column.id] ?? Clock;
-                            return <Icon className={cn("h-4 w-4", statusColorClass[column.id] ?? "text-muted-foreground")} />;
+                            return <Icon className={cn("h-3.5 w-3.5 shrink-0", statusColorClass[column.id] ?? "text-muted-foreground")} />;
                           })()}
-                          <span>{column.label}</span>
+                          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                            {column.label}
+                          </span>
                         </div>
-                        <Badge variant="secondary" className="text-[11px] px-2 py-0.5 font-semibold">
+                        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
                           {items.length}
-                        </Badge>
+                        </span>
                       </div>
                       <div
                         className={cn(
-                          "p-3 space-y-3 flex-1 overflow-y-auto",
-                          draggingId && "pb-5"
+                          "flex-1 overflow-y-auto px-2 pb-3 space-y-2 min-h-[120px]",
+                          draggingId && "pb-4"
                         )}
                       >
                         {items.length === 0 ? (
-                          <div className="rounded-lg border border-dashed border-border/70 bg-muted/30 text-muted-foreground text-xs p-4 text-center">
+                          <div className="rounded-md border border-dashed border-border/50 bg-transparent text-muted-foreground/70 text-[11px] py-6 px-3 text-center">
                             Немає прорахунків
                           </div>
                         ) : (
@@ -3272,8 +3367,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 onDragEnd={() => setDraggingId(null)}
                                 onClick={() => navigate(`/orders/estimates/${row.id}`)}
                                 className={cn(
-                                  "rounded-lg border border-border/70 bg-card/80 p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer",
-                                  draggingId === row.id && "ring-2 ring-primary/40"
+                                  "rounded-[var(--radius-md)] border border-border/60 bg-card p-3 transition-all hover:border-border hover:bg-card/90 cursor-pointer active:scale-[0.995]",
+                                  draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                 )}
                               >
                                 <div className="flex items-start justify-between gap-2">
