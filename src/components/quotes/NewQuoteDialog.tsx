@@ -537,28 +537,31 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Get current status
   const currentStatus = QUOTE_STATUSES.find((s) => s.value === status) ?? QUOTE_STATUSES[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
+  const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[800px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base font-medium flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditMode
-              ? "Оновіть актуальні параметри прорахунку."
-              : "Заповніть параметри замовлення, щоб створити прорахунок."}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[800px] max-h-[85vh] overflow-hidden p-0">
+        <div className="flex max-h-[85vh] flex-col">
+          <DialogHeader className="px-6 pt-6 pb-3">
+            <DialogTitle className="text-base font-medium flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditMode
+                ? "Оновіть актуальні параметри прорахунку."
+                : "Заповніть параметри замовлення, щоб створити прорахунок."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto px-6 pb-4">
 
-        {isEditMode ? (
-          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-            {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
-            {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
-          </div>
-        ) : null}
+            {isEditMode ? (
+              <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
+                {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
+              </div>
+            ) : null}
 
         {/* Main chips row */}
         <div className="flex flex-wrap items-center gap-2">
@@ -761,11 +764,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           {/* Delivery */}
           <Popover open={deliveryPopoverOpen} onOpenChange={setDeliveryPopoverOpen}>
             <PopoverTrigger asChild>
-              <Chip size="md" icon={<Truck />} active={!!deliveryType}>
-                {DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType)?.label || "Логістика"}
+              <Chip
+                size="md"
+                icon={currentDelivery ? <currentDelivery.icon /> : <Truck />}
+                active={!!deliveryType}
+              >
+                {currentDelivery?.label || "Логістика"}
               </Chip>
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-2" align="start">
+            <PopoverContent className="w-56 p-2" align="start">
               <div className="space-y-1">
                 {DELIVERY_OPTIONS.map((option) => (
                   <Button
@@ -795,7 +802,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </Popover>
         </div>
 
-        <div className="space-y-4">
+        <div className="mt-5 space-y-4">
           <SectionHeader>Деталі</SectionHeader>
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Нотатка до дедлайну</div>
@@ -809,7 +816,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         </div>
 
         {deliveryType ? (
-          <div className="space-y-4">
+          <div className="mt-5 space-y-4">
             <SectionHeader>Логістика</SectionHeader>
             <div className="grid gap-3 md:grid-cols-2">
               {deliveryType === "nova_poshta" ? (
@@ -999,7 +1006,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         ) : null}
 
         {/* Product section */}
-        <div className="space-y-4">
+        <div className="mt-5 space-y-4">
           <SectionHeader>Продукція</SectionHeader>
 
           <div className="space-y-3">
@@ -1411,28 +1418,30 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             {submitError}
           </div>
         ) : null}
-
-        {/* Footer */}
-        <Separator className="bg-border/40 -mx-6 w-[calc(100%+3rem)]" />
-        <div className="flex items-center justify-between -mb-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {files.length > 0 ? (
-              <>
-                <Paperclip className="h-3.5 w-3.5" />
-                <span>{files.length} файлів</span>
-              </>
-            ) : null}
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => void handleSubmit()}
-              size="sm"
-              disabled={submitting}
-              className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] shadow-md shadow-primary/20"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {isEditMode ? "Зберегти" : "Створити"}
-            </Button>
+          {/* Footer */}
+          <div className="border-t border-border/40 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {files.length > 0 ? (
+                  <>
+                    <Paperclip className="h-3.5 w-3.5" />
+                    <span>{files.length} файлів</span>
+                  </>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => void handleSubmit()}
+                  size="sm"
+                  disabled={submitting}
+                  className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] shadow-md shadow-primary/20"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {isEditMode ? "Зберегти" : "Створити"}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
