@@ -80,6 +80,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 
 const STATUS_OPTIONS = [
   "new",
@@ -267,6 +269,7 @@ type PendingAttachment = {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const navigate = useNavigate();
+  const workspacePresence = useWorkspacePresence();
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2416,16 +2419,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     <div className="w-full pb-16 space-y-5">
       {/* Modern Linea-style Header Block */}
       <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden sticky top-0 z-10">
-        <div className="px-5 py-5 space-y-4">
+        <div className="px-5 pt-2 pb-4 space-y-4">
           {/* Header Section */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="h-11 w-11 rounded-[var(--radius-lg)] border border-primary/30 bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4 min-w-0 lg:min-h-[84px]">
+              <div className="h-12 w-12 rounded-[var(--radius-lg)] border border-primary/30 bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Calculator className="h-5 w-5" />
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold leading-tight tracking-tight">Прорахунки</h1>
-                <p className="text-sm text-muted-foreground mt-1.5">Керуйте прорахунками та пропозиціями</p>
+              <div className="min-w-0 flex flex-col justify-center gap-1.5">
+                <h1 className="text-2xl font-semibold leading-none tracking-tight">Прорахунки</h1>
+                <p className="text-sm leading-6 text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -2457,6 +2460,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 Новий прорахунок
               </Button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-start">
+            <ActiveHereCard
+              entries={workspacePresence.activeHereEntries}
+              title="Активні тут"
+              className="h-8 px-3 py-0"
+            />
           </div>
 
           {/* Search and Filters Row */}
