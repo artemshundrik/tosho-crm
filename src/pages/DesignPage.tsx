@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -17,6 +17,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import {
+  formatElapsedSeconds,
+  getDesignTasksTimerSummaryMap,
+  pauseDesignTaskTimer,
+  type DesignTaskTimerSummary,
+} from "@/lib/designTaskTimer";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
@@ -110,6 +116,15 @@ const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 
 const MAX_BRIEF_FILES = 5;
+const HoverHint = ({ text, children }: { text: string; children: ReactNode }) => (
+  <span className="relative inline-flex group/tt">
+    {children}
+    <span className="pointer-events-none absolute left-0 top-full z-40 mt-2 w-max max-w-[320px] whitespace-normal rounded-md border border-border/60 bg-popover px-2 py-1 text-[11px] leading-4 text-popover-foreground shadow-md opacity-0 translate-y-1 transition-all duration-150 group-hover/tt:translate-y-0 group-hover/tt:opacity-100">
+      {text}
+    </span>
+  </span>
+);
+
 const formatEstimateMinutes = (minutes?: number | null) => {
   if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
@@ -163,12 +178,33 @@ export default function DesignPage() {
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
+  const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
+  const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const canManageAssignments = permissions.canManageAssignments;
   const canSelfAssign = permissions.canSelfAssignDesign;
 
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
     return memberById[id] ?? id.slice(0, 8);
+  };
+
+  const getTaskTimerSummary = (taskId: string): DesignTaskTimerSummary => {
+    return (
+      timerSummaryByTaskId[taskId] ?? {
+        totalSeconds: 0,
+        activeSessionId: null,
+        activeStartedAt: null,
+        activeUserId: null,
+      }
+    );
+  };
+
+  const getTaskTrackedSeconds = (taskId: string) => {
+    const summary = getTaskTimerSummary(taskId);
+    const activeSeconds = summary.activeStartedAt
+      ? Math.max(0, Math.floor((timerNowMs - new Date(summary.activeStartedAt).getTime()) / 1000))
+      : 0;
+    return summary.totalSeconds + activeSeconds;
   };
 
   useEffect(() => {
@@ -312,6 +348,20 @@ export default function DesignPage() {
       }));
 
       setTasks(parsed);
+      try {
+        const timerSummaryMap = await getDesignTasksTimerSummaryMap(
+          effectiveTeamId,
+          parsed.map((task) => task.id)
+        );
+        const timerSummaryObj: Record<string, DesignTaskTimerSummary> = {};
+        timerSummaryMap.forEach((summary, taskId) => {
+          timerSummaryObj[taskId] = summary;
+        });
+        setTimerSummaryByTaskId(timerSummaryObj);
+      } catch (timerError) {
+        console.warn("Failed to load timer summaries", timerError);
+        setTimerSummaryByTaskId({});
+      }
     } catch (e: any) {
       setError(e?.message ?? "Не вдалося завантажити задачі дизайну");
     } finally {
@@ -330,6 +380,15 @@ export default function DesignPage() {
     }
     return tasks.filter((task) => !task.assigneeUserId);
   }, [assignmentFilter, tasks, userId]);
+
+  useEffect(() => {
+    const hasActive = Object.values(timerSummaryByTaskId).some((summary) => !!summary.activeStartedAt);
+    if (!hasActive) return;
+    const interval = window.setInterval(() => {
+      setTimerNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [timerSummaryByTaskId]);
 
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
@@ -615,8 +674,29 @@ export default function DesignPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
+      if (previousStatus === "in_progress" && next !== "in_progress") {
+        await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
+      }
+
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (previousStatus === "in_progress" && next !== "in_progress") {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_timer",
+            title: "Таймер зупинено автоматично",
+            metadata: {
+              source: "design_task_timer",
+              timer_action: "auto_pause_on_status_change",
+              from_status: previousStatus,
+              to_status: next,
+            },
+          });
+        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -648,6 +728,22 @@ export default function DesignPage() {
         });
       } catch (logError) {
         console.warn("Failed to log design task status event", logError);
+      }
+      try {
+        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, [task.id]);
+        const nextSummary = timerSummaryMap.get(task.id);
+        setTimerSummaryByTaskId((prev) => ({
+          ...prev,
+          [task.id]:
+            nextSummary ?? {
+              totalSeconds: 0,
+              activeSessionId: null,
+              activeStartedAt: null,
+              activeUserId: null,
+            },
+        }));
+      } catch (timerError) {
+        console.warn("Failed to refresh timer summary after status change", timerError);
       }
     } catch (e: any) {
       setError(e?.message ?? "Не вдалося оновити статус");
@@ -740,8 +836,29 @@ export default function DesignPage() {
         throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
       }
 
+      if (previousAssignee !== nextAssigneeUserId) {
+        await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
+      }
+
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (previousAssignee !== nextAssigneeUserId) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_timer",
+            title: "Таймер зупинено автоматично",
+            metadata: {
+              source: "design_task_timer",
+              timer_action: "auto_pause_on_reassign",
+              from_assignee_user_id: previousAssignee,
+              to_assignee_user_id: nextAssigneeUserId,
+            },
+          });
+        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -801,6 +918,23 @@ export default function DesignPage() {
         }
       } catch (notifyError) {
         console.warn("Failed to send design task assignment notification", notifyError);
+      }
+
+      try {
+        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, [task.id]);
+        const nextSummary = timerSummaryMap.get(task.id);
+        setTimerSummaryByTaskId((prev) => ({
+          ...prev,
+          [task.id]:
+            nextSummary ?? {
+              totalSeconds: 0,
+              activeSessionId: null,
+              activeStartedAt: null,
+              activeUserId: null,
+            },
+        }));
+      } catch (timerError) {
+        console.warn("Failed to refresh timer summary after assignee change", timerError);
       }
 
       toast.success(nextAssigneeUserId ? `Задача призначена: ${getMemberLabel(nextAssigneeUserId)}` : "Призначення знято");
@@ -1125,6 +1259,9 @@ export default function DesignPage() {
 
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
+    const timerSummary = getTaskTimerSummary(task.id);
+    const trackedLabel = formatElapsedSeconds(getTaskTrackedSeconds(task.id));
+    const hasActiveTimer = !!timerSummary.activeStartedAt;
     return (
       <div
         key={task.id}
@@ -1267,22 +1404,54 @@ export default function DesignPage() {
             </span>
           ) : null}
           {task.designDeadline ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-              <Clock className="h-3.5 w-3.5" />
-              {new Date(task.designDeadline).toLocaleDateString("uk-UA", {
+            <HoverHint
+              text={`Дедлайн: ${new Date(task.designDeadline).toLocaleDateString("uk-UA", {
                 day: "numeric",
-                month: "short",
-              })}
+                month: "long",
+                year: "numeric",
+              })}`}
+            >
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+                <Clock className="h-3.5 w-3.5" />
+                {new Date(task.designDeadline).toLocaleDateString("uk-UA", {
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
+            </HoverHint>
+          ) : null}
+          <HoverHint text={hasActiveTimer ? "Таймер активний (накопичений час)" : "Накопичений витрачений час"}>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-1",
+                hasActiveTimer ? "border-emerald-500/40 text-emerald-300" : "border-border/60"
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" /> {trackedLabel}
             </span>
+          </HoverHint>
+          {hasActiveTimer ? (
+            <HoverHint
+              text={`Таймер зараз запущений${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}`}
+            >
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 px-2 py-1 text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Активний
+              </span>
+            </HoverHint>
           ) : null}
           {getTaskEstimateMinutes(task) ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-              <Timer className="h-3.5 w-3.5" /> {formatEstimateMinutes(getTaskEstimateMinutes(task))}
-            </span>
+            <HoverHint text={`Естімейт: ${formatEstimateMinutes(getTaskEstimateMinutes(task))}`}>
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
+                <Timer className="h-3.5 w-3.5" /> {formatEstimateMinutes(getTaskEstimateMinutes(task))}
+              </span>
+            </HoverHint>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-1 text-amber-300">
-              <Timer className="h-3.5 w-3.5" /> Без естімейту
-            </span>
+            <HoverHint text="Для задачі не встановлено естімейт">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-1 text-amber-300">
+                <Timer className="h-3.5 w-3.5" /> Без естімейту
+              </span>
+            </HoverHint>
           )}
         </div>
       </div>
@@ -1354,6 +1523,9 @@ export default function DesignPage() {
           <div className="flex gap-4 min-w-[1100px]">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
+              const activeTimersInColumn = items.filter(
+                (task) => !!getTaskTimerSummary(task.id).activeStartedAt
+              ).length;
               return (
                 <div
                   key={col.id}
@@ -1391,9 +1563,21 @@ export default function DesignPage() {
                         <div className="text-[11px] text-muted-foreground">{col.hint}</div>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
-                      {items.length}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {activeTimersInColumn > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[11px] px-2 py-0.5 border-emerald-500/40 text-emerald-300"
+                          title="Активні таймери"
+                        >
+                          <Clock className="h-3 w-3 mr-1" />
+                          {activeTimersInColumn}
+                        </Badge>
+                      ) : null}
+                      <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
+                        {items.length}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
                     {items.length === 0 ? (
@@ -1490,6 +1674,7 @@ export default function DesignPage() {
                     }`,
                     `Статус: ${statusLabel}`,
                     `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
+                    `Витрачено: ${formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}`,
                     `Дедлайн: ${row.end.toLocaleDateString("uk-UA")}`,
                   ].join(" • ");
                   return (
@@ -1505,7 +1690,8 @@ export default function DesignPage() {
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
                           {row.task.customerName ?? "Не вказано"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)} ·{" "}
-                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
+                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"} ·{" "}
+                          {formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}
                         </div>
                       </button>
                       <div
@@ -1611,7 +1797,7 @@ export default function DesignPage() {
                       <div>Клієнт</div>
                       <div>Статус</div>
                       <div>Дедлайн</div>
-                      <div>Естімейт</div>
+                      <div>Естімейт / Час</div>
                       <div className="text-right">Дії</div>
                     </div>
                     {group.tasks.map((task) => {
@@ -1654,7 +1840,10 @@ export default function DesignPage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-muted-foreground">{formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
+                          <div className="text-muted-foreground">
+                            <div>{formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
+                            <div className="text-[11px] text-foreground/80">{formatElapsedSeconds(getTaskTrackedSeconds(task.id))}</div>
+                          </div>
                           <div className="flex justify-end">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

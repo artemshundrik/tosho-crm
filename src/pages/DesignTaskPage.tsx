@@ -22,6 +22,9 @@ import {
   Loader2,
   ArrowLeft,
   Clock,
+  Timer,
+  Play,
+  Pause,
   CalendarClock,
   Eye,
   Upload,
@@ -43,6 +46,13 @@ import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import {
+  formatElapsedSeconds,
+  getDesignTaskTimerSummary,
+  pauseDesignTaskTimer,
+  startDesignTaskTimer,
+  type DesignTaskTimerSummary,
+} from "@/lib/designTaskTimer";
 import { toast } from "sonner";
 
 type DesignStatus =
@@ -290,6 +300,14 @@ export default function DesignTaskPage() {
   const [deletingTask, setDeletingTask] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
+    totalSeconds: 0,
+    activeSessionId: null,
+    activeStartedAt: null,
+    activeUserId: null,
+  });
+  const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
+  const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const outputInputRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveTeamId = teamId;
@@ -312,6 +330,22 @@ export default function DesignTaskPage() {
     if (!value) return "Не вказано";
     if (positionLabelById[value]) return positionLabelById[value];
     return isUuid(value) ? "Позиція з каталогу" : value;
+  };
+
+  const loadTimerSummary = async (taskId: string) => {
+    if (!effectiveTeamId) return;
+    try {
+      const summary = await getDesignTaskTimerSummary(effectiveTeamId, taskId);
+      setTimerSummary(summary);
+    } catch (e) {
+      console.warn("Failed to load timer summary", e);
+      setTimerSummary({
+        totalSeconds: 0,
+        activeSessionId: null,
+        activeStartedAt: null,
+        activeUserId: null,
+      });
+    }
   };
 
   useEffect(() => {
@@ -659,6 +693,19 @@ export default function DesignTaskPage() {
     void loadHistory(task.id);
   }, [task?.id, effectiveTeamId]);
 
+  useEffect(() => {
+    if (!task?.id) return;
+    void loadTimerSummary(task.id);
+  }, [task?.id, effectiveTeamId]);
+
+  useEffect(() => {
+    if (!timerSummary.activeStartedAt) return;
+    const interval = window.setInterval(() => {
+      setTimerNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [timerSummary.activeStartedAt]);
+
   const deadlineLabel = useMemo(() => {
     if (!task?.designDeadline) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const d = new Date(task.designDeadline);
@@ -674,6 +721,50 @@ export default function DesignTaskPage() {
     const minutes = getTaskEstimateMinutes(task);
     return formatEstimateMinutes(minutes);
   }, [task?.metadata]);
+  const isTimerRunning = !!timerSummary.activeSessionId && !!timerSummary.activeStartedAt;
+  const timerElapsedSeconds =
+    timerSummary.totalSeconds +
+    (timerSummary.activeStartedAt
+      ? Math.max(0, Math.floor((timerNowMs - new Date(timerSummary.activeStartedAt).getTime()) / 1000))
+      : 0);
+  const timerElapsedLabel = formatElapsedSeconds(timerElapsedSeconds);
+  const canStartTimer =
+    !!task &&
+    !!userId &&
+    task.status === "in_progress" &&
+    !isTimerRunning &&
+    !!task.assigneeUserId &&
+    (task.assigneeUserId === userId || canManageAssignments);
+  const canPauseTimer =
+    !!task &&
+    isTimerRunning &&
+    !!userId &&
+    !!task.assigneeUserId &&
+    (task.assigneeUserId === userId || canManageAssignments);
+  const startTimerBlockedReason = !task
+    ? "Задача не завантажена"
+    : !userId
+      ? "Потрібна авторизація"
+      : task.status !== "in_progress"
+        ? "Спочатку переведіть задачу у статус «В роботі»"
+        : !task.assigneeUserId
+          ? "Спочатку призначте виконавця"
+          : task.assigneeUserId !== userId && !canManageAssignments
+            ? "Запускати таймер може тільки виконавець задачі"
+            : isTimerRunning
+              ? "Таймер уже запущено"
+              : null;
+  const pauseTimerBlockedReason = !task
+    ? "Задача не завантажена"
+    : !userId
+      ? "Потрібна авторизація"
+      : !isTimerRunning
+        ? "Таймер не запущено"
+        : !task.assigneeUserId
+          ? "Виконавець не вказаний"
+          : task.assigneeUserId !== userId && !canManageAssignments
+            ? "Ставити на паузу може тільки виконавець задачі"
+            : null;
 
   const methods = useMemo(() => {
     const raw = quoteItem?.methods;
@@ -853,6 +944,26 @@ export default function DesignTaskPage() {
           actorLabel,
           icon: Clock,
           accentClass: "bg-sky-500/15 text-sky-200 border-sky-500/30",
+        };
+      }
+
+      if (source === "design_task_timer") {
+        const timerAction = typeof metadata.timer_action === "string" ? metadata.timer_action : "";
+        const title =
+          timerAction === "start"
+            ? "Запущено таймер"
+            : timerAction === "pause"
+              ? "Таймер на паузі"
+              : timerAction.startsWith("auto_pause")
+                ? "Таймер зупинено автоматично"
+                : row.title?.trim() || "Оновлено таймер";
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title,
+          actorLabel,
+          icon: Timer,
+          accentClass: "bg-violet-500/15 text-violet-200 border-violet-500/30",
         };
       }
 
@@ -1065,6 +1176,88 @@ export default function DesignTaskPage() {
     }
   };
 
+  const handleStartTimer = async () => {
+    if (!task || !effectiveTeamId || !userId || timerBusy) return;
+    if (task.status !== "in_progress") {
+      toast.error("Таймер можна запустити тільки у статусі «В роботі».");
+      return;
+    }
+    if (!task.assigneeUserId) {
+      toast.error("Спочатку призначте виконавця.");
+      return;
+    }
+    if (task.assigneeUserId !== userId && !canManageAssignments) {
+      toast.error("Таймер може запускати виконавець задачі.");
+      return;
+    }
+    setTimerBusy("start");
+    try {
+      await startDesignTaskTimer({
+        teamId: effectiveTeamId,
+        taskId: task.id,
+        userId,
+      });
+      await loadTimerSummary(task.id);
+
+      const actorLabel = getMemberLabel(userId);
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_timer",
+        title: "Запустив таймер",
+        metadata: {
+          source: "design_task_timer",
+          timer_action: "start",
+        },
+      });
+      await loadHistory(task.id);
+      toast.success("Таймер запущено");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Не вдалося запустити таймер");
+    } finally {
+      setTimerBusy(null);
+    }
+  };
+
+  const handlePauseTimer = async (options?: { silent?: boolean }) => {
+    if (!task || !effectiveTeamId || timerBusy) return false;
+    setTimerBusy("pause");
+    try {
+      const wasPaused = await pauseDesignTaskTimer({
+        teamId: effectiveTeamId,
+        taskId: task.id,
+      });
+      await loadTimerSummary(task.id);
+      if (wasPaused && !options?.silent) {
+        const actorLabel = userId ? getMemberLabel(userId) : "System";
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_timer",
+          title: "Поставив таймер на паузу",
+          metadata: {
+            source: "design_task_timer",
+            timer_action: "pause",
+          },
+        });
+        await loadHistory(task.id);
+        toast.success("Таймер на паузі");
+      }
+      return wasPaused;
+    } catch (e: any) {
+      if (!options?.silent) toast.error(e?.message ?? "Не вдалося зупинити таймер");
+      return false;
+    } finally {
+      setTimerBusy(null);
+    }
+  };
+
   const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
@@ -1116,8 +1309,29 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
+      if (previousStatus === "in_progress" && nextStatus !== "in_progress") {
+        await handlePauseTimer({ silent: true });
+      }
+
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (previousStatus === "in_progress" && nextStatus !== "in_progress") {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_timer",
+            title: "Таймер зупинено автоматично",
+            metadata: {
+              source: "design_task_timer",
+              timer_action: "auto_pause_on_status_change",
+              from_status: previousStatus,
+              to_status: nextStatus,
+            },
+          });
+        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -1228,8 +1442,29 @@ export default function DesignTaskPage() {
         throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
       }
 
+      if (previousAssignee !== nextAssigneeUserId) {
+        await handlePauseTimer({ silent: true });
+      }
+
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
+        if (previousAssignee !== nextAssigneeUserId) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_timer",
+            title: "Таймер зупинено автоматично",
+            metadata: {
+              source: "design_task_timer",
+              timer_action: "auto_pause_on_reassign",
+              from_assignee_user_id: previousAssignee,
+              to_assignee_user_id: nextAssigneeUserId,
+            },
+          });
+        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -1383,8 +1618,29 @@ export default function DesignTaskPage() {
         throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
       }
 
+      if (previousAssignee && previousAssignee !== userId) {
+        await handlePauseTimer({ silent: true });
+      }
+
       const actorLabel = getMemberLabel(userId);
       try {
+        if (previousAssignee && previousAssignee !== userId) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_timer",
+            title: "Таймер зупинено автоматично",
+            metadata: {
+              source: "design_task_timer",
+              timer_action: "auto_pause_on_takeover",
+              from_assignee_user_id: previousAssignee,
+              to_assignee_user_id: userId,
+            },
+          });
+        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -1723,6 +1979,16 @@ export default function DesignTaskPage() {
             <Badge variant="outline" className={cn("px-2.5 py-1 text-xs gap-1", deadlineLabel.className)}>
               <CalendarClock className="h-3.5 w-3.5" />
               Дедлайн: {deadlineLabel.label}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={cn(
+                "px-2.5 py-1 text-xs gap-1",
+                isTimerRunning ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/10" : ""
+              )}
+            >
+              <Timer className="h-3.5 w-3.5" />
+              {timerElapsedLabel}
             </Badge>
             <Button
               variant="outline"
@@ -2116,6 +2382,43 @@ export default function DesignTaskPage() {
               ) : null}
             </div>
 
+            <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
+              <div className="text-xs text-muted-foreground">Крок 3. Таймер роботи</div>
+              <div className="font-mono text-lg font-semibold tracking-wide">{timerElapsedLabel}</div>
+              <div className="text-xs text-muted-foreground">
+                {isTimerRunning
+                  ? `Таймер активний${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}`
+                  : "Таймер зупинено"}
+              </div>
+              {startTimerBlockedReason && !isTimerRunning ? (
+                <div className="text-[11px] text-amber-300">{startTimerBlockedReason}</div>
+              ) : null}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1 justify-start"
+                  disabled={!canStartTimer || !!timerBusy}
+                  title={startTimerBlockedReason ?? undefined}
+                  onClick={() => void handleStartTimer()}
+                >
+                  {timerBusy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  Play
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 justify-start"
+                  disabled={!canPauseTimer || !!timerBusy}
+                  title={pauseTimerBlockedReason ?? undefined}
+                  onClick={() => void handlePauseTimer()}
+                >
+                  {timerBusy === "pause" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                  Pause
+                </Button>
+              </div>
+            </div>
+
             {statusQuickActionsWithoutStart.length === 0 ? (
               <div className="text-sm text-muted-foreground">Для цього статусу немає швидких переходів.</div>
             ) : (
@@ -2238,6 +2541,10 @@ export default function DesignTaskPage() {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Призначено</span>
                 <span className="font-medium text-right">{formatDate(task.assignedAt, true)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Витрачено часу</span>
+                <span className="font-mono font-medium text-right">{timerElapsedLabel}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Створено</span>

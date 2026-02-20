@@ -13,14 +13,28 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import {
   listQuotes,
+  listQuoteSets,
+  listQuoteSetItems,
+  listQuoteSetMemberships,
+  findQuoteSetsByExactComposition,
+  listCustomerQuotes,
+  updateQuoteSetName,
+  deleteQuoteSet,
+  removeQuoteSetItem,
+  addQuotesToQuoteSet,
   listCustomersBySearch,
   createQuote,
+  createQuoteSet,
   deleteQuote,
   getQuoteSummary,
   listTeamMembers,
   setStatus as setQuoteStatus,
   updateQuote,
   type QuoteListRow,
+  type QuoteSetListRow,
+  type QuoteSetItemRow,
+  type QuoteSetMembershipInfo,
+  type CustomerQuoteRow,
   type TeamMemberRow,
   type CustomerRow,
 } from "@/lib/toshoApi";
@@ -34,7 +48,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
   X, 
-  Filter, 
   Shirt,
   Printer,
   Layers,
@@ -65,9 +78,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
-import { PageHeader } from "@/components/app/headers/PageHeader";
 
 const STATUS_OPTIONS = [
   "new",
@@ -255,7 +265,6 @@ type PendingAttachment = {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const navigate = useNavigate();
-  const workspacePresence = useWorkspacePresence();
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -333,6 +342,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [quoteSets, setQuoteSets] = useState<QuoteSetListRow[]>([]);
+  const [quoteSetsLoading, setQuoteSetsLoading] = useState(false);
+  const [quoteMembershipByQuoteId, setQuoteMembershipByQuoteId] = useState<
+    Map<string, QuoteSetMembershipInfo>
+  >(new Map());
+  const [contentView, setContentView] = useState<"quotes" | "sets" | "all">("quotes");
+  const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">("flat");
+  const [quoteSetSearch, setQuoteSetSearch] = useState("");
+  const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">("all");
+  const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
+  const [quoteSetDetailsLoading, setQuoteSetDetailsLoading] = useState(false);
+  const [quoteSetDetailsItems, setQuoteSetDetailsItems] = useState<QuoteSetItemRow[]>([]);
+  const [quoteSetDetailsTarget, setQuoteSetDetailsTarget] = useState<QuoteSetListRow | null>(null);
+  const [quoteSetEditName, setQuoteSetEditName] = useState("");
+  const [quoteSetActionBusy, setQuoteSetActionBusy] = useState(false);
+  const [quoteSetCandidateQuotes, setQuoteSetCandidateQuotes] = useState<CustomerQuoteRow[]>([]);
+  const [quoteSetCandidateId, setQuoteSetCandidateId] = useState("");
+  const [quoteSetCandidatesLoading, setQuoteSetCandidatesLoading] = useState(false);
+  const [quoteSetDialogOpen, setQuoteSetDialogOpen] = useState(false);
+  const [quoteSetName, setQuoteSetName] = useState("");
+  const [quoteSetSaving, setQuoteSetSaving] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddTargetQuote, setQuickAddTargetQuote] = useState<QuoteListRow | null>(null);
+  const [quickAddTargetSetId, setQuickAddTargetSetId] = useState("");
+  const [quickAddKindFilter, setQuickAddKindFilter] = useState<"all" | "kp" | "set">("all");
+  const [quickAddLoadingSets, setQuickAddLoadingSets] = useState(false);
+  const [quickAddBusy, setQuickAddBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>();
 
   // Get current user ID
@@ -687,6 +723,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const data = await listQuotes({ teamId, search, status });
       setRows(data);
       const ids = data.map((row) => row.id).filter(Boolean);
+      try {
+        const membershipMap = await listQuoteSetMemberships(teamId, ids);
+        setQuoteMembershipByQuoteId(membershipMap);
+      } catch {
+        setQuoteMembershipByQuoteId(new Map());
+      }
       if (ids.length === 0) {
         setAttachmentCounts({});
       } else {
@@ -712,8 +754,56 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setError(e?.message ?? "Не вдалося завантажити список.");
       setRows([]);
       setAttachmentCounts({});
+      setQuoteMembershipByQuoteId(new Map());
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadQuoteSets = async () => {
+    if (!teamId) return;
+    setQuoteSetsLoading(true);
+    try {
+      const data = await listQuoteSets(teamId, 20);
+      setQuoteSets(data);
+    } catch {
+      setQuoteSets([]);
+    } finally {
+      setQuoteSetsLoading(false);
+    }
+  };
+
+  const openQuoteSetDetails = async (target: QuoteSetListRow) => {
+    setQuoteSetDetailsTarget(target);
+    setQuoteSetEditName(target.name ?? "");
+    setQuoteSetDetailsOpen(true);
+    setQuoteSetDetailsLoading(true);
+    try {
+      const items = await listQuoteSetItems(teamId, target.id);
+      setQuoteSetDetailsItems(items);
+      const excludedIds = new Set(items.map((item) => item.quote_id));
+      setQuoteSetCandidatesLoading(true);
+      try {
+        const customerQuotes = await listCustomerQuotes({
+          teamId,
+          customerId: target.customer_id,
+          limit: 300,
+        });
+        const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
+        setQuoteSetCandidateQuotes(available);
+        setQuoteSetCandidateId(available[0]?.id ?? "");
+      } catch {
+        setQuoteSetCandidateQuotes([]);
+        setQuoteSetCandidateId("");
+      } finally {
+        setQuoteSetCandidatesLoading(false);
+      }
+    } catch {
+      setQuoteSetDetailsItems([]);
+      setQuoteSetCandidateQuotes([]);
+      setQuoteSetCandidateId("");
+    } finally {
+      setQuoteSetDetailsLoading(false);
     }
   };
 
@@ -725,6 +815,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }, delay);
     return () => window.clearTimeout(id);
   }, [teamId, status, search]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    void loadQuoteSets();
+  }, [teamId]);
 
   const handleRowStatusChange = async (quoteId: string, nextStatus: string) => {
     setRowStatusBusy(quoteId);
@@ -1646,9 +1741,74 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return filtered;
   }, [rows, search, quickFilter, status, sortBy, sortOrder]);
 
+  const filteredQuoteSets = useMemo(() => {
+    const q = quoteSetSearch.trim().toLowerCase();
+    return quoteSets.filter((set) => {
+      if (quoteSetKindFilter !== "all" && (set.kind ?? "set") !== quoteSetKindFilter) return false;
+      if (!q) return true;
+      const hay = [set.name, set.customer_name, set.kind].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [quoteSets, quoteSetKindFilter, quoteSetSearch]);
+  const quoteSetKpCount = useMemo(
+    () => filteredQuoteSets.filter((set) => (set.kind ?? "set") === "kp").length,
+    [filteredQuoteSets]
+  );
+  const quoteSetSetCount = useMemo(
+    () => filteredQuoteSets.filter((set) => (set.kind ?? "set") === "set").length,
+    [filteredQuoteSets]
+  );
+  const quickAddAvailableSets = useMemo(() => {
+    if (!quickAddTargetQuote?.customer_id) return [];
+    const membership = quoteMembershipByQuoteId.get(quickAddTargetQuote.id);
+    const existingSetIds = new Set((membership?.refs ?? []).map((ref) => ref.id));
+    return quoteSets.filter((set) => {
+      const matchesCustomer = set.customer_id === quickAddTargetQuote.customer_id;
+      const matchesKind = quickAddKindFilter === "all" || (set.kind ?? "set") === quickAddKindFilter;
+      const notMemberYet = !existingSetIds.has(set.id);
+      return matchesCustomer && matchesKind && notMemberYet;
+    });
+  }, [quickAddKindFilter, quickAddTargetQuote, quoteMembershipByQuoteId, quoteSets]);
+
+  const foundCount = contentView === "sets" ? filteredQuoteSets.length : filteredAndSortedRows.length;
+
+  const groupedQuotesView = useMemo(() => {
+    const groups = new Map<
+      string,
+      { id: string; name: string; kind: "set" | "kp"; rows: QuoteListRow[] }
+    >();
+    const ungrouped: QuoteListRow[] = [];
+
+    filteredAndSortedRows.forEach((row) => {
+      const refs = quoteMembershipByQuoteId.get(row.id)?.refs ?? [];
+      if (refs.length === 0) {
+        ungrouped.push(row);
+        return;
+      }
+      refs.forEach((ref) => {
+        const current = groups.get(ref.id) ?? { id: ref.id, name: ref.name, kind: ref.kind, rows: [] };
+        current.rows.push(row);
+        groups.set(ref.id, current);
+      });
+    });
+
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "kp" ? -1 : 1;
+      return a.name.localeCompare(b.name, "uk-UA");
+    });
+
+    return { groups: sortedGroups, ungrouped };
+  }, [filteredAndSortedRows, quoteMembershipByQuoteId]);
+
   useEffect(() => {
     localStorage.setItem("quotes_view_mode", viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (quoteListMode === "grouped" && selectedIds.size > 0) {
+      setSelectedIds(new Set());
+    }
+  }, [quoteListMode, selectedIds.size]);
 
   const groupedByStatus = useMemo(() => {
     const buckets: Record<string, QuoteListRow[]> = {
@@ -1666,6 +1826,41 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     });
     return buckets;
   }, [filteredAndSortedRows]);
+
+  const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
+
+  const selectedRows = useMemo(
+    () =>
+      Array.from(selectedIds)
+        .map((id) => rowsById.get(id))
+        .filter((row): row is QuoteListRow => Boolean(row)),
+    [rowsById, selectedIds]
+  );
+
+  const selectedCustomers = useMemo(() => {
+    const unique = new Set<string>();
+    selectedRows.forEach((row) => {
+      const key = (row.customer_id ?? row.customer_name ?? "").trim().toLowerCase();
+      if (key) unique.add(key);
+    });
+    return unique;
+  }, [selectedRows]);
+
+  const canRunGroupedActions = selectedRows.length >= 2 && selectedCustomers.size === 1;
+  const bulkValidationMessage =
+    selectedRows.length < 2
+      ? "Оберіть щонайменше 2 прорахунки."
+      : selectedCustomers.size > 1
+      ? "Масові дії доступні тільки для одного замовника."
+      : null;
+
+  const addableSelectedCountForOpenSet = useMemo(() => {
+    if (!quoteSetDetailsTarget) return 0;
+    const existingQuoteIds = new Set(quoteSetDetailsItems.map((item) => item.quote_id));
+    return selectedRows.filter(
+      (row) => row.customer_id === quoteSetDetailsTarget.customer_id && !existingQuoteIds.has(row.id)
+    ).length;
+  }, [quoteSetDetailsItems, quoteSetDetailsTarget, selectedRows]);
 
   const handleDragStart = (id: string) => {
     setDraggingId(id);
@@ -1880,74 +2075,414 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  const handleBulkCreateKp = async () => {
+    if (!canRunGroupedActions) {
+      toast.error("Не можна створити КП", {
+        description: bulkValidationMessage ?? "Перевірте вибрані прорахунки.",
+      });
+      return;
+    }
+
+    const quoteIds = selectedRows.map((row) => row.id);
+    const customerName = selectedRows[0]?.customer_name?.trim() || "замовника";
+    try {
+      const exactMatches = await findQuoteSetsByExactComposition(teamId, quoteIds);
+      const sameKind = exactMatches.filter((item) => item.kind === "kp");
+      const crossKind = exactMatches.filter((item) => item.kind !== "kp");
+      if (sameKind.length > 0) {
+        const list = sameKind.map((item) => `КП: ${item.name}`).join("\n");
+        toast.error("Такий КП уже існує", {
+          description: `Однаковий склад уже є:\n${list}`,
+        });
+        return;
+      }
+      if (crossKind.length > 0) {
+        const list = crossKind.map((item) => `Набір: ${item.name}`).join("\n");
+        toast.message("Знайдено набір з таким самим складом", {
+          description: `Створюю окремий КП.\n${list}`,
+        });
+      }
+    } catch {
+      // ignore duplicate-precheck failures
+    }
+    setQuoteSetSaving(true);
+    try {
+      const created = await createQuoteSet({
+        teamId,
+        quoteIds,
+        name: `КП ${customerName} ${new Date().toLocaleDateString("uk-UA")}`,
+        kind: "kp",
+      });
+      toast.success("КП сформовано", { description: `ID: ${created.id}` });
+      setSelectedIds(new Set());
+      await loadQuoteSets();
+    } catch (e: any) {
+      toast.error("Не вдалося сформувати КП", {
+        description: e?.message ?? "Спробуйте ще раз.",
+      });
+    } finally {
+      setQuoteSetSaving(false);
+    }
+  };
+
+  const openQuoteSetDialog = () => {
+    if (!canRunGroupedActions) {
+      toast.error("Не можна сформувати набір", {
+        description: bulkValidationMessage ?? "Перевірте вибрані прорахунки.",
+      });
+      return;
+    }
+
+    const customerName = selectedRows[0]?.customer_name?.trim() || "замовника";
+    const dateLabel = new Date().toLocaleDateString("uk-UA");
+    setQuoteSetName(`Набір ${customerName} ${dateLabel}`);
+    setQuoteSetDialogOpen(true);
+  };
+
+  const handleCreateQuoteSet = async () => {
+    if (!canRunGroupedActions) {
+      toast.error("Не можна сформувати набір", {
+        description: bulkValidationMessage ?? "Перевірте вибрані прорахунки.",
+      });
+      return;
+    }
+
+    const safeName = quoteSetName.trim();
+    if (!safeName) {
+      toast.error("Вкажіть назву набору");
+      return;
+    }
+
+    try {
+      const exactMatches = await findQuoteSetsByExactComposition(
+        teamId,
+        selectedRows.map((row) => row.id)
+      );
+      const sameKind = exactMatches.filter((item) => item.kind === "set");
+      const crossKind = exactMatches.filter((item) => item.kind !== "set");
+      if (sameKind.length > 0) {
+        const list = sameKind.map((item) => `Набір: ${item.name}`).join("\n");
+        toast.error("Такий набір уже існує", {
+          description: `Однаковий склад уже є:\n${list}`,
+        });
+        return;
+      }
+      if (crossKind.length > 0) {
+        const list = crossKind.map((item) => `КП: ${item.name}`).join("\n");
+        toast.message("Знайдено КП з таким самим складом", {
+          description: `Створюю окремий набір.\n${list}`,
+        });
+      }
+    } catch {
+      // ignore duplicate-precheck failures
+    }
+
+    setQuoteSetSaving(true);
+    try {
+      const created = await createQuoteSet({
+        teamId,
+        quoteIds: selectedRows.map((row) => row.id),
+        name: safeName,
+        kind: "set",
+      });
+      toast.success("Набір сформовано", { description: `ID: ${created.id}` });
+      setQuoteSetDialogOpen(false);
+      setSelectedIds(new Set());
+      await loadQuoteSets();
+    } catch (e: any) {
+      toast.error("Не вдалося сформувати набір", {
+        description: e?.message ?? "Спробуйте ще раз.",
+      });
+    } finally {
+      setQuoteSetSaving(false);
+    }
+  };
+
+  const handleRenameQuoteSet = async () => {
+    if (!quoteSetDetailsTarget) return;
+    const safeName = quoteSetEditName.trim();
+    if (!safeName) {
+      toast.error("Вкажіть назву");
+      return;
+    }
+    if (safeName === quoteSetDetailsTarget.name) return;
+
+    setQuoteSetActionBusy(true);
+    try {
+      await updateQuoteSetName({
+        teamId,
+        quoteSetId: quoteSetDetailsTarget.id,
+        name: safeName,
+      });
+      setQuoteSetDetailsTarget((prev) => (prev ? { ...prev, name: safeName } : prev));
+      setQuoteSets((prev) => prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, name: safeName } : set)));
+      toast.success("Назву оновлено");
+    } catch (e: any) {
+      toast.error("Не вдалося оновити назву", { description: e?.message });
+    } finally {
+      setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handleDeleteQuoteSet = async (targetOverride?: QuoteSetListRow | null) => {
+    const target = targetOverride ?? quoteSetDetailsTarget;
+    if (!target) return;
+    const approved = window.confirm("Видалити цей набір/КП? Дію не можна скасувати.");
+    if (!approved) return;
+
+    setQuoteSetActionBusy(true);
+    try {
+      await deleteQuoteSet({ teamId, quoteSetId: target.id });
+      setQuoteSets((prev) => prev.filter((set) => set.id !== target.id));
+      setQuoteSetDetailsOpen(false);
+      setQuoteSetDetailsItems([]);
+      setQuoteSetDetailsTarget(null);
+      toast.success("Набір видалено");
+    } catch (e: any) {
+      toast.error("Не вдалося видалити набір", { description: e?.message });
+    } finally {
+      setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handleRemoveItemFromQuoteSet = async (itemId: string) => {
+    if (!quoteSetDetailsTarget) return;
+    setQuoteSetActionBusy(true);
+    try {
+      await removeQuoteSetItem({ teamId, quoteSetItemId: itemId });
+      const nextItems = quoteSetDetailsItems.filter((item) => item.id !== itemId);
+      setQuoteSetDetailsItems(nextItems);
+      const excludedIds = new Set(nextItems.map((item) => item.quote_id));
+      const customerQuotes = await listCustomerQuotes({
+        teamId,
+        customerId: quoteSetDetailsTarget.customer_id,
+        limit: 300,
+      });
+      const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
+      setQuoteSetCandidateQuotes(available);
+      setQuoteSetCandidateId((prev) => (prev && available.some((q) => q.id === prev) ? prev : (available[0]?.id ?? "")));
+      setQuoteSets((prev) =>
+        prev.map((set) =>
+          set.id === quoteSetDetailsTarget.id ? { ...set, item_count: Math.max(0, set.item_count - 1) } : set
+        )
+      );
+      toast.success("Позицію прибрано");
+    } catch (e: any) {
+      toast.error("Не вдалося прибрати позицію", { description: e?.message });
+    } finally {
+      setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handleAddSelectedToQuoteSet = async () => {
+    if (!quoteSetDetailsTarget) return;
+    const existingQuoteIds = new Set(quoteSetDetailsItems.map((item) => item.quote_id));
+    const candidateRows = selectedRows.filter(
+      (row) => row.customer_id === quoteSetDetailsTarget.customer_id && !existingQuoteIds.has(row.id)
+    );
+    if (candidateRows.length === 0) {
+      toast.error("Немає сумісних вибраних прорахунків для додавання");
+      return;
+    }
+
+    setQuoteSetActionBusy(true);
+    try {
+      const added = await addQuotesToQuoteSet({
+        teamId,
+        quoteSetId: quoteSetDetailsTarget.id,
+        quoteIds: candidateRows.map((row) => row.id),
+      });
+      if (added <= 0) {
+        toast.message("Нових позицій для додавання немає");
+      } else {
+        toast.success(`Додано ${added} позицій`);
+      }
+      const fresh = await listQuoteSetItems(teamId, quoteSetDetailsTarget.id);
+      setQuoteSetDetailsItems(fresh);
+      const excludedIds = new Set(fresh.map((item) => item.quote_id));
+      const customerQuotes = await listCustomerQuotes({
+        teamId,
+        customerId: quoteSetDetailsTarget.customer_id,
+        limit: 300,
+      });
+      const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
+      setQuoteSetCandidateQuotes(available);
+      setQuoteSetCandidateId(available[0]?.id ?? "");
+      setQuoteSets((prev) =>
+        prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, item_count: fresh.length } : set))
+      );
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error("Не вдалося додати позиції", { description: e?.message });
+    } finally {
+      setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handleAddQuoteToOpenSet = async () => {
+    if (!quoteSetDetailsTarget || !quoteSetCandidateId) return;
+    setQuoteSetActionBusy(true);
+    try {
+      const added = await addQuotesToQuoteSet({
+        teamId,
+        quoteSetId: quoteSetDetailsTarget.id,
+        quoteIds: [quoteSetCandidateId],
+      });
+      if (added <= 0) {
+        toast.message("Цей прорахунок вже в наборі/КП");
+      } else {
+        toast.success("Прорахунок додано");
+      }
+      const fresh = await listQuoteSetItems(teamId, quoteSetDetailsTarget.id);
+      setQuoteSetDetailsItems(fresh);
+      const excludedIds = new Set(fresh.map((item) => item.quote_id));
+      const customerQuotes = await listCustomerQuotes({
+        teamId,
+        customerId: quoteSetDetailsTarget.customer_id,
+        limit: 300,
+      });
+      const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
+      setQuoteSetCandidateQuotes(available);
+      setQuoteSetCandidateId(available[0]?.id ?? "");
+      setQuoteSets((prev) =>
+        prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, item_count: fresh.length } : set))
+      );
+    } catch (e: any) {
+      toast.error("Не вдалося додати прорахунок", { description: e?.message });
+    } finally {
+      setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handleOpenQuickAddToSet = async (row: QuoteListRow) => {
+    if (!row.customer_id) {
+      toast.error("У прорахунку не заданий замовник");
+      return;
+    }
+    setQuickAddTargetQuote(row);
+    setQuickAddKindFilter("all");
+    setQuickAddTargetSetId("");
+    setQuickAddOpen(true);
+    setQuickAddLoadingSets(true);
+    try {
+      const latestSets = await listQuoteSets(teamId, 200);
+      setQuoteSets(latestSets);
+    } catch {
+      // keep current sets if refresh fails
+    } finally {
+      setQuickAddLoadingSets(false);
+    }
+  };
+
+  const handleQuickAddToSet = async () => {
+    if (!quickAddTargetQuote || !quickAddTargetSetId) return;
+    setQuickAddBusy(true);
+    try {
+      const added = await addQuotesToQuoteSet({
+        teamId,
+        quoteSetId: quickAddTargetSetId,
+        quoteIds: [quickAddTargetQuote.id],
+      });
+      if (added <= 0) {
+        toast.message("Цей прорахунок вже є в обраному КП/наборі");
+      } else {
+        toast.success("Прорахунок додано в КП/набір");
+      }
+      setQuickAddOpen(false);
+      setQuickAddTargetQuote(null);
+      setQuickAddTargetSetId("");
+      await Promise.all([loadQuoteSets(), loadQuotes()]);
+    } catch (e: any) {
+      toast.error("Не вдалося додати прорахунок", { description: e?.message ?? "Спробуйте ще раз." });
+    } finally {
+      setQuickAddBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!quickAddOpen) return;
+    if (quickAddAvailableSets.length === 0) {
+      setQuickAddTargetSetId("");
+      return;
+    }
+    setQuickAddTargetSetId((prev) =>
+      prev && quickAddAvailableSets.some((set) => set.id === prev) ? prev : quickAddAvailableSets[0].id
+    );
+  }, [quickAddAvailableSets, quickAddOpen]);
+
   return (
     <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
-      <PageHeader
-        title="Прорахунки"
-        subtitle="Керуйте прорахунками та пропозиціями"
-        icon={<Calculator className="h-5 w-5" />}
-        actions={
-          <>
-            <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
-              <Button
-                variant={viewMode === "table" ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setViewMode("table")}
-                aria-label="Табличний вигляд"
-              >
-                ≡
-              </Button>
-              <Button
-                variant={viewMode === "kanban" ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setViewMode("kanban")}
-                aria-label="Kanban вигляд"
-              >
-                ▦
-              </Button>
-            </div>
-            <Button onClick={openCreate} size="lg" className="gap-2">
-              <PlusIcon className="h-4 w-4" />
-              Новий прорахунок
-            </Button>
-          </>
-        }
-      >
-        <ActiveHereCard entries={workspacePresence.activeHereEntries} />
-      </PageHeader>
-
-      {/* Filters and Search */}
       <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden sticky top-4 z-10 backdrop-blur">
         <div className="p-4 space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl border border-primary/40 bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Calculator className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold leading-none">Прорахунки</h1>
+                <p className="text-sm text-muted-foreground mt-1">Керуйте прорахунками та пропозиціями</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/20 px-2 py-1">
+                <Button
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setViewMode("table")}
+                  aria-label="Табличний вигляд"
+                >
+                  ≡
+                </Button>
+                <Button
+                  variant={viewMode === "kanban" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setViewMode("kanban")}
+                  aria-label="Kanban вигляд"
+                >
+                  ▦
+                </Button>
+              </div>
+              <Button onClick={openCreate} size="lg" className="gap-2">
+                <PlusIcon className="h-4 w-4" />
+                Новий прорахунок
+              </Button>
+            </div>
+          </div>
 
-          {/* Search Bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Пошук за назвою, номером або замовником..."
+                value={contentView === "sets" ? quoteSetSearch : search}
+                onChange={(e) =>
+                  contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
+                }
+                placeholder={
+                  contentView === "sets"
+                    ? "Пошук по КП та наборах..."
+                    : "Пошук за назвою, номером або замовником..."
+                }
                 className="pl-10 pr-12 h-11"
               />
-              {search && (
+              {(contentView === "sets" ? quoteSetSearch : search) && (
                 <button
-                  onClick={() => setSearch("")}
+                  onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
-              {loading && search && (
+              {loading && contentView !== "sets" && search && (
                 <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
               )}
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="hidden sm:inline">Знайдено:</span>
               <Badge variant="secondary" className="font-semibold">
-                {filteredAndSortedRows.length}
+                {foundCount}
               </Badge>
             </div>
             {hasActiveFilters && (
@@ -1957,73 +2492,124 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             )}
           </div>
 
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Button
-              variant={quickFilter === "all" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setQuickFilter("all")}
-            >
-              Всі
-            </Button>
-            <Button
-              variant={quickFilter === "new" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setQuickFilter("new")}
-              className="gap-1.5"
-            >
-              <FileText className="h-3 w-3" />
-              Нові
-            </Button>
-            <Button
-              variant={quickFilter === "estimated" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setQuickFilter("estimated")}
-            >
-              Пораховано
-            </Button>
-
-            <div className="h-4 w-px bg-border mx-2" />
-
-            <Select value={status} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px] h-9">
-                <SelectValue placeholder="Статус" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Всі статуси</SelectItem>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {formatStatusLabel(s)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-2 ml-auto text-xs">
-                {search.trim() && <Badge variant="outline">Пошук: “{search.trim()}”</Badge>}
-                {quickFilter !== "all" && (
-                  <Badge variant="outline">
-                    {quickFilter === "new" ? "Тільки нові" : "Тільки пораховано"}
-                  </Badge>
-                )}
-                {status !== "all" && <Badge variant="outline">{formatStatusLabel(status)}</Badge>}
-              </div>
-            )}
+          <div className="flex flex-col gap-3 border-t border-border/60 pt-3 lg:flex-row lg:items-center lg:justify-between">
+            <Tabs value={contentView} onValueChange={(value) => setContentView(value as "quotes" | "sets" | "all")}>
+              <TabsList>
+                <TabsTrigger value="quotes">Прорахунки</TabsTrigger>
+                <TabsTrigger value="sets">КП та набори</TabsTrigger>
+                <TabsTrigger value="all">Все</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="flex flex-wrap items-center gap-2">
+              {contentView !== "sets" ? (
+                <>
+                  <Button
+                    variant={quickFilter === "all" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuickFilter("all")}
+                  >
+                    Всі
+                  </Button>
+                  <Button
+                    variant={quickFilter === "new" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuickFilter("new")}
+                    className="gap-1.5"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Нові
+                  </Button>
+                  <Button
+                    variant={quickFilter === "estimated" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuickFilter("estimated")}
+                  >
+                    Пораховано
+                  </Button>
+                  <Select value={status} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[180px] h-9">
+                      <SelectValue placeholder="Статус" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Всі статуси</SelectItem>
+                      {STATUS_OPTIONS.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {formatStatusLabel(s)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant={quoteSetKindFilter === "all" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuoteSetKindFilter("all")}
+                  >
+                    Всі
+                  </Button>
+                  <Button
+                    variant={quoteSetKindFilter === "kp" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuoteSetKindFilter("kp")}
+                  >
+                    КП
+                  </Button>
+                  <Button
+                    variant={quoteSetKindFilter === "set" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setQuoteSetKindFilter("set")}
+                  >
+                    Набори
+                  </Button>
+                </>
+              )}
+            </div>
+            {contentView !== "sets" && viewMode === "table" ? (
+              <Tabs
+                value={quoteListMode}
+                onValueChange={(value) => setQuoteListMode(value as "flat" | "grouped")}
+              >
+                <TabsList>
+                  <TabsTrigger value="flat">Список</TabsTrigger>
+                  <TabsTrigger value="grouped">Group Mode</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
           </div>
         </div>
       </div>
 
       {/* Bulk actions */}
-      {selectedIds.size > 0 && (
+      {contentView !== "sets" && selectedIds.size > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
           <div className="text-sm font-semibold">Вибрано: {selectedIds.size}</div>
+          {bulkValidationMessage ? (
+            <div className="text-xs text-amber-500">{bulkValidationMessage}</div>
+          ) : (
+            <div className="text-xs text-emerald-500">Можна виконувати об'єднані дії</div>
+          )}
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
+              onClick={handleBulkCreateKp}
+            >
+              Створити КП
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
+              onClick={openQuoteSetDialog}
+            >
+              Сформувати набір
+            </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled={bulkBusy}
+              disabled={bulkBusy || quoteSetSaving}
               onClick={() => handleBulkStatus("approved")}
             >
               Поставити “Затверджено”
@@ -2031,7 +2617,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Button
               variant="outline"
               size="sm"
-              disabled={bulkBusy}
+              disabled={bulkBusy || quoteSetSaving}
               onClick={() => handleBulkStatus("cancelled")}
             >
               Поставити “Скасовано”
@@ -2039,7 +2625,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Button
               variant="destructive"
               size="sm"
-              disabled={bulkBusy}
+              disabled={bulkBusy || quoteSetSaving}
               onClick={handleBulkDelete}
             >
               Видалити
@@ -2050,15 +2636,169 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             size="sm"
             className="ml-auto text-muted-foreground"
             onClick={() => setSelectedIds(new Set())}
-            disabled={bulkBusy}
+            disabled={bulkBusy || quoteSetSaving}
           >
             Скасувати вибір
           </Button>
         </div>
       )}
 
+      {contentView !== "quotes" && (
+      <div className="rounded-xl border border-border bg-card/60 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+          <div>
+            <div className="text-sm font-semibold">КП та набори</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Натисніть на рядок, щоб подивитися склад</div>
+            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span>КП: {quoteSetKpCount}</span>
+              <span>•</span>
+              <span>Набори: {quoteSetSetCount}</span>
+            </div>
+          </div>
+          <Badge variant="secondary" className="font-semibold">
+            {filteredQuoteSets.length}
+          </Badge>
+        </div>
+        {quoteSetsLoading ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground">Завантаження...</div>
+        ) : filteredQuoteSets.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground">
+            Поки немає створених КП або наборів.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="[&_th]:px-4 [&_td]:px-4">
+              <TableHeader>
+                <TableRow className="bg-muted/20">
+                  <TableHead className="w-[12px]"></TableHead>
+                  <TableHead>Назва</TableHead>
+                  <TableHead>Тип</TableHead>
+                  <TableHead>Замовник</TableHead>
+                  <TableHead>Позицій</TableHead>
+                  <TableHead>Створено</TableHead>
+                  <TableHead className="w-[120px] text-right">Дія</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredQuoteSets.map((set) => (
+                  <TableRow
+                    key={set.id}
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/15 transition-colors",
+                      (set.kind ?? "set") === "kp"
+                        ? "data-[state=selected]:bg-primary/5"
+                        : "data-[state=selected]:bg-emerald-500/5"
+                    )}
+                    onClick={() => openQuoteSetDetails(set)}
+                  >
+                    <TableCell className="pr-0">
+                      <div
+                        className={cn(
+                          "h-8 w-1.5 rounded-full",
+                          (set.kind ?? "set") === "kp" ? "bg-sky-400/80" : "bg-emerald-400/80"
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {set.customer_logo_url ? (
+                          <img
+                            src={set.customer_logo_url}
+                            alt={set.customer_name ?? "logo"}
+                            className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20 shrink-0"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
+                            {getInitials(set.customer_name)}
+                          </div>
+                        )}
+                        <span className="truncate">{set.name}</span>
+                      </div>
+                      {set.preview_quote_numbers && set.preview_quote_numbers.length > 0 ? (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {set.preview_quote_numbers.join(" · ")}
+                          {set.item_count > set.preview_quote_numbers.length ? " · ..." : ""}
+                        </div>
+                      ) : null}
+                      {set.duplicate_count && set.duplicate_count > 0 ? (
+                        <div className="mt-1">
+                          <Badge
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] border-amber-500/40 text-amber-300 bg-amber-500/10"
+                            title="Є ще КП/набір з таким самим складом прорахунків"
+                          >
+                            Той самий склад
+                            {set.has_same_composition_kp ? " · є КП" : ""}
+                            {set.has_same_composition_set ? " · є Набір" : ""}
+                          </Badge>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "inline-flex items-center gap-1.5",
+                          set.kind === "kp"
+                            ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
+                            : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
+                        )}
+                        variant="outline"
+                      >
+                        {set.kind === "kp" ? <FileText className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                        {set.kind === "kp" ? "КП" : "Набір"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{set.customer_name ?? "Не вказано"}</TableCell>
+                    <TableCell>{set.item_count}</TableCell>
+                    <TableCell>
+                      {set.created_at
+                        ? new Date(set.created_at).toLocaleString("uk-UA", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-70 hover:opacity-100"
+                            aria-label="Дії"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              void handleDeleteQuoteSet(set);
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Видалити
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+      )}
+
       {/* Views */}
-      {viewMode === "table" ? (
+      {contentView !== "sets" && (viewMode === "table" ? (
         <div className="rounded-xl border border-border bg-card/70 shadow-sm overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
@@ -2083,6 +2823,83 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   Створити прорахунок
                 </Button>
               )}
+            </div>
+          ) : quoteListMode === "grouped" ? (
+            <div className="p-4 space-y-4">
+              {groupedQuotesView.groups.map((group) => (
+                <div key={group.id} className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className={cn(
+                          "h-7 w-1.5 rounded-full",
+                          group.kind === "kp" ? "bg-sky-400/80" : "bg-emerald-400/80"
+                        )}
+                      />
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "inline-flex items-center gap-1.5",
+                          group.kind === "kp"
+                            ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
+                            : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
+                        )}
+                      >
+                        {group.kind === "kp" ? <FileText className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                        {group.kind === "kp" ? "КП" : "Набір"}
+                      </Badge>
+                      <div className="truncate text-sm font-semibold">{group.name}</div>
+                    </div>
+                    <Badge variant="secondary">{group.rows.length}</Badge>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {group.rows.map((row) => (
+                      <div
+                        key={`${group.id}-${row.id}`}
+                        className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer"
+                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge className={cn("border", statusPillClasses(row.status))} variant="outline">
+                            {formatStatusLabel(row.status)}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {groupedQuotesView.ungrouped.length > 0 ? (
+                <div className="rounded-xl border border-border/60 bg-card/50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border/60 text-sm font-semibold">Без групи</div>
+                  <div className="divide-y divide-border/50">
+                    {groupedQuotesView.ungrouped.map((row) => (
+                      <div
+                        key={`ungrouped-${row.id}`}
+                        className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer"
+                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                          </div>
+                        </div>
+                        <Badge className={cn("border", statusPillClasses(row.status))} variant="outline">
+                          {formatStatusLabel(row.status)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -2149,6 +2966,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <TableBody>
                   {filteredAndSortedRows.map((row) => {
                     const isSelected = selectedIds.has(row.id);
+                    const membership = quoteMembershipByQuoteId.get(row.id);
                     return (
                       <TableRow
                         key={row.id}
@@ -2174,9 +2992,49 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           />
                         </TableCell>
                         <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
-                          <span className="group-hover:underline underline-offset-2">
-                            {row.number ?? "Не вказано"}
-                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              {membership ? (
+                                <div
+                                  className={cn(
+                                    "h-5 w-1.5 rounded-full",
+                                    membership.kp_count > 0
+                                      ? "bg-sky-400/80"
+                                      : membership.set_count > 0
+                                      ? "bg-emerald-400/80"
+                                      : "bg-transparent"
+                                  )}
+                                />
+                              ) : null}
+                              <span className="group-hover:underline underline-offset-2">
+                                {row.number ?? "Не вказано"}
+                              </span>
+                            </div>
+                            {membership ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {membership.kp_count > 0 ? (
+                                  <Badge
+                                    variant="outline"
+                                    title={membership.kp_names.join(", ")}
+                                    className="h-5 px-1.5 text-[10px] border-sky-500/40 text-sky-300 bg-sky-500/10 inline-flex items-center gap-1"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                  </Badge>
+                                ) : null}
+                                {membership.set_count > 0 ? (
+                                  <Badge
+                                    variant="outline"
+                                    title={membership.set_names.join(", ")}
+                                    className="h-5 px-1.5 text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10 inline-flex items-center gap-1"
+                                  >
+                                    <Layers className="h-3 w-3" />
+                                    Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm">
                           {row.created_at ? (
@@ -2308,6 +3166,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               <Copy className="mr-2 h-4 w-4" />
                               Дублювати
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleOpenQuickAddToSet(row)}>
+                              <Layers className="mr-2 h-4 w-4" />
+                              Додати в КП/набір
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => requestDelete(row.id)}
@@ -2401,6 +3263,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             const Icon = quoteTypeIcon(row.quote_type);
                             const normalizedStatus = normalizeStatus(row.status);
                             const statusClass = statusClasses[normalizedStatus] ?? statusClasses.new;
+                            const membership = quoteMembershipByQuoteId.get(row.id);
                             return (
                               <div
                                 key={row.id}
@@ -2432,6 +3295,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   </div>
                                 </div>
                                 <div className="mt-3 space-y-2">
+                                  {membership ? (
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {membership.kp_count > 0 ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="h-5 px-1.5 text-[10px] border-sky-500/40 text-sky-300 bg-sky-500/10 inline-flex items-center gap-1"
+                                        >
+                                          <FileText className="h-3 w-3" />
+                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
+                                      {membership.set_count > 0 ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="h-5 px-1.5 text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10 inline-flex items-center gap-1"
+                                        >
+                                          <Layers className="h-3 w-3" />
+                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                   <div className="flex items-center gap-2 text-sm font-medium">
                                     {row.customer_logo_url ? (
                                       <img
@@ -2518,7 +3403,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
           )}
         </div>
-      )}
+      ))}
 
       {rowStatusError && (
         <div className="px-6 pb-4 text-sm text-destructive flex items-center gap-2">
@@ -2573,6 +3458,335 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         submitLabel="Створити клієнта"
         onSubmit={handleCustomerCreate}
       />
+
+      <Dialog
+        open={quoteSetDetailsOpen}
+        onOpenChange={(open) => {
+          setQuoteSetDetailsOpen(open);
+          if (!open) {
+            setQuoteSetDetailsItems([]);
+            setQuoteSetDetailsTarget(null);
+            setQuoteSetDetailsLoading(false);
+            setQuoteSetEditName("");
+            setQuoteSetActionBusy(false);
+            setQuoteSetCandidateQuotes([]);
+            setQuoteSetCandidateId("");
+            setQuoteSetCandidatesLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[860px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {quoteSetDetailsTarget?.name ?? "Деталі набору"}
+              {quoteSetDetailsTarget ? (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "inline-flex items-center gap-1.5",
+                    quoteSetDetailsTarget.kind === "kp"
+                      ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
+                      : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
+                  )}
+                >
+                  {quoteSetDetailsTarget.kind === "kp" ? (
+                    <FileText className="h-3.5 w-3.5" />
+                  ) : (
+                    <Layers className="h-3.5 w-3.5" />
+                  )}
+                  {quoteSetDetailsTarget.kind === "kp" ? "КП" : "Набір"}
+                </Badge>
+              ) : null}
+            </DialogTitle>
+            <DialogDescription>
+              {quoteSetDetailsTarget?.customer_name ?? "Замовник не вказаний"} ·{" "}
+              {quoteSetDetailsTarget?.created_at
+                ? new Date(quoteSetDetailsTarget.created_at).toLocaleString("uk-UA", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Дата не вказана"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-border/60 bg-muted/10 p-3 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                value={quoteSetEditName}
+                onChange={(event) => setQuoteSetEditName(event.target.value)}
+                placeholder="Назва набору"
+                disabled={quoteSetActionBusy}
+              />
+              <Button
+                variant="outline"
+                onClick={handleRenameQuoteSet}
+                disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
+              >
+                Зберегти назву
+              </Button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Select
+                value={quoteSetCandidateId}
+                onValueChange={setQuoteSetCandidateId}
+                disabled={quoteSetCandidatesLoading || quoteSetActionBusy || quoteSetCandidateQuotes.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      quoteSetCandidatesLoading
+                        ? "Завантаження прорахунків..."
+                        : quoteSetCandidateQuotes.length === 0
+                        ? "Немає доступних прорахунків для додавання"
+                        : "Оберіть прорахунок"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {quoteSetCandidateQuotes.map((quote) => (
+                    <SelectItem key={quote.id} value={quote.id}>
+                      {(quote.number ?? quote.id.slice(0, 8)) +
+                        (quote.created_at
+                          ? ` · ${new Date(quote.created_at).toLocaleDateString("uk-UA")}`
+                          : "")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={handleAddQuoteToOpenSet}
+                disabled={quoteSetActionBusy || !quoteSetCandidateId}
+              >
+                Додати прорахунок
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleAddSelectedToQuoteSet}
+                disabled={quoteSetActionBusy || addableSelectedCountForOpenSet <= 0}
+              >
+                Додати вибрані ({addableSelectedCountForOpenSet})
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => void handleDeleteQuoteSet()}
+                disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
+              >
+                Видалити {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набір"}
+              </Button>
+            </div>
+          </div>
+          {quoteSetDetailsLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Завантаження складу...</div>
+          ) : quoteSetDetailsItems.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              У цьому наборі поки немає прорахунків.
+            </div>
+          ) : (
+            <div className="max-h-[55vh] overflow-auto rounded-lg border border-border/60">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/20">
+                    <TableHead className="w-[80px]">#</TableHead>
+                    <TableHead>Прорахунок</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Створено</TableHead>
+                    <TableHead className="w-[200px] text-right">Дії</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quoteSetDetailsItems.map((item, idx) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell className="font-mono font-semibold">
+                        {item.quote_number ?? item.quote_id.slice(0, 8)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn("border", statusPillClasses(item.quote_status))} variant="outline">
+                          {formatStatusLabel(item.quote_status ?? null)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.quote_created_at
+                          ? new Date(item.quote_created_at).toLocaleString("uk-UA", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/orders/estimates/${item.quote_id}`)}
+                          >
+                            Відкрити
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => handleRemoveItemFromQuoteSet(item.id)}
+                            disabled={quoteSetActionBusy}
+                          >
+                            Прибрати
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={quoteSetDialogOpen}
+        onOpenChange={(open) => {
+          if (quoteSetSaving) return;
+          setQuoteSetDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Сформувати набір</DialogTitle>
+            <DialogDescription>
+              У набір увійдуть {selectedRows.length} прорахунків одного замовника.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium">Назва набору</div>
+              <Input
+                value={quoteSetName}
+                onChange={(event) => setQuoteSetName(event.target.value)}
+                placeholder="Напр. Набір для весняної кампанії"
+                disabled={quoteSetSaving}
+              />
+            </div>
+            {bulkValidationMessage ? (
+              <div className="text-xs text-amber-500">{bulkValidationMessage}</div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuoteSetDialogOpen(false)}
+              disabled={quoteSetSaving}
+            >
+              Скасувати
+            </Button>
+            <Button onClick={handleCreateQuoteSet} disabled={quoteSetSaving || !canRunGroupedActions}>
+              {quoteSetSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Створити набір
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={quickAddOpen}
+        onOpenChange={(open) => {
+          if (quickAddBusy) return;
+          setQuickAddOpen(open);
+          if (!open) {
+            setQuickAddTargetQuote(null);
+            setQuickAddTargetSetId("");
+            setQuickAddKindFilter("all");
+            setQuickAddLoadingSets(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Додати в існуючий КП/набір</DialogTitle>
+            <DialogDescription>
+              {quickAddTargetQuote?.number ?? "Прорахунок"} ·{" "}
+              {quickAddTargetQuote?.customer_name ?? "Замовник не вказаний"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={quickAddKindFilter === "all" ? "primary" : "outline"}
+                onClick={() => setQuickAddKindFilter("all")}
+                disabled={quickAddBusy}
+              >
+                Всі
+              </Button>
+              <Button
+                size="sm"
+                variant={quickAddKindFilter === "kp" ? "primary" : "outline"}
+                onClick={() => setQuickAddKindFilter("kp")}
+                disabled={quickAddBusy}
+              >
+                КП
+              </Button>
+              <Button
+                size="sm"
+                variant={quickAddKindFilter === "set" ? "primary" : "outline"}
+                onClick={() => setQuickAddKindFilter("set")}
+                disabled={quickAddBusy}
+              >
+                Набори
+              </Button>
+            </div>
+            <Select
+              value={quickAddTargetSetId}
+              onValueChange={setQuickAddTargetSetId}
+              disabled={quickAddBusy || quickAddLoadingSets || quickAddAvailableSets.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    quickAddLoadingSets
+                      ? "Завантаження КП/наборів..."
+                      : quickAddAvailableSets.length === 0
+                      ? "Немає доступних КП/наборів для додавання"
+                      : "Оберіть КП або набір"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {quickAddAvailableSets.map((set) => (
+                  <SelectItem key={set.id} value={set.id}>
+                    {(set.kind === "kp" ? "КП" : "Набір") +
+                      ` · ${set.name}` +
+                      ` · ${set.item_count} поз.`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {quickAddAvailableSets.length === 0 && !quickAddLoadingSets ? (
+              <div className="text-xs text-muted-foreground">
+                Для цього замовника немає сумісних КП/наборів, або прорахунок уже входить у всі доступні.
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickAddOpen(false)} disabled={quickAddBusy}>
+              Скасувати
+            </Button>
+            <Button onClick={handleQuickAddToSet} disabled={quickAddBusy || !quickAddTargetSetId}>
+              {quickAddBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Додати
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">

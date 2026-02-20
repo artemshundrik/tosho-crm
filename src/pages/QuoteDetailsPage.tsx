@@ -47,10 +47,12 @@ import {
   listStatusHistory,
   setStatus,
   updateQuote,
+  listQuoteSetMemberships,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
   type QuoteRun,
+  type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
 import { isDesignerJobRole } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
@@ -567,6 +569,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [history, setHistory] = useState<QuoteStatusRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [quoteSetMembership, setQuoteSetMembership] = useState<QuoteSetMembershipInfo | null>(null);
 
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -2175,6 +2178,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [quoteId, teamId]);
 
   useEffect(() => {
+    if (!teamId || !quoteId) return;
+    let active = true;
+    const loadMembership = async () => {
+      try {
+        const map = await listQuoteSetMemberships(teamId, [quoteId]);
+        if (!active) return;
+        setQuoteSetMembership(map.get(quoteId) ?? null);
+      } catch {
+        if (!active) return;
+        setQuoteSetMembership(null);
+      }
+    };
+    void loadMembership();
+    return () => {
+      active = false;
+    };
+  }, [quoteId, teamId]);
+
+  useEffect(() => {
     void loadDesignTask();
   }, [quoteId, teamId]);
 
@@ -3044,6 +3066,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </Badge>
               );
             })()}
+            {quoteSetMembership?.kp_count ? (
+              <Badge
+                variant="outline"
+                className="border-sky-500/40 bg-sky-500/10 text-sky-300"
+                title={quoteSetMembership.kp_names.join(", ")}
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                КП{quoteSetMembership.kp_count > 1 ? ` +${quoteSetMembership.kp_count - 1}` : ""}
+              </Badge>
+            ) : null}
+            {quoteSetMembership?.set_count ? (
+              <Badge
+                variant="outline"
+                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                title={quoteSetMembership.set_names.join(", ")}
+              >
+                <Package className="h-3 w-3 mr-1" />
+                Набір{quoteSetMembership.set_count > 1 ? ` +${quoteSetMembership.set_count - 1}` : ""}
+              </Badge>
+            ) : null}
           </>
         }
         actions={
@@ -3102,6 +3144,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </>
         }
       />
+
+      {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
+        <Card className="border-border/70 bg-card/60 p-4">
+          <div className="text-sm font-semibold">Пов'язано з КП та наборами</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {quoteSetMembership.kp_names.map((name) => (
+              <Badge
+                key={`kp-${name}`}
+                variant="outline"
+                className="border-sky-500/40 bg-sky-500/10 text-sky-300"
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                {name}
+              </Badge>
+            ))}
+            {quoteSetMembership.set_names.map((name) => (
+              <Badge
+                key={`set-${name}`}
+                variant="outline"
+                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              >
+                <Package className="h-3 w-3 mr-1" />
+                {name}
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="border-border/70 bg-card/60 p-4 sm:p-5">
         <div className="flex flex-col gap-4">

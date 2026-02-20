@@ -10,6 +10,7 @@ type ListQuotesParams = {
 export type QuoteListRow = {
   id: string;
   team_id?: string | null;
+  customer_id?: string | null;
   number?: string | null;
   status?: string | null;
   comment?: string | null;
@@ -75,7 +76,7 @@ export async function listQuotes(params: ListQuotesParams) {
     let query = supabase
       .schema("tosho")
       .from("v_quotes_list")
-      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .select("id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
       .eq("team_id", teamId)
       .order("created_at", { ascending: false });
 
@@ -104,25 +105,44 @@ export async function listQuotes(params: ListQuotesParams) {
     }
 
     const listFromQuotes = async (withDesignBrief: boolean) => {
-      const columns = withDesignBrief
-        ? "id,team_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note"
-        : "id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,processing_minutes,deadline_at,deadline_note";
-      let query: any = (supabase as any)
-        .schema("tosho")
-        .from("quotes")
-        .select(columns)
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: false });
+      const baseColumns =
+        "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note";
+      const variants = withDesignBrief
+        ? [
+            `${baseColumns},design_brief,processing_minutes`,
+            `${baseColumns},design_brief`,
+            `${baseColumns},processing_minutes`,
+            baseColumns,
+          ]
+        : [`${baseColumns},processing_minutes`, baseColumns];
 
-      if (q.length > 0) {
-        query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+      let lastError: any = null;
+      for (const columns of variants) {
+        let query: any = (supabase as any)
+          .schema("tosho")
+          .from("quotes")
+          .select(columns)
+          .eq("team_id", teamId)
+          .order("created_at", { ascending: false });
+
+        if (q.length > 0) {
+          query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+        }
+
+        if (status && status !== "all") {
+          query = query.eq("status", status);
+        }
+
+        const result = await query;
+        if (!result.error) return result;
+
+        const message = (result.error?.message ?? "").toLowerCase();
+        const isMissingColumn = message.includes("column") && message.includes("does not exist");
+        if (!isMissingColumn) return result;
+        lastError = result.error;
       }
 
-      if (status && status !== "all") {
-        query = query.eq("status", status);
-      }
-
-      return await query;
+      return { data: null, error: lastError };
     };
 
     let { data, error: fallbackError } = await listFromQuotes(true);
@@ -134,12 +154,64 @@ export async function listQuotes(params: ListQuotesParams) {
       ({ data, error: fallbackError } = await listFromQuotes(false));
     }
     handleError(fallbackError);
-    return ((data as QuoteListRow[]) ?? []).map((row) => ({
-      ...row,
-      customer_name: row.customer_name ?? null,
-      customer_logo_url: row.customer_logo_url ?? null,
-      design_brief: row.design_brief ?? null,
-    }));
+
+    const fallbackRows = (data as QuoteListRow[]) ?? [];
+    const customerIds = Array.from(
+      new Set(
+        fallbackRows
+          .map((row) => row.customer_id ?? null)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    let customerById = new Map<
+      string,
+      { name?: string | null; legal_name?: string | null; logo_url?: string | null }
+    >();
+    if (customerIds.length > 0) {
+      const loadCustomers = async (withLogo: boolean) => {
+        const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+        return await supabase
+          .schema("tosho")
+          .from("customers")
+          .select(columns)
+          .in("id", customerIds);
+      };
+
+      let { data: customerRows, error: customersError } = await loadCustomers(true);
+      if (
+        customersError &&
+        /column/i.test(customersError.message ?? "") &&
+        /logo_url/i.test(customersError.message ?? "")
+      ) {
+        ({ data: customerRows, error: customersError } = await loadCustomers(false));
+      }
+
+      if (!customersError) {
+        const typedCustomerRows = ((customerRows ?? []) as unknown) as Array<{
+          id: string;
+          name?: string | null;
+          legal_name?: string | null;
+          logo_url?: string | null;
+        }>;
+        customerById = new Map(
+          typedCustomerRows.map((row) => [
+            row.id,
+            { name: row.name ?? null, legal_name: row.legal_name ?? null, logo_url: row.logo_url ?? null },
+          ])
+        );
+      }
+    }
+
+    return fallbackRows.map((row) => {
+      const customer = row.customer_id ? customerById.get(row.customer_id) : undefined;
+      return {
+        ...row,
+        customer_name: row.customer_name ?? customer?.name ?? customer?.legal_name ?? null,
+        customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? null,
+        design_brief: row.design_brief ?? null,
+      };
+    });
   }
 }
 
@@ -759,4 +831,618 @@ export async function updateQuote(params: {
 
     return await executeUpdate(fallbackPayload);
   }
+}
+
+export type QuoteSetRow = {
+  id: string;
+  team_id: string;
+  customer_id: string;
+  name: string;
+  kind?: "set" | "kp";
+  created_by?: string | null;
+  created_at?: string | null;
+};
+
+export type QuoteSetListRow = QuoteSetRow & {
+  item_count: number;
+  customer_name?: string | null;
+  customer_logo_url?: string | null;
+  preview_quote_numbers?: string[];
+  duplicate_count?: number;
+  has_same_composition_kp?: boolean;
+  has_same_composition_set?: boolean;
+};
+
+export type QuoteSetItemRow = {
+  id: string;
+  quote_set_id: string;
+  quote_id: string;
+  sort_order: number;
+  quote_number?: string | null;
+  quote_status?: string | null;
+  quote_total?: number | null;
+  quote_created_at?: string | null;
+};
+
+export type QuoteSetMembershipInfo = {
+  quote_id: string;
+  set_count: number;
+  kp_count: number;
+  set_names: string[];
+  kp_names: string[];
+  refs: Array<{
+    id: string;
+    name: string;
+    kind: "set" | "kp";
+  }>;
+};
+
+export type QuoteSetCompositionMatch = {
+  id: string;
+  name: string;
+  kind: "set" | "kp";
+};
+
+export type CustomerQuoteRow = {
+  id: string;
+  number?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+
+export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSetListRow[]> {
+  const readSets = async (withKind: boolean) => {
+    const columns = withKind
+      ? "id,team_id,customer_id,name,kind,created_by,created_at"
+      : "id,team_id,customer_id,name,created_by,created_at";
+    return await supabase
+      .schema("tosho")
+      .from("quote_sets")
+      .select(columns)
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  };
+
+  let { data: setsData, error: setsError } = await readSets(true);
+  if (
+    setsError &&
+    /column/i.test(setsError.message ?? "") &&
+    /kind/i.test(setsError.message ?? "")
+  ) {
+    ({ data: setsData, error: setsError } = await readSets(false));
+  }
+  handleError(setsError);
+
+  const sets = ((setsData ?? []) as unknown) as QuoteSetRow[];
+  if (sets.length === 0) return [];
+
+  const setIds = sets.map((set) => set.id);
+  const { data: itemRows, error: itemsError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("quote_set_id,quote_id,sort_order")
+    .in("quote_set_id", setIds);
+  handleError(itemsError);
+
+  const itemCountBySetId = new Map<string, number>();
+  const quoteIdsBySetId = new Map<string, string[]>();
+  const typedItemRows = ((itemRows ?? []) as unknown) as Array<{
+    quote_set_id?: string | null;
+    quote_id?: string | null;
+    sort_order?: number | null;
+  }>;
+  typedItemRows
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .forEach((row) => {
+    const setId = row.quote_set_id ?? "";
+    if (!setId) return;
+    itemCountBySetId.set(setId, (itemCountBySetId.get(setId) ?? 0) + 1);
+    const quoteId = row.quote_id ?? "";
+    if (!quoteId) return;
+    const list = quoteIdsBySetId.get(setId) ?? [];
+    list.push(quoteId);
+    quoteIdsBySetId.set(setId, list);
+  });
+
+  const allQuoteIds = Array.from(
+    new Set(typedItemRows.map((row) => row.quote_id ?? "").filter(Boolean))
+  );
+  const quoteNumberById = new Map<string, string>();
+  if (allQuoteIds.length > 0) {
+    const { data: quoteRows, error: quoteRowsError } = await supabase
+      .schema("tosho")
+      .from("quotes")
+      .select("id,number")
+      .eq("team_id", teamId)
+      .in("id", allQuoteIds);
+    handleError(quoteRowsError);
+    (((quoteRows ?? []) as unknown) as Array<{ id: string; number?: string | null }>).forEach((row) => {
+      quoteNumberById.set(row.id, row.number ?? row.id.slice(0, 8));
+    });
+  }
+
+  const customerIds = Array.from(new Set(sets.map((set) => set.customer_id).filter(Boolean)));
+  const loadCustomers = async (withLogo: boolean) => {
+    const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+    return await supabase.schema("tosho").from("customers").select(columns).in("id", customerIds);
+  };
+  let { data: customerRows, error: customersError } = await loadCustomers(true);
+  if (
+    customersError &&
+    /column/i.test(customersError.message ?? "") &&
+    /logo_url/i.test(customersError.message ?? "")
+  ) {
+    ({ data: customerRows, error: customersError } = await loadCustomers(false));
+  }
+  handleError(customersError);
+
+  const customerById = new Map(
+    (((customerRows ?? []) as unknown) as Array<{
+      id: string;
+      name?: string | null;
+      legal_name?: string | null;
+      logo_url?: string | null;
+    }>).map((row) => [
+      row.id,
+      {
+        name: row.name ?? row.legal_name ?? null,
+        logoUrl: row.logo_url ?? null,
+      },
+    ])
+  );
+
+  const normalizedSets = sets.map((set) => ({
+    ...set,
+    kind: set.kind ?? (/^\s*кп\b/i.test(set.name ?? "") ? "kp" : "set"),
+  }));
+
+  const signatureGroups = new Map<string, Array<"kp" | "set">>();
+  normalizedSets.forEach((set) => {
+    const quoteIds = quoteIdsBySetId.get(set.id) ?? [];
+    const signature = [...quoteIds].sort().join("|");
+    if (!signature) return;
+    const kinds = signatureGroups.get(signature) ?? [];
+    kinds.push(set.kind ?? "set");
+    signatureGroups.set(signature, kinds);
+  });
+
+  return normalizedSets.map((set) => {
+    const quoteIds = quoteIdsBySetId.get(set.id) ?? [];
+    const signature = [...quoteIds].sort().join("|");
+    const kinds = signature ? signatureGroups.get(signature) ?? [] : [];
+    const preview = quoteIds.slice(0, 3).map((id) => quoteNumberById.get(id) ?? id.slice(0, 8));
+    return {
+      ...set,
+      item_count: itemCountBySetId.get(set.id) ?? 0,
+      customer_name: customerById.get(set.customer_id)?.name ?? null,
+      customer_logo_url: customerById.get(set.customer_id)?.logoUrl ?? null,
+      preview_quote_numbers: preview,
+      duplicate_count: kinds.length > 1 ? kinds.length - 1 : 0,
+      has_same_composition_kp: kinds.includes("kp") && set.kind !== "kp",
+      has_same_composition_set: kinds.includes("set") && set.kind !== "set",
+    };
+  });
+}
+
+export async function listQuoteSetMemberships(
+  teamId: string,
+  quoteIds: string[]
+): Promise<Map<string, QuoteSetMembershipInfo>> {
+  const uniqueQuoteIds = Array.from(new Set(quoteIds.filter(Boolean)));
+  const empty = new Map<string, QuoteSetMembershipInfo>();
+  if (uniqueQuoteIds.length === 0) return empty;
+
+  const { data: itemRows, error: itemError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("quote_id,quote_set_id")
+    .eq("team_id", teamId)
+    .in("quote_id", uniqueQuoteIds);
+  handleError(itemError);
+
+  const typedItems = ((itemRows ?? []) as unknown) as Array<{
+    quote_id?: string | null;
+    quote_set_id?: string | null;
+  }>;
+  if (typedItems.length === 0) return empty;
+
+  const setIds = Array.from(
+    new Set(typedItems.map((row) => row.quote_set_id ?? "").filter(Boolean))
+  );
+  const readSets = async (withKind: boolean) => {
+    const columns = withKind ? "id,name,kind" : "id,name";
+    return await supabase.schema("tosho").from("quote_sets").select(columns).eq("team_id", teamId).in("id", setIds);
+  };
+
+  let { data: setRows, error: setError } = await readSets(true);
+  if (setError && /column/i.test(setError.message ?? "") && /kind/i.test(setError.message ?? "")) {
+    ({ data: setRows, error: setError } = await readSets(false));
+  }
+  handleError(setError);
+
+  const setById = new Map(
+    (((setRows ?? []) as unknown) as Array<{ id: string; name?: string | null; kind?: "set" | "kp" | null }>).map(
+      (row) => [
+        row.id,
+        {
+          kind: row.kind ?? (/^\s*кп\b/i.test(row.name ?? "") ? "kp" : "set"),
+          name: row.name ?? "",
+        },
+      ]
+    )
+  );
+
+  const membership = new Map<string, QuoteSetMembershipInfo>();
+  typedItems.forEach((item) => {
+    const quoteId = item.quote_id ?? "";
+    const setId = item.quote_set_id ?? "";
+    if (!quoteId || !setId) return;
+    const setInfo = setById.get(setId);
+    if (!setInfo) return;
+
+    const current = membership.get(quoteId) ?? {
+      quote_id: quoteId,
+      set_count: 0,
+      kp_count: 0,
+      set_names: [],
+      kp_names: [],
+      refs: [],
+    };
+    current.refs.push({
+      id: setId,
+      name: setInfo.name,
+      kind: setInfo.kind,
+    });
+    if (setInfo.kind === "kp") {
+      current.kp_count += 1;
+      if (setInfo.name) current.kp_names.push(setInfo.name);
+    } else {
+      current.set_count += 1;
+      if (setInfo.name) current.set_names.push(setInfo.name);
+    }
+    membership.set(quoteId, current);
+  });
+
+  return membership;
+}
+
+export async function findQuoteSetsByExactComposition(
+  teamId: string,
+  quoteIds: string[]
+): Promise<QuoteSetCompositionMatch[]> {
+  const uniqueQuoteIds = Array.from(new Set(quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return [];
+
+  const { data: matchedRows, error: matchedError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("quote_set_id,quote_id")
+    .eq("team_id", teamId)
+    .in("quote_id", uniqueQuoteIds);
+  handleError(matchedError);
+
+  const matched = ((matchedRows ?? []) as unknown) as Array<{
+    quote_set_id?: string | null;
+    quote_id?: string | null;
+  }>;
+  if (matched.length === 0) return [];
+
+  const matchCountBySetId = new Map<string, number>();
+  matched.forEach((row) => {
+    const setId = row.quote_set_id ?? "";
+    if (!setId) return;
+    matchCountBySetId.set(setId, (matchCountBySetId.get(setId) ?? 0) + 1);
+  });
+
+  const candidateSetIds = Array.from(matchCountBySetId.entries())
+    .filter(([, count]) => count === uniqueQuoteIds.length)
+    .map(([setId]) => setId);
+  if (candidateSetIds.length === 0) return [];
+
+  const { data: allRows, error: allError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("quote_set_id")
+    .eq("team_id", teamId)
+    .in("quote_set_id", candidateSetIds);
+  handleError(allError);
+
+  const totalCountBySetId = new Map<string, number>();
+  (((allRows ?? []) as unknown) as Array<{ quote_set_id?: string | null }>).forEach((row) => {
+    const setId = row.quote_set_id ?? "";
+    if (!setId) return;
+    totalCountBySetId.set(setId, (totalCountBySetId.get(setId) ?? 0) + 1);
+  });
+
+  const exactSetIds = candidateSetIds.filter(
+    (setId) => (totalCountBySetId.get(setId) ?? 0) === uniqueQuoteIds.length
+  );
+  if (exactSetIds.length === 0) return [];
+
+  const readSets = async (withKind: boolean) => {
+    const columns = withKind ? "id,name,kind" : "id,name";
+    return await supabase.schema("tosho").from("quote_sets").select(columns).eq("team_id", teamId).in("id", exactSetIds);
+  };
+  let { data: setRows, error: setError } = await readSets(true);
+  if (setError && /column/i.test(setError.message ?? "") && /kind/i.test(setError.message ?? "")) {
+    ({ data: setRows, error: setError } = await readSets(false));
+  }
+  handleError(setError);
+
+  return (((setRows ?? []) as unknown) as Array<{ id: string; name?: string | null; kind?: "set" | "kp" | null }>).map(
+    (row) => ({
+      id: row.id,
+      name: row.name ?? row.id.slice(0, 8),
+      kind: row.kind ?? (/^\s*кп\b/i.test(row.name ?? "") ? "kp" : "set"),
+    })
+  );
+}
+
+export async function listCustomerQuotes(params: {
+  teamId: string;
+  customerId: string;
+  limit?: number;
+}): Promise<CustomerQuoteRow[]> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id,number,status,created_at")
+    .eq("team_id", params.teamId)
+    .eq("customer_id", params.customerId)
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 200);
+  handleError(error);
+  return ((data ?? []) as unknown) as CustomerQuoteRow[];
+}
+
+export async function listQuoteSetItems(teamId: string, quoteSetId: string): Promise<QuoteSetItemRow[]> {
+  const { data: itemsRows, error: itemsError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("id,quote_set_id,quote_id,sort_order")
+    .eq("team_id", teamId)
+    .eq("quote_set_id", quoteSetId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  handleError(itemsError);
+
+  const items = ((itemsRows ?? []) as unknown) as Array<{
+    id: string;
+    quote_set_id: string;
+    quote_id: string;
+    sort_order?: number | null;
+  }>;
+  if (items.length === 0) return [];
+
+  const quoteIds = Array.from(new Set(items.map((item) => item.quote_id).filter(Boolean)));
+  const { data: quoteRows, error: quotesError } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id,number,status,total,created_at")
+    .eq("team_id", teamId)
+    .in("id", quoteIds);
+  handleError(quotesError);
+
+  const quoteById = new Map(
+    (((quoteRows ?? []) as unknown) as Array<{
+      id: string;
+      number?: string | null;
+      status?: string | null;
+      total?: number | null;
+      created_at?: string | null;
+    }>).map((row) => [row.id, row])
+  );
+
+  return items.map((item) => {
+    const quote = quoteById.get(item.quote_id);
+    return {
+      id: item.id,
+      quote_set_id: item.quote_set_id,
+      quote_id: item.quote_id,
+      sort_order: item.sort_order ?? 0,
+      quote_number: quote?.number ?? null,
+      quote_status: quote?.status ?? null,
+      quote_total: quote?.total ?? null,
+      quote_created_at: quote?.created_at ?? null,
+    };
+  });
+}
+
+export async function updateQuoteSetName(params: {
+  teamId: string;
+  quoteSetId: string;
+  name: string;
+}) {
+  const safeName = params.name.trim();
+  if (!safeName) throw new Error("Назва не може бути порожньою.");
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quote_sets")
+    .update({ name: safeName })
+    .eq("team_id", params.teamId)
+    .eq("id", params.quoteSetId)
+    .select("id,name")
+    .single();
+  handleError(error);
+  return (data as unknown) as { id: string; name: string };
+}
+
+export async function deleteQuoteSet(params: { teamId: string; quoteSetId: string }) {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("quote_sets")
+    .delete()
+    .eq("team_id", params.teamId)
+    .eq("id", params.quoteSetId);
+  handleError(error);
+}
+
+export async function removeQuoteSetItem(params: { teamId: string; quoteSetItemId: string }) {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .delete()
+    .eq("team_id", params.teamId)
+    .eq("id", params.quoteSetItemId);
+  handleError(error);
+}
+
+export async function addQuotesToQuoteSet(params: {
+  teamId: string;
+  quoteSetId: string;
+  quoteIds: string[];
+}) {
+  const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return 0;
+
+  const { data: existingRows, error: existingError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .select("quote_id")
+    .eq("team_id", params.teamId)
+    .eq("quote_set_id", params.quoteSetId);
+  handleError(existingError);
+
+  const existingQuoteIds = new Set(
+    (((existingRows ?? []) as unknown) as Array<{ quote_id?: string | null }>)
+      .map((row) => row.quote_id ?? "")
+      .filter(Boolean)
+  );
+
+  const quoteIdsToInsert = uniqueQuoteIds.filter((quoteId) => !existingQuoteIds.has(quoteId));
+  if (quoteIdsToInsert.length === 0) return 0;
+
+  const nextSortStart = existingQuoteIds.size;
+  const payload = quoteIdsToInsert.map((quoteId, index) => ({
+    team_id: params.teamId,
+    quote_set_id: params.quoteSetId,
+    quote_id: quoteId,
+    sort_order: nextSortStart + index,
+  }));
+
+  const { error } = await supabase.schema("tosho").from("quote_set_items").insert(payload);
+  handleError(error);
+  return payload.length;
+}
+
+export async function createQuoteSet(params: {
+  teamId: string;
+  quoteIds: string[];
+  name: string;
+  kind?: "set" | "kp";
+}) {
+  const quoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  if (quoteIds.length < 2) {
+    throw new Error("Для набору потрібно вибрати щонайменше 2 прорахунки.");
+  }
+
+  const { data: quoteRows, error: quotesError } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id,customer_id")
+    .eq("team_id", params.teamId)
+    .in("id", quoteIds);
+  handleError(quotesError);
+
+  if (!quoteRows || quoteRows.length !== quoteIds.length) {
+    throw new Error("Не вдалося знайти всі вибрані прорахунки.");
+  }
+
+  const customerIds = Array.from(
+    new Set(
+      quoteRows
+        .map((row) => row.customer_id as string | null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  if (customerIds.length !== 1) {
+    throw new Error("У набір можна додавати лише прорахунки одного замовника.");
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  handleError(authError);
+  const createdBy = authData.user?.id ?? null;
+
+  const insertSet = async (withCreatedBy: boolean) => {
+    const payload: Record<string, unknown> = {
+      team_id: params.teamId,
+      customer_id: customerIds[0],
+      name: params.name.trim(),
+      kind: params.kind ?? "set",
+    };
+    if (withCreatedBy && createdBy) {
+      payload.created_by = createdBy;
+    }
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("quote_sets")
+      .insert(payload)
+      .select("id,team_id,customer_id,name,kind,created_by,created_at")
+      .single();
+    handleError(error);
+    return data as QuoteSetRow;
+  };
+
+  const insertSetWithOptions = async (withKind: boolean, withCreatedBy: boolean) => {
+    const payload: Record<string, unknown> = {
+      team_id: params.teamId,
+      customer_id: customerIds[0],
+      name: params.name.trim(),
+    };
+    if (withKind) payload.kind = params.kind ?? "set";
+    if (withCreatedBy && createdBy) payload.created_by = createdBy;
+    const selectColumns = withKind
+      ? "id,team_id,customer_id,name,kind,created_by,created_at"
+      : "id,team_id,customer_id,name,created_by,created_at";
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("quote_sets")
+      .insert(payload)
+      .select(selectColumns)
+      .single();
+    handleError(error);
+    const created = (data as unknown) as QuoteSetRow;
+    if (!withKind) created.kind = "set";
+    return created;
+  };
+
+  let createdSet: QuoteSetRow;
+  try {
+    createdSet = await insertSetWithOptions(true, true);
+  } catch (error: any) {
+    const message = (error?.message ?? "").toLowerCase();
+    if (message.includes("relation") && message.includes("quote_sets")) {
+      throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.");
+    }
+
+    const kindMissing = message.includes("column") && message.includes("kind");
+    const createdByMissing = message.includes("column") && message.includes("created_by");
+
+    if (kindMissing && createdByMissing) {
+      createdSet = await insertSetWithOptions(false, false);
+    } else if (kindMissing) {
+      createdSet = await insertSetWithOptions(false, true);
+    } else if (createdByMissing) {
+      createdSet = await insertSetWithOptions(true, false);
+    } else {
+      throw error;
+    }
+  }
+
+  const itemsPayload = quoteIds.map((quoteId, index) => ({
+    team_id: params.teamId,
+    quote_set_id: createdSet.id,
+    quote_id: quoteId,
+    sort_order: index,
+  }));
+
+  const { error: itemsError } = await supabase
+    .schema("tosho")
+    .from("quote_set_items")
+    .insert(itemsPayload);
+  handleError(itemsError);
+
+  return createdSet;
 }
