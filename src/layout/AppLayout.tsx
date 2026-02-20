@@ -138,7 +138,12 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Каталог продукції", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban },
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette },
-  { label: "Підрядники", to: ROUTES.contractors, group: "operations", icon: Users },
+  {
+    label: "Підрядники та Постачальники",
+    to: ROUTES.contractors,
+    group: "operations",
+    icon: Users,
+  },
 
   // Акаунт
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
@@ -234,9 +239,9 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.contractors))
     return {
-      title: "Підрядники",
-      subtitle: "База партнерів, договори та взаємодія.",
-      breadcrumbLabel: "Підрядники",
+      title: "Підрядники та Постачальники",
+      subtitle: "База партнерів, постачальників, договорів та взаємодії.",
+      breadcrumbLabel: "Підрядники та Постачальники",
       breadcrumbTo: ROUTES.contractors,
     };
 

@@ -98,7 +98,7 @@ function pathToLabel(pathname: string): string {
   if (pathname.startsWith("/catalog/products")) return "Каталог продукції";
   if (pathname.startsWith("/design")) return "Дизайн";
   if (pathname.startsWith("/logistics")) return "Логістика";
-  if (pathname.startsWith("/contractors")) return "Підрядники";
+  if (pathname.startsWith("/contractors")) return "Підрядники та Постачальники";
   if (pathname.startsWith("/finance/invoices")) return "Рахунки";
   if (pathname.startsWith("/finance/expense-invoices")) return "Видаткові накладні";
   if (pathname.startsWith("/finance/acts")) return "Акти виконаних робіт";
