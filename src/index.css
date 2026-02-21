@@ -416,6 +416,82 @@
   .gumloop-blue-gradient {
     background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));
   }
+
+  .quote-page-canvas {
+    @apply w-full pb-16 space-y-5 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
+  }
+  .quote-details-page-canvas {
+    @apply w-full max-w-[1400px] mx-auto pb-20 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
+  }
+  .quote-section {
+    @apply rounded-[var(--radius-section)] border border-border/70 bg-card shadow-sm overflow-hidden;
+  }
+  .quote-sticky-section {
+    @apply rounded-[var(--radius-section)] border border-border/70 bg-card/95 supports-[backdrop-filter]:bg-card/85 supports-[backdrop-filter]:backdrop-blur sticky top-0 z-10 shadow-sm overflow-hidden;
+  }
+  .quote-soft-card {
+    @apply border-border/70 bg-card/70 shadow-sm;
+  }
+  .quote-muted-card {
+    @apply border border-border/60 bg-muted/10 shadow-sm;
+  }
+
+  .quote-kind-badge-kp {
+    background-color: hsl(var(--info-soft));
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .quote-kind-badge-set {
+    background-color: hsl(var(--success-soft));
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .quote-warning-badge {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .quote-success-badge {
+    background-color: hsl(var(--success-soft));
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .quote-danger-badge {
+    background-color: hsl(var(--danger-soft));
+    border-color: hsl(var(--danger-soft-border));
+    color: hsl(var(--danger-foreground));
+  }
+  .quote-neutral-badge {
+    background-color: hsl(var(--neutral-soft));
+    border-color: hsl(var(--neutral-soft-border));
+    color: hsl(var(--neutral-foreground));
+  }
+
+  .quote-kind-stripe-kp {
+    background-color: hsl(var(--info-foreground));
+  }
+  .quote-kind-stripe-set {
+    background-color: hsl(var(--success-foreground));
+  }
+
+  .quote-activity-accent-comment {
+    background-color: hsl(var(--info-soft));
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .quote-activity-accent-runs {
+    background-color: hsl(var(--success-soft));
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .quote-activity-accent-deadline {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .quote-activity-accent-default {
+    @apply bg-muted/40 text-muted-foreground border-border;
+  }
 }
 
 /* === SHIMMER ANIMATION FOR IMAGE LOADING === */

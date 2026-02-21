@@ -56,9 +56,6 @@ import {
   ArrowUpDown,
   Clock,
   XCircle,
-  CalendarClock,
-  CalendarDays,
-  Timer,
   Pencil,
   Calculator,
   LayoutGrid,
@@ -94,6 +91,12 @@ import {
   statusLabels,
   type PrintConfig,
 } from "@/features/quotes/quotes-page/config";
+import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
+import {
+  CONTROL_BASE,
+} from "@/components/ui/controlStyles";
+import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
+import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
 
 type QuotesPageProps = {
   teamId: string;
@@ -332,10 +335,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   const getDeadlineBadge = (value?: string | null) => {
-    if (!value) return { label: "Не вказано", className: "text-muted-foreground", tone: "none" as const };
+    if (!value) return { label: "Не вказано", tone: "none" as const };
     const date = parseDateOnly(value);
     if (Number.isNaN(date.getTime())) {
-      return { label: "Не вказано", className: "text-muted-foreground", tone: "none" as const };
+      return { label: "Не вказано", tone: "none" as const };
     }
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -345,30 +348,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (diffDays < 0) {
       return {
         label: `Прострочено (${Math.abs(diffDays)} дн.)`,
-        className:
-          "border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-500/40 dark:text-rose-200 dark:bg-rose-500/15",
         tone: "overdue" as const,
       };
     }
     if (diffDays === 0) {
       return {
         label: "Сьогодні",
-        className:
-          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/40 dark:text-amber-200 dark:bg-amber-500/15",
         tone: "today" as const,
       };
     }
     if (diffDays <= 2) {
       return {
         label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
-        className:
-          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-100 dark:bg-amber-500/10",
         tone: "soon" as const,
       };
     }
     return {
       label: date.toLocaleDateString("uk-UA"),
-      className: "border-border/60 text-muted-foreground bg-muted/20",
       tone: "future" as const,
     };
   };
@@ -1561,125 +1557,44 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
-  const hasActiveFilters = useMemo(
-    () => Boolean(search.trim()) || quickFilter !== "all" || status !== "all",
-    [search, quickFilter, status]
-  );
+  const {
+    addableSelectedCountForOpenSet,
+    bulkValidationMessage,
+    canRunGroupedActions,
+    filteredAndSortedRows,
+    filteredQuoteSets,
+    foundCount,
+    groupedByStatus,
+    groupedQuotesView,
+    hasActiveFilters,
+    quickAddAvailableSets,
+    quoteSetKpCount,
+    quoteSetSetCount,
+    selectedRows,
+  } = useQuotesPageViewState({
+    rows,
+    search,
+    quickFilter,
+    status,
+    sortBy,
+    sortOrder,
+    quoteSets,
+    quoteSetSearch,
+    quoteSetKindFilter,
+    quickAddKindFilter,
+    quickAddTargetQuote,
+    quoteMembershipByQuoteId,
+    contentView,
+    selectedIds,
+    quoteSetDetailsTarget,
+    quoteSetDetailsItems,
+  });
 
   const clearFilters = () => {
     setSearch("");
     setQuickFilter("all");
     setStatusFilter("all");
   };
-
-  const filteredAndSortedRows = useMemo(() => {
-    let filtered = [...rows];
-
-    const q = search.trim().toLowerCase();
-    if (q) {
-      filtered = filtered.filter((row) => {
-        const hay = [
-          row.number,
-          row.comment,
-          row.title,
-          row.customer_name,
-          row.quote_type,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(q);
-      });
-    }
-
-    // Quick filters
-    if (quickFilter === "new") {
-      filtered = filtered.filter((row) => normalizeStatus(row.status) === "new");
-    } else if (quickFilter === "estimated") {
-      filtered = filtered.filter((row) => normalizeStatus(row.status) === "estimated");
-    }
-
-    // Status dropdown
-    if (status && status !== "all") {
-      filtered = filtered.filter((row) => normalizeStatus(row.status) === status);
-    }
-
-    // Sorting
-    if (sortBy === "date") {
-      filtered.sort((a, b) => {
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
-      });
-    } else if (sortBy === "number") {
-      filtered.sort((a, b) => {
-        const numA = parseInt(a.number || "0", 10);
-        const numB = parseInt(b.number || "0", 10);
-        return sortOrder === "asc" ? numA - numB : numB - numA;
-      });
-    }
-
-    return filtered;
-  }, [rows, search, quickFilter, status, sortBy, sortOrder]);
-
-  const filteredQuoteSets = useMemo(() => {
-    const q = quoteSetSearch.trim().toLowerCase();
-    return quoteSets.filter((set) => {
-      if (quoteSetKindFilter !== "all" && (set.kind ?? "set") !== quoteSetKindFilter) return false;
-      if (!q) return true;
-      const hay = [set.name, set.customer_name, set.kind].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
-    });
-  }, [quoteSets, quoteSetKindFilter, quoteSetSearch]);
-  const quoteSetKpCount = useMemo(
-    () => filteredQuoteSets.filter((set) => (set.kind ?? "set") === "kp").length,
-    [filteredQuoteSets]
-  );
-  const quoteSetSetCount = useMemo(
-    () => filteredQuoteSets.filter((set) => (set.kind ?? "set") === "set").length,
-    [filteredQuoteSets]
-  );
-  const quickAddAvailableSets = useMemo(() => {
-    if (!quickAddTargetQuote?.customer_id) return [];
-    const membership = quoteMembershipByQuoteId.get(quickAddTargetQuote.id);
-    const existingSetIds = new Set((membership?.refs ?? []).map((ref) => ref.id));
-    return quoteSets.filter((set) => {
-      const matchesCustomer = set.customer_id === quickAddTargetQuote.customer_id;
-      const matchesKind = quickAddKindFilter === "all" || (set.kind ?? "set") === quickAddKindFilter;
-      const notMemberYet = !existingSetIds.has(set.id);
-      return matchesCustomer && matchesKind && notMemberYet;
-    });
-  }, [quickAddKindFilter, quickAddTargetQuote, quoteMembershipByQuoteId, quoteSets]);
-
-  const foundCount = contentView === "sets" ? filteredQuoteSets.length : filteredAndSortedRows.length;
-
-  const groupedQuotesView = useMemo(() => {
-    const groups = new Map<
-      string,
-      { id: string; name: string; kind: "set" | "kp"; rows: QuoteListRow[] }
-    >();
-    const ungrouped: QuoteListRow[] = [];
-
-    filteredAndSortedRows.forEach((row) => {
-      const refs = quoteMembershipByQuoteId.get(row.id)?.refs ?? [];
-      if (refs.length === 0) {
-        ungrouped.push(row);
-        return;
-      }
-      refs.forEach((ref) => {
-        const current = groups.get(ref.id) ?? { id: ref.id, name: ref.name, kind: ref.kind, rows: [] };
-        current.rows.push(row);
-        groups.set(ref.id, current);
-      });
-    });
-
-    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "kp" ? -1 : 1;
-      return a.name.localeCompare(b.name, "uk-UA");
-    });
-
-    return { groups: sortedGroups, ungrouped };
-  }, [filteredAndSortedRows, quoteMembershipByQuoteId]);
 
   useEffect(() => {
     localStorage.setItem("quotes_view_mode", viewMode);
@@ -1690,58 +1605,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setSelectedIds(new Set());
     }
   }, [quoteListMode, selectedIds.size]);
-
-  const groupedByStatus = useMemo(() => {
-    const buckets: Record<string, QuoteListRow[]> = {
-      new: [],
-      estimating: [],
-      estimated: [],
-      awaiting_approval: [],
-      approved: [],
-      cancelled: [],
-    };
-    filteredAndSortedRows.forEach((row) => {
-      const s = normalizeStatus(row.status);
-      if (!buckets[s]) buckets[s] = [];
-      buckets[s].push(row);
-    });
-    return buckets;
-  }, [filteredAndSortedRows]);
-
-  const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
-
-  const selectedRows = useMemo(
-    () =>
-      Array.from(selectedIds)
-        .map((id) => rowsById.get(id))
-        .filter((row): row is QuoteListRow => Boolean(row)),
-    [rowsById, selectedIds]
-  );
-
-  const selectedCustomers = useMemo(() => {
-    const unique = new Set<string>();
-    selectedRows.forEach((row) => {
-      const key = (row.customer_id ?? row.customer_name ?? "").trim().toLowerCase();
-      if (key) unique.add(key);
-    });
-    return unique;
-  }, [selectedRows]);
-
-  const canRunGroupedActions = selectedRows.length >= 2 && selectedCustomers.size === 1;
-  const bulkValidationMessage =
-    selectedRows.length < 2
-      ? "Оберіть щонайменше 2 прорахунки."
-      : selectedCustomers.size > 1
-      ? "Масові дії доступні тільки для одного замовника."
-      : null;
-
-  const addableSelectedCountForOpenSet = useMemo(() => {
-    if (!quoteSetDetailsTarget) return 0;
-    const existingQuoteIds = new Set(quoteSetDetailsItems.map((item) => item.quote_id));
-    return selectedRows.filter(
-      (row) => row.customer_id === quoteSetDetailsTarget.customer_id && !existingQuoteIds.has(row.id)
-    ).length;
-  }, [quoteSetDetailsItems, quoteSetDetailsTarget, selectedRows]);
 
   const handleDragStart = (id: string) => {
     setDraggingId(id);
@@ -2292,9 +2155,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [quickAddAvailableSets, quickAddOpen]);
 
   return (
-    <div className="w-full pb-16 space-y-5">
+    <div className="quote-page-canvas">
       {/* Modern Linea-style Header Block */}
-      <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden sticky top-0 z-10">
+      <div className="quote-sticky-section">
         <div className="px-5 pt-2 pb-4 space-y-4">
           {/* Header Section */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2391,7 +2254,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       ? "Пошук по КП та наборах..."
                       : "Пошук за назвою, номером або замовником..."
                   }
-                  className="h-10 pl-9 pr-9 bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40 transition-colors"
+                  className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
                 />
                 {(contentView === "sets" ? quoteSetSearch : search) && (
                   <Button
@@ -2526,7 +2389,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   aria-pressed={quoteListMode === "grouped"}
                   onClick={() => setQuoteListMode("grouped")}
                 >
-                  Group Mode
+                  Групи
                 </Button>
               </div>
             ) : null}
@@ -2536,7 +2399,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Bulk actions */}
       {contentView !== "sets" && selectedIds.size > 0 && (
-        <div className="rounded-[var(--radius-section)] border border-border bg-card px-5 py-4 shadow-none">
+        <div className={cn("quote-section", "px-5 py-4")}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <div className="flex items-center gap-2">
@@ -2544,11 +2407,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   Вибрано: {selectedIds.size}
                 </Badge>
                 {bulkValidationMessage ? (
-                  <Badge variant="outline" className="h-9 border-amber-500/40 text-amber-300 bg-amber-500/10">
+                  <Badge variant="outline" className="h-9 quote-warning-badge">
                     {bulkValidationMessage}
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="h-9 border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                  <Badge variant="outline" className="h-9 quote-success-badge">
                     Можна виконувати об'єднані дії
                   </Badge>
                 )}
@@ -2614,7 +2477,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       )}
 
       {contentView !== "quotes" && (
-      <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden">
+      <div className="quote-section">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div>
             <div className="text-base font-semibold">КП та набори</div>
@@ -2667,7 +2530,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       "cursor-pointer hover:bg-muted/10 transition-colors border-b border-border/50",
                       (set.kind ?? "set") === "kp"
                         ? "data-[state=selected]:bg-primary/5"
-                        : "data-[state=selected]:bg-emerald-500/5"
+                        : "data-[state=selected]:bg-success-soft"
                     )}
                     onClick={() => openQuoteSetDetails(set)}
                   >
@@ -2675,7 +2538,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <div
                         className={cn(
                           "h-8 w-1.5 rounded-full",
-                          (set.kind ?? "set") === "kp" ? "bg-sky-400/80" : "bg-emerald-400/80"
+                          (set.kind ?? "set") === "kp" ? "quote-kind-stripe-kp" : "quote-kind-stripe-set"
                         )}
                       />
                     </TableCell>
@@ -2705,7 +2568,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <div className="mt-1">
                           <Badge
                             variant="outline"
-                            className="h-5 px-1.5 text-[10px] border-amber-500/40 text-amber-300 bg-amber-500/10"
+                            className="h-5 px-1.5 text-[10px] quote-warning-badge"
                             title="Є ще КП/набір з таким самим складом прорахунків"
                           >
                             Той самий склад
@@ -2716,18 +2579,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={cn(
-                          "inline-flex items-center gap-1.5",
-                          set.kind === "kp"
-                            ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
-                            : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
-                        )}
-                        variant="outline"
-                      >
-                        {set.kind === "kp" ? <FileText className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
-                        {set.kind === "kp" ? "КП" : "Набір"}
-                      </Badge>
+                      <QuoteKindBadge kind={set.kind} />
                     </TableCell>
                     <TableCell>{set.customer_name ?? "Не вказано"}</TableCell>
                     <TableCell>{set.item_count}</TableCell>
@@ -2779,7 +2631,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
-        <div className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden">
+        <div className="quote-section">
           {loading ? (
             <div className="p-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -2787,7 +2639,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
           ) : error ? (
             <div className="p-12 text-center">
-              <div className="text-destructive mb-2 text-2xl">⚠️</div>
+              <XCircle className="h-9 w-9 mx-auto mb-3 text-destructive/80" />
               <p className="text-sm text-destructive font-medium">{error}</p>
             </div>
           ) : filteredAndSortedRows.length === 0 ? (
@@ -2813,21 +2665,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <div
                         className={cn(
                           "h-7 w-1.5 rounded-full",
-                          group.kind === "kp" ? "bg-sky-400/80" : "bg-emerald-400/80"
+                          group.kind === "kp" ? "quote-kind-stripe-kp" : "quote-kind-stripe-set"
                         )}
                       />
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "inline-flex items-center gap-1.5",
-                          group.kind === "kp"
-                            ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
-                            : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
-                        )}
-                      >
-                        {group.kind === "kp" ? <FileText className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
-                        {group.kind === "kp" ? "КП" : "Набір"}
-                      </Badge>
+                      <QuoteKindBadge kind={group.kind} />
                       <div className="truncate text-sm font-semibold">{group.name}</div>
                     </div>
                     <Badge variant="outline" className="font-semibold">{group.rows.length}</Badge>
@@ -2979,9 +2820,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   className={cn(
                                     "h-5 w-1.5 rounded-full",
                                     membership.kp_count > 0
-                                      ? "bg-sky-400/80"
+                                      ? "quote-kind-stripe-kp"
                                       : membership.set_count > 0
-                                      ? "bg-emerald-400/80"
+                                      ? "quote-kind-stripe-set"
                                       : "bg-transparent"
                                   )}
                                 />
@@ -2996,7 +2837,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <Badge
                                     variant="outline"
                                     title={membership.kp_names.join(", ")}
-                                    className="h-5 px-1.5 text-[10px] border-sky-500/40 text-sky-300 bg-sky-500/10 inline-flex items-center gap-1"
+                                    className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
                                   >
                                     <FileText className="h-3 w-3" />
                                     КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
@@ -3006,7 +2847,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <Badge
                                     variant="outline"
                                     title={membership.set_names.join(", ")}
-                                    className="h-5 px-1.5 text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10 inline-flex items-center gap-1"
+                                    className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
                                   >
                                     <Layers className="h-3 w-3" />
                                     Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
@@ -3083,13 +2924,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               row.deadline_note ? `Коментар: ${row.deadline_note}` : null,
                             ].filter(Boolean);
                             return (
-                              <Badge
-                                variant="outline"
-                                className={cn("text-xs font-medium", badge.className)}
+                              <QuoteDeadlineBadge
+                                tone={badge.tone}
+                                label={badge.label}
                                 title={titleParts.join(" · ")}
-                              >
-                                {badge.label}
-                              </Badge>
+                              />
                             );
                           })()}
                         </TableCell>
@@ -3281,7 +3120,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       {membership.kp_count > 0 ? (
                                         <Badge
                                           variant="outline"
-                                          className="h-5 px-1.5 text-[10px] border-sky-500/40 text-sky-300 bg-sky-500/10 inline-flex items-center gap-1"
+                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
                                         >
                                           <FileText className="h-3 w-3" />
                                           КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
@@ -3290,7 +3129,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       {membership.set_count > 0 ? (
                                         <Badge
                                           variant="outline"
-                                          className="h-5 px-1.5 text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10 inline-flex items-center gap-1"
+                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
                                         >
                                           <Layers className="h-3 w-3" />
                                           Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
@@ -3342,32 +3181,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   {row.deadline_at ? (
                                     (() => {
                                       const shortLabel = formatDeadlineShort(row.deadline_at!);
-                                      const pillTone = badge.tone;
-                                      const pillClass = {
-                                        overdue:
-                                          "border-rose-500/30 bg-rose-500/10 text-rose-200",
-                                        today:
-                                          "border-amber-400/40 bg-amber-500/10 text-amber-100",
-                                        soon:
-                                          "border-amber-400/30 bg-amber-500/10 text-amber-100",
-                                        future:
-                                          "border-border/60 bg-muted/20 text-muted-foreground",
-                                        none: "hidden",
-                                      }[pillTone] ?? "border-border/60 bg-muted/20 text-muted-foreground";
-                                      const pillIcon = {
-                                        overdue: XCircle,
-                                        today: CalendarClock,
-                                        soon: Timer,
-                                        future: CalendarDays,
-                                        none: CalendarDays,
-                                      }[pillTone] ?? CalendarDays;
-                                      const PillIcon = pillIcon;
                                       if (!shortLabel) return null;
                                       return (
-                                        <div className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-semibold", pillClass)}>
-                                          <PillIcon className="h-3.5 w-3.5" />
-                                          <span className="leading-tight">{shortLabel}</span>
-                                        </div>
+                                        <QuoteDeadlineBadge
+                                          tone={badge.tone}
+                                          label={shortLabel}
+                                          compact
+                                        />
                                       );
                                     })()
                                   ) : null}
@@ -3461,22 +3281,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <DialogTitle className="flex items-center gap-2">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
               {quoteSetDetailsTarget ? (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "inline-flex items-center gap-1.5",
-                    quoteSetDetailsTarget.kind === "kp"
-                      ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
-                      : "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
-                  )}
-                >
-                  {quoteSetDetailsTarget.kind === "kp" ? (
-                    <FileText className="h-3.5 w-3.5" />
-                  ) : (
-                    <Layers className="h-3.5 w-3.5" />
-                  )}
-                  {quoteSetDetailsTarget.kind === "kp" ? "КП" : "Набір"}
-                </Badge>
+                <QuoteKindBadge kind={quoteSetDetailsTarget.kind} />
               ) : null}
             </DialogTitle>
             <DialogDescription>
@@ -3658,7 +3463,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               />
             </div>
             {bulkValidationMessage ? (
-              <div className="text-xs text-amber-500">{bulkValidationMessage}</div>
+              <div className="text-xs text-warning-foreground">{bulkValidationMessage}</div>
             ) : null}
           </div>
           <DialogFooter>

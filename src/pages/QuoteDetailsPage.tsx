@@ -119,35 +119,33 @@ import {
   statusIcons,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
+import {
+  QuoteDeadlineBadge,
+  type QuoteDeadlineTone,
+} from "@/features/quotes/components/QuoteDeadlineBadge";
+import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
+import {
+  type CatalogKind,
+  type CatalogMethod,
+  type CatalogModel,
+  type CatalogPriceTier,
+  type CatalogPrintPosition,
+  getKindLabel,
+  getMethodLabel,
+  getMethodPrice,
+  getModelImage,
+  getModelLabel,
+  getModelPrice,
+  getPrintPositionLabel,
+  getTypeLabel,
+  type CatalogType,
+} from "@/features/quotes/quote-details/catalog-utils";
 
 type QuoteDetailsPageProps = {
   teamId: string;
   quoteId: string;
 };
 
-
-type CatalogMethod = { id: string; name: string; price?: number };
-type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
-type CatalogPriceTier = { id: string; min: number; max: number | null; price: number };
-type CatalogModel = {
-  id: string;
-  name: string;
-  price?: number;
-  priceTiers?: CatalogPriceTier[];
-  imageUrl?: string;
-};
-type CatalogKind = {
-  id: string;
-  name: string;
-  models: CatalogModel[];
-  methods: CatalogMethod[];
-  printPositions: CatalogPrintPosition[];
-};
-type CatalogType = {
-  id: string;
-  name: string;
-  kinds: CatalogKind[];
-};
 type ItemMethod = {
   id: string;
   methodId: string;
@@ -243,93 +241,6 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (typeof value === "object") return value as Record<string, unknown>;
   return {};
 };
-
-
-function getTypeLabel(catalog: CatalogType[], typeId?: string) {
-  return catalog.find((type) => type.id === typeId)?.name;
-}
-
-function getKindLabel(catalog: CatalogType[], typeId?: string, kindId?: string) {
-  const type = catalog.find((item) => item.id === typeId);
-  return type?.kinds.find((kind) => kind.id === kindId)?.name;
-}
-
-function getModelLabel(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  modelId?: string
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  return kind?.models.find((model) => model.id === modelId)?.name;
-}
-
-function getModelImage(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  modelId?: string
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  return kind?.models.find((model) => model.id === modelId)?.imageUrl ?? null;
-}
-
-function getMethodLabel(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  methodId?: string
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  return kind?.methods.find((method) => method.id === methodId)?.name;
-}
-
-function getPrintPositionLabel(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  positionId?: string
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  return kind?.printPositions.find((pos) => pos.id === positionId)?.label;
-}
-
-function getModelPrice(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  modelId?: string,
-  qty?: number
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  const model = kind?.models.find((item) => item.id === modelId);
-  if (!model) return 0;
-  const tiers = model.priceTiers ?? [];
-  if (tiers.length > 0 && qty !== undefined) {
-    const match = tiers.find((tier) => {
-      const max = tier.max ?? Number.POSITIVE_INFINITY;
-      return qty >= tier.min && qty <= max;
-    });
-    if (match) return match.price;
-  }
-  return model.price ?? 0;
-}
-
-function getMethodPrice(
-  catalog: CatalogType[],
-  typeId?: string,
-  kindId?: string,
-  methodId?: string
-) {
-  const type = catalog.find((item) => item.id === typeId);
-  const kind = type?.kinds.find((item) => item.id === kindId);
-  return kind?.methods.find((method) => method.id === methodId)?.price ?? 0;
-}
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
@@ -696,11 +607,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const getDeadlineBadge = (value?: string | null) => {
     if (!value) {
-      return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
+      return { label: "Без дедлайну", tone: "none" as QuoteDeadlineTone };
     }
     const date = parseDeadlineDate(value);
     if (!date) {
-      return { label: "Без дедлайну", className: "border-border/60 text-muted-foreground bg-muted/20" };
+      return { label: "Без дедлайну", tone: "none" as QuoteDeadlineTone };
     }
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -710,27 +621,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (diffDays < 0) {
       return {
         label: `Прострочено (${Math.abs(diffDays)} дн.)`,
-        className:
-          "border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-500/40 dark:text-rose-200 dark:bg-rose-500/15",
+        tone: "overdue" as QuoteDeadlineTone,
       };
     }
     if (diffDays === 0) {
       return {
         label: "Сьогодні",
-        className:
-          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/40 dark:text-amber-200 dark:bg-amber-500/15",
+        tone: "today" as QuoteDeadlineTone,
       };
     }
     if (diffDays <= 2) {
       return {
         label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`,
-        className:
-          "border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-500/30 dark:text-amber-100 dark:bg-amber-500/10",
+        tone: "soon" as QuoteDeadlineTone,
       };
     }
     return {
       label: date.toLocaleDateString("uk-UA"),
-      className: "border-border/60 text-muted-foreground bg-muted/20",
+      tone: "future" as QuoteDeadlineTone,
     };
   };
 
@@ -919,7 +827,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         ? memberById.get(comment.created_by) ?? "Невідомий користувач"
         : "Невідомий користувач",
       icon: MessageSquare as ActivityIcon,
-      accentClass: "bg-primary/10 text-primary border-primary/20",
+      accentClass: "quote-activity-accent-comment",
     }));
 
     const hasHistory = history.length > 0;
@@ -976,12 +884,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             : Clock;
         const accentClass =
           source === "quote_runs"
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40"
+            ? "quote-activity-accent-runs"
             : source === "quote_status" && toStatus
             ? statusClasses[toStatus] ?? statusClasses.new
             : source === "quote_deadline"
-            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40"
-            : "bg-muted/40 text-muted-foreground border-border";
+            ? "quote-activity-accent-deadline"
+            : "quote-activity-accent-default";
         return {
           id: `activity-${row.id}`,
           type,
@@ -2826,7 +2734,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+    <div className="quote-details-page-canvas">
       <EntityHeader
         topBar={
           <Button
@@ -2870,35 +2778,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
               ].filter(Boolean);
               return (
-                <Badge
-                  variant="outline"
-                  className={cn("text-xs font-medium", badge.className)}
+                <QuoteDeadlineBadge
+                  tone={badge.tone}
+                  label={badge.label}
                   title={titleParts.join(" · ")}
-                >
-                  <Calendar className="h-3 w-3 mr-1" />
-                  {badge.label}
-                </Badge>
+                />
               );
             })()}
             {quoteSetMembership?.kp_count ? (
-              <Badge
-                variant="outline"
-                className="border-sky-500/40 bg-sky-500/10 text-sky-300"
+              <QuoteKindBadge
+                kind="kp"
+                className="h-6"
                 title={quoteSetMembership.kp_names.join(", ")}
-              >
-                <FileText className="h-3 w-3 mr-1" />
-                КП{quoteSetMembership.kp_count > 1 ? ` +${quoteSetMembership.kp_count - 1}` : ""}
-              </Badge>
+                label={`КП${quoteSetMembership.kp_count > 1 ? ` +${quoteSetMembership.kp_count - 1}` : ""}`}
+              />
             ) : null}
             {quoteSetMembership?.set_count ? (
-              <Badge
-                variant="outline"
-                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              <QuoteKindBadge
+                kind="set"
+                className="h-6"
                 title={quoteSetMembership.set_names.join(", ")}
-              >
-                <Package className="h-3 w-3 mr-1" />
-                Набір{quoteSetMembership.set_count > 1 ? ` +${quoteSetMembership.set_count - 1}` : ""}
-              </Badge>
+                label={`Набір${quoteSetMembership.set_count > 1 ? ` +${quoteSetMembership.set_count - 1}` : ""}`}
+              />
             ) : null}
           </>
         }
@@ -2960,34 +2861,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       />
 
       {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
-        <Card className="border-border/70 bg-card/60 p-4">
+        <Card className="quote-soft-card p-4">
           <div className="text-sm font-semibold">Пов'язано з КП та наборами</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {quoteSetMembership.kp_names.map((name) => (
-              <Badge
-                key={`kp-${name}`}
-                variant="outline"
-                className="border-sky-500/40 bg-sky-500/10 text-sky-300"
-              >
-                <FileText className="h-3 w-3 mr-1" />
-                {name}
-              </Badge>
+              <QuoteKindBadge key={`kp-${name}`} kind="kp" label={name} />
             ))}
             {quoteSetMembership.set_names.map((name) => (
-              <Badge
-                key={`set-${name}`}
-                variant="outline"
-                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-              >
-                <Package className="h-3 w-3 mr-1" />
-                {name}
-              </Badge>
+              <QuoteKindBadge key={`set-${name}`} kind="set" label={name} />
             ))}
           </div>
         </Card>
       ) : null}
 
-      <Card className="border-border/70 bg-card/60 p-4 sm:p-5">
+      <Card className="quote-soft-card p-4 sm:p-5">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
             {STATUS_FLOW.map((status, index) => {
@@ -3004,7 +2891,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       active
                         ? "border-primary/50 bg-primary/10 text-primary"
                         : reached
-                        ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-600"
+                        ? "border-success-soft-border bg-success-soft text-success-foreground"
                         : "border-border text-muted-foreground"
                     )}
                   >
@@ -3024,9 +2911,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 {stageHints.map((item) => (
                   <div key={item.label} className="flex items-center gap-2 text-xs">
                     {item.done ? (
-                      <Check className="h-3.5 w-3.5 text-emerald-500" />
+                      <Check className="h-3.5 w-3.5 text-success-foreground" />
                     ) : (
-                      <Clock className="h-3.5 w-3.5 text-amber-500" />
+                      <Clock className="h-3.5 w-3.5 text-warning-foreground" />
                     )}
                     <span className={item.done ? "text-foreground/90" : "text-muted-foreground"}>
                       {item.label}
@@ -3432,7 +3319,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Spec (read-only) */}
-          <Card className="p-6 bg-muted/10 border border-border/60 shadow-sm">
+          <Card className="quote-muted-card p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
                 <span role="img" aria-hidden="true">📋</span> Специфікація
@@ -3629,7 +3516,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Visualization placeholder */}
-          <Card className="p-6 bg-muted/10 border border-border/60 shadow-sm">
+          <Card className="quote-muted-card p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
                 <span role="img" aria-hidden="true">🎨</span> Візуалізація
@@ -3652,7 +3539,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Calculation (manager) */}
-          <Card className="p-6 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold flex items-center gap-2">
                 💰 Розрахунок
@@ -3968,7 +3855,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         {/* Right Column */}
         <div className="space-y-6">
           {/* Designer brief */}
-          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <FileText className="h-5 w-5" />
@@ -4049,7 +3936,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Design task */}
-          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <Sparkles className="h-5 w-5" />
@@ -4117,7 +4004,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Comments Card - Improved */}
-          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <MessageSquare className="h-5 w-5" />
@@ -4264,7 +4151,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </Card>
 
           {/* Files Card - Categorized */}
-          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
                 <Paperclip className="h-5 w-5" />
@@ -4523,7 +4410,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           />
 
           {/* Activity Card */}
-          <Card className="p-5 bg-card/70 border-border/60 shadow-sm">
+          <Card className="quote-soft-card p-5">
             <div className="text-lg font-semibold mb-4">Активність</div>
 
             {activityLoading || historyLoading || commentsLoading ? (
