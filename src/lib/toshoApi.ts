@@ -900,7 +900,28 @@ export type CustomerQuoteRow = {
   id: string;
   number?: string | null;
   status?: string | null;
+  total?: number | null;
   created_at?: string | null;
+};
+
+export type QuoteItemExportRow = {
+  id: string;
+  quote_id: string;
+  position?: number | null;
+  name?: string | null;
+  description?: string | null;
+  qty?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  line_total?: number | null;
+  methods?: unknown[] | null;
+  attachment?: Record<string, unknown> | null;
+  catalog_type_id?: string | null;
+  catalog_kind_id?: string | null;
+  catalog_model_id?: string | null;
+  print_position_id?: string | null;
+  print_width_mm?: number | null;
+  print_height_mm?: number | null;
 };
 
 export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSetListRow[]> {
@@ -1200,13 +1221,42 @@ export async function listCustomerQuotes(params: {
   const { data, error } = await supabase
     .schema("tosho")
     .from("quotes")
-    .select("id,number,status,created_at")
+    .select("id,number,status,total,created_at")
     .eq("team_id", params.teamId)
     .eq("customer_id", params.customerId)
     .order("created_at", { ascending: false })
     .limit(params.limit ?? 200);
   handleError(error);
   return ((data ?? []) as unknown) as CustomerQuoteRow[];
+}
+
+export async function listQuoteItemsForQuotes(params: {
+  teamId: string;
+  quoteIds: string[];
+}): Promise<QuoteItemExportRow[]> {
+  const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return [];
+
+  const readRows = async (withTeamFilter: boolean) => {
+    let query = supabase
+      .schema("tosho")
+      .from("quote_items")
+      .select("id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm")
+      .in("quote_id", uniqueQuoteIds)
+      .order("quote_id", { ascending: true })
+      .order("position", { ascending: true });
+    if (withTeamFilter) {
+      query = query.eq("team_id", params.teamId);
+    }
+    return await query;
+  };
+
+  let { data, error } = await readRows(true);
+  if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+    ({ data, error } = await readRows(false));
+  }
+  handleError(error);
+  return ((data ?? []) as unknown) as QuoteItemExportRow[];
 }
 
 export async function listQuoteSetItems(teamId: string, quoteSetId: string): Promise<QuoteSetItemRow[]> {

@@ -91,6 +91,7 @@ type MembershipRow = {
 };
 
 type QuoteItemRow = {
+  id?: string;
   name: string | null;
   qty: number | null;
   unit: string | null;
@@ -496,13 +497,7 @@ export default function DesignTaskPage() {
           : { data: null };
 
         let itemPreviewUrl: string | null = null;
-        const attachmentUrlCandidate =
-          item && typeof item.attachment === "object" && item.attachment
-            ? (item.attachment as { url?: string | null })?.url
-            : null;
-        if (typeof attachmentUrlCandidate === "string" && attachmentUrlCandidate) {
-          itemPreviewUrl = attachmentUrlCandidate;
-        } else if (item?.catalog_model_id) {
+        if (item?.catalog_model_id) {
           const { data: modelRow } = await supabase
             .schema("tosho")
             .from("catalog_models")
@@ -511,6 +506,7 @@ export default function DesignTaskPage() {
             .maybeSingle();
           itemPreviewUrl = (modelRow as { image_url?: string | null } | null)?.image_url ?? null;
         }
+        // Keep product image independent from design visualizations.
 
         // customer attachments (only for quote-linked tasks)
         const { data: files } = isUuid(quoteId)
@@ -1074,6 +1070,33 @@ export default function DesignTaskPage() {
     }
   };
 
+  const syncDesignFileToQuoteVisualizations = async (file: DesignOutputFile) => {
+    if (!task || !effectiveTeamId || !isUuid(task.quoteId)) return;
+
+    const { data: existing, error: existingError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .select("id")
+      .eq("quote_id", task.quoteId)
+      .eq("storage_bucket", file.storage_bucket)
+      .eq("storage_path", file.storage_path)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing?.id) return;
+
+    const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+      team_id: effectiveTeamId,
+      quote_id: task.quoteId,
+      file_name: file.file_name,
+      mime_type: file.mime_type || null,
+      file_size: file.file_size,
+      storage_bucket: file.storage_bucket,
+      storage_path: file.storage_path,
+      uploaded_by: userId ?? null,
+    });
+    if (insertError) throw insertError;
+  };
+
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
     setOutputUploading(true);
@@ -1121,6 +1144,13 @@ export default function DesignTaskPage() {
       const nextFiles = [...uploaded, ...designOutputFiles];
       await persistDesignOutputs(nextFiles, designOutputLinks);
       setDesignOutputFiles(nextFiles);
+      try {
+        if (uploaded.length > 0) {
+          await syncDesignFileToQuoteVisualizations(uploaded[0]);
+        }
+      } catch (syncError: unknown) {
+        console.warn("Failed to sync design file to quote visualizations", syncError);
+      }
       toast.success(`Додано файлів: ${uploaded.length}`);
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити файли");

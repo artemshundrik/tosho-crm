@@ -17,6 +17,7 @@ import {
   listQuoteSetMemberships,
   findQuoteSetsByExactComposition,
   listCustomerQuotes,
+  listQuoteItemsForQuotes,
   updateQuoteSetName,
   deleteQuoteSet,
   removeQuoteSetItem,
@@ -34,6 +35,7 @@ import {
   type QuoteSetItemRow,
   type QuoteSetMembershipInfo,
   type CustomerQuoteRow,
+  type QuoteItemExportRow,
   type TeamMemberRow,
   type CustomerRow,
 } from "@/lib/toshoApi";
@@ -60,6 +62,10 @@ import {
   Calculator,
   LayoutGrid,
   List,
+  Eye,
+  Printer,
+  Download,
+  FileDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -119,6 +125,43 @@ type PendingAttachment = {
   id: string;
   file: File;
   previewUrl?: string;
+};
+
+type CommercialItemRow = {
+  id: string;
+  position: number;
+  imageUrl: string;
+  name: string;
+  catalogPath: string;
+  description: string;
+  methodsSummary: string;
+  placementSummary: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+type CommercialQuoteSection = {
+  quoteId: string;
+  quoteNumber: string;
+  status: string;
+  createdAt: string;
+  visualizationUrl: string;
+  visualizationName: string;
+  items: CommercialItemRow[];
+  total: number;
+};
+
+type CommercialDocument = {
+  title: string;
+  kindLabel: string;
+  customerName: string;
+  createdAt: string;
+  generatedAt: string;
+  currency: string;
+  sections: CommercialQuoteSection[];
+  total: number;
 };
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
@@ -228,6 +271,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quoteSetCandidateQuotes, setQuoteSetCandidateQuotes] = useState<CustomerQuoteRow[]>([]);
   const [quoteSetCandidateId, setQuoteSetCandidateId] = useState("");
   const [quoteSetCandidatesLoading, setQuoteSetCandidatesLoading] = useState(false);
+  const [quoteSetPreviewOpen, setQuoteSetPreviewOpen] = useState(false);
+  const [quoteSetCommercialDoc, setQuoteSetCommercialDoc] = useState<CommercialDocument | null>(null);
+  const [quoteSetCommercialLoading, setQuoteSetCommercialLoading] = useState(false);
   const [quoteSetDialogOpen, setQuoteSetDialogOpen] = useState(false);
   const [quoteSetName, setQuoteSetName] = useState("");
   const [quoteSetSaving, setQuoteSetSaving] = useState(false);
@@ -237,6 +283,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quickAddKindFilter, setQuickAddKindFilter] = useState<"all" | "kp" | "set">("all");
   const [quickAddLoadingSets, setQuickAddLoadingSets] = useState(false);
   const [quickAddBusy, setQuickAddBusy] = useState(false);
+  const [bulkAddExistingOpen, setBulkAddExistingOpen] = useState(false);
+  const [bulkAddKindFilter, setBulkAddKindFilter] = useState<"all" | "kp" | "set">("all");
+  const [bulkAddTargetSetId, setBulkAddTargetSetId] = useState("");
+  const [bulkAddBusy, setBulkAddBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>();
 
   // Get current user ID
@@ -1570,6 +1620,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quickAddAvailableSets,
     quoteSetKpCount,
     quoteSetSetCount,
+    selectionContext,
     selectedRows,
   } = useQuotesPageViewState({
     rows,
@@ -1589,6 +1640,556 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsTarget,
     quoteSetDetailsItems,
   });
+
+  const bulkAddAvailableSets = useMemo(() => {
+    if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
+    const customerId = selectedRows[0]?.customer_id ?? null;
+    if (!customerId) return [] as QuoteSetListRow[];
+    const selectedIdsSet = new Set(selectedRows.map((row) => row.id));
+    return quoteSets.filter((set) => {
+      if (set.customer_id !== customerId) return false;
+      if (bulkAddKindFilter !== "all" && (set.kind ?? "set") !== bulkAddKindFilter) return false;
+      return Array.from(selectedIdsSet).some((quoteId) => {
+        const refs = quoteMembershipByQuoteId.get(quoteId)?.refs ?? [];
+        return !refs.some((ref) => ref.id === set.id);
+      });
+    });
+  }, [
+    bulkAddKindFilter,
+    canRunGroupedActions,
+    quoteMembershipByQuoteId,
+    quoteSets,
+    selectedRows,
+  ]);
+
+  const selectedQuoteCandidate = useMemo(
+    () => quoteSetCandidateQuotes.find((quote) => quote.id === quoteSetCandidateId) ?? null,
+    [quoteSetCandidateId, quoteSetCandidateQuotes]
+  );
+  const quoteSetTotalAmount = useMemo(
+    () =>
+      quoteSetDetailsItems.reduce(
+        (sum, item) => sum + (Number.isFinite(item.quote_total ?? NaN) ? Number(item.quote_total) : 0),
+        0
+      ),
+    [quoteSetDetailsItems]
+  );
+  const quoteSetAverageAmount = useMemo(() => {
+    if (quoteSetDetailsItems.length === 0) return 0;
+    return quoteSetTotalAmount / quoteSetDetailsItems.length;
+  }, [quoteSetDetailsItems.length, quoteSetTotalAmount]);
+  const formatMoney = (value: number) =>
+    `${new Intl.NumberFormat("uk-UA", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(value)} грн`;
+  const formatMoneyPlain = (value: number) =>
+    new Intl.NumberFormat("uk-UA", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(value);
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+  const escapeHtml = (value: string) =>
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  const normalizeTextCell = (value: string) =>
+    value.replaceAll(/\s+/g, " ").replaceAll("\t", " ").trim();
+  const parseMethodsSummary = (methods: QuoteItemExportRow["methods"]) => {
+    if (!Array.isArray(methods) || methods.length === 0) return "";
+    const labels = methods
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return "";
+        const row = entry as Record<string, unknown>;
+        const methodName = String(row.method_name ?? row.methodName ?? row.name ?? "").trim();
+        const count = Number(row.count ?? 1) || 1;
+        if (!methodName) return "";
+        return count > 1 ? `${methodName} x${count}` : methodName;
+      })
+      .filter(Boolean);
+    return labels.join(", ");
+  };
+  const parsePlacementSummary = (
+    methods: QuoteItemExportRow["methods"],
+    printPositionLabelById: Map<string, string>,
+    fallbackPositionId?: string | null,
+    fallbackWidthMm?: number | null,
+    fallbackHeightMm?: number | null
+  ) => {
+    const parts: string[] = [];
+    if (Array.isArray(methods)) {
+      methods.forEach((entry) => {
+        if (!entry || typeof entry !== "object") return;
+        const row = entry as Record<string, unknown>;
+        const posId = String(row.print_position_id ?? row.printPositionId ?? "").trim();
+        const posLabelRaw = String(row.print_position_label ?? row.printPositionLabel ?? "").trim();
+        const widthRaw = row.print_width_mm ?? row.printWidthMm ?? null;
+        const heightRaw = row.print_height_mm ?? row.printHeightMm ?? null;
+        const width = widthRaw == null || widthRaw === "" ? null : Number(widthRaw);
+        const height = heightRaw == null || heightRaw === "" ? null : Number(heightRaw);
+        const sizeLabel =
+          Number.isFinite(width) && Number.isFinite(height) ? `${width}x${height} мм` : "";
+        const posLabel = posLabelRaw || (posId ? printPositionLabelById.get(posId) ?? "" : "");
+        const chunk = [posLabel, sizeLabel].filter(Boolean).join(" · ");
+        if (chunk) parts.push(chunk);
+      });
+    }
+    if (parts.length > 0) return parts.join(", ");
+    const fallbackPositionLabel = fallbackPositionId ? printPositionLabelById.get(fallbackPositionId) ?? "" : "";
+    const fallbackSize =
+      Number.isFinite(Number(fallbackWidthMm)) && Number.isFinite(Number(fallbackHeightMm))
+        ? `${Number(fallbackWidthMm)}x${Number(fallbackHeightMm)} мм`
+        : "";
+    return [fallbackPositionLabel, fallbackSize].filter(Boolean).join(" · ");
+  };
+
+  const getCommercialDocFilename = (doc: CommercialDocument, extension: "xls" | "html") => {
+    const raw = `${doc.kindLabel}_${doc.customerName}_${doc.createdAt}`;
+    const sanitized = raw
+      .toLowerCase()
+      .replaceAll(/[^a-zа-яіїєґ0-9]+/gi, "_")
+      .replaceAll(/^_+|_+$/g, "")
+      .slice(0, 96);
+    return `${sanitized || "commercial_offer"}.${extension}`;
+  };
+
+  const buildCommercialDocument = async (): Promise<CommercialDocument | null> => {
+    if (!quoteSetDetailsTarget) return null;
+    const quoteIds = quoteSetDetailsItems.map((item) => item.quote_id).filter(Boolean);
+    if (quoteIds.length === 0) return null;
+
+    const itemRows = await listQuoteItemsForQuotes({ teamId, quoteIds });
+    const { data: visualizationRows, error: visualizationsError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .select("quote_id,file_name,mime_type,storage_bucket,storage_path,created_at")
+      .in("quote_id", quoteIds)
+      .order("created_at", { ascending: false });
+    if (visualizationsError) throw visualizationsError;
+    const typeIds = Array.from(new Set(itemRows.map((row) => row.catalog_type_id ?? "").filter(Boolean)));
+    const kindIds = Array.from(new Set(itemRows.map((row) => row.catalog_kind_id ?? "").filter(Boolean)));
+    const modelIds = Array.from(new Set(itemRows.map((row) => row.catalog_model_id ?? "").filter(Boolean)));
+    const printPositionIds = Array.from(
+      new Set(
+        itemRows
+          .flatMap((row) => {
+            const fromMethods = Array.isArray(row.methods)
+              ? row.methods
+                  .map((entry) => {
+                    if (!entry || typeof entry !== "object") return "";
+                    const value = (entry as Record<string, unknown>).print_position_id;
+                    return typeof value === "string" ? value : "";
+                  })
+                  .filter(Boolean)
+              : [];
+            return [row.print_position_id ?? "", ...fromMethods];
+          })
+          .filter(Boolean)
+      )
+    );
+
+    const [typeRows, kindRows, modelRows, printPositionRows] = await Promise.all([
+      typeIds.length > 0
+        ? supabase
+            .schema("tosho")
+            .from("catalog_types")
+            .select("id,name")
+            .in("id", typeIds)
+        : Promise.resolve({ data: [], error: null }),
+      kindIds.length > 0
+        ? supabase
+            .schema("tosho")
+            .from("catalog_kinds")
+            .select("id,name")
+            .in("id", kindIds)
+        : Promise.resolve({ data: [], error: null }),
+      modelIds.length > 0
+        ? supabase
+            .schema("tosho")
+            .from("catalog_models")
+            .select("id,name,image_url")
+            .in("id", modelIds)
+        : Promise.resolve({ data: [], error: null }),
+      printPositionIds.length > 0
+        ? supabase
+            .schema("tosho")
+            .from("catalog_print_positions")
+            .select("id,label")
+            .in("id", printPositionIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (typeRows.error) throw typeRows.error;
+    if (kindRows.error) throw kindRows.error;
+    if (modelRows.error) throw modelRows.error;
+    if (printPositionRows.error) throw printPositionRows.error;
+
+    const typeNameById = new Map(
+      (((typeRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
+        row.id,
+        row.name ?? "",
+      ])
+    );
+    const kindNameById = new Map(
+      (((kindRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null }>).map((row) => [
+        row.id,
+        row.name ?? "",
+      ])
+    );
+    const modelById = new Map(
+      (
+        ((modelRows.data ?? []) as unknown) as Array<{ id: string; name?: string | null; image_url?: string | null }>
+      ).map((row) => [row.id, { name: row.name ?? "", imageUrl: row.image_url ?? "" }])
+    );
+    const printPositionLabelById = new Map(
+      (((printPositionRows.data ?? []) as unknown) as Array<{ id: string; label?: string | null }>).map((row) => [
+        row.id,
+        row.label ?? "",
+      ])
+    );
+    const visualizationByQuoteId = new Map<string, { url: string; fileName: string }>();
+    const typedVisualizations = ((visualizationRows ?? []) as unknown) as Array<{
+      quote_id?: string | null;
+      file_name?: string | null;
+      mime_type?: string | null;
+      storage_bucket?: string | null;
+      storage_path?: string | null;
+      created_at?: string | null;
+    }>;
+    for (const row of typedVisualizations) {
+      const quoteId = row.quote_id ?? "";
+      if (!quoteId || visualizationByQuoteId.has(quoteId)) continue;
+      if (!row.storage_bucket || !row.storage_path) continue;
+      const mimeType = row.mime_type?.toLowerCase() ?? "";
+      const fileName = row.file_name?.toLowerCase() ?? "";
+      const isImage =
+        mimeType.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif|bmp|svg)$/i.test(fileName);
+      if (!isImage) continue;
+
+      const signed = await supabase.storage
+        .from(row.storage_bucket)
+        .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
+      const signedUrl =
+        signed.data?.signedUrl ??
+        supabase.storage.from(row.storage_bucket).getPublicUrl(row.storage_path).data.publicUrl;
+      if (!signedUrl) continue;
+      visualizationByQuoteId.set(quoteId, {
+        url: signedUrl,
+        fileName: row.file_name ?? "visualization",
+      });
+    }
+
+    const itemsByQuoteId = new Map<string, QuoteItemExportRow[]>();
+    itemRows.forEach((row) => {
+      const quoteId = row.quote_id;
+      if (!quoteId) return;
+      const existing = itemsByQuoteId.get(quoteId) ?? [];
+      existing.push(row);
+      itemsByQuoteId.set(quoteId, existing);
+    });
+
+    const sections: CommercialQuoteSection[] = quoteSetDetailsItems.map((quoteRef) => {
+      const rows = (itemsByQuoteId.get(quoteRef.quote_id) ?? []).slice().sort((a, b) => {
+        const aPosition = typeof a.position === "number" ? a.position : Number.MAX_SAFE_INTEGER;
+        const bPosition = typeof b.position === "number" ? b.position : Number.MAX_SAFE_INTEGER;
+        return aPosition - bPosition;
+      });
+
+      const mappedItems: CommercialItemRow[] = rows.map((row, index) => {
+        const qty = Number(row.qty ?? 0) || 0;
+        const unitPrice = Number(row.unit_price ?? 0) || 0;
+        const computedLineTotal = qty * unitPrice;
+        const lineTotal =
+          Number.isFinite(Number(row.line_total)) && row.line_total !== null
+            ? Number(row.line_total)
+            : computedLineTotal;
+        const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
+        const imageUrl = modelMeta?.imageUrl || "";
+        const catalogPath = [
+          row.catalog_type_id ? typeNameById.get(row.catalog_type_id) ?? "" : "",
+          row.catalog_kind_id ? kindNameById.get(row.catalog_kind_id) ?? "" : "",
+          modelMeta?.name ?? "",
+        ]
+          .filter(Boolean)
+          .join(" / ");
+        const placementSummary = parsePlacementSummary(
+          row.methods,
+          printPositionLabelById,
+          row.print_position_id,
+          row.print_width_mm,
+          row.print_height_mm
+        );
+        return {
+          id: row.id,
+          position: typeof row.position === "number" ? row.position : index + 1,
+          imageUrl,
+          name: row.name?.trim() || "Без назви",
+          catalogPath,
+          description: row.description?.trim() || "",
+          methodsSummary: parseMethodsSummary(row.methods),
+          placementSummary,
+          qty,
+          unit: row.unit?.trim() || "шт",
+          unitPrice,
+          lineTotal,
+        };
+      });
+
+      const itemsTotal = mappedItems.reduce((sum, row) => sum + row.lineTotal, 0);
+      const quoteTotalFromSummary =
+        typeof quoteRef.quote_total === "number" && Number.isFinite(quoteRef.quote_total)
+          ? Number(quoteRef.quote_total)
+          : null;
+
+      return {
+        quoteId: quoteRef.quote_id,
+        quoteNumber: quoteRef.quote_number ?? quoteRef.quote_id.slice(0, 8),
+        status: formatStatusLabel(quoteRef.quote_status ?? null),
+        createdAt: formatDateTime(quoteRef.quote_created_at),
+        visualizationUrl: visualizationByQuoteId.get(quoteRef.quote_id)?.url ?? "",
+        visualizationName: visualizationByQuoteId.get(quoteRef.quote_id)?.fileName ?? "",
+        items: mappedItems,
+        total: quoteTotalFromSummary ?? itemsTotal,
+      };
+    });
+
+    const total = sections.reduce((sum, section) => sum + section.total, 0);
+    const now = new Date();
+    const createdAt = quoteSetDetailsTarget.created_at
+      ? new Date(quoteSetDetailsTarget.created_at).toLocaleDateString("uk-UA")
+      : now.toLocaleDateString("uk-UA");
+
+    return {
+      title: quoteSetDetailsTarget.name ?? "Комерційна пропозиція",
+      kindLabel: quoteSetDetailsTarget.kind === "kp" ? "КП" : "Набір",
+      customerName: quoteSetDetailsTarget.customer_name ?? "Замовник не вказаний",
+      createdAt,
+      generatedAt: formatDateTime(now.toISOString()),
+      currency: "грн",
+      sections,
+      total,
+    };
+  };
+
+  const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
+    const sectionsHtml = doc.sections
+      .map((section, sectionIndex) => {
+        const rowsHtml =
+          section.items.length === 0
+            ? `<tr><td colspan="10" class="empty">У цьому прорахунку немає товарних позицій.</td></tr>`
+            : section.items
+                .map(
+                  (item) => `
+                    <tr>
+                      <td>${item.position}</td>
+                      <td>${
+                        item.imageUrl
+                          ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="thumb" />`
+                          : `<div class="thumb placeholder">—</div>`
+                      }</td>
+                      <td>${escapeHtml(item.name)}${
+                        item.description ? `<div class="cell-muted">${escapeHtml(item.description)}</div>` : ""
+                      }</td>
+                      <td>${escapeHtml(item.catalogPath || "—")}</td>
+                      <td>${escapeHtml(item.placementSummary || "—")}</td>
+                      <td>${escapeHtml(item.methodsSummary || "—")}</td>
+                      <td class="num">${formatMoneyPlain(item.qty)}</td>
+                      <td>${escapeHtml(item.unit)}</td>
+                      <td class="num">${formatMoneyPlain(item.unitPrice)}</td>
+                      <td class="num">${formatMoneyPlain(item.lineTotal)}</td>
+                    </tr>
+                  `
+                )
+                .join("");
+
+        return `
+          <section class="quote-section">
+            <div class="section-head">
+              <div class="section-title">${sectionIndex + 1}. ${escapeHtml(section.quoteNumber)}</div>
+              <div class="section-meta">${escapeHtml(section.status)} · ${escapeHtml(section.createdAt)}</div>
+            </div>
+            ${
+              section.visualizationUrl
+                ? `<div class="visual-block">
+                     <div class="visual-label">Візуалізація</div>
+                     <img src="${escapeHtml(section.visualizationUrl)}" alt="${escapeHtml(
+                    section.visualizationName || section.quoteNumber
+                  )}" class="visual-thumb" />
+                   </div>`
+                : ""
+            }
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Фото</th>
+                  <th>Товар</th>
+                  <th>Категорія / модель</th>
+                  <th>Місце / розмір</th>
+                  <th>Нанесення</th>
+                  <th>К-сть</th>
+                  <th>Од.</th>
+                  <th>Ціна</th>
+                  <th>Сума</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+            <div class="section-total">Разом по ${escapeHtml(section.quoteNumber)}: <b>${formatMoney(
+              section.total
+            )}</b></div>
+          </section>
+        `;
+      })
+      .join("");
+
+    return `<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(doc.title)}</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font-family: "Inter", "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; }
+    .page { max-width: 1120px; margin: 0 auto; padding: 24px; }
+    .head { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+    .title { font-size: 28px; font-weight: 700; margin: 0 0 6px; }
+    .muted { color: #475569; font-size: 13px; }
+    .summary { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin: 14px 0 22px; }
+    .summary strong { font-size: 18px; }
+    .quote-section { margin-bottom: 18px; }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .section-title { font-size: 17px; font-weight: 700; }
+    .section-meta { color: #334155; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; font-size: 13px; vertical-align: top; }
+    th { background: #f8fafc; text-align: left; font-weight: 600; }
+    td.num { text-align: right; white-space: nowrap; }
+    td.empty { text-align: center; color: #475569; padding: 16px; }
+    .thumb { width: 56px; height: 56px; object-fit: cover; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; display: block; }
+    .thumb.placeholder { display: inline-flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; }
+    .cell-muted { margin-top: 4px; color: #475569; font-size: 12px; }
+    .visual-block { margin: 0 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; display: inline-flex; flex-direction: column; gap: 6px; }
+    .visual-label { font-size: 12px; color: #334155; }
+    .visual-thumb { width: 180px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
+    .section-total { display: flex; justify-content: flex-end; margin-top: 8px; font-size: 14px; }
+    .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
+    @media print {
+      body { background: #fff; }
+      .page { max-width: none; padding: 0; }
+      @page { size: A4 landscape; margin: 10mm; }
+      tr, td, th { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="head">
+      <div>
+        <h1 class="title">${escapeHtml(doc.title)}</h1>
+        <div class="muted">${escapeHtml(doc.kindLabel)} · Замовник: ${escapeHtml(doc.customerName)}</div>
+        <div class="muted">Дата формування: ${escapeHtml(doc.generatedAt)}</div>
+      </div>
+    </header>
+    <section class="summary">
+      <div><b>Прорахунків у документі:</b> ${doc.sections.length}</div>
+      <div><b>Номери:</b> ${escapeHtml(doc.sections.map((s) => s.quoteNumber).join(", "))}</div>
+      <div><b>Підсумок "Разом":</b> <strong>${formatMoney(doc.total)}</strong></div>
+    </section>
+    ${sectionsHtml}
+    <div class="total">Разом: ${formatMoney(doc.total)}</div>
+  </main>
+</body>
+</html>`;
+  };
+
+  const downloadBlob = (filename: string, blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+  const buildCommercialExcelTsv = (doc: CommercialDocument) => {
+    const lines: string[] = [];
+    lines.push(normalizeTextCell(doc.title));
+    lines.push(`Тип:\t${normalizeTextCell(doc.kindLabel)}`);
+    lines.push(`Замовник:\t${normalizeTextCell(doc.customerName)}`);
+    lines.push(`Сформовано:\t${normalizeTextCell(doc.generatedAt)}`);
+    lines.push(`Прорахунків:\t${doc.sections.length}`);
+    lines.push(`Разом:\t${formatMoneyPlain(doc.total)}`);
+    lines.push("");
+    doc.sections.forEach((section, index) => {
+      lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}\t${normalizeTextCell(section.status)}\t${normalizeTextCell(section.createdAt)}`);
+      lines.push(`Візуалізація\t${normalizeTextCell(section.visualizationUrl || "—")}`);
+      lines.push("№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL");
+      if (section.items.length === 0) {
+        lines.push("\tНемає товарних позицій");
+      } else {
+        section.items.forEach((item) => {
+          lines.push(
+            [
+              item.position,
+              normalizeTextCell(item.name),
+              normalizeTextCell(item.description || "—"),
+              normalizeTextCell(item.catalogPath || "—"),
+              normalizeTextCell(item.placementSummary || "—"),
+              normalizeTextCell(item.methodsSummary || "—"),
+              formatMoneyPlain(item.qty),
+              normalizeTextCell(item.unit),
+              formatMoneyPlain(item.unitPrice),
+              formatMoneyPlain(item.lineTotal),
+              normalizeTextCell(item.imageUrl || "—"),
+            ].join("\t")
+          );
+        });
+      }
+      lines.push(`\t\t\t\t\t\t\t\tРазом по прорахунку\t${formatMoneyPlain(section.total)}`);
+      lines.push("");
+    });
+    lines.push(`Загальна сума\t${formatMoneyPlain(doc.total)}`);
+    return lines.join("\r\n");
+  };
+  const printCommercialHtml = (html: string) => {
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.setAttribute("aria-hidden", "true");
+    document.body.appendChild(iframe);
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+      const printWindow = iframe.contentWindow;
+      if (!printWindow) return;
+      printWindow.focus();
+      window.setTimeout(() => {
+        printWindow.print();
+      }, 120);
+    };
+    window.setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 60_000);
+  };
 
   const clearFilters = () => {
     setSearch("");
@@ -1883,6 +2484,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setQuoteSetDialogOpen(true);
   };
 
+  const openBulkAddExistingDialog = () => {
+    if (!canRunGroupedActions) {
+      toast.error("Не можна додати в існуючий КП/набір", {
+        description: bulkValidationMessage ?? "Перевірте вибрані прорахунки.",
+      });
+      return;
+    }
+    setBulkAddKindFilter("all");
+    setBulkAddExistingOpen(true);
+  };
+
   const handleCreateQuoteSet = async () => {
     if (!canRunGroupedActions) {
       toast.error("Не можна сформувати набір", {
@@ -1942,6 +2554,61 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  const handleBulkAddToExistingSet = async () => {
+    if (!bulkAddTargetSetId) {
+      toast.error("Оберіть КП або набір");
+      return;
+    }
+    if (!canRunGroupedActions) {
+      toast.error("Не можна додати в існуючий КП/набір", {
+        description: bulkValidationMessage ?? "Перевірте вибрані прорахунки.",
+      });
+      return;
+    }
+
+    const selectedSet = bulkAddAvailableSets.find((set) => set.id === bulkAddTargetSetId);
+    if (!selectedSet) {
+      toast.error("Оберіть валідний КП або набір");
+      return;
+    }
+
+    const candidateQuoteIds = selectedRows
+      .filter((row) => row.customer_id === selectedSet.customer_id)
+      .map((row) => row.id)
+      .filter((quoteId) => {
+        const refs = quoteMembershipByQuoteId.get(quoteId)?.refs ?? [];
+        return !refs.some((ref) => ref.id === selectedSet.id);
+      });
+
+    if (candidateQuoteIds.length === 0) {
+      toast.message("Усі вибрані прорахунки вже в цьому КП/наборі");
+      return;
+    }
+
+    setBulkAddBusy(true);
+    try {
+      const added = await addQuotesToQuoteSet({
+        teamId,
+        quoteSetId: selectedSet.id,
+        quoteIds: candidateQuoteIds,
+      });
+      if (added > 0) {
+        toast.success(`Додано ${added} позицій до ${selectedSet.kind === "kp" ? "КП" : "набору"}`);
+      } else {
+        toast.message("Нових позицій для додавання немає");
+      }
+      setBulkAddExistingOpen(false);
+      setSelectedIds(new Set());
+      await Promise.all([loadQuoteSets(), loadQuotes()]);
+    } catch (e: unknown) {
+      toast.error("Не вдалося додати в існуючий КП/набір", {
+        description: getErrorMessage(e, "Спробуйте ще раз."),
+      });
+    } finally {
+      setBulkAddBusy(false);
+    }
+  };
+
   const handleRenameQuoteSet = async () => {
     if (!quoteSetDetailsTarget) return;
     const safeName = quoteSetEditName.trim();
@@ -1986,6 +2653,72 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.error("Не вдалося видалити набір", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
+    }
+  };
+
+  const handlePreviewQuoteSet = async () => {
+    if (!quoteSetDetailsTarget) return;
+    setQuoteSetCommercialLoading(true);
+    try {
+      const doc = await buildCommercialDocument();
+      if (!doc) {
+        toast.error("Немає даних для прев'ю");
+        return;
+      }
+      setQuoteSetCommercialDoc(doc);
+      setQuoteSetPreviewOpen(true);
+    } catch (e: unknown) {
+      toast.error("Не вдалося підготувати прев'ю", { description: getErrorMessage(e, "") });
+    } finally {
+      setQuoteSetCommercialLoading(false);
+    }
+  };
+
+  const handlePrintQuoteSet = async () => {
+    setQuoteSetCommercialLoading(true);
+    try {
+      const doc = await buildCommercialDocument();
+      if (!doc) {
+        toast.error("Немає даних для друку");
+        return;
+      }
+      setQuoteSetCommercialDoc(doc);
+      const html = renderCommercialDocumentHtml(doc);
+      printCommercialHtml(html);
+    } catch (e: unknown) {
+      toast.error("Не вдалося підготувати друк", { description: getErrorMessage(e, "") });
+    } finally {
+      setQuoteSetCommercialLoading(false);
+    }
+  };
+
+  const handleExportQuoteSet = async (format: "pdf" | "xls") => {
+    setQuoteSetCommercialLoading(true);
+    try {
+      const doc = await buildCommercialDocument();
+      if (!doc) {
+        toast.error("Немає даних для експорту");
+        return;
+      }
+      setQuoteSetCommercialDoc(doc);
+      const html = renderCommercialDocumentHtml(doc);
+
+      if (format === "xls") {
+        const tsv = buildCommercialExcelTsv(doc);
+        const blob = new Blob([`\ufeff${tsv}`], {
+          type: "text/tab-separated-values;charset=utf-8",
+        });
+        downloadBlob(getCommercialDocFilename(doc, "xls"), blob);
+        toast.success("Excel файл згенеровано");
+        return;
+      }
+
+      printCommercialHtml(html);
+      toast.message("У вікні друку оберіть «Зберегти як PDF»");
+    } catch (e: unknown) {
+      toast.error(`Не вдалося експортувати ${format.toUpperCase()}`, { description: getErrorMessage(e, "") });
+    } finally {
+      setQuoteSetCommercialLoading(false);
     }
   };
 
@@ -2153,6 +2886,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       prev && quickAddAvailableSets.some((set) => set.id === prev) ? prev : quickAddAvailableSets[0].id
     );
   }, [quickAddAvailableSets, quickAddOpen]);
+
+  useEffect(() => {
+    if (!bulkAddExistingOpen) return;
+    if (bulkAddAvailableSets.length === 0) {
+      setBulkAddTargetSetId("");
+      return;
+    }
+    setBulkAddTargetSetId((prev) =>
+      prev && bulkAddAvailableSets.some((set) => set.id === prev) ? prev : bulkAddAvailableSets[0].id
+    );
+  }, [bulkAddAvailableSets, bulkAddExistingOpen]);
 
   return (
     <div className="quote-page-canvas">
@@ -2399,79 +3143,137 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Bulk actions */}
       {contentView !== "sets" && selectedIds.size > 0 && (
-        <div className={cn("quote-section", "px-5 py-4")}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="font-semibold px-2.5 py-1 h-9">
+        <div className={cn("quote-section", "px-5 py-3")}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                <Badge variant="outline" className="font-semibold h-8 px-2.5">
                   Вибрано: {selectedIds.size}
                 </Badge>
                 {bulkValidationMessage ? (
-                  <Badge variant="outline" className="h-9 quote-warning-badge">
-                    {bulkValidationMessage}
-                  </Badge>
+                  <p className="text-xs text-warning-foreground">
+                    {selectedRows.length < 2
+                      ? `Оберіть ще ${Math.max(0, 2 - selectedRows.length)} прорахунок(и), щоб створити КП або набір.`
+                      : bulkValidationMessage}
+                  </p>
                 ) : (
-                  <Badge variant="outline" className="h-9 quote-success-badge">
-                    Можна виконувати об'єднані дії
-                  </Badge>
+                  <p className="text-xs text-success-foreground">Готово до групових дій.</p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
-              onClick={handleBulkCreateKp}
-              className="h-9"
-            >
-              Створити КП
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
-              onClick={openQuoteSetDialog}
-              className="h-9"
-            >
-              Сформувати набір
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy || quoteSetSaving}
-              onClick={() => handleBulkStatus("approved")}
-              className="h-9"
-            >
-              Поставити “Затверджено”
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy || quoteSetSaving}
-              onClick={() => handleBulkStatus("cancelled")}
-              className="h-9"
-            >
-              Поставити “Скасовано”
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkBusy || quoteSetSaving}
-              onClick={handleBulkDelete}
-              className="h-9"
-            >
-              Видалити
-            </Button>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant="outline" className="h-7 quote-neutral-badge">
+                  Звичайні: {selectionContext.plainCount}
+                </Badge>
+                {selectionContext.withKpCount > 0 ? (
+                  <Badge variant="outline" className="h-7 quote-kind-badge-kp">
+                    У КП: {selectionContext.withKpCount}
+                  </Badge>
+                ) : null}
+                {selectionContext.withSetCount > 0 ? (
+                  <Badge variant="outline" className="h-7 quote-kind-badge-set">
+                    У наборах: {selectionContext.withSetCount}
+                  </Badge>
+                ) : null}
+                {selectionContext.refs.slice(0, 2).map((ref) => (
+                  <Badge
+                    key={ref.id}
+                    variant="outline"
+                    className={cn("h-7", ref.kind === "kp" ? "quote-kind-badge-kp" : "quote-kind-badge-set")}
+                    title={`${ref.name} · вибрано ${ref.selectedCount}`}
+                  >
+                    {ref.kind === "kp" ? "КП" : "Набір"}: {ref.name} ({ref.selectedCount})
+                  </Badge>
+                ))}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground shrink-0 h-9"
-              onClick={() => setSelectedIds(new Set())}
-              disabled={bulkBusy || quoteSetSaving}
-            >
-              Скасувати вибір
-            </Button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
+                onClick={handleBulkCreateKp}
+                className="h-8"
+              >
+                Створити КП
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions}
+                onClick={openQuoteSetDialog}
+                className="h-8"
+              >
+                Сформувати набір
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy || quoteSetSaving || !canRunGroupedActions || bulkAddAvailableSets.length === 0}
+                onClick={openBulkAddExistingDialog}
+                className="h-8"
+                title={
+                  bulkAddAvailableSets.length === 0
+                    ? "Немає існуючих КП/наборів, куди можна додати вибрані"
+                    : undefined
+                }
+              >
+                Додати в існуючий
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    disabled={bulkBusy || quoteSetSaving}
+                  >
+                    Інші дії
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleBulkStatus("approved");
+                    }}
+                    disabled={bulkBusy || quoteSetSaving}
+                  >
+                    Поставити “Затверджено”
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleBulkStatus("cancelled");
+                    }}
+                    disabled={bulkBusy || quoteSetSaving}
+                  >
+                    Поставити “Скасовано”
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleBulkDelete();
+                    }}
+                    disabled={bulkBusy || quoteSetSaving}
+                  >
+                    Видалити
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-muted-foreground"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={bulkBusy || quoteSetSaving}
+              >
+                Очистити
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -3273,16 +4075,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             setQuoteSetCandidateQuotes([]);
             setQuoteSetCandidateId("");
             setQuoteSetCandidatesLoading(false);
+            setQuoteSetPreviewOpen(false);
+            setQuoteSetCommercialDoc(null);
+            setQuoteSetCommercialLoading(false);
           }
         }}
       >
-        <DialogContent className="sm:max-w-[860px]">
-          <DialogHeader>
+        <DialogContent className="w-[min(980px,calc(100vw-32px))] max-h-[88vh] overflow-hidden p-0">
+          <DialogHeader className="px-5 py-4 border-b border-border/60 bg-muted/10">
             <DialogTitle className="flex items-center gap-2">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
-              {quoteSetDetailsTarget ? (
-                <QuoteKindBadge kind={quoteSetDetailsTarget.kind} />
-              ) : null}
+              {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} /> : null}
             </DialogTitle>
             <DialogDescription>
               {quoteSetDetailsTarget?.customer_name ?? "Замовник не вказаний"} ·{" "}
@@ -3297,144 +4100,443 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 : "Дата не вказана"}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-border/60 bg-muted/10 p-3 space-y-3">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <Input
-                value={quoteSetEditName}
-                onChange={(event) => setQuoteSetEditName(event.target.value)}
-                placeholder="Назва набору"
-                disabled={quoteSetActionBusy}
-              />
-              <Button
-                variant="outline"
-                onClick={handleRenameQuoteSet}
-                disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
-              >
-                Зберегти назву
-              </Button>
+
+          <div className="p-5 space-y-4 overflow-y-auto">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <div className="rounded-xl border border-border/60 bg-muted/10 p-4 space-y-3">
+                <div className="text-sm font-semibold">Керування</div>
+                <div className="space-y-1.5">
+                  <div className="text-xs text-muted-foreground">Назва</div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <Input
+                      value={quoteSetEditName}
+                      onChange={(event) => setQuoteSetEditName(event.target.value)}
+                      placeholder="Назва набору"
+                      disabled={quoteSetActionBusy}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleRenameQuoteSet}
+                      disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
+                    >
+                      Зберегти
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs text-muted-foreground">Додати один прорахунок</div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <Select
+                      value={quoteSetCandidateId}
+                      onValueChange={setQuoteSetCandidateId}
+                      disabled={quoteSetCandidatesLoading || quoteSetActionBusy || quoteSetCandidateQuotes.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            quoteSetCandidatesLoading
+                              ? "Завантаження прорахунків..."
+                              : quoteSetCandidateQuotes.length === 0
+                              ? "Немає доступних прорахунків для додавання"
+                              : "Оберіть прорахунок"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {quoteSetCandidateQuotes.map((quote) => (
+                          <SelectItem key={quote.id} value={quote.id}>
+                            {(quote.number ?? quote.id.slice(0, 8)) +
+                              (quote.status ? ` · ${formatStatusLabel(quote.status)}` : "") +
+                              (typeof quote.total === "number" ? ` · ${formatMoney(quote.total)}` : "") +
+                              (quote.created_at
+                                ? ` · ${new Date(quote.created_at).toLocaleDateString("uk-UA")}`
+                                : "")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={handleAddQuoteToOpenSet}
+                      disabled={quoteSetActionBusy || !quoteSetCandidateId}
+                    >
+                      Додати
+                    </Button>
+                  </div>
+                  {selectedQuoteCandidate ? (
+                    <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        Попередній перегляд
+                      </div>
+                      <div className="mt-1 text-sm font-medium">
+                        {selectedQuoteCandidate.number ?? selectedQuoteCandidate.id.slice(0, 8)}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {selectedQuoteCandidate.status
+                          ? formatStatusLabel(selectedQuoteCandidate.status)
+                          : "Статус не вказано"}
+                        {typeof selectedQuoteCandidate.total === "number"
+                          ? ` · ${formatMoney(selectedQuoteCandidate.total)}`
+                          : ""}
+                        {selectedQuoteCandidate.created_at
+                          ? ` · ${new Date(selectedQuoteCandidate.created_at).toLocaleDateString("uk-UA")}`
+                          : ""}
+                      </div>
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => navigate(`/orders/estimates/${selectedQuoteCandidate.id}`)}
+                        >
+                          <Eye className="mr-1.5 h-3.5 w-3.5" />
+                          Відкрити прорахунок
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+                <div className="text-sm font-semibold">Комерційний підсумок</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Позиції</div>
+                    <div className="text-sm font-semibold">{quoteSetDetailsItems.length}</div>
+                  </div>
+                  <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Середня сума</div>
+                    <div className="text-sm font-semibold">{formatMoney(quoteSetAverageAmount)}</div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Разом</div>
+                  <div className="text-base font-semibold">{formatMoney(quoteSetTotalAmount)}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void handlePreviewQuoteSet();
+                    }}
+                    disabled={quoteSetCommercialLoading}
+                  >
+                    <Eye className="mr-1.5 h-4 w-4" />
+                    Прев'ю
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void handlePrintQuoteSet();
+                    }}
+                    disabled={quoteSetCommercialLoading}
+                  >
+                    <Printer className="mr-1.5 h-4 w-4" />
+                    Друк
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void handleExportQuoteSet("pdf");
+                    }}
+                    disabled={quoteSetCommercialLoading}
+                  >
+                    <FileDown className="mr-1.5 h-4 w-4" />
+                    PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void handleExportQuoteSet("xls");
+                    }}
+                    disabled={quoteSetCommercialLoading}
+                  >
+                    <Download className="mr-1.5 h-4 w-4" />
+                    XLS
+                  </Button>
+                </div>
+                {quoteSetCommercialLoading ? (
+                  <div className="text-xs text-muted-foreground">Генерація комерційного документа...</div>
+                ) : null}
+                {selectedRows.length > 0 ? (
+                  <>
+                    <div className="text-xs text-muted-foreground">
+                      Вибрано в таблиці:{" "}
+                      <span className="font-medium text-foreground">{selectedRows.length}</span>
+                      {addableSelectedCountForOpenSet > 0
+                        ? ` · можна додати: ${addableSelectedCountForOpenSet}`
+                        : " · усі вибрані вже всередині або не підходять"}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleAddSelectedToQuoteSet}
+                      disabled={quoteSetActionBusy || addableSelectedCountForOpenSet <= 0}
+                    >
+                      Додати вибрані ({addableSelectedCountForOpenSet})
+                    </Button>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                    Щоб додати кілька прорахунків, закрийте модалку і виділіть їх у списку.
+                  </div>
+                )}
+                <div className="pt-2 border-t border-border/50">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => void handleDeleteQuoteSet()}
+                    disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
+                  >
+                    Видалити {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набір"}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <Select
-                value={quoteSetCandidateId}
-                onValueChange={setQuoteSetCandidateId}
-                disabled={quoteSetCandidatesLoading || quoteSetActionBusy || quoteSetCandidateQuotes.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      quoteSetCandidatesLoading
-                        ? "Завантаження прорахунків..."
-                        : quoteSetCandidateQuotes.length === 0
-                        ? "Немає доступних прорахунків для додавання"
-                        : "Оберіть прорахунок"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {quoteSetCandidateQuotes.map((quote) => (
-                    <SelectItem key={quote.id} value={quote.id}>
-                      {(quote.number ?? quote.id.slice(0, 8)) +
-                        (quote.created_at
-                          ? ` · ${new Date(quote.created_at).toLocaleDateString("uk-UA")}`
-                          : "")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                onClick={handleAddQuoteToOpenSet}
-                disabled={quoteSetActionBusy || !quoteSetCandidateId}
-              >
-                Додати прорахунок
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleAddSelectedToQuoteSet}
-                disabled={quoteSetActionBusy || addableSelectedCountForOpenSet <= 0}
-              >
-                Додати вибрані ({addableSelectedCountForOpenSet})
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => void handleDeleteQuoteSet()}
-                disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
-              >
-                Видалити {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набір"}
-              </Button>
+
+            <div className="rounded-xl border border-border/60 overflow-hidden">
+              <div className="px-4 py-3 border-b border-border/60 bg-muted/20 text-sm font-semibold">
+                Склад {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набору"}
+              </div>
+              {quoteSetDetailsLoading ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">Завантаження складу...</div>
+              ) : quoteSetDetailsItems.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  У цьому {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "наборі"} поки немає прорахунків.
+                </div>
+              ) : (
+                <div className="max-h-[48vh] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/20">
+                        <TableHead className="w-[64px]">#</TableHead>
+                        <TableHead>Прорахунок</TableHead>
+                        <TableHead>Статус</TableHead>
+                        <TableHead>Створено</TableHead>
+                        <TableHead className="w-[190px] text-right">Дії</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {quoteSetDetailsItems.map((item, idx) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                          <TableCell className="font-mono font-semibold">
+                            {item.quote_number ?? item.quote_id.slice(0, 8)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={cn("border", statusPillClasses(item.quote_status))} variant="outline">
+                              {formatStatusLabel(item.quote_status ?? null)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {item.quote_created_at
+                              ? new Date(item.quote_created_at).toLocaleString("uk-UA", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(`/orders/estimates/${item.quote_id}`)}
+                              >
+                                Відкрити
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive"
+                                onClick={() => handleRemoveItemFromQuoteSet(item.id)}
+                                disabled={quoteSetActionBusy}
+                              >
+                                Прибрати
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
           </div>
-          {quoteSetDetailsLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Завантаження складу...</div>
-          ) : quoteSetDetailsItems.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              У цьому наборі поки немає прорахунків.
-            </div>
-          ) : (
-            <div className="max-h-[55vh] overflow-auto rounded-lg border border-border/60">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/20">
-                    <TableHead className="w-[80px]">#</TableHead>
-                    <TableHead>Прорахунок</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead>Створено</TableHead>
-                    <TableHead className="w-[200px] text-right">Дії</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {quoteSetDetailsItems.map((item, idx) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                      <TableCell className="font-mono font-semibold">
-                        {item.quote_number ?? item.quote_id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={cn("border", statusPillClasses(item.quote_status))} variant="outline">
-                          {formatStatusLabel(item.quote_status ?? null)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {item.quote_created_at
-                          ? new Date(item.quote_created_at).toLocaleString("uk-UA", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/orders/estimates/${item.quote_id}`)}
-                          >
-                            Відкрити
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive"
-                            onClick={() => handleRemoveItemFromQuoteSet(item.id)}
-                            disabled={quoteSetActionBusy}
-                          >
-                            Прибрати
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={quoteSetPreviewOpen} onOpenChange={setQuoteSetPreviewOpen}>
+        <DialogContent className="w-[min(980px,calc(100vw-32px))] max-h-[88vh] overflow-hidden p-0">
+          <DialogHeader className="px-5 py-4 border-b border-border/60 bg-muted/10">
+            <DialogTitle className="flex items-center gap-2">
+              Комерційний прев'ю
+              {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} label={quoteSetDetailsTarget.name} /> : null}
+            </DialogTitle>
+            <DialogDescription>
+              Разом: {formatMoney(quoteSetCommercialDoc?.total ?? quoteSetTotalAmount)} · Позицій:{" "}
+              {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-5 space-y-4 overflow-y-auto">
+            {quoteSetCommercialLoading ? (
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                Генерація прев'ю...
+              </div>
+            ) : !quoteSetCommercialDoc ? (
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+                Немає даних для відображення.
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 grid gap-2 sm:grid-cols-2">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Замовник:</span>{" "}
+                    <span className="font-medium">{quoteSetCommercialDoc.customerName}</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Прорахунків:</span>{" "}
+                    <span className="font-medium">{quoteSetCommercialDoc.sections.length}</span>
+                  </div>
+                </div>
+                {quoteSetCommercialDoc.sections.map((section, sectionIndex) => (
+                  <div key={`preview-group-${section.quoteId}`} className="rounded-xl border border-border/60 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border/60 bg-muted/20 flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold">
+                        {sectionIndex + 1}. {section.quoteNumber}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {section.status} · {section.createdAt}
+                      </div>
+                    </div>
+                    {section.visualizationUrl ? (
+                      <div className="px-4 py-3 border-b border-border/60 bg-muted/10">
+                        <div className="text-xs text-muted-foreground mb-2">Візуалізація</div>
+                        <img
+                          src={section.visualizationUrl}
+                          alt={section.visualizationName || section.quoteNumber}
+                          className="h-24 w-40 rounded-md border border-border/60 object-cover bg-muted/20"
+                        />
+                      </div>
+                    ) : null}
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/10">
+                          <TableHead className="w-[60px]">#</TableHead>
+                          <TableHead className="w-[84px]">Фото</TableHead>
+                          <TableHead>Товар</TableHead>
+                          <TableHead>Специфікація</TableHead>
+                          <TableHead className="text-right">К-сть</TableHead>
+                          <TableHead className="text-right">Од.</TableHead>
+                          <TableHead className="text-right">Ціна</TableHead>
+                          <TableHead className="text-right">Сума</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {section.items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                              У цьому прорахунку немає товарних позицій.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          section.items.map((item) => (
+                            <TableRow key={`preview-item-${item.id}`}>
+                              <TableCell className="text-muted-foreground">{item.position}</TableCell>
+                              <TableCell>
+                                {item.imageUrl ? (
+                                  <img
+                                    src={item.imageUrl}
+                                    alt={item.name}
+                                    className="h-12 w-12 rounded-md border border-border/60 object-cover bg-muted/20"
+                                  />
+                                ) : (
+                                  <div className="h-12 w-12 rounded-md border border-border/60 bg-muted/20 grid place-items-center text-xs text-muted-foreground">
+                                    —
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium">{item.name}</div>
+                                {item.description ? (
+                                  <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
+                                ) : null}
+                              </TableCell>
+                              <TableCell>
+                                {item.catalogPath ? (
+                                  <div className="text-xs text-muted-foreground">{item.catalogPath}</div>
+                                ) : null}
+                                {item.placementSummary ? (
+                                  <div className="text-xs text-muted-foreground">{item.placementSummary}</div>
+                                ) : null}
+                                {item.methodsSummary ? (
+                                  <div className="text-xs text-muted-foreground">{item.methodsSummary}</div>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-right">{formatMoneyPlain(item.qty)}</TableCell>
+                              <TableCell className="text-right">{item.unit}</TableCell>
+                              <TableCell className="text-right">{formatMoneyPlain(item.unitPrice)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatMoney(item.lineTotal)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                    <div className="px-4 py-3 border-t border-border/60 bg-muted/10 flex items-center justify-end text-sm font-medium">
+                      Разом по прорахунку: {formatMoney(section.total)}
+                    </div>
+                  </div>
+                ))}
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Загальна сума</span>
+                  <span className="text-lg font-semibold">{formatMoney(quoteSetCommercialDoc.total)}</span>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/5">
+            <Button variant="outline" onClick={() => setQuoteSetPreviewOpen(false)}>
+              Закрити
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void handlePrintQuoteSet();
+              }}
+              disabled={quoteSetCommercialLoading}
+            >
+              <Printer className="mr-1.5 h-4 w-4" />
+              Друк
+            </Button>
+            <Button
+              onClick={() => {
+                void handleExportQuoteSet("pdf");
+              }}
+              disabled={quoteSetCommercialLoading}
+            >
+              <FileDown className="mr-1.5 h-4 w-4" />
+              Експорт PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void handleExportQuoteSet("xls");
+              }}
+              disabled={quoteSetCommercialLoading}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Експорт XLS
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -3477,6 +4579,98 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <Button onClick={handleCreateQuoteSet} disabled={quoteSetSaving || !canRunGroupedActions}>
               {quoteSetSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Створити набір
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={bulkAddExistingOpen}
+        onOpenChange={(open) => {
+          if (bulkAddBusy) return;
+          setBulkAddExistingOpen(open);
+          if (!open) {
+            setBulkAddTargetSetId("");
+            setBulkAddKindFilter("all");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Додати вибрані в існуючий КП/набір</DialogTitle>
+            <DialogDescription>
+              Додаємо {selectedRows.length} вибраних прорахунків до вже створеної групи.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={bulkAddKindFilter === "all" ? "primary" : "outline"}
+                onClick={() => setBulkAddKindFilter("all")}
+                disabled={bulkAddBusy}
+              >
+                Всі
+              </Button>
+              <Button
+                size="sm"
+                variant={bulkAddKindFilter === "kp" ? "primary" : "outline"}
+                onClick={() => setBulkAddKindFilter("kp")}
+                disabled={bulkAddBusy}
+              >
+                КП
+              </Button>
+              <Button
+                size="sm"
+                variant={bulkAddKindFilter === "set" ? "primary" : "outline"}
+                onClick={() => setBulkAddKindFilter("set")}
+                disabled={bulkAddBusy}
+              >
+                Набори
+              </Button>
+            </div>
+            <Select
+              value={bulkAddTargetSetId}
+              onValueChange={setBulkAddTargetSetId}
+              disabled={bulkAddBusy || bulkAddAvailableSets.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    bulkAddAvailableSets.length === 0
+                      ? "Немає доступних КП/наборів для додавання"
+                      : "Оберіть КП або набір"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {bulkAddAvailableSets.map((set) => (
+                  <SelectItem key={set.id} value={set.id}>
+                    {set.kind === "kp" ? "КП" : "Набір"} · {set.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {bulkAddAvailableSets.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Серед цього замовника немає існуючих КП/наборів для додавання нових позицій.
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkAddExistingOpen(false)}
+              disabled={bulkAddBusy}
+            >
+              Скасувати
+            </Button>
+            <Button
+              onClick={handleBulkAddToExistingSet}
+              disabled={bulkAddBusy || !bulkAddTargetSetId}
+            >
+              {bulkAddBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Додати
             </Button>
           </DialogFooter>
         </DialogContent>

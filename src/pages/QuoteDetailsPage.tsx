@@ -302,6 +302,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [filesDocsOpen, setFilesDocsOpen] = useState(true);
 
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
+  const [designVisualizations, setDesignVisualizations] = useState<QuoteAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
@@ -1737,11 +1738,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           } satisfies QuoteAttachment;
         })
       );
-
-      setAttachments(mapped);
+      const isDesignVisualization = (file: QuoteAttachment) =>
+        (file.storagePath ?? "").includes("design-outputs/");
+      setAttachments(mapped.filter((file) => !isDesignVisualization(file)));
+      setDesignVisualizations(mapped.filter((file) => isDesignVisualization(file)));
     } catch (e: unknown) {
       setAttachmentsError(getErrorMessage(e, "Не вдалося завантажити файли."));
       setAttachments([]);
+      setDesignVisualizations([]);
     } finally {
       setAttachmentsLoading(false);
     }
@@ -3384,38 +3388,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       method.printPositionId || method.printWidthMm || method.printHeightMm
                   )
                 );
-                const attachmentExtension = getFileExtension(item.attachment?.name);
                 const catalogImage = getModelImage(
                   catalogTypes,
                   resolvedTypeId,
                   resolvedKindId,
                   resolvedModelId
                 );
-                const attachmentPreview =
-                  item.attachment?.url && canPreviewImage(attachmentExtension)
-                    ? { type: "image" as const, url: item.attachment.url }
-                    : item.attachment?.url && canPreviewPdf(attachmentExtension)
-                    ? { type: "pdf" as const, url: item.attachment.url }
-                    : catalogImage
-                    ? { type: "image" as const, url: catalogImage }
-                    : null;
+                const productPreview = catalogImage
+                  ? { type: "image" as const, url: catalogImage }
+                  : null;
 
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
                     <div className="flex items-center gap-4">
                       <div className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
-                        {attachmentPreview?.type === "image" ? (
+                        {productPreview?.type === "image" ? (
                           <img
-                            src={attachmentPreview.url}
-                            alt={item.attachment?.name ?? modelLabel ?? "Візуалізація"}
+                            src={productPreview.url}
+                            alt={modelLabel ?? "Товар"}
                             className="h-full w-full object-cover"
                             loading="lazy"
-                          />
-                        ) : attachmentPreview?.type === "pdf" ? (
-                          <iframe
-                            src={`${attachmentPreview.url}#page=1&view=FitH`}
-                            title={`Preview ${item.attachment?.name ?? "PDF"}`}
-                            className="h-full w-full pointer-events-none"
                           />
                         ) : (
                           <Package className="h-6 w-6 text-muted-foreground/60" />
@@ -3521,21 +3513,58 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
                 <span role="img" aria-hidden="true">🎨</span> Візуалізація
               </div>
+              <Badge variant="outline" className="text-[11px]">
+                {designVisualizations.length}
+              </Badge>
             </div>
-            <div className="border-2 border-dashed border-border/60 rounded-xl p-10 text-center bg-background/30">
-              <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
-                  <Image className="h-6 w-6" />
+            {designVisualizations.length === 0 ? (
+              <div className="border-2 border-dashed border-border/60 rounded-xl p-10 text-center bg-background/30">
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
+                    <Image className="h-6 w-6" />
+                  </div>
+                  <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
+                  <div className="text-xs text-muted-foreground">
+                    Тут будуть макети від дизайнера після їх створення
+                  </div>
                 </div>
-                <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
-                <div className="text-xs text-muted-foreground">
-                  Тут будуть макети від дизайнера після їх створення
-                </div>
-                <Badge variant="outline" className="text-[11px] px-3">
-                  Скоро буде доступно
-                </Badge>
               </div>
-            </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {designVisualizations.map((file) => {
+                  const extension = getFileExtension(file.name);
+                  const previewImage = file.url && canPreviewImage(extension);
+                  return (
+                    <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
+                      <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
+                        {previewImage ? (
+                          <img src={file.url} alt={file.name} className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="text-xs text-muted-foreground">{extension}</div>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground truncate" title={file.name}>
+                        {file.name}
+                      </div>
+                      <div className="mt-2 flex items-center gap-1">
+                        {file.url ? (
+                          <>
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={file.url} target="_blank" rel="noopener noreferrer">Переглянути</a>
+                            </Button>
+                            <Button size="sm" variant="ghost" asChild>
+                              <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}>
+                                Завантажити
+                              </a>
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           {/* Calculation (manager) */}

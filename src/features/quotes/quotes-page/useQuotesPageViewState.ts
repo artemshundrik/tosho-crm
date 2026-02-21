@@ -32,6 +32,21 @@ type UseQuotesPageViewStateParams = {
   quoteSetDetailsItems: QuoteSetItemRow[];
 };
 
+type SelectedRefSummary = {
+  id: string;
+  kind: "kp" | "set";
+  name: string;
+  selectedCount: number;
+};
+
+type SelectionContext = {
+  plainCount: number;
+  withAnySetCount: number;
+  withKpCount: number;
+  withSetCount: number;
+  refs: SelectedRefSummary[];
+};
+
 export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
   const {
     rows,
@@ -209,6 +224,56 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     ).length;
   }, [quoteSetDetailsItems, quoteSetDetailsTarget, selectedRows]);
 
+  const selectionContext = useMemo<SelectionContext>(() => {
+    let plainCount = 0;
+    let withAnySetCount = 0;
+    let withKpCount = 0;
+    let withSetCount = 0;
+    const refs = new Map<string, SelectedRefSummary>();
+
+    selectedRows.forEach((row) => {
+      const rowRefs = quoteMembershipByQuoteId.get(row.id)?.refs ?? [];
+      if (rowRefs.length === 0) {
+        plainCount += 1;
+        return;
+      }
+      withAnySetCount += 1;
+      let hasKp = false;
+      let hasSet = false;
+      rowRefs.forEach((ref) => {
+        if (ref.kind === "kp") hasKp = true;
+        if (ref.kind === "set") hasSet = true;
+        const current = refs.get(ref.id);
+        if (current) {
+          current.selectedCount += 1;
+        } else {
+          refs.set(ref.id, {
+            id: ref.id,
+            kind: ref.kind,
+            name: ref.name,
+            selectedCount: 1,
+          });
+        }
+      });
+      if (hasKp) withKpCount += 1;
+      if (hasSet) withSetCount += 1;
+    });
+
+    const sortedRefs = Array.from(refs.values()).sort((a, b) => {
+      if (a.selectedCount !== b.selectedCount) return b.selectedCount - a.selectedCount;
+      if (a.kind !== b.kind) return a.kind === "kp" ? -1 : 1;
+      return a.name.localeCompare(b.name, "uk-UA");
+    });
+
+    return {
+      plainCount,
+      withAnySetCount,
+      withKpCount,
+      withSetCount,
+      refs: sortedRefs,
+    };
+  }, [quoteMembershipByQuoteId, selectedRows]);
+
   return {
     addableSelectedCountForOpenSet,
     bulkValidationMessage,
@@ -222,6 +287,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
     quickAddAvailableSets,
     quoteSetKpCount,
     quoteSetSetCount,
+    selectionContext,
     selectedCustomers,
     selectedRows,
   };
