@@ -78,47 +78,4 @@ export default defineConfig(({ command }) => ({
       "@": path.resolve(__dirname, "src"),
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          const pkgPath = id.split("node_modules/")[1] ?? "";
-
-          if (
-            pkgPath === "react" ||
-            pkgPath.startsWith("react/") ||
-            pkgPath.startsWith("react-dom") ||
-            pkgPath.startsWith("react-router")
-          ) {
-            return "vendor-react";
-          }
-
-          if (pkgPath.startsWith("@supabase/")) {
-            return "vendor-supabase";
-          }
-
-          if (
-            pkgPath.startsWith("@radix-ui/") ||
-            pkgPath.startsWith("cmdk") ||
-            pkgPath.startsWith("sonner") ||
-            pkgPath.startsWith("react-day-picker")
-          ) {
-            return "vendor-ui";
-          }
-
-          if (
-            pkgPath.startsWith("date-fns") ||
-            pkgPath.startsWith("lucide-react") ||
-            pkgPath.startsWith("recharts") ||
-            pkgPath.startsWith("@tabler/icons-react")
-          ) {
-            return "vendor-viz";
-          }
-
-          return "vendor";
-        },
-      },
-    },
-  },
 }));
