@@ -11,7 +11,6 @@
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PageHeader } from "@/components/app/headers/PageHeader";
-import { Badge } from "@/components/ui/badge";
 import { AlertCircle, FolderKanban, Loader2 } from "lucide-react";
 import { exportToCSV } from "@/utils/catalogUtils";
 
@@ -26,9 +25,6 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useBulkSelection } from "./hooks/useBulkSelection";
 
 // Components
-import { CatalogSidebar } from "./components/CatalogSidebar";
-import { ModelGrid } from "./components/ModelGrid";
-import { TableView } from "./components/TableView";
 import { ModelEditor } from "./components/ModelEditor";
 import { CategoryDialog } from "./components/CategoryDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -42,7 +38,7 @@ import { SimpleModelGrid } from "./components/SimpleModelGrid";
 
 export default function ProductCatalogPage() {
   // View mode state
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode] = useState<ViewMode>("grid");
 
   // Delete confirmation state
   const [deleteTypeConfirm, setDeleteTypeConfirm] = useState<{
@@ -188,6 +184,9 @@ export default function ProductCatalogPage() {
     modelEditor.setMethodError(null);
   };
 
+  const normalizeQuoteType = (value?: string | null): "merch" | "print" | "other" =>
+    value === "print" || value === "other" ? value : "merch";
+
   // Handle edit type
   const handleEditType = (typeId: string) => {
     const typeToEdit = catalog.find((t) => t.id === typeId);
@@ -195,7 +194,7 @@ export default function ProductCatalogPage() {
       categoryManager.openEditType(
         typeId,
         typeToEdit.name,
-        typeToEdit.quote_type as any
+        normalizeQuoteType(typeToEdit.quote_type)
       );
     }
   };
@@ -255,10 +254,6 @@ export default function ProductCatalogPage() {
 
   // Bulk operations
   const handleBulkExport = () => {
-    const selectedModels = filters.allModelsWithContext.filter((item) =>
-      bulkSelection.selectedIds.includes(item.model.id)
-    );
-
     const selectedCatalog = catalog.map((type) => ({
       ...type,
       kinds: type.kinds.map((kind) => ({
@@ -284,6 +279,7 @@ export default function ProductCatalogPage() {
 
     // Delete all selected models
     for (const modelId of bulkSelection.selectedIds) {
+      void modelId;
       await modelEditor.handleDeleteModel();
     }
 

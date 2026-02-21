@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 
@@ -46,8 +45,8 @@ export default function UpdatePasswordPage() {
       if (updateError) throw updateError;
       setMsg("Пароль оновлено. Зараз перенаправлю на вхід.");
       setTimeout(() => navigate("/login"), 1200);
-    } catch (err: any) {
-      setError(err?.message ?? "Не вдалося оновити пароль.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Не вдалося оновити пароль.");
     } finally {
       setBusy(false);
     }

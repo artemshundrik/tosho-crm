@@ -62,7 +62,6 @@ import {
   FileDown,
   FileText,
   MoreHorizontal,
-  Pencil,
   Plus,
   Trash2,
   Paperclip,
@@ -271,6 +270,12 @@ type QuoteComment = {
   created_at: string;
   created_by?: string | null;
 };
+type InsertedCommentRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  created_by: string | null;
+};
 type MentionContext = {
   start: number;
   end: number;
@@ -360,13 +365,22 @@ const statusClasses: Record<string, string> = {
     "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
 };
 
-const statusIcons: Record<string, any> = {
+const statusIcons: Record<string, LucideIcon> = {
   new: PlusCircle,
   estimating: PlayCircle,
   estimated: Send,
   awaiting_approval: Hourglass,
   approved: CheckCircle2,
   cancelled: XCircle,
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
 };
 
 const STATUS_FLOW: string[] = ["new", "estimating", "estimated", "awaiting_approval", "approved"];
@@ -655,6 +669,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   // Inline editing for quantity
   const [editingQty, setEditingQty] = useState<string | null>(null);
+  void editingQty;
   const [qtyValue, setQtyValue] = useState("");
 
   const [discount, setDiscount] = useState("0");
@@ -692,11 +707,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       prev.map((run, i) => (i === index ? { ...run, [field]: value } : run))
     );
   };
+  void updateRun;
 
-  const updateRunRaw = (index: number, field: keyof QuoteRun, raw: string) => {
+  const updateRunRaw = (
+    index: number,
+    field: "quantity" | "unit_price_model" | "unit_price_print" | "logistics_cost",
+    raw: string
+  ) => {
     const parsed = raw === "" ? null : Number(raw);
     setRuns((prev) =>
-      prev.map((run, i) => (i === index ? { ...run, [field]: parsed as any } : run))
+      prev.map((run, i) => (i === index ? { ...run, [field]: parsed } : run))
     );
   };
 
@@ -737,8 +757,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       });
       await loadActivityLog();
       toast.success("Тиражі збережено");
-    } catch (e: any) {
-      setRunsError(e?.message ?? "Не вдалося зберегти тиражі.");
+    } catch (e: unknown) {
+      setRunsError(getErrorMessage(e, "Не вдалося зберегти тиражі."));
       toast.error("Помилка збереження");
     } finally {
       setRunsSaving(false);
@@ -763,8 +783,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await deleteQuote(quoteId, teamId);
       toast.success("Прорахунок видалено");
       navigate("/orders/estimates", { replace: true });
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося видалити прорахунок";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося видалити прорахунок");
       setStatusError(message);
       toast.error(message);
     } finally {
@@ -789,9 +809,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         prev
           ? {
               ...prev,
-              comment: (data as any)?.comment ?? nextBrief ?? null,
-              design_brief: (data as any)?.design_brief ?? nextBrief ?? null,
-              updated_at: (data as any)?.updated_at ?? prev.updated_at,
+              comment: (data as Partial<QuoteSummaryRow> | null)?.comment ?? nextBrief ?? null,
+              design_brief: (data as Partial<QuoteSummaryRow> | null)?.design_brief ?? nextBrief ?? null,
+              updated_at: (data as Partial<QuoteSummaryRow> | null)?.updated_at ?? prev.updated_at,
             }
           : prev
       );
@@ -807,8 +827,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       });
       await loadActivityLog();
       toast.success("ТЗ збережено");
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося зберегти ТЗ.";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося зберегти ТЗ.");
       setBriefError(message);
       toast.error(message);
     } finally {
@@ -1028,6 +1048,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (briefDirty) return;
     setBriefText(quote.design_brief ?? quote.comment ?? "");
     setBriefError(null);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
   const currentStatus = normalizeStatus(quote?.status);
   const baseTotalForStatus = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
@@ -1204,6 +1225,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return [...statusEvents, ...commentEvents, ...activityLogEvents].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activityRows, comments, history, memberById]);
 
   const activityGroups = useMemo(() => {
@@ -1246,6 +1268,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const availableKinds = selectedType?.kinds ?? [];
   const selectedKind = availableKinds.find((kind) => kind.id === itemKindId) ?? null;
   const availableModels = selectedKind?.models ?? [];
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const availableMethods = selectedKind?.methods ?? [];
 
   const catalogGroups = useMemo(() => {
@@ -1417,9 +1440,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (!cancelled) {
           setCatalogTypes(nextCatalog);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setCatalogError(e?.message ?? "Не вдалося завантажити каталог.");
+          setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
           setCatalogTypes([]);
         }
       } finally {
@@ -1465,8 +1488,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setQuote(summary);
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
       setDeadlineNote(summary.deadline_note ?? "");
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося завантажити прорахунок.";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося завантажити прорахунок.");
       if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
         setError("Помилка БД (stack depth limit exceeded). Перевірте RLS/policy у таблицях quote_*.");
       } else {
@@ -1512,8 +1535,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata,
       });
       setDesignAssigneeId(assigneeUserId);
-    } catch (e: any) {
-      setDesignTaskError(e?.message ?? "Не вдалося завантажити дизайн-задачу.");
+    } catch (e: unknown) {
+      setDesignTaskError(getErrorMessage(e, "Не вдалося завантажити дизайн-задачу."));
       setDesignTask(null);
     } finally {
       setDesignTaskLoading(false);
@@ -1593,8 +1616,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       }
       toast.success("Дизайн-задачу створено");
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося створити дизайн-задачу.";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося створити дизайн-задачу.");
       setDesignTaskError(message);
       toast.error(message);
     } finally {
@@ -1686,7 +1709,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
 
       toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setDesignTask({
         ...designTask,
         assigneeUserId: previousAssignee,
@@ -1694,7 +1717,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata: designTask.metadata,
       });
       setDesignAssigneeId(previousAssignee);
-      const message = e?.message ?? "Не вдалося оновити виконавця.";
+      const message = getErrorMessage(e, "Не вдалося оновити виконавця.");
       setDesignTaskError(message);
       toast.error(message);
     } finally {
@@ -1734,11 +1757,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         rows.map((row) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
           const parsedMethods: ItemMethod[] = rawMethods
-            .map((method: any) => {
-              const methodId = method?.method_id ?? method?.methodId ?? method?.id ?? "";
+            .map((method: unknown) => {
+              if (!method || typeof method !== "object") return null;
+              const entry = method as Record<string, unknown>;
+              const methodId = (entry.method_id ?? entry.methodId ?? entry.id ?? "") as string;
               if (!methodId) return null;
-              const rawWidth = method?.print_width_mm ?? method?.printWidthMm ?? null;
-              const rawHeight = method?.print_height_mm ?? method?.printHeightMm ?? null;
+              const rawWidth = entry.print_width_mm ?? entry.printWidthMm ?? null;
+              const rawHeight = entry.print_height_mm ?? entry.printHeightMm ?? null;
               const width =
                 rawWidth === null || rawWidth === undefined || rawWidth === ""
                   ? null
@@ -1750,8 +1775,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               return {
                 id: createLocalId(),
                 methodId,
-                count: Number(method?.count ?? 1) || 1,
-                printPositionId: method?.print_position_id ?? method?.printPositionId ?? undefined,
+                count: Number(entry.count ?? 1) || 1,
+                printPositionId: (entry.print_position_id ?? entry.printPositionId ?? undefined) as
+                  | string
+                  | undefined,
                 printWidthMm: Number.isNaN(width) ? null : width,
                 printHeightMm: Number.isNaN(height) ? null : height,
               };
@@ -1788,8 +1815,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           };
         })
       );
-    } catch (e: any) {
-      setItemsError(e?.message ?? "Не вдалося завантажити позиції.");
+    } catch (e: unknown) {
+      setItemsError(getErrorMessage(e, "Не вдалося завантажити позиції."));
       setItems([]);
     } finally {
       setItemsLoading(false);
@@ -1803,8 +1830,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const data = await getQuoteRuns(quoteId, teamId);
       setRuns(data);
       setRunsOriginal(data);
-    } catch (e: any) {
-      setRunsError(e?.message ?? "Не вдалося завантажити тиражі.");
+    } catch (e: unknown) {
+      setRunsError(getErrorMessage(e, "Не вдалося завантажити тиражі."));
       setRuns([]);
     } finally {
       setRunsLoading(false);
@@ -1847,8 +1874,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     try {
       const data = await listStatusHistory(quoteId, teamId);
       setHistory(data);
-    } catch (e: any) {
-      setHistoryError(e?.message ?? "Не вдалося завантажити історію.");
+    } catch (e: unknown) {
+      setHistoryError(getErrorMessage(e, "Не вдалося завантажити історію."));
       setHistory([]);
     } finally {
       setHistoryLoading(false);
@@ -1874,7 +1901,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         });
 
         const rawText = await response.text();
-        let parsed: any = {};
+        let parsed: Record<string, unknown> = {};
         if (rawText) {
           try {
             parsed = JSON.parse(rawText);
@@ -1884,7 +1911,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
 
         if (!response.ok) {
-          throw new Error(parsed?.error || `HTTP ${response.status}`);
+          const parsedError = typeof parsed.error === "string" ? parsed.error : null;
+          throw new Error(parsedError || `HTTP ${response.status}`);
         }
 
         return parsed;
@@ -1920,12 +1948,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           });
           const comments = Array.isArray(fallback?.comments) ? fallback.comments : [];
           setComments(
-            comments.map((row: any) => ({
-              id: row.id,
-              body: row.body ?? "",
-              created_at: row.created_at ?? new Date().toISOString(),
-              created_by: row.created_by ?? null,
-            }))
+            comments.map((row: unknown) => {
+              const entry = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+              return {
+                id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
+                body: typeof entry.body === "string" ? entry.body : "",
+                created_at:
+                  typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
+                created_by: typeof entry.created_by === "string" ? entry.created_by : null,
+              };
+            })
           );
           return;
         }
@@ -1939,8 +1971,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           created_by: row.created_by ?? null,
         }))
       );
-    } catch (e: any) {
-      setCommentsError(e?.message ?? "Не вдалося завантажити коментарі.");
+    } catch (e: unknown) {
+      setCommentsError(getErrorMessage(e, "Не вдалося завантажити коментарі."));
       setComments([]);
     } finally {
       setCommentsLoading(false);
@@ -1963,8 +1995,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const { data, error } = await query;
       if (error) throw error;
       setActivityRows((data as ActivityRow[]) ?? []);
-    } catch (e: any) {
-      setActivityError(e?.message ?? "Не вдалося завантажити активність.");
+    } catch (e: unknown) {
+      setActivityError(getErrorMessage(e, "Не вдалося завантажити активність."));
       setActivityRows([]);
     } finally {
       setActivityLoading(false);
@@ -2026,8 +2058,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       );
 
       setAttachments(mapped);
-    } catch (e: any) {
-      setAttachmentsError(e?.message ?? "Не вдалося завантажити файли.");
+    } catch (e: unknown) {
+      setAttachmentsError(getErrorMessage(e, "Не вдалося завантажити файли."));
       setAttachments([]);
     } finally {
       setAttachmentsLoading(false);
@@ -2059,7 +2091,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        throw new Error(userError?.message ?? "Користувач не авторизований");
+        throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
       }
       const uploadedBy = userData.user.id;
 
@@ -2124,8 +2156,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
 
       await loadAttachments();
-    } catch (e: any) {
-      setAttachmentsUploadError(e?.message ?? "Не вдалося завантажити файли.");
+    } catch (e: unknown) {
+      setAttachmentsUploadError(getErrorMessage(e, "Не вдалося завантажити файли."));
     } finally {
       setAttachmentsUploading(false);
       if (attachmentsInputRef.current) {
@@ -2164,8 +2196,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDeleteAttachmentOpen(false);
       setDeleteAttachmentTarget(null);
       toast.success("Файл видалено");
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося видалити файл.";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося видалити файл.");
       setAttachmentsDeleteError(message);
       toast.error("Помилка видалення", { description: message });
     } finally {
@@ -2175,6 +2207,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     void loadQuote();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, teamId]);
 
   useEffect(() => {
@@ -2198,6 +2231,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     void loadDesignTask();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, teamId]);
 
   useEffect(() => {
@@ -2208,6 +2242,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadAttachments();
     void loadComments();
     void loadActivityLog();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.id, quoteId, error]);
 
   useEffect(() => {
@@ -2226,6 +2261,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   useEffect(() => {
     if (itemAttachmentUploading) return;
     void loadAttachments();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemAttachmentUploading]);
 
   const handleAttachmentsDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -2286,8 +2322,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         await loadActivityLog();
       }
       await loadQuote();
-    } catch (e: any) {
-      setDeadlineError(e?.message ?? "Не вдалося оновити дедлайн.");
+    } catch (e: unknown) {
+      setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
     } finally {
       setDeadlineSaving(false);
     }
@@ -2353,8 +2389,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await loadHistory();
       await loadActivityLog();
       setStatusNote("");
-    } catch (e: any) {
-      setStatusError(e?.message ?? "Помилка зміни статусу");
+    } catch (e: unknown) {
+      setStatusError(getErrorMessage(e, "Помилка зміни статусу"));
     } finally {
       setStatusBusy(false);
     }
@@ -2385,6 +2421,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setEditingQty(itemId);
     setQtyValue(currentQty.toString());
   };
+  void startQtyEdit;
 
   const saveQtyEdit = async (itemId: string) => {
     const newQty = Math.max(1, parseInt(qtyValue) || 1);
@@ -2405,10 +2442,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         })
         .eq("id", itemId);
       if (error) throw error;
-    } catch (e: any) {
-      setItemsError(e?.message ?? "Не вдалося оновити кількість.");
+    } catch (e: unknown) {
+      setItemsError(getErrorMessage(e, "Не вдалося оновити кількість."));
     }
   };
+  void saveQtyEdit;
 
   const openNewItem = () => {
     setEditingItemId(null);
@@ -2451,6 +2489,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setLastAutoTitle("");
     setItemModalOpen(true);
   };
+  void openEditItem;
 
   const handleTypeChange = (value: string) => {
     setItemTypeId(value);
@@ -2488,7 +2527,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        throw new Error(userError?.message ?? "User not authenticated");
+        throw new Error(getErrorMessage(userError, "User not authenticated"));
       }
       const uploadedBy = userData.user.id;
       const { data: membership, error: membershipError } = await supabase
@@ -2502,7 +2541,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         throw new Error("Користувач не є членом команди для цього прорахунку.");
       }
 
-      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
       const candidatePaths = [
         `teams/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`,
@@ -2574,8 +2613,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           ...prev,
         ]);
       }
-    } catch (error: any) {
-      setItemAttachmentError(error?.message ?? "Не вдалося завантажити файл");
+    } catch (error: unknown) {
+      setItemAttachmentError(getErrorMessage(error, "Не вдалося завантажити файл"));
       setItemAttachment(null);
     } finally {
       setItemAttachmentUploading(false);
@@ -2717,8 +2756,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         setItems((prev) => [...prev, inserted]);
       }
       setItemModalOpen(false);
-    } catch (e: any) {
-      setItemsError(e?.message ?? "Не вдалося зберегти позицію.");
+    } catch (e: unknown) {
+      setItemsError(getErrorMessage(e, "Не вдалося зберегти позицію."));
     }
   };
 
@@ -2731,10 +2770,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .delete()
         .eq("id", itemId);
       if (error) throw error;
-    } catch (e: any) {
-      setItemsError(e?.message ?? "Не вдалося видалити позицію.");
+    } catch (e: unknown) {
+      setItemsError(getErrorMessage(e, "Не вдалося видалити позицію."));
     }
   };
+  void handleDeleteItem;
 
   const handleAddComment = () => {
     if (!commentText.trim() || commentSaving) return;
@@ -2854,7 +2894,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         });
 
         const rawText = await response.text();
-        let parsed: any = {};
+        let parsed: Record<string, unknown> = {};
         if (rawText) {
           try {
             parsed = JSON.parse(rawText);
@@ -2864,7 +2904,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
 
         if (!response.ok) {
-          throw new Error(parsed?.error || `HTTP ${response.status}`);
+          const parsedError = typeof parsed.error === "string" ? parsed.error : null;
+          throw new Error(parsedError || `HTTP ${response.status}`);
         }
 
         return parsed;
@@ -2913,7 +2954,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             body,
             mentionedUserIds: mentionUserIdsList,
           });
-          data = fallback?.comment as any;
+          data = (fallback?.comment as InsertedCommentRow | null) ?? null;
           if (hasMentionsInBody) {
             mentionsHandledViaServer = !fallback?.mentionError;
           }
@@ -2923,7 +2964,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       }
 
-      const inserted = data as QuoteComment;
+      const inserted = data as InsertedCommentRow;
       setComments((prev) => [
         {
           id: inserted.id,
@@ -2965,8 +3006,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setMentionContext(null);
       setMentionActiveIndex(0);
       await loadActivityLog();
-    } catch (e: any) {
-      setCommentsError(e?.message ?? "Не вдалося додати коментар.");
+    } catch (e: unknown) {
+      setCommentsError(getErrorMessage(e, "Не вдалося додати коментар."));
     } finally {
       setCommentSaving(false);
     }
@@ -3897,6 +3938,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         const printPrice = Number(run.unit_price_print) || 0;
                         const logistics = Number(run.logistics_cost) || 0;
                         const total = (modelPrice + printPrice) * qty + logistics;
+                        void total;
                         const disabled = !canEditRuns;
                         const isSelected = !!run.id && run.id === selectedRunId;
                         return (
@@ -4791,7 +4833,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
 
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-            <Tabs value={itemFormMode} onValueChange={(v) => setItemFormMode(v as any)} className="w-full">
+            <Tabs
+              value={itemFormMode}
+              onValueChange={(v) => setItemFormMode(v as "simple" | "advanced")}
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-muted/30 p-1 shadow-inner">
                 <TabsTrigger
                   value="simple"

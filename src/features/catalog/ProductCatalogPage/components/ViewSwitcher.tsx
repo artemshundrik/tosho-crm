@@ -4,7 +4,6 @@
  * Toggle between Grid and Table view for catalog models
  */
 
-import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Grid3x3, List } from "lucide-react";
 import { cn } from "@/lib/utils";

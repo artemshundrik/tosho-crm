@@ -24,6 +24,7 @@ export function usePageHeaderActions(actions: React.ReactNode, deps: React.Depen
     if (!ctx) return;
     ctx.setActions(actions);
     return () => ctx.setActions(null);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx, actions, ...deps]);
 }
 

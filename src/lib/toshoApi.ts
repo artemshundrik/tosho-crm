@@ -68,6 +68,12 @@ function handleError(error: unknown) {
   throw error;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (typeof error !== "object" || !error) return "";
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+}
+
 export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status } = params;
   const q = search?.trim() ?? "";
@@ -93,8 +99,8 @@ export async function listQuotes(params: ListQuotesParams) {
     const { data, error } = await query;
     handleError(error);
     return (data as QuoteListRow[]) ?? [];
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     const shouldFallbackToQuotes =
       message.includes("stack depth limit exceeded") ||
       message.includes("statement timeout") ||
@@ -116,9 +122,9 @@ export async function listQuotes(params: ListQuotesParams) {
           ]
         : [`${baseColumns},processing_minutes`, baseColumns];
 
-      let lastError: any = null;
+      let lastError: unknown = null;
       for (const columns of variants) {
-        let query: any = (supabase as any)
+        let query = supabase
           .schema("tosho")
           .from("quotes")
           .select(columns)
@@ -136,7 +142,7 @@ export async function listQuotes(params: ListQuotesParams) {
         const result = await query;
         if (!result.error) return result;
 
-        const message = (result.error?.message ?? "").toLowerCase();
+        const message = getErrorMessage(result.error).toLowerCase();
         const isMissingColumn = message.includes("column") && message.includes("does not exist");
         if (!isMissingColumn) return result;
         lastError = result.error;
@@ -146,16 +152,13 @@ export async function listQuotes(params: ListQuotesParams) {
     };
 
     let { data, error: fallbackError } = await listFromQuotes(true);
-    if (
-      fallbackError &&
-      /column/i.test(fallbackError.message ?? "") &&
-      /design_brief/i.test(fallbackError.message ?? "")
-    ) {
+    const fallbackMessage = getErrorMessage(fallbackError);
+    if (/column/i.test(fallbackMessage) && /design_brief/i.test(fallbackMessage)) {
       ({ data, error: fallbackError } = await listFromQuotes(false));
     }
     handleError(fallbackError);
 
-    const fallbackRows = (data as QuoteListRow[]) ?? [];
+    const fallbackRows = ((data as unknown) as QuoteListRow[]) ?? [];
     const customerIds = Array.from(
       new Set(
         fallbackRows
@@ -284,8 +287,8 @@ export async function createQuote(params: {
 
   try {
     return await insertQuote(payload);
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     let changed = false;
     if (message.includes("column") && message.includes("created_by")) {
       delete payload.created_by;
@@ -354,8 +357,8 @@ export async function getQuoteSummary(quoteId: string) {
       delivery_details:
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
     } as QuoteSummaryRow;
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     const shouldFallbackToQuotes =
       message.includes("stack depth limit exceeded") ||
       message.includes("statement timeout") ||
@@ -373,7 +376,7 @@ export async function getQuoteSummary(quoteId: string) {
       .single();
     handleError(rowError);
 
-    const fallback = (row ?? {}) as Record<string, any>;
+    const fallback = (row ?? {}) as Record<string, unknown>;
     return {
       id: String(fallback.id ?? quoteId),
       team_id: (fallback.team_id as string | null | undefined) ?? null,
@@ -500,8 +503,8 @@ export async function setStatus(params: { quoteId: string; status: string; note?
     });
     handleError(error);
     return data;
-  } catch (error: any) {
-    const message = error?.message ?? "";
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
     if (message.includes("set_quote_status")) {
       const { error: updateError } = await supabase
         .schema("tosho")
@@ -576,8 +579,15 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   };
 
   try {
-    let data: any = null;
-    let error: any = null;
+    type TeamMemberViewRow = {
+      user_id: string;
+      full_name?: string | null;
+      avatar_url?: string | null;
+      email?: string | null;
+      job_role?: string | null;
+    };
+    let data: TeamMemberViewRow[] | null = null;
+    let error: unknown = null;
     const columnsToTry = [
       "user_id, full_name, avatar_url, email, job_role",
       "user_id, full_name, avatar_url, email",
@@ -585,34 +595,30 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       "user_id, full_name, avatar_url",
     ];
     for (const columns of columnsToTry) {
-      ({ data, error } = await supabase
+      const result = await supabase
         .from("team_members_view")
         .select(columns)
         .eq("team_id", teamId)
-        .order("created_at", { ascending: true }));
+        .order("created_at", { ascending: true });
+      data = (result.data as unknown as TeamMemberViewRow[] | null) ?? null;
+      error = result.error;
       if (!error) break;
-      const message = (error?.message ?? "").toLowerCase();
+      const message = getErrorMessage(error).toLowerCase();
       if (!message.includes("column") && !message.includes("does not exist")) {
         break;
       }
     }
 
     handleError(error);
-    const filteredRows =
-      ((data as {
-        user_id: string;
-        full_name?: string | null;
-        avatar_url?: string | null;
-        email?: string | null;
-        job_role?: string | null;
-      }[]) ?? [])
-      .filter((row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id));
+    const filteredRows = (data ?? []).filter(
+      (row) => !workspaceMemberIds || workspaceMemberIds.has(row.user_id)
+    );
 
     const baseMembers = filteredRows.map((row) => ({
       id: row.user_id,
       label: formatLabel(row),
       avatarUrl: row.avatar_url ?? null,
-      jobRole: (row as { job_role?: string | null }).job_role ?? null,
+      jobRole: row.job_role ?? null,
     }));
 
     // If team_members_view doesn't expose job_role, hydrate it from memberships_view
@@ -624,17 +630,19 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 
     const ids = baseMembers.map((m) => m.id);
     const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-    let membershipRows: any = null;
-    let membershipError: any = null;
+    let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+    let membershipError: unknown = null;
     for (const columns of columnsToTryMemberships) {
-      ({ data: membershipRows, error: membershipError } = await supabase
+      const result = await supabase
         .schema("tosho")
         .from("memberships_view")
         .select(columns)
         .eq("workspace_id", workspaceId)
-        .in("user_id", ids));
+        .in("user_id", ids);
+      membershipRows = (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
+      membershipError = result.error;
       if (!membershipError) break;
-      const message = (membershipError?.message ?? "").toLowerCase();
+      const message = getErrorMessage(membershipError).toLowerCase();
       if (!message.includes("column") && !message.includes("does not exist")) {
         break;
       }
@@ -654,20 +662,22 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       ...member,
       jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
     }));
-  } catch (error: any) {
-    const message = error?.message ?? "";
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
     if (message.includes("does not exist") || message.includes("relation")) {
-      let data: any = null;
-      let fallbackError: any = null;
+      let data: Array<{ user_id: string; job_role?: string | null }> | null = null;
+      let fallbackError: unknown = null;
       const fallbackColumns = ["user_id, job_role", "user_id"];
       for (const columns of fallbackColumns) {
-        ({ data, error: fallbackError } = await supabase
+        const result = await supabase
           .from("team_members")
           .select(columns)
           .eq("team_id", teamId)
-          .order("created_at", { ascending: true }));
+          .order("created_at", { ascending: true });
+        data = (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
+        fallbackError = result.error;
         if (!fallbackError) break;
-        const message = (fallbackError?.message ?? "").toLowerCase();
+        const message = getErrorMessage(fallbackError).toLowerCase();
         if (!message.includes("column") && !message.includes("does not exist")) {
           break;
         }
@@ -690,17 +700,20 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 
       const ids = baseMembers.map((m) => m.id);
       const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-      let membershipRows: any = null;
-      let membershipError: any = null;
+      let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+      let membershipError: unknown = null;
       for (const columns of columnsToTryMemberships) {
-        ({ data: membershipRows, error: membershipError } = await supabase
+        const result = await supabase
           .schema("tosho")
           .from("memberships_view")
           .select(columns)
           .eq("workspace_id", workspaceId)
-          .in("user_id", ids));
+          .in("user_id", ids);
+        membershipRows =
+          (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
+        membershipError = result.error;
         if (!membershipError) break;
-        const message = (membershipError?.message ?? "").toLowerCase();
+        const message = getErrorMessage(membershipError).toLowerCase();
         if (!message.includes("column") && !message.includes("does not exist")) {
           break;
         }
@@ -745,8 +758,8 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
 
   try {
     await deleteQuoteRow(true);
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     const isFk = message.includes("foreign key");
     const isNotFound = message.includes("not found") || message.includes("no rows");
 
@@ -806,8 +819,8 @@ export async function updateQuote(params: {
 
   try {
     return await executeUpdate(payload);
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     const fallbackPayload = { ...payload };
     let changed = false;
 
@@ -1365,26 +1378,6 @@ export async function createQuoteSet(params: {
   handleError(authError);
   const createdBy = authData.user?.id ?? null;
 
-  const insertSet = async (withCreatedBy: boolean) => {
-    const payload: Record<string, unknown> = {
-      team_id: params.teamId,
-      customer_id: customerIds[0],
-      name: params.name.trim(),
-      kind: params.kind ?? "set",
-    };
-    if (withCreatedBy && createdBy) {
-      payload.created_by = createdBy;
-    }
-    const { data, error } = await supabase
-      .schema("tosho")
-      .from("quote_sets")
-      .insert(payload)
-      .select("id,team_id,customer_id,name,kind,created_by,created_at")
-      .single();
-    handleError(error);
-    return data as QuoteSetRow;
-  };
-
   const insertSetWithOptions = async (withKind: boolean, withCreatedBy: boolean) => {
     const payload: Record<string, unknown> = {
       team_id: params.teamId,
@@ -1411,8 +1404,8 @@ export async function createQuoteSet(params: {
   let createdSet: QuoteSetRow;
   try {
     createdSet = await insertSetWithOptions(true, true);
-  } catch (error: any) {
-    const message = (error?.message ?? "").toLowerCase();
+  } catch (error: unknown) {
+    const message = getErrorMessage(error).toLowerCase();
     if (message.includes("relation") && message.includes("quote_sets")) {
       throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.");
     }

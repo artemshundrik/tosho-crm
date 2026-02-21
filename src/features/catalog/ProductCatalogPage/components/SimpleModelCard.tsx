@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Image as ImageIcon, Layers, MoreVertical } from "lucide-react";
+import { Layers, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,7 @@ export function SimpleModelCard({
   onClone,
   onDelete,
 }: SimpleModelCardProps) {
-  const { model, typeName, kindName, validation } = item;
+  const { model, kindName, validation } = item;
   const [isHovered, setIsHovered] = useState(false);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;

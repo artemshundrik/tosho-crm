@@ -50,6 +50,7 @@ type TeamTournament = {
   created_at: string;
   tournament: Tournament;
 };
+type TeamTournamentRow = Omit<TeamTournament, "tournament"> & { tournaments: Tournament | null };
 
 type Match = {
   id: string;
@@ -136,7 +137,7 @@ export function AdminPage() {
       return;
     }
 
-    const rows = (data || []) as any[];
+    const rows = ((data as unknown) as TeamTournamentRow[] | null) ?? [];
     const mapped: TeamTournament[] = rows
       .filter((row) => row.tournaments)
       .map((row) => ({

@@ -81,7 +81,6 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const UpdatePasswordPage = lazy(() => import("./pages/UpdatePasswordPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
-const NewQuoteFormDemo = lazy(() => import("./pages/NewQuoteFormDemo").then((module) => ({ default: module.NewQuoteFormDemo })));
 
 function RouteSuspense({
   children,
@@ -342,18 +341,6 @@ function AppRoutes() {
   return (
     <Routes location={location}>
       {/* public */}
-      {import.meta.env.DEV ? (
-        <Route
-          path="/dev/new-quote-form"
-          element={
-            <RequireAuth session={session} loading={loading}>
-              <RouteSuspense>
-                <NewQuoteFormDemo />
-              </RouteSuspense>
-            </RequireAuth>
-          }
-        />
-      ) : null}
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/reset-password"

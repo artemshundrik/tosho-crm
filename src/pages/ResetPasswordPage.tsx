@@ -4,6 +4,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return "Не вдалося надіслати лист.";
+}
+
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,8 +36,8 @@ export default function ResetPasswordPage() {
       });
       if (resetError) throw resetError;
       setMsg("Лист для встановлення пароля надіслано. Перевір пошту.");
-    } catch (err: any) {
-      setError(err?.message ?? "Не вдалося надіслати лист.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }

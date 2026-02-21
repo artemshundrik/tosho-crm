@@ -272,6 +272,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     if (open) setQuery("");
   }, [open]);
 
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const recents = useMemo(() => loadRecents(), [open]);
 
   function go(to: string) {

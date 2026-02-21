@@ -9,6 +9,11 @@ type InviteRequest = {
   expiresInDays?: number;
   userId?: string;
 };
+type HttpEvent = {
+  httpMethod?: string;
+  body?: string | null;
+  headers?: Record<string, string | undefined>;
+};
 
 const normalizeRole = (value?: string | null) => {
   if (!value || value === "member") return null;
@@ -89,7 +94,7 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-export const handler = async (event: any) => {
+export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") {
     return jsonResponse(204, {});
   }
@@ -387,8 +392,10 @@ export const handler = async (event: any) => {
         accessRole: nextAccessRole,
         jobRole: nextJobRole,
       });
-    } catch (error: any) {
-      return jsonResponse(500, { error: error?.message ?? "Could not update roles" });
+    } catch (error: unknown) {
+      return jsonResponse(500, {
+        error: error instanceof Error ? error.message : "Could not update roles",
+      });
     }
   }
 

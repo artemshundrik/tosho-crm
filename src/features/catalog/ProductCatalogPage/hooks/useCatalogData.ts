@@ -18,6 +18,15 @@ import type {
 import { INITIAL_CATALOG } from "@/constants/catalog";
 import { usePageCache } from "@/hooks/usePageCache";
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
+};
+
 export function useCatalogData(teamId: string | null) {
   const cacheKey = useMemo(() => (teamId ? `catalog:${teamId}` : "catalog:none"), [teamId]);
   const { cached, setCache, isStale } = usePageCache<CatalogType[]>(cacheKey);
@@ -194,9 +203,9 @@ export function useCatalogData(teamId: string | null) {
           setCatalog(nextCatalog);
           setCache(nextCatalog);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setCatalogError(e?.message ?? "Не вдалося завантажити каталог");
+          setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог"));
           if (!isBackground) {
             setCatalog([]);
           }

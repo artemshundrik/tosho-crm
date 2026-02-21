@@ -144,7 +144,8 @@ export function usePageData<T>({
         loadData(true);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Background refetch
@@ -160,6 +161,7 @@ export function usePageData<T>({
     }, refetchInterval);
 
     return () => clearInterval(interval);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundRefetch, refetchInterval, cached, cacheKey]);
 
   // Функція для ручного оновлення

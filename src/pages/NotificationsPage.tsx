@@ -6,7 +6,6 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";

@@ -1,7 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { PostgrestClient } from "@supabase/postgrest-js";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPostgrestClient = PostgrestClient<any, any, any>;
 
 let cachedSupabase: AnySupabaseClient | null = null;
@@ -44,13 +46,13 @@ export function getDbClient(): AnyPostgrestClient {
 export const supabase: AnySupabaseClient = new Proxy({} as AnySupabaseClient, {
   get(_target, prop) {
     const client = getSupabaseClient();
-    return (client as any)[prop];
+    return Reflect.get(client as object, prop);
   },
 }) as AnySupabaseClient;
 
 // Dev-only helper to inspect auth/session in browser console.
 if (import.meta.env.DEV) {
-  (window as any).supabase = supabase;
+  (window as unknown as { supabase?: AnySupabaseClient }).supabase = supabase;
 }
 
 /**
@@ -61,7 +63,7 @@ if (import.meta.env.DEV) {
 export const db: AnyPostgrestClient = new Proxy({} as AnyPostgrestClient, {
   get(_target, prop) {
     const client = getDbClient();
-    return (client as any)[prop];
+    return Reflect.get(client as object, prop);
   },
 }) as AnyPostgrestClient;
 

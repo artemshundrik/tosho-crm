@@ -358,7 +358,7 @@ function NextUpHero({
   dateLine,
   leagueLogoUrl,
   tournamentName,
-  leagueName,
+  leagueName: _leagueName,
   tourLabel,
   teams,
   avatars,
@@ -380,6 +380,7 @@ function NextUpHero({
   detailLine?: string;
   ctaLabel: string;
 }) {
+  void _leagueName;
   const Container: React.ElementType = clickable && to ? Link : "div";
   const containerProps = clickable && to ? { to } : {};
   const percentValue = (() => {

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { User, Mail, Shield, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
+import { User, Mail, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -24,6 +23,15 @@ type ProfileCache = {
   jobRole: string | null;
   initials: string;
   avatarUrl: string | null;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
 };
 
 export function ProfilePage() {
@@ -56,7 +64,7 @@ export function ProfilePage() {
   // Form state
   const [fullName, setFullName] = useState(cached?.fullName ?? "");
   const [email, setEmail] = useState(cached?.email ?? "");
-  const [accessRole, setAccessRole] = useState(cached?.accessRole ?? (cached as any)?.role ?? "");
+  const [accessRole, setAccessRole] = useState(cached?.accessRole ?? "");
   const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
   const [initials, setInitials] = useState(cached?.initials ?? "");
 
@@ -79,7 +87,8 @@ export function ProfilePage() {
     if (!hasCache) {
       getProfile();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCache]);
 
   const getProfile = async () => {
@@ -233,9 +242,9 @@ export function ProfilePage() {
       setAvatarDraftUrl(null);
       commitCache({ avatarUrl: publicUrl });
       toast.success("Аватар оновлено");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Не вдалося оновити аватар", {
-        description: error.message,
+        description: getErrorMessage(error, "Спробуй ще раз."),
       });
     } finally {
       setAvatarUploading(false);
@@ -274,9 +283,9 @@ export function ProfilePage() {
       // Невеликий таймаут для візуального комфорту перед оновленням
       setTimeout(() => window.location.reload(), 1000);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Помилка оновлення", {
-        description: error.message,
+        description: getErrorMessage(error, "Не вдалося оновити профіль."),
       });
     } finally {
       setUpdating(false);

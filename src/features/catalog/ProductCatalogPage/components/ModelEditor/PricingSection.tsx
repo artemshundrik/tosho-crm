@@ -6,11 +6,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { Layers, Plus, Trash2 } from "lucide-react";
-import { CURRENCY_SYMBOL } from "@/constants/catalog";
 import type { CatalogPriceTier, PriceMode } from "@/types/catalog";
 
 interface PricingSectionProps {
@@ -34,6 +32,8 @@ export function PricingSection({
   onAddTier,
   onRemoveTier,
 }: PricingSectionProps) {
+  void draftFixedPrice;
+  void onFixedPriceChange;
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-2">

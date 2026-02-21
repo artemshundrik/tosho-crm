@@ -94,8 +94,8 @@ type QuoteItemRow = {
   name: string | null;
   qty: number | null;
   unit: string | null;
-  methods: any | null;
-  attachment?: any | null;
+  methods: unknown;
+  attachment?: unknown;
   catalog_model_id?: string | null;
   catalog_kind_id?: string | null;
 };
@@ -254,6 +254,15 @@ const formatEstimateMinutes = (minutes?: number | null) => {
   return parts.length > 0 ? parts.join(" ") : "0 хв";
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
+};
+
 export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, permissions } = useAuth();
@@ -393,7 +402,7 @@ export default function DesignTaskPage() {
           .eq("id", id)
           .single();
         if (rowError) throw rowError;
-        const meta = (row?.metadata as any) ?? {};
+        const meta = (row?.metadata as Record<string, unknown> | null) ?? {};
         const metadataQuoteId =
           typeof meta.quote_id === "string" && meta.quote_id.trim() ? meta.quote_id.trim() : null;
         const entityQuoteId = typeof row?.entity_id === "string" ? row.entity_id : "";
@@ -530,19 +539,21 @@ export default function DesignTaskPage() {
           ? meta.standalone_brief_files
           : [];
         const parsedStandaloneBriefFiles = rawStandaloneBriefFiles
-          .map((row: any) => {
-            const fileName = typeof row?.file_name === "string" && row.file_name ? row.file_name : null;
-            const storageBucket = typeof row?.storage_bucket === "string" && row.storage_bucket ? row.storage_bucket : null;
-            const storagePath = typeof row?.storage_path === "string" && row.storage_path ? row.storage_path : null;
+          .map((row: unknown) => {
+            if (!row || typeof row !== "object") return null;
+            const entry = row as Record<string, unknown>;
+            const fileName = typeof entry.file_name === "string" && entry.file_name ? entry.file_name : null;
+            const storageBucket = typeof entry.storage_bucket === "string" && entry.storage_bucket ? entry.storage_bucket : null;
+            const storagePath = typeof entry.storage_path === "string" && entry.storage_path ? entry.storage_path : null;
             if (!fileName || !storageBucket || !storagePath) return null;
             return {
-              id: typeof row?.id === "string" && row.id ? row.id : crypto.randomUUID(),
+              id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
               file_name: fileName,
-              file_size: row?.file_size == null ? null : Number(row.file_size),
-              created_at: typeof row?.created_at === "string" ? row.created_at : new Date().toISOString(),
+              file_size: entry.file_size == null ? null : Number(entry.file_size),
+              created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               storage_bucket: storageBucket,
               storage_path: storagePath,
-              uploaded_by: typeof row?.uploaded_by === "string" ? row.uploaded_by : null,
+              uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
             } satisfies AttachmentRow;
           })
           .filter(Boolean) as AttachmentRow[];
@@ -562,20 +573,22 @@ export default function DesignTaskPage() {
 
         const rawDesignFiles = Array.isArray(meta.design_output_files) ? meta.design_output_files : [];
         const parsedDesignFiles: DesignOutputFile[] = rawDesignFiles
-          .map((row: any) => {
-            const fileName = typeof row?.file_name === "string" && row.file_name ? row.file_name : null;
-            const storageBucket = typeof row?.storage_bucket === "string" && row.storage_bucket ? row.storage_bucket : null;
-            const storagePath = typeof row?.storage_path === "string" && row.storage_path ? row.storage_path : null;
+          .map((row: unknown) => {
+            if (!row || typeof row !== "object") return null;
+            const entry = row as Record<string, unknown>;
+            const fileName = typeof entry.file_name === "string" && entry.file_name ? entry.file_name : null;
+            const storageBucket = typeof entry.storage_bucket === "string" && entry.storage_bucket ? entry.storage_bucket : null;
+            const storagePath = typeof entry.storage_path === "string" && entry.storage_path ? entry.storage_path : null;
             if (!fileName || !storageBucket || !storagePath) return null;
             return {
-              id: typeof row?.id === "string" && row.id ? row.id : crypto.randomUUID(),
+              id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
               file_name: fileName,
-              file_size: row?.file_size == null ? null : Number(row.file_size),
-              mime_type: typeof row?.mime_type === "string" ? row.mime_type : null,
+              file_size: entry.file_size == null ? null : Number(entry.file_size),
+              mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
               storage_bucket: storageBucket,
               storage_path: storagePath,
-              uploaded_by: typeof row?.uploaded_by === "string" ? row.uploaded_by : null,
-              created_at: typeof row?.created_at === "string" ? row.created_at : new Date().toISOString(),
+              uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
+              created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               signed_url: null,
             } satisfies DesignOutputFile;
           })
@@ -592,16 +605,17 @@ export default function DesignTaskPage() {
 
         const rawDesignLinks = Array.isArray(meta.design_output_links) ? meta.design_output_links : [];
         const parsedDesignLinks: DesignOutputLink[] = rawDesignLinks
-          .map((row: any) => {
+          .map((row: unknown) => {
             if (!row || typeof row !== "object") return null;
-            const url = typeof row.url === "string" ? row.url.trim() : "";
+            const entry = row as Record<string, unknown>;
+            const url = typeof entry.url === "string" ? entry.url.trim() : "";
             if (!url) return null;
             return {
-              id: typeof row.id === "string" && row.id ? row.id : crypto.randomUUID(),
-              label: (typeof row.label === "string" && row.label.trim()) || "Посилання",
+              id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
+              label: (typeof entry.label === "string" && entry.label.trim()) || "Посилання",
               url,
-              created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
-              created_by: typeof row.created_by === "string" ? row.created_by : null,
+              created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
+              created_by: typeof entry.created_by === "string" ? entry.created_by : null,
             } satisfies DesignOutputLink;
           })
           .filter(Boolean) as DesignOutputLink[];
@@ -616,8 +630,11 @@ export default function DesignTaskPage() {
           assignedAt: typeof meta.assigned_at === "string" ? meta.assigned_at : null,
           metadata: meta,
           methodsCount: meta.methods_count ?? (item?.methods?.length ?? 0),
-          hasFiles: meta.has_files ?? (files?.length ?? 0) > 0,
-          designDeadline: meta.design_deadline ?? meta.deadline ?? null,
+          hasFiles:
+            typeof meta.has_files === "boolean" ? meta.has_files : (files?.length ?? 0) > 0,
+          designDeadline:
+            (typeof meta.design_deadline === "string" ? meta.design_deadline : null) ??
+            (typeof meta.deadline === "string" ? meta.deadline : null),
           quoteNumber:
             (typeof meta.quote_number === "string" && meta.quote_number.trim() ? meta.quote_number.trim() : null) ??
             (quote?.number as string) ??
@@ -638,8 +655,8 @@ export default function DesignTaskPage() {
         setAttachments([...standaloneBriefFilesWithUrls, ...attachmentsWithUrls]);
         setDesignOutputFiles(designFilesWithUrls);
         setDesignOutputLinks(parsedDesignLinks);
-      } catch (e: any) {
-        setError(e?.message ?? "Не вдалося завантажити задачу");
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, "Не вдалося завантажити задачу"));
       } finally {
         setLoading(false);
       }
@@ -680,9 +697,9 @@ export default function DesignTaskPage() {
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setHistoryRows(rows);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setHistoryRows([]);
-      setHistoryError(e?.message ?? "Не вдалося завантажити історію задачі.");
+      setHistoryError(getErrorMessage(e, "Не вдалося завантажити історію задачі."));
     } finally {
       setHistoryLoading(false);
     }
@@ -691,11 +708,13 @@ export default function DesignTaskPage() {
   useEffect(() => {
     if (!task?.id) return;
     void loadHistory(task.id);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, effectiveTeamId]);
 
   useEffect(() => {
     if (!task?.id) return;
     void loadTimerSummary(task.id);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, effectiveTeamId]);
 
   useEffect(() => {
@@ -720,6 +739,7 @@ export default function DesignTaskPage() {
   const estimateLabel = useMemo(() => {
     const minutes = getTaskEstimateMinutes(task);
     return formatEstimateMinutes(minutes);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.metadata]);
   const isTimerRunning = !!timerSummary.activeSessionId && !!timerSummary.activeStartedAt;
   const timerElapsedSeconds =
@@ -1060,7 +1080,7 @@ export default function DesignTaskPage() {
     try {
       const uploaded: DesignOutputFile[] = [];
       for (const file of Array.from(files)) {
-        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+        const safeName = file.name.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
         const candidatePaths = [
           `teams/${effectiveTeamId}/design-outputs/${task.quoteId}/${baseName}`,
@@ -1102,9 +1122,10 @@ export default function DesignTaskPage() {
       await persistDesignOutputs(nextFiles, designOutputLinks);
       setDesignOutputFiles(nextFiles);
       toast.success(`Додано файлів: ${uploaded.length}`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Не вдалося завантажити файли");
-      setError(e?.message ?? "Не вдалося завантажити файли");
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося завантажити файли");
+      toast.error(message);
+      setError(message);
     } finally {
       setOutputUploading(false);
       if (outputInputRef.current) outputInputRef.current.value = "";
@@ -1160,8 +1181,8 @@ export default function DesignTaskPage() {
         await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
       }
       toast.success("Файл видалено");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Не вдалося видалити файл");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
     }
   };
 
@@ -1171,8 +1192,8 @@ export default function DesignTaskPage() {
       await persistDesignOutputs(designOutputFiles, nextLinks);
       setDesignOutputLinks(nextLinks);
       toast.success("Посилання видалено");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Не вдалося видалити посилання");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося видалити посилання"));
     }
   };
 
@@ -1215,8 +1236,8 @@ export default function DesignTaskPage() {
       });
       await loadHistory(task.id);
       toast.success("Таймер запущено");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Не вдалося запустити таймер");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося запустити таймер"));
     } finally {
       setTimerBusy(null);
     }
@@ -1250,8 +1271,8 @@ export default function DesignTaskPage() {
         toast.success("Таймер на паузі");
       }
       return wasPaused;
-    } catch (e: any) {
-      if (!options?.silent) toast.error(e?.message ?? "Не вдалося зупинити таймер");
+    } catch (e: unknown) {
+      if (!options?.silent) toast.error(getErrorMessage(e, "Не вдалося зупинити таймер"));
       return false;
     } finally {
       setTimerBusy(null);
@@ -1367,10 +1388,11 @@ export default function DesignTaskPage() {
       }
 
       toast.success(`Статус оновлено: ${statusLabels[nextStatus]}`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTask(previousTask);
-      setError(e?.message ?? "Не вдалося змінити статус");
-      toast.error(e?.message ?? "Не вдалося змінити статус");
+      const message = getErrorMessage(e, "Не вдалося змінити статус");
+      setError(message);
+      toast.error(message);
     } finally {
       setStatusSaving(null);
     }
@@ -1537,10 +1559,11 @@ export default function DesignTaskPage() {
 
       await loadHistory(task.id);
       toast.success(nextAssigneeUserId ? `Виконавця змінено: ${getMemberLabel(nextAssigneeUserId)}` : "Виконавця знято");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTask(previousTask);
-      setError(e?.message ?? "Не вдалося оновити виконавця");
-      toast.error(e?.message ?? "Не вдалося оновити виконавця");
+      const message = getErrorMessage(e, "Не вдалося оновити виконавця");
+      setError(message);
+      toast.error(message);
     } finally {
       setAssigningMemberId(null);
     }
@@ -1718,10 +1741,11 @@ export default function DesignTaskPage() {
           ? "Задача призначена на вас і переведена в статус «В роботі»"
           : "Задача призначена на вас"
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTask(previousTask);
-      toast.error(e?.message ?? "Не вдалося призначити задачу");
-      setError(e?.message ?? "Не вдалося призначити задачу");
+      const message = getErrorMessage(e, "Не вдалося призначити задачу");
+      toast.error(message);
+      setError(message);
     } finally {
       setAssigningSelf(false);
     }
@@ -1786,10 +1810,11 @@ export default function DesignTaskPage() {
       });
       await loadHistory(task.id);
       toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTask(previousTask);
-      setError(e?.message ?? "Не вдалося оновити естімейт");
-      toast.error(e?.message ?? "Не вдалося оновити естімейт");
+      const message = getErrorMessage(e, "Не вдалося оновити естімейт");
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -1850,8 +1875,8 @@ export default function DesignTaskPage() {
       setDeleteDialogOpen(false);
       toast.success("Задачу видалено");
       navigate("/design", { replace: true });
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося видалити задачу";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося видалити задачу");
       setError(message);
       toast.error(message);
     } finally {
@@ -1876,7 +1901,7 @@ export default function DesignTaskPage() {
   let primaryActionLabel = "Взяти в роботу";
   let primaryActionHint = "Призначити задачу на себе.";
   let primaryActionDisabled = true;
-  let primaryActionLoading = assigningSelf || statusSaving === "in_progress";
+  const primaryActionLoading = assigningSelf || statusSaving === "in_progress";
   let primaryActionClick: (() => void) | null = null;
 
   if (task) {

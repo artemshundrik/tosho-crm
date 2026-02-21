@@ -29,9 +29,7 @@ import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
-import { AvatarBase } from "@/components/app/avatar-kit";
 import { preloadRoute } from "@/routes/routePreload";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -560,7 +558,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const [activityUnreadCount, setActivityUnreadCount] = useState(0);
+  const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
   const [eurUahRate, setEurUahRate] = useState<number | null>(null);
   const [usdUahUpdatedAt, setUsdUahUpdatedAt] = useState<string | null>(null);

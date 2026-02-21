@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -49,16 +48,8 @@ export function ContentHeader({
   onUpdateMethod,
   onDeleteMethod,
 }: ContentHeaderProps) {
-  if (!selectedType || !selectedKind) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Оберіть категорію та вид для початку роботи
-      </div>
-    );
-  }
-
-  const availableMethods = selectedKind.methods || [];
-  const printPositions = selectedKind.printPositions || [];
+  const availableMethods = selectedKind?.methods || [];
+  const printPositions = selectedKind?.printPositions || [];
   const [positionModalOpen, setPositionModalOpen] = useState(false);
   const [positionModalMode, setPositionModalMode] = useState<"add" | "edit">("add");
   const [positionModalId, setPositionModalId] = useState<string | null>(null);
@@ -105,6 +96,14 @@ export function ContentHeader({
     setPositionModalValue("");
     setMethodModalValue("");
   }, [selectedKind?.id]);
+
+  if (!selectedType || !selectedKind) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Оберіть категорію та вид для початку роботи
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 border-b border-border/40 space-y-4">

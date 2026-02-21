@@ -108,28 +108,6 @@ const DELIVERY_PAYER_OPTIONS = [
 ];
 
 /**
- * Print methods (types of application)
- */
-const PRINT_METHODS = [
-  { value: "dtf", label: "DTF" },
-  { value: "screen", label: "Трафарет" },
-  { value: "embroidery", label: "Вишивка" },
-  { value: "sublimation", label: "Сублімація" },
-  { value: "vinyl", label: "Термовініл" },
-];
-
-/**
- * Print positions
- */
-const PRINT_POSITIONS = [
-  { value: "chest", label: "Груди" },
-  { value: "back", label: "Спина" },
-  { value: "left_sleeve", label: "Лівий рукав" },
-  { value: "right_sleeve", label: "Правий рукав" },
-  { value: "neck", label: "Комір" },
-];
-
-/**
  * Quantity units
  */
 const QUANTITY_UNITS = [
@@ -245,7 +223,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   open,
   onOpenChange,
   onSubmit,
-  teamId,
+  teamId: _teamId,
   mode = "create",
   initialValues,
   submitting = false,
@@ -260,6 +238,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   catalogTypes = [],
   currentUserId,
 }) => {
+  void _teamId;
   const isEditMode = mode === "edit";
   // Form state
   const [status, setStatus] = React.useState("new");

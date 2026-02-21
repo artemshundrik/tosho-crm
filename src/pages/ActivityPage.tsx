@@ -5,7 +5,6 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
@@ -19,7 +18,7 @@ import {
   type ActivityItem,
   type ActivityRow,
 } from "@/lib/activity";
-import { Activity, CalendarDays, Trophy, UserPlus, Users, Wallet, Dumbbell } from "lucide-react";
+import { Activity, Trophy, UserPlus, Users, Wallet, Dumbbell } from "lucide-react";
 
 type FilterMode = "all" | "matches" | "trainings" | "finance" | "team";
 type MemberAvatar = { user_id: string; avatar_url: string | null; full_name: string | null };
@@ -109,6 +108,7 @@ export default function ActivityPage() {
     if (teamId) {
       load();
     }
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   useEffect(() => {
@@ -223,6 +223,7 @@ export default function ActivityPage() {
 
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  void isSameDay;
 
   const stripDateTime = (text: string) =>
     text

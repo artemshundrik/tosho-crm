@@ -7,7 +7,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Download, Trash2, X, Copy, Tag } from "lucide-react";
+import { Download, Trash2, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BulkActionsBarProps {

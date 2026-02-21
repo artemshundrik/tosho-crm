@@ -53,6 +53,13 @@ type MembershipRow = {
   access_role: string | null;
   job_role: string | null;
 };
+type DesignTaskActivityRow = {
+  id: string;
+  entity_id: string | null;
+  metadata: Record<string, unknown> | null;
+  title: string | null;
+  created_at: string;
+};
 
 type AssignmentFilter = "mine" | "all" | "unassigned";
 type DesignViewMode = "kanban" | "timeline" | "assignee";
@@ -136,6 +143,15 @@ const formatEstimateMinutes = (minutes?: number | null) => {
   if (hours) parts.push(`${hours} год`);
   if (mins) parts.push(`${mins} хв`);
   return parts.length > 0 ? parts.join(" ") : "0 хв";
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
 };
 
 export default function DesignPage() {
@@ -239,8 +255,8 @@ export default function DesignPage() {
             .filter((row) => isDesignerRole(row.job_role))
             .map((row) => ({ id: row.user_id, label: labelById[row.user_id] ?? row.user_id }))
         );
-      } catch (e: any) {
-        setError(e?.message ?? "Не вдалося завантажити учасників команди");
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, "Не вдалося завантажити учасників команди"));
       } finally {
         setMembersLoading(false);
       }
@@ -268,7 +284,7 @@ export default function DesignPage() {
       if (fetchError) throw fetchError;
       const parsedRaw =
         data?.map((row) => {
-          const metadata = (row.metadata as any) ?? {};
+          const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
           const metadataQuoteId =
             typeof metadata.quote_id === "string" && metadata.quote_id.trim()
               ? metadata.quote_id.trim()
@@ -317,7 +333,7 @@ export default function DesignPage() {
         const customerIds = Array.from(
           new Set((quoteRows ?? []).map((q) => q.customer_id).filter(Boolean) as string[])
         );
-        let customerMap = new Map<string, string | null>();
+        const customerMap = new Map<string, string | null>();
         if (customerIds.length > 0) {
           const { data: customers, error: custError } = await supabase
             .schema("tosho")
@@ -362,8 +378,8 @@ export default function DesignPage() {
         console.warn("Failed to load timer summaries", timerError);
         setTimerSummaryByTaskId({});
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Не вдалося завантажити задачі дизайну");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Не вдалося завантажити задачі дизайну"));
     } finally {
       setLoading(false);
     }
@@ -371,6 +387,7 @@ export default function DesignPage() {
 
   useEffect(() => {
     void loadTasks();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId]);
 
   const filteredTasks = useMemo(() => {
@@ -601,6 +618,7 @@ export default function DesignPage() {
       if (b.tasks.length !== a.tasks.length) return b.tasks.length - a.tasks.length;
       return a.label.localeCompare(b.label, "uk");
     });
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTasks, memberById]);
 
   const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
@@ -745,8 +763,8 @@ export default function DesignPage() {
       } catch (timerError) {
         console.warn("Failed to refresh timer summary after status change", timerError);
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Не вдалося оновити статус");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Не вдалося оновити статус"));
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, status: task.status, metadata: task.metadata ?? {} } : t))
       );
@@ -938,7 +956,7 @@ export default function DesignPage() {
       }
 
       toast.success(nextAssigneeUserId ? `Задача призначена: ${getMemberLabel(nextAssigneeUserId)}` : "Призначення знято");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTasks((prev) =>
         prev.map((row) =>
           row.id === task.id
@@ -951,8 +969,9 @@ export default function DesignPage() {
             : row
         )
       );
-      setError(e?.message ?? "Не вдалося оновити виконавця");
-      toast.error(e?.message ?? "Не вдалося оновити виконавця");
+      const message = getErrorMessage(e, "Не вдалося оновити виконавця");
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -1073,12 +1092,14 @@ export default function DesignPage() {
         .single();
       if (insertError) throw insertError;
 
-      const metadata = ((data as any)?.metadata ?? {}) as Record<string, unknown>;
+      const createdRow = (data as unknown as DesignTaskActivityRow | null) ?? null;
+      if (!createdRow) throw new Error("Не вдалося створити дизайн-задачу");
+      const metadata = (createdRow.metadata ?? {}) as Record<string, unknown>;
       let briefFiles: Array<Record<string, unknown>> = [];
       if (createFiles.length > 0) {
         briefFiles = await uploadStandaloneBriefFiles({
           teamId: effectiveTeamId,
-          taskId: (data as any).id as string,
+          taskId: createdRow.id,
           userId: userId ?? null,
           files: createFiles,
         });
@@ -1091,14 +1112,14 @@ export default function DesignPage() {
           .from("activity_log")
           .update({ metadata: patchedMetadata })
           .eq("team_id", effectiveTeamId)
-          .eq("id", (data as any).id as string);
+          .eq("id", createdRow.id);
         if (patchError) throw patchError;
         Object.assign(metadata, patchedMetadata);
       }
       const createdTask: DesignTask = {
-        id: (data as any).id as string,
-        quoteId: ((data as any).entity_id as string) || entityId,
-        title: ((data as any).title as string) ?? subject,
+        id: createdRow.id,
+        quoteId: createdRow.entity_id || entityId,
+        title: createdRow.title ?? subject,
         status: ((metadata.status as DesignStatus) ?? "new") as DesignStatus,
         assigneeUserId:
           typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
@@ -1111,7 +1132,7 @@ export default function DesignPage() {
         methodsCount: 0,
         hasFiles: createFiles.length > 0,
         designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
-        createdAt: (data as any).created_at as string,
+        createdAt: createdRow.created_at,
       };
       setTasks((prev) => [createdTask, ...prev]);
 
@@ -1137,8 +1158,8 @@ export default function DesignPage() {
       setCreateAssigneeUserId("none");
       setCreateFiles([]);
       toast.success("Дизайн-задачу створено");
-    } catch (e: any) {
-      setCreateError(e?.message ?? "Не вдалося створити дизайн-задачу");
+    } catch (e: unknown) {
+      setCreateError(getErrorMessage(e, "Не вдалося створити дизайн-задачу"));
     } finally {
       setCreateSaving(false);
     }
@@ -1171,8 +1192,8 @@ export default function DesignPage() {
       }
 
       toast.success("Задачу видалено");
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося видалити задачу";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося видалити задачу");
       setError(message);
       toast.error(message);
     } finally {
@@ -1219,9 +1240,10 @@ export default function DesignPage() {
         },
       });
       toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
-    } catch (e: any) {
-      setError(e?.message ?? "Не вдалося оновити естімейт");
-      toast.error(e?.message ?? "Не вдалося оновити естімейт");
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося оновити естімейт");
+      setError(message);
+      toast.error(message);
       setTasks((prev) => prev.map((row) => (row.id === task.id ? task : row)));
     }
   };

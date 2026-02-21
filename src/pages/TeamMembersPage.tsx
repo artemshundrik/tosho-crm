@@ -156,6 +156,15 @@ async function parseJsonSafe<T>(response: Response): Promise<T | null> {
   }
 }
 
+function getErrorMessage(error: unknown, fallback = "Unknown error") {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function isRecoverableRoleUpdateError(message: string) {
@@ -275,8 +284,8 @@ export function TeamMembersPage() {
           throw userError;
         }
         resolvedId = await resolveWorkspaceId(userData.user?.id ?? null);
-      } catch (error: any) {
-        if (!cancelled) setWorkspaceError(error?.message ?? "Unknown error");
+      } catch (error: unknown) {
+        if (!cancelled) setWorkspaceError(getErrorMessage(error));
       } finally {
         if (!cancelled) {
           setWorkspaceId(resolvedId);
@@ -290,6 +299,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -345,9 +355,9 @@ export function TeamMembersPage() {
             avatar_url: null,
           }))
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setMembersError(error?.message ?? "Unknown error");
+          setMembersError(getErrorMessage(error));
           setMembers([]);
         }
       } finally {
@@ -360,6 +370,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   useEffect(() => {
@@ -490,9 +501,9 @@ export function TeamMembersPage() {
         } else {
           setInvites((data as Invite[]) ?? []);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setInvitesError(error?.message ?? "Unknown error");
+          setInvitesError(getErrorMessage(error));
           setInvites([]);
         }
       } finally {
@@ -505,6 +516,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, canManage]);
 
   useEffect(() => {
@@ -827,8 +839,8 @@ export function TeamMembersPage() {
         toast.success("Ролі учасника оновлено");
       }
       setEditMember(null);
-    } catch (error: any) {
-      toast.error("Не вдалося змінити ролі", { description: error?.message ?? "Unknown error" });
+    } catch (error: unknown) {
+      toast.error("Не вдалося змінити ролі", { description: getErrorMessage(error) });
     } finally {
       setEditBusy(false);
     }
@@ -884,8 +896,8 @@ export function TeamMembersPage() {
         .order("created_at", { ascending: false });
 
       setInvites((invitesData as Invite[]) ?? []);
-    } catch (e: any) {
-      toast.error("Не вдалося створити інвайт", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося створити інвайт", { description: getErrorMessage(e, "") });
     } finally {
       setInviteBusy(false);
     }

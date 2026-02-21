@@ -20,20 +20,17 @@ import { Badge } from "@/components/ui/badge";
 import {
   Plus,
   Download,
-  Box,
   FolderOpen,
   Layers,
   Search,
   Clock,
-  X,
   AlertTriangle,
   Image as ImageIcon,
-  Package,
   Coins,
 } from "lucide-react";
 import type { ModelWithContext } from "@/types/catalog";
 import type { CommandAction } from "../hooks/useCommandPalette";
-import { formatPrice, getPriceRange } from "@/utils/catalogUtils";
+import { getPriceRange } from "@/utils/catalogUtils";
 import { CURRENCY_SYMBOL } from "@/constants/catalog";
 
 interface CommandPaletteProps {

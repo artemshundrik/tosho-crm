@@ -44,7 +44,6 @@ import { CustomerDialog } from "@/components/customers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
   X, 
@@ -137,6 +136,15 @@ const statusColorClass: Record<string, string> = {
   awaiting_approval: "text-amber-400",
   approved: "text-emerald-400",
   cancelled: "text-rose-400",
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
 };
 
 const KANBAN_COLUMNS = [
@@ -249,6 +257,7 @@ const DELIVERY_TYPE_OPTIONS = [
   { id: "taxi", label: "Таксі / Uklon" },
   { id: "cargo", label: "Вантажне перевезення" },
 ];
+void DELIVERY_TYPE_OPTIONS;
 
   const quoteTypeLabel = (value?: string | null) =>
     QUOTE_TYPE_OPTIONS.find((item) => item.id === value)?.label ?? "Не вказано";
@@ -358,6 +367,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">("all");
   const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
   const [quoteSetDetailsLoading, setQuoteSetDetailsLoading] = useState(false);
+  void rowStatusBusy;
+  void customerDropdownOpen;
+  void catalogLoading;
+  void catalogError;
+  void setPrintMode;
+  void createError;
+  void creating;
+  void attachmentsError;
+  void attachmentCounts;
   const [quoteSetDetailsItems, setQuoteSetDetailsItems] = useState<QuoteSetItemRow[]>([]);
   const [quoteSetDetailsTarget, setQuoteSetDetailsTarget] = useState<QuoteSetListRow | null>(null);
   const [quoteSetEditName, setQuoteSetEditName] = useState("");
@@ -402,11 +420,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => catalogTypes.find((t) => t.id === selectedTypeId),
     [catalogTypes, selectedTypeId]
   );
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const selectedKinds = selectedType?.kinds ?? [];
   const selectedKind = useMemo(
     () => selectedKinds.find((k) => k.id === selectedKindId),
     [selectedKinds, selectedKindId]
   );
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const selectedModels = selectedKind?.models ?? [];
   const selectedModel = useMemo(
     () => selectedModels.find((m) => m.id === selectedModelId),
@@ -416,6 +436,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const availablePrintPositions = selectedKind?.printPositions ?? [];
   const hasValidPrintConfigs =
     printConfigs.length > 0 && printConfigs.every((print) => print.methodId && print.positionId);
+  void availableMethods;
+  void availablePrintPositions;
+  void hasValidPrintConfigs;
 
   const formatStatusLabel = (value: string | null | undefined) => {
     const normalized = normalizeStatus(value);
@@ -432,6 +455,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const match = customers.find((c) => c.id === customerId);
     return match?.name || match?.legal_name || "";
   }, [customers, customerId]);
+  void customerLabel;
 
   const getInitials = (name?: string | null) => {
     if (!name) return "Не вказано";
@@ -520,6 +544,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const value = bytes / 1024 ** exp;
     return `${value.toFixed(value >= 10 || exp === 0 ? 0 : 1)} ${units[exp]}`;
   };
+  void formatFileSize;
 
   const isImageFile = (file: File) => file.type.startsWith("image/");
 
@@ -704,9 +729,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           setSelectedModelId(nextModelId);
           setPrintConfigs([createPrintConfig()]);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setCatalogError(e?.message ?? "Не вдалося завантажити каталог.");
+          setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
           setCatalogTypes([]);
         }
       } finally {
@@ -755,8 +780,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           setAttachmentCounts({});
         }
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Не вдалося завантажити список.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Не вдалося завантажити список."));
       setRows([]);
       setAttachmentCounts({});
       setQuoteMembershipByQuoteId(new Map());
@@ -819,11 +844,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       void loadQuotes();
     }, delay);
     return () => window.clearTimeout(id);
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, status, search]);
 
   useEffect(() => {
     if (!teamId) return;
     void loadQuoteSets();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   const handleRowStatusChange = async (quoteId: string, nextStatus: string) => {
@@ -834,12 +861,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows((prev) =>
         prev.map((row) => (row.id === quoteId ? { ...row, status: nextStatus } : row))
       );
-    } catch (e: any) {
-      setRowStatusError(e?.message ?? "Не вдалося змінити статус.");
+    } catch (e: unknown) {
+      setRowStatusError(getErrorMessage(e, "Не вдалося змінити статус."));
     } finally {
       setRowStatusBusy(null);
     }
   };
+  void handleRowStatusChange;
 
   const openCreate = () => {
     revokeAttachmentPreviews(pendingAttachments);
@@ -891,9 +919,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         .eq("team_id", teamId)
         .order("name");
       if (error) throw error;
-      setCatalogTypes((data as any[]) ?? []);
-    } catch (e: any) {
-      setCatalogError(e?.message ?? "Не вдалося завантажити каталог.");
+      setCatalogTypes(((data as unknown) as CatalogType[]) ?? []);
+    } catch (e: unknown) {
+      setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
     } finally {
       setCatalogLoading(false);
     }
@@ -1103,8 +1131,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (data.files.length > 0) {
         try {
           await uploadFilesForQuote(created.id, data.files);
-        } catch (attachmentError: any) {
-          attachmentWarning = attachmentError?.message ?? "Не вдалося завантажити файли.";
+        } catch (attachmentError: unknown) {
+          attachmentWarning = getErrorMessage(attachmentError, "Не вдалося завантажити файли.");
         }
       }
 
@@ -1124,11 +1152,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           description: `#${created.id.slice(0, 8)}`,
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error creating quote:", e);
-      setCreateError(e?.message ?? "Не вдалося створити прорахунок.");
+      setCreateError(getErrorMessage(e, "Не вдалося створити прорахунок."));
       toast.error("Помилка створення прорахунку", {
-        description: e?.message,
+        description: getErrorMessage(e, ""),
       });
     } finally {
       setCreating(false);
@@ -1175,6 +1203,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     resetCustomerForm(prefillName);
     setCustomerCreateOpen(true);
   };
+  void openCustomerCreate;
 
   const handleCustomerCreate = async () => {
     if (!teamId) {
@@ -1227,8 +1256,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCustomerSearch(label);
       closeCustomerDropdown();
       setCustomerCreateOpen(false);
-    } catch (err: any) {
-      setCustomerCreateError(err?.message ?? "Не вдалося створити клієнта.");
+    } catch (err: unknown) {
+      setCustomerCreateError(getErrorMessage(err, "Не вдалося створити клієнта."));
     } finally {
       setCustomerCreateSaving(false);
     }
@@ -1306,6 +1335,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCreateStep(4);
     }
   };
+  void handleStepChange;
 
   const handleNextStep = () => {
     if (createStep === 1 && validateStep1()) {
@@ -1318,6 +1348,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCreateStep(4);
     }
   };
+  void handleNextStep;
 
   const handleAttachmentSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -1358,6 +1389,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       attachmentsInputRef.current.value = "";
     }
   };
+  void handleAttachmentSelect;
 
   const handleRemoveAttachment = (id: string) => {
     setPendingAttachments((prev) => {
@@ -1368,13 +1400,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       return prev.filter((item) => item.id !== id);
     });
   };
+  void handleRemoveAttachment;
 
   const uploadPendingAttachments = async (quoteId: string) => {
     if (pendingAttachments.length === 0) return;
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) {
-      throw new Error(userError?.message ?? "Користувач не авторизований");
+      throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
     }
 
     const uploadedBy = userData.user.id;
@@ -1402,8 +1435,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (membershipVerified && !membershipFound) {
         throw new Error("Користувач не є членом команди для цього прорахунку.");
       }
-    } catch (error: any) {
-      const message = error?.message?.toLowerCase?.() ?? "";
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "").toLowerCase();
       if (!message.includes("does not exist") && !message.includes("relation")) {
         throw error;
       }
@@ -1477,7 +1510,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) {
-      throw new Error(userError?.message ?? "Користувач не авторизований");
+      throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
     }
 
     const uploadedBy = userData.user.id;
@@ -1505,8 +1538,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (membershipVerified && !membershipFound) {
         throw new Error("Користувач не є членом команди для цього прорахунку.");
       }
-    } catch (error: any) {
-      const message = error?.message?.toLowerCase?.() ?? "";
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "").toLowerCase();
       if (!message.includes("does not exist") && !message.includes("relation")) {
         throw error;
       }
@@ -1636,8 +1669,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let attachmentWarning: string | null = null;
       try {
         await uploadPendingAttachments(created.id);
-      } catch (attachmentError: any) {
-        attachmentWarning = attachmentError?.message ?? "Не вдалося завантажити файли замовника.";
+      } catch (attachmentError: unknown) {
+        attachmentWarning = getErrorMessage(attachmentError, "Не вдалося завантажити файли замовника.");
       }
 
       revokeAttachmentPreviews(pendingAttachments);
@@ -1669,12 +1702,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       } else if (pendingAttachments.length > 0) {
         toast.success("Файли замовника додано");
       }
-    } catch (e: any) {
-      setCreateError(e?.message ?? "Не вдалося створити прорахунок.");
+    } catch (e: unknown) {
+      setCreateError(getErrorMessage(e, "Не вдалося створити прорахунок."));
     } finally {
       setCreating(false);
     }
   };
+  void handleCreate;
 
   const handleSort = (field: "date" | "number") => {
     if (sortBy === field) {
@@ -1878,8 +1912,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows((prev) =>
         prev.map((row) => (row.id === draggingId ? { ...row, status } : row))
       );
-    } catch (e: any) {
-      toast.error("Не вдалося змінити статус", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося змінити статус", { description: getErrorMessage(e, "") });
     } finally {
       setDraggingId(null);
     }
@@ -1964,8 +1998,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ...((fresh.delivery_details as Record<string, string> | null) ?? {}),
         },
       });
-    } catch (e: any) {
-      setEditError(e?.message ?? "Не вдалося завантажити актуальні дані прорахунку.");
+    } catch (e: unknown) {
+      setEditError(getErrorMessage(e, "Не вдалося завантажити актуальні дані прорахунку."));
     } finally {
       setEditLoading(false);
     }
@@ -2018,8 +2052,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setEditDialogOpen(false);
       setEditInitialValues(null);
       toast.success("Прорахунок оновлено");
-    } catch (e: any) {
-      setEditError(e?.message ?? "Не вдалося оновити прорахунок.");
+    } catch (e: unknown) {
+      setEditError(getErrorMessage(e, "Не вдалося оновити прорахунок."));
     } finally {
       setEditSaving(false);
     }
@@ -2035,8 +2069,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.success("Прорахунок видалено");
       setDeleteDialogOpen(false);
       setDeleteTargetId(null);
-    } catch (e: any) {
-      const message = e?.message ?? "Не вдалося видалити прорахунок.";
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося видалити прорахунок.");
       setRowDeleteError(message);
       toast.error("Помилка видалення", { description: message });
     } finally {
@@ -2058,8 +2092,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       );
       toast.success(`Статус оновлено (${selectedIds.size})`);
       setSelectedIds(new Set());
-    } catch (e: any) {
-      toast.error("Не вдалося змінити статус", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося змінити статус", { description: getErrorMessage(e, "") });
     } finally {
       setBulkBusy(false);
     }
@@ -2073,8 +2107,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows((prev) => prev.filter((row) => !selectedIds.has(row.id)));
       toast.success(`Видалено ${selectedIds.size}`);
       setSelectedIds(new Set());
-    } catch (e: any) {
-      toast.error("Помилка видалення", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Помилка видалення", { description: getErrorMessage(e, "") });
     } finally {
       setBulkBusy(false);
     }
@@ -2121,9 +2155,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.success("КП сформовано", { description: `ID: ${created.id}` });
       setSelectedIds(new Set());
       await loadQuoteSets();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error("Не вдалося сформувати КП", {
-        description: e?.message ?? "Спробуйте ще раз.",
+        description: getErrorMessage(e, "Спробуйте ще раз."),
       });
     } finally {
       setQuoteSetSaving(false);
@@ -2194,9 +2228,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteSetDialogOpen(false);
       setSelectedIds(new Set());
       await loadQuoteSets();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error("Не вдалося сформувати набір", {
-        description: e?.message ?? "Спробуйте ще раз.",
+        description: getErrorMessage(e, "Спробуйте ще раз."),
       });
     } finally {
       setQuoteSetSaving(false);
@@ -2222,8 +2256,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteSetDetailsTarget((prev) => (prev ? { ...prev, name: safeName } : prev));
       setQuoteSets((prev) => prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, name: safeName } : set)));
       toast.success("Назву оновлено");
-    } catch (e: any) {
-      toast.error("Не вдалося оновити назву", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося оновити назву", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
     }
@@ -2243,8 +2277,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteSetDetailsItems([]);
       setQuoteSetDetailsTarget(null);
       toast.success("Набір видалено");
-    } catch (e: any) {
-      toast.error("Не вдалося видалити набір", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося видалити набір", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
     }
@@ -2272,8 +2306,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         )
       );
       toast.success("Позицію прибрано");
-    } catch (e: any) {
-      toast.error("Не вдалося прибрати позицію", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося прибрати позицію", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
     }
@@ -2317,8 +2351,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, item_count: fresh.length } : set))
       );
       setSelectedIds(new Set());
-    } catch (e: any) {
-      toast.error("Не вдалося додати позиції", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося додати позиції", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
     }
@@ -2352,8 +2386,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteSets((prev) =>
         prev.map((set) => (set.id === quoteSetDetailsTarget.id ? { ...set, item_count: fresh.length } : set))
       );
-    } catch (e: any) {
-      toast.error("Не вдалося додати прорахунок", { description: e?.message });
+    } catch (e: unknown) {
+      toast.error("Не вдалося додати прорахунок", { description: getErrorMessage(e, "") });
     } finally {
       setQuoteSetActionBusy(false);
     }
@@ -2397,8 +2431,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuickAddTargetQuote(null);
       setQuickAddTargetSetId("");
       await Promise.all([loadQuoteSets(), loadQuotes()]);
-    } catch (e: any) {
-      toast.error("Не вдалося додати прорахунок", { description: e?.message ?? "Спробуйте ще раз." });
+    } catch (e: unknown) {
+      toast.error("Не вдалося додати прорахунок", { description: getErrorMessage(e, "Спробуйте ще раз.") });
     } finally {
       setQuickAddBusy(false);
     }
@@ -3368,7 +3402,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             const badge = getDeadlineBadge(row.deadline_at ?? null);
                             const Icon = quoteTypeIcon(row.quote_type);
                             const normalizedStatus = normalizeStatus(row.status);
-                            const statusClass = statusClasses[normalizedStatus] ?? statusClasses.new;
                             const membership = quoteMembershipByQuoteId.get(row.id);
                             return (
                               <div

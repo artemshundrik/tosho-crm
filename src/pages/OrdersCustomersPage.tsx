@@ -85,6 +85,15 @@ const getInitials = (value?: string | null) => {
   return (first + last).toUpperCase();
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
+};
+
 function CustomersPage({ teamId }: { teamId: string }) {
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,8 +198,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
         .order("name", { ascending: true });
       if (loadError) throw loadError;
       setRows((data as CustomerRow[]) ?? []);
-    } catch (err: any) {
-      setError(err?.message ?? "Не вдалося завантажити замовників.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Не вдалося завантажити замовників."));
     } finally {
       setLoading(false);
     }
@@ -198,6 +207,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   useEffect(() => {
     void loadCustomers();
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   const handleSave = async () => {
@@ -294,8 +304,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setDialogOpen(false);
       resetForm();
       await loadCustomers();
-    } catch (err: any) {
-      setFormError(err?.message ?? "Не вдалося зберегти замовника.");
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, "Не вдалося зберегти замовника."));
     } finally {
       setSaving(false);
     }
@@ -316,8 +326,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
       await loadCustomers();
-    } catch (err: any) {
-      setDeleteError(err?.message ?? "Не вдалося видалити замовника.");
+    } catch (err: unknown) {
+      setDeleteError(getErrorMessage(err, "Не вдалося видалити замовника."));
     } finally {
       setDeleteBusy(false);
     }

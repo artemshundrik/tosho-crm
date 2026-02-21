@@ -12,6 +12,11 @@ type TeamMemberIdentity = {
   full_name?: string | null;
   email?: string | null;
 };
+type HttpEvent = {
+  httpMethod?: string;
+  body?: string | null;
+  headers?: Record<string, string | undefined>;
+};
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -62,7 +67,7 @@ const extractMentionKeys = (text: string) => {
   return Array.from(keys);
 };
 
-export const handler = async (event: any) => {
+export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") {
     return jsonResponse(204, {});
   }
@@ -214,7 +219,7 @@ export const handler = async (event: any) => {
       userData.user.email?.split("@")[0]?.trim() ||
       "Користувач";
 
-    const quoteNumber = (quoteData as any)?.number as string | null | undefined;
+    const quoteNumber = quoteData.number;
     const quoteLabel = quoteNumber ? `#${quoteNumber}` : quoteId;
     const trimmedBody = text.length > 220 ? `${text.slice(0, 217)}...` : text;
     const bodyText = trimmedBody
@@ -241,8 +246,10 @@ export const handler = async (event: any) => {
     try {
       const { delivered } = await sendMentionNotifications(payload.mentionedUserIds, payload.body);
       return jsonResponse(200, { success: true, delivered });
-    } catch (error: any) {
-      return jsonResponse(500, { error: error?.message ?? "Failed to send notifications" });
+    } catch (error: unknown) {
+      return jsonResponse(500, {
+        error: error instanceof Error ? error.message : "Failed to send notifications",
+      });
     }
   }
 
@@ -283,11 +290,11 @@ export const handler = async (event: any) => {
     try {
       const { delivered } = await sendMentionNotifications(payload.mentionedUserIds, payload.body);
       return jsonResponse(200, { comment: data, deliveredMentions: delivered });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return jsonResponse(200, {
         comment: data,
         deliveredMentions: 0,
-        mentionError: error?.message ?? "Failed to send notifications",
+        mentionError: error instanceof Error ? error.message : "Failed to send notifications",
       });
     }
   }

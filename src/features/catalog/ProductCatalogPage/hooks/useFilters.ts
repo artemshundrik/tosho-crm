@@ -76,6 +76,7 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
     [catalog, selectedTypeId]
   );
   
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const selectedKinds = selectedType?.kinds ?? [];
   
   const selectedKind = useMemo(

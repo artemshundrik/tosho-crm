@@ -21,6 +21,16 @@ type InviteInfo = {
   jobRole?: string | null;
 };
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const fromMessage = record.message;
+    if (typeof fromMessage === "string" && fromMessage) return fromMessage;
+  }
+  return fallback;
+}
+
 export default function InvitePage() {
   const { session, signOut } = useAuth();
   const user = session?.user;
@@ -54,8 +64,8 @@ export default function InvitePage() {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.error || "Invite not found");
         if (!cancelled) setInviteInfo(payload as InviteInfo);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Не вдалося знайти інвайт");
+      } catch (e: unknown) {
+        if (!cancelled) setError(getErrorMessage(e, "Не вдалося знайти інвайт"));
       } finally {
         if (!cancelled) setInviteLoading(false);
       }
@@ -111,10 +121,20 @@ export default function InvitePage() {
       setTimeout(() => {
         nav("/orders/estimates");
       }, 1500);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       let msg = "Не вдалося прийняти запрошення.";
-      const rawMessage = e?.message || e?.error_description || e?.details;
+      let rawMessage: string | undefined;
+      if (e instanceof Error) {
+        rawMessage = e.message;
+      } else if (typeof e === "object" && e !== null) {
+        const record = e as Record<string, unknown>;
+        rawMessage =
+          (typeof record.message === "string" && record.message) ||
+          (typeof record.error_description === "string" && record.error_description) ||
+          (typeof record.details === "string" && record.details) ||
+          undefined;
+      }
       if (rawMessage?.includes("expired")) msg = "Термін дії посилання минув.";
       if (rawMessage?.includes("already")) msg = "Ви вже є учасником цього workspace.";
       if (rawMessage && rawMessage !== msg) {

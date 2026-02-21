@@ -1,6 +1,10 @@
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const ALLOWED_HOSTS = new Set(["v9ky.in.ua", "r-cup.com.ua", "sfck.com.ua"]);
+type HttpEvent = {
+  httpMethod?: string;
+  body?: string | null;
+};
 
 function buildResponse(statusCode: number, body: string) {
   return {
@@ -14,7 +18,7 @@ function buildResponse(statusCode: number, body: string) {
   };
 }
 
-export const handler = async (event: any) => {
+export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 204,

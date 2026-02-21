@@ -34,7 +34,7 @@ export function FinancePoolCreatePage() {
     title: "",
     total_amount: "",
     due_date: "",
-    split: "equal" as "equal",
+    split: "equal" as const,
   });
 
   useEffect(() => {

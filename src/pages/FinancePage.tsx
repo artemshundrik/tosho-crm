@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -127,6 +127,7 @@ const invoiceStatusLabel: Record<FinanceInvoice["status"], string> = {
   overdue: "Прострочено",
   canceled: "Скасовано",
 };
+void invoiceStatusLabel;
 
 const planPeriodLabel: Record<string, string> = {
   once: "Разово",
@@ -307,9 +308,15 @@ export function FinancePage() {
           poolParticipants: nextPoolParticipants,
           players: nextPlayers,
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        setError(e.message || "Не вдалося завантажити фінанси");
+        const message =
+          e instanceof Error
+            ? e.message
+            : typeof e === "object" && e !== null && "message" in e && typeof e.message === "string"
+              ? e.message
+              : "Не вдалося завантажити фінанси";
+        setError(message);
       } finally {
         setLoading(false);
       }
@@ -319,7 +326,8 @@ export function FinancePage() {
     if (!hasCache) {
       load();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCache]);
 
   const paidTransactions = useMemo(
@@ -387,6 +395,7 @@ export function FinancePage() {
   }, [players, unpaidInvoices]);
 
   const debtorsCount = new Set(unpaidInvoices.map((inv) => inv.player_id).filter(Boolean)).size;
+  void debtorsCount;
 
   const revenueBreakdown = useMemo(() => {
     const map = new Map<string, number>();

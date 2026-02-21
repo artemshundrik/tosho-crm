@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -114,7 +113,7 @@ export function FinancePoolDetailsPage() {
         setPool(poolRes.data as FinancePool);
       }
       const normalized = !participantsRes.error && participantsRes.data
-        ? ((participantsRes.data as any[]).map((row) => ({
+        ? ((participantsRes.data as Array<Record<string, unknown>>).map((row) => ({
             ...row,
             players: Array.isArray(row.players) ? row.players[0] ?? null : row.players ?? null,
           })) as ParticipantRow[])
@@ -130,7 +129,8 @@ export function FinancePoolDetailsPage() {
     if (!hasCache) {
       load();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCache, id]);
 
   const totals = useMemo(() => {

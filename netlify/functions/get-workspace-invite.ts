@@ -1,4 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+type HttpEvent = {
+  httpMethod?: string;
+  queryStringParameters?: Record<string, string | undefined> | null;
+};
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -13,7 +17,7 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-export const handler = async (event: any) => {
+export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") {
     return jsonResponse(204, {});
   }

@@ -8,6 +8,15 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { CatalogType, CatalogKind, CategoryMode, QuoteType } from "@/types/catalog";
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message) return record.message;
+  }
+  return fallback;
+};
+
 interface UseCategoryManagerProps {
   teamId: string | null;
   catalog: CatalogType[];
@@ -220,9 +229,9 @@ export function useCategoryManager({
       }
 
       setCategoryDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("create category failed", error);
-      setCategoryError(error?.message ?? "Не вдалося створити категорію");
+      setCategoryError(getErrorMessage(error, "Не вдалося створити категорію"));
     } finally {
       setCategorySaving(false);
     }
@@ -310,9 +319,9 @@ export function useCategoryManager({
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("delete kind failed", error);
-      setCategoryError(error?.message ?? "Не вдалося видалити вид");
+      setCategoryError(getErrorMessage(error, "Не вдалося видалити вид"));
     } finally {
       setCategorySaving(false);
     }
@@ -357,9 +366,9 @@ export function useCategoryManager({
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("delete type failed", error);
-      setCategoryError(error?.message ?? "Не вдалося видалити категорію");
+      setCategoryError(getErrorMessage(error, "Не вдалося видалити категорію"));
     } finally {
       setCategorySaving(false);
     }
