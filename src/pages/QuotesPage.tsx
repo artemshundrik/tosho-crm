@@ -147,8 +147,10 @@ type CommercialQuoteSection = {
   quoteNumber: string;
   status: string;
   createdAt: string;
-  visualizationUrl: string;
-  visualizationName: string;
+  visualizations: Array<{
+    url: string;
+    name: string;
+  }>;
   items: CommercialItemRow[];
   total: number;
 };
@@ -164,16 +166,76 @@ type CommercialDocument = {
   total: number;
 };
 
+type QuotesPageCachePayload = {
+  rows: QuoteListRow[];
+  attachmentCounts: Record<string, number>;
+  quoteMembershipEntries?: Array<[string, QuoteSetMembershipInfo]>;
+  cachedAt: number;
+};
+
+function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`quotes-page-cache:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QuotesPageCachePayload;
+    if (!Array.isArray(parsed.rows)) return null;
+    return {
+      rows: parsed.rows,
+      attachmentCounts:
+        parsed.attachmentCounts && typeof parsed.attachmentCounts === "object"
+          ? parsed.attachmentCounts
+          : {},
+      quoteMembershipEntries: Array.isArray(parsed.quoteMembershipEntries)
+        ? parsed.quoteMembershipEntries.filter(
+            (entry): entry is [string, QuoteSetMembershipInfo] =>
+              Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "string"
+          )
+        : [],
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
+  if (typeof window === "undefined" || !teamId) return [];
+  try {
+    const raw = sessionStorage.getItem(`quotes-page-members:${teamId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (row): row is TeamMemberRow =>
+        Boolean(row) &&
+        typeof row === "object" &&
+        typeof (row as TeamMemberRow).id === "string" &&
+        typeof (row as TeamMemberRow).label === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function isBrokenSupabaseRestUrl(value?: string | null): boolean {
+  if (!value) return false;
+  return /\/rest\/v1\//i.test(value);
+}
+
 export function QuotesPage({ teamId }: QuotesPageProps) {
+  const initialCache = readQuotesPageCache(teamId);
+  const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const navigate = useNavigate();
   const workspacePresence = useWorkspacePresence();
-  const [rows, setRows] = useState<QuoteListRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
+  const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatusFilter] = useState("all");
-  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
-  const [teamMembersLoaded, setTeamMembersLoaded] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
+  const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
   const [rowStatusError, setRowStatusError] = useState<string | null>(null);
   const [rowDeleteBusy, setRowDeleteBusy] = useState<string | null>(null);
@@ -237,7 +299,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
-  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>(
+    () => initialCache?.attachmentCounts ?? {}
+  );
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -248,7 +312,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quoteSetsLoading, setQuoteSetsLoading] = useState(false);
   const [quoteMembershipByQuoteId, setQuoteMembershipByQuoteId] = useState<
     Map<string, QuoteSetMembershipInfo>
-  >(new Map());
+  >(
+    () =>
+      new Map<string, QuoteSetMembershipInfo>(
+        initialCache?.quoteMembershipEntries ?? []
+      )
+  );
   const [contentView, setContentView] = useState<"quotes" | "sets" | "all">("quotes");
   const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">("flat");
   const [quoteSetSearch, setQuoteSetSearch] = useState("");
@@ -288,6 +357,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [bulkAddTargetSetId, setBulkAddTargetSetId] = useState("");
   const [bulkAddBusy, setBulkAddBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>();
+  const quotesLoadRequestIdRef = useRef(0);
+  const cacheKey = `quotes-page-cache:${teamId}`;
 
   // Get current user ID
   useEffect(() => {
@@ -464,10 +535,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (active) {
           setTeamMembers(data);
           setTeamMembersLoaded(true);
+          try {
+            sessionStorage.setItem(`quotes-page-members:${teamId}`, JSON.stringify(data));
+          } catch {
+            // ignore cache persistence failures
+          }
         }
       } catch {
         if (active) {
-          setTeamMembers([]);
           setTeamMembersLoaded(true);
         }
       }
@@ -635,46 +710,124 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [createOpen, teamId, quoteType]);
 
   const loadQuotes = async () => {
-    setLoading(true);
+    const requestId = ++quotesLoadRequestIdRef.current;
+    const isBlockingLoad = rows.length === 0;
+    if (isBlockingLoad) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setError(null);
     try {
       const data = await listQuotes({ teamId, search, status });
-      setRows(data);
-      const ids = data.map((row) => row.id).filter(Boolean);
-      try {
-        const membershipMap = await listQuoteSetMemberships(teamId, ids);
-        setQuoteMembershipByQuoteId(membershipMap);
-      } catch {
-        setQuoteMembershipByQuoteId(new Map());
-      }
-      if (ids.length === 0) {
-        setAttachmentCounts({});
-      } else {
-        try {
-          const { data: attachmentRows, error: attachmentsError } = await supabase
-            .schema("tosho")
-            .from("quote_attachments")
-            .select("quote_id")
-            .in("quote_id", ids);
-          if (attachmentsError) throw attachmentsError;
-          const counts: Record<string, number> = {};
-          (attachmentRows ?? []).forEach((row) => {
-            const quoteId = row.quote_id as string | undefined;
-            if (!quoteId) return;
-            counts[quoteId] = (counts[quoteId] ?? 0) + 1;
-          });
-          setAttachmentCounts(counts);
-        } catch {
-          setAttachmentCounts({});
+      const normalizeLogo = (url?: string | null) =>
+        url && !isBrokenSupabaseRestUrl(url) ? url : null;
+
+      const missingCustomerIds = Array.from(
+        new Set(
+          data
+            .filter((row) => row.customer_id && !row.customer_name)
+            .map((row) => row.customer_id as string)
+        )
+      );
+      let customerMetaById = new Map<string, { name?: string | null; legal_name?: string | null; logo_url?: string | null }>();
+      if (missingCustomerIds.length > 0) {
+        const loadCustomers = async (withLogo: boolean) => {
+          const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+          return await supabase.schema("tosho").from("customers").select(columns).in("id", missingCustomerIds);
+        };
+        let { data: customerRows, error: customersError } = await loadCustomers(true);
+        if (
+          customersError &&
+          /column/i.test(customersError.message ?? "") &&
+          /logo_url/i.test(customersError.message ?? "")
+        ) {
+          ({ data: customerRows, error: customersError } = await loadCustomers(false));
+        }
+        if (!customersError) {
+          const rows = ((customerRows ?? []) as unknown) as Array<{
+            id: string;
+            name?: string | null;
+            legal_name?: string | null;
+            logo_url?: string | null;
+          }>;
+          customerMetaById = new Map(rows.map((row) => [row.id, row]));
         }
       }
+
+      const previousById = new Map(rows.map((row) => [row.id, row]));
+      const mergedRows = data.map((row) => {
+        const prev = previousById.get(row.id);
+        const customerMeta = row.customer_id ? customerMetaById.get(row.customer_id) : undefined;
+        return {
+          ...row,
+          customer_name: row.customer_name ?? customerMeta?.name ?? customerMeta?.legal_name ?? prev?.customer_name ?? null,
+          customer_logo_url: normalizeLogo(
+            row.customer_logo_url ?? customerMeta?.logo_url ?? prev?.customer_logo_url ?? null
+          ),
+        };
+      });
+      const ids = mergedRows.map((row) => row.id).filter(Boolean);
+      const [membershipMap, counts] = await Promise.all([
+        (async () => {
+          if (ids.length === 0) return new Map<string, QuoteSetMembershipInfo>();
+          try {
+            return await listQuoteSetMemberships(teamId, ids);
+          } catch {
+            return new Map<string, QuoteSetMembershipInfo>();
+          }
+        })(),
+        (async () => {
+          if (ids.length === 0) return {} as Record<string, number>;
+          try {
+            const { data: attachmentRows, error: attachmentsError } = await supabase
+              .schema("tosho")
+              .from("quote_attachments")
+              .select("quote_id")
+              .in("quote_id", ids);
+            if (attachmentsError) throw attachmentsError;
+            const nextCounts: Record<string, number> = {};
+            (attachmentRows ?? []).forEach((row) => {
+              const quoteId = row.quote_id as string | undefined;
+              if (!quoteId) return;
+              nextCounts[quoteId] = (nextCounts[quoteId] ?? 0) + 1;
+            });
+            return nextCounts;
+          } catch {
+            return {} as Record<string, number>;
+          }
+        })(),
+      ]);
+
+      if (requestId !== quotesLoadRequestIdRef.current) return;
+      setRows(mergedRows);
+      setQuoteMembershipByQuoteId(membershipMap);
+      setAttachmentCounts(counts);
+
+      try {
+        sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            rows: mergedRows,
+            attachmentCounts: counts,
+            quoteMembershipEntries: Array.from(membershipMap.entries()),
+            cachedAt: Date.now(),
+          })
+        );
+      } catch {
+        // ignore cache persistence failures
+      }
     } catch (e: unknown) {
+      if (requestId !== quotesLoadRequestIdRef.current) return;
       setError(getErrorMessage(e, "Не вдалося завантажити список."));
       setRows([]);
       setAttachmentCounts({});
       setQuoteMembershipByQuoteId(new Map());
     } finally {
-      setLoading(false);
+      if (requestId === quotesLoadRequestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -724,6 +877,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteSetDetailsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const cached = readQuotesPageCache(teamId);
+    if (cached && cached.rows.length > 0) {
+      setRows(cached.rows);
+      setAttachmentCounts(cached.attachmentCounts ?? {});
+      setQuoteMembershipByQuoteId(new Map(cached.quoteMembershipEntries ?? []));
+      setLoading(false);
+      return;
+    }
+    try {
+      sessionStorage.removeItem(cacheKey);
+    } catch {
+      // ignore storage errors
+    }
+    setRows([]);
+    setAttachmentCounts({});
+    setQuoteMembershipByQuoteId(new Map());
+    setLoading(true);
+  }, [cacheKey, teamId]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1860,7 +2033,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         row.label ?? "",
       ])
     );
-    const visualizationByQuoteId = new Map<string, { url: string; fileName: string }>();
+    const visualizationsByQuoteId = new Map<string, Array<{ url: string; name: string }>>();
     const typedVisualizations = ((visualizationRows ?? []) as unknown) as Array<{
       quote_id?: string | null;
       file_name?: string | null;
@@ -1871,8 +2044,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }>;
     for (const row of typedVisualizations) {
       const quoteId = row.quote_id ?? "";
-      if (!quoteId || visualizationByQuoteId.has(quoteId)) continue;
+      if (!quoteId) continue;
       if (!row.storage_bucket || !row.storage_path) continue;
+      const storagePath = row.storage_path;
+      const isDesignVisualization = storagePath.includes("design-outputs/");
+      if (!isDesignVisualization) continue;
       const mimeType = row.mime_type?.toLowerCase() ?? "";
       const fileName = row.file_name?.toLowerCase() ?? "";
       const isImage =
@@ -1881,15 +2057,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       const signed = await supabase.storage
         .from(row.storage_bucket)
-        .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
       const signedUrl =
         signed.data?.signedUrl ??
-        supabase.storage.from(row.storage_bucket).getPublicUrl(row.storage_path).data.publicUrl;
+        supabase.storage.from(row.storage_bucket).getPublicUrl(storagePath).data.publicUrl;
       if (!signedUrl) continue;
-      visualizationByQuoteId.set(quoteId, {
-        url: signedUrl,
-        fileName: row.file_name ?? "visualization",
-      });
+      const list = visualizationsByQuoteId.get(quoteId) ?? [];
+      if (!list.some((item) => item.url === signedUrl)) {
+        list.push({
+          url: signedUrl,
+          name: row.file_name ?? "visualization",
+        });
+      }
+      visualizationsByQuoteId.set(quoteId, list);
     }
 
     const itemsByQuoteId = new Map<string, QuoteItemExportRow[]>();
@@ -1959,8 +2139,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         quoteNumber: quoteRef.quote_number ?? quoteRef.quote_id.slice(0, 8),
         status: formatStatusLabel(quoteRef.quote_status ?? null),
         createdAt: formatDateTime(quoteRef.quote_created_at),
-        visualizationUrl: visualizationByQuoteId.get(quoteRef.quote_id)?.url ?? "",
-        visualizationName: visualizationByQuoteId.get(quoteRef.quote_id)?.fileName ?? "",
+        visualizations: visualizationsByQuoteId.get(quoteRef.quote_id) ?? [],
         items: mappedItems,
         total: quoteTotalFromSummary ?? itemsTotal,
       };
@@ -2022,12 +2201,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <div class="section-meta">${escapeHtml(section.status)} · ${escapeHtml(section.createdAt)}</div>
             </div>
             ${
-              section.visualizationUrl
-                ? `<div class="visual-block">
-                     <div class="visual-label">Візуалізація</div>
-                     <img src="${escapeHtml(section.visualizationUrl)}" alt="${escapeHtml(
-                    section.visualizationName || section.quoteNumber
-                  )}" class="visual-thumb" />
+              section.visualizations.length > 0
+                ? `<div class="visual-group">
+                     <div class="visual-label">Візуалізації (${section.visualizations.length})</div>
+                     <div class="visual-grid">
+                       ${section.visualizations
+                         .map(
+                           (file) =>
+                             `<img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.name || section.quoteNumber)}" class="visual-thumb" />`
+                         )
+                         .join("")}
+                     </div>
                    </div>`
                 : ""
             }
@@ -2083,8 +2267,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     .thumb { width: 56px; height: 56px; object-fit: cover; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; display: block; }
     .thumb.placeholder { display: inline-flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; }
     .cell-muted { margin-top: 4px; color: #475569; font-size: 12px; }
-    .visual-block { margin: 0 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; display: inline-flex; flex-direction: column; gap: 6px; }
+    .visual-group { margin: 0 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
     .visual-label { font-size: 12px; color: #334155; }
+    .visual-grid { display: flex; gap: 8px; flex-wrap: wrap; }
     .visual-thumb { width: 180px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
     .section-total { display: flex; justify-content: flex-end; margin-top: 8px; font-size: 14px; }
     .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
@@ -2138,7 +2323,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     lines.push("");
     doc.sections.forEach((section, index) => {
       lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}\t${normalizeTextCell(section.status)}\t${normalizeTextCell(section.createdAt)}`);
-      lines.push(`Візуалізація\t${normalizeTextCell(section.visualizationUrl || "—")}`);
+      lines.push(
+        `Візуалізації\t${normalizeTextCell(
+          section.visualizations.length > 0 ? section.visualizations.map((item) => item.url).join(" | ") : "—"
+        )}`
+      );
       lines.push("№\tТовар\tОпис\tКатегорія/модель\tМісце/розмір\tНанесення\tК-сть\tОд.\tЦіна\tСума\tФото URL");
       if (section.items.length === 0) {
         lines.push("\tНемає товарних позицій");
@@ -3012,7 +3201,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <X className="h-4 w-4" />
                   </Button>
                 )}
-                {loading && contentView !== "sets" && search && (
+                {(loading || refreshing) && contentView !== "sets" && search && (
                   <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                 )}
               </div>
@@ -3020,7 +3209,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               {/* Results Count */}
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="outline" className="font-semibold px-2.5 py-1 h-10 flex items-center gap-1.5">
-                  <span className="tabular-nums">{foundCount}</span>
+                  <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
                   <span className="text-muted-foreground text-xs hidden sm:inline">знайдено</span>
                 </Badge>
               </div>
@@ -4418,14 +4607,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         {section.status} · {section.createdAt}
                       </div>
                     </div>
-                    {section.visualizationUrl ? (
+                    {section.visualizations.length > 0 ? (
                       <div className="px-4 py-3 border-b border-border/60 bg-muted/10">
-                        <div className="text-xs text-muted-foreground mb-2">Візуалізація</div>
-                        <img
-                          src={section.visualizationUrl}
-                          alt={section.visualizationName || section.quoteNumber}
-                          className="h-24 w-40 rounded-md border border-border/60 object-cover bg-muted/20"
-                        />
+                        <div className="text-xs text-muted-foreground mb-2">
+                          Візуалізації ({section.visualizations.length})
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {section.visualizations.map((visual, idx) => (
+                            <img
+                              key={`${section.quoteId}-visual-${idx}`}
+                              src={visual.url}
+                              alt={visual.name || `${section.quoteNumber} visual ${idx + 1}`}
+                              className="h-24 w-40 rounded-md border border-border/60 object-cover bg-muted/20"
+                            />
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                     <Table>

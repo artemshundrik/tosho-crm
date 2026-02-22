@@ -78,144 +78,97 @@ export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status } = params;
   const q = search?.trim() ?? "";
 
-  try {
-    let query = supabase
-      .schema("tosho")
-      .from("v_quotes_list")
-      .select("id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
-      .eq("team_id", teamId)
-      .order("created_at", { ascending: false });
+  const listFromQuotes = async () => {
+    const baseColumns =
+      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note";
+    const variants = [
+      baseColumns,
+      `${baseColumns},processing_minutes`,
+      `${baseColumns},design_brief`,
+      `${baseColumns},design_brief,processing_minutes`,
+    ];
 
-    if (q.length > 0) {
-      query = query.or(
-        `number.ilike.%${q}%,comment.ilike.%${q}%,customer_name.ilike.%${q}%`
-      );
-    }
+    let lastError: unknown = null;
+    for (const columns of variants) {
+      let query = supabase
+        .schema("tosho")
+        .from("quotes")
+        .select(columns)
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false });
 
-    if (status && status !== "all") {
-      query = query.eq("status", status);
-    }
-
-    const { data, error } = await query;
-    handleError(error);
-    return (data as QuoteListRow[]) ?? [];
-  } catch (error: unknown) {
-    const message = getErrorMessage(error).toLowerCase();
-    const shouldFallbackToQuotes =
-      message.includes("stack depth limit exceeded") ||
-      message.includes("statement timeout") ||
-      message.includes("v_quotes_list");
-
-    if (!shouldFallbackToQuotes) {
-      throw error;
-    }
-
-    const listFromQuotes = async (withDesignBrief: boolean) => {
-      const baseColumns =
-        "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note";
-      const variants = withDesignBrief
-        ? [
-            `${baseColumns},design_brief,processing_minutes`,
-            `${baseColumns},design_brief`,
-            `${baseColumns},processing_minutes`,
-            baseColumns,
-          ]
-        : [`${baseColumns},processing_minutes`, baseColumns];
-
-      let lastError: unknown = null;
-      for (const columns of variants) {
-        let query = supabase
-          .schema("tosho")
-          .from("quotes")
-          .select(columns)
-          .eq("team_id", teamId)
-          .order("created_at", { ascending: false });
-
-        if (q.length > 0) {
-          query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
-        }
-
-        if (status && status !== "all") {
-          query = query.eq("status", status);
-        }
-
-        const result = await query;
-        if (!result.error) return result;
-
-        const message = getErrorMessage(result.error).toLowerCase();
-        const isMissingColumn = message.includes("column") && message.includes("does not exist");
-        if (!isMissingColumn) return result;
-        lastError = result.error;
+      if (q.length > 0) {
+        query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
       }
 
-      return { data: null, error: lastError };
+      if (status && status !== "all") {
+        query = query.eq("status", status);
+      }
+
+      const result = await query;
+      if (!result.error) return result;
+
+      const message = getErrorMessage(result.error).toLowerCase();
+      const isMissingColumn = message.includes("column") && message.includes("does not exist");
+      if (!isMissingColumn) return result;
+      lastError = result.error;
+    }
+
+    return { data: null, error: lastError };
+  };
+
+  const { data, error } = await listFromQuotes();
+  handleError(error);
+
+  const rows = ((data as unknown) as QuoteListRow[]) ?? [];
+  const customerIds = Array.from(
+    new Set(rows.map((row) => row.customer_id ?? null).filter((value): value is string => Boolean(value)))
+  );
+
+  let customerById = new Map<
+    string,
+    { name?: string | null; legal_name?: string | null; logo_url?: string | null }
+  >();
+  if (customerIds.length > 0) {
+    const loadCustomers = async (withLogo: boolean) => {
+      const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+      return await supabase.schema("tosho").from("customers").select(columns).in("id", customerIds);
     };
 
-    let { data, error: fallbackError } = await listFromQuotes(true);
-    const fallbackMessage = getErrorMessage(fallbackError);
-    if (/column/i.test(fallbackMessage) && /design_brief/i.test(fallbackMessage)) {
-      ({ data, error: fallbackError } = await listFromQuotes(false));
-    }
-    handleError(fallbackError);
-
-    const fallbackRows = ((data as unknown) as QuoteListRow[]) ?? [];
-    const customerIds = Array.from(
-      new Set(
-        fallbackRows
-          .map((row) => row.customer_id ?? null)
-          .filter((value): value is string => Boolean(value))
-      )
-    );
-
-    let customerById = new Map<
-      string,
-      { name?: string | null; legal_name?: string | null; logo_url?: string | null }
-    >();
-    if (customerIds.length > 0) {
-      const loadCustomers = async (withLogo: boolean) => {
-        const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
-        return await supabase
-          .schema("tosho")
-          .from("customers")
-          .select(columns)
-          .in("id", customerIds);
-      };
-
-      let { data: customerRows, error: customersError } = await loadCustomers(true);
-      if (
-        customersError &&
-        /column/i.test(customersError.message ?? "") &&
-        /logo_url/i.test(customersError.message ?? "")
-      ) {
-        ({ data: customerRows, error: customersError } = await loadCustomers(false));
-      }
-
-      if (!customersError) {
-        const typedCustomerRows = ((customerRows ?? []) as unknown) as Array<{
-          id: string;
-          name?: string | null;
-          legal_name?: string | null;
-          logo_url?: string | null;
-        }>;
-        customerById = new Map(
-          typedCustomerRows.map((row) => [
-            row.id,
-            { name: row.name ?? null, legal_name: row.legal_name ?? null, logo_url: row.logo_url ?? null },
-          ])
-        );
-      }
+    let { data: customerRows, error: customersError } = await loadCustomers(true);
+    if (
+      customersError &&
+      /column/i.test(customersError.message ?? "") &&
+      /logo_url/i.test(customersError.message ?? "")
+    ) {
+      ({ data: customerRows, error: customersError } = await loadCustomers(false));
     }
 
-    return fallbackRows.map((row) => {
-      const customer = row.customer_id ? customerById.get(row.customer_id) : undefined;
-      return {
-        ...row,
-        customer_name: row.customer_name ?? customer?.name ?? customer?.legal_name ?? null,
-        customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? null,
-        design_brief: row.design_brief ?? null,
-      };
-    });
+    if (!customersError) {
+      const typedCustomerRows = ((customerRows ?? []) as unknown) as Array<{
+        id: string;
+        name?: string | null;
+        legal_name?: string | null;
+        logo_url?: string | null;
+      }>;
+      customerById = new Map(
+        typedCustomerRows.map((row) => [
+          row.id,
+          { name: row.name ?? null, legal_name: row.legal_name ?? null, logo_url: row.logo_url ?? null },
+        ])
+      );
+    }
   }
+
+  return rows.map((row) => {
+    const customer = row.customer_id ? customerById.get(row.customer_id) : undefined;
+    return {
+      ...row,
+      customer_name: row.customer_name ?? customer?.name ?? customer?.legal_name ?? null,
+      customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? null,
+      design_brief: row.design_brief ?? null,
+    };
+  });
 }
 
 export async function listCustomersBySearch(teamId: string, search: string) {
@@ -589,17 +542,16 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     let data: TeamMemberViewRow[] | null = null;
     let error: unknown = null;
     const columnsToTry = [
-      "user_id, full_name, avatar_url, email, job_role",
+      "user_id, full_name, avatar_url",
       "user_id, full_name, avatar_url, email",
       "user_id, full_name, avatar_url, job_role",
-      "user_id, full_name, avatar_url",
+      "user_id, full_name, avatar_url, email, job_role",
     ];
     for (const columns of columnsToTry) {
       const result = await supabase
         .from("team_members_view")
         .select(columns)
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: true });
+        .eq("team_id", teamId);
       data = (result.data as unknown as TeamMemberViewRow[] | null) ?? null;
       error = result.error;
       if (!error) break;
@@ -620,6 +572,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       avatarUrl: row.avatar_url ?? null,
       jobRole: row.job_role ?? null,
     }));
+    baseMembers.sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
     // If team_members_view doesn't expose job_role, hydrate it from memberships_view
     // (this is the canonical source used by TeamMembersPage).
@@ -672,8 +625,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         const result = await supabase
           .from("team_members")
           .select(columns)
-          .eq("team_id", teamId)
-          .order("created_at", { ascending: true });
+          .eq("team_id", teamId);
         data = (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
         fallbackError = result.error;
         if (!fallbackError) break;
@@ -692,6 +644,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         avatarUrl: null,
         jobRole: row.job_role ?? null,
       }));
+      baseMembers.sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
       const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
       if (hasAnyJobRole || !workspaceId || baseMembers.length === 0) {
