@@ -223,32 +223,12 @@ export function ProfilePage() {
     setAvatarUploading(true);
     try {
       const fileName = `avatar-${Date.now()}.png`;
-      const workspaceId = await resolveWorkspaceId(userId);
-      const pathCandidates = [
-        `${userId}/${fileName}`,
-        `${userId}/avatars/${fileName}`,
-        `avatars/${userId}/${fileName}`,
-        `${userId}/profile/${fileName}`,
-        workspaceId ? `${userId}/${workspaceId}/${fileName}` : null,
-        workspaceId ? `${userId}/${workspaceId}/avatars/${fileName}` : null,
-      ].filter((value): value is string => Boolean(value));
+      const uploadedPath = `avatars/${userId}/${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(uploadedPath, blob, { upsert: true, contentType: blob.type || "image/png" });
 
-      let uploadedPath: string | null = null;
-      let lastUploadError: unknown = null;
-
-      for (const candidate of [...new Set(pathCandidates)]) {
-        const { error: uploadError } = await supabase.storage
-          .from(AVATAR_BUCKET)
-          .upload(candidate, blob, { upsert: true, contentType: blob.type || "image/png" });
-
-        if (!uploadError) {
-          uploadedPath = candidate;
-          break;
-        }
-        lastUploadError = uploadError;
-      }
-
-      if (!uploadedPath) throw lastUploadError ?? new Error("Avatar upload failed");
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(uploadedPath);
       const publicUrl = data.publicUrl;
@@ -258,9 +238,14 @@ export function ProfilePage() {
       });
 
       if (updateError) throw updateError;
-      setAvatarUrl(publicUrl);
+      await supabase.auth.refreshSession();
+      const { data: refreshedUserData } = await supabase.auth.getUser();
+      const refreshedAvatarUrl =
+        (refreshedUserData.user?.user_metadata?.avatar_url as string | undefined) || publicUrl;
+
+      setAvatarUrl(refreshedAvatarUrl);
       setAvatarDraftUrl(null);
-      commitCache({ avatarUrl: publicUrl });
+      commitCache({ avatarUrl: refreshedAvatarUrl });
       toast.success("Аватар оновлено");
     } catch (error: unknown) {
       toast.error("Не вдалося оновити аватар", {
