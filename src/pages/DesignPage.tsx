@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Loader2, Palette, CheckCircle2, Paperclip, Clock, Timer, MoreVertical, Trash2, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
@@ -2001,11 +2002,11 @@ export default function DesignPage() {
           }
         }}
       >
-        <DialogContent className="max-w-[640px]">
+        <DialogContent className="max-w-[640px] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Нова дизайн-задача (без прорахунку)</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto pr-1 max-h-[calc(85vh-170px)]">
             <div className="space-y-2">
               <Label htmlFor="standalone-design-title">Назва задачі</Label>
               <Input
@@ -2038,7 +2039,7 @@ export default function DesignPage() {
                       {createDeadline ? format(createDeadline, "d MMM yyyy", { locale: uk }) : "Оберіть дедлайн"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={createDeadline}
@@ -2050,6 +2051,12 @@ export default function DesignPage() {
                       fromYear={new Date().getFullYear() - 3}
                       toYear={new Date().getFullYear() + 5}
                       initialFocus
+                    />
+                    <DateQuickActions
+                      onSelect={(date) => {
+                        setCreateDeadline(date ?? undefined);
+                        setCreateDeadlinePopoverOpen(false);
+                      }}
                     />
                   </PopoverContent>
                 </Popover>

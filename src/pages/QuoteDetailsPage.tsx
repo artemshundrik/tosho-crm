@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1968,20 +1969,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAttachmentsDragActive(false);
   };
 
-  const handleSaveDeadline = async () => {
+  const handleSaveDeadline = async (overrides?: { date?: string; note?: string }) => {
     if (!quote) return;
     setDeadlineSaving(true);
     setDeadlineError(null);
     try {
       const prevDate = toDateInputValue(quote.deadline_at ?? null);
       const prevNote = quote.deadline_note ?? "";
-      const nextDate = deadlineDate || "";
-      const nextNote = deadlineNote.trim();
+      const nextDate = (overrides?.date ?? deadlineDate) || "";
+      const nextNote = (overrides?.note ?? deadlineNote).trim();
       const deadlineChanged = prevDate !== nextDate || prevNote.trim() !== nextNote;
 
       const payload = {
-        deadline_at: deadlineDate || null,
-        deadline_note: deadlineNote.trim() || null,
+        deadline_at: nextDate || null,
+        deadline_note: nextNote || null,
       };
       const { error } = await supabase
         .schema("tosho")
@@ -2012,18 +2013,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     } finally {
       setDeadlineSaving(false);
     }
-  };
-
-  const handleDeadlineQuickSet = (offsetDays: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() + offsetDays);
-    setDeadlineDate(formatDateInput(date));
-    setDeadlinePopoverOpen(false);
-  };
-
-  const handleDeadlineClear = () => {
-    setDeadlineDate("");
-    setDeadlinePopoverOpen(false);
   };
 
   // Quick status change
@@ -3230,63 +3219,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           {deadlineDate ? formatDeadlineLabel(deadlineDate) : "Оберіть дату"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align="start" className="p-0 w-auto">
+                      <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
                         <CalendarPicker
                           mode="single"
                           selected={toLocalDate(deadlineDate)}
                           onSelect={async (date) => {
-                            setDeadlineDate(formatDateInput(date ?? null));
+                            const nextDate = formatDateInput(date ?? null);
+                            setDeadlineDate(nextDate);
                             setDeadlinePopoverOpen(false);
-                            await handleSaveDeadline();
+                            await handleSaveDeadline({ date: nextDate });
                           }}
                           initialFocus
                         />
-                        <div className="flex flex-wrap gap-2 p-3 border-t border-border/60">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              handleDeadlineQuickSet(0);
-                              await handleSaveDeadline();
-                            }}
-                          >
-                            Сьогодні
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              handleDeadlineQuickSet(1);
-                              await handleSaveDeadline();
-                            }}
-                          >
-                            Завтра
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              handleDeadlineQuickSet(7);
-                              await handleSaveDeadline();
-                            }}
-                          >
-                            +7 днів
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={async () => {
-                              handleDeadlineClear();
-                              await handleSaveDeadline();
-                            }}
-                          >
-                            Очистити
-                          </Button>
-                        </div>
+                        <DateQuickActions
+                          clearLabel="Очистити"
+                          onSelect={async (date) => {
+                            const nextDate = formatDateInput(date ?? null);
+                            setDeadlineDate(nextDate);
+                            setDeadlinePopoverOpen(false);
+                            await handleSaveDeadline({ date: nextDate });
+                          }}
+                        />
                       </PopoverContent>
                     </Popover>
                     <Input
@@ -3294,14 +3247,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       placeholder="Коментар до дедлайну (опціонально)"
                       value={deadlineNote}
                       onChange={(e) => setDeadlineNote(e.target.value)}
-                      onBlur={handleSaveDeadline}
+                      onBlur={() => void handleSaveDeadline()}
                       maxLength={200}
                     />
                     <Button
                       size="icon"
                       variant="outline"
                       className="h-9 w-9"
-                      onClick={handleSaveDeadline}
+                      onClick={() => void handleSaveDeadline()}
                       disabled={deadlineSaving}
                       aria-label="Зберегти дедлайн"
                     >

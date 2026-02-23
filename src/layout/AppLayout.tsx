@@ -21,6 +21,8 @@ import {
   Truck,
   Users,
   CircleDot,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,7 @@ import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-c
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
+import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
 
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { toast } from "sonner";
@@ -461,6 +464,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   ) : (
     children
   );
+  const isCanvasMode = location.pathname === ROUTES.ordersEstimates;
 
   // /matches/:matchId/events
   const matchEventsRoute = useMemo(() => {
@@ -553,6 +557,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("app_sidebar_collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [usdRateOpen, setUsdRateOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
@@ -564,6 +575,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [usdUahUpdatedAt, setUsdUahUpdatedAt] = useState<string | null>(null);
   const [usdUahLoading, setUsdUahLoading] = useState(false);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("app_sidebar_collapsed", sidebarCollapsed ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarCollapsed]);
 
   const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
     setUsdUahLoading(true);
@@ -715,7 +734,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           const row = payload.new as NotificationRow;
           const item = mapNotificationRow(row);
           setNotifications((prev) => [item, ...prev].slice(0, 20));
-          toast(item.title, { description: item.description || undefined });
+          const toastTitle = item.title?.trim() || "Нове сповіщення";
+          const toastDescription = item.description?.trim() || undefined;
+          toast(toastTitle, { description: toastDescription });
         }
       )
       .subscribe();
@@ -778,95 +799,121 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   return (
     <WorkspacePresenceProvider value={workspacePresence}>
-      <div className="min-h-screen min-h-[100dvh] bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+      <div
+        className={cn(
+          "min-h-screen min-h-[100dvh] text-foreground selection:bg-primary/20 selection:text-primary",
+          isCanvasMode ? "bg-[hsl(var(--sidebar-surface-bg))]" : "bg-background"
+        )}
+      >
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
-        <div className="px-4 pt-5">
+      <aside
+        className={cn(
+          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))]",
+          "transition-[width,background-color,border-color] duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          sidebarCollapsed ? "w-[84px]" : "w-[270px]"
+        )}
+      >
+        <div className={cn("pt-5", sidebarCollapsed ? "px-3" : "px-4")}>
+          <div className={cn("mb-2 flex items-center justify-between gap-2", sidebarCollapsed && "group/logo")}>
           <Link
             to={ROUTES.overview}
             onMouseEnter={() => preloadRoute(ROUTES.overview)}
             onFocus={() => preloadRoute(ROUTES.overview)}
             onTouchStart={() => preloadRoute(ROUTES.overview)}
             className={cn(
-              "flex w-full rounded-[var(--radius-lg)] px-2 py-2.5",
+              "flex rounded-[var(--radius-lg)] py-2.5",
+              sidebarCollapsed ? "justify-center px-0" : "flex-1 px-2",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             )}
             aria-label="ToSho CRM"
           >
-            <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
+            {sidebarCollapsed ? (
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary/15 text-xs font-semibold text-primary">
+                TS
+              </span>
+            ) : (
+              <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
+            )}
           </Link>
-        </div>
-
-        {/* Search (Cmd+K) */}
-        <div className="px-4 pt-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              readOnly
-              value=""
-              placeholder="Пошук…"
-              className={cn(
-                "h-10 rounded-[var(--radius-lg)] pl-10 pr-16 bg-background/60",
-                "border border-input",
-                "cursor-pointer",
-                "focus-visible:ring-2 focus-visible:ring-primary/30"
-              )}
-              onClick={() => setCmdkOpen(true)}
-            />
-            <div className="absolute right-2 inset-y-0 flex items-center">
-              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
-                <span className="text-[11px]">⌘</span>K
-              </kbd>
-            </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-200",
+              sidebarCollapsed &&
+                "opacity-0 -translate-x-1 pointer-events-none group-hover/logo:opacity-100 group-hover/logo:translate-x-0 group-focus-within/logo:opacity-100 group-focus-within/logo:translate-x-0 group-hover/logo:pointer-events-auto group-focus-within/logo:pointer-events-auto"
+            )}
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
+            title={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+        <nav className={cn("flex-1 overflow-y-auto py-5", sidebarCollapsed ? "px-2 space-y-3" : "px-4 space-y-6")}>
           <SidebarGroup
             label="Головне"
             links={sidebarLinks.filter((l) => l.group === "overview")}
             currentPath={location.pathname}
             notificationsUnreadCount={unreadCount}
+            collapsed={sidebarCollapsed}
           />
           <SidebarGroup
             label="Замовлення"
             links={sidebarLinks.filter((l) => l.group === "orders")}
             currentPath={location.pathname}
             notificationsUnreadCount={unreadCount}
+            collapsed={sidebarCollapsed}
           />
           <SidebarGroup
             label="Фінанси"
             links={sidebarLinks.filter((l) => l.group === "finance")}
             currentPath={location.pathname}
             notificationsUnreadCount={unreadCount}
+            collapsed={sidebarCollapsed}
           />
           <SidebarGroup
             label="Операції"
             links={sidebarLinks.filter((l) => l.group === "operations")}
             currentPath={location.pathname}
             notificationsUnreadCount={unreadCount}
+            collapsed={sidebarCollapsed}
           />
           <SidebarGroup
             label="Акаунт"
             links={sidebarLinks.filter((l) => l.group === "account")}
             currentPath={location.pathname}
             notificationsUnreadCount={unreadCount}
+            collapsed={sidebarCollapsed}
           />
         </nav>
 
         {/* Footer / Profile */}
-<div className="border-t border-border p-4">
-  <UserMenu />
+<div className={cn(sidebarCollapsed ? "p-2" : "p-4")}>
+  <UserMenu compact={sidebarCollapsed} />
 </div>
       </aside>
 
       {/* MAIN */}
-      <div className="md:pl-[270px]">
+      <div
+        className={cn(
+          "transition-[padding] duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          sidebarCollapsed ? "md:pl-[84px]" : "md:pl-[270px]"
+        )}
+      >
+        <div className={cn(isCanvasMode ? "app-canvas-shell md:m-1.5 md:min-h-[calc(100dvh-12px)]" : "")}>
         {/* HEADER */}
         <header
           key={theme}
-          className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl"
+          className={cn(
+            "z-20 border-b border-border",
+            isCanvasMode ? "bg-[hsl(var(--app-shell-bg))]" : "bg-background/75 backdrop-blur-xl",
+            isCanvasMode ? "" : "sticky top-0"
+          )}
         >
           <div className="flex h-14 items-center justify-between px-4 md:px-5 lg:px-6">
             <div className="flex items-center gap-3">
@@ -1163,8 +1210,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </header>
 
         {/* CONTENT */}
-        <main className="w-full overflow-x-hidden px-4 py-5 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:px-5 md:pb-5 lg:px-6">
-          <div className="mx-auto max-w-[1600px] space-y-6 min-w-0">
+        <main
+          className={cn(
+            "w-full overflow-x-hidden pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-5",
+            isCanvasMode ? "px-0 py-0 md:px-0 lg:px-0" : "px-4 py-5 md:px-5 lg:px-6"
+          )}
+          data-canvas-mode={isCanvasMode ? "on" : "off"}
+        >
+          <div className={cn(isCanvasMode ? "min-w-0" : "mx-auto max-w-[1600px] space-y-6 min-w-0")}>
             {/* Page header (desktop) */}
             {header.showPageHeader === false ? (
               header.eyebrow ? (
@@ -1189,6 +1242,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div>{pageContent}</div>
           </div>
         </main>
+        </div>
       </div>
 
       <TabBar hidden={mobileMenuOpen} />
@@ -1204,20 +1258,24 @@ function SidebarGroup({
   currentPath,
   onNavigate,
   notificationsUnreadCount = 0,
+  collapsed = false,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
   onNavigate?: () => void;
   notificationsUnreadCount?: number;
+  collapsed?: boolean;
 }) {
   if (links.length === 0) return null;
 
   return (
     <div className="space-y-2">
-      <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        {label}
-      </h4>
+      {!collapsed ? (
+        <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          {label}
+        </h4>
+      ) : null}
 
       <div className="space-y-1">
         {links.map((link) => {
@@ -1225,9 +1283,8 @@ function SidebarGroup({
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
 
-          return (
+          const navLink = (
             <Link
-              key={link.to}
               to={link.to}
               onClick={onNavigate}
               onMouseEnter={() => preloadRoute(link.to)}
@@ -1236,15 +1293,22 @@ function SidebarGroup({
               className={cn(
                 "relative group flex items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-medium transition-colors",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                collapsed && "mx-auto h-10 w-10 justify-center gap-0 rounded-[12px] px-0 py-0",
                 active
-                  ? "bg-primary/10 text-foreground"
+                  ? collapsed
+                    ? "bg-primary/15 text-foreground"
+                    : "bg-primary/10 text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               )}
             >
               <span
                 className={cn(
                   "absolute left-1 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full transition-opacity",
-                  active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
+                  collapsed
+                    ? "hidden"
+                    : active
+                    ? "bg-primary opacity-100"
+                    : "bg-primary opacity-0 group-hover:opacity-40"
                 )}
               />
 
@@ -1255,13 +1319,23 @@ function SidebarGroup({
                 )}
               />
 
-              <span className="truncate">{link.label}</span>
+              {!collapsed ? <span className="truncate">{link.label}</span> : null}
               {showNotificationsBadge ? (
-                <span className="ml-2 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
-                  {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
-                </span>
+                collapsed ? (
+                  <span className="absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                ) : (
+                  <span className="ml-2 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                    {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
+                  </span>
+                )
               ) : null}
             </Link>
+          );
+
+          return (
+            <SidebarIconTooltip key={link.to} label={link.label} collapsed={collapsed}>
+              {navLink}
+            </SidebarIconTooltip>
           );
         })}
       </div>

@@ -60,8 +60,6 @@ import {
   XCircle,
   Pencil,
   Calculator,
-  LayoutGrid,
-  List,
   Eye,
   Printer,
   Download,
@@ -103,6 +101,10 @@ import {
 } from "@/components/ui/controlStyles";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
+import { PageCanvas, PageCanvasBody, PageCanvasHeader } from "@/components/canvas/PageCanvas";
+import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
+import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
+import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 
 type QuotesPageProps = {
   teamId: string;
@@ -297,6 +299,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return saved === "kanban" ? "kanban" : "table";
   });
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+  const [dragPlaceholder, setDragPlaceholder] = useState<{
+    columnId: string;
+    index: number;
+  } | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>(
@@ -2411,6 +2418,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(e, "") });
     } finally {
       setDraggingId(null);
+      setDragOverColumnId(null);
+      setDragPlaceholder(null);
     }
   };
 
@@ -3088,58 +3097,31 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [bulkAddAvailableSets, bulkAddExistingOpen]);
 
   return (
-    <div className="quote-page-canvas">
+    <PageCanvas>
       {/* Modern Linea-style Header Block */}
-      <div className="quote-sticky-section">
-        <div className="px-5 pt-2 pb-4 space-y-4">
+      <PageCanvasHeader sticky>
+        <div className="px-5 pt-4 pb-4 space-y-4">
           {/* Header Section */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4 min-w-0 lg:min-h-[84px]">
-              <div className="h-12 w-12 rounded-[var(--radius-lg)] border border-primary/30 bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <Calculator className="h-5 w-5" />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="min-w-0 flex items-center gap-3">
+                <h1 className="text-2xl leading-none font-semibold tracking-tight">Прорахунки</h1>
+                <ActiveHereCard
+                  entries={workspacePresence.activeHereEntries}
+                  title="Тут"
+                  className="h-8 px-3 py-0 bg-muted/20 border-border/50"
+                />
               </div>
-              <div className="min-w-0 flex flex-col justify-center gap-1.5">
-                <h1 className="text-2xl font-semibold leading-none tracking-tight">Прорахунки</h1>
-                <p className="text-sm leading-6 text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
-              </div>
+              <p className="hidden xl:block text-sm text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {/* View Mode Switcher */}
-              <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={viewMode === "table"}
-                  onClick={() => setViewMode("table")}
-                  className="gap-1.5"
-                >
-                  <List className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Список</span>
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={viewMode === "kanban"}
-                  onClick={() => setViewMode("kanban")}
-                  className="gap-1.5"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Kanban</span>
-                </Button>
-              </div>
+              <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
               <Button onClick={openCreate} size="sm" className="gap-2 h-10">
                 <PlusIcon className="h-4 w-4" />
                 Новий прорахунок
               </Button>
             </div>
-          </div>
-
-          <div className="flex items-center justify-start">
-            <ActiveHereCard
-              entries={workspacePresence.activeHereEntries}
-              title="Активні тут"
-              className="h-8 px-3 py-0"
-            />
           </div>
 
           {/* Search and Filters Row */}
@@ -3224,7 +3206,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </div>
 
           {/* Status Filters Row */}
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               {contentView !== "sets" ? (
                 <>
@@ -3328,11 +3310,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : null}
           </div>
         </div>
-      </div>
+      </PageCanvasHeader>
 
       {/* Bulk actions */}
       {contentView !== "sets" && selectedIds.size > 0 && (
-        <div className={cn("quote-section", "px-5 py-3")}>
+        <PageCanvasBody className="px-5 py-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
@@ -3464,11 +3446,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </Button>
             </div>
           </div>
-        </div>
+        </PageCanvasBody>
       )}
 
       {contentView !== "quotes" && (
-      <div className="quote-section">
+      <EstimatesTableCanvas>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div>
             <div className="text-base font-semibold">КП та набори</div>
@@ -3502,8 +3484,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         ) : (
           <div className="overflow-x-auto">
             <Table className="[&_th]:px-5 [&_td]:px-5">
-              <TableHeader>
-                <TableRow className="bg-muted/30 border-b border-border/60">
+                <TableHeader>
+                  <TableRow className="bg-transparent border-b border-border/40">
                   <TableHead className="w-[12px]"></TableHead>
                   <TableHead>Назва</TableHead>
                   <TableHead>Тип</TableHead>
@@ -3617,12 +3599,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </Table>
           </div>
         )}
-      </div>
+      </EstimatesTableCanvas>
       )}
 
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
-        <div className="quote-section">
+        <EstimatesTableCanvas>
           {loading ? (
             <div className="p-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -3717,7 +3699,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             <div className="overflow-x-auto">
               <Table className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
-                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                  <TableRow className="bg-transparent hover:bg-transparent border-b border-border/40">
                     <TableHead className="w-[44px]">
                       <Checkbox
                         checked={
@@ -4003,9 +3985,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </Table>
             </div>
           )}
-        </div>
+        </EstimatesTableCanvas>
       ) : (
-        <div className="mt-1">
+        <EstimatesKanbanCanvas>
           {loading ? (
             <div className="p-12 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -4031,21 +4013,43 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto -mx-1">
-              <div className="min-w-[1000px] flex gap-3 px-1 pb-4">
+            <div className="overflow-x-auto px-4 pb-2 pt-3 md:px-5">
+              <div className="w-max flex gap-4 pb-5">
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
                     <div
                       key={column.id}
-                      className="flex-1 min-w-[220px] max-w-[280px] rounded-[var(--radius-lg)] bg-muted/30 border border-border/50 flex flex-col"
-                      onDragOver={(e) => e.preventDefault()}
+                      className={cn(
+                        "kanban-column-surface",
+                        `kanban-column-status-${column.id}`,
+                        draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
+                        "basis-[300px] shrink-0 flex flex-col"
+                      )}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragOverColumnId !== column.id) {
+                          setDragOverColumnId(column.id);
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        const nextTarget = e.relatedTarget;
+                        if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) {
+                          return;
+                        }
+                        if (dragOverColumnId === column.id) {
+                          setDragOverColumnId(null);
+                        }
+                        if (dragPlaceholder?.columnId === column.id) {
+                          setDragPlaceholder(null);
+                        }
+                      }}
                       onDrop={(e) => {
                         e.preventDefault();
                         handleDropToStatus(column.id);
                       }}
                     >
-                      <div className="flex items-center justify-between gap-2 px-3 py-2.5 shrink-0">
+                      <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
                         <div className="flex items-center gap-2 min-w-0">
                           {(() => {
                             const Icon = statusIcons[column.id] ?? Clock;
@@ -4061,132 +4065,185 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </div>
                       <div
                         className={cn(
-                          "flex-1 overflow-y-auto px-2 pb-3 space-y-2 min-h-[120px]",
+                          "flex-1 overflow-y-auto px-2.5 pb-3.5 pt-2.5 space-y-2 min-h-[120px]",
                           draggingId && "pb-4"
                         )}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (!draggingId) return;
+                          if (dragOverColumnId !== column.id) {
+                            setDragOverColumnId(column.id);
+                          }
+                          const listNode = e.currentTarget;
+                          const cardNodes = Array.from(
+                            listNode.querySelectorAll<HTMLElement>("[data-kanban-card='true']")
+                          );
+                          let nextIndex = cardNodes.length;
+                          for (let i = 0; i < cardNodes.length; i += 1) {
+                            const rect = cardNodes[i].getBoundingClientRect();
+                            if (e.clientY < rect.top + rect.height / 2) {
+                              nextIndex = i;
+                              break;
+                            }
+                          }
+                          if (
+                            dragPlaceholder?.columnId !== column.id ||
+                            dragPlaceholder.index !== nextIndex
+                          ) {
+                            setDragPlaceholder({ columnId: column.id, index: nextIndex });
+                          }
+                        }}
                       >
                         {items.length === 0 ? (
-                          <div className="rounded-md border border-dashed border-border/50 bg-transparent text-muted-foreground/70 text-[11px] py-6 px-3 text-center">
-                            Немає прорахунків
-                          </div>
+                          draggingId && dragPlaceholder?.columnId === column.id ? (
+                            <div className="kanban-drop-placeholder rounded-[var(--radius-md)] border-2 border-dashed px-3 py-5" />
+                          ) : (
+                            <div className="kanban-empty-state rounded-md border border-dashed border-border/50 text-muted-foreground/70 text-[11px] py-6 px-3 text-center">
+                              <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-border/50 bg-muted/20">
+                                {(() => {
+                                  const Icon = statusIcons[column.id] ?? Clock;
+                                  return (
+                                    <Icon className={cn("h-3.5 w-3.5", statusColorClass[column.id] ?? "text-muted-foreground")} />
+                                  );
+                                })()}
+                              </div>
+                              <p className="text-[11px] font-medium">Немає прорахунків</p>
+                              <p className="mt-1 text-[10px] text-muted-foreground/60">Перетягніть картку сюди</p>
+                            </div>
+                          )
                         ) : (
-                          items.map((row) => {
+                          items.map((row, index) => {
                             const badge = getDeadlineBadge(row.deadline_at ?? null);
                             const Icon = quoteTypeIcon(row.quote_type);
                             const normalizedStatus = normalizeStatus(row.status);
                             const membership = quoteMembershipByQuoteId.get(row.id);
                             return (
-                              <div
-                                key={row.id}
-                                draggable
-                                onDragStart={() => handleDragStart(row.id)}
-                                onDragEnd={() => setDraggingId(null)}
-                                onClick={() => navigate(`/orders/estimates/${row.id}`)}
-                                className={cn(
-                                  "rounded-[var(--radius-md)] border border-border/60 bg-card p-3 transition-all hover:border-border hover:bg-card/90 cursor-pointer active:scale-[0.995]",
-                                  draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
-                                )}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    {(() => {
-                                      const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
-                                      return (
-                                        <StatusIcon
-                                          className={cn(
-                                            "h-4 w-4 shrink-0",
-                                            statusColorClass[normalizedStatus] ?? "text-muted-foreground"
-                                          )}
-                                        />
-                                      );
-                                    })()}
-                                    <span className="font-mono text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-                                      {row.number ?? "Не вказано"}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mt-3 space-y-2">
-                                  {membership ? (
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      {membership.kp_count > 0 ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
-                                        >
-                                          <FileText className="h-3 w-3" />
-                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
-                                      {membership.set_count > 0 ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
-                                        >
-                                          <Layers className="h-3 w-3" />
-                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
+                              <div key={row.id}>
+                                {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
+                                  <div className="kanban-drop-placeholder-inline" />
+                                ) : null}
+                                <div
+                                  data-kanban-card="true"
+                                  draggable
+                                  onDragStart={() => handleDragStart(row.id)}
+                                  onDragEnd={() => {
+                                    setDraggingId(null);
+                                    setDragOverColumnId(null);
+                                    setDragPlaceholder(null);
+                                  }}
+                                  onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                                  className={cn(
+                                    "kanban-estimate-card rounded-[var(--radius-md)] border border-border/60 bg-card p-2.5 transition-all hover:border-border hover:bg-card/90 cursor-pointer active:scale-[0.995]",
+                                    draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
+                                  )}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {(() => {
+                                        const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
+                                        return (
+                                          <StatusIcon
+                                            className={cn(
+                                              "h-4 w-4 shrink-0",
+                                              statusColorClass[normalizedStatus] ?? "text-muted-foreground"
+                                            )}
+                                          />
+                                        );
+                                      })()}
+                                      <span className="font-mono text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+                                        {row.number ?? "Не вказано"}
+                                      </span>
                                     </div>
-                                  ) : null}
-                                  <div className="flex items-center gap-2 text-sm font-medium">
-                                    {row.customer_logo_url ? (
-                                      <img
-                                        src={row.customer_logo_url}
-                                        alt={row.customer_name ?? "logo"}
-                                        className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20"
-                                        loading="lazy"
-                                        onError={(e) => {
-                                          const target = e.currentTarget;
-                                          target.style.display = "none";
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center">
-                                        {getInitials(row.customer_name)}
+                                  </div>
+                                  <div className="mt-2.5 space-y-1.5">
+                                    {membership ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        {membership.kp_count > 0 ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                          >
+                                            <FileText className="h-3 w-3" />
+                                            КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                          </Badge>
+                                        ) : null}
+                                        {membership.set_count > 0 ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                          >
+                                            <Layers className="h-3 w-3" />
+                                            Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                          </Badge>
+                                        ) : null}
                                       </div>
-                                    )}
-                                    <span className="truncate">{row.customer_name ?? "Не вказано"}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <AvatarBase
-                                      src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                                      name={getManagerLabel(row.assigned_to)}
-                                      fallback={
-                                        row.assigned_to
-                                          ? getInitials(getManagerLabel(row.assigned_to))
-                                          : "Не вказано"
-                                      }
-                                      size={22}
-                                      className="text-[9px] font-semibold"
-                                    />
-                                    <span className="truncate">
-                                      {getManagerLabel(row.assigned_to)}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                                  <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-2 py-1 font-semibold">
-                                    {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                                    {quoteTypeLabel(row.quote_type)}
-                                  </div>
-                                  {row.deadline_at ? (
-                                    (() => {
-                                      const shortLabel = formatDeadlineShort(row.deadline_at!);
-                                      if (!shortLabel) return null;
-                                      return (
-                                        <QuoteDeadlineBadge
-                                          tone={badge.tone}
-                                          label={shortLabel}
-                                          compact
+                                    ) : null}
+                                    <div className="flex items-center gap-2 text-[15px] font-medium">
+                                      {row.customer_logo_url ? (
+                                        <img
+                                          src={row.customer_logo_url}
+                                          alt={row.customer_name ?? "logo"}
+                                          className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20"
+                                          loading="lazy"
+                                          onError={(e) => {
+                                            const target = e.currentTarget;
+                                            target.style.display = "none";
+                                          }}
                                         />
-                                      );
-                                    })()
-                                  ) : null}
+                                      ) : (
+                                        <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center">
+                                          {getInitials(row.customer_name)}
+                                        </div>
+                                      )}
+                                      <span className="truncate">{row.customer_name ?? "Не вказано"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                                      <AvatarBase
+                                        src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                                        name={getManagerLabel(row.assigned_to)}
+                                        fallback={
+                                          row.assigned_to
+                                            ? getInitials(getManagerLabel(row.assigned_to))
+                                            : "Не вказано"
+                                        }
+                                        size={22}
+                                        className="text-[9px] font-semibold"
+                                      />
+                                      <span className="truncate">
+                                        {getManagerLabel(row.assigned_to)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2.5 flex items-center justify-between gap-2 text-xs">
+                                    <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-2 py-1 font-semibold">
+                                      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                                      {quoteTypeLabel(row.quote_type)}
+                                    </div>
+                                    {row.deadline_at ? (
+                                      (() => {
+                                        const shortLabel = formatDeadlineShort(row.deadline_at!);
+                                        if (!shortLabel) return null;
+                                        return (
+                                          <QuoteDeadlineBadge
+                                            tone={badge.tone}
+                                            label={shortLabel}
+                                            compact
+                                          />
+                                        );
+                                      })()
+                                    ) : null}
+                                  </div>
                                 </div>
                               </div>
                             );
                           })
                         )}
+                        {items.length > 0 &&
+                        draggingId &&
+                        dragPlaceholder?.columnId === column.id &&
+                        dragPlaceholder.index === items.length ? (
+                          <div className="kanban-drop-placeholder-inline" />
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -4194,7 +4251,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </div>
             </div>
           )}
-        </div>
+        </EstimatesKanbanCanvas>
       ))}
 
       {rowStatusError && (
@@ -5020,6 +5077,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         catalogTypes={catalogTypes}
         currentUserId={currentUserId}
       />
-    </div>
+    </PageCanvas>
   );
 }

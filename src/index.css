@@ -154,32 +154,67 @@
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;
     --tabbar-transition: 140ms;
+
+    /* --- CANVAS TOKENS (LIGHT) --- */
+    --canvas-bg: 0 0% 100%;
+    --canvas-border: 240 9% 86%;
+    --canvas-radius: 28px;
+    --canvas-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    --canvas-header-bg: 240 20% 98%;
+    --canvas-grid-line: 240 10% 91%;
+    --canvas-gutter-x: 20px;
+    --canvas-gutter-y: 18px;
+
+    /* --- APP SHELL TOKENS (LIGHT) --- */
+    --app-shell-bg: 240 20% 98%;
+    --app-shell-radius: 16px;
+    --sidebar-surface-bg: 240 10% 90%;
+
+    /* --- KANBAN COLUMN TOKENS (LIGHT) --- */
+    --kanban-col-new-bg: 220 14% 98%;
+    --kanban-col-new-border: 220 10% 88%;
+    --kanban-col-new-accent: 220 10% 62%;
+    --kanban-col-estimating-bg: 207 58% 98%;
+    --kanban-col-estimating-border: 207 42% 88%;
+    --kanban-col-estimating-accent: 207 84% 58%;
+    --kanban-col-estimated-bg: 256 58% 98%;
+    --kanban-col-estimated-border: 256 40% 89%;
+    --kanban-col-estimated-accent: 256 82% 66%;
+    --kanban-col-awaiting-bg: 42 90% 98%;
+    --kanban-col-awaiting-border: 42 64% 87%;
+    --kanban-col-awaiting-accent: 42 92% 54%;
+    --kanban-col-approved-bg: 152 46% 97%;
+    --kanban-col-approved-border: 152 34% 86%;
+    --kanban-col-approved-accent: 152 64% 42%;
+    --kanban-col-cancelled-bg: 0 0% 98%;
+    --kanban-col-cancelled-border: 220 10% 88%;
+    --kanban-col-cancelled-accent: 352 60% 62%;
   }
 
   .dark {
     /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
-    --background: 222 18% 11%; /* Темно-синій фон */
+    --background: 228 8% 10%; /* Нейтральний темний фон */
     --foreground: 210 40% 98%; /* Білий текст */
     
-    --card: 222 18% 14%;
+    --card: 228 8% 12%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 18% 13%;
+    --popover: 228 8% 12%;
     --popover-foreground: 210 40% 98%;
     
-    --secondary: 222 18% 20%;
+    --secondary: 228 8% 16%;
     --secondary-foreground: 210 40% 98%;
     
-    --muted: 222 18% 18%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 228 7% 15%;
+    --muted-foreground: 220 8% 66%;
 
-    --accent: 222 18% 18%;
+    --accent: 228 7% 15%;
     --accent-foreground: 210 40% 98%;
     
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     
-    --border: 222 18% 22%;
-    --input: 222 18% 22%;
+    --border: 228 8% 20%;
+    --input: 228 8% 20%;
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
@@ -200,11 +235,11 @@
     /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
-    --skeleton-bg: 222 18% 20%;
+    --skeleton-bg: 228 7% 18%;
 
-    --neutral-soft: 222 16% 20%;
-    --neutral-soft-border: 222 16% 26%;
-    --neutral-foreground: 215 20% 70%;
+    --neutral-soft: 228 7% 17%;
+    --neutral-soft-border: 228 8% 24%;
+    --neutral-foreground: 220 8% 72%;
 
     --info-soft: 217 70% 20%;
     --info-soft-border: 217 70% 28%;
@@ -291,6 +326,41 @@
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;
     --tabbar-transition: 140ms;
+
+    /* --- CANVAS TOKENS (DARK) --- */
+    --canvas-bg: 228 8% 9%;
+    --canvas-border: 228 8% 17%;
+    --canvas-radius: 24px;
+    --canvas-shadow: 0 8px 20px rgba(2, 6, 23, 0.32);
+    --canvas-header-bg: 228 8% 10%;
+    --canvas-grid-line: 228 8% 18%;
+    --canvas-gutter-x: 20px;
+    --canvas-gutter-y: 18px;
+
+    /* --- APP SHELL TOKENS (DARK) --- */
+    --app-shell-bg: 228 8% 10%;
+    --app-shell-radius: 14px;
+    --sidebar-surface-bg: 228 10% 8%;
+
+    /* --- KANBAN COLUMN TOKENS (DARK) --- */
+    --kanban-col-new-bg: 228 10% 11%;
+    --kanban-col-new-border: 228 9% 20%;
+    --kanban-col-new-accent: 220 10% 56%;
+    --kanban-col-estimating-bg: 214 22% 11%;
+    --kanban-col-estimating-border: 214 26% 23%;
+    --kanban-col-estimating-accent: 206 82% 58%;
+    --kanban-col-estimated-bg: 252 22% 11%;
+    --kanban-col-estimated-border: 252 22% 23%;
+    --kanban-col-estimated-accent: 256 80% 66%;
+    --kanban-col-awaiting-bg: 37 20% 11%;
+    --kanban-col-awaiting-border: 37 20% 23%;
+    --kanban-col-awaiting-accent: 42 88% 56%;
+    --kanban-col-approved-bg: 154 18% 11%;
+    --kanban-col-approved-border: 154 18% 22%;
+    --kanban-col-approved-accent: 152 70% 52%;
+    --kanban-col-cancelled-bg: 228 9% 11%;
+    --kanban-col-cancelled-border: 228 9% 20%;
+    --kanban-col-cancelled-accent: 350 62% 58%;
   }
 
   * {
@@ -299,19 +369,14 @@
   html,
   body,
   #root {
-    height: 100%;
-    min-height: 100%;
-    background-color: hsl(var(--background));
+    min-height: 100vh;
+    background-color: hsl(var(--sidebar-surface-bg));
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
   }
   body {
     color: hsl(var(--foreground));
-  }
-  @supports (height: 100dvh) {
-    html,
-    body,
-    #root {
-      min-height: 100dvh;
-    }
   }
 
   input[type="date"],
@@ -418,16 +483,28 @@
   }
 
   .quote-page-canvas {
-    @apply w-full pb-16 space-y-5 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
+    @apply w-full pb-16 overflow-hidden;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .quote-details-page-canvas {
     @apply w-full max-w-[1400px] mx-auto pb-20 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
   }
   .quote-section {
-    @apply rounded-[var(--radius-section)] border border-border/70 bg-card shadow-sm overflow-hidden;
+    @apply overflow-hidden;
+    border-radius: var(--canvas-radius);
+    border: 1px solid hsl(var(--canvas-border));
+    background: hsl(var(--canvas-bg));
+    box-shadow: var(--canvas-shadow);
   }
   .quote-sticky-section {
-    @apply rounded-[var(--radius-section)] border border-border/70 bg-card/95 supports-[backdrop-filter]:bg-card/85 supports-[backdrop-filter]:backdrop-blur sticky top-0 z-10 shadow-sm overflow-hidden;
+    @apply overflow-hidden;
+    border-radius: var(--canvas-radius);
+    border: 1px solid hsl(var(--canvas-border));
+    background: hsl(var(--canvas-header-bg));
+    box-shadow: var(--canvas-shadow);
   }
   .quote-soft-card {
     @apply border-border/70 bg-card/70 shadow-sm;
@@ -472,6 +549,181 @@
   }
   .quote-kind-stripe-set {
     background-color: hsl(var(--success-foreground));
+  }
+
+  .page-canvas-root {
+    @apply w-full;
+  }
+
+  .page-canvas-header {
+    @apply overflow-hidden;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .page-canvas-body {
+    @apply overflow-hidden;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .quote-page-canvas > .page-canvas-body + .page-canvas-body {
+    border-top: 1px solid hsl(var(--canvas-grid-line));
+  }
+
+  .estimates-table-canvas {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .estimates-kanban-canvas {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .kanban-column-surface {
+    border-radius: calc(var(--radius-lg) + 2px);
+    border: 1px solid hsl(var(--kanban-col-new-border));
+    background-color: hsl(var(--kanban-col-new-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-new-accent) / 0.3);
+    overflow: hidden;
+  }
+
+  .kanban-column-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 1px solid hsl(var(--border) / 0.45);
+    background-color: hsl(var(--kanban-col-new-bg) / 0.92);
+    backdrop-filter: blur(6px);
+  }
+
+  .kanban-estimate-card {
+    background-color: hsl(var(--card) / 0.84);
+  }
+
+  .kanban-empty-state {
+    background-color: hsl(var(--card) / 0.32);
+  }
+
+  .kanban-column-drop-target {
+    border-color: hsl(var(--primary) / 0.38);
+    box-shadow:
+      inset 0 2px 0 hsl(var(--primary) / 0.26),
+      0 0 0 1px hsl(var(--primary) / 0.16);
+  }
+
+  .kanban-drop-placeholder {
+    border-color: hsl(var(--primary) / 0.28);
+    background: hsl(var(--primary) / 0.04);
+    min-height: 74px;
+    box-shadow: none;
+  }
+
+  .kanban-drop-placeholder-inline {
+    height: 10px;
+    min-height: 10px;
+    border: none;
+    background: transparent;
+    position: relative;
+    margin: 2px 2px;
+  }
+
+  .kanban-drop-placeholder-inline::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 50%;
+    height: 2px;
+    border-radius: 9999px;
+    transform: translateY(-50%);
+    background: hsl(var(--primary) / 0.58);
+  }
+
+  .kanban-drop-placeholder-inline::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    transform: translateY(-50%);
+    background: hsl(var(--primary) / 0.58);
+    box-shadow: calc(100% + (100% - 16px)) 0 0 hsl(var(--primary) / 0.58);
+  }
+
+  .kanban-column-status-new {
+    border-color: hsl(var(--kanban-col-new-border));
+    background-color: hsl(var(--kanban-col-new-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-new-accent) / 0.35);
+  }
+
+  .kanban-column-status-estimating {
+    border-color: hsl(var(--kanban-col-estimating-border));
+    background-color: hsl(var(--kanban-col-estimating-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-estimating-accent) / 0.38);
+  }
+
+  .kanban-column-status-estimating .kanban-column-header {
+    background-color: hsl(var(--kanban-col-estimating-bg) / 0.92);
+  }
+
+  .kanban-column-status-estimated {
+    border-color: hsl(var(--kanban-col-estimated-border));
+    background-color: hsl(var(--kanban-col-estimated-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-estimated-accent) / 0.38);
+  }
+
+  .kanban-column-status-estimated .kanban-column-header {
+    background-color: hsl(var(--kanban-col-estimated-bg) / 0.92);
+  }
+
+  .kanban-column-status-awaiting_approval {
+    border-color: hsl(var(--kanban-col-awaiting-border));
+    background-color: hsl(var(--kanban-col-awaiting-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-awaiting-accent) / 0.38);
+  }
+
+  .kanban-column-status-awaiting_approval .kanban-column-header {
+    background-color: hsl(var(--kanban-col-awaiting-bg) / 0.92);
+  }
+
+  .kanban-column-status-approved {
+    border-color: hsl(var(--kanban-col-approved-border));
+    background-color: hsl(var(--kanban-col-approved-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-approved-accent) / 0.38);
+  }
+
+  .kanban-column-status-approved .kanban-column-header {
+    background-color: hsl(var(--kanban-col-approved-bg) / 0.92);
+  }
+
+  .kanban-column-status-cancelled {
+    border-color: hsl(var(--kanban-col-cancelled-border));
+    background-color: hsl(var(--kanban-col-cancelled-bg));
+    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-cancelled-accent) / 0.22);
+  }
+
+  .kanban-column-status-cancelled .kanban-column-header {
+    background-color: hsl(var(--kanban-col-cancelled-bg) / 0.92);
+  }
+
+  .app-canvas-shell {
+    border-radius: var(--app-shell-radius);
+    border: none;
+    background: hsl(var(--app-shell-bg));
+    box-shadow: none;
+    overflow: hidden;
   }
 
   .quote-activity-accent-comment {

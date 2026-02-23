@@ -28,6 +28,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { isDesignerJobRole } from "@/lib/permissions";
@@ -695,7 +696,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   : "Дедлайн"}
               </Chip>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
               <Calendar
                 mode="single"
                 selected={deadline}
@@ -707,6 +708,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 fromYear={currentYear - 3}
                 toYear={currentYear + 5}
                 initialFocus
+              />
+              <DateQuickActions
+                onSelect={(date) => {
+                  setDeadline(date ?? undefined);
+                  setDeadlinePopoverOpen(false);
+                }}
               />
             </PopoverContent>
           </Popover>

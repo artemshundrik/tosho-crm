@@ -29,6 +29,7 @@ const JOB_ROLE_NAMES: Record<string, string> = {
 type UserMenuProps = {
   mobile?: boolean;
   onNavigate?: () => void;
+  compact?: boolean;
 };
 
 type UserState = {
@@ -42,7 +43,7 @@ type UserState = {
 
 let cachedUserData: UserState | null = null;
 
-export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
+export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMenuProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(!cachedUserData);
   const [userData, setUserData] = useState<UserState>(
@@ -187,6 +188,13 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
 
   // === Десктопна версія ===
   if (loading) {
+    if (compact) {
+      return (
+        <div className="flex items-center justify-center">
+          <Skeleton className="h-10 w-10 rounded-[var(--radius-lg)]" />
+        </div>
+      );
+    }
     return (
       <div className="w-full rounded-[var(--radius-lg)] border border-border bg-card/60 px-3 py-3">
         <div className="flex items-center gap-3">
@@ -197,6 +205,63 @@ export function UserMenu({ mobile = false, onNavigate }: UserMenuProps) {
           </div>
           <Skeleton className="h-8 w-8 rounded-[var(--radius-lg)]" />
         </div>
+      </div>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center justify-center">
+        <AppDropdown
+          align="start"
+          side="top"
+          sideOffset={10}
+          contentClassName="w-[250px]"
+          trigger={
+            <Button
+              type="button"
+              variant="menu"
+              size="icon"
+              className="h-10 w-10 rounded-[var(--radius-lg)] p-0"
+              title={userData.name}
+              aria-label="Меню профілю"
+            >
+              <AvatarBase
+                src={userData.avatarUrl}
+                name={userData.name}
+                fallback={userData.initials}
+                size={32}
+                shape="rounded"
+                className="border-border"
+                imageClassName="object-cover"
+              />
+            </Button>
+          }
+          items={[
+            { type: "label", label: "Акаунт" },
+            { type: "separator" },
+            {
+              label: (
+                <>
+                  <User className="mr-2 h-4 w-4" />
+                  Мій профіль
+                </>
+              ),
+              onSelect: () => navigate("/profile"),
+            },
+            { type: "separator" },
+            {
+              label: (
+                <>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Вийти
+                </>
+              ),
+              onSelect: handleLogout,
+              destructive: true,
+            },
+          ]}
+        />
       </div>
     );
   }

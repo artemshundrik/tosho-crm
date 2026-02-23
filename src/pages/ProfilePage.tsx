@@ -34,6 +34,11 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const isMissingSchemaObjectError = (message: string) => {
+  const normalized = message.toLowerCase();
+  return normalized.includes("does not exist") || normalized.includes("not found");
+};
+
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
   
@@ -218,6 +223,29 @@ export function ProfilePage() {
     return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png", 0.92));
   };
 
+  const syncWorkspaceProfile = async (params: { fullName?: string; avatarUrl?: string | null }) => {
+    if (!userId) return;
+    const payload: Record<string, unknown> = {};
+    if (typeof params.fullName === "string") payload.full_name = params.fullName;
+    if ("avatarUrl" in params) payload.avatar_url = params.avatarUrl ?? null;
+    if (Object.keys(payload).length === 0) return;
+
+    const attempts = [
+      () => supabase.schema("tosho").from("users").update(payload).eq("id", userId),
+      () => supabase.schema("tosho").from("users").update(payload).eq("user_id", userId),
+    ];
+
+    for (const runAttempt of attempts) {
+      try {
+        const { error } = await runAttempt();
+        if (!error) return;
+        if (isMissingSchemaObjectError(error.message ?? "")) continue;
+      } catch {
+        // ignore and try fallback query
+      }
+    }
+  };
+
   const uploadAvatarBlob = async (blob: Blob) => {
     if (!userId) return;
     setAvatarUploading(true);
@@ -237,6 +265,7 @@ export function ProfilePage() {
       });
 
       if (updateError) throw updateError;
+      await syncWorkspaceProfile({ avatarUrl: publicUrl });
 
       setAvatarUrl(publicUrl);
       setAvatarDraftUrl(null);
@@ -271,6 +300,7 @@ export function ProfilePage() {
       });
 
       if (error) throw error;
+      await syncWorkspaceProfile({ fullName, avatarUrl });
       
       const i = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
       setInitials(i);
