@@ -666,9 +666,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           .slice(0, 2)
                           .toUpperCase()
                       }
-                      size={16}
+                      size={20}
                       className="border-border/60"
-                      fallbackClassName="text-[9px] font-semibold"
+                      fallbackClassName="text-[10px] font-semibold"
                     />
                   ) : (
                     <User />
@@ -700,9 +700,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         src={member.avatarUrl ?? null}
                         name={member.label}
                         fallback={member.label.slice(0, 2).toUpperCase()}
-                        size={18}
+                        size={20}
                         className="border-border/60 shrink-0"
-                        fallbackClassName="text-[9px] font-semibold"
+                        fallbackClassName="text-[10px] font-semibold"
                       />
                       <span className="text-sm truncate max-w-[220px]">{member.label}</span>
                     </Button>

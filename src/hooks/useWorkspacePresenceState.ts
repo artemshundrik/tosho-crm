@@ -322,10 +322,9 @@ export function useWorkspacePresenceState({
 
     return () => {
       presenceChannelRef.current = null;
-      setRealtimeByUserId({});
       supabase.removeChannel(channel);
     };
-  }, [buildTrackPayload, teamId, userId]);
+  }, [teamId, userId]);
 
   useEffect(() => {
     const channel = presenceChannelRef.current;

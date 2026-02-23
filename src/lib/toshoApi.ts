@@ -577,18 +577,31 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     // Hydrate missing fields from memberships_view (canonical source for workspace membership data).
     const hasMissingJobRole = baseMembers.some((m) => !m.jobRole);
     const hasMissingAvatar = baseMembers.some((m) => !m.avatarUrl);
-    if ((!hasMissingJobRole && !hasMissingAvatar) || !workspaceId || baseMembers.length === 0) {
+    const hasGenericLabel = baseMembers.some(
+      (m) => m.label.startsWith("Користувач ") || m.label === "Невідомий користувач"
+    );
+    if ((!hasMissingJobRole && !hasMissingAvatar && !hasGenericLabel) || !workspaceId || baseMembers.length === 0) {
       return baseMembers;
     }
 
     const ids = baseMembers.map((m) => m.id);
     const columnsToTryMemberships = [
-      "user_id, job_role, avatar_url",
+      "user_id, job_role, avatar_url, full_name, email",
+      "user_id, job_role, avatar_url, full_name",
+      "user_id, job_role, avatar_url, email",
       "user_id, job_role",
       "user_id, avatar_url",
       "user_id",
     ];
-    let membershipRows: Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }> | null = null;
+    let membershipRows:
+      | Array<{
+          user_id: string;
+          job_role?: string | null;
+          avatar_url?: string | null;
+          full_name?: string | null;
+          email?: string | null;
+        }>
+      | null = null;
     let membershipError: unknown = null;
     for (const columns of columnsToTryMemberships) {
       const result = await supabase
@@ -597,7 +610,14 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         .select(columns)
         .eq("workspace_id", workspaceId)
         .in("user_id", ids);
-      membershipRows = (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
+      membershipRows =
+        (result.data as unknown as Array<{
+          user_id: string;
+          job_role?: string | null;
+          avatar_url?: string | null;
+          full_name?: string | null;
+          email?: string | null;
+        }> | null) ?? null;
       membershipError = result.error;
       if (!membershipError) break;
       const message = getErrorMessage(membershipError).toLowerCase();
@@ -610,20 +630,48 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     }
 
     const jobRoleById = new Map(
-      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }>).map((row) => [
+      ((membershipRows ?? []) as Array<{
+        user_id: string;
+        job_role?: string | null;
+        avatar_url?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+      }>).map((row) => [
         row.user_id,
         row.job_role ?? null,
       ])
     );
     const avatarById = new Map(
-      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }>).map((row) => [
+      ((membershipRows ?? []) as Array<{
+        user_id: string;
+        job_role?: string | null;
+        avatar_url?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+      }>).map((row) => [
         row.user_id,
         row.avatar_url ?? null,
+      ])
+    );
+    const labelById = new Map(
+      ((membershipRows ?? []) as Array<{
+        user_id: string;
+        job_role?: string | null;
+        avatar_url?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+      }>).map((row) => [
+        row.user_id,
+        formatLabel({ user_id: row.user_id, full_name: row.full_name ?? null, email: row.email ?? null }),
       ])
     );
 
     return baseMembers.map((member) => ({
       ...member,
+      label:
+        (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
+          ? labelById.get(member.id)
+          : null) ?? member.label,
       jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
       avatarUrl: member.avatarUrl ?? avatarById.get(member.id) ?? null,
     }));
@@ -659,13 +707,24 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       baseMembers.sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
       const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
-      if (hasAnyJobRole || !workspaceId || baseMembers.length === 0) {
+      const hasGenericLabel = baseMembers.some(
+        (m) => m.label.startsWith("Користувач ") || m.label === "Невідомий користувач"
+      );
+      if ((hasAnyJobRole && !hasGenericLabel) || !workspaceId || baseMembers.length === 0) {
         return baseMembers;
       }
 
       const ids = baseMembers.map((m) => m.id);
-      const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-      let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+      const columnsToTryMemberships = [
+        "user_id, job_role, full_name, email",
+        "user_id, job_role, full_name",
+        "user_id, job_role, email",
+        "user_id, job_role",
+        "user_id",
+      ];
+      let membershipRows:
+        | Array<{ user_id: string; job_role?: string | null; full_name?: string | null; email?: string | null }>
+        | null = null;
       let membershipError: unknown = null;
       for (const columns of columnsToTryMemberships) {
         const result = await supabase
@@ -675,7 +734,12 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
           .eq("workspace_id", workspaceId)
           .in("user_id", ids);
         membershipRows =
-          (result.data as unknown as Array<{ user_id: string; job_role?: string | null }> | null) ?? null;
+          (result.data as unknown as Array<{
+            user_id: string;
+            job_role?: string | null;
+            full_name?: string | null;
+            email?: string | null;
+          }> | null) ?? null;
         membershipError = result.error;
         if (!membershipError) break;
         const message = getErrorMessage(membershipError).toLowerCase();
@@ -688,14 +752,24 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       }
 
       const jobRoleById = new Map(
-        ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null }>).map((row) => [
+        ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; full_name?: string | null; email?: string | null }>).map((row) => [
           row.user_id,
           row.job_role ?? null,
+        ])
+      );
+      const labelById = new Map(
+        ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; full_name?: string | null; email?: string | null }>).map((row) => [
+          row.user_id,
+          formatLabel({ user_id: row.user_id, full_name: row.full_name ?? null, email: row.email ?? null }),
         ])
       );
 
       return baseMembers.map((member) => ({
         ...member,
+        label:
+          (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
+            ? labelById.get(member.id)
+            : null) ?? member.label,
         jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
       }));
     }

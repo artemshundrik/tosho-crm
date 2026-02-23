@@ -86,6 +86,7 @@ type TeamMembersPageCache = {
   workspaceId: string | null;
   members: Member[];
   invites: Invite[];
+  memberProfilesByUserId: Record<string, { label: string; avatarUrl: string | null }>;
 };
 
 type AccessRoleOption = {
@@ -212,7 +213,7 @@ export function TeamMembersPage() {
   const [membersError, setMembersError] = useState<string | null>(null);
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
-  >({});
+  >(cached?.memberProfilesByUserId ?? {});
   const [memberProfilesLoading, setMemberProfilesLoading] = useState(false);
 
   const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
@@ -560,8 +561,9 @@ export function TeamMembersPage() {
       workspaceId,
       members,
       invites,
+      memberProfilesByUserId,
     });
-  }, [workspaceId, members, invites, setCache]);
+  }, [workspaceId, members, invites, memberProfilesByUserId, setCache]);
 
   const filteredMembers = members.filter((m) => {
     const email = (m.email ?? "").toLowerCase();
