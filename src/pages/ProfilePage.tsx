@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -104,7 +105,9 @@ export function ProfilePage() {
         setEmail(user.email || "");
         const metaName = user.user_metadata?.full_name || "";
         setFullName(metaName);
-        setAvatarUrl((user.user_metadata?.avatar_url as string | undefined) || null);
+        const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
+        const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
+        setAvatarUrl(displayAvatarUrl);
 
         const i = (metaName || user.email || "U")
           .split(" ")
@@ -140,7 +143,7 @@ export function ProfilePage() {
           accessRole: resolvedAccessRole,
           jobRole: resolvedJobRole,
           initials: i,
-          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
+          avatarUrl: displayAvatarUrl,
         });
       }
     } catch (error) {
@@ -239,9 +242,10 @@ export function ProfilePage() {
 
       if (updateError) throw updateError;
       await supabase.auth.refreshSession();
-      setAvatarUrl(publicUrl);
+      const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, publicUrl, AVATAR_BUCKET);
+      setAvatarUrl(displayAvatarUrl);
       setAvatarDraftUrl(null);
-      commitCache({ avatarUrl: publicUrl });
+      commitCache({ avatarUrl: displayAvatarUrl });
       window.dispatchEvent(
         new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: publicUrl } })
       );

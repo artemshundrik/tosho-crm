@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 const ACCESS_ROLE_NAMES: Record<string, string> = {
   owner: "Super Admin",
@@ -102,12 +105,15 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           else rawRole = "viewer";
         }
 
+        const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
+        const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
+
         const nextData: UserState = {
           name: fullName,
           accessRole: accessRoleLabel,
           jobRole: jobRoleLabel,
           initials: initials,
-          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null,
+          avatarUrl,
           roleKey: rawRole
         };
         cachedUserData = nextData;
@@ -119,9 +125,10 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   }, []);
 
   useEffect(() => {
-    const handleAvatarUpdated = (event: Event) => {
+    const handleAvatarUpdated = async (event: Event) => {
       const customEvent = event as CustomEvent<{ avatarUrl?: string }>;
-      const nextAvatar = customEvent.detail?.avatarUrl ?? null;
+      const rawAvatar = customEvent.detail?.avatarUrl ?? null;
+      const nextAvatar = await resolveAvatarDisplayUrl(supabase, rawAvatar, AVATAR_BUCKET);
       setUserData((prev) => {
         const next = { ...prev, avatarUrl: nextAvatar };
         cachedUserData = next;
