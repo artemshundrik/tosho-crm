@@ -56,6 +56,9 @@ import {
 } from "@/components/ui/select";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 // --- TYPES ---
 type Member = {
@@ -424,10 +427,19 @@ export function TeamMembersPage() {
 
           acc[id] = {
             label: dbRow?.full_name?.trim() || dbRow?.email?.split("@")[0]?.trim() || emailFallback,
-            avatarUrl: dbRow?.avatar_url ?? null,
+            avatarUrl: dbRow?.avatar_url ?? baseMember?.avatar_url ?? null,
           };
           return acc;
         }, {});
+
+        await Promise.all(
+          Object.entries(nextMap).map(async ([id, profile]) => {
+            nextMap[id] = {
+              ...profile,
+              avatarUrl: await resolveAvatarDisplayUrl(supabase, profile.avatarUrl, AVATAR_BUCKET),
+            };
+          })
+        );
 
         const { data: currentUserData } = await supabase.auth.getUser();
         const currentUserId = currentUserData.user?.id ?? null;
@@ -1054,7 +1066,7 @@ export function TeamMembersPage() {
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
                             <AvatarBase
-                              src={m.avatar_url ?? profile?.avatarUrl ?? null}
+                              src={profile?.avatarUrl ?? m.avatar_url ?? null}
                               name={displayName}
                               fallback={initials}
                               size={48}
