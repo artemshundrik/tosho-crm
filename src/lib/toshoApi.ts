@@ -525,7 +525,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     }
 
     if (row.user_id && isUuid(row.user_id)) {
-      return `Користувач ${row.user_id.slice(0, 8)}`;
+      return "Користувач";
     }
 
     return row.user_id || "Невідомий користувач";
@@ -542,10 +542,10 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     let data: TeamMemberViewRow[] | null = null;
     let error: unknown = null;
     const columnsToTry = [
-      "user_id, full_name, avatar_url",
+      "user_id, full_name, avatar_url, email, job_role",
       "user_id, full_name, avatar_url, email",
       "user_id, full_name, avatar_url, job_role",
-      "user_id, full_name, avatar_url, email, job_role",
+      "user_id, full_name, avatar_url",
     ];
     for (const columns of columnsToTry) {
       const result = await supabase
