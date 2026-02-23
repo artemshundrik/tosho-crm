@@ -34,11 +34,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const isMissingSchemaObjectError = (message: string) => {
-  const normalized = message.toLowerCase();
-  return normalized.includes("does not exist") || normalized.includes("not found");
-};
-
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
   
@@ -223,46 +218,28 @@ export function ProfilePage() {
     return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png", 0.92));
   };
 
-  const syncWorkspaceProfile = async (params: { fullName?: string; avatarUrl?: string | null }) => {
-    if (!userId) return;
-    const payload: Record<string, unknown> = {};
-    if (typeof params.fullName === "string") payload.full_name = params.fullName;
-    if ("avatarUrl" in params) payload.avatar_url = params.avatarUrl ?? null;
-    if (Object.keys(payload).length === 0) return;
-
-    const attempts = [
-      () => supabase.schema("tosho").from("users").update(payload).eq("id", userId),
-      () => supabase.schema("tosho").from("users").update(payload).eq("user_id", userId),
-    ];
-
-    for (const runAttempt of attempts) {
-      try {
-        const { error } = await runAttempt();
-        if (!error) return;
-        if (isMissingSchemaObjectError(error.message ?? "")) continue;
-      } catch {
-        // ignore and try fallback query
-      }
-    }
-  };
-
   const uploadAvatarBlob = async (blob: Blob) => {
     if (!userId) return;
     setAvatarUploading(true);
     try {
       const fileName = `avatar-${Date.now()}.png`;
+      const workspaceId = await resolveWorkspaceId(userId);
       const pathCandidates = [
         `${userId}/${fileName}`,
+        `${userId}/avatars/${fileName}`,
         `avatars/${userId}/${fileName}`,
-      ];
+        `${userId}/profile/${fileName}`,
+        workspaceId ? `${userId}/${workspaceId}/${fileName}` : null,
+        workspaceId ? `${userId}/${workspaceId}/avatars/${fileName}` : null,
+      ].filter((value): value is string => Boolean(value));
 
       let uploadedPath: string | null = null;
       let lastUploadError: unknown = null;
 
-      for (const candidate of pathCandidates) {
+      for (const candidate of [...new Set(pathCandidates)]) {
         const { error: uploadError } = await supabase.storage
           .from(AVATAR_BUCKET)
-          .upload(candidate, blob, { upsert: true, contentType: "image/png" });
+          .upload(candidate, blob, { upsert: true, contentType: blob.type || "image/png" });
 
         if (!uploadError) {
           uploadedPath = candidate;
@@ -281,8 +258,6 @@ export function ProfilePage() {
       });
 
       if (updateError) throw updateError;
-      await syncWorkspaceProfile({ avatarUrl: publicUrl });
-
       setAvatarUrl(publicUrl);
       setAvatarDraftUrl(null);
       commitCache({ avatarUrl: publicUrl });
@@ -316,8 +291,6 @@ export function ProfilePage() {
       });
 
       if (error) throw error;
-      await syncWorkspaceProfile({ fullName, avatarUrl });
-      
       const i = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
       setInitials(i);
 
