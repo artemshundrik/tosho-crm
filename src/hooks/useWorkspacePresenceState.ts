@@ -117,6 +117,7 @@ export function useWorkspacePresenceState({
   const [realtimeByUserId, setRealtimeByUserId] = useState<Record<string, PresenceRealtimeMeta>>({});
   const [dbUnavailable, setDbUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selfAvatarOverride, setSelfAvatarOverride] = useState<string | null>(null);
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const entityContext = useMemo(() => parseEntityFromPath(pathname), [pathname]);
 
@@ -128,10 +129,10 @@ export function useWorkspacePresenceState({
     return "Користувач";
   }, [session?.user?.email, session?.user?.user_metadata]);
 
-  const selfAvatarUrl = useMemo(
-    () => ((session?.user?.user_metadata?.avatar_url as string | undefined) ?? null),
-    [session?.user?.user_metadata]
-  );
+  const selfAvatarUrl = useMemo(() => {
+    if (selfAvatarOverride) return selfAvatarOverride;
+    return (session?.user?.user_metadata?.avatar_url as string | undefined) ?? null;
+  }, [selfAvatarOverride, session?.user?.user_metadata]);
 
   const buildTrackPayload = useCallback(
     (): PresenceRealtimeMeta => ({
@@ -178,6 +179,49 @@ export function useWorkspacePresenceState({
     teamId,
     userId,
   ]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const handleAvatarUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ avatarUrl?: string | null }>;
+      const nextAvatar = customEvent.detail?.avatarUrl ?? null;
+      setSelfAvatarOverride(nextAvatar);
+
+      const nowIso = new Date().toISOString();
+      setRealtimeByUserId((prev) => ({
+        ...prev,
+        [userId]: {
+          ...(prev[userId] ?? {}),
+          user_id: userId,
+          avatar_url: nextAvatar,
+          display_name: prev[userId]?.display_name ?? selfDisplayName,
+          current_path: prev[userId]?.current_path ?? pathname,
+          current_label: prev[userId]?.current_label ?? currentLabel,
+          entity_type: prev[userId]?.entity_type ?? entityContext.entityType,
+          entity_id: prev[userId]?.entity_id ?? entityContext.entityId,
+          last_seen_at: nowIso,
+        },
+      }));
+
+      setDbRowsByUserId((prev) => {
+        const current = prev[userId];
+        if (!current) return prev;
+        return {
+          ...prev,
+          [userId]: {
+            ...current,
+            avatar_url: nextAvatar,
+            last_seen_at: nowIso,
+          },
+        };
+      });
+    };
+
+    window.addEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
+    return () => {
+      window.removeEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
+    };
+  }, [currentLabel, entityContext.entityId, entityContext.entityType, pathname, selfDisplayName, userId]);
 
   useEffect(() => {
     if (!teamId || !userId) {

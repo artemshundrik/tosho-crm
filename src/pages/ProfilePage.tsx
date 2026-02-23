@@ -247,7 +247,7 @@ export function ProfilePage() {
       setAvatarDraftUrl(null);
       commitCache({ avatarUrl: displayAvatarUrl });
       window.dispatchEvent(
-        new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: publicUrl } })
+        new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: displayAvatarUrl } })
       );
       toast.success("Аватар оновлено");
     } catch (error: unknown) {
