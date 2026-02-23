@@ -239,13 +239,12 @@ export function ProfilePage() {
 
       if (updateError) throw updateError;
       await supabase.auth.refreshSession();
-      const { data: refreshedUserData } = await supabase.auth.getUser();
-      const refreshedAvatarUrl =
-        (refreshedUserData.user?.user_metadata?.avatar_url as string | undefined) || publicUrl;
-
-      setAvatarUrl(refreshedAvatarUrl);
+      setAvatarUrl(publicUrl);
       setAvatarDraftUrl(null);
-      commitCache({ avatarUrl: refreshedAvatarUrl });
+      commitCache({ avatarUrl: publicUrl });
+      window.dispatchEvent(
+        new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: publicUrl } })
+      );
       toast.success("Аватар оновлено");
     } catch (error: unknown) {
       toast.error("Не вдалося оновити аватар", {

@@ -118,6 +118,23 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
     getUserData();
   }, []);
 
+  useEffect(() => {
+    const handleAvatarUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ avatarUrl?: string }>;
+      const nextAvatar = customEvent.detail?.avatarUrl ?? null;
+      setUserData((prev) => {
+        const next = { ...prev, avatarUrl: nextAvatar };
+        cachedUserData = next;
+        return next;
+      });
+    };
+
+    window.addEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
+    return () => {
+      window.removeEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
+    };
+  }, []);
+
   const handleLogout = async () => {
     onNavigate?.();
     await supabase.auth.signOut();
