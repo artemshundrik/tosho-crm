@@ -388,7 +388,6 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMemberProfiles = async () => {
-      setMemberProfilesLoading(true);
       try {
         const memberIds = Array.from(
           new Set(
@@ -402,6 +401,12 @@ export function TeamMembersPage() {
           setMemberProfilesByUserId({});
           return;
         }
+
+        const hasWarmProfiles = memberIds.every((id) => {
+          const cachedProfile = memberProfilesByUserId[id];
+          return Boolean(cachedProfile?.label || cachedProfile?.avatarUrl);
+        });
+        setMemberProfilesLoading(!hasWarmProfiles);
 
         let rows:
           | Array<{ user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }>
