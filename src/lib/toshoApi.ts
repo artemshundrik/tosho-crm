@@ -574,16 +574,21 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     }));
     baseMembers.sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
-    // If team_members_view doesn't expose job_role, hydrate it from memberships_view
-    // (this is the canonical source used by TeamMembersPage).
-    const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
-    if (hasAnyJobRole || !workspaceId || baseMembers.length === 0) {
+    // Hydrate missing fields from memberships_view (canonical source for workspace membership data).
+    const hasMissingJobRole = baseMembers.some((m) => !m.jobRole);
+    const hasMissingAvatar = baseMembers.some((m) => !m.avatarUrl);
+    if ((!hasMissingJobRole && !hasMissingAvatar) || !workspaceId || baseMembers.length === 0) {
       return baseMembers;
     }
 
     const ids = baseMembers.map((m) => m.id);
-    const columnsToTryMemberships = ["user_id, job_role", "user_id"];
-    let membershipRows: Array<{ user_id: string; job_role?: string | null }> | null = null;
+    const columnsToTryMemberships = [
+      "user_id, job_role, avatar_url",
+      "user_id, job_role",
+      "user_id, avatar_url",
+      "user_id",
+    ];
+    let membershipRows: Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }> | null = null;
     let membershipError: unknown = null;
     for (const columns of columnsToTryMemberships) {
       const result = await supabase
@@ -605,15 +610,22 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     }
 
     const jobRoleById = new Map(
-      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null }>).map((row) => [
+      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }>).map((row) => [
         row.user_id,
         row.job_role ?? null,
+      ])
+    );
+    const avatarById = new Map(
+      ((membershipRows ?? []) as Array<{ user_id: string; job_role?: string | null; avatar_url?: string | null }>).map((row) => [
+        row.user_id,
+        row.avatar_url ?? null,
       ])
     );
 
     return baseMembers.map((member) => ({
       ...member,
       jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
+      avatarUrl: member.avatarUrl ?? avatarById.get(member.id) ?? null,
     }));
   } catch (error: unknown) {
     const message = getErrorMessage(error);

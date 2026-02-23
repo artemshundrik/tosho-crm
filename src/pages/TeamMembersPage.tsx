@@ -213,6 +213,7 @@ export function TeamMembersPage() {
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
   >({});
+  const [memberProfilesLoading, setMemberProfilesLoading] = useState(false);
 
   const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
   const [invitesLoading, setInvitesLoading] = useState(false);
@@ -379,12 +380,14 @@ export function TeamMembersPage() {
   useEffect(() => {
     if (!workspaceId || members.length === 0) {
       setMemberProfilesByUserId({});
+      setMemberProfilesLoading(false);
       return;
     }
 
     let cancelled = false;
 
     const loadMemberProfiles = async () => {
+      setMemberProfilesLoading(true);
       try {
         const memberIds = Array.from(
           new Set(
@@ -474,6 +477,8 @@ export function TeamMembersPage() {
           // ignore fallback load errors
         }
         setMemberProfilesByUserId({});
+      } finally {
+        if (!cancelled) setMemberProfilesLoading(false);
       }
     };
 
@@ -1047,6 +1052,8 @@ export function TeamMembersPage() {
               <TableBody>
                 {membersError ? (
                   <TableEmptyRow colSpan={5}>Помилка завантаження: {membersError}</TableEmptyRow>
+                ) : memberProfilesLoading ? (
+                  <TableEmptyRow colSpan={5}>Завантаження профілів учасників...</TableEmptyRow>
                 ) : filteredMembers.length === 0 ? (
                   <TableEmptyRow colSpan={5}>Нема учасників.</TableEmptyRow>
                 ) : (

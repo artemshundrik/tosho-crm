@@ -1,6 +1,10 @@
 import * as React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
+import { getCachedAvatarDisplayUrl, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 type AvatarVariant = "xs" | "sm" | "lg" | "hero";
 type AvatarShape = "circle" | "rounded";
@@ -71,14 +75,46 @@ export function AvatarBase({
   referrerPolicy,
 }: AvatarBaseProps) {
   const [errored, setErrored] = React.useState(false);
+  const [resolvedSrc, setResolvedSrc] = React.useState<string | null>(() => {
+    if (!src) return null;
+    return getCachedAvatarDisplayUrl(src) ?? src;
+  });
 
   React.useEffect(() => {
     setErrored(false);
   }, [src]);
 
+  React.useEffect(() => {
+    let active = true;
+    if (!src) {
+      setResolvedSrc(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    const cached = getCachedAvatarDisplayUrl(src);
+    if (cached) {
+      setResolvedSrc(cached);
+      return () => {
+        active = false;
+      };
+    }
+
+    setResolvedSrc(src);
+    const run = async () => {
+      const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET);
+      if (active) setResolvedSrc(next);
+    };
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [src]);
+
   const computedSize = size ?? VARIANT_SIZES[variant];
   const initials = getInitials(name, fallback);
-  const showImage = Boolean(src) && !errored;
+  const showImage = Boolean(resolvedSrc) && !errored;
 
   return (
     <Avatar
@@ -91,7 +127,7 @@ export function AvatarBase({
     >
       {showImage ? (
         <AvatarImage
-          src={src ?? ""}
+          src={resolvedSrc ?? ""}
           alt={name || "Avatar"}
           className={cn("object-cover", imageClassName)}
           style={imageStyle}

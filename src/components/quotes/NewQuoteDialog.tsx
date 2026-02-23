@@ -30,6 +30,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Separator } from "@/components/ui/separator";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
 import { isDesignerJobRole } from "@/lib/permissions";
 import {
@@ -653,7 +654,28 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           {/* Manager */}
           <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
             <PopoverTrigger asChild>
-              <Chip size="md" icon={<User />} active={!!managerId}>
+              <Chip
+                size="md"
+                icon={
+                  managerId ? (
+                    <AvatarBase
+                      src={teamMembers.find((m) => m.id === managerId)?.avatarUrl ?? null}
+                      name={teamMembers.find((m) => m.id === managerId)?.label ?? "Менеджер"}
+                      fallback={
+                        (teamMembers.find((m) => m.id === managerId)?.label ?? "M")
+                          .slice(0, 2)
+                          .toUpperCase()
+                      }
+                      size={16}
+                      className="border-border/60"
+                      fallbackClassName="text-[9px] font-semibold"
+                    />
+                  ) : (
+                    <User />
+                  )
+                }
+                active={!!managerId}
+              >
                 {managerId 
                   ? teamMembers.find(m => m.id === managerId)?.label || "Менеджер обрано"
                   : "Менеджер"}
@@ -674,7 +696,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       }}
                       title={member.label}
                     >
-                      <User className="h-3.5 w-3.5 shrink-0" />
+                      <AvatarBase
+                        src={member.avatarUrl ?? null}
+                        name={member.label}
+                        fallback={member.label.slice(0, 2).toUpperCase()}
+                        size={18}
+                        className="border-border/60 shrink-0"
+                        fallbackClassName="text-[9px] font-semibold"
+                      />
                       <span className="text-sm truncate max-w-[220px]">{member.label}</span>
                     </Button>
                   ))

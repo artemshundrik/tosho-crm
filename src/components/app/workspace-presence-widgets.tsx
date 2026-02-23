@@ -1,50 +1,9 @@
-import { useEffect, useState } from "react";
 import { Eye, Users } from "lucide-react";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WorkspacePresenceEntry } from "@/hooks/useWorkspacePresenceState";
-import { supabase } from "@/lib/supabaseClient";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
-
-const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
-
-type PresenceAvatarProps = {
-  src: string | null;
-  name: string;
-  fallback: string;
-  size: number;
-  className?: string;
-  fallbackClassName?: string;
-};
-
-function PresenceAvatar({ src, name, fallback, size, className, fallbackClassName }: PresenceAvatarProps) {
-  const [resolvedSrc, setResolvedSrc] = useState<string | null>(src);
-
-  useEffect(() => {
-    let active = true;
-    const resolveSrc = async () => {
-      const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET);
-      if (active) setResolvedSrc(next);
-    };
-    void resolveSrc();
-    return () => {
-      active = false;
-    };
-  }, [src]);
-
-  return (
-    <AvatarBase
-      src={resolvedSrc}
-      name={name}
-      fallback={fallback}
-      size={size}
-      className={className}
-      fallbackClassName={fallbackClassName}
-    />
-  );
-}
 
 type PresenceAvatarStackProps = {
   entries: WorkspacePresenceEntry[];
@@ -65,7 +24,7 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
       <div className="flex -space-x-2">
         {visible.map((entry) => (
           <div key={entry.userId} className="relative">
-            <PresenceAvatar
+            <AvatarBase
               src={entry.avatarUrl}
               name={entry.displayName}
               fallback={entry.displayName.slice(0, 2).toUpperCase()}
@@ -120,7 +79,7 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
             <div className="max-h-[300px] overflow-auto">
               {entries.map((entry) => (
                 <div key={entry.userId} className="flex items-center gap-2 px-3 py-2">
-                  <PresenceAvatar
+                  <AvatarBase
                     src={entry.avatarUrl}
                     name={entry.displayName}
                     fallback={entry.displayName.slice(0, 2).toUpperCase()}
