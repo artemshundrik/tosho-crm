@@ -27,28 +27,28 @@ function Calendar({
     <DayPicker
       locale={locale}
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
+      className={cn("p-3 w-full", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        caption: "relative flex items-center justify-center pt-1 px-12",
-        caption_label: "text-sm font-medium hidden", // Ховаємо стандартний заголовок
-        nav: "absolute inset-x-1 top-1 flex items-center justify-between pointer-events-none",
+        months: "flex flex-col w-full",
+        month: "space-y-4 w-full",
+        caption: "flex items-center justify-between w-full pt-1",
+        caption_label: "text-sm font-medium hidden",
+        nav: "contents",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
-          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 pointer-events-auto z-10"
+          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0"
         ),
-        nav_button_previous: "",
-        nav_button_next: "",
-        table: "w-auto mx-auto border-collapse space-y-1",
-        head_row: "flex",
+        nav_button_previous: "order-first",
+        nav_button_next: "order-last",
+        table: "w-full border-collapse space-y-1",
+        head_row: "flex w-full",
         head_cell:
-          "text-muted-foreground rounded-[var(--radius-md)] w-9 font-normal text-[0.8rem]",
-        row: "flex mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-[var(--radius-md)] [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-[var(--radius-md)] last:[&:has([aria-selected])]:rounded-r-[var(--radius-md)] focus-within:relative focus-within:z-20",
+          "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
+        row: "flex w-full mt-2",
+        cell: "flex-1 aspect-square text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-[var(--radius-md)] [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-[var(--radius-md)] last:[&:has([aria-selected])]:rounded-r-[var(--radius-md)] focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+          "h-full w-full p-0 font-normal aria-selected:opacity-100"
         ),
         day_range_end: "day-range-end",
         day_selected:
@@ -61,7 +61,7 @@ function Calendar({
         day_range_middle:
           "aria-selected:bg-accent aria-selected:text-accent-foreground",
         day_hidden: "invisible",
-        caption_dropdowns: "relative z-20 flex items-center justify-center gap-3 min-w-0 pointer-events-auto", // Стиль для контейнера дропдаунів
+        caption_dropdowns: "flex items-center gap-2 flex-1 justify-center mx-2",
         ...classNames,
       }}
       components={{
@@ -83,11 +83,10 @@ function Calendar({
                 handleChange(value)
               }}
             >
-              <SelectTrigger className="h-[32px] min-w-[118px] pl-3 pr-10 gap-3">
+              <SelectTrigger className="h-[32px] min-w-0 pl-3 pr-2 gap-1 text-sm [&>svg]:ml-auto [&>svg]:shrink-0">
                 <SelectValue>{selected?.props?.children}</SelectValue>
               </SelectTrigger>
               <SelectContent position="popper">
-                  {/* Обмежуємо висоту скролу для років */}
                   <div className="max-h-[var(--radix-select-content-available-height)] overflow-y-auto">
                     {options.map((option, id) => (
                         <SelectItem key={`${option.props.value}-${id}`} value={option.props.value?.toString() ?? ""}>

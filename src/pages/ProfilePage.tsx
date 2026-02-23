@@ -250,14 +250,30 @@ export function ProfilePage() {
     if (!userId) return;
     setAvatarUploading(true);
     try {
-      const path = `avatars/${userId}/avatar-${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(path, blob, { upsert: true, contentType: "image/png" });
+      const fileName = `avatar-${Date.now()}.png`;
+      const pathCandidates = [
+        `${userId}/${fileName}`,
+        `avatars/${userId}/${fileName}`,
+      ];
 
-      if (uploadError) throw uploadError;
+      let uploadedPath: string | null = null;
+      let lastUploadError: unknown = null;
 
-      const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+      for (const candidate of pathCandidates) {
+        const { error: uploadError } = await supabase.storage
+          .from(AVATAR_BUCKET)
+          .upload(candidate, blob, { upsert: true, contentType: "image/png" });
+
+        if (!uploadError) {
+          uploadedPath = candidate;
+          break;
+        }
+        lastUploadError = uploadError;
+      }
+
+      if (!uploadedPath) throw lastUploadError ?? new Error("Avatar upload failed");
+
+      const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(uploadedPath);
       const publicUrl = data.publicUrl;
 
       const { error: updateError } = await supabase.auth.updateUser({
