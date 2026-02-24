@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -91,6 +92,7 @@ type MembershipRow = {
   user_id: string;
   full_name: string | null;
   email: string | null;
+  avatar_url?: string | null;
   access_role: string | null;
   job_role: string | null;
 };
@@ -226,6 +228,7 @@ const isImageAttachment = (name?: string | null) => {
 
 const DESIGN_OUTPUT_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -288,6 +291,7 @@ export default function DesignTaskPage() {
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
   const [memberById, setMemberById] = useState<Record<string, string>>({});
+  const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [assigningSelf, setAssigningSelf] = useState(false);
   const [assigningMemberId, setAssigningMemberId] = useState<string | null>(null);
@@ -338,6 +342,10 @@ export default function DesignTaskPage() {
     if (!id) return "Без виконавця";
     return memberById[id] ?? id.slice(0, 8);
   };
+  const getMemberAvatar = (id: string | null | undefined) => {
+    if (!id) return null;
+    return memberAvatarById[id] ?? null;
+  };
 
   const getMethodLabel = (value: string | null | undefined) => {
     if (!value) return "Не вказано";
@@ -375,9 +383,13 @@ export default function DesignTaskPage() {
 
         if (effectiveTeamId) {
           const teamViewColumns = [
-            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,avatar_url,access_role,job_role",
+            "user_id,full_name,email,avatar_url,job_role",
+            "user_id,full_name,email,avatar_url",
             "user_id,full_name,email,job_role",
             "user_id,full_name,email",
+            "user_id,full_name,avatar_url",
+            "user_id,email,avatar_url",
             "user_id,full_name,job_role",
             "user_id,full_name",
             "user_id,email",
@@ -403,20 +415,46 @@ export default function DesignTaskPage() {
           const workspaceId = await resolveWorkspaceId(userId);
           if (!workspaceId) return;
 
-          const { data, error: membersError } = await supabase
-            .schema("tosho")
-            .from("memberships_view")
-            .select("user_id,full_name,email,access_role,job_role")
-            .eq("workspace_id", workspaceId);
-          if (membersError) throw membersError;
-          rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+          const membershipColumns = [
+            "user_id,full_name,email,avatar_url,access_role,job_role",
+            "user_id,full_name,email,avatar_url,job_role",
+            "user_id,full_name,email,avatar_url",
+            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,job_role",
+            "user_id,full_name,email",
+            "user_id",
+          ];
+          let loaded = false;
+          for (const columns of membershipColumns) {
+            const { data, error: membersError } = await supabase
+              .schema("tosho")
+              .from("memberships_view")
+              .select(columns)
+              .eq("workspace_id", workspaceId);
+            if (!membersError) {
+              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              loaded = true;
+              break;
+            }
+            const message = (membersError.message ?? "").toLowerCase();
+            if (!message.includes("column") || !message.includes("does not exist")) {
+              throw membersError;
+            }
+          }
+          if (!loaded) throw new Error("Не вдалося завантажити учасників");
         }
 
         const labels: Record<string, string> = {};
+        const avatars: Record<string, string | null> = {};
         rows.forEach((row) => {
           labels[row.user_id] = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
+          avatars[row.user_id] = row.avatar_url ?? null;
         });
         setMemberById(labels);
+        const resolvedAvatarEntries = await Promise.all(
+          Object.entries(avatars).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
+        );
+        setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
         setDesignerMembers(
           rows
             .filter((row) => isDesignerRole(row.job_role))
@@ -2125,6 +2163,7 @@ export default function DesignTaskPage() {
         <span className="inline-flex items-center gap-1.5">
           <span>Виконавець:</span>
           <AvatarBase
+            src={getMemberAvatar(task.assigneeUserId)}
             name={getMemberLabel(task.assigneeUserId)}
             fallback={getInitials(getMemberLabel(task.assigneeUserId))}
             size={14}
@@ -2141,6 +2180,7 @@ export default function DesignTaskPage() {
         <span className="inline-flex items-center gap-1.5">
           <span>Зараз виконавець:</span>
           <AvatarBase
+            src={getMemberAvatar(task.assigneeUserId)}
             name={getMemberLabel(task.assigneeUserId)}
             fallback={getInitials(getMemberLabel(task.assigneeUserId))}
             size={14}
@@ -2209,6 +2249,7 @@ export default function DesignTaskPage() {
             </Badge>
             <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1.5">
               <AvatarBase
+                src={getMemberAvatar(task.assigneeUserId)}
                 name={getMemberLabel(task.assigneeUserId)}
                 fallback={getInitials(getMemberLabel(task.assigneeUserId))}
                 size={16}
@@ -2459,6 +2500,7 @@ export default function DesignTaskPage() {
                               <span>·</span>
                               <span className="inline-flex items-center gap-1">
                                 <AvatarBase
+                                  src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
                                   name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
                                   fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
                                   size={14}
@@ -2547,6 +2589,7 @@ export default function DesignTaskPage() {
                       <span>·</span>
                       <span className="inline-flex items-center gap-1">
                         <AvatarBase
+                          src={link.created_by ? getMemberAvatar(link.created_by) : null}
                           name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
                           fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
                           size={14}
@@ -2608,6 +2651,7 @@ export default function DesignTaskPage() {
               {task.assigneeUserId ? (
                 <div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/60 px-2.5 py-2">
                   <AvatarBase
+                    src={getMemberAvatar(task.assigneeUserId)}
                     name={getMemberLabel(task.assigneeUserId)}
                     fallback={getInitials(getMemberLabel(task.assigneeUserId))}
                     size={24}
@@ -2835,6 +2879,7 @@ export default function DesignTaskPage() {
                                   <span>·</span>
                                   <span className="inline-flex items-center gap-1">
                                     <AvatarBase
+                                      src={getMemberAvatar(file.uploaded_by)}
                                       name={getMemberLabel(file.uploaded_by)}
                                       fallback={getInitials(getMemberLabel(file.uploaded_by))}
                                       size={14}
@@ -2906,6 +2951,7 @@ export default function DesignTaskPage() {
                 <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Виконавець</span>
                 <span className="inline-flex items-center gap-1.5 min-w-0">
                   <AvatarBase
+                    src={getMemberAvatar(task.assigneeUserId)}
                     name={getMemberLabel(task.assigneeUserId)}
                     fallback={getInitials(getMemberLabel(task.assigneeUserId))}
                     size={16}
@@ -2968,6 +3014,7 @@ export default function DesignTaskPage() {
                               </div>
                               <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
                                 <AvatarBase
+                                  src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
                                   name={event.actorLabel}
                                   fallback={getInitials(event.actorLabel)}
                                   size={14}

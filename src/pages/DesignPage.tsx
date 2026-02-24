@@ -28,6 +28,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -52,6 +53,7 @@ type MembershipRow = {
   user_id: string;
   full_name: string | null;
   email: string | null;
+  avatar_url?: string | null;
   access_role: string | null;
   job_role: string | null;
 };
@@ -123,6 +125,7 @@ const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
 
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 const MAX_BRIEF_FILES = 5;
 const HoverHint = ({ text, children }: { text: string; children: ReactNode }) => (
@@ -205,6 +208,7 @@ export default function DesignPage() {
   const [viewMode, setViewMode] = useState<DesignViewMode>("kanban");
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
+  const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
@@ -222,6 +226,10 @@ export default function DesignPage() {
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
     return memberById[id] ?? id.slice(0, 8);
+  };
+  const getMemberAvatar = (id: string | null | undefined) => {
+    if (!id) return null;
+    return memberAvatarById[id] ?? null;
   };
 
   const getTaskTimerSummary = (taskId: string): DesignTaskTimerSummary => {
@@ -252,9 +260,13 @@ export default function DesignPage() {
 
         if (effectiveTeamId) {
           const teamViewColumns = [
-            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,avatar_url,access_role,job_role",
+            "user_id,full_name,email,avatar_url,job_role",
+            "user_id,full_name,email,avatar_url",
             "user_id,full_name,email,job_role",
             "user_id,full_name,email",
+            "user_id,full_name,avatar_url",
+            "user_id,email,avatar_url",
             "user_id,full_name,job_role",
             "user_id,full_name",
             "user_id,email",
@@ -280,25 +292,52 @@ export default function DesignPage() {
           const workspaceId = await resolveWorkspaceId(userId);
           if (!workspaceId) {
             setMemberById({});
+            setMemberAvatarById({});
             setDesignerMembers([]);
             return;
           }
 
-          const { data, error: membersError } = await supabase
-            .schema("tosho")
-            .from("memberships_view")
-            .select("user_id,full_name,email,access_role,job_role")
-            .eq("workspace_id", workspaceId);
-          if (membersError) throw membersError;
-          rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+          const membershipColumns = [
+            "user_id,full_name,email,avatar_url,access_role,job_role",
+            "user_id,full_name,email,avatar_url,job_role",
+            "user_id,full_name,email,avatar_url",
+            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,job_role",
+            "user_id,full_name,email",
+            "user_id",
+          ];
+          let loaded = false;
+          for (const columns of membershipColumns) {
+            const { data, error: membersError } = await supabase
+              .schema("tosho")
+              .from("memberships_view")
+              .select(columns)
+              .eq("workspace_id", workspaceId);
+            if (!membersError) {
+              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              loaded = true;
+              break;
+            }
+            const message = (membersError.message ?? "").toLowerCase();
+            if (!message.includes("column") || !message.includes("does not exist")) {
+              throw membersError;
+            }
+          }
+          if (!loaded) throw new Error("Не вдалося завантажити учасників");
         }
 
         const labelById: Record<string, string> = {};
+        const avatarById: Record<string, string | null> = {};
         rows.forEach((row) => {
           const label = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
           labelById[row.user_id] = label;
+          avatarById[row.user_id] = row.avatar_url ?? null;
         });
         setMemberById(labelById);
+        const resolvedAvatarEntries = await Promise.all(
+          Object.entries(avatarById).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
+        );
+        setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
 
         setDesignerMembers(
           rows
@@ -1463,10 +1502,11 @@ export default function DesignPage() {
             Виконавець:{" "}
             {task.assigneeUserId ? (
               <span className="inline-flex items-center gap-1">
-                <AvatarBase
-                  name={getMemberLabel(task.assigneeUserId)}
-                  fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-                  size={14}
+                  <AvatarBase
+                    src={getMemberAvatar(task.assigneeUserId)}
+                    name={getMemberLabel(task.assigneeUserId)}
+                    fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+                    size={14}
                   className="shrink-0 border-border/70"
                 />
                 <span className="font-medium text-foreground">{getMemberLabel(task.assigneeUserId)}</span>
@@ -1803,6 +1843,7 @@ export default function DesignPage() {
                           <span>·</span>
                           <span className="inline-flex items-center gap-1 min-w-0">
                             <AvatarBase
+                              src={getMemberAvatar(row.task.assigneeUserId)}
                               name={getMemberLabel(row.task.assigneeUserId)}
                               fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
                               size={14}
@@ -1903,6 +1944,7 @@ export default function DesignPage() {
                     <div className="inline-flex items-center gap-1.5 min-w-0">
                       {group.id ? (
                         <AvatarBase
+                          src={group.id ? getMemberAvatar(group.id) : null}
                           name={group.label}
                           fallback={getInitials(group.label)}
                           size={16}
