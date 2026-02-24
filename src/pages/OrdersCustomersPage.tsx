@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CustomerDialog } from "@/components/customers";
+import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { PageHeader } from "@/components/app/headers/PageHeader";
+import { listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, MoreHorizontal, PlusCircle, Search, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Building2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
 
 type OwnershipOption = {
   value: string;
@@ -32,6 +34,7 @@ type CustomerRow = {
   team_id?: string | null;
   name?: string | null;
   legal_name?: string | null;
+  manager?: string | null;
   ownership_type?: string | null;
   vat_rate?: number | null;
   tax_id?: string | null;
@@ -43,6 +46,22 @@ type CustomerRow = {
   contact_phone?: string | null;
   contact_email?: string | null;
   contact_birthday?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type LeadRow = {
+  id: string;
+  team_id?: string | null;
+  company_name?: string | null;
+  legal_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_numbers?: string[] | null;
+  source?: string | null;
+  website?: string | null;
+  manager?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -95,10 +114,19 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 function CustomersPage({ teamId }: { teamId: string }) {
-  const [rows, setRows] = useState<CustomerRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { session } = useAuth();
+  const [activeTab, setActiveTab] = useState<"customers" | "leads">("customers");
   const [search, setSearch] = useState("");
+
+  const [rows, setRows] = useState<CustomerRow[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [customersError, setCustomersError] = useState<string | null>(null);
+
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leadsError, setLeadsError] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -110,6 +138,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [form, setForm] = useState({
     name: "",
     legalName: "",
+    manager: "",
     ownershipType: "",
     vatRate: "none",
     taxId: "",
@@ -123,20 +152,76 @@ function CustomersPage({ teamId }: { teamId: string }) {
     contactBirthday: "",
   });
 
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
+  const [leadEditingId, setLeadEditingId] = useState<string | null>(null);
+  const [leadSaving, setLeadSaving] = useState(false);
+  const [leadFormError, setLeadFormError] = useState<string | null>(null);
+  const [leadDeleteDialogOpen, setLeadDeleteDialogOpen] = useState(false);
+  const [leadDeleteTarget, setLeadDeleteTarget] = useState<LeadRow | null>(null);
+  const [leadDeleteBusy, setLeadDeleteBusy] = useState(false);
+  const [leadDeleteError, setLeadDeleteError] = useState<string | null>(null);
+  const [leadForm, setLeadForm] = useState({
+    companyName: "",
+    legalName: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phones: [""],
+    source: "",
+    website: "",
+    manager: "",
+  });
+
+  const defaultManagerName = useMemo(() => {
+    const fullNameRaw = session?.user?.user_metadata?.full_name;
+    const fullName = typeof fullNameRaw === "string" ? fullNameRaw.trim() : "";
+    if (fullName) return fullName;
+    const email = session?.user?.email ?? "";
+    const local = email.split("@")[0]?.trim() ?? "";
+    return local;
+  }, [session]);
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) => {
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
-      return name.includes(q) || legal.includes(q);
+      const manager = row.manager?.toLowerCase() ?? "";
+      return name.includes(q) || legal.includes(q) || manager.includes(q);
     });
   }, [rows, search]);
+
+  const filteredLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return leads;
+    return leads.filter((lead) => {
+      const company = lead.company_name?.toLowerCase() ?? "";
+      const legal = lead.legal_name?.toLowerCase() ?? "";
+      const first = lead.first_name?.toLowerCase() ?? "";
+      const last = lead.last_name?.toLowerCase() ?? "";
+      const email = lead.email?.toLowerCase() ?? "";
+      const source = lead.source?.toLowerCase() ?? "";
+      const manager = lead.manager?.toLowerCase() ?? "";
+      const phones = (lead.phone_numbers ?? []).join(" ").toLowerCase();
+      return (
+        company.includes(q) ||
+        legal.includes(q) ||
+        first.includes(q) ||
+        last.includes(q) ||
+        email.includes(q) ||
+        source.includes(q) ||
+        manager.includes(q) ||
+        phones.includes(q)
+      );
+    });
+  }, [leads, search]);
 
   const resetForm = () => {
     setForm({
       name: "",
       legalName: "",
+      manager: defaultManagerName,
       ownershipType: "",
       vatRate: "none",
       taxId: "",
@@ -152,6 +237,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setFormError(null);
   };
 
+  const resetLeadForm = () => {
+    setLeadForm({
+      companyName: "",
+      legalName: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phones: [""],
+      source: "",
+      website: "",
+      manager: defaultManagerName,
+    });
+    setLeadFormError(null);
+  };
+
   const openCreate = () => {
     setEditingId(null);
     resetForm();
@@ -163,6 +263,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setForm({
       name: row.name ?? "",
       legalName: row.legal_name ?? "",
+      manager: row.manager ?? "",
       ownershipType: row.ownership_type ?? "",
       vatRate:
         row.vat_rate === null || row.vat_rate === undefined ? "none" : String(row.vat_rate),
@@ -186,9 +287,38 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setDeleteDialogOpen(true);
   };
 
+  const openCreateLead = () => {
+    setLeadEditingId(null);
+    resetLeadForm();
+    setLeadDialogOpen(true);
+  };
+
+  const openEditLead = (lead: LeadRow) => {
+    setLeadEditingId(lead.id);
+    setLeadForm({
+      companyName: lead.company_name ?? "",
+      legalName: lead.legal_name ?? "",
+      firstName: lead.first_name ?? "",
+      lastName: lead.last_name ?? "",
+      email: lead.email ?? "",
+      phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
+      source: lead.source ?? "",
+      website: lead.website ?? "",
+      manager: lead.manager ?? "",
+    });
+    setLeadFormError(null);
+    setLeadDialogOpen(true);
+  };
+
+  const openDeleteLead = (lead: LeadRow) => {
+    setLeadDeleteTarget(lead);
+    setLeadDeleteError(null);
+    setLeadDeleteDialogOpen(true);
+  };
+
   const loadCustomers = async () => {
-    setLoading(true);
-    setError(null);
+    setCustomersLoading(true);
+    setCustomersError(null);
     try {
       const { data, error: loadError } = await supabase
         .schema("tosho")
@@ -199,15 +329,50 @@ function CustomersPage({ teamId }: { teamId: string }) {
       if (loadError) throw loadError;
       setRows((data as CustomerRow[]) ?? []);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Не вдалося завантажити замовників."));
+      setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
     } finally {
-      setLoading(false);
+      setCustomersLoading(false);
+    }
+  };
+
+  const loadLeads = async () => {
+    setLeadsLoading(true);
+    setLeadsError(null);
+    try {
+      const { data, error: loadError } = await supabase
+        .schema("tosho")
+        .from("leads")
+        .select("*")
+        .eq("team_id", teamId)
+        .order("company_name", { ascending: true });
+      if (loadError) throw loadError;
+      setLeads((data as LeadRow[]) ?? []);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, "Не вдалося завантажити ліди.");
+      if (message.includes("relation") && message.includes("leads")) {
+        setLeadsError("Таблиця lead ще не створена. Запустіть SQL-скрипт scripts/leads-schema.sql.");
+      } else {
+        setLeadsError(message);
+      }
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  const loadTeamMembers = async () => {
+    try {
+      const members = await listTeamMembers(teamId);
+      setTeamMembers(members);
+    } catch {
+      setTeamMembers([]);
     }
   };
 
   useEffect(() => {
     void loadCustomers();
-// eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadLeads();
+    void loadTeamMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   const handleSave = async () => {
@@ -220,10 +385,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setFormError(null);
 
     const vatOption = VAT_OPTIONS.find((option) => option.value === form.vatRate);
+    const managerValue = form.manager.trim();
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: form.name.trim(),
       legal_name: form.legalName.trim() || null,
+      manager: editingId
+        ? (managerValue || null)
+        : (managerValue || defaultManagerName || null),
       ownership_type: form.ownershipType || null,
       vat_rate: vatOption?.rate ?? null,
       tax_id: form.taxId.trim() || null,
@@ -244,6 +413,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
     const removeOptionalFields = () => {
       const clone = { ...payload };
+      delete clone.manager;
       delete clone.ownership_type;
       delete clone.vat_rate;
       delete clone.tax_id;
@@ -311,18 +481,97 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   };
 
+  const handleSaveLead = async () => {
+    if (!leadForm.companyName.trim()) {
+      setLeadFormError("Вкажіть назву компанії.");
+      return;
+    }
+    if (!leadForm.firstName.trim()) {
+      setLeadFormError("Вкажіть імʼя.");
+      return;
+    }
+    if (!leadForm.lastName.trim()) {
+      setLeadFormError("Вкажіть прізвище.");
+      return;
+    }
+    if (!leadForm.email.trim()) {
+      setLeadFormError("Вкажіть email.");
+      return;
+    }
+    if (!leadForm.source.trim()) {
+      setLeadFormError("Вкажіть джерело.");
+      return;
+    }
+
+    const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
+    if (phones.length === 0) {
+      setLeadFormError("Вкажіть хоча б один номер телефону.");
+      return;
+    }
+
+    setLeadSaving(true);
+    setLeadFormError(null);
+
+    const managerValue = leadForm.manager.trim();
+    const payload: Record<string, unknown> = {
+      team_id: teamId,
+      company_name: leadForm.companyName.trim(),
+      legal_name: leadForm.legalName.trim() || null,
+      first_name: leadForm.firstName.trim(),
+      last_name: leadForm.lastName.trim(),
+      email: leadForm.email.trim(),
+      phone_numbers: phones,
+      source: leadForm.source.trim(),
+      website: leadForm.website.trim() || null,
+      manager: leadEditingId
+        ? (managerValue || null)
+        : (managerValue || defaultManagerName || null),
+    };
+
+    try {
+      if (leadEditingId) {
+        const { error: updateError } = await supabase
+          .schema("tosho")
+          .from("leads")
+          .update(payload)
+          .eq("id", leadEditingId)
+          .eq("team_id", teamId);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .schema("tosho")
+          .from("leads")
+          .insert(payload);
+        if (insertError) throw insertError;
+      }
+
+      setLeadDialogOpen(false);
+      resetLeadForm();
+      await loadLeads();
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, "Не вдалося зберегти ліда.");
+      if (message.includes("relation") && message.includes("leads")) {
+        setLeadFormError("Таблиця lead ще не створена. Запустіть SQL-скрипт scripts/leads-schema.sql.");
+      } else {
+        setLeadFormError(message);
+      }
+    } finally {
+      setLeadSaving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      const { error: deleteError } = await supabase
+      const { error: removeError } = await supabase
         .schema("tosho")
         .from("customers")
         .delete()
         .eq("id", deleteTarget.id)
         .eq("team_id", teamId);
-      if (deleteError) throw deleteError;
+      if (removeError) throw removeError;
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
       await loadCustomers();
@@ -333,16 +582,38 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   };
 
+  const handleDeleteLead = async () => {
+    if (!leadDeleteTarget) return;
+    setLeadDeleteBusy(true);
+    setLeadDeleteError(null);
+    try {
+      const { error: removeError } = await supabase
+        .schema("tosho")
+        .from("leads")
+        .delete()
+        .eq("id", leadDeleteTarget.id)
+        .eq("team_id", teamId);
+      if (removeError) throw removeError;
+      setLeadDeleteDialogOpen(false);
+      setLeadDeleteTarget(null);
+      await loadLeads();
+    } catch (err: unknown) {
+      setLeadDeleteError(getErrorMessage(err, "Не вдалося видалити ліда."));
+    } finally {
+      setLeadDeleteBusy(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
       <PageHeader
-        title="Замовники"
-        subtitle="База компаній, реквізитів та контактної інформації."
+        title="Замовники та ліди"
+        subtitle="База компаній, контактів, лідів і відповідальних менеджерів."
         icon={<Building2 className="h-5 w-5" />}
         actions={
-          <Button onClick={openCreate} className="gap-2">
+          <Button onClick={activeTab === "customers" ? openCreate : openCreateLead} className="gap-2">
             <PlusCircle className="h-4 w-4" />
-            Новий замовник
+            {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
           </Button>
         }
       >
@@ -351,116 +622,222 @@ function CustomersPage({ teamId }: { teamId: string }) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук замовника..."
+            placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
             className="pl-9"
           />
         </div>
       </PageHeader>
 
-      <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
-        {loading ? (
-          <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
-        ) : error ? (
-          <div className="p-6 text-sm text-destructive">{error}</div>
-        ) : filteredRows.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground">
-            Немає замовників. Додайте першого.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/20 hover:bg-muted/20">
-                <TableHead className="pl-6">Компанія</TableHead>
-                <TableHead>Тип</TableHead>
-                <TableHead>ПДВ</TableHead>
-                <TableHead>ЄДРПОУ / ІПН</TableHead>
-                <TableHead>Сайт</TableHead>
-                <TableHead>IBAN</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="hover:bg-muted/10 cursor-pointer"
-                  onClick={() => openEdit(row)}
-                >
-                  <TableCell className="pl-6">
-                    <div className="flex items-center gap-3">
-                      {row.logo_url ? (
-                        <img
-                          src={row.logo_url}
-                          alt={row.name ?? "logo"}
-                          className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
-                          {getInitials(row.name)}
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
+        <TabsList className="w-fit">
+          <TabsTrigger value="customers" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            Замовники
+          </TabsTrigger>
+          <TabsTrigger value="leads" className="gap-2">
+            <Users className="h-4 w-4" />
+            Ліди
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="customers" className="mt-4">
+          <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
+            {customersLoading ? (
+              <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
+            ) : customersError ? (
+              <div className="p-6 text-sm text-destructive">{customersError}</div>
+            ) : filteredRows.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">Немає замовників. Додайте першого.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="pl-6">Компанія</TableHead>
+                    <TableHead>Тип</TableHead>
+                    <TableHead>ПДВ</TableHead>
+                    <TableHead>ЄДРПОУ / ІПН</TableHead>
+                    <TableHead>Сайт</TableHead>
+                    <TableHead>IBAN</TableHead>
+                    <TableHead>Менеджер</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="hover:bg-muted/10 cursor-pointer"
+                      onClick={() => openEdit(row)}
+                    >
+                      <TableCell className="pl-6">
+                        <div className="flex items-center gap-3">
+                          {row.logo_url ? (
+                            <img
+                              src={row.logo_url}
+                              alt={row.name ?? "logo"}
+                              className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
+                              loading="lazy"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
+                              {getInitials(row.name)}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-medium">{row.name ?? "Не вказано"}</div>
+                            {row.legal_name && (
+                              <div className="text-xs text-muted-foreground">{row.legal_name}</div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div>
-                        <div className="font-medium">{row.name ?? "Не вказано"}</div>
-                        {row.legal_name && (
-                          <div className="text-xs text-muted-foreground">{row.legal_name}</div>
+                      </TableCell>
+                      <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
+                      <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
+                      <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
+                      <TableCell className="truncate max-w-[200px]">
+                        {row.website ? (
+                          <a
+                            href={row.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline underline-offset-2"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {row.website}
+                          </a>
+                        ) : (
+                          "Не вказано"
                         )}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
-                  <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
-                  <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
-                  <TableCell className="truncate max-w-[200px]">
-                    {row.website ? (
-                      <a
-                        href={row.website}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary underline underline-offset-2"
+                      </TableCell>
+                      <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
+                      <TableCell>{row.manager ?? "Не вказано"}</TableCell>
+                      <TableCell
+                        className="text-right pr-4"
+                        onClick={(event) => event.stopPropagation()}
                       >
-                        {row.website}
-                      </a>
-                    ) : (
-                      "Не вказано"
-                    )}
-                  </TableCell>
-                  <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
-                  <TableCell
-                    className="text-right pr-4"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEdit(row)}>
-                          Редагувати
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => openDelete(row)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Видалити
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => openDelete(row)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Видалити
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="leads" className="mt-4">
+          <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
+            {leadsLoading ? (
+              <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
+            ) : leadsError ? (
+              <div className="p-6 text-sm text-destructive">{leadsError}</div>
+            ) : filteredLeads.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">Немає лідів. Додайте першого.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="pl-6">Компанія</TableHead>
+                    <TableHead>Контакт</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Телефони</TableHead>
+                    <TableHead>Джерело</TableHead>
+                    <TableHead>Сайт</TableHead>
+                    <TableHead>Менеджер</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLeads.map((lead) => (
+                    <TableRow
+                      key={lead.id}
+                      className="hover:bg-muted/10 cursor-pointer"
+                      onClick={() => openEditLead(lead)}
+                    >
+                      <TableCell className="pl-6">
+                        <div>
+                          <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
+                          {lead.legal_name ? (
+                            <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[220px]">{lead.email ?? "Не вказано"}</TableCell>
+                      <TableCell className="truncate max-w-[220px]">
+                        {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
+                      </TableCell>
+                      <TableCell>{lead.source ?? "Не вказано"}</TableCell>
+                      <TableCell className="truncate max-w-[200px]">
+                        {lead.website ? (
+                          <a
+                            href={lead.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline underline-offset-2"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {lead.website}
+                          </a>
+                        ) : (
+                          "Не вказано"
+                        )}
+                      </TableCell>
+                      <TableCell>{lead.manager ?? "Не вказано"}</TableCell>
+                      <TableCell
+                        className="text-right pr-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditLead(lead)}>Редагувати</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => openDeleteLead(lead)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Видалити
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <CustomerDialog
         open={dialogOpen}
@@ -474,6 +851,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         setForm={setForm}
         ownershipOptions={OWNERSHIP_OPTIONS}
         vatOptions={VAT_OPTIONS}
+        teamMembers={teamMembers}
         saving={saving}
         error={formError}
         title={editingId ? "Редагувати замовника" : "Новий замовник"}
@@ -484,6 +862,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
         }
         submitLabel={editingId ? "Зберегти" : "Створити клієнта"}
         onSubmit={handleSave}
+      />
+
+      <LeadDialog
+        open={leadDialogOpen}
+        onOpenChange={(open) => {
+          setLeadDialogOpen(open);
+          if (!open && !leadEditingId) {
+            resetLeadForm();
+          }
+        }}
+        form={leadForm}
+        setForm={setLeadForm}
+        saving={leadSaving}
+        error={leadFormError}
+        title={leadEditingId ? "Редагувати ліда" : "Новий лід"}
+        description={leadEditingId ? undefined : "Додайте всі дані ліда для першого контакту."}
+        submitLabel={leadEditingId ? "Зберегти" : "Створити ліда"}
+        onSubmit={handleSaveLead}
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -505,6 +901,34 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </Button>
             <Button variant="destructiveSolid" onClick={handleDelete} disabled={deleteBusy}>
               {deleteBusy ? "Видалення..." : "Видалити"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leadDeleteDialogOpen} onOpenChange={setLeadDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Видалити ліда?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground">
+            {leadDeleteTarget?.company_name ?? "Цей лід"} буде видалений. Дію не можна скасувати.
+          </div>
+          {leadDeleteError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {leadDeleteError}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLeadDeleteDialogOpen(false)}
+              disabled={leadDeleteBusy}
+            >
+              Скасувати
+            </Button>
+            <Button variant="destructiveSolid" onClick={handleDeleteLead} disabled={leadDeleteBusy}>
+              {leadDeleteBusy ? "Видалення..." : "Видалити"}
             </Button>
           </DialogFooter>
         </DialogContent>

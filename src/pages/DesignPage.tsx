@@ -46,6 +46,7 @@ type DesignTask = {
   designDeadline?: string | null;
   quoteNumber?: string | null;
   customerName?: string | null;
+  productName?: string | null;
   createdAt?: string | null;
 };
 
@@ -399,6 +400,14 @@ export default function DesignPage() {
               typeof metadata.customer_name === "string" && metadata.customer_name.trim()
                 ? metadata.customer_name.trim()
                 : null,
+            productName:
+              typeof metadata.product_name === "string" && metadata.product_name.trim()
+                ? metadata.product_name.trim()
+                : typeof metadata.quote_item_name === "string" && metadata.quote_item_name.trim()
+                  ? metadata.quote_item_name.trim()
+                  : typeof metadata.item_name === "string" && metadata.item_name.trim()
+                    ? metadata.item_name.trim()
+                    : null,
             methodsCount: metadata.methods_count ?? 0,
             hasFiles: metadata.has_files ?? false,
             designDeadline: metadata.design_deadline ?? metadata.deadline ?? null,
@@ -411,6 +420,7 @@ export default function DesignPage() {
         new Set(parsedRaw.map((t) => t.quoteId).filter((quoteId): quoteId is string => !!quoteId && isUuid(quoteId)))
       );
       let quoteMap = new Map<string, { number: string | null; customerName: string | null }>();
+      let productNameByQuoteId = new Map<string, string | null>();
       if (quoteIds.length > 0) {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
@@ -444,12 +454,28 @@ export default function DesignPage() {
             },
           ])
         );
+
+        const { data: quoteItems, error: quoteItemsError } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .select("quote_id, position, name")
+          .in("quote_id", quoteIds)
+          .order("position", { ascending: true });
+        if (quoteItemsError) throw quoteItemsError;
+
+        (quoteItems ?? []).forEach((item) => {
+          const quoteId = typeof item.quote_id === "string" ? item.quote_id : null;
+          if (!quoteId || productNameByQuoteId.has(quoteId)) return;
+          const name = typeof item.name === "string" ? item.name.trim() : "";
+          productNameByQuoteId.set(quoteId, name || null);
+        });
       }
 
       const parsed: DesignTask[] = parsedRaw.map((t) => ({
         ...t,
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
         customerName: t.customerName ?? quoteMap.get(t.quoteId)?.customerName ?? null,
+        productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
       }));
 
       setTasks(parsed);
@@ -1425,6 +1451,11 @@ export default function DesignPage() {
             <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
               {task.customerName ?? "Не вказано"}
             </div>
+            {isLinkedQuote ? (
+              <div className="text-[11px] text-muted-foreground truncate" title={task.productName ?? ""}>
+                Товар: {task.productName ?? "Не вказано"}
+              </div>
+            ) : null}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1838,6 +1869,12 @@ export default function DesignPage() {
                         </div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
+                          {isUuid(row.task.quoteId) ? (
+                            <>
+                              <span>·</span>
+                              <span className="truncate">Товар: {row.task.productName ?? "Не вказано"}</span>
+                            </>
+                          ) : null}
                           <span>·</span>
                           <span>{statusLabel}</span>
                           <span>·</span>
@@ -2005,7 +2042,9 @@ export default function DesignPage() {
                                 ? task.quoteNumber ?? task.quoteId.slice(0, 8)
                                 : task.title ?? task.quoteId.slice(0, 8)}
                             </div>
-                            <div className="text-xs text-muted-foreground truncate">{isLinkedQuote ? "Прорахунок" : "Standalone"}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {isLinkedQuote ? `Товар: ${task.productName ?? "Не вказано"}` : "Standalone"}
+                            </div>
                           </button>
                           <div className="truncate">{task.customerName ?? "Не вказано"}</div>
                           <div>

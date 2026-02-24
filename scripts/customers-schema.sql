@@ -3,6 +3,7 @@
 
 alter table tosho.customers
   add column if not exists legal_name text,
+  add column if not exists manager text,
   add column if not exists ownership_type text,
   add column if not exists vat_rate numeric,
   add column if not exists tax_id text,

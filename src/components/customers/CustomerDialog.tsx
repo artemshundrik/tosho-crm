@@ -14,6 +14,7 @@ import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -23,6 +24,7 @@ import {
   Check,
   Image as ImageIcon,
   Percent,
+  User,
   UserPlus,
 } from "lucide-react";
 
@@ -40,6 +42,7 @@ export type VatOption = {
 export type CustomerFormState = {
   name: string;
   legalName: string;
+  manager: string;
   ownershipType: string;
   vatRate: string;
   taxId: string;
@@ -60,6 +63,11 @@ export type CustomerDialogProps = {
   setForm: React.Dispatch<React.SetStateAction<CustomerFormState>>;
   ownershipOptions: OwnershipOption[];
   vatOptions: VatOption[];
+  teamMembers?: Array<{
+    id: string;
+    label: string;
+    avatarUrl?: string | null;
+  }>;
   saving?: boolean;
   error?: string | null;
   title?: string;
@@ -104,6 +112,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   setForm,
   ownershipOptions,
   vatOptions,
+  teamMembers = [],
   saving = false,
   error,
   title = "Новий замовник",
@@ -120,11 +129,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [vatOpen, setVatOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
+  const [managerOpen, setManagerOpen] = React.useState(false);
   const [birthdayOpen, setBirthdayOpen] = React.useState(false);
 
   const birthdayDate = form.contactBirthday
     ? new Date(form.contactBirthday)
     : undefined;
+  const selectedManager = teamMembers.find((member) => member.label === form.manager);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -254,6 +265,75 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   Очистити
                 </Button>
               ) : null}
+            </PopoverContent>
+          </Popover>
+
+          <Popover open={managerOpen} onOpenChange={setManagerOpen}>
+            <PopoverTrigger asChild>
+              <Chip
+                size="md"
+                icon={
+                  selectedManager ? (
+                    <AvatarBase
+                      src={selectedManager.avatarUrl ?? null}
+                      name={selectedManager.label}
+                      fallback={selectedManager.label.slice(0, 2).toUpperCase()}
+                      size={20}
+                      className="border-border/60"
+                      fallbackClassName="text-[10px] font-semibold"
+                    />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )
+                }
+                active={!!form.manager.trim()}
+              >
+                {form.manager.trim() || "Менеджер"}
+              </Chip>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" align="start">
+              <div className="space-y-1">
+                {teamMembers.length > 0 ? (
+                  teamMembers.map((member) => (
+                    <Button
+                      key={member.id}
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-sm truncate"
+                      onClick={() => {
+                        setForm((prev) => ({ ...prev, manager: member.label }));
+                        setManagerOpen(false);
+                      }}
+                      title={member.label}
+                    >
+                      <AvatarBase
+                        src={member.avatarUrl ?? null}
+                        name={member.label}
+                        fallback={member.label.slice(0, 2).toUpperCase()}
+                        size={20}
+                        className="border-border/60 shrink-0"
+                        fallbackClassName="text-[10px] font-semibold"
+                      />
+                      <span className="truncate">{member.label}</span>
+                    </Button>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
+                )}
+                {!!form.manager.trim() ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-sm text-muted-foreground"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, manager: "" }));
+                      setManagerOpen(false);
+                    }}
+                  >
+                    Очистити
+                  </Button>
+                ) : null}
+              </div>
             </PopoverContent>
           </Popover>
         </div>

@@ -263,6 +263,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [customerForm, setCustomerForm] = useState({
     name: "",
     legalName: "",
+    manager: "",
     ownershipType: "",
     vatRate: "none",
     taxId: "",
@@ -364,13 +365,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [bulkAddTargetSetId, setBulkAddTargetSetId] = useState("");
   const [bulkAddBusy, setBulkAddBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>();
+  const [currentUserManagerLabel, setCurrentUserManagerLabel] = useState("");
   const quotesLoadRequestIdRef = useRef(0);
   const cacheKey = `quotes-page-cache:${teamId}`;
 
   // Get current user ID
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data.session?.user?.id);
+      const user = data.session?.user;
+      setCurrentUserId(user?.id);
+      const fullNameRaw = user?.user_metadata?.full_name;
+      const fullName = typeof fullNameRaw === "string" ? fullNameRaw.trim() : "";
+      const emailLocalPart = user?.email?.split("@")[0]?.trim() ?? "";
+      setCurrentUserManagerLabel(fullName || emailLocalPart);
     });
   }, []);
 
@@ -378,6 +385,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
     [teamMembers]
   );
+  useEffect(() => {
+    if (!currentUserId) return;
+    const label = memberById.get(currentUserId)?.trim();
+    if (label) setCurrentUserManagerLabel(label);
+  }, [currentUserId, memberById]);
   const memberAvatarById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
@@ -1252,6 +1264,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCustomerForm({
       name: prefillName,
       legalName: "",
+      manager: currentUserManagerLabel,
       ownershipType: "",
       vatRate: "none",
       taxId: "",
@@ -1291,6 +1304,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       team_id: teamId,
       name: customerForm.name.trim(),
       legal_name: customerForm.legalName.trim() || null,
+      manager: customerForm.manager.trim() || currentUserManagerLabel || null,
       ownership_type: customerForm.ownershipType || null,
       vat_rate: vatOption?.rate ?? null,
       tax_id: customerForm.taxId.trim() || null,
@@ -4300,6 +4314,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setForm={setCustomerForm}
         ownershipOptions={OWNERSHIP_OPTIONS}
         vatOptions={VAT_OPTIONS}
+        teamMembers={teamMembers}
         saving={customerCreateSaving}
         error={customerCreateError}
         title="Новий замовник"
