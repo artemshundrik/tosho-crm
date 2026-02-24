@@ -584,6 +584,93 @@
     background-color: hsl(var(--success-foreground));
   }
 
+  .design-status-badge-new {
+    background-color: hsl(var(--neutral-soft));
+    border-color: hsl(var(--neutral-soft-border));
+    color: hsl(var(--neutral-foreground));
+  }
+  .design-status-badge-changes {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .design-status-badge-in-progress {
+    background-color: hsl(var(--info-soft));
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .design-status-badge-pm-review {
+    background-color: hsl(var(--info-soft));
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .design-status-badge-client-review {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .design-status-badge-approved {
+    background-color: hsl(var(--success-soft));
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .design-status-badge-cancelled {
+    background-color: hsl(var(--danger-soft));
+    border-color: hsl(var(--danger-soft-border));
+    color: hsl(var(--danger-foreground));
+  }
+
+  .design-status-dot-new {
+    background-color: hsl(var(--neutral-foreground));
+  }
+  .design-status-dot-changes {
+    background-color: hsl(var(--warning-foreground));
+  }
+  .design-status-dot-in-progress {
+    background-color: hsl(var(--info-foreground));
+  }
+  .design-status-dot-pm-review {
+    background-color: hsl(var(--info-foreground));
+  }
+  .design-status-dot-client-review {
+    background-color: hsl(var(--warning-foreground));
+  }
+  .design-status-dot-approved {
+    background-color: hsl(var(--success-foreground));
+  }
+  .design-status-dot-cancelled {
+    background-color: hsl(var(--danger-foreground));
+  }
+
+  .design-timeline-bar-new {
+    background-color: hsl(var(--neutral-soft) / 0.75);
+    border-color: hsl(var(--neutral-soft-border));
+  }
+  .design-timeline-bar-changes {
+    background-color: hsl(var(--warning-soft) / 0.75);
+    border-color: hsl(var(--warning-soft-border));
+  }
+  .design-timeline-bar-in-progress {
+    background-color: hsl(var(--info-soft) / 0.75);
+    border-color: hsl(var(--info-soft-border));
+  }
+  .design-timeline-bar-pm-review {
+    background-color: hsl(var(--info-soft) / 0.75);
+    border-color: hsl(var(--info-soft-border));
+  }
+  .design-timeline-bar-client-review {
+    background-color: hsl(var(--warning-soft) / 0.75);
+    border-color: hsl(var(--warning-soft-border));
+  }
+  .design-timeline-bar-approved {
+    background-color: hsl(var(--success-soft) / 0.75);
+    border-color: hsl(var(--success-soft-border));
+  }
+  .design-timeline-bar-cancelled {
+    background-color: hsl(var(--danger-soft) / 0.75);
+    border-color: hsl(var(--danger-soft-border));
+  }
+
   .page-canvas-root {
     @apply w-full;
   }

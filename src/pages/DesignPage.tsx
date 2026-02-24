@@ -27,6 +27,7 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -84,31 +85,31 @@ type DesignStatus =
   | "cancelled";
 
 const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: string }[] = [
-  { id: "new", label: "Новий", hint: "Нові завдання", color: "bg-muted-foreground/50" },
-  { id: "changes", label: "Правки", hint: "Повернуті від клієнта", color: "bg-amber-400" },
-  { id: "in_progress", label: "В роботі", hint: "Дизайнер працює", color: "bg-sky-400" },
-  { id: "pm_review", label: "На перевірці", hint: "PM перевіряє", color: "bg-indigo-400" },
-  { id: "client_review", label: "На погодженні", hint: "Клієнт дивиться", color: "bg-yellow-400" },
-  { id: "approved", label: "Затверджено", hint: "Готово", color: "bg-emerald-400" },
-  { id: "cancelled", label: "Скасовано", hint: "Скасовано", color: "bg-rose-400" },
+  { id: "new", label: "Новий", hint: "Нові завдання", color: "design-status-dot-new" },
+  { id: "changes", label: "Правки", hint: "Повернуті від клієнта", color: "design-status-dot-changes" },
+  { id: "in_progress", label: "В роботі", hint: "Дизайнер працює", color: "design-status-dot-in-progress" },
+  { id: "pm_review", label: "На перевірці", hint: "PM перевіряє", color: "design-status-dot-pm-review" },
+  { id: "client_review", label: "На погодженні", hint: "Клієнт дивиться", color: "design-status-dot-client-review" },
+  { id: "approved", label: "Затверджено", hint: "Готово", color: "design-status-dot-approved" },
+  { id: "cancelled", label: "Скасовано", hint: "Скасовано", color: "design-status-dot-cancelled" },
 ];
 const STATUS_BADGE_CLASS_BY_STATUS: Record<DesignStatus, string> = {
-  new: "border-slate-400/40 bg-slate-500/12 text-slate-200",
-  changes: "border-amber-400/40 bg-amber-500/15 text-amber-200",
-  in_progress: "border-sky-400/40 bg-sky-500/15 text-sky-200",
-  pm_review: "border-indigo-400/40 bg-indigo-500/15 text-indigo-200",
-  client_review: "border-yellow-400/40 bg-yellow-500/15 text-yellow-200",
-  approved: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
-  cancelled: "border-rose-400/40 bg-rose-500/15 text-rose-200",
+  new: "design-status-badge-new",
+  changes: "design-status-badge-changes",
+  in_progress: "design-status-badge-in-progress",
+  pm_review: "design-status-badge-pm-review",
+  client_review: "design-status-badge-client-review",
+  approved: "design-status-badge-approved",
+  cancelled: "design-status-badge-cancelled",
 };
 const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
-  new: "bg-slate-400/25 border-slate-300/50",
-  changes: "bg-amber-400/25 border-amber-300/50",
-  in_progress: "bg-sky-400/25 border-sky-300/50",
-  pm_review: "bg-indigo-400/25 border-indigo-300/50",
-  client_review: "bg-yellow-400/25 border-yellow-300/50",
-  approved: "bg-emerald-400/25 border-emerald-300/50",
-  cancelled: "bg-rose-400/20 border-rose-300/45",
+  new: "design-timeline-bar-new",
+  changes: "design-timeline-bar-changes",
+  in_progress: "design-timeline-bar-in-progress",
+  pm_review: "design-timeline-bar-pm-review",
+  client_review: "design-timeline-bar-client-review",
+  approved: "design-timeline-bar-approved",
+  cancelled: "design-timeline-bar-cancelled",
 };
 const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
   new: 0,
@@ -144,6 +145,16 @@ const formatEstimateMinutes = (minutes?: number | null) => {
   if (hours) parts.push(`${hours} год`);
   if (mins) parts.push(`${mins} хв`);
   return parts.length > 0 ? parts.join(" ") : "0 хв";
+};
+
+const getInitials = (name?: string | null) => {
+  if (!name) return "•";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "•";
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -199,6 +210,14 @@ export default function DesignPage() {
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const canManageAssignments = permissions.canManageAssignments;
   const canSelfAssign = permissions.canSelfAssignDesign;
+  const openTask = (taskId: string, inNewTab = false) => {
+    const href = `/design/${taskId}`;
+    if (inNewTab) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    navigate(href);
+  };
 
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
@@ -229,21 +248,51 @@ export default function DesignPage() {
       if (!userId) return;
       setMembersLoading(true);
       try {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (!workspaceId) {
-          setMemberById({});
-          setDesignerMembers([]);
-          return;
+        let rows: MembershipRow[] = [];
+
+        if (effectiveTeamId) {
+          const teamViewColumns = [
+            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,job_role",
+            "user_id,full_name,email",
+            "user_id,full_name,job_role",
+            "user_id,full_name",
+            "user_id,email",
+            "user_id",
+          ];
+          for (const columns of teamViewColumns) {
+            const { data: teamViewData, error: teamViewError } = await supabase
+              .from("team_members_view")
+              .select(columns)
+              .eq("team_id", effectiveTeamId);
+            if (!teamViewError) {
+              rows = ((teamViewData as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              break;
+            }
+            const message = (teamViewError.message ?? "").toLowerCase();
+            if (!message.includes("column") || !message.includes("does not exist")) {
+              throw teamViewError;
+            }
+          }
         }
 
-        const { data, error: membersError } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("user_id,full_name,email,access_role,job_role")
-          .eq("workspace_id", workspaceId);
-        if (membersError) throw membersError;
+        if (rows.length === 0) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (!workspaceId) {
+            setMemberById({});
+            setDesignerMembers([]);
+            return;
+          }
 
-        const rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+          const { data, error: membersError } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select("user_id,full_name,email,access_role,job_role")
+            .eq("workspace_id", workspaceId);
+          if (membersError) throw membersError;
+          rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+        }
+
         const labelById: Record<string, string> = {};
         rows.forEach((row) => {
           const label = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
@@ -263,7 +312,7 @@ export default function DesignPage() {
       }
     };
     void loadMembers();
-  }, [userId]);
+  }, [userId, effectiveTeamId]);
 
   useEffect(() => {
     if (permissions.isDesigner) {
@@ -1295,7 +1344,20 @@ export default function DesignPage() {
         onDragEnd={options?.draggable ? stopDraggingTask : undefined}
         onClick={() => {
           if (suppressCardClick) return;
-          navigate(`/design/${task.id}`);
+          openTask(task.id);
+        }}
+        onAuxClick={(event) => {
+          if (event.button !== 1) return;
+          event.preventDefault();
+          if (suppressCardClick) return;
+          openTask(task.id, true);
+        }}
+        onMouseDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+            event.preventDefault();
+            if (suppressCardClick) return;
+            openTask(task.id, true);
+          }
         }}
         className={cn(
           "rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer",
@@ -1337,6 +1399,8 @@ export default function DesignPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+              <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
+              <DropdownMenuSeparator />
               {canSelfAssign &&
               userId &&
               task.assigneeUserId &&
@@ -1397,9 +1461,19 @@ export default function DesignPage() {
         <div className="mt-2">
           <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
             Виконавець:{" "}
-            <span className={cn("font-medium", task.assigneeUserId ? "text-foreground" : "text-amber-300")}>
-              {getMemberLabel(task.assigneeUserId)}
-            </span>
+            {task.assigneeUserId ? (
+              <span className="inline-flex items-center gap-1">
+                <AvatarBase
+                  name={getMemberLabel(task.assigneeUserId)}
+                  fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+                  size={14}
+                  className="shrink-0 border-border/70"
+                />
+                <span className="font-medium text-foreground">{getMemberLabel(task.assigneeUserId)}</span>
+              </span>
+            ) : (
+              <span className="font-medium text-warning-foreground">{getMemberLabel(task.assigneeUserId)}</span>
+            )}
           </span>
           {!task.assigneeUserId && canSelfAssign && userId ? (
             <Button
@@ -1447,7 +1521,7 @@ export default function DesignPage() {
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-2 py-1",
-                hasActiveTimer ? "border-emerald-500/40 text-emerald-300" : "border-border/60"
+                hasActiveTimer ? "border-success-soft-border text-success-foreground bg-success-soft" : "border-border/60"
               )}
             >
               <Clock className="h-3.5 w-3.5" /> {trackedLabel}
@@ -1457,8 +1531,8 @@ export default function DesignPage() {
             <HoverHint
               text={`Таймер зараз запущений${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}`}
             >
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 px-2 py-1 text-emerald-300">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1 rounded-full border border-success-soft-border bg-success-soft px-2 py-1 text-success-foreground">
+                <span className="h-2 w-2 rounded-full design-status-dot-approved animate-pulse" />
                 Активний
               </span>
             </HoverHint>
@@ -1471,7 +1545,7 @@ export default function DesignPage() {
             </HoverHint>
           ) : (
             <HoverHint text="Для задачі не встановлено естімейт">
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-1 text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded-full border border-warning-soft-border bg-warning-soft px-2 py-1 text-warning-foreground">
                 <Timer className="h-3.5 w-3.5" /> Без естімейту
               </span>
             </HoverHint>
@@ -1590,7 +1664,7 @@ export default function DesignPage() {
                       {activeTimersInColumn > 0 ? (
                         <Badge
                           variant="outline"
-                          className="text-[11px] px-2 py-0.5 border-emerald-500/40 text-emerald-300"
+                          className="text-[11px] px-2 py-0.5 border-success-soft-border bg-success-soft text-success-foreground"
                           title="Активні таймери"
                         >
                           <Clock className="h-3 w-3 mr-1" />
@@ -1623,15 +1697,15 @@ export default function DesignPage() {
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-rose-400" />
+                <span className="h-2 w-2 rounded-full design-status-dot-cancelled" />
                 Лінія сьогодні
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                <span className="h-2 w-2 rounded-full design-status-dot-client-review" />
                 Ризик старту
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span className="h-2 w-2 rounded-full design-status-dot-cancelled" />
                 Прострочено
               </span>
             </div>
@@ -1704,17 +1778,42 @@ export default function DesignPage() {
                     <div key={row.task.id} className="contents">
                       <button
                         className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-3 py-2 text-left hover:bg-muted/20"
-                        onClick={() => navigate(`/design/${row.task.id}`)}
+                        onClick={() => openTask(row.task.id)}
+                        onAuxClick={(event) => {
+                          if (event.button !== 1) return;
+                          event.preventDefault();
+                          openTask(row.task.id, true);
+                        }}
+                        onMouseDown={(event) => {
+                          if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+                            event.preventDefault();
+                            openTask(row.task.id, true);
+                          }
+                        }}
                       >
                         <div className="truncate text-sm font-medium">
                           {isUuid(row.task.quoteId)
                             ? row.task.quoteNumber ?? row.task.quoteId.slice(0, 8)
                             : row.task.title ?? row.task.quoteId.slice(0, 8)}
                         </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {row.task.customerName ?? "Не вказано"} · {statusLabel} · {getMemberLabel(row.task.assigneeUserId)} ·{" "}
-                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"} ·{" "}
-                          {formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
+                          <span>·</span>
+                          <span>{statusLabel}</span>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1 min-w-0">
+                            <AvatarBase
+                              name={getMemberLabel(row.task.assigneeUserId)}
+                              fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
+                              size={14}
+                              className="shrink-0 border-border/70"
+                            />
+                            <span className="truncate">{getMemberLabel(row.task.assigneeUserId)}</span>
+                          </span>
+                          <span>·</span>
+                          <span>{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
+                          <span>·</span>
+                          <span>{formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}</span>
                         </div>
                       </button>
                       <div
@@ -1722,7 +1821,7 @@ export default function DesignPage() {
                         style={{ gridColumn: `2 / span ${timelineAxis.columnCount}` }}
                       >
                         <div
-                          className="absolute inset-y-0 border-l border-rose-400/55 pointer-events-none"
+                          className="absolute inset-y-0 border-l border-danger-soft-border pointer-events-none"
                           style={{ left: `calc(${timelineData.todayOffset / timelineAxis.bucketSize} * (100% / ${timelineAxis.columnCount}))` }}
                         />
                         <div className="absolute inset-y-2 left-0 right-0">
@@ -1731,8 +1830,8 @@ export default function DesignPage() {
                               className={cn(
                                 "absolute top-1/2 -translate-y-1/2 h-6 rounded-md border",
                                 row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "bg-transparent border-border/70 border-dashed",
-                                row.isStartRisk && "ring-2 ring-amber-400/50",
-                                row.isOverdue && "ring-2 ring-rose-400/65"
+                                row.isStartRisk && "ring-2 ring-warning-soft-border",
+                                row.isOverdue && "ring-2 ring-danger-soft-border"
                               )}
                               title={barTitle}
                               style={{
@@ -1801,12 +1900,22 @@ export default function DesignPage() {
               <div key={group.id ?? "unassigned"} className="rounded-lg border border-border/60 bg-card/60">
                 <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="text-sm font-semibold">{group.label}</div>
+                    <div className="inline-flex items-center gap-1.5 min-w-0">
+                      {group.id ? (
+                        <AvatarBase
+                          name={group.label}
+                          fallback={getInitials(group.label)}
+                          size={16}
+                          className="shrink-0 border-border/70"
+                        />
+                      ) : null}
+                      <div className="text-sm font-semibold truncate">{group.label}</div>
+                    </div>
                     <Badge variant="outline" className="text-[11px]">
                       {formatEstimateMinutes(group.estimateMinutesTotal)}
                     </Badge>
                     {group.tasksWithoutEstimate > 0 ? (
-                      <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-300">
+                      <Badge variant="outline" className="text-[11px] border-warning-soft-border bg-warning-soft text-warning-foreground">
                         Без естімейту: {group.tasksWithoutEstimate}
                       </Badge>
                     ) : null}
@@ -1835,7 +1944,18 @@ export default function DesignPage() {
                         >
                           <button
                             className="text-left min-w-0"
-                            onClick={() => navigate(`/design/${task.id}`)}
+                            onClick={() => openTask(task.id)}
+                            onAuxClick={(event) => {
+                              if (event.button !== 1) return;
+                              event.preventDefault();
+                              openTask(task.id, true);
+                            }}
+                            onMouseDown={(event) => {
+                              if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+                                event.preventDefault();
+                                openTask(task.id, true);
+                              }
+                            }}
                             title={task.title ?? task.quoteNumber ?? task.quoteId}
                           >
                             <div className="font-medium truncate">

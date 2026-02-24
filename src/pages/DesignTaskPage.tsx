@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -9,6 +9,9 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -54,6 +57,8 @@ import {
   type DesignTaskTimerSummary,
 } from "@/lib/designTaskTimer";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { uk } from "date-fns/locale";
 
 type DesignStatus =
   | "new"
@@ -137,6 +142,7 @@ type DesignTaskHistoryEvent = {
   created_at: string;
   title: string;
   actorLabel: string;
+  actorUserId?: string | null;
   description?: string;
   icon: typeof Clock;
   accentClass: string;
@@ -153,13 +159,13 @@ const statusLabels: Record<DesignStatus, string> = {
 };
 
 const statusColors: Record<DesignStatus, string> = {
-  new: "bg-muted-foreground/40 text-foreground",
-  changes: "bg-amber-500/15 text-amber-300 border border-amber-500/40",
-  in_progress: "bg-sky-500/15 text-sky-200 border border-sky-500/40",
-  pm_review: "bg-indigo-500/15 text-indigo-200 border border-indigo-500/40",
-  client_review: "bg-yellow-500/15 text-yellow-200 border border-yellow-500/40",
-  approved: "bg-emerald-500/15 text-emerald-200 border border-emerald-500/40",
-  cancelled: "bg-rose-500/15 text-rose-200 border border-rose-500/40",
+  new: "design-status-badge-new",
+  changes: "design-status-badge-changes",
+  in_progress: "design-status-badge-in-progress",
+  pm_review: "design-status-badge-pm-review",
+  client_review: "design-status-badge-client-review",
+  approved: "design-status-badge-approved",
+  cancelled: "design-status-badge-cancelled",
 };
 
 const statusQuickActions: Partial<Record<DesignStatus, Array<{ next: DesignStatus; label: string }>>> = {
@@ -299,6 +305,9 @@ export default function DesignTaskPage() {
   const [estimateInput, setEstimateInput] = useState("2");
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
+  const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [estimatePendingAction, setEstimatePendingAction] = useState<
     | { mode: "assign"; nextAssigneeUserId: string | null }
     | { mode: "assign_self"; alsoStart: boolean }
@@ -362,17 +371,47 @@ export default function DesignTaskPage() {
     const loadMembers = async () => {
       if (!userId) return;
       try {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (!workspaceId) return;
+        let rows: MembershipRow[] = [];
 
-        const { data, error: membersError } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("user_id,full_name,email,access_role,job_role")
-          .eq("workspace_id", workspaceId);
-        if (membersError) throw membersError;
+        if (effectiveTeamId) {
+          const teamViewColumns = [
+            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,job_role",
+            "user_id,full_name,email",
+            "user_id,full_name,job_role",
+            "user_id,full_name",
+            "user_id,email",
+            "user_id",
+          ];
+          for (const columns of teamViewColumns) {
+            const { data: teamViewData, error: teamViewError } = await supabase
+              .from("team_members_view")
+              .select(columns)
+              .eq("team_id", effectiveTeamId);
+            if (!teamViewError) {
+              rows = ((teamViewData as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              break;
+            }
+            const message = (teamViewError.message ?? "").toLowerCase();
+            if (!message.includes("column") || !message.includes("does not exist")) {
+              throw teamViewError;
+            }
+          }
+        }
 
-        const rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+        if (rows.length === 0) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (!workspaceId) return;
+
+          const { data, error: membersError } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select("user_id,full_name,email,access_role,job_role")
+            .eq("workspace_id", workspaceId);
+          if (membersError) throw membersError;
+          rows = ((data as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+        }
+
         const labels: Record<string, string> = {};
         rows.forEach((row) => {
           labels[row.user_id] = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
@@ -388,7 +427,7 @@ export default function DesignTaskPage() {
       }
     };
     void loadMembers();
-  }, [userId]);
+  }, [userId, effectiveTeamId]);
 
   useEffect(() => {
     const load = async () => {
@@ -727,9 +766,9 @@ export default function DesignTaskPage() {
     if (Number.isNaN(d.getTime())) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const today = new Date();
     const diff = Math.round((d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return { label: `Прострочено ${Math.abs(diff)} дн.`, className: "text-rose-400" };
-    if (diff === 0) return { label: "Сьогодні", className: "text-amber-300" };
-    if (diff === 1) return { label: "Завтра", className: "text-amber-200" };
+    if (diff < 0) return { label: `Прострочено ${Math.abs(diff)} дн.`, className: "text-danger-foreground" };
+    if (diff === 0) return { label: "Сьогодні", className: "text-warning-foreground" };
+    if (diff === 1) return { label: "Завтра", className: "text-warning-foreground" };
     return { label: d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }), className: "text-muted-foreground" };
   }, [task?.designDeadline]);
   const estimateLabel = useMemo(() => {
@@ -912,6 +951,27 @@ export default function DesignTaskPage() {
       : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
   };
 
+  const formatDeadlineLabel = (value: string | null | undefined) => {
+    if (!value) return "Без дедлайну";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Без дедлайну";
+    return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const toLocalDate = (value: string | null | undefined) => {
+    if (!value) return undefined;
+    const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]) - 1;
+      const day = Number(dateOnlyMatch[3]);
+      return new Date(year, month, day);
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
   const historyEvents = useMemo<DesignTaskHistoryEvent[]>(() => {
     return historyRows.map((row) => {
       const metadata = parseActivityMetadata(row.metadata);
@@ -928,6 +988,7 @@ export default function DesignTaskPage() {
           created_at: row.created_at,
           title,
           actorLabel,
+          actorUserId: row.user_id ?? null,
           icon: UserRound,
           accentClass:
             "bg-primary/10 text-primary border-primary/20",
@@ -944,8 +1005,23 @@ export default function DesignTaskPage() {
           created_at: row.created_at,
           title: fromLabel && toLabel ? `Статус: ${fromLabel} → ${toLabel}` : row.title?.trim() || "Оновлено статус задачі",
           actorLabel,
+          actorUserId: row.user_id ?? null,
           icon: CalendarClock,
-          accentClass: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+          accentClass: "quote-activity-accent-deadline",
+        };
+      }
+
+      if (source === "design_task_deadline") {
+        const fromDeadline = typeof metadata.from_deadline === "string" ? metadata.from_deadline : null;
+        const toDeadline = typeof metadata.to_deadline === "string" ? metadata.to_deadline : null;
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: `Дедлайн: ${formatDeadlineLabel(fromDeadline)} → ${formatDeadlineLabel(toDeadline)}`,
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          icon: CalendarClock,
+          accentClass: "quote-activity-accent-deadline",
         };
       }
 
@@ -958,8 +1034,9 @@ export default function DesignTaskPage() {
           created_at: row.created_at,
           title: `Естімейт: ${formatEstimateMinutes(Number.isFinite(estimateMinutes) ? estimateMinutes : null)}`,
           actorLabel,
+          actorUserId: row.user_id ?? null,
           icon: Clock,
-          accentClass: "bg-sky-500/15 text-sky-200 border-sky-500/30",
+          accentClass: "quote-activity-accent-comment",
         };
       }
 
@@ -978,8 +1055,9 @@ export default function DesignTaskPage() {
           created_at: row.created_at,
           title,
           actorLabel,
+          actorUserId: row.user_id ?? null,
           icon: Timer,
-          accentClass: "bg-violet-500/15 text-violet-200 border-violet-500/30",
+          accentClass: "quote-activity-accent-comment",
         };
       }
 
@@ -989,9 +1067,10 @@ export default function DesignTaskPage() {
           created_at: row.created_at,
           title: "Створено дизайн-задачу",
           actorLabel,
+          actorUserId: row.user_id ?? null,
           description: row.title?.trim() || undefined,
           icon: Palette,
-          accentClass: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
+          accentClass: "quote-activity-accent-runs",
         };
       }
 
@@ -1000,6 +1079,7 @@ export default function DesignTaskPage() {
         created_at: row.created_at,
         title: row.title?.trim() || "Оновлено задачу",
         actorLabel,
+        actorUserId: row.user_id ?? null,
         icon: Clock,
         accentClass: "bg-muted/30 text-muted-foreground border-border",
       };
@@ -1334,6 +1414,7 @@ export default function DesignTaskPage() {
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,
       design_deadline: task.designDeadline ?? null,
+      deadline: task.designDeadline ?? null,
       assignee_user_id: task.assigneeUserId ?? null,
       assigned_at: task.assignedAt ?? null,
       estimate_minutes: estimateMinutes,
@@ -1428,6 +1509,81 @@ export default function DesignTaskPage() {
     }
   };
 
+  const updateTaskDeadline = async (nextDate: Date | null) => {
+    if (!task || !effectiveTeamId) return;
+    const previousDeadline = task.designDeadline ?? null;
+    const nextDeadline = nextDate ? format(nextDate, "yyyy-MM-dd") : null;
+    if (previousDeadline === nextDeadline) return;
+
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      status: task.status,
+      methods_count: task.methodsCount ?? 0,
+      has_files: task.hasFiles ?? false,
+      quote_id: task.quoteId,
+      design_deadline: nextDeadline,
+      deadline: nextDeadline,
+      assignee_user_id: task.assigneeUserId ?? null,
+      assigned_at: task.assignedAt ?? null,
+      estimate_minutes: getTaskEstimateMinutes(task),
+      estimate_set_at: (task.metadata ?? {}).estimate_set_at ?? null,
+      estimated_by_user_id: (task.metadata ?? {}).estimated_by_user_id ?? null,
+    };
+
+    const previousTask = task;
+    setDeadlineSaving(true);
+    setTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            designDeadline: nextDeadline,
+            metadata: nextMetadata,
+          }
+        : prev
+    );
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_deadline",
+          title: `Дедлайн: ${formatDeadlineLabel(previousDeadline)} → ${formatDeadlineLabel(nextDeadline)}`,
+          metadata: {
+            source: "design_task_deadline",
+            from_deadline: previousDeadline,
+            to_deadline: nextDeadline,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task deadline event", logError);
+      }
+
+      toast.success(nextDeadline ? `Дедлайн оновлено: ${formatDeadlineLabel(nextDeadline)}` : "Дедлайн очищено");
+    } catch (e: unknown) {
+      setTask(previousTask);
+      const message = getErrorMessage(e, "Не вдалося оновити дедлайн");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeadlineSaving(false);
+      setDeadlinePopoverOpen(false);
+      setHeaderDeadlinePopoverOpen(false);
+    }
+  };
+
   const applyAssignee = async (nextAssigneeUserId: string | null, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !canManageAssignments) return;
     if (nextAssigneeUserId === task.assigneeUserId) return;
@@ -1457,6 +1613,7 @@ export default function DesignTaskPage() {
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,
       design_deadline: task.designDeadline ?? null,
+      deadline: task.designDeadline ?? null,
       assignee_user_id: nextAssigneeUserId,
       assigned_at: nextAssignedAt,
       estimate_minutes: estimateMinutes,
@@ -1633,6 +1790,7 @@ export default function DesignTaskPage() {
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,
       design_deadline: task.designDeadline ?? null,
+      deadline: task.designDeadline ?? null,
       assignee_user_id: userId,
       assigned_at: nextAssignedAt,
       estimate_minutes: estimateMinutes,
@@ -1929,7 +2087,7 @@ export default function DesignTaskPage() {
     (!!isAssignedToMe || canManageAssignments);
 
   let primaryActionLabel = "Взяти в роботу";
-  let primaryActionHint = "Призначити задачу на себе.";
+  let primaryActionHint: ReactNode = "Призначити задачу на себе.";
   let primaryActionDisabled = true;
   const primaryActionLoading = assigningSelf || statusSaving === "in_progress";
   let primaryActionClick: (() => void) | null = null;
@@ -1963,12 +2121,34 @@ export default function DesignTaskPage() {
       primaryActionClick = null;
     } else if (isAssignedToOther && !canManageAssignments) {
       primaryActionLabel = "Вже призначено";
-      primaryActionHint = `Виконавець: ${getMemberLabel(task.assigneeUserId)}`;
+      primaryActionHint = (
+        <span className="inline-flex items-center gap-1.5">
+          <span>Виконавець:</span>
+          <AvatarBase
+            name={getMemberLabel(task.assigneeUserId)}
+            fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+            size={14}
+            className="shrink-0 border-border/70"
+          />
+          <span>{getMemberLabel(task.assigneeUserId)}</span>
+        </span>
+      );
       primaryActionDisabled = true;
       primaryActionClick = null;
     } else if (isAssignedToOther && canManageAssignments) {
       primaryActionLabel = "Призначити себе";
-      primaryActionHint = `Зараз виконавець: ${getMemberLabel(task.assigneeUserId)}`;
+      primaryActionHint = (
+        <span className="inline-flex items-center gap-1.5">
+          <span>Зараз виконавець:</span>
+          <AvatarBase
+            name={getMemberLabel(task.assigneeUserId)}
+            fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+            size={14}
+            className="shrink-0 border-border/70"
+          />
+          <span>{getMemberLabel(task.assigneeUserId)}</span>
+        </span>
+      );
       primaryActionDisabled = !canTakeOverForSelf;
       primaryActionClick = () => {
         void assignTaskToMe();
@@ -2027,19 +2207,53 @@ export default function DesignTaskPage() {
             <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
               {statusLabels[task.status]}
             </Badge>
-            <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1">
-              <UserRound className="h-3.5 w-3.5" />
-              {getMemberLabel(task.assigneeUserId)}
+            <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1.5">
+              <AvatarBase
+                name={getMemberLabel(task.assigneeUserId)}
+                fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+                size={16}
+                className="border-border/70"
+              />
+              <span className="truncate max-w-[160px]">{getMemberLabel(task.assigneeUserId)}</span>
             </Badge>
-            <Badge variant="outline" className={cn("px-2.5 py-1 text-xs gap-1", deadlineLabel.className)}>
-              <CalendarClock className="h-3.5 w-3.5" />
-              Дедлайн: {deadlineLabel.label}
-            </Badge>
+            <Popover open={headerDeadlinePopoverOpen} onOpenChange={setHeaderDeadlinePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn("h-7 px-2.5 text-xs gap-1", deadlineLabel.className)}
+                  disabled={deadlineSaving}
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Дедлайн: {deadlineLabel.label}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={toLocalDate(task.designDeadline)}
+                  onSelect={(date) => {
+                    if (!date) return;
+                    void updateTaskDeadline(date);
+                  }}
+                  captionLayout="dropdown-buttons"
+                  fromYear={new Date().getFullYear() - 3}
+                  toYear={new Date().getFullYear() + 5}
+                  initialFocus
+                />
+                <DateQuickActions
+                  onSelect={(date) => {
+                    void updateTaskDeadline(date ?? null);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
             <Badge
               variant="outline"
               className={cn(
                 "px-2.5 py-1 text-xs gap-1",
-                isTimerRunning ? "border-emerald-500/40 text-emerald-300 bg-emerald-500/10" : ""
+                isTimerRunning ? "border-success-soft-border text-success-foreground bg-success-soft" : ""
               )}
             >
               <Timer className="h-3.5 w-3.5" />
@@ -2130,7 +2344,7 @@ export default function DesignTaskPage() {
               </div>
             </div>
             {task.status === "changes" ? (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+              <div className="rounded-lg border border-warning-soft-border bg-warning-soft p-3 text-sm text-warning-foreground">
                 {task.title ?? "Клієнт надіслав правки, перевірте деталі та оновіть макет."}
               </div>
             ) : null}
@@ -2238,9 +2452,20 @@ export default function DesignTaskPage() {
                             <div className="truncate text-sm font-medium" title={file.file_name}>
                               {file.file_name}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {formatFileSize(file.file_size)} · {formatDate(file.created_at, true)} ·{" "}
-                              {file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
+                            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
+                              <span>{formatFileSize(file.file_size)}</span>
+                              <span>·</span>
+                              <span>{formatDate(file.created_at, true)}</span>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-1">
+                                <AvatarBase
+                                  name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
+                                  fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
+                                  size={14}
+                                  className="shrink-0 border-border/70"
+                                />
+                                <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -2317,8 +2542,18 @@ export default function DesignTaskPage() {
                         </Button>
                       </div>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {formatDate(link.created_at, true)} · {link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
+                    <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
+                      <span>{formatDate(link.created_at, true)}</span>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <AvatarBase
+                          name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
+                          fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
+                          size={14}
+                          className="shrink-0 border-border/70"
+                        />
+                        <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -2370,7 +2605,19 @@ export default function DesignTaskPage() {
 
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
               <div className="text-xs text-muted-foreground">Крок 1. Виконавець</div>
-              <div className="font-medium">{getMemberLabel(task.assigneeUserId)}</div>
+              {task.assigneeUserId ? (
+                <div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/60 px-2.5 py-2">
+                  <AvatarBase
+                    name={getMemberLabel(task.assigneeUserId)}
+                    fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+                    size={24}
+                    className="shrink-0"
+                  />
+                  <div className="font-medium truncate">{getMemberLabel(task.assigneeUserId)}</div>
+                </div>
+              ) : (
+                <div className="font-medium text-muted-foreground">Без виконавця</div>
+              )}
               {!task.assigneeUserId ? (
                 <Button
                   size="sm"
@@ -2438,6 +2685,57 @@ export default function DesignTaskPage() {
             </div>
 
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
+              <div className="text-xs text-muted-foreground">Дедлайн задачі</div>
+              <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full justify-start"
+                    disabled={deadlineSaving}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-1" />
+                    {task.designDeadline
+                      ? format(toLocalDate(task.designDeadline) ?? new Date(task.designDeadline), "d MMM yyyy", { locale: uk })
+                      : "Оберіть дедлайн"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={toLocalDate(task.designDeadline)}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      void updateTaskDeadline(date);
+                    }}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear() - 3}
+                    toYear={new Date().getFullYear() + 5}
+                    initialFocus
+                  />
+                  <DateQuickActions
+                    onSelect={(date) => {
+                      void updateTaskDeadline(date ?? null);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              {task.designDeadline ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground"
+                  disabled={deadlineSaving}
+                  onClick={() => void updateTaskDeadline(null)}
+                >
+                  Очистити дедлайн
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
               <div className="text-xs text-muted-foreground">Крок 3. Таймер роботи</div>
               <div className="font-mono text-lg font-semibold tracking-wide">{timerElapsedLabel}</div>
               <div className="text-xs text-muted-foreground">
@@ -2446,7 +2744,7 @@ export default function DesignTaskPage() {
                   : "Таймер зупинено"}
               </div>
               {startTimerBlockedReason && !isTimerRunning ? (
-                <div className="text-[11px] text-amber-300">{startTimerBlockedReason}</div>
+                <div className="text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
               ) : null}
               <div className="flex gap-2">
                 <Button
@@ -2528,9 +2826,24 @@ export default function DesignTaskPage() {
                             <div className="truncate text-sm font-medium" title={file.file_name ?? ""}>
                               {file.file_name ?? "Файл"}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {formatFileSize(file.file_size)} · {formatDate(file.created_at, true)}
-                              {file.uploaded_by ? ` · ${getMemberLabel(file.uploaded_by)}` : ""}
+                            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
+                              <span>{formatFileSize(file.file_size)}</span>
+                              <span>·</span>
+                              <span>{formatDate(file.created_at, true)}</span>
+                              {file.uploaded_by ? (
+                                <>
+                                  <span>·</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <AvatarBase
+                                      name={getMemberLabel(file.uploaded_by)}
+                                      fallback={getInitials(getMemberLabel(file.uploaded_by))}
+                                      size={14}
+                                      className="shrink-0 border-border/70"
+                                    />
+                                    <span>{getMemberLabel(file.uploaded_by)}</span>
+                                  </span>
+                                </>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -2591,7 +2904,15 @@ export default function DesignTaskPage() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Виконавець</span>
-                <span className="font-medium text-right">{getMemberLabel(task.assigneeUserId)}</span>
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <AvatarBase
+                    name={getMemberLabel(task.assigneeUserId)}
+                    fallback={getInitials(getMemberLabel(task.assigneeUserId))}
+                    size={16}
+                    className="shrink-0 border-border/70"
+                  />
+                  <span className="font-medium text-right truncate max-w-[180px]">{getMemberLabel(task.assigneeUserId)}</span>
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Призначено</span>
@@ -2645,7 +2966,15 @@ export default function DesignTaskPage() {
                                   {formatActivityClock(event.created_at)}
                                 </div>
                               </div>
-                              <div className="text-xs text-muted-foreground">{event.actorLabel}</div>
+                              <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                                <AvatarBase
+                                  name={event.actorLabel}
+                                  fallback={getInitials(event.actorLabel)}
+                                  size={14}
+                                  className="shrink-0 border-border/70"
+                                />
+                                <span>{event.actorLabel}</span>
+                              </div>
                               {event.description ? (
                                 <div className="text-xs text-muted-foreground mt-1">{event.description}</div>
                               ) : null}
