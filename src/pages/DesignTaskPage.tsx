@@ -139,6 +139,13 @@ type DesignOutputLink = {
   created_by: string | null;
 };
 
+type QuoteMentionComment = {
+  id: string;
+  body: string;
+  created_at: string;
+  created_by: string;
+};
+
 type DesignTaskHistoryEvent = {
   id: string;
   created_at: string;
@@ -301,6 +308,9 @@ export default function DesignTaskPage() {
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
+  const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
+  const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addLinkUrl, setAddLinkUrl] = useState("https://");
   const [addLinkLabel, setAddLinkLabel] = useState("");
@@ -791,6 +801,76 @@ export default function DesignTaskPage() {
   }, [task?.id, effectiveTeamId]);
 
   useEffect(() => {
+    const loadQuoteMentions = async () => {
+      if (!task || !isUuid(task.quoteId)) {
+        setQuoteMentionComments([]);
+        setQuoteMentionsError(null);
+        setQuoteMentionsLoading(false);
+        return;
+      }
+
+      setQuoteMentionsLoading(true);
+      setQuoteMentionsError(null);
+      try {
+        let rows: QuoteMentionComment[] = [];
+        const { data, error: commentsError } = await supabase
+          .schema("tosho")
+          .from("quote_comments")
+          .select("id,body,created_at,created_by")
+          .eq("quote_id", task.quoteId)
+          .order("created_at", { ascending: false })
+          .limit(30);
+
+        if (!commentsError) {
+          rows =
+            ((data as Array<{ id: string; body: string | null; created_at: string; created_by: string | null }> | null) ?? [])
+              .map((row) => ({
+                id: row.id,
+                body: row.body ?? "",
+                created_at: row.created_at,
+                created_by: row.created_by ?? "",
+              }));
+        } else {
+          const sessionData = await supabase.auth.getSession();
+          const token = sessionData.data.session?.access_token;
+          if (!token) throw commentsError;
+          const response = await fetch("/.netlify/functions/quote-comments", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ mode: "list", quoteId: task.quoteId }),
+          });
+          if (!response.ok) throw commentsError;
+          const payload = await parseJsonSafe<{ comments?: unknown[] }>(response);
+          rows = (Array.isArray(payload?.comments) ? payload.comments : [])
+            .map((row) => {
+              if (!row || typeof row !== "object") return null;
+              const data = row as Record<string, unknown>;
+              if (typeof data.id !== "string" || typeof data.created_at !== "string") return null;
+              return {
+                id: data.id,
+                body: typeof data.body === "string" ? data.body : "",
+                created_at: data.created_at,
+                created_by: typeof data.created_by === "string" ? data.created_by : "",
+              } satisfies QuoteMentionComment;
+            })
+            .filter(Boolean) as QuoteMentionComment[];
+        }
+
+        setQuoteMentionComments(rows.filter((row) => row.body.includes("@")));
+      } catch (e: unknown) {
+        setQuoteMentionComments([]);
+        setQuoteMentionsError(getErrorMessage(e, "Не вдалося завантажити згадки з прорахунку."));
+      } finally {
+        setQuoteMentionsLoading(false);
+      }
+    };
+    void loadQuoteMentions();
+  }, [task?.id, task?.quoteId]);
+
+  useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
     const interval = window.setInterval(() => {
       setTimerNowMs(Date.now());
@@ -987,6 +1067,15 @@ export default function DesignTaskPage() {
     return withTime
       ? date.toLocaleString("uk-UA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
       : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const parseJsonSafe = async <T,>(response: Response): Promise<T | null> => {
+    const raw = await response.text();
+    if (!raw.trim()) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
   };
 
   const formatDeadlineLabel = (value: string | null | undefined) => {
@@ -3040,9 +3129,36 @@ export default function DesignTaskPage() {
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Коментарі та згадки</div>
             {isLinkedQuote ? (
               <>
-                <p className="text-sm text-muted-foreground">
-                  Обговорення і @згадки ведуться в деталях прорахунку, щоб команда та сповіщення працювали в одному потоці.
-                </p>
+                {quoteMentionsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Завантаження згадок...
+                  </div>
+                ) : quoteMentionsError ? (
+                  <div className="text-sm text-destructive">{quoteMentionsError}</div>
+                ) : quoteMentionComments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Поки немає згадок у коментарях цього прорахунку.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {quoteMentionComments.slice(0, 5).map((comment) => (
+                      <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+                        <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                          <AvatarBase
+                            src={getMemberAvatar(comment.created_by)}
+                            name={getMemberLabel(comment.created_by)}
+                            fallback={getInitials(getMemberLabel(comment.created_by))}
+                            size={14}
+                            className="shrink-0 border-border/70"
+                          />
+                          <span>{getMemberLabel(comment.created_by)}</span>
+                          <span>·</span>
+                          <span>{formatDate(comment.created_at, true)}</span>
+                        </div>
+                        <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3">{comment.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
                   <ExternalLink className="h-4 w-4" />
                   Відкрити коментарі прорахунку
