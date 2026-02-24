@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type PageRevealProps = {
@@ -7,17 +7,9 @@ type PageRevealProps = {
   className?: string;
 };
 
-export function PageReveal({ children, activeKey, className }: PageRevealProps) {
-  const [animate, setAnimate] = useState(false);
-
-  useEffect(() => {
-    setAnimate(false);
-    const id = window.requestAnimationFrame(() => setAnimate(true));
-    return () => window.cancelAnimationFrame(id);
-  }, [activeKey]);
-
+export function PageReveal({ children, activeKey: _activeKey, className }: PageRevealProps) {
   return (
-    <div className={cn("page-reveal", animate && "page-reveal--active", className)}>
+    <div className={cn("page-reveal", className)}>
       {children}
     </div>
   );
