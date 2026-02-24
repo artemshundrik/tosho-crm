@@ -4,7 +4,7 @@
 @layer base {
   :root {
     /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
-    --background: 240 5% 96%; /* Світло-сірий фон сторінки */
+    --background: 220 4% 97%; /* Світло-сірий фон сторінки */
     --foreground: 240 10% 3.9%; /* Майже чорний текст */
     
     --card: 0 0% 100%;
@@ -12,20 +12,20 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
     
-    --secondary: 240 4.8% 95.9%;
+    --secondary: 220 4% 96%;
     --secondary-foreground: 222 47% 11%;
     
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 220 4% 96%;
+    --muted-foreground: 220 4% 40%;
 
-    --accent: 240 4.8% 95.9%;
+    --accent: 220 4% 96%;
     --accent-foreground: 222 47% 11%;
     
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    --border: 220 6% 88%;
+    --input: 220 6% 88%;
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
@@ -157,18 +157,19 @@
 
     /* --- CANVAS TOKENS (LIGHT) --- */
     --canvas-bg: 0 0% 100%;
-    --canvas-border: 240 9% 86%;
+    --canvas-border: 220 7% 87%;
     --canvas-radius: 28px;
     --canvas-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-    --canvas-header-bg: 240 20% 98%;
-    --canvas-grid-line: 240 10% 91%;
+    --canvas-header-bg: 220 7% 97%;
+    --canvas-grid-line: 220 7% 90%;
     --canvas-gutter-x: 20px;
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (LIGHT) --- */
-    --app-shell-bg: 240 20% 98%;
+    --app-shell-bg: 220 7% 97%;
     --app-shell-radius: 16px;
-    --sidebar-surface-bg: 240 10% 90%;
+    --page-underlay-bg: 0 0% 99%;
+    --sidebar-surface-bg: 220 8% 97%;
 
     /* --- KANBAN COLUMN TOKENS (LIGHT) --- */
     --kanban-col-new-bg: 220 14% 98%;
@@ -340,6 +341,7 @@
     /* --- APP SHELL TOKENS (DARK) --- */
     --app-shell-bg: 228 8% 10%;
     --app-shell-radius: 14px;
+    --page-underlay-bg: 228 8% 12%;
     --sidebar-surface-bg: 228 10% 8%;
 
     /* --- KANBAN COLUMN TOKENS (DARK) --- */
@@ -716,14 +718,6 @@
 
   .kanban-column-status-cancelled .kanban-column-header {
     background-color: hsl(var(--kanban-col-cancelled-bg) / 0.92);
-  }
-
-  .app-canvas-shell {
-    border-radius: var(--app-shell-radius);
-    border: none;
-    background: hsl(var(--app-shell-bg));
-    box-shadow: none;
-    overflow: hidden;
   }
 
   .quote-activity-accent-comment {

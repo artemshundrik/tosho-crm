@@ -802,94 +802,118 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <div
         className={cn(
           "min-h-screen min-h-[100dvh] text-foreground selection:bg-primary/20 selection:text-primary",
-          isCanvasMode ? "bg-[hsl(var(--sidebar-surface-bg))]" : "bg-background"
+          "bg-[hsl(var(--page-underlay-bg))]"
         )}
       >
       {/* DESKTOP SIDEBAR */}
       <aside
         className={cn(
           "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))]",
-          "transition-[width,background-color,border-color] duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
           sidebarCollapsed ? "w-[84px]" : "w-[270px]"
         )}
       >
-        <div className={cn("pt-5", sidebarCollapsed ? "px-3" : "px-4")}>
-          <div className={cn("mb-2 flex items-center justify-between gap-2", sidebarCollapsed && "group/logo")}>
-          <Link
-            to={ROUTES.overview}
-            onMouseEnter={() => preloadRoute(ROUTES.overview)}
-            onFocus={() => preloadRoute(ROUTES.overview)}
-            onTouchStart={() => preloadRoute(ROUTES.overview)}
-            className={cn(
-              "flex rounded-[var(--radius-lg)] py-2.5",
-              sidebarCollapsed ? "justify-center px-0" : "flex-1 px-2",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            )}
-            aria-label="ToSho CRM"
-          >
-            {sidebarCollapsed ? (
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary/15 text-xs font-semibold text-primary">
-                TS
-              </span>
-            ) : (
-              <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-7 w-auto" />
-            )}
-          </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-200",
-              sidebarCollapsed &&
-                "opacity-0 -translate-x-1 pointer-events-none group-hover/logo:opacity-100 group-hover/logo:translate-x-0 group-focus-within/logo:opacity-100 group-focus-within/logo:translate-x-0 group-hover/logo:pointer-events-auto group-focus-within/logo:pointer-events-auto"
-            )}
-            onClick={() => setSidebarCollapsed((prev) => !prev)}
-            aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
-            title={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
+        <div className={cn("h-14", sidebarCollapsed ? "px-3" : "px-4")}>
+          <div className={cn("flex h-full items-center", sidebarCollapsed ? "justify-center" : "justify-between")}>
+            <Link
+              to={ROUTES.overview}
+              onMouseEnter={() => preloadRoute(ROUTES.overview)}
+              onFocus={() => preloadRoute(ROUTES.overview)}
+              onTouchStart={() => preloadRoute(ROUTES.overview)}
+              className={cn(
+                "inline-flex items-center justify-center overflow-hidden rounded-[10px] transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                sidebarCollapsed
+                  ? "h-0 w-0 opacity-0 -translate-x-2 pointer-events-none"
+                  : "h-9 w-auto px-1 opacity-100 translate-x-0 translate-y-[2px]"
+              )}
+              aria-label="ToSho CRM"
+              aria-hidden={sidebarCollapsed}
+              tabIndex={sidebarCollapsed ? -1 : undefined}
+            >
+              <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-[22px] w-auto" />
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
+                sidebarCollapsed ? "rounded-[12px] bg-background/35" : ""
+              )}
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
+              title={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4 transition-transform duration-300" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4 transition-transform duration-300 rotate-0" />
+              )}
+            </Button>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className={cn("flex-1 overflow-y-auto py-5", sidebarCollapsed ? "px-2 space-y-3" : "px-4 space-y-6")}>
-          <SidebarGroup
-            label="Головне"
-            links={sidebarLinks.filter((l) => l.group === "overview")}
-            currentPath={location.pathname}
-            notificationsUnreadCount={unreadCount}
-            collapsed={sidebarCollapsed}
-          />
-          <SidebarGroup
-            label="Замовлення"
-            links={sidebarLinks.filter((l) => l.group === "orders")}
-            currentPath={location.pathname}
-            notificationsUnreadCount={unreadCount}
-            collapsed={sidebarCollapsed}
-          />
-          <SidebarGroup
-            label="Фінанси"
-            links={sidebarLinks.filter((l) => l.group === "finance")}
-            currentPath={location.pathname}
-            notificationsUnreadCount={unreadCount}
-            collapsed={sidebarCollapsed}
-          />
-          <SidebarGroup
-            label="Операції"
-            links={sidebarLinks.filter((l) => l.group === "operations")}
-            currentPath={location.pathname}
-            notificationsUnreadCount={unreadCount}
-            collapsed={sidebarCollapsed}
-          />
-          <SidebarGroup
-            label="Акаунт"
-            links={sidebarLinks.filter((l) => l.group === "account")}
-            currentPath={location.pathname}
-            notificationsUnreadCount={unreadCount}
-            collapsed={sidebarCollapsed}
-          />
+        <nav
+          className={cn(
+            "flex-1 overflow-visible transition-[padding] duration-[220ms] ease-linear",
+            sidebarCollapsed ? "px-2 py-3" : "px-4 py-5"
+          )}
+        >
+          <div
+            className={cn(
+              sidebarCollapsed
+                ? "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70"
+                : "space-y-6"
+            )}
+          >
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
+              <SidebarGroup
+                label="Головне"
+                links={sidebarLinks.filter((l) => l.group === "overview")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+              />
+            </div>
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+              <SidebarGroup
+                label="Замовлення"
+                links={sidebarLinks.filter((l) => l.group === "orders")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+              />
+            </div>
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+              <SidebarGroup
+                label="Фінанси"
+                links={sidebarLinks.filter((l) => l.group === "finance")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+              />
+            </div>
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+              <SidebarGroup
+                label="Операції"
+                links={sidebarLinks.filter((l) => l.group === "operations")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+              />
+            </div>
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5 pb-0" : "")}>
+              <SidebarGroup
+                label="Акаунт"
+                links={sidebarLinks.filter((l) => l.group === "account")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+              />
+            </div>
+          </div>
         </nav>
 
         {/* Footer / Profile */}
@@ -901,17 +925,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* MAIN */}
       <div
         className={cn(
-          "transition-[padding] duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "transition-[padding] duration-[220ms] ease-linear",
           sidebarCollapsed ? "md:pl-[84px]" : "md:pl-[270px]"
         )}
       >
-        <div className={cn(isCanvasMode ? "app-canvas-shell md:m-1.5 md:min-h-[calc(100dvh-12px)]" : "")}>
+        <div>
         {/* HEADER */}
         <header
           key={theme}
           className={cn(
             "z-20 border-b border-border",
-            isCanvasMode ? "bg-[hsl(var(--app-shell-bg))]" : "bg-background/75 backdrop-blur-xl",
+            "bg-[hsl(var(--page-underlay-bg))]",
             isCanvasMode ? "" : "sticky top-0"
           )}
         >
@@ -1002,17 +1026,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </div>
 
               {/* Breadcrumb */}
-              <div className="hidden md:flex items-center text-xs font-medium text-muted-foreground">
+              <div className="hidden md:flex h-7 items-center gap-1.5 text-[12px] leading-none font-medium text-muted-foreground">
                 <Link
                   to={ROUTES.overview}
-                  className="rounded-[var(--radius-md)] px-1.5 py-1 hover:bg-muted/60 hover:text-foreground transition-colors"
+                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] px-1.5 leading-none hover:bg-muted/60 hover:text-foreground transition-colors"
                 >
                   ToSho CRM
                 </Link>
-                <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-muted-foreground/80" />
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/80" />
                 <Link
                   to={header.breadcrumbTo}
-                  className="rounded-[var(--radius-md)] bg-muted/50 px-2 py-1 text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] bg-muted/50 px-2 leading-none text-foreground hover:bg-muted transition-colors"
                 >
                   {header.breadcrumbLabel}
                 </Link>
@@ -1272,9 +1296,7 @@ function SidebarGroup({
   return (
     <div className="space-y-2">
       {!collapsed ? (
-        <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-          {label}
-        </h4>
+        <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</h4>
       ) : null}
 
       <div className="space-y-1">
@@ -1291,9 +1313,10 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-medium transition-colors",
+                "relative group flex h-10 w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-normal",
+                "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                collapsed && "mx-auto h-10 w-10 justify-center gap-0 rounded-[12px] px-0 py-0",
+                collapsed && "mx-auto w-10 justify-center gap-0 rounded-[12px] px-0 py-0",
                 active
                   ? collapsed
                     ? "bg-primary/15 text-foreground"
