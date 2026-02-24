@@ -76,7 +76,7 @@ export function MethodsSection({
                 />
               </div>
               <Button
-                onClick={onAddMethod}
+                onClick={() => onAddMethod()}
                 disabled={!newMethodName.trim() || methodSaving}
                 className="gap-2"
               >

@@ -185,50 +185,55 @@ export function useModelEditor({
    * Adds a new method to the current kind
    */
   const handleAddMethod = async (kindIdOverride?: string, nameOverride?: string) => {
-    const targetKindId = kindIdOverride ?? draftKindId;
+    const rawKindId = kindIdOverride ?? draftKindId;
+    const targetKindId = typeof rawKindId === "string" ? rawKindId.trim() : "";
     if (!teamId || !targetKindId || methodSaving) return;
-    
-    const name = (nameOverride ?? newMethodName).trim();
+
+    const rawName = nameOverride ?? newMethodName;
+    const name = typeof rawName === "string" ? rawName.trim() : "";
     if (!name) return;
     
     setMethodSaving(true);
     setMethodError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_methods")
+        .insert({
+          team_id: teamId,
+          kind_id: targetKindId,
+          name,
+          price: null,
+        })
+        .select("id,name,price,kind_id")
+        .single();
 
-    const { data, error } = await supabase
-      .schema("tosho")
-      .from("catalog_methods")
-      .insert({
-        team_id: teamId,
-        kind_id: targetKindId,
-        name,
-        price: null,
-      })
-      .select("id,name,price,kind_id")
-      .single();
+      if (error || !data) {
+        setMethodError(error?.message ?? "Не вдалося додати метод");
+        return;
+      }
 
-    if (error || !data) {
-      setMethodError(error?.message ?? "Не вдалося додати метод");
+      setCatalog((prev) =>
+        prev.map((type) => ({
+          ...type,
+          kinds: type.kinds.map((kind) => {
+            if (kind.id !== targetKindId) return kind;
+            const nextMethods = [
+              ...(kind.methods ?? []),
+              { id: data.id, name: data.name, price: data.price ?? undefined },
+            ];
+            return { ...kind, methods: nextMethods };
+          }),
+        }))
+      );
+
+      setNewMethodName("");
+      setNewMethodPrice("");
+    } catch (error: unknown) {
+      setMethodError(error instanceof Error ? error.message : "Не вдалося додати метод");
+    } finally {
       setMethodSaving(false);
-      return;
     }
-
-    setCatalog((prev) =>
-      prev.map((type) => ({
-        ...type,
-        kinds: type.kinds.map((kind) => {
-          if (kind.id !== targetKindId) return kind;
-          const nextMethods = [
-            ...kind.methods,
-            { id: data.id, name: data.name, price: data.price ?? undefined },
-          ];
-          return { ...kind, methods: nextMethods };
-        }),
-      }))
-    );
-
-    setNewMethodName("");
-    setNewMethodPrice("");
-    setMethodSaving(false);
   };
 
   /**
