@@ -58,7 +58,8 @@
 
     /* --- ТІНІ --- */
     --shadow-surface: none;
-    --shadow-floating: 0 8px 18px rgba(15, 23, 42, 0.1);
+    --shadow-floating: none;
+    --shadow-overlay: 0 8px 18px rgba(15, 23, 42, 0.1);
     --shadow-pressed: none;
     --shadow-primary-glow: none;
     --shadow-success-glow: none;
@@ -226,7 +227,8 @@
     --btn-radius: 10px;
 
     --shadow-surface: none;
-    --shadow-floating: 0 10px 24px rgba(2, 6, 23, 0.38);
+    --shadow-floating: none;
+    --shadow-overlay: 0 10px 24px rgba(2, 6, 23, 0.38);
     --shadow-pressed: none;
     --shadow-primary-glow: none;
     --shadow-success-glow: none;
@@ -514,14 +516,14 @@
   }
 
   .quote-page-canvas {
-    @apply w-full pb-16 overflow-hidden;
+    @apply w-full pb-0 overflow-hidden;
     border: none;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
   }
   .quote-details-page-canvas {
-    @apply w-full max-w-[1400px] mx-auto pb-20 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
+    @apply w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
   }
   .quote-section {
     @apply overflow-hidden;

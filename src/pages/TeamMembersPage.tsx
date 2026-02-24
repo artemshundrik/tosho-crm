@@ -963,7 +963,7 @@ export function TeamMembersPage() {
 
   if (!workspaceId) {
     return (
-      <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20">
+      <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
         <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
           <div className="p-6">
             <div className="text-sm font-semibold text-foreground">Workspace not selected</div>
@@ -977,7 +977,7 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20">
+    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
       <PageHeader
         title="Доступ до команди"
         subtitle="Керування учасниками та рівнями доступу в workspace."

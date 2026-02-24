@@ -2005,7 +2005,7 @@ export default function DesignTaskPage() {
     : `${task.customerName ?? "Клієнт"} · Дизайн-задача без прорахунку`;
 
   return (
-    <div className="w-full max-w-none px-0 pb-20 space-y-4">
+    <div className="w-full max-w-none px-0 pb-20 md:pb-0 space-y-4">
       <EntityHeader
         topBar={
           <>

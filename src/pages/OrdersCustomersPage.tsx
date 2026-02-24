@@ -334,7 +334,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
+    <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
       <PageHeader
         title="Замовники"
         subtitle="База компаній, реквізитів та контактної інформації."
