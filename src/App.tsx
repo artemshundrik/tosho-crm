@@ -1,5 +1,5 @@
 // src/App.tsx
-import { Suspense, lazy, useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -90,6 +90,88 @@ function RouteSuspense({
   shell?: boolean;
 }) {
   return <Suspense fallback={shell ? <AppShell /> : <PageSkeleton />}>{children}</Suspense>;
+}
+
+const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";
+
+function getRuntimeErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === "string" ? message : "";
+  }
+  return "";
+}
+
+function isChunkLikeError(error: unknown): boolean {
+  const message = getRuntimeErrorMessage(error).toLowerCase();
+  return (
+    message.includes("chunkloaderror") ||
+    message.includes("loading chunk") ||
+    message.includes("failed to fetch dynamically imported module") ||
+    message.includes("dynamically imported module")
+  );
+}
+
+function reloadOnceForChunkError(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY) === "1") {
+      return false;
+    }
+    window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, "1");
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type AppBoundaryProps = { children: ReactNode };
+type AppBoundaryState = { hasError: boolean; message: string };
+
+class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundaryState> {
+  state: AppBoundaryState = { hasError: false, message: "" };
+
+  static getDerivedStateFromError(error: unknown): AppBoundaryState {
+    return {
+      hasError: true,
+      message: getRuntimeErrorMessage(error) || "Сталася помилка рендеру сторінки.",
+    };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error("App runtime error:", error, info);
+    if (isChunkLikeError(error)) {
+      const reloaded = reloadOnceForChunkError();
+      if (!reloaded) {
+        this.setState({
+          hasError: true,
+          message: "Не вдалося завантажити оновлення сторінки. Спробуйте оновити сторінку.",
+        });
+      }
+    }
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="w-full max-w-lg rounded-[var(--radius-inner)] border border-border bg-card p-5">
+          <div className="text-base font-semibold">Сталася помилка інтерфейсу</div>
+          <div className="mt-2 text-sm text-muted-foreground">{this.state.message}</div>
+          <div className="mt-4 flex gap-2">
+            <Button type="button" onClick={() => window.location.reload()}>
+              Оновити сторінку
+            </Button>
+            <Button type="button" variant="outline" asChild>
+              <Link to="/overview">На головну</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
 
 // =======================
@@ -683,10 +765,32 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (!isChunkLikeError(event.reason)) return;
+      event.preventDefault();
+      reloadOnceForChunkError();
+    };
+
+    const handleWindowError = (event: ErrorEvent) => {
+      if (!isChunkLikeError(event.error ?? event.message)) return;
+      reloadOnceForChunkError();
+    };
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    window.addEventListener("error", handleWindowError);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+      window.removeEventListener("error", handleWindowError);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <AppRoutes />
+      <AppRuntimeBoundary>
+        <AppRoutes />
+      </AppRuntimeBoundary>
       <Toaster position="top-center" />
     </BrowserRouter>
   );

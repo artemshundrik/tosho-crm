@@ -57,12 +57,12 @@
     --btn-primary-shadow: var(--brand-h) var(--brand-s) var(--brand-l);
 
     /* --- ТІНІ --- */
-    --shadow-surface: 0 10px 24px rgba(15, 23, 42, 0.08);
-    --shadow-floating: 0 16px 32px rgba(15, 23, 42, 0.14);
-    --shadow-pressed: 0 6px 14px rgba(15, 23, 42, 0.12);
-    --shadow-primary-glow: 0 0 8px hsl(var(--primary) / 0.4);
-    --shadow-success-glow: 0 0 10px -3px hsl(var(--success-foreground) / 0.3);
-    --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.3);
+    --shadow-surface: none;
+    --shadow-floating: 0 8px 18px rgba(15, 23, 42, 0.1);
+    --shadow-pressed: none;
+    --shadow-primary-glow: none;
+    --shadow-success-glow: none;
+    --shadow-danger-glow: none;
 
     /* --- BADGE TONES --- */
     --neutral-soft: 220 14% 96%;
@@ -140,7 +140,7 @@
     /* --- TAB BAR TOKENS (LIGHT) --- */
     --tabbar-bg: var(--background);
     --tabbar-border: var(--border);
-    --tabbar-shadow: 0 10px 24px hsl(var(--foreground) / 0.08);
+    --tabbar-shadow: none;
     --tabbar-icon: var(--muted-foreground);
     --tabbar-icon-active: var(--primary);
     --tabbar-label: var(--muted-foreground);
@@ -159,7 +159,7 @@
     --canvas-bg: 0 0% 100%;
     --canvas-border: 220 7% 87%;
     --canvas-radius: 28px;
-    --canvas-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    --canvas-shadow: none;
     --canvas-header-bg: 220 7% 97%;
     --canvas-grid-line: 220 7% 90%;
     --canvas-gutter-x: 20px;
@@ -225,12 +225,12 @@
     --radius-inner: 16px;
     --btn-radius: 10px;
 
-    --shadow-surface: 0 12px 28px rgba(2, 6, 23, 0.55);
-    --shadow-floating: 0 18px 40px rgba(2, 6, 23, 0.65);
-    --shadow-pressed: 0 8px 16px rgba(2, 6, 23, 0.45);
-    --shadow-primary-glow: 0 0 8px hsl(var(--primary) / 0.5);
-    --shadow-success-glow: 0 0 10px -3px hsl(var(--success-foreground) / 0.4);
-    --shadow-danger-glow: 0 0 10px -3px hsl(var(--danger-foreground) / 0.4);
+    --shadow-surface: none;
+    --shadow-floating: 0 10px 24px rgba(2, 6, 23, 0.38);
+    --shadow-pressed: none;
+    --shadow-primary-glow: none;
+    --shadow-success-glow: none;
+    --shadow-danger-glow: none;
 
     /* --- SKELETON LOADING (UPDATED - DARK) --- */
     /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
@@ -313,7 +313,7 @@
     /* --- TAB BAR TOKENS (DARK) --- */
     --tabbar-bg: var(--card);
     --tabbar-border: var(--border);
-    --tabbar-shadow: 0 12px 28px hsl(0 0% 0% / 0.35);
+    --tabbar-shadow: none;
     --tabbar-icon: var(--muted-foreground);
     --tabbar-icon-active: var(--primary);
     --tabbar-label: var(--muted-foreground);
@@ -332,7 +332,7 @@
     --canvas-bg: 228 8% 9%;
     --canvas-border: 228 8% 17%;
     --canvas-radius: 24px;
-    --canvas-shadow: 0 8px 20px rgba(2, 6, 23, 0.32);
+    --canvas-shadow: none;
     --canvas-header-bg: 228 8% 10%;
     --canvas-grid-line: 228 8% 18%;
     --canvas-gutter-x: 20px;

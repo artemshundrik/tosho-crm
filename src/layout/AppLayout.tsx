@@ -808,7 +808,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* DESKTOP SIDEBAR */}
       <aside
         className={cn(
-          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))]",
+          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border",
           "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
           sidebarCollapsed ? "w-[84px]" : "w-[270px]"
         )}
