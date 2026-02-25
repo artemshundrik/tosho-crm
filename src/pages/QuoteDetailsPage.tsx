@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +40,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
+import { useEntityLock } from "@/hooks/useEntityLock";
 import {
   getQuoteSummary,
   getQuoteRuns,
@@ -245,6 +247,7 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
+  const { userId } = useAuth();
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
     () => getEntityViewers("quote", quoteId),
@@ -660,6 +663,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!userId) return "Не вказано";
     return memberById.get(userId) ?? userId;
   };
+  const quoteLock = useEntityLock({
+    teamId,
+    entityType: "quote",
+    entityId: quoteId,
+    userId,
+    userLabel: userId ? memberById.get(userId) ?? null : null,
+    enabled: !!teamId && !!quoteId && !!userId,
+  });
+  const quoteLockedByOther = quoteLock.lockedByOther;
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       teamMembers.map((member) => {
@@ -2802,7 +2814,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               variant="primary"
               size="sm"
               className="gap-2 shadow-sm"
-              disabled={statusBusy}
+              disabled={statusBusy || quoteLockedByOther}
               onClick={handlePrimaryStatusAction}
             >
               {createElement(
@@ -2815,7 +2827,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               variant="outline"
               size="sm"
               className="gap-2"
-              disabled={statusBusy}
+              disabled={statusBusy || quoteLockedByOther}
               onClick={openStatusDialog}
             >
               Змінити статус
@@ -2852,6 +2864,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </>
         }
       />
+
+      {quoteLockedByOther ? (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <span className="font-medium">Режим лише перегляду.</span>{" "}
+          Запис редагує {quoteLock.holderName ?? "інший користувач"}.
+        </div>
+      ) : null}
 
       {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
         <Card className="quote-soft-card p-4">

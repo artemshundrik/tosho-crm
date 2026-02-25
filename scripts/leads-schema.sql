@@ -6,9 +6,10 @@ create table if not exists tosho.leads (
   team_id uuid not null,
   company_name text not null,
   legal_name text,
+  logo_url text,
   first_name text not null,
-  last_name text not null,
-  email text not null,
+  last_name text,
+  email text,
   phone_numbers text[] not null default '{}'::text[],
   source text not null,
   website text,
@@ -16,6 +17,11 @@ create table if not exists tosho.leads (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists tosho.leads
+  add column if not exists logo_url text,
+  alter column last_name drop not null,
+  alter column email drop not null;
 
 create index if not exists leads_team_company_name_idx
   on tosho.leads (team_id, company_name);

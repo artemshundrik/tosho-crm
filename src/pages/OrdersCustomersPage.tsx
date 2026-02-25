@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +56,7 @@ type LeadRow = {
   team_id?: string | null;
   company_name?: string | null;
   legal_name?: string | null;
+  logo_url?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
@@ -163,6 +165,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadForm, setLeadForm] = useState({
     companyName: "",
     legalName: "",
+    logoUrl: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -217,6 +220,30 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
   }, [leads, search]);
 
+  const memberByLabel = useMemo(
+    () => new Map(teamMembers.map((member) => [member.label, member])),
+    [teamMembers]
+  );
+
+  const renderManagerCell = (manager?: string | null) => {
+    const managerLabel = manager?.trim();
+    if (!managerLabel) return "Не вказано";
+    const member = memberByLabel.get(managerLabel);
+    return (
+      <div className="flex items-center gap-2 min-w-0">
+        <AvatarBase
+          src={member?.avatarUrl ?? null}
+          name={managerLabel}
+          fallback={managerLabel.slice(0, 2).toUpperCase()}
+          size={20}
+          className="border-border/60 shrink-0"
+          fallbackClassName="text-[10px] font-semibold"
+        />
+        <span className="truncate">{managerLabel}</span>
+      </div>
+    );
+  };
+
   const resetForm = () => {
     setForm({
       name: "",
@@ -241,6 +268,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadForm({
       companyName: "",
       legalName: "",
+      logoUrl: "",
       firstName: "",
       lastName: "",
       email: "",
@@ -298,13 +326,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadForm({
       companyName: lead.company_name ?? "",
       legalName: lead.legal_name ?? "",
+      logoUrl: lead.logo_url ?? "",
       firstName: lead.first_name ?? "",
       lastName: lead.last_name ?? "",
       email: lead.email ?? "",
       phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
       source: lead.source ?? "",
       website: lead.website ?? "",
-      manager: lead.manager ?? "",
+      manager: lead.manager ?? defaultManagerName,
     });
     setLeadFormError(null);
     setLeadDialogOpen(true);
@@ -490,14 +519,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadFormError("Вкажіть імʼя.");
       return;
     }
-    if (!leadForm.lastName.trim()) {
-      setLeadFormError("Вкажіть прізвище.");
-      return;
-    }
-    if (!leadForm.email.trim()) {
-      setLeadFormError("Вкажіть email.");
-      return;
-    }
     if (!leadForm.source.trim()) {
       setLeadFormError("Вкажіть джерело.");
       return;
@@ -517,15 +538,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
+      logo_url: leadForm.logoUrl.trim() || null,
       first_name: leadForm.firstName.trim(),
-      last_name: leadForm.lastName.trim(),
-      email: leadForm.email.trim(),
+      last_name: leadForm.lastName.trim() || null,
+      email: leadForm.email.trim() || null,
       phone_numbers: phones,
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
-      manager: leadEditingId
-        ? (managerValue || null)
-        : (managerValue || defaultManagerName || null),
+      manager: managerValue || defaultManagerName || null,
     };
 
     try {
@@ -536,13 +556,41 @@ function CustomersPage({ teamId }: { teamId: string }) {
           .update(payload)
           .eq("id", leadEditingId)
           .eq("team_id", teamId);
-        if (updateError) throw updateError;
+        if (updateError) {
+          const message = updateError.message ?? "";
+          if (message.includes("column") && message.includes("logo_url")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.logo_url;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .update(fallbackPayload)
+              .eq("id", leadEditingId)
+              .eq("team_id", teamId);
+            if (fallbackError) throw fallbackError;
+          } else {
+            throw updateError;
+          }
+        }
       } else {
         const { error: insertError } = await supabase
           .schema("tosho")
           .from("leads")
           .insert(payload);
-        if (insertError) throw insertError;
+        if (insertError) {
+          const message = insertError.message ?? "";
+          if (message.includes("column") && message.includes("logo_url")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.logo_url;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .insert(fallbackPayload);
+            if (fallbackError) throw fallbackError;
+          } else {
+            throw insertError;
+          }
+        }
       }
 
       setLeadDialogOpen(false);
@@ -714,7 +762,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         )}
                       </TableCell>
                       <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
-                      <TableCell>{row.manager ?? "Не вказано"}</TableCell>
+                      <TableCell>{renderManagerCell(row.manager)}</TableCell>
                       <TableCell
                         className="text-right pr-4"
                         onClick={(event) => event.stopPropagation()}
@@ -806,7 +854,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           "Не вказано"
                         )}
                       </TableCell>
-                      <TableCell>{lead.manager ?? "Не вказано"}</TableCell>
+                      <TableCell>{renderManagerCell(lead.manager)}</TableCell>
                       <TableCell
                         className="text-right pr-4"
                         onClick={(event) => event.stopPropagation()}
@@ -874,6 +922,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         }}
         form={leadForm}
         setForm={setLeadForm}
+        teamMembers={teamMembers}
         saving={leadSaving}
         error={leadFormError}
         title={leadEditingId ? "Редагувати ліда" : "Новий лід"}

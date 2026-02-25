@@ -271,6 +271,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("with_print");
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
   const [files, setFiles] = React.useState<File[]>([]);
+  const [filesDragActive, setFilesDragActive] = React.useState(false);
 
   // Popover states
   const [statusPopoverOpen, setStatusPopoverOpen] = React.useState(false);
@@ -350,6 +351,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeadlinePopoverOpen(false);
     setCurrencyPopoverOpen(false);
     setDeliveryPopoverOpen(false);
+    setFilesDragActive(false);
   }, [open, initialValues, currentUserId]);
 
   // Add print application
@@ -388,6 +390,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Handle file drop
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setFilesDragActive(false);
     if (printMode === "no_print") return;
     const droppedFiles = Array.from(e.dataTransfer.files);
     setFiles([...files, ...droppedFiles].slice(0, 5));
@@ -1385,8 +1388,17 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="text-sm text-muted-foreground">Файли для дизайнера</div>
               <div
                 onDrop={handleFileDrop}
-                onDragOver={(e) => e.preventDefault()}
-                className="relative border-2 border-dashed border-border/40 rounded-[var(--radius-md)] p-6 text-center transition-colors hover:border-border/60 cursor-pointer"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!filesDragActive) setFilesDragActive(true);
+                }}
+                onDragLeave={() => setFilesDragActive(false)}
+                className={cn(
+                  "relative border-2 border-dashed rounded-[var(--radius-md)] p-6 text-center transition-colors cursor-pointer",
+                  filesDragActive
+                    ? "border-primary/70 bg-primary/10"
+                    : "border-border/40 hover:border-border/60"
+                )}
               >
                 <input
                   type="file"
@@ -1396,8 +1408,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   accept="*/*"
                 />
                 <div className="flex flex-col items-center gap-2">
-                  <Paperclip className="h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm text-foreground">Перетягніть або клікніть для вибору</div>
+                  <Paperclip className={cn("h-5 w-5", filesDragActive ? "text-primary" : "text-muted-foreground")} />
+                  <div className={cn("text-sm", filesDragActive ? "text-primary font-medium" : "text-foreground")}>
+                    {filesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     до 5 файлів, до 50MB
                   </div>

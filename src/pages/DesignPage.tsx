@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Loader2, Palette, CheckCircle2, Paperclip, Clock, Timer, MoreVertical, Trash2, Plus } from "lucide-react";
+import { Loader2, Palette, CheckCircle2, Paperclip, Clock, Timer, MoreVertical, Trash2, Plus, Building2, User, Calendar as CalendarIcon, Check } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -66,12 +67,28 @@ type DesignTaskActivityRow = {
   created_at: string;
 };
 
+type CustomerOption = {
+  id: string;
+  label: string;
+};
+
 type AssignmentFilter = "mine" | "all" | "unassigned";
 type DesignViewMode = "kanban" | "timeline" | "assignee";
 
 const isDesignerRole = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
   return normalized === "designer" || normalized === "дизайнер";
+};
+
+const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
+  const normalizedAccess = (accessRole ?? "").trim().toLowerCase();
+  const normalizedJob = (jobRole ?? "").trim().toLowerCase();
+  return (
+    normalizedAccess === "owner" ||
+    normalizedAccess === "admin" ||
+    normalizedJob === "manager" ||
+    normalizedJob === "менеджер"
+  );
 };
 
 const isUuid = (value?: string | null) =>
@@ -188,12 +205,20 @@ export default function DesignPage() {
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
   const [createCustomer, setCreateCustomer] = useState("");
+  const [createCustomerSearch, setCreateCustomerSearch] = useState("");
+  const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
+  const [createManagerUserId, setCreateManagerUserId] = useState<string>("none");
+  const [createManagerPopoverOpen, setCreateManagerPopoverOpen] = useState(false);
   const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string>("none");
+  const [createAssigneePopoverOpen, setCreateAssigneePopoverOpen] = useState(false);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const [createFilesDragActive, setCreateFilesDragActive] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
   const [estimateInput, setEstimateInput] = useState("2");
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -210,7 +235,8 @@ export default function DesignPage() {
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
-  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
+  const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
+  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const canManageAssignments = permissions.canManageAssignments;
@@ -294,6 +320,7 @@ export default function DesignPage() {
           if (!workspaceId) {
             setMemberById({});
             setMemberAvatarById({});
+            setManagerMembers([]);
             setDesignerMembers([]);
             return;
           }
@@ -339,11 +366,64 @@ export default function DesignPage() {
           Object.entries(avatarById).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
         );
         setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
+        let designerRows = rows.filter((row) => isDesignerRole(row.job_role));
 
+        // Fallback: when team_members_view doesn't expose job_role, hydrate roles from memberships_view.
+        if (designerRows.length === 0 && rows.length > 0) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (workspaceId) {
+            const memberIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
+            const membershipColumns = [
+              "user_id,job_role",
+              "user_id,full_name,email,job_role",
+              "user_id,access_role,job_role",
+              "user_id",
+            ];
+            for (const columns of membershipColumns) {
+              const { data: roleRows, error: roleError } = await supabase
+                .schema("tosho")
+                .from("memberships_view")
+                .select(columns)
+                .eq("workspace_id", workspaceId)
+                .in("user_id", memberIds);
+              if (!roleError) {
+                const roleById = new Map(
+                  (((roleRows as Array<{ user_id?: string | null; job_role?: string | null }> | null) ?? [])
+                    .map((row) => [row.user_id ?? "", row.job_role ?? null])) as Array<[string, string | null]>
+                );
+                designerRows = rows.filter((row) => isDesignerRole(roleById.get(row.user_id) ?? row.job_role));
+                break;
+              }
+              const message = (roleError.message ?? "").toLowerCase();
+              if (!message.includes("column") || !message.includes("does not exist")) {
+                throw roleError;
+              }
+            }
+          }
+        }
+
+        // If no one is marked as designer, still allow assignment to any team member.
+        const assigneeRows = designerRows.length > 0 ? designerRows : rows;
         setDesignerMembers(
-          rows
-            .filter((row) => isDesignerRole(row.job_role))
-            .map((row) => ({ id: row.user_id, label: labelById[row.user_id] ?? row.user_id }))
+          assigneeRows.map((row) => ({
+            id: row.user_id,
+            label: labelById[row.user_id] ?? row.user_id,
+            avatarUrl: avatarById[row.user_id] ?? null,
+          }))
+        );
+
+        let managerRows = rows.filter((row) => isManagerRole(row.access_role, row.job_role));
+        if (managerRows.length === 0 && userId) {
+          const me = rows.find((row) => row.user_id === userId);
+          if (me) managerRows = [me];
+        }
+        if (managerRows.length === 0) managerRows = rows;
+        setManagerMembers(
+          managerRows.map((row) => ({
+            id: row.user_id,
+            label: labelById[row.user_id] ?? row.user_id,
+            avatarUrl: avatarById[row.user_id] ?? null,
+          }))
         );
       } catch (e: unknown) {
         setError(getErrorMessage(e, "Не вдалося завантажити учасників команди"));
@@ -353,6 +433,34 @@ export default function DesignPage() {
     };
     void loadMembers();
   }, [userId, effectiveTeamId]);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      if (!effectiveTeamId) return;
+      setCustomersLoading(true);
+      try {
+        const { data, error: customersError } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .select("id,name,legal_name")
+          .eq("team_id", effectiveTeamId)
+          .order("name", { ascending: true });
+        if (customersError) throw customersError;
+        const options = ((data as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? [])
+          .map((row) => ({
+            id: row.id,
+            label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, "uk"));
+        setCustomers(options);
+      } catch {
+        setCustomers([]);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+    void loadCustomers();
+  }, [effectiveTeamId]);
 
   useEffect(() => {
     if (permissions.isDesigner) {
@@ -735,6 +843,29 @@ export default function DesignPage() {
     });
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTasks, memberById]);
+
+  const filteredCustomerOptions = useMemo(() => {
+    const q = createCustomerSearch.trim().toLowerCase();
+    if (!q) return customers.slice(0, 50);
+    return customers
+      .filter((customer) => customer.label.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [customers, createCustomerSearch]);
+
+  const selectedAssignee = useMemo(
+    () => designerMembers.find((member) => member.id === createAssigneeUserId) ?? null,
+    [designerMembers, createAssigneeUserId]
+  );
+  const selectedManager = useMemo(
+    () => managerMembers.find((member) => member.id === createManagerUserId) ?? null,
+    [managerMembers, createManagerUserId]
+  );
+
+  useEffect(() => {
+    if (!createDialogOpen) return;
+    if (!userId) return;
+    setCreateManagerUserId((prev) => (prev && prev !== "none" ? prev : userId));
+  }, [createDialogOpen, userId]);
 
   const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
     setDraggingId(taskId);
@@ -1170,9 +1301,14 @@ export default function DesignPage() {
     setCreateError(null);
     try {
       const assigneeUserId = createAssigneeUserId === "none" ? null : createAssigneeUserId;
+      const managerUserId =
+        createManagerUserId === "none"
+          ? (userId ?? null)
+          : createManagerUserId;
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const entityId = `standalone-${crypto.randomUUID()}`;
       const actorName = userId ? getMemberLabel(userId) : "System";
+      const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
       const brief = createBrief.trim();
       const customerName = createCustomer.trim();
       const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
@@ -1194,6 +1330,8 @@ export default function DesignPage() {
             quote_id: null,
             assignee_user_id: assigneeUserId,
             assigned_at: assignedAt,
+            manager_user_id: managerUserId,
+            manager_label: managerLabel,
             customer_name: customerName || null,
             design_brief: brief || null,
             standalone_brief_files: [],
@@ -1269,8 +1407,14 @@ export default function DesignPage() {
       setCreateTitle("");
       setCreateBrief("");
       setCreateCustomer("");
+      setCreateCustomerSearch("");
       setCreateDeadline(undefined);
+      setCreateDeadlinePopoverOpen(false);
+      setCreateManagerUserId(userId ?? "none");
+      setCreateManagerPopoverOpen(false);
       setCreateAssigneeUserId("none");
+      setCreateAssigneePopoverOpen(false);
+      setCreateFilesDragActive(false);
       setCreateFiles([]);
       toast.success("Дизайн-задачу створено");
     } catch (e: unknown) {
@@ -2200,6 +2344,11 @@ export default function DesignPage() {
           if (!open) {
             setCreateError(null);
             setCreateSaving(false);
+            setCreateCustomerPopoverOpen(false);
+            setCreateAssigneePopoverOpen(false);
+            setCreateManagerPopoverOpen(false);
+            setCreateDeadlinePopoverOpen(false);
+            setCreateFilesDragActive(false);
           }
         }}
       >
@@ -2217,73 +2366,266 @@ export default function DesignPage() {
                 placeholder="Напр. Розробити брендбук / Пост для Instagram"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="standalone-design-customer">Клієнт (опційно)</Label>
-              <Input
-                id="standalone-design-customer"
-                value={createCustomer}
-                onChange={(event) => setCreateCustomer(event.target.value)}
-                placeholder="Назва клієнта"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="standalone-design-deadline">Дедлайн (опційно)</Label>
-                <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="standalone-design-deadline"
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      {createDeadline ? format(createDeadline, "d MMM yyyy", { locale: uk }) : "Оберіть дедлайн"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={createDeadline}
-                      onSelect={(date) => {
-                        setCreateDeadline(date);
-                        setCreateDeadlinePopoverOpen(false);
-                      }}
-                      captionLayout="dropdown-buttons"
-                      fromYear={new Date().getFullYear() - 3}
-                      toYear={new Date().getFullYear() + 5}
-                      initialFocus
+            <div className="flex flex-wrap items-center gap-2">
+              <Popover
+                open={createCustomerPopoverOpen}
+                onOpenChange={(open) => {
+                  setCreateCustomerPopoverOpen(open);
+                  if (open) setCreateCustomerSearch(createCustomer || "");
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Chip size="md" icon={<Building2 className="h-4 w-4" />} active={!!createCustomer.trim()}>
+                    {createCustomer.trim() || "Клієнт"}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-2" align="start">
+                  <div className="space-y-2">
+                    <Input
+                      value={createCustomerSearch}
+                      onChange={(event) => setCreateCustomerSearch(event.target.value)}
+                      placeholder="Пошук клієнта..."
+                      className="h-9"
                     />
-                    <DateQuickActions
-                      onSelect={(date) => {
-                        setCreateDeadline(date ?? undefined);
-                        setCreateDeadlinePopoverOpen(false);
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label>Виконавець (дизайнер)</Label>
-                <Select value={createAssigneeUserId} onValueChange={setCreateAssigneeUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Без виконавця" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Без виконавця</SelectItem>
-                    {designerMembers.length > 0 ? (
-                      designerMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.label}
-                        </SelectItem>
+                    <div className="max-h-56 overflow-auto space-y-1">
+                      {customersLoading ? (
+                        <div className="text-xs text-muted-foreground p-2">Завантаження...</div>
+                      ) : filteredCustomerOptions.length > 0 ? (
+                        filteredCustomerOptions.map((customer) => (
+                          <Button
+                            key={customer.id}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2 h-9 text-sm"
+                            onClick={() => {
+                              setCreateCustomer(customer.label);
+                              setCreateCustomerSearch(customer.label);
+                              setCreateCustomerPopoverOpen(false);
+                            }}
+                            title={customer.label}
+                          >
+                            <span className="truncate">{customer.label}</span>
+                            <Check
+                              className={cn(
+                                "ml-auto h-3.5 w-3.5 text-primary",
+                                createCustomer.trim() === customer.label ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </Button>
+                        ))
+                      ) : (
+                        <div className="text-xs text-muted-foreground p-2">Клієнтів не знайдено</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8"
+                        disabled={!createCustomerSearch.trim()}
+                        onClick={() => {
+                          const manualName = createCustomerSearch.trim();
+                          if (!manualName) return;
+                          setCreateCustomer(manualName);
+                          setCreateCustomerPopoverOpen(false);
+                        }}
+                      >
+                        Використати: {createCustomerSearch.trim() || "назву"}
+                      </Button>
+                      {!!createCustomer.trim() ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-muted-foreground"
+                          onClick={() => {
+                            setCreateCustomer("");
+                            setCreateCustomerSearch("");
+                            setCreateCustomerPopoverOpen(false);
+                          }}
+                        >
+                          Очистити
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Chip size="md" icon={<CalendarIcon className="h-4 w-4" />} active={!!createDeadline}>
+                    {createDeadline ? format(createDeadline, "d MMM yyyy", { locale: uk }) : "Дедлайн"}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={createDeadline}
+                    onSelect={(date) => {
+                      setCreateDeadline(date);
+                      setCreateDeadlinePopoverOpen(false);
+                    }}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear() - 3}
+                    toYear={new Date().getFullYear() + 5}
+                    initialFocus
+                  />
+                  <DateQuickActions
+                    onSelect={(date) => {
+                      setCreateDeadline(date ?? undefined);
+                      setCreateDeadlinePopoverOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <Popover open={createManagerPopoverOpen} onOpenChange={setCreateManagerPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Chip
+                    size="md"
+                    icon={
+                      selectedManager ? (
+                        <AvatarBase
+                          src={selectedManager.avatarUrl ?? null}
+                          name={selectedManager.label}
+                          fallback={getInitials(selectedManager.label)}
+                          size={20}
+                          className="border-border/60"
+                          fallbackClassName="text-[10px] font-semibold"
+                        />
+                      ) : (
+                        <User className="h-4 w-4" />
+                      )
+                    }
+                    active={createManagerUserId !== "none"}
+                  >
+                    {selectedManager?.label ?? "Менеджер"}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <div className="space-y-1">
+                    {managerMembers.length > 0 ? (
+                      managerMembers.map((member) => (
+                        <Button
+                          key={member.id}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start gap-2 h-9 text-sm"
+                          onClick={() => {
+                            setCreateManagerUserId(member.id);
+                            setCreateManagerPopoverOpen(false);
+                          }}
+                          title={member.label}
+                        >
+                          <AvatarBase
+                            src={member.avatarUrl ?? null}
+                            name={member.label}
+                            fallback={getInitials(member.label)}
+                            size={20}
+                            className="border-border/60 shrink-0"
+                            fallbackClassName="text-[10px] font-semibold"
+                          />
+                          <span className="truncate">{member.label}</span>
+                          <Check
+                            className={cn(
+                              "ml-auto h-3.5 w-3.5 text-primary",
+                              createManagerUserId === member.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </Button>
                       ))
                     ) : (
-                      <SelectItem value="empty" disabled>
-                        Немає дизайнерів
-                      </SelectItem>
+                      <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
                     )}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <Popover open={createAssigneePopoverOpen} onOpenChange={setCreateAssigneePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Chip
+                    size="md"
+                    icon={
+                      selectedAssignee ? (
+                        <AvatarBase
+                          src={selectedAssignee.avatarUrl ?? null}
+                          name={selectedAssignee.label}
+                          fallback={getInitials(selectedAssignee.label)}
+                          size={20}
+                          className="border-border/60"
+                          fallbackClassName="text-[10px] font-semibold"
+                        />
+                      ) : (
+                        <User className="h-4 w-4" />
+                      )
+                    }
+                    active={createAssigneeUserId !== "none"}
+                  >
+                    {selectedAssignee?.label ?? "Виконавець"}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <div className="space-y-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-sm"
+                      onClick={() => {
+                        setCreateAssigneeUserId("none");
+                        setCreateAssigneePopoverOpen(false);
+                      }}
+                    >
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      Без виконавця
+                      <Check
+                        className={cn(
+                          "ml-auto h-3.5 w-3.5 text-primary",
+                          createAssigneeUserId === "none" ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                    </Button>
+                    {designerMembers.length > 0 ? (
+                      designerMembers.map((member) => (
+                        <Button
+                          key={member.id}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start gap-2 h-9 text-sm"
+                          onClick={() => {
+                            setCreateAssigneeUserId(member.id);
+                            setCreateAssigneePopoverOpen(false);
+                          }}
+                          title={member.label}
+                        >
+                          <AvatarBase
+                            src={member.avatarUrl ?? null}
+                            name={member.label}
+                            fallback={getInitials(member.label)}
+                            size={20}
+                            className="border-border/60 shrink-0"
+                            fallbackClassName="text-[10px] font-semibold"
+                          />
+                          <span className="truncate">{member.label}</span>
+                          <Check
+                            className={cn(
+                              "ml-auto h-3.5 w-3.5 text-primary",
+                              createAssigneeUserId === member.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </Button>
+                      ))
+                    ) : (
+                      <div className="text-xs text-muted-foreground p-2">Немає користувачів</div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
@@ -2300,10 +2642,20 @@ export default function DesignPage() {
               <div
                 onDrop={(event) => {
                   event.preventDefault();
+                  setCreateFilesDragActive(false);
                   addFilesToCreate(event.dataTransfer.files);
                 }}
-                onDragOver={(event) => event.preventDefault()}
-                className="relative border-2 border-dashed border-border/40 rounded-[var(--radius-md)] p-6 text-center transition-colors hover:border-border/60 cursor-pointer"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!createFilesDragActive) setCreateFilesDragActive(true);
+                }}
+                onDragLeave={() => setCreateFilesDragActive(false)}
+                className={cn(
+                  "relative border-2 border-dashed rounded-[var(--radius-md)] p-6 text-center transition-colors cursor-pointer",
+                  createFilesDragActive
+                    ? "border-primary/70 bg-primary/10"
+                    : "border-border/40 hover:border-border/60"
+                )}
               >
                 <input
                   type="file"
@@ -2313,8 +2665,10 @@ export default function DesignPage() {
                   accept="*/*"
                 />
                 <div className="flex flex-col items-center gap-2">
-                  <Paperclip className="h-5 w-5 text-muted-foreground" />
-                  <div className="text-sm text-foreground">Перетягніть або клікніть для вибору</div>
+                  <Paperclip className={cn("h-5 w-5", createFilesDragActive ? "text-primary" : "text-muted-foreground")} />
+                  <div className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
+                    {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                  </div>
                   <div className="text-xs text-muted-foreground">до {MAX_BRIEF_FILES} файлів</div>
                 </div>
               </div>

@@ -41,6 +41,7 @@ import {
   ExternalLink,
   Link2,
   Trash2,
+  Check,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -48,6 +49,7 @@ import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
+import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
@@ -247,6 +249,18 @@ const isDesignerRole = (value?: string | null) => {
   return normalized === "designer" || normalized === "дизайнер";
 };
 
+const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
+  const normalizedAccess = (accessRole ?? "").trim().toLowerCase();
+  const normalizedJob = (jobRole ?? "").trim().toLowerCase();
+  return (
+    normalizedAccess === "owner" ||
+    normalizedAccess === "admin" ||
+    normalizedAccess === "manager" ||
+    normalizedJob === "manager" ||
+    normalizedJob === "менеджер"
+  );
+};
+
 const formatQuantityWithUnit = (qty?: number | null, unit?: string | null) => {
   if (qty == null || Number.isNaN(Number(qty))) return "Не вказано";
   const qtyText = new Intl.NumberFormat("uk-UA").format(Number(qty));
@@ -300,8 +314,10 @@ export default function DesignTaskPage() {
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
+  const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [assigningSelf, setAssigningSelf] = useState(false);
   const [assigningMemberId, setAssigningMemberId] = useState<string | null>(null);
+  const [managerSaving, setManagerSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
@@ -347,6 +363,23 @@ export default function DesignTaskPage() {
   const canManageAssignments = permissions.canManageAssignments;
   const canSelfAssign = permissions.canSelfAssignDesign;
   const isAssignedToMe = !!userId && task?.assigneeUserId === userId;
+  const designTaskLock = useEntityLock({
+    teamId: effectiveTeamId,
+    entityType: "design_task",
+    entityId: id ?? null,
+    userId,
+    userLabel: userId ? memberById[userId] ?? null : null,
+    enabled: !!effectiveTeamId && !!id && !!userId,
+  });
+  const designTaskLockedByOther = designTaskLock.lockedByOther;
+
+  const ensureCanEdit = () => {
+    if (!designTaskLockedByOther) return true;
+    toast.error(
+      `Запис зараз редагує ${designTaskLock.holderName ?? "інший користувач"}. Доступно лише перегляд.`
+    );
+    return false;
+  };
 
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
@@ -469,6 +502,18 @@ export default function DesignTaskPage() {
           rows
             .filter((row) => isDesignerRole(row.job_role))
             .map((row) => ({ id: row.user_id, label: labels[row.user_id] ?? row.user_id }))
+        );
+        let managerRows = rows.filter((row) => isManagerRole(row.access_role, row.job_role));
+        if (managerRows.length === 0 && userId) {
+          const me = rows.find((row) => row.user_id === userId);
+          if (me) managerRows = [me];
+        }
+        if (managerRows.length === 0) managerRows = rows;
+        setManagerMembers(
+          managerRows.map((row) => ({
+            id: row.user_id,
+            label: labels[row.user_id] ?? row.user_id,
+          }))
         );
       } catch {
         // Optional UI context; keep page functional even if membership lookup fails.
@@ -1122,6 +1167,20 @@ export default function DesignTaskPage() {
         };
       }
 
+      if (source === "design_task_manager") {
+        const fromLabel = typeof metadata.from_manager_label === "string" ? metadata.from_manager_label : "Не вказано";
+        const toLabel = typeof metadata.to_manager_label === "string" ? metadata.to_manager_label : "Не вказано";
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: `Менеджер: ${fromLabel} → ${toLabel}`,
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          icon: UserRound,
+          accentClass: "quote-activity-accent-comment",
+        };
+      }
+
       if (source === "design_task_status") {
         const fromStatusRaw = typeof metadata.from_status === "string" ? metadata.from_status : "";
         const toStatusRaw = typeof metadata.to_status === "string" ? metadata.to_status : "";
@@ -1239,6 +1298,7 @@ export default function DesignTaskPage() {
 
   const persistDesignOutputs = async (nextFiles: DesignOutputFile[], nextLinks: DesignOutputLink[]) => {
     if (!task || !effectiveTeamId) return;
+    if (!ensureCanEdit()) return;
     const filesForMeta = nextFiles.map((file) => ({
       id: file.id,
       file_name: file.file_name,
@@ -1279,6 +1339,7 @@ export default function DesignTaskPage() {
 
   const syncDesignFileToQuoteVisualizations = async (file: DesignOutputFile) => {
     if (!task || !effectiveTeamId || !isUuid(task.quoteId)) return;
+    if (!ensureCanEdit()) return;
 
     const { data: existing, error: existingError } = await supabase
       .schema("tosho")
@@ -1306,6 +1367,7 @@ export default function DesignTaskPage() {
 
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
+    if (!ensureCanEdit()) return;
     setOutputUploading(true);
     try {
       const uploaded: DesignOutputFile[] = [];
@@ -1378,6 +1440,7 @@ export default function DesignTaskPage() {
 
   const handleSubmitDesignLink = async () => {
     if (!task) return;
+    if (!ensureCanEdit()) return;
     const trimmedUrl = addLinkUrl.trim();
     if (!trimmedUrl) {
       setAddLinkError("Вставте URL посилання.");
@@ -1408,6 +1471,7 @@ export default function DesignTaskPage() {
   };
 
   const handleRemoveDesignFile = async (fileId: string) => {
+    if (!ensureCanEdit()) return;
     const target = designOutputFiles.find((file) => file.id === fileId);
     if (!target) return;
     try {
@@ -1424,6 +1488,7 @@ export default function DesignTaskPage() {
   };
 
   const handleRemoveDesignLink = async (linkId: string) => {
+    if (!ensureCanEdit()) return;
     try {
       const nextLinks = designOutputLinks.filter((link) => link.id !== linkId);
       await persistDesignOutputs(designOutputFiles, nextLinks);
@@ -1436,6 +1501,7 @@ export default function DesignTaskPage() {
 
   const handleStartTimer = async () => {
     if (!task || !effectiveTeamId || !userId || timerBusy) return;
+    if (!ensureCanEdit()) return;
     if (task.status !== "in_progress") {
       toast.error("Таймер можна запустити тільки у статусі «В роботі».");
       return;
@@ -1482,6 +1548,7 @@ export default function DesignTaskPage() {
 
   const handlePauseTimer = async (options?: { silent?: boolean }) => {
     if (!task || !effectiveTeamId || timerBusy) return false;
+    if (!ensureCanEdit()) return false;
     setTimerBusy("pause");
     try {
       const wasPaused = await pauseDesignTaskTimer({
@@ -1518,6 +1585,7 @@ export default function DesignTaskPage() {
 
   const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
+    if (!ensureCanEdit()) return;
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (nextStatus === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
       requestEstimateDialog({ mode: "status", nextStatus });
@@ -1638,6 +1706,7 @@ export default function DesignTaskPage() {
 
   const updateTaskDeadline = async (nextDate: Date | null) => {
     if (!task || !effectiveTeamId) return;
+    if (!ensureCanEdit()) return;
     const previousDeadline = task.designDeadline ?? null;
     const nextDeadline = nextDate ? format(nextDate, "yyyy-MM-dd") : null;
     if (previousDeadline === nextDeadline) return;
@@ -1713,6 +1782,7 @@ export default function DesignTaskPage() {
 
   const applyAssignee = async (nextAssigneeUserId: string | null, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !canManageAssignments) return;
+    if (!ensureCanEdit()) return;
     if (nextAssigneeUserId === task.assigneeUserId) return;
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (nextAssigneeUserId && !existingEstimateMinutes && !options?.estimateMinutes) {
@@ -1883,8 +1953,74 @@ export default function DesignTaskPage() {
     }
   };
 
+  const applyManager = async (nextManagerUserId: string | null) => {
+    if (!task || !effectiveTeamId || managerSaving) return;
+    if (!ensureCanEdit()) return;
+    const previousManagerUserId =
+      typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
+        ? (task.metadata.manager_user_id as string)
+        : null;
+    if (previousManagerUserId === nextManagerUserId) return;
+
+    const previousManagerLabel =
+      (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
+      (previousManagerUserId ? getMemberLabel(previousManagerUserId) : "Не вказано");
+    const nextManagerLabel = nextManagerUserId ? getMemberLabel(nextManagerUserId) : "Не вказано";
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      manager_user_id: nextManagerUserId,
+      manager_label: nextManagerUserId ? nextManagerLabel : null,
+    };
+
+    const previousTask = task;
+    setManagerSaving(true);
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_manager",
+          title: `Менеджер: ${previousManagerLabel} → ${nextManagerLabel}`,
+          metadata: {
+            source: "design_task_manager",
+            from_manager_user_id: previousManagerUserId,
+            from_manager_label: previousManagerLabel,
+            to_manager_user_id: nextManagerUserId,
+            to_manager_label: nextManagerLabel,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log manager update", logError);
+      }
+
+      toast.success(nextManagerUserId ? `Менеджера змінено: ${nextManagerLabel}` : "Менеджера очищено");
+    } catch (e: unknown) {
+      setTask(previousTask);
+      const message = getErrorMessage(e, "Не вдалося оновити менеджера");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setManagerSaving(false);
+    }
+  };
+
   const assignTaskToMe = async (options?: { alsoStart?: boolean; estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !userId || !canSelfAssign || isAssignedToMe || assigningSelf) return;
+    if (!ensureCanEdit()) return;
     if (!canManageAssignments && task.assigneeUserId && task.assigneeUserId !== userId) {
       toast.error("Задача вже призначена іншому дизайнеру");
       return;
@@ -2088,6 +2224,7 @@ export default function DesignTaskPage() {
 
   const updateTaskEstimate = async (estimateMinutes: number) => {
     if (!task || !effectiveTeamId) return;
+    if (!ensureCanEdit()) return;
     const previousEstimate = getTaskEstimateMinutes(task);
     const previousTask = task;
     const nextMetadata: Record<string, unknown> = {
@@ -2167,6 +2304,7 @@ export default function DesignTaskPage() {
 
   const handleDeleteTask = async () => {
     if (!task || !effectiveTeamId || !canManageAssignments || deletingTask) return;
+    if (!ensureCanEdit()) return;
     setDeletingTask(true);
     try {
       const { error: taskDeleteError } = await supabase
@@ -2312,6 +2450,14 @@ export default function DesignTaskPage() {
   const taskHeaderSubtitle = isLinkedQuote
     ? `${task.customerName ?? "Клієнт"} · ${quoteItem?.name ?? "Позиція"}`
     : `${task.customerName ?? "Клієнт"} · Дизайн-задача без прорахунку`;
+  const taskManagerUserId =
+    typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
+      ? (task.metadata.manager_user_id as string)
+      : null;
+  const taskManagerLabel =
+    (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
+    (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");
+  const taskManagerAvatar = taskManagerUserId ? getMemberAvatar(taskManagerUserId) : null;
 
   return (
     <div className="w-full max-w-none px-0 pb-20 md:pb-0 space-y-4">
@@ -2353,7 +2499,7 @@ export default function DesignTaskPage() {
                   variant="outline"
                   size="sm"
                   className={cn("h-7 px-2.5 text-xs gap-1", deadlineLabel.className)}
-                  disabled={deadlineSaving}
+                  disabled={deadlineSaving || designTaskLockedByOther}
                 >
                   <CalendarClock className="h-3.5 w-3.5" />
                   Дедлайн: {deadlineLabel.label}
@@ -2393,6 +2539,7 @@ export default function DesignTaskPage() {
               variant="outline"
               size="sm"
               className="h-7 gap-1 px-2.5 text-xs"
+              disabled={designTaskLockedByOther}
               onClick={() => void openManualEstimateDialog()}
             >
               <Clock className="h-3.5 w-3.5" />
@@ -2408,7 +2555,7 @@ export default function DesignTaskPage() {
                 Відкрити прорахунок
               </Button>
             ) : null}
-            <Button disabled={primaryActionDisabled} onClick={primaryActionClick ?? undefined}>
+            <Button disabled={primaryActionDisabled || designTaskLockedByOther} onClick={primaryActionClick ?? undefined}>
               {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {primaryActionLabel}
             </Button>
@@ -2416,6 +2563,13 @@ export default function DesignTaskPage() {
         }
         hint={primaryActionHint}
       />
+
+      {designTaskLockedByOther ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <span className="font-medium">Режим лише перегляду.</span>{" "}
+          ТЗ редагує {designTaskLock.holderName ?? "інший користувач"}.
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)] gap-4">
         <div className="space-y-4">
@@ -2440,6 +2594,68 @@ export default function DesignTaskPage() {
                     className="border-border/70"
                   />
                   <div className="font-medium">{task.customerName ?? "Не вказано"}</div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
+                <div className="text-xs text-muted-foreground mb-1">Менеджер</div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <AvatarBase
+                      src={taskManagerAvatar}
+                      name={taskManagerLabel}
+                      fallback={getInitials(taskManagerLabel)}
+                      size={28}
+                      className="border-border/70"
+                    />
+                    <div className="font-medium">{taskManagerLabel}</div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start"
+                        disabled={managerSaving || designTaskLockedByOther || managerMembers.length === 0}
+                      >
+                        {managerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Змінити менеджера
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel>Відповідальний менеджер</DropdownMenuLabel>
+                      {managerMembers.map((member) => (
+                        <DropdownMenuItem
+                          key={member.id}
+                          onClick={() => void applyManager(member.id)}
+                          disabled={taskManagerUserId === member.id || managerSaving}
+                          className="gap-2"
+                        >
+                          <AvatarBase
+                            src={getMemberAvatar(member.id)}
+                            name={member.label}
+                            fallback={getInitials(member.label)}
+                            size={18}
+                            className="shrink-0 border-border/70"
+                            fallbackClassName="text-[10px] font-semibold"
+                          />
+                          <span className="truncate">{member.label}</span>
+                          <Check
+                            className={cn(
+                              "ml-auto h-3.5 w-3.5 text-primary",
+                              taskManagerUserId === member.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => void applyManager(null)}
+                        disabled={!taskManagerUserId || managerSaving}
+                      >
+                        <span className="truncate">Очистити менеджера</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               {isLinkedQuote ? (
@@ -3047,6 +3263,19 @@ export default function DesignTaskPage() {
                     className="shrink-0 border-border/70"
                   />
                   <span className="font-medium text-right truncate max-w-[180px]">{getMemberLabel(task.assigneeUserId)}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Менеджер</span>
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <AvatarBase
+                    src={taskManagerAvatar}
+                    name={taskManagerLabel}
+                    fallback={getInitials(taskManagerLabel)}
+                    size={16}
+                    className="shrink-0 border-border/70"
+                  />
+                  <span className="font-medium text-right truncate max-w-[180px]">{taskManagerLabel}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
