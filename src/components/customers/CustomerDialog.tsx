@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -101,12 +100,7 @@ export type CustomerDialogProps = {
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex items-center gap-3 -mx-6 px-6">
-    <span className="text-xs uppercase tracking-wider text-muted-foreground font-normal">
-      {children}
-    </span>
-    <Separator className="flex-1 bg-border/40" />
-  </div>
+  <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground">{children}</h4>
 );
 
 const getInitials = (value?: string) => {
@@ -411,16 +405,22 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           </Popover>
         </div>
 
-        <div className="space-y-4">
+        <div className="rounded-md border border-border/50 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+          {[form.name || "Без назви", form.manager || "Без менеджера", form.reminderDate || "Без нагадування"]
+            .filter(Boolean)
+            .join(" • ")}
+        </div>
+
+        <div className="space-y-3">
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-            <TabsList className="sticky top-0 z-10 w-full justify-start bg-card/95 backdrop-blur">
-              <TabsTrigger value="basic">Основне</TabsTrigger>
-              <TabsTrigger value="requisites">Реквізити</TabsTrigger>
-              <TabsTrigger value="communication">Комунікація</TabsTrigger>
-              <TabsTrigger value="history">Історія</TabsTrigger>
+            <TabsList className="h-8 w-fit rounded-md bg-muted/40 p-0.5">
+              <TabsTrigger value="basic" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Основне</TabsTrigger>
+              <TabsTrigger value="requisites" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Реквізити</TabsTrigger>
+              <TabsTrigger value="communication" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Комунікація</TabsTrigger>
+              <TabsTrigger value="history" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Історія</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basic" className="space-y-4 mt-4">
+            <TabsContent value="basic" className="space-y-3 mt-3">
               <SectionHeader>Компанія</SectionHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
@@ -568,7 +568,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="requisites" className="space-y-4 mt-4">
+            <TabsContent value="requisites" className="space-y-3 mt-3">
               <SectionHeader>Реквізити</SectionHeader>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
@@ -603,7 +603,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="communication" className="space-y-4 mt-4">
+            <TabsContent value="communication" className="space-y-3 mt-3">
               <SectionHeader>Нагадування</SectionHeader>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
@@ -669,7 +669,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     value={form.reminderComment}
                     onChange={(e) => setForm((prev) => ({ ...prev, reminderComment: e.target.value }))}
                     placeholder="Що треба зробити"
-                    className="min-h-20"
+                    className="min-h-16"
                   />
                 </div>
               </div>
@@ -737,7 +737,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     value={form.eventComment}
                     onChange={(e) => setForm((prev) => ({ ...prev, eventComment: e.target.value }))}
                     placeholder="Контекст події"
-                    className="min-h-20"
+                    className="min-h-16"
                   />
                 </div>
               </div>
@@ -749,17 +749,17 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   value={form.notes}
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                   placeholder="Що замовляє, коли, важливі деталі комунікації..."
-                  className="min-h-24"
+                  className="min-h-16"
                 />
               </div>
             </TabsContent>
 
-            <TabsContent value="history" className="space-y-4 mt-4">
+            <TabsContent value="history" className="space-y-3 mt-3">
               <SectionHeader>Історія</SectionHeader>
               <Tabs defaultValue="calculations" className="w-full">
-                <TabsList className="w-full justify-start">
-                  <TabsTrigger value="calculations">Прорахунки</TabsTrigger>
-                  <TabsTrigger value="orders">Замовлення</TabsTrigger>
+                <TabsList className="h-8 w-fit rounded-md bg-muted/40 p-0.5">
+                  <TabsTrigger value="calculations" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Прорахунки</TabsTrigger>
+                  <TabsTrigger value="orders" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Замовлення</TabsTrigger>
                 </TabsList>
                 <TabsContent value="calculations" className="mt-3">
                   {linkedLoading ? (
@@ -767,13 +767,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   ) : calculations.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {calculations.map((row) => (
-                        <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
-                          <div className="font-medium">{row.number ?? "Без номера"}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.status ?? "new"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
-                          </div>
+                        <div key={row.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 text-sm">
+                          <div className="truncate font-medium">{row.number ?? "Без номера"}</div>
+                          <div className="text-xs text-muted-foreground">{row.status ?? "new"}</div>
+                          <div className="text-xs text-muted-foreground">{row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}</div>
                         </div>
                       ))}
                     </div>
@@ -785,13 +784,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   ) : orders.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {orders.map((row) => (
-                        <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
-                          <div className="font-medium">{row.number ?? "Без номера"}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.status ?? "approved"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
-                          </div>
+                        <div key={row.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 text-sm">
+                          <div className="truncate font-medium">{row.number ?? "Без номера"}</div>
+                          <div className="text-xs text-muted-foreground">{row.status ?? "approved"}</div>
+                          <div className="text-xs text-muted-foreground">{row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}</div>
                         </div>
                       ))}
                     </div>
