@@ -23,6 +23,8 @@ import {
   removeQuoteSetItem,
   addQuotesToQuoteSet,
   listCustomersBySearch,
+  listLeadsBySearch,
+  getLeadById,
   createQuote,
   createQuoteSet,
   deleteQuote,
@@ -38,6 +40,7 @@ import {
   type QuoteItemExportRow,
   type TeamMemberRow,
   type CustomerRow,
+  type LeadSearchRow,
 } from "@/lib/toshoApi";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
@@ -108,6 +111,10 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 
 type QuotesPageProps = {
   teamId: string;
+};
+
+type QuotePartyOption = CustomerRow & {
+  entityType?: "customer" | "lead";
 };
 
 type CatalogMethod = { id: string; name: string; price?: number };
@@ -251,7 +258,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [customers, setCustomers] = useState<QuotePartyOption[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -1023,8 +1030,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     setCustomersLoading(true);
     try {
-      const data = await listCustomersBySearch(teamId, search);
-      setCustomers(data);
+      const [customerRows, leadRows] = await Promise.all([
+        listCustomersBySearch(teamId, search),
+        listLeadsBySearch(teamId, search).catch(() => [] as LeadSearchRow[]),
+      ]);
+      const leadOptions: QuotePartyOption[] = leadRows.map((lead) => ({
+        id: lead.id,
+        name: lead.company_name ?? lead.legal_name ?? null,
+        legal_name: lead.legal_name ?? null,
+        entityType: "lead",
+      }));
+      const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
+        ...customer,
+        entityType: "customer",
+      }));
+      setCustomers([...customerOptions, ...leadOptions]);
     } catch {
       setCustomers([]);
     } finally {
@@ -1049,10 +1069,80 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return `${y}-${m}-${d}`;
       };
       const deadlineAt = data.deadline ? formatDateOnly(data.deadline) : null;
+      let resolvedCustomerId = data.customerId!;
+      if (data.customerType === "lead") {
+        const lead = await getLeadById(teamId, data.customerId!);
+        if (!lead) {
+          throw new Error("Не вдалося знайти ліда для створення прорахунку.");
+        }
+
+        const fullContactName = [lead.first_name?.trim(), lead.last_name?.trim()]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        const insertCustomerPayload: Record<string, unknown> = {
+          team_id: teamId,
+          name: lead.company_name?.trim() || lead.legal_name?.trim() || "Без назви",
+          legal_name: lead.legal_name?.trim() || null,
+          manager: lead.manager?.trim() || currentUserManagerLabel || null,
+          website: lead.website?.trim() || null,
+          iban: lead.iban?.trim() || null,
+          logo_url: lead.logo_url?.trim() || null,
+          contact_name: fullContactName || lead.first_name?.trim() || null,
+          contact_phone: lead.phone_numbers?.find((phone) => phone.trim().length > 0)?.trim() || null,
+          contact_email: lead.email?.trim() || null,
+          signatory_name: lead.signatory_name?.trim() || null,
+          signatory_position: lead.signatory_position?.trim() || null,
+          reminder_at: lead.reminder_at || null,
+          reminder_comment: lead.reminder_comment?.trim() || null,
+          event_name: lead.event_name?.trim() || null,
+          event_at: lead.event_at || null,
+          event_comment: lead.event_comment?.trim() || null,
+          notes: lead.notes?.trim() || null,
+        };
+
+        let createdCustomer: CustomerRow | null = null;
+        const insertWithPayload = async (payload: Record<string, unknown>) => {
+          const { data: inserted, error } = await supabase
+            .schema("tosho")
+            .from("customers")
+            .insert(payload)
+            .select("id,name,legal_name")
+            .single();
+          if (error) throw error;
+          return (inserted as CustomerRow) ?? null;
+        };
+
+        try {
+          createdCustomer = await insertWithPayload(insertCustomerPayload);
+        } catch (error: unknown) {
+          const message = getErrorMessage(error, "").toLowerCase();
+          if (message.includes("column") && message.includes("logo_url")) {
+            const fallbackPayload = { ...insertCustomerPayload };
+            delete fallbackPayload.logo_url;
+            createdCustomer = await insertWithPayload(fallbackPayload);
+          } else {
+            throw error;
+          }
+        }
+
+        if (!createdCustomer?.id) {
+          throw new Error("Не вдалося створити клієнта з ліда.");
+        }
+        const createdCustomerRow = createdCustomer;
+        resolvedCustomerId = createdCustomerRow.id;
+        setCustomers((prev) => {
+          const exists = prev.some(
+            (item) => item.id === createdCustomerRow.id && (item.entityType ?? "customer") === "customer"
+          );
+          if (exists) return prev;
+          return [{ ...createdCustomerRow, entityType: "customer" }, ...prev];
+        });
+      }
 
       const created = await createQuote({
         teamId,
-        customerId: data.customerId!,
+        customerId: resolvedCustomerId,
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,

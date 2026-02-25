@@ -157,6 +157,7 @@ export type Customer = {
   id: string;
   name?: string | null;
   legal_name?: string | null;
+  entityType?: "customer" | "lead";
 };
 
 /**
@@ -199,6 +200,7 @@ export type NewQuoteFormData = {
   status: string;
   comment?: string;
   customerId?: string;
+  customerType?: "customer" | "lead";
   managerId?: string;
   designAssigneeId?: string | null;
   deadline?: Date;
@@ -246,6 +248,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [status, setStatus] = React.useState("new");
   const [comment, setComment] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
+  const [customerType, setCustomerType] = React.useState<"customer" | "lead">("customer");
   const [customerSearch, setCustomerSearch] = React.useState("");
   const [managerId, setManagerId] = React.useState<string>("");
   const [deadline, setDeadline] = React.useState<Date>();
@@ -313,6 +316,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setStatus(initialValues?.status ?? "new");
     setComment(initialValues?.comment ?? "");
     setCustomerId(initialValues?.customerId ?? "");
+    setCustomerType(initialValues?.customerType ?? "customer");
     setCustomerSearch("");
     setManagerId(initialValues?.managerId ?? currentUserId ?? "");
     setDeadline(initialValues?.deadline);
@@ -409,7 +413,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const handleSubmit = async () => {
     // Validation
     if (!isEditMode && !customerId) {
-      alert("Оберіть клієнта");
+      alert("Оберіть клієнта або ліда");
       setCustomerPopoverOpen(true);
       return;
     }
@@ -497,6 +501,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       status,
       comment,
       customerId,
+      customerType,
       managerId,
       designAssigneeId: shouldCreateDesignTask ? designAssigneeId : null,
       deadline,
@@ -522,6 +527,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const currentStatus = QUOTE_STATUSES.find((s) => s.value === status) ?? QUOTE_STATUSES[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
+  const selectedCustomer = customers.find((c) => c.id === customerId && (c.entityType ?? "customer") === customerType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -594,14 +600,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <PopoverTrigger asChild>
                 <Chip size="md" icon={<Building2 />} active={!!customerId}>
                   {customerId
-                    ? customers.find((c) => c.id === customerId)?.name || "Клієнт обрано"
-                    : "Клієнт"}
+                    ? selectedCustomer
+                      ? `${selectedCustomer.entityType === "lead" ? "Лід: " : ""}${selectedCustomer.name || selectedCustomer.legal_name || "Без назви"}`
+                      : "Контакт обрано"
+                    : "Клієнт / Лід"}
                 </Chip>
               </PopoverTrigger>
               <PopoverContent className="w-72 p-2" align="start">
                 <div className="space-y-2">
                   <Input
-                    placeholder="Пошук клієнта..."
+                    placeholder="Пошук клієнта або ліда..."
                     value={customerSearch}
                     onChange={(e) => {
                       setCustomerSearch(e.target.value);
@@ -615,24 +623,33 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     ) : customers.length > 0 ? (
                       customers.map((customer) => (
                         <Button
-                          key={customer.id}
+                          key={`${customer.entityType ?? "customer"}-${customer.id}`}
                           variant="ghost"
                           size="sm"
                           className="w-full justify-start h-9 text-sm truncate"
                           onClick={() => {
                             setCustomerId(customer.id);
+                            setCustomerType(customer.entityType ?? "customer");
                             setCustomerPopoverOpen(false);
                           }}
                           title={customer.name || customer.legal_name || "Без назви"}
                         >
-                          <span className="truncate max-w-[220px]">
+                          <span className="truncate max-w-[220px] inline-flex items-center gap-2">
+                            <span className={cn(
+                              "inline-flex h-5 items-center rounded-full border px-2 text-[10px] uppercase tracking-wide",
+                              (customer.entityType ?? "customer") === "lead"
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            )}>
+                              {(customer.entityType ?? "customer") === "lead" ? "Лід" : "Клієнт"}
+                            </span>
                             {customer.name || customer.legal_name || "Без назви"}
                           </span>
                         </Button>
                       ))
                     ) : customerSearch ? (
                       <div className="space-y-2 p-2">
-                        <div className="text-xs text-muted-foreground">Клієнтів не знайдено</div>
+                        <div className="text-xs text-muted-foreground">Клієнтів або лідів не знайдено</div>
                         <Button
                           variant="secondary"
                           size="sm"

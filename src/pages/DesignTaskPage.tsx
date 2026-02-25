@@ -238,6 +238,7 @@ const isImageAttachment = (name?: string | null) => {
 const DESIGN_OUTPUT_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
 const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -338,6 +339,7 @@ export default function DesignTaskPage() {
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
   const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [deadlineTime, setDeadlineTime] = useState("12:00");
   const [estimatePendingAction, setEstimatePendingAction] = useState<
     | { mode: "assign"; nextAssigneeUserId: string | null }
     | { mode: "assign_self"; alsoStart: boolean }
@@ -778,9 +780,16 @@ export default function DesignTaskPage() {
             (typeof row?.created_at === "string" && row.created_at ? row.created_at : null) ??
             (quote?.created_at as string | null),
         });
+        const designOutputKeys = new Set(
+          designFilesWithUrls.map((file) => `${file.storage_bucket}:${file.storage_path}`)
+        );
+        const customerOnlyAttachments = attachmentsWithUrls.filter(
+          (file) => !designOutputKeys.has(`${file.storage_bucket}:${file.storage_path}`)
+        );
+
         setQuoteItem(item ?? null);
         setProductPreviewUrl(itemPreviewUrl);
-        setAttachments([...standaloneBriefFilesWithUrls, ...attachmentsWithUrls]);
+        setAttachments([...standaloneBriefFilesWithUrls, ...customerOnlyAttachments]);
         setDesignOutputFiles(designFilesWithUrls);
         setDesignOutputLinks(parsedDesignLinks);
       } catch (e: unknown) {
@@ -923,16 +932,28 @@ export default function DesignTaskPage() {
     return () => window.clearInterval(interval);
   }, [timerSummary.activeStartedAt]);
 
+  useEffect(() => {
+    if (!headerDeadlinePopoverOpen && !deadlinePopoverOpen) return;
+    setDeadlineTime(extractDeadlineTime(task?.designDeadline ?? null));
+  }, [headerDeadlinePopoverOpen, deadlinePopoverOpen, task?.designDeadline]);
+
   const deadlineLabel = useMemo(() => {
     if (!task?.designDeadline) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const d = new Date(task.designDeadline);
     if (Number.isNaN(d.getTime())) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const today = new Date();
     const diff = Math.round((d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return { label: `Прострочено ${Math.abs(diff)} дн.`, className: "text-danger-foreground" };
-    if (diff === 0) return { label: "Сьогодні", className: "text-warning-foreground" };
-    if (diff === 1) return { label: "Завтра", className: "text-warning-foreground" };
-    return { label: d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }), className: "text-muted-foreground" };
+    const hasTime = /t\d{2}:\d{2}/i.test(task.designDeadline ?? "");
+    const timeSuffix = hasTime
+      ? ` ${d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+      : "";
+    if (diff < 0) return { label: `Прострочено ${Math.abs(diff)} дн.${timeSuffix}`, className: "text-danger-foreground" };
+    if (diff === 0) return { label: `Сьогодні${timeSuffix}`, className: "text-warning-foreground" };
+    if (diff === 1) return { label: `Завтра${timeSuffix}`, className: "text-warning-foreground" };
+    return {
+      label: `${d.toLocaleDateString("uk-UA", { day: "numeric", month: "short" })}${timeSuffix}`,
+      className: "text-muted-foreground",
+    };
   }, [task?.designDeadline]);
   const estimateLabel = useMemo(() => {
     const minutes = getTaskEstimateMinutes(task);
@@ -1130,6 +1151,22 @@ export default function DesignTaskPage() {
     return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
   };
 
+  const formatDeadlineDateTime = (value: string | null | undefined) => {
+    if (!value) return "Без дедлайну";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Без дедлайну";
+    const hasTime = /t\d{2}:\d{2}/i.test(value);
+    return hasTime
+      ? date.toLocaleString("uk-UA", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   const toLocalDate = (value: string | null | undefined) => {
     if (!value) return undefined;
     const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1142,6 +1179,22 @@ export default function DesignTaskPage() {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return undefined;
     return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
+  const normalizeDeadlineTimeInput = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    if (digits.length === 0) return "";
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  };
+
+  const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+
+  const extractDeadlineTime = (value: string | null | undefined) => {
+    const match = value?.match(/t(\d{2}):(\d{2})/i);
+    if (!match) return "12:00";
+    const parsed = `${match[1]}:${match[2]}`;
+    return isValidDeadlineTime(parsed) ? parsed : "12:00";
   };
 
   const historyEvents = useMemo<DesignTaskHistoryEvent[]>(() => {
@@ -1704,11 +1757,13 @@ export default function DesignTaskPage() {
     }
   };
 
-  const updateTaskDeadline = async (nextDate: Date | null) => {
+  const updateTaskDeadline = async (nextDate: Date | null, nextTime?: string) => {
     if (!task || !effectiveTeamId) return;
     if (!ensureCanEdit()) return;
     const previousDeadline = task.designDeadline ?? null;
-    const nextDeadline = nextDate ? format(nextDate, "yyyy-MM-dd") : null;
+    const rawTime = (nextTime ?? deadlineTime).trim();
+    const normalizedTime = isValidDeadlineTime(rawTime) ? rawTime : "12:00";
+    const nextDeadline = nextDate ? `${format(nextDate, "yyyy-MM-dd")}T${normalizedTime}:00` : null;
     if (previousDeadline === nextDeadline) return;
 
     const nextMetadata: Record<string, unknown> = {
@@ -1755,7 +1810,7 @@ export default function DesignTaskPage() {
           userId,
           actorName: actorLabel,
           action: "design_task_deadline",
-          title: `Дедлайн: ${formatDeadlineLabel(previousDeadline)} → ${formatDeadlineLabel(nextDeadline)}`,
+          title: `Дедлайн: ${formatDeadlineDateTime(previousDeadline)} → ${formatDeadlineDateTime(nextDeadline)}`,
           metadata: {
             source: "design_task_deadline",
             from_deadline: previousDeadline,
@@ -1767,7 +1822,7 @@ export default function DesignTaskPage() {
         console.warn("Failed to log design task deadline event", logError);
       }
 
-      toast.success(nextDeadline ? `Дедлайн оновлено: ${formatDeadlineLabel(nextDeadline)}` : "Дедлайн очищено");
+      toast.success(nextDeadline ? `Дедлайн оновлено: ${formatDeadlineDateTime(nextDeadline)}` : "Дедлайн очищено");
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити дедлайн");
@@ -2505,22 +2560,56 @@ export default function DesignTaskPage() {
                   Дедлайн: {deadlineLabel.label}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+              <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                 <Calendar
                   mode="single"
                   selected={toLocalDate(task.designDeadline)}
                   onSelect={(date) => {
                     if (!date) return;
-                    void updateTaskDeadline(date);
+                    void updateTaskDeadline(date, deadlineTime);
                   }}
                   captionLayout="dropdown-buttons"
                   fromYear={new Date().getFullYear() - 3}
                   toYear={new Date().getFullYear() + 5}
+                  className="p-3"
+                  classNames={{
+                    head_cell: "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
+                    row: "flex w-full mt-1",
+                    day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
+                    day_selected:
+                      "rounded-full bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                  }}
                   initialFocus
                 />
+                <div className="space-y-2 border-t border-border/50 px-2 py-3">
+                  <Input
+                    value={deadlineTime}
+                    onChange={(event) => setDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
+                    onBlur={() => {
+                      setDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
+                    }}
+                    placeholder="HH:MM"
+                    className="h-9 text-sm"
+                  />
+                  <div className="grid w-full grid-cols-4 gap-1.5">
+                    {DEADLINE_PRESET_TIMES.map((time) => (
+                      <Button
+                        key={time}
+                        type="button"
+                        size="xs"
+                        variant={deadlineTime === time ? "secondary" : "outline"}
+                        className="w-full justify-center"
+                        onClick={() => setDeadlineTime(time)}
+                      >
+                        {time}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
                 <DateQuickActions
+                  fullWidth
                   onSelect={(date) => {
-                    void updateTaskDeadline(date ?? null);
+                    void updateTaskDeadline(date ?? null, deadlineTime);
                   }}
                 />
               </PopoverContent>
@@ -3046,26 +3135,60 @@ export default function DesignTaskPage() {
                   >
                     <CalendarClock className="h-4 w-4 mr-1" />
                     {task.designDeadline
-                      ? format(toLocalDate(task.designDeadline) ?? new Date(task.designDeadline), "d MMM yyyy", { locale: uk })
+                      ? formatDeadlineDateTime(task.designDeadline)
                       : "Оберіть дедлайн"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={toLocalDate(task.designDeadline)}
                     onSelect={(date) => {
                       if (!date) return;
-                      void updateTaskDeadline(date);
+                      void updateTaskDeadline(date, deadlineTime);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
                     toYear={new Date().getFullYear() + 5}
+                    className="p-3"
+                    classNames={{
+                      head_cell: "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
+                      row: "flex w-full mt-1",
+                      day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
+                      day_selected:
+                        "rounded-full bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                    }}
                     initialFocus
                   />
+                  <div className="space-y-2 border-t border-border/50 px-2 py-3">
+                    <Input
+                      value={deadlineTime}
+                      onChange={(event) => setDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
+                      onBlur={() => {
+                        setDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
+                      }}
+                      placeholder="HH:MM"
+                      className="h-9 text-sm"
+                    />
+                    <div className="grid w-full grid-cols-4 gap-1.5">
+                      {DEADLINE_PRESET_TIMES.map((time) => (
+                        <Button
+                          key={time}
+                          type="button"
+                          size="xs"
+                          variant={deadlineTime === time ? "secondary" : "outline"}
+                          className="w-full justify-center"
+                          onClick={() => setDeadlineTime(time)}
+                        >
+                          {time}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                   <DateQuickActions
+                    fullWidth
                     onSelect={(date) => {
-                      void updateTaskDeadline(date ?? null);
+                      void updateTaskDeadline(date ?? null, deadlineTime);
                     }}
                   />
                 </PopoverContent>

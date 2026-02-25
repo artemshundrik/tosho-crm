@@ -62,6 +62,37 @@ export type TeamMemberRow = {
 };
 
 export type CustomerRow = { id: string; name?: string | null; legal_name?: string | null };
+export type LeadSearchRow = {
+  id: string;
+  company_name?: string | null;
+  legal_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+export type LeadRow = {
+  id: string;
+  team_id?: string | null;
+  company_name?: string | null;
+  legal_name?: string | null;
+  logo_url?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_numbers?: string[] | null;
+  source?: string | null;
+  website?: string | null;
+  manager?: string | null;
+  iban?: string | null;
+  signatory_name?: string | null;
+  signatory_position?: string | null;
+  reminder_at?: string | null;
+  reminder_comment?: string | null;
+  event_name?: string | null;
+  event_at?: string | null;
+  event_comment?: string | null;
+  notes?: string | null;
+};
 
 function handleError(error: unknown) {
   if (!error) return;
@@ -188,6 +219,42 @@ export async function listCustomersBySearch(teamId: string, search: string) {
   const { data, error } = await query;
   handleError(error);
   return (data as CustomerRow[]) ?? [];
+}
+
+export async function listLeadsBySearch(teamId: string, search: string) {
+  const q = search.trim();
+  let query = supabase
+    .schema("tosho")
+    .from("leads")
+    .select("id,company_name,legal_name,first_name,last_name")
+    .eq("team_id", teamId)
+    .order("company_name", { ascending: true })
+    .limit(20);
+
+  if (q.length > 0) {
+    query = query.or(
+      `company_name.ilike.%${q}%,legal_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`
+    );
+  }
+
+  const { data, error } = await query;
+  handleError(error);
+  return (data as LeadSearchRow[]) ?? [];
+}
+
+export async function getLeadById(teamId: string, leadId: string) {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("leads")
+    .select(
+      "id,team_id,company_name,legal_name,logo_url,first_name,last_name,email,phone_numbers,source,website,manager,iban,signatory_name,signatory_position,reminder_at,reminder_comment,event_name,event_at,event_comment,notes"
+    )
+    .eq("team_id", teamId)
+    .eq("id", leadId)
+    .maybeSingle();
+
+  handleError(error);
+  return (data as LeadRow | null) ?? null;
 }
 
 export async function createQuote(params: {
