@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { PageHeader } from "@/components/app/headers/PageHeader";
-import { listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
+import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import {
   DropdownMenu,
@@ -47,6 +47,14 @@ type CustomerRow = {
   contact_phone?: string | null;
   contact_email?: string | null;
   contact_birthday?: string | null;
+  signatory_name?: string | null;
+  signatory_position?: string | null;
+  reminder_at?: string | null;
+  reminder_comment?: string | null;
+  event_name?: string | null;
+  event_at?: string | null;
+  event_comment?: string | null;
+  notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -64,8 +72,25 @@ type LeadRow = {
   source?: string | null;
   website?: string | null;
   manager?: string | null;
+  iban?: string | null;
+  signatory_name?: string | null;
+  signatory_position?: string | null;
+  reminder_at?: string | null;
+  reminder_comment?: string | null;
+  event_name?: string | null;
+  event_at?: string | null;
+  event_comment?: string | null;
+  notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type QuoteHistoryRow = {
+  id: string;
+  number?: string | null;
+  status?: string | null;
+  total?: number | null;
+  created_at?: string | null;
 };
 
 const OWNERSHIP_OPTIONS: OwnershipOption[] = [
@@ -152,6 +177,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
     contactPhone: "",
     contactEmail: "",
     contactBirthday: "",
+    signatoryName: "",
+    signatoryPosition: "",
+    reminderDate: "",
+    reminderTime: "",
+    reminderComment: "",
+    eventName: "",
+    eventDate: "",
+    eventComment: "",
+    notes: "",
   });
 
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
@@ -173,7 +207,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
     source: "",
     website: "",
     manager: "",
+    iban: "",
+    signatoryName: "",
+    signatoryPosition: "",
+    reminderDate: "",
+    reminderTime: "",
+    reminderComment: "",
+    eventName: "",
+    eventDate: "",
+    eventComment: "",
+    notes: "",
   });
+  const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
+  const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
 
   const defaultManagerName = useMemo(() => {
     const fullNameRaw = session?.user?.user_metadata?.full_name;
@@ -224,6 +270,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     () => new Map(teamMembers.map((member) => [member.label, member])),
     [teamMembers]
   );
+  const calculationQuotes = useMemo(
+    () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
+    [linkedQuotes]
+  );
+  const orderQuotes = useMemo(
+    () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() === "approved"),
+    [linkedQuotes]
+  );
 
   const renderManagerCell = (manager?: string | null) => {
     const managerLabel = manager?.trim();
@@ -260,7 +314,18 @@ function CustomersPage({ teamId }: { teamId: string }) {
       contactPhone: "",
       contactEmail: "",
       contactBirthday: "",
+      signatoryName: "",
+      signatoryPosition: "",
+      reminderDate: "",
+      reminderTime: "",
+      reminderComment: "",
+      eventName: "",
+      eventDate: "",
+      eventComment: "",
+      notes: "",
     });
+    setLinkedQuotes([]);
+    setLinkedQuotesLoading(false);
     setFormError(null);
   };
 
@@ -276,6 +341,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
       source: "",
       website: "",
       manager: defaultManagerName,
+      iban: "",
+      signatoryName: "",
+      signatoryPosition: "",
+      reminderDate: "",
+      reminderTime: "",
+      reminderComment: "",
+      eventName: "",
+      eventDate: "",
+      eventComment: "",
+      notes: "",
     });
     setLeadFormError(null);
   };
@@ -304,9 +379,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
       contactPhone: row.contact_phone ?? "",
       contactEmail: row.contact_email ?? "",
       contactBirthday: row.contact_birthday ?? "",
+      signatoryName: row.signatory_name ?? "",
+      signatoryPosition: row.signatory_position ?? "",
+      reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
+      reminderTime: row.reminder_at ? row.reminder_at.slice(11, 16) : "",
+      reminderComment: row.reminder_comment ?? "",
+      eventName: row.event_name ?? "",
+      eventDate: row.event_at ? row.event_at.slice(0, 10) : "",
+      eventComment: row.event_comment ?? "",
+      notes: row.notes ?? "",
     });
     setFormError(null);
     setDialogOpen(true);
+    void loadCustomerLinkedQuotes(row.id);
   };
 
   const openDelete = (row: CustomerRow) => {
@@ -334,9 +419,31 @@ function CustomersPage({ teamId }: { teamId: string }) {
       source: lead.source ?? "",
       website: lead.website ?? "",
       manager: lead.manager ?? defaultManagerName,
+      iban: lead.iban ?? "",
+      signatoryName: lead.signatory_name ?? "",
+      signatoryPosition: lead.signatory_position ?? "",
+      reminderDate: lead.reminder_at ? lead.reminder_at.slice(0, 10) : "",
+      reminderTime: lead.reminder_at ? lead.reminder_at.slice(11, 16) : "",
+      reminderComment: lead.reminder_comment ?? "",
+      eventName: lead.event_name ?? "",
+      eventDate: lead.event_at ? lead.event_at.slice(0, 10) : "",
+      eventComment: lead.event_comment ?? "",
+      notes: lead.notes ?? "",
     });
     setLeadFormError(null);
     setLeadDialogOpen(true);
+  };
+
+  const loadCustomerLinkedQuotes = async (customerId: string) => {
+    setLinkedQuotesLoading(true);
+    try {
+      const rows = await listCustomerQuotes({ teamId, customerId, limit: 100 });
+      setLinkedQuotes(rows as QuoteHistoryRow[]);
+    } catch {
+      setLinkedQuotes([]);
+    } finally {
+      setLinkedQuotesLoading(false);
+    }
   };
 
   const openDeleteLead = (lead: LeadRow) => {
@@ -433,6 +540,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
       contact_phone: form.contactPhone.trim() || null,
       contact_email: form.contactEmail.trim() || null,
       contact_birthday: form.contactBirthday || null,
+      signatory_name: form.signatoryName.trim() || null,
+      signatory_position: form.signatoryPosition.trim() || null,
+      reminder_at:
+        form.reminderDate && form.reminderTime
+          ? `${form.reminderDate}T${form.reminderTime}:00`
+          : null,
+      reminder_comment: form.reminderComment.trim() || null,
+      event_name: form.eventName.trim() || null,
+      event_at: form.eventDate || null,
+      event_comment: form.eventComment.trim() || null,
+      notes: form.notes.trim() || null,
     };
 
     const basePayload: Record<string, unknown> = {
@@ -454,6 +572,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.contact_phone;
       delete clone.contact_email;
       delete clone.contact_birthday;
+      delete clone.signatory_name;
+      delete clone.signatory_position;
+      delete clone.reminder_at;
+      delete clone.reminder_comment;
+      delete clone.event_name;
+      delete clone.event_at;
+      delete clone.event_comment;
+      delete clone.notes;
       return clone;
     };
 
@@ -546,6 +672,18 @@ function CustomersPage({ teamId }: { teamId: string }) {
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
       manager: managerValue || defaultManagerName || null,
+      iban: leadForm.iban.trim() || null,
+      signatory_name: leadForm.signatoryName.trim() || null,
+      signatory_position: leadForm.signatoryPosition.trim() || null,
+      reminder_at:
+        leadForm.reminderDate && leadForm.reminderTime
+          ? `${leadForm.reminderDate}T${leadForm.reminderTime}:00`
+          : null,
+      reminder_comment: leadForm.reminderComment.trim() || null,
+      event_name: leadForm.eventName.trim() || null,
+      event_at: leadForm.eventDate || null,
+      event_comment: leadForm.eventComment.trim() || null,
+      notes: leadForm.notes.trim() || null,
     };
 
     try {
@@ -894,6 +1032,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
           if (!open && !editingId) {
             resetForm();
           }
+          if (!open && editingId) {
+            setLinkedQuotes([]);
+            setLinkedQuotesLoading(false);
+          }
         }}
         form={form}
         setForm={setForm}
@@ -909,6 +1051,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
             : "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
         }
         submitLabel={editingId ? "Зберегти" : "Створити клієнта"}
+        calculations={calculationQuotes}
+        orders={orderQuotes}
+        linkedLoading={linkedQuotesLoading}
         onSubmit={handleSave}
       />
 
@@ -928,6 +1073,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
         title={leadEditingId ? "Редагувати ліда" : "Новий лід"}
         description={leadEditingId ? undefined : "Додайте всі дані ліда для першого контакту."}
         submitLabel={leadEditingId ? "Зберегти" : "Створити ліда"}
+        calculations={[]}
+        orders={[]}
+        linkedLoading={false}
         onSubmit={handleSaveLead}
       />
 

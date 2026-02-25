@@ -16,11 +16,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import {
   Building2,
+  CalendarIcon,
   Check,
   Image as ImageIcon,
   Percent,
@@ -54,6 +58,23 @@ export type CustomerFormState = {
   contactPhone: string;
   contactEmail: string;
   contactBirthday: string;
+  signatoryName: string;
+  signatoryPosition: string;
+  reminderDate: string;
+  reminderTime: string;
+  reminderComment: string;
+  eventName: string;
+  eventDate: string;
+  eventComment: string;
+  notes: string;
+};
+
+export type CustomerLinkedItem = {
+  id: string;
+  number?: string | null;
+  status?: string | null;
+  total?: number | null;
+  created_at?: string | null;
 };
 
 export type CustomerDialogProps = {
@@ -74,6 +95,9 @@ export type CustomerDialogProps = {
   description?: string;
   submitLabel?: string;
   onSubmit: () => void;
+  calculations?: CustomerLinkedItem[];
+  orders?: CustomerLinkedItem[];
+  linkedLoading?: boolean;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -105,6 +129,28 @@ const POSITION_OPTIONS = [
   "Секретар",
 ];
 
+const normalizeTime = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (!digits) return "";
+
+  let hour = 0;
+  let minute = 0;
+  if (digits.length <= 2) {
+    hour = Number(digits);
+  } else if (digits.length === 3) {
+    hour = Number(digits.slice(0, 1));
+    minute = Number(digits.slice(1));
+  } else {
+    hour = Number(digits.slice(0, 2));
+    minute = Number(digits.slice(2));
+  }
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
+  hour = Math.max(0, Math.min(23, hour));
+  minute = Math.max(0, Math.min(59, minute));
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   open,
   onOpenChange,
@@ -119,23 +165,50 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   description = "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
   submitLabel = "Створити клієнта",
   onSubmit,
+  calculations = [],
+  orders = [],
+  linkedLoading = false,
 }) => {
   const currentOwnership = ownershipOptions.find(
     (option) => option.value === form.ownershipType
   );
   const currentVat = vatOptions.find((option) => option.value === form.vatRate);
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
-
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [vatOpen, setVatOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
   const [birthdayOpen, setBirthdayOpen] = React.useState(false);
+  const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
+  const [eventDateOpen, setEventDateOpen] = React.useState(false);
+  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
+    "basic"
+  );
 
-  const birthdayDate = form.contactBirthday
-    ? new Date(form.contactBirthday)
-    : undefined;
+  const birthdayValue = React.useMemo(
+    () => (form.contactBirthday ? new Date(`${form.contactBirthday}T00:00:00`) : undefined),
+    [form.contactBirthday]
+  );
+  const reminderDateValue = React.useMemo(
+    () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
+    [form.reminderDate]
+  );
+  const eventDateValue = React.useMemo(
+    () => (form.eventDate ? new Date(`${form.eventDate}T00:00:00`) : undefined),
+    [form.eventDate]
+  );
+
   const selectedManager = teamMembers.find((member) => member.label === form.manager);
+
+  const handleReminderTimeChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    const masked = digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`;
+    setForm((prev) => ({ ...prev, reminderTime: masked }));
+  };
+
+  const handleReminderTimeBlur = () => {
+    setForm((prev) => ({ ...prev, reminderTime: normalizeTime(prev.reminderTime) }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -339,151 +412,394 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         </div>
 
         <div className="space-y-4">
-          <SectionHeader>Компанія</SectionHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Назва компанії *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Напр. ТОВ “Вектор”"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Юридична назва</Label>
-                <Input
-                  value={form.legalName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                  placeholder="Повна назва"
-                  className="h-9"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>ЄДРПОУ / ІПН</Label>
-                <Input
-                  value={form.taxId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
-                  placeholder="Код або ІПН"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>IBAN</Label>
-                <Input
-                  value={form.iban}
-                  onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
-                  placeholder="UA..."
-                  className="h-9"
-                />
-              </div>
-            </div>
-          </div>
+          <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
+            <TabsList className="sticky top-0 z-10 w-full justify-start bg-card/95 backdrop-blur">
+              <TabsTrigger value="basic">Основне</TabsTrigger>
+              <TabsTrigger value="requisites">Реквізити</TabsTrigger>
+              <TabsTrigger value="communication">Комунікація</TabsTrigger>
+              <TabsTrigger value="history">Історія</TabsTrigger>
+            </TabsList>
 
-          <SectionHeader>Контакти</SectionHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Контактна особа</Label>
-                <Input
-                  value={form.contactName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contactName: e.target.value }))}
-                  placeholder="Імʼя та прізвище"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Посада</Label>
-                <Select
-                  value={form.contactPosition}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, contactPosition: value }))}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Оберіть посаду" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POSITION_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Номер телефону</Label>
-                <Input
-                  value={form.contactPhone}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
-                  placeholder="+380..."
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={form.contactEmail}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
-                  placeholder="name@company.com"
-                  className="h-9"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Сайт</Label>
-                <Input
-                  value={form.website}
-                  onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
-                  placeholder="https://"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>День народження</Label>
-                <Popover open={birthdayOpen} onOpenChange={setBirthdayOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "h-9 w-full justify-between px-3 text-sm font-normal",
-                        !form.contactBirthday && "text-muted-foreground"
-                      )}
-                    >
-                      {form.contactBirthday
-                        ? format(birthdayDate ?? new Date(), "dd.MM.yyyy", { locale: uk })
-                        : "dd.mm.yyyy"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={birthdayDate}
-                      onSelect={(date) => {
-                        if (!date) return;
-                        setForm((prev) => ({
-                          ...prev,
-                          contactBirthday: format(date, "yyyy-MM-dd"),
-                        }));
-                        setBirthdayOpen(false);
-                      }}
-                      captionLayout="dropdown-buttons"
-                      fromYear={currentYear - 100}
-                      toYear={currentYear}
-                      initialFocus
+            <TabsContent value="basic" className="space-y-4 mt-4">
+              <SectionHeader>Компанія</SectionHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Назва компанії *</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Напр. ТОВ “Вектор”"
+                      className="h-9"
                     />
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Юридична назва</Label>
+                    <Input
+                      value={form.legalName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
+                      placeholder="Повна назва"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>ЄДРПОУ / ІПН</Label>
+                    <Input
+                      value={form.taxId}
+                      onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                      placeholder="Код або ІПН"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Сайт</Label>
+                    <Input
+                      value={form.website}
+                      onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                      placeholder="https://"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+
+              <SectionHeader>Контакти</SectionHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Контактна особа</Label>
+                    <Input
+                      value={form.contactName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, contactName: e.target.value }))}
+                      placeholder="Імʼя та прізвище"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Посада</Label>
+                    <Select
+                      value={form.contactPosition}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, contactPosition: value }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть посаду" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {POSITION_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Номер телефону</Label>
+                    <Input
+                      value={form.contactPhone}
+                      onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                      placeholder="+380..."
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={form.contactEmail}
+                      onChange={(e) => setForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                      placeholder="name@company.com"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>День народження</Label>
+                    <Popover open={birthdayOpen} onOpenChange={setBirthdayOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-9 w-full justify-start px-3 text-sm font-normal",
+                            !form.contactBirthday && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {form.contactBirthday && birthdayValue
+                            ? format(birthdayValue, "d MMM yyyy", { locale: uk })
+                            : "Оберіть дату"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={birthdayValue}
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              contactBirthday: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setBirthdayOpen(false);
+                          }}
+                          captionLayout="dropdown-buttons"
+                          fromYear={currentYear - 100}
+                          toYear={currentYear}
+                          initialFocus
+                        />
+                        <DateQuickActions
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              contactBirthday: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setBirthdayOpen(false);
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="requisites" className="space-y-4 mt-4">
+              <SectionHeader>Реквізити</SectionHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>IBAN</Label>
+                    <Input
+                      value={form.iban}
+                      onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
+                      placeholder="UA..."
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Підписант</Label>
+                    <Input
+                      value={form.signatoryName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, signatoryName: e.target.value }))}
+                      placeholder="ПІБ підписанта"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Посада підписанта</Label>
+                  <Input
+                    value={form.signatoryPosition}
+                    onChange={(e) => setForm((prev) => ({ ...prev, signatoryPosition: e.target.value }))}
+                    placeholder="Напр. Директор"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="communication" className="space-y-4 mt-4">
+              <SectionHeader>Нагадування</SectionHeader>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Дата</Label>
+                  <Popover open={reminderDateOpen} onOpenChange={setReminderDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "h-9 w-full justify-start px-3 text-sm font-normal",
+                          !form.reminderDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {form.reminderDate && reminderDateValue
+                          ? format(reminderDateValue, "d MMM yyyy", { locale: uk })
+                          : "Оберіть дату"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={reminderDateValue}
+                        onSelect={(date) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            reminderDate: date ? format(date, "yyyy-MM-dd") : "",
+                          }));
+                          setReminderDateOpen(false);
+                        }}
+                        captionLayout="dropdown-buttons"
+                        fromYear={currentYear - 3}
+                        toYear={currentYear + 5}
+                        initialFocus
+                      />
+                      <DateQuickActions
+                        onSelect={(date) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            reminderDate: date ? format(date, "yyyy-MM-dd") : "",
+                          }));
+                          setReminderDateOpen(false);
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Час</Label>
+                  <Input
+                    value={form.reminderTime}
+                    onChange={(e) => handleReminderTimeChange(e.target.value)}
+                    onBlur={handleReminderTimeBlur}
+                    placeholder="HH:MM"
+                    inputMode="numeric"
+                    className="h-9"
+                  />
+                </div>
+                <div className="grid gap-2 col-span-2">
+                  <Label>Коментар нагадування</Label>
+                  <Textarea
+                    value={form.reminderComment}
+                    onChange={(e) => setForm((prev) => ({ ...prev, reminderComment: e.target.value }))}
+                    placeholder="Що треба зробити"
+                    className="min-h-20"
+                  />
+                </div>
+              </div>
+
+              <SectionHeader>Подія</SectionHeader>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Назва події</Label>
+                  <Input
+                    value={form.eventName}
+                    onChange={(e) => setForm((prev) => ({ ...prev, eventName: e.target.value }))}
+                    placeholder="Річниця, конференція, захід..."
+                    className="h-9"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Дата події</Label>
+                  <Popover open={eventDateOpen} onOpenChange={setEventDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "h-9 w-full justify-start px-3 text-sm font-normal",
+                          !form.eventDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {form.eventDate && eventDateValue
+                          ? format(eventDateValue, "d MMM yyyy", { locale: uk })
+                          : "Оберіть дату"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={eventDateValue}
+                        onSelect={(date) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            eventDate: date ? format(date, "yyyy-MM-dd") : "",
+                          }));
+                          setEventDateOpen(false);
+                        }}
+                        captionLayout="dropdown-buttons"
+                        fromYear={currentYear - 3}
+                        toYear={currentYear + 5}
+                        initialFocus
+                      />
+                      <DateQuickActions
+                        onSelect={(date) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            eventDate: date ? format(date, "yyyy-MM-dd") : "",
+                          }));
+                          setEventDateOpen(false);
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid gap-2 col-span-2">
+                  <Label>Коментар події</Label>
+                  <Textarea
+                    value={form.eventComment}
+                    onChange={(e) => setForm((prev) => ({ ...prev, eventComment: e.target.value }))}
+                    placeholder="Контекст події"
+                    className="min-h-20"
+                  />
+                </div>
+              </div>
+
+              <SectionHeader>Коментарі</SectionHeader>
+              <div className="grid gap-2">
+                <Label>Загальні коментарі</Label>
+                <Textarea
+                  value={form.notes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Що замовляє, коли, важливі деталі комунікації..."
+                  className="min-h-24"
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="history" className="space-y-4 mt-4">
+              <SectionHeader>Історія</SectionHeader>
+              <Tabs defaultValue="calculations" className="w-full">
+                <TabsList className="w-full justify-start">
+                  <TabsTrigger value="calculations">Прорахунки</TabsTrigger>
+                  <TabsTrigger value="orders">Замовлення</TabsTrigger>
+                </TabsList>
+                <TabsContent value="calculations" className="mt-3">
+                  {linkedLoading ? (
+                    <div className="text-sm text-muted-foreground">Завантаження...</div>
+                  ) : calculations.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {calculations.map((row) => (
+                        <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
+                          <div className="font-medium">{row.number ?? "Без номера"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.status ?? "new"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="orders" className="mt-3">
+                  {linkedLoading ? (
+                    <div className="text-sm text-muted-foreground">Завантаження...</div>
+                  ) : orders.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {orders.map((row) => (
+                        <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
+                          <div className="font-medium">{row.number ?? "Без номера"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.status ?? "approved"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </TabsContent>
+          </Tabs>
 
           {error ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

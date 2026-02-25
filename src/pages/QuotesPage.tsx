@@ -275,6 +275,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     contactPhone: "",
     contactEmail: "",
     contactBirthday: "",
+    signatoryName: "",
+    signatoryPosition: "",
+    reminderDate: "",
+    reminderTime: "",
+    reminderComment: "",
+    eventName: "",
+    eventDate: "",
+    eventComment: "",
+    notes: "",
   });
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
@@ -1276,6 +1285,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       contactPhone: "",
       contactEmail: "",
       contactBirthday: "",
+      signatoryName: "",
+      signatoryPosition: "",
+      reminderDate: "",
+      reminderTime: "",
+      reminderComment: "",
+      eventName: "",
+      eventDate: "",
+      eventComment: "",
+      notes: "",
     });
     setCustomerCreateError(null);
   };
@@ -1316,6 +1334,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       contact_phone: customerForm.contactPhone.trim() || null,
       contact_email: customerForm.contactEmail.trim() || null,
       contact_birthday: customerForm.contactBirthday || null,
+      signatory_name: customerForm.signatoryName.trim() || null,
+      signatory_position: customerForm.signatoryPosition.trim() || null,
+      reminder_at:
+        customerForm.reminderDate && customerForm.reminderTime
+          ? `${customerForm.reminderDate}T${customerForm.reminderTime}:00`
+          : null,
+      reminder_comment: customerForm.reminderComment.trim() || null,
+      event_name: customerForm.eventName.trim() || null,
+      event_at: customerForm.eventDate || null,
+      event_comment: customerForm.eventComment.trim() || null,
+      notes: customerForm.notes.trim() || null,
     };
 
     try {

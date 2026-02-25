@@ -13,9 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
-import { Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
+import { format } from "date-fns";
+import { uk } from "date-fns/locale";
+import { CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
 
 export type LeadFormState = {
   companyName: string;
@@ -28,6 +34,24 @@ export type LeadFormState = {
   website: string;
   logoUrl: string;
   manager: string;
+  iban: string;
+  signatoryName: string;
+  signatoryPosition: string;
+  reminderDate: string;
+  reminderTime: string;
+  reminderComment: string;
+  eventName: string;
+  eventDate: string;
+  eventComment: string;
+  notes: string;
+};
+
+export type LeadLinkedItem = {
+  id: string;
+  number?: string | null;
+  status?: string | null;
+  total?: number | null;
+  created_at?: string | null;
 };
 
 export type LeadDialogProps = {
@@ -46,6 +70,9 @@ export type LeadDialogProps = {
   description?: string;
   submitLabel?: string;
   onSubmit: () => void;
+  calculations?: LeadLinkedItem[];
+  orders?: LeadLinkedItem[];
+  linkedLoading?: boolean;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -66,6 +93,28 @@ const getInitials = (value?: string) => {
   return (first + last).toUpperCase();
 };
 
+const normalizeTime = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (!digits) return "";
+
+  let hour = 0;
+  let minute = 0;
+  if (digits.length <= 2) {
+    hour = Number(digits);
+  } else if (digits.length === 3) {
+    hour = Number(digits.slice(0, 1));
+    minute = Number(digits.slice(1));
+  } else {
+    hour = Number(digits.slice(0, 2));
+    minute = Number(digits.slice(2));
+  }
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
+  hour = Math.max(0, Math.min(23, hour));
+  minute = Math.max(0, Math.min(59, minute));
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
 export const LeadDialog: React.FC<LeadDialogProps> = ({
   open,
   onOpenChange,
@@ -78,12 +127,30 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   description = "Додайте контакт ліда для подальшої роботи.",
   submitLabel = "Створити ліда",
   onSubmit,
+  calculations = [],
+  orders = [],
+  linkedLoading = false,
 }) => {
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
+  const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
+  const [eventDateOpen, setEventDateOpen] = React.useState(false);
+  const [quickMode, setQuickMode] = React.useState(true);
+  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
+    "basic"
+  );
+  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
   const hasManagerInList = teamMembers.some((member) => member.label === form.manager);
   const selectedManager = teamMembers.find((member) => member.label === form.manager);
+  const reminderDateValue = React.useMemo(
+    () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
+    [form.reminderDate]
+  );
+  const eventDateValue = React.useMemo(
+    () => (form.eventDate ? new Date(`${form.eventDate}T00:00:00`) : undefined),
+    [form.eventDate]
+  );
 
   const updatePhone = (index: number, value: string) => {
     setForm((prev) => ({
@@ -101,6 +168,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
       if (prev.phones.length <= 1) return prev;
       return { ...prev, phones: prev.phones.filter((_, i) => i !== index) };
     });
+  };
+
+  const handleReminderTimeChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    const masked = digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`;
+    setForm((prev) => ({ ...prev, reminderTime: masked }));
+  };
+
+  const handleReminderTimeBlur = () => {
+    setForm((prev) => ({ ...prev, reminderTime: normalizeTime(prev.reminderTime) }));
   };
 
   return (
@@ -244,124 +321,482 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
         </div>
 
         <div className="space-y-4">
-          <SectionHeader>Компанія</SectionHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Назва компанії *</Label>
-                <Input
-                  value={form.companyName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                  placeholder="Назва компанії"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Юридична назва</Label>
-                <Input
-                  value={form.legalName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                  placeholder="Повна юридична назва"
-                  className="h-9"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Сайт компанії</Label>
-                <Input
-                  value={form.website}
-                  onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
-                  placeholder="https://"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Джерело *</Label>
-                <Input
-                  value={form.source}
-                  onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
-                  placeholder="Звідки отримали контакт"
-                  className="h-9"
-                />
-              </div>
+          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 p-2">
+            <span className="text-xs text-muted-foreground">Режим форми</span>
+            <div className="inline-flex items-center gap-1 rounded-md bg-background p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={quickMode ? "secondary" : "ghost"}
+                className="h-7 px-2 text-xs"
+                onClick={() => {
+                  setQuickMode(true);
+                  setSection("basic");
+                }}
+              >
+                Швидко
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={!quickMode ? "secondary" : "ghost"}
+                className="h-7 px-2 text-xs"
+                onClick={() => setQuickMode(false)}
+              >
+                Повна картка
+              </Button>
             </div>
           </div>
 
-          <SectionHeader>Контакти</SectionHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Імʼя *</Label>
-                <Input
-                  value={form.firstName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
-                  placeholder="Імʼя"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Прізвище</Label>
-                <Input
-                  value={form.lastName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
-                  placeholder="Прізвище"
-                  className="h-9"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  placeholder="name@company.com"
-                  className="h-9"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <Label>Телефон *</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={addPhone}
-                  >
-                    <PlusCircle className="h-4 w-4 mr-1" />
-                    Додати номер
-                  </Button>
+          {quickMode ? (
+            <div className="space-y-4">
+              <SectionHeader>Основне</SectionHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Назва компанії *</Label>
+                    <Input
+                      value={form.companyName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                      placeholder="Назва компанії"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Джерело *</Label>
+                    <Input
+                      value={form.source}
+                      onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
+                      placeholder="Звідки отримали контакт"
+                      className="h-9"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {form.phones.map((phone, index) => (
-                    <div key={`phone-${index}`} className="flex items-center gap-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Імʼя *</Label>
+                    <Input
+                      value={form.firstName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                      placeholder="Імʼя"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Прізвище</Label>
+                    <Input
+                      value={form.lastName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                      placeholder="Прізвище"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="name@company.com"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Телефон *</Label>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={addPhone}>
+                        <PlusCircle className="mr-1 h-4 w-4" />
+                        Додати номер
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {form.phones.map((phone, index) => (
+                        <div key={`phone-${index}`} className="flex items-center gap-2">
+                          <Input
+                            value={phone}
+                            onChange={(e) => updatePhone(index, e.target.value)}
+                            placeholder="+380..."
+                            className="h-9"
+                          />
+                          {form.phones.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 shrink-0"
+                              onClick={() => removePhone(index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
+                Відкрити повну картку
+              </Button>
+            </div>
+          ) : (
+            <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
+              <TabsList className="sticky top-0 z-10 w-full justify-start bg-card/95 backdrop-blur">
+                <TabsTrigger value="basic">Основне</TabsTrigger>
+                <TabsTrigger value="requisites">Реквізити</TabsTrigger>
+                <TabsTrigger value="communication">Комунікація</TabsTrigger>
+                <TabsTrigger value="history">Історія</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="basic" className="space-y-4 mt-4">
+                <SectionHeader>Компанія</SectionHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Назва компанії *</Label>
                       <Input
-                        value={phone}
-                        onChange={(e) => updatePhone(index, e.target.value)}
-                        placeholder="+380..."
+                        value={form.companyName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                        placeholder="Назва компанії"
                         className="h-9"
                       />
-                      {form.phones.length > 1 ? (
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Юридична назва</Label>
+                      <Input
+                        value={form.legalName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
+                        placeholder="Повна юридична назва"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Сайт компанії</Label>
+                      <Input
+                        value={form.website}
+                        onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                        placeholder="https://"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Джерело *</Label>
+                      <Input
+                        value={form.source}
+                        onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
+                        placeholder="Звідки отримали контакт"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <SectionHeader>Контакти</SectionHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Імʼя *</Label>
+                      <Input
+                        value={form.firstName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                        placeholder="Імʼя"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Прізвище</Label>
+                      <Input
+                        value={form.lastName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                        placeholder="Прізвище"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        value={form.email}
+                        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                        placeholder="name@company.com"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Телефон *</Label>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={addPhone}>
+                          <PlusCircle className="mr-1 h-4 w-4" />
+                          Додати номер
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {form.phones.map((phone, index) => (
+                          <div key={`phone-${index}`} className="flex items-center gap-2">
+                            <Input
+                              value={phone}
+                              onChange={(e) => updatePhone(index, e.target.value)}
+                              placeholder="+380..."
+                              className="h-9"
+                            />
+                            {form.phones.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 shrink-0"
+                                onClick={() => removePhone(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="requisites" className="space-y-4 mt-4">
+                <SectionHeader>Реквізити</SectionHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>IBAN</Label>
+                      <Input
+                        value={form.iban}
+                        onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
+                        placeholder="UA..."
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Підписант</Label>
+                      <Input
+                        value={form.signatoryName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, signatoryName: e.target.value }))}
+                        placeholder="ПІБ підписанта"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Посада підписанта</Label>
+                    <Input
+                      value={form.signatoryPosition}
+                      onChange={(e) => setForm((prev) => ({ ...prev, signatoryPosition: e.target.value }))}
+                      placeholder="Напр. Директор"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="communication" className="space-y-4 mt-4">
+                <SectionHeader>Нагадування</SectionHeader>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Дата</Label>
+                    <Popover open={reminderDateOpen} onOpenChange={setReminderDateOpen}>
+                      <PopoverTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => removePhone(index)}
+                          variant="outline"
+                          className={cn(
+                            "h-9 w-full justify-start px-3 text-sm font-normal",
+                            !form.reminderDate && "text-muted-foreground"
+                          )}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {form.reminderDate && reminderDateValue
+                            ? format(reminderDateValue, "d MMM yyyy", { locale: uk })
+                            : "Оберіть дату"}
                         </Button>
-                      ) : null}
+                      </PopoverTrigger>
+                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={reminderDateValue}
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              reminderDate: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setReminderDateOpen(false);
+                          }}
+                          captionLayout="dropdown-buttons"
+                          fromYear={currentYear - 3}
+                          toYear={currentYear + 5}
+                          initialFocus
+                        />
+                        <DateQuickActions
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              reminderDate: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setReminderDateOpen(false);
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Час</Label>
+                    <Input
+                      value={form.reminderTime}
+                      onChange={(e) => handleReminderTimeChange(e.target.value)}
+                      onBlur={handleReminderTimeBlur}
+                      placeholder="HH:MM"
+                      inputMode="numeric"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2 col-span-2">
+                    <Label>Коментар нагадування</Label>
+                    <Textarea
+                      value={form.reminderComment}
+                      onChange={(e) => setForm((prev) => ({ ...prev, reminderComment: e.target.value }))}
+                      placeholder="Що треба зробити"
+                      className="min-h-20"
+                    />
+                  </div>
+                </div>
+
+                <SectionHeader>Подія</SectionHeader>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Назва події</Label>
+                    <Input
+                      value={form.eventName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, eventName: e.target.value }))}
+                      placeholder="Річниця, конференція, захід..."
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Дата події</Label>
+                    <Popover open={eventDateOpen} onOpenChange={setEventDateOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-9 w-full justify-start px-3 text-sm font-normal",
+                            !form.eventDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {form.eventDate && eventDateValue
+                            ? format(eventDateValue, "d MMM yyyy", { locale: uk })
+                            : "Оберіть дату"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={eventDateValue}
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              eventDate: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setEventDateOpen(false);
+                          }}
+                          captionLayout="dropdown-buttons"
+                          fromYear={currentYear - 3}
+                          toYear={currentYear + 5}
+                          initialFocus
+                        />
+                        <DateQuickActions
+                          onSelect={(date) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              eventDate: date ? format(date, "yyyy-MM-dd") : "",
+                            }));
+                            setEventDateOpen(false);
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="grid gap-2 col-span-2">
+                    <Label>Коментар події</Label>
+                    <Textarea
+                      value={form.eventComment}
+                      onChange={(e) => setForm((prev) => ({ ...prev, eventComment: e.target.value }))}
+                      placeholder="Контекст події"
+                      className="min-h-20"
+                    />
+                  </div>
+                </div>
+
+                <SectionHeader>Коментарі</SectionHeader>
+                <div className="grid gap-2">
+                  <Label>Загальні коментарі</Label>
+                  <Textarea
+                    value={form.notes}
+                    onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Що замовляє, коли, важливі деталі комунікації..."
+                    className="min-h-24"
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="history" className="space-y-4 mt-4">
+                <SectionHeader>Історія</SectionHeader>
+                <Tabs defaultValue="calculations" className="w-full">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="calculations">Прорахунки</TabsTrigger>
+              <TabsTrigger value="orders">Замовлення</TabsTrigger>
+            </TabsList>
+            <TabsContent value="calculations" className="mt-3">
+              {linkedLoading ? (
+                <div className="text-sm text-muted-foreground">Завантаження...</div>
+              ) : calculations.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
+              ) : (
+                <div className="space-y-2">
+                  {calculations.map((row) => (
+                    <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
+                      <div className="font-medium">{row.number ?? "Без номера"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.status ?? "new"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          </div>
+              )}
+            </TabsContent>
+            <TabsContent value="orders" className="mt-3">
+              {linkedLoading ? (
+                <div className="text-sm text-muted-foreground">Завантаження...</div>
+              ) : orders.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
+              ) : (
+                <div className="space-y-2">
+                  {orders.map((row) => (
+                    <div key={row.id} className="rounded-lg border border-border/50 px-3 py-2 text-sm">
+                      <div className="font-medium">{row.number ?? "Без номера"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.status ?? "approved"} · {row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+                </Tabs>
+              </TabsContent>
+            </Tabs>
+          )}
 
           {error ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

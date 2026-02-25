@@ -14,12 +14,30 @@ create table if not exists tosho.leads (
   source text not null,
   website text,
   manager text,
+  iban text,
+  signatory_name text,
+  signatory_position text,
+  reminder_at timestamptz,
+  reminder_comment text,
+  event_name text,
+  event_at date,
+  event_comment text,
+  notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table if exists tosho.leads
   add column if not exists logo_url text,
+  add column if not exists iban text,
+  add column if not exists signatory_name text,
+  add column if not exists signatory_position text,
+  add column if not exists reminder_at timestamptz,
+  add column if not exists reminder_comment text,
+  add column if not exists event_name text,
+  add column if not exists event_at date,
+  add column if not exists event_comment text,
+  add column if not exists notes text,
   alter column last_name drop not null,
   alter column email drop not null;
 
