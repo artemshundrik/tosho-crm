@@ -24,7 +24,6 @@ import {
   addQuotesToQuoteSet,
   listCustomersBySearch,
   listLeadsBySearch,
-  getLeadById,
   createQuote,
   createQuoteSet,
   deleteQuote,
@@ -1069,80 +1068,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return `${y}-${m}-${d}`;
       };
       const deadlineAt = data.deadline ? formatDateOnly(data.deadline) : null;
-      let resolvedCustomerId = data.customerId!;
-      if (data.customerType === "lead") {
-        const lead = await getLeadById(teamId, data.customerId!);
-        if (!lead) {
-          throw new Error("Не вдалося знайти ліда для створення прорахунку.");
-        }
-
-        const fullContactName = [lead.first_name?.trim(), lead.last_name?.trim()]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const insertCustomerPayload: Record<string, unknown> = {
-          team_id: teamId,
-          name: lead.company_name?.trim() || lead.legal_name?.trim() || "Без назви",
-          legal_name: lead.legal_name?.trim() || null,
-          manager: lead.manager?.trim() || currentUserManagerLabel || null,
-          website: lead.website?.trim() || null,
-          iban: lead.iban?.trim() || null,
-          logo_url: lead.logo_url?.trim() || null,
-          contact_name: fullContactName || lead.first_name?.trim() || null,
-          contact_phone: lead.phone_numbers?.find((phone) => phone.trim().length > 0)?.trim() || null,
-          contact_email: lead.email?.trim() || null,
-          signatory_name: lead.signatory_name?.trim() || null,
-          signatory_position: lead.signatory_position?.trim() || null,
-          reminder_at: lead.reminder_at || null,
-          reminder_comment: lead.reminder_comment?.trim() || null,
-          event_name: lead.event_name?.trim() || null,
-          event_at: lead.event_at || null,
-          event_comment: lead.event_comment?.trim() || null,
-          notes: lead.notes?.trim() || null,
-        };
-
-        let createdCustomer: CustomerRow | null = null;
-        const insertWithPayload = async (payload: Record<string, unknown>) => {
-          const { data: inserted, error } = await supabase
-            .schema("tosho")
-            .from("customers")
-            .insert(payload)
-            .select("id,name,legal_name")
-            .single();
-          if (error) throw error;
-          return (inserted as CustomerRow) ?? null;
-        };
-
-        try {
-          createdCustomer = await insertWithPayload(insertCustomerPayload);
-        } catch (error: unknown) {
-          const message = getErrorMessage(error, "").toLowerCase();
-          if (message.includes("column") && message.includes("logo_url")) {
-            const fallbackPayload = { ...insertCustomerPayload };
-            delete fallbackPayload.logo_url;
-            createdCustomer = await insertWithPayload(fallbackPayload);
-          } else {
-            throw error;
-          }
-        }
-
-        if (!createdCustomer?.id) {
-          throw new Error("Не вдалося створити клієнта з ліда.");
-        }
-        const createdCustomerRow = createdCustomer;
-        resolvedCustomerId = createdCustomerRow.id;
-        setCustomers((prev) => {
-          const exists = prev.some(
-            (item) => item.id === createdCustomerRow.id && (item.entityType ?? "customer") === "customer"
-          );
-          if (exists) return prev;
-          return [{ ...createdCustomerRow, entityType: "customer" }, ...prev];
-        });
-      }
+      const selectedParty = customers.find(
+        (item) => item.id === data.customerId && (item.entityType ?? "customer") === (data.customerType ?? "customer")
+      );
+      const customerIdForQuote = data.customerType === "lead" ? null : data.customerId ?? null;
+      const quoteTitleFromLead =
+        data.customerType === "lead"
+          ? (selectedParty?.name || selectedParty?.legal_name || "Лід").trim()
+          : null;
 
       const created = await createQuote({
         teamId,
-        customerId: resolvedCustomerId,
+        customerId: customerIdForQuote,
+        title: quoteTitleFromLead,
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,

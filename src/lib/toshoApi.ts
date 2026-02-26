@@ -259,7 +259,8 @@ export async function getLeadById(teamId: string, leadId: string) {
 
 export async function createQuote(params: {
   teamId: string;
-  customerId: string;
+  customerId?: string | null;
+  title?: string | null;
   quoteType?: string | null;
   printType?: string | null;
   deliveryType?: string | null;
@@ -277,7 +278,8 @@ export async function createQuote(params: {
 
   const payload: Record<string, unknown> = {
     team_id: params.teamId,
-    customer_id: params.customerId,
+    customer_id: params.customerId ?? null,
+    title: params.title ?? null,
     comment: params.comment ?? null,
     design_brief: params.designBrief ?? null,
     currency: params.currency ?? null,
