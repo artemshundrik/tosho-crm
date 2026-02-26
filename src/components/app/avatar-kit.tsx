@@ -60,6 +60,31 @@ type PlayerAvatarProps = {
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>["referrerPolicy"];
 };
 
+type EntityAvatarProps = {
+  src?: string | null;
+  name?: string | null;
+  fallback?: string;
+  size?: number;
+  className?: string;
+  fallbackClassName?: string;
+};
+
+const ENTITY_AVATAR_TONES = [
+  { shell: "border-sky-400/40 bg-sky-500/10", fallback: "bg-sky-500/25 text-sky-100" },
+  { shell: "border-emerald-400/40 bg-emerald-500/10", fallback: "bg-emerald-500/25 text-emerald-100" },
+  { shell: "border-amber-400/40 bg-amber-500/10", fallback: "bg-amber-500/25 text-amber-100" },
+  { shell: "border-rose-400/40 bg-rose-500/10", fallback: "bg-rose-500/25 text-rose-100" },
+  { shell: "border-violet-400/40 bg-violet-500/10", fallback: "bg-violet-500/25 text-violet-100" },
+  { shell: "border-cyan-400/40 bg-cyan-500/10", fallback: "bg-cyan-500/25 text-cyan-100" },
+];
+
+function getEntityAvatarTone(seed?: string | null) {
+  const normalized = (seed ?? "").trim().toLowerCase();
+  if (!normalized) return ENTITY_AVATAR_TONES[0];
+  const hash = Array.from(normalized).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return ENTITY_AVATAR_TONES[hash % ENTITY_AVATAR_TONES.length];
+}
+
 export function AvatarBase({
   src,
   name,
@@ -174,6 +199,27 @@ export function PlayerAvatar({
       loading={loading}
       referrerPolicy={referrerPolicy}
       imageStyle={getPlayerAvatarImageStyle(size)}
+    />
+  );
+}
+
+export function EntityAvatar({
+  src,
+  name,
+  fallback,
+  size = 36,
+  className,
+  fallbackClassName,
+}: EntityAvatarProps) {
+  const tone = getEntityAvatarTone(name ?? fallback ?? "");
+  return (
+    <AvatarBase
+      src={src}
+      name={name ?? undefined}
+      fallback={fallback}
+      size={size}
+      className={cn("shrink-0", tone.shell, className)}
+      fallbackClassName={cn("text-xs font-semibold", tone.fallback, fallbackClassName)}
     />
   );
 }

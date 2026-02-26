@@ -36,7 +36,7 @@ import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
@@ -3255,22 +3255,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     Замовник
                   </div>
                   <div className="flex items-center gap-3">
-                    {quote.customer_logo_url ? (
-                      <img
-                        src={quote.customer_logo_url}
-                        alt={quote.customer_name ?? "logo"}
-                        className="h-10 w-10 rounded-full object-cover border border-border/60 bg-muted/20"
-                        loading="lazy"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
-                        {getInitials(quote.customer_name)}
-                      </div>
-                    )}
+                    <EntityAvatar
+                      src={quote.customer_logo_url ?? null}
+                      name={quote.customer_name ?? "Замовник"}
+                      fallback={getInitials(quote.customer_name)}
+                      size={40}
+                    />
                     <div className="font-semibold text-base">{quote.customer_name ?? "Не вказано"}</div>
                   </div>
                 </div>

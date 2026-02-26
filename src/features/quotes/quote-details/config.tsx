@@ -245,12 +245,12 @@ export function formatCurrency(value: number | null | undefined, currency?: stri
 }
 
 export function getInitials(value?: string | null) {
-  if (!value) return "Не вказано";
+  if (!value) return "?";
   const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "Не вказано";
+  if (parts.length === 0) return "?";
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
-  return (first + last).toUpperCase();
+  return (first + last).toUpperCase() || "?";
 }
 
 export function minutesAgo(value: string | null | undefined) {

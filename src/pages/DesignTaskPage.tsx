@@ -44,7 +44,7 @@ import {
   Check,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
@@ -2675,12 +2675,11 @@ export default function DesignTaskPage() {
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                 <div className="text-xs text-muted-foreground mb-1">Клієнт</div>
                 <div className="flex items-center gap-2.5">
-                  <AvatarBase
+                  <EntityAvatar
                     src={task.customerLogoUrl ?? null}
                     name={task.customerName ?? undefined}
                     fallback={getInitials(task.customerName)}
                     size={28}
-                    className="border-border/70"
                   />
                   <div className="font-medium">{task.customerName ?? "Не вказано"}</div>
                 </div>

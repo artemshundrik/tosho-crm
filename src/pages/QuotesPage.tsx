@@ -46,7 +46,7 @@ import type { NewQuoteFormData } from "@/components/quotes";
 import { CustomerDialog } from "@/components/customers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { 
   Search, 
   X, 
@@ -458,12 +458,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   void customerLabel;
 
   const getInitials = (name?: string | null) => {
-    if (!name) return "Не вказано";
+    if (!name) return "?";
     const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "Не вказано";
+    if (parts.length === 0) return "?";
     const first = parts[0][0] ?? "";
     const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
-    return (first + last).toUpperCase();
+    return (first + last).toUpperCase() || "?";
   };
 
   const getDateLabels = (value?: string | null) => {
@@ -3588,18 +3588,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2 min-w-0">
-                        {set.customer_logo_url ? (
-                          <img
-                            src={set.customer_logo_url}
-                            alt={set.customer_name ?? "logo"}
-                            className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20 shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                            {getInitials(set.customer_name)}
-                          </div>
-                        )}
+                        <EntityAvatar
+                          src={set.customer_logo_url ?? null}
+                          name={set.customer_name ?? "Замовник"}
+                          fallback={getInitials(set.customer_name)}
+                          size={28}
+                        />
                         <span className="truncate">{set.name}</span>
                       </div>
                       {set.preview_quote_numbers && set.preview_quote_numbers.length > 0 ? (
@@ -3921,22 +3915,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                         <TableCell className="font-medium max-w-[260px]">
                           <div className="flex items-center gap-3 min-w-0">
-                            {row.customer_logo_url ? (
-                              <img
-                                src={row.customer_logo_url}
-                                alt={row.customer_name ?? "logo"}
-                                className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  target.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground flex items-center justify-center">
-                                {getInitials(row.customer_name)}
-                              </div>
-                            )}
+                            <EntityAvatar
+                              src={row.customer_logo_url ?? null}
+                              name={row.customer_name ?? "Замовник"}
+                              fallback={getInitials(row.customer_name)}
+                              size={36}
+                            />
                             <span className="truncate" title={row.customer_name ?? "Не вказано"}>
                               {row.customer_name ?? "Не вказано"}
                             </span>
@@ -4250,22 +4234,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </div>
                                     ) : null}
                                     <div className="flex items-center gap-2 text-[15px] font-medium">
-                                      {row.customer_logo_url ? (
-                                        <img
-                                          src={row.customer_logo_url}
-                                          alt={row.customer_name ?? "logo"}
-                                          className="h-7 w-7 rounded-full object-cover border border-border/60 bg-muted/20"
-                                          loading="lazy"
-                                          onError={(e) => {
-                                            const target = e.currentTarget;
-                                            target.style.display = "none";
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="h-7 w-7 rounded-full border border-border/60 bg-muted/20 text-[9px] font-semibold text-muted-foreground flex items-center justify-center">
-                                          {getInitials(row.customer_name)}
-                                        </div>
-                                      )}
+                                      <EntityAvatar
+                                        src={row.customer_logo_url ?? null}
+                                        name={row.customer_name ?? "Замовник"}
+                                        fallback={getInitials(row.customer_name)}
+                                        size={28}
+                                      />
                                       <span className="truncate">{row.customer_name ?? "Не вказано"}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
