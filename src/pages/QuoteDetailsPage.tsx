@@ -42,6 +42,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import {
+  createQuote,
   getQuoteSummary,
   getQuoteRuns,
   upsertQuoteRuns,
@@ -263,6 +264,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [deleteQuoteDialogOpen, setDeleteQuoteDialogOpen] = useState(false);
   const [deleteQuoteBusy, setDeleteQuoteBusy] = useState(false);
+  const [duplicateQuoteBusy, setDuplicateQuoteBusy] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
@@ -2102,6 +2104,123 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setCancelNote("");
   };
 
+  const handleDuplicateQuote = async () => {
+    if (!quote?.id) return;
+    setDuplicateQuoteBusy(true);
+    try {
+      const sourceQuoteId = quote.id;
+      const effectiveTeamId = quote.team_id ?? teamId;
+      if (!effectiveTeamId) {
+        throw new Error("Не вдалося визначити команду для дублювання.");
+      }
+
+      const created = await createQuote({
+        teamId: effectiveTeamId,
+        customerId: quote.customer_id ?? null,
+        title: quote.title ?? null,
+        quoteType: quote.quote_type ?? null,
+        printType: quote.print_type ?? null,
+        deliveryType: quote.delivery_type ?? null,
+        deliveryDetails: quote.delivery_details ?? null,
+        comment: quote.comment ?? null,
+        designBrief: quote.design_brief ?? null,
+        currency: quote.currency ?? "UAH",
+        assignedTo: quote.assigned_to ?? null,
+        deadlineAt: quote.deadline_at ?? null,
+        deadlineNote: quote.deadline_note ?? null,
+      });
+      const newQuoteId = created?.id;
+      if (!newQuoteId) throw new Error("Не вдалося створити дублікат прорахунку.");
+
+      const { data: sourceItems, error: sourceItemsError } = await supabase
+        .schema("tosho")
+        .from("quote_items")
+        .select(
+          "id,position,name,description,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
+        )
+        .eq("quote_id", sourceQuoteId)
+        .order("position", { ascending: true });
+      if (sourceItemsError) throw sourceItemsError;
+
+      const itemIdMap = new Map<string, string>();
+      const itemRows = ((sourceItems as Array<Record<string, unknown>> | null) ?? []).map((row, index) => {
+        const oldId = typeof row.id === "string" ? row.id : null;
+        const nextId = crypto.randomUUID();
+        if (oldId) itemIdMap.set(oldId, nextId);
+        return {
+          id: nextId,
+          team_id: effectiveTeamId,
+          quote_id: newQuoteId,
+          position: Number(row.position ?? index + 1) || index + 1,
+          name: (row.name as string | null) ?? "Позиція",
+          description: (row.description as string | null) ?? null,
+          qty: Number(row.qty ?? 1) || 1,
+          unit: (row.unit as string | null) ?? "шт",
+          unit_price: Number(row.unit_price ?? 0) || 0,
+          line_total: Number(row.line_total ?? 0) || 0,
+          catalog_type_id: (row.catalog_type_id as string | null) ?? null,
+          catalog_kind_id: (row.catalog_kind_id as string | null) ?? null,
+          catalog_model_id: (row.catalog_model_id as string | null) ?? null,
+          methods: (row.methods as unknown) ?? null,
+          attachment: (row.attachment as unknown) ?? null,
+        };
+      });
+      if (itemRows.length > 0) {
+        const { error: insertItemsError } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .insert(itemRows);
+        if (insertItemsError) throw insertItemsError;
+      }
+
+      const sourceRuns = await getQuoteRuns(sourceQuoteId, effectiveTeamId);
+      if (sourceRuns.length > 0) {
+        const runsPayload: QuoteRun[] = sourceRuns.map((run) => ({
+          quote_id: newQuoteId,
+          quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
+          quantity: Number(run.quantity ?? 1) || 1,
+          unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+          unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+          logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+        }));
+        await upsertQuoteRuns(newQuoteId, runsPayload);
+      }
+
+      const { data: sourceAttachments, error: sourceAttachmentsError } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .select("file_name,mime_type,file_size,storage_bucket,storage_path,uploaded_by")
+        .eq("quote_id", sourceQuoteId);
+      if (sourceAttachmentsError) throw sourceAttachmentsError;
+      const attachmentRows = (sourceAttachments as Array<Record<string, unknown>> | null) ?? [];
+      if (attachmentRows.length > 0) {
+        const { error: insertAttachmentsError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .insert(
+            attachmentRows.map((row) => ({
+              team_id: effectiveTeamId,
+              quote_id: newQuoteId,
+              file_name: (row.file_name as string | null) ?? null,
+              mime_type: (row.mime_type as string | null) ?? null,
+              file_size: (row.file_size as number | null) ?? null,
+              storage_bucket: (row.storage_bucket as string | null) ?? null,
+              storage_path: (row.storage_path as string | null) ?? null,
+              uploaded_by: (row.uploaded_by as string | null) ?? null,
+            }))
+          );
+        if (insertAttachmentsError) throw insertAttachmentsError;
+      }
+
+      toast.success("Прорахунок продубльовано");
+      navigate(`/orders/estimates/${newQuoteId}`);
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося продублювати прорахунок."));
+    } finally {
+      setDuplicateQuoteBusy(false);
+    }
+  };
+
   // Inline quantity editing
   const startQtyEdit = (itemId: string, currentQty: number) => {
     setEditingQty(itemId);
@@ -2844,9 +2963,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <FileDown className="mr-2 h-4 w-4" />
                   Експорт PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled>
+                <DropdownMenuItem
+                  disabled={duplicateQuoteBusy || !quote?.id}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    void handleDuplicateQuote();
+                  }}
+                >
                   <Copy className="mr-2 h-4 w-4" />
-                  Дублювати
+                  {duplicateQuoteBusy ? "Дублювання..." : "Дублювати"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
