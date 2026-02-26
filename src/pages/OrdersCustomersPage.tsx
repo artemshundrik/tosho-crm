@@ -123,12 +123,28 @@ const formatVat = (value?: number | null) => {
 };
 
 const getInitials = (value?: string | null) => {
-  if (!value) return "Не вказано";
+  if (!value) return "?";
   const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "Не вказано";
+  if (parts.length === 0) return "?";
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
-  return (first + last).toUpperCase();
+  return (first + last).toUpperCase() || "?";
+};
+
+const COMPANY_AVATAR_TONES = [
+  { shell: "border-sky-400/40 bg-sky-500/10", fallback: "bg-sky-500/25 text-sky-100" },
+  { shell: "border-emerald-400/40 bg-emerald-500/10", fallback: "bg-emerald-500/25 text-emerald-100" },
+  { shell: "border-amber-400/40 bg-amber-500/10", fallback: "bg-amber-500/25 text-amber-100" },
+  { shell: "border-rose-400/40 bg-rose-500/10", fallback: "bg-rose-500/25 text-rose-100" },
+  { shell: "border-violet-400/40 bg-violet-500/10", fallback: "bg-violet-500/25 text-violet-100" },
+  { shell: "border-cyan-400/40 bg-cyan-500/10", fallback: "bg-cyan-500/25 text-cyan-100" },
+];
+
+const getAvatarTone = (seed?: string | null) => {
+  const normalized = (seed ?? "").trim().toLowerCase();
+  if (!normalized) return COMPANY_AVATAR_TONES[0];
+  const hash = Array.from(normalized).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return COMPANY_AVATAR_TONES[hash % COMPANY_AVATAR_TONES.length];
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -857,22 +873,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     >
                       <TableCell className="pl-6">
                         <div className="flex items-center gap-3">
-                          {row.logo_url ? (
-                            <img
-                              src={row.logo_url}
-                              alt={row.name ?? "logo"}
-                              className="h-9 w-9 rounded-full object-cover border border-border/60 bg-muted/20"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <div className="h-9 w-9 rounded-full border border-border/60 bg-muted/20 text-xs font-semibold text-muted-foreground flex items-center justify-center">
-                              {getInitials(row.name)}
-                            </div>
-                          )}
+                          {(() => {
+                            const tone = getAvatarTone(row.name ?? row.legal_name ?? row.id);
+                            return (
+                              <AvatarBase
+                                src={row.logo_url ?? null}
+                                name={row.name ?? row.legal_name ?? "Компанія"}
+                                fallback={getInitials(row.name ?? row.legal_name)}
+                                size={36}
+                                className={`shrink-0 ${tone.shell}`}
+                                fallbackClassName={`text-xs font-semibold ${tone.fallback}`}
+                              />
+                            );
+                          })()}
                           <div>
                             <div className="font-medium">{row.name ?? "Не вказано"}</div>
                             {row.legal_name && (
@@ -962,11 +975,26 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       onClick={() => openEditLead(lead)}
                     >
                       <TableCell className="pl-6">
-                        <div>
-                          <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
-                          {lead.legal_name ? (
-                            <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
-                          ) : null}
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const tone = getAvatarTone(lead.company_name ?? lead.legal_name ?? lead.id);
+                            return (
+                              <AvatarBase
+                                src={lead.logo_url ?? null}
+                                name={lead.company_name ?? lead.legal_name ?? "Лід"}
+                                fallback={getInitials(lead.company_name ?? lead.legal_name)}
+                                size={36}
+                                className={`shrink-0 ${tone.shell}`}
+                                fallbackClassName={`text-xs font-semibold ${tone.fallback}`}
+                              />
+                            );
+                          })()}
+                          <div>
+                            <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
+                            {lead.legal_name ? (
+                              <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
+                            ) : null}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
