@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
@@ -141,10 +142,16 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const ALL_MANAGERS_FILTER = "__all__";
+const NO_MANAGER_FILTER = "__none__";
+
 function CustomersPage({ teamId }: { teamId: string }) {
-  const { session } = useAuth();
+  const { session, userId, accessRole, jobRole } = useAuth();
   const [activeTab, setActiveTab] = useState<"customers" | "leads">("customers");
   const [search, setSearch] = useState("");
+  const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
+  const [leadManagerFilter, setLeadManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
+  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
@@ -231,21 +238,45 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return local;
   }, [session]);
 
+  const customerManagerOptions = useMemo(() => {
+    const values = new Set<string>();
+    rows.forEach((row) => {
+      const value = row.manager?.trim();
+      if (value) values.add(value);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
+  }, [rows]);
+
+  const leadManagerOptions = useMemo(() => {
+    const values = new Set<string>();
+    leads.forEach((lead) => {
+      const value = lead.manager?.trim();
+      if (value) values.add(value);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
+  }, [leads]);
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => {
+    let next = rows.filter((row) => {
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
       const manager = row.manager?.toLowerCase() ?? "";
-      return name.includes(q) || legal.includes(q) || manager.includes(q);
+      return !q || name.includes(q) || legal.includes(q) || manager.includes(q);
     });
-  }, [rows, search]);
+
+    if (customerManagerFilter === NO_MANAGER_FILTER) {
+      next = next.filter((row) => !(row.manager?.trim() ?? ""));
+    } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
+      next = next.filter((row) => (row.manager?.trim() ?? "") === customerManagerFilter);
+    }
+
+    return next;
+  }, [rows, search, customerManagerFilter]);
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter((lead) => {
+    let next = leads.filter((lead) => {
       const company = lead.company_name?.toLowerCase() ?? "";
       const legal = lead.legal_name?.toLowerCase() ?? "";
       const first = lead.first_name?.toLowerCase() ?? "";
@@ -255,6 +286,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const manager = lead.manager?.toLowerCase() ?? "";
       const phones = (lead.phone_numbers ?? []).join(" ").toLowerCase();
       return (
+        !q ||
         company.includes(q) ||
         legal.includes(q) ||
         first.includes(q) ||
@@ -265,12 +297,31 @@ function CustomersPage({ teamId }: { teamId: string }) {
         phones.includes(q)
       );
     });
-  }, [leads, search]);
+
+    if (leadManagerFilter === NO_MANAGER_FILTER) {
+      next = next.filter((lead) => !(lead.manager?.trim() ?? ""));
+    } else if (leadManagerFilter !== ALL_MANAGERS_FILTER) {
+      next = next.filter((lead) => (lead.manager?.trim() ?? "") === leadManagerFilter);
+    }
+
+    return next;
+  }, [leads, search, leadManagerFilter]);
 
   const memberByLabel = useMemo(
     () => new Map(teamMembers.map((member) => [member.label, member])),
     [teamMembers]
   );
+  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  const currentManagerLabel = useMemo(() => {
+    const fromMember = userId ? memberById.get(userId)?.label?.trim() : "";
+    if (fromMember) return fromMember;
+    return defaultManagerName.trim();
+  }, [defaultManagerName, memberById, userId]);
+  const isManagerUser = useMemo(() => {
+    const access = (accessRole ?? "").trim().toLowerCase();
+    const job = (jobRole ?? "").trim().toLowerCase();
+    return access === "owner" || access === "admin" || job === "manager" || job === "менеджер";
+  }, [accessRole, jobRole]);
   const calculationQuotes = useMemo(
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
@@ -296,6 +347,25 @@ function CustomersPage({ teamId }: { teamId: string }) {
         />
         <span className="truncate">{managerLabel}</span>
       </div>
+    );
+  };
+
+  const renderManagerFilterValue = (value: string) => {
+    if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
+    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
+    const member = memberByLabel.get(value);
+    return (
+      <span className="flex items-center gap-2 min-w-0">
+        <AvatarBase
+          src={member?.avatarUrl ?? null}
+          name={value}
+          fallback={value.slice(0, 2).toUpperCase()}
+          size={18}
+          className="border-border/60 shrink-0"
+          fallbackClassName="text-[9px] font-semibold"
+        />
+        <span className="truncate">{value}</span>
+      </span>
     );
   };
 
@@ -511,6 +581,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
     void loadTeamMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
+
+  useEffect(() => {
+    if (defaultManagerFilterApplied) return;
+    if (!isManagerUser) return;
+    if (!currentManagerLabel) return;
+    const hasManager =
+      customerManagerOptions.includes(currentManagerLabel) || leadManagerOptions.includes(currentManagerLabel);
+    if (!hasManager) return;
+    setCustomerManagerFilter(currentManagerLabel);
+    setLeadManagerFilter(currentManagerLabel);
+    setDefaultManagerFilterApplied(true);
+  }, [
+    currentManagerLabel,
+    customerManagerOptions,
+    defaultManagerFilterApplied,
+    isManagerUser,
+    leadManagerOptions,
+  ]);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -804,14 +892,36 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </Button>
         }
       >
-        <div className="relative min-w-[240px] max-w-[420px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
-            className="pl-9"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] max-w-[420px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
+              className="pl-9"
+            />
+          </div>
+          <Select
+            value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
+            onValueChange={(value) => {
+              if (activeTab === "customers") setCustomerManagerFilter(value);
+              else setLeadManagerFilter(value);
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
+              <SelectItem value={NO_MANAGER_FILTER}>Без менеджера</SelectItem>
+              {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
+                <SelectItem key={manager} value={manager}>
+                  {renderManagerFilterValue(manager)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </PageHeader>
 

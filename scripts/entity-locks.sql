@@ -251,11 +251,23 @@ declare
   v_user_id uuid := auth.uid();
 begin
   if tg_op = 'DELETE' then
-    v_team_id := old.team_id;
-    v_quote_id := old.quote_id::text;
+    v_team_id := nullif(to_jsonb(old)->>'team_id', '')::uuid;
+    v_quote_id := nullif(to_jsonb(old)->>'quote_id', '');
   else
-    v_team_id := new.team_id;
-    v_quote_id := new.quote_id::text;
+    v_team_id := nullif(to_jsonb(new)->>'team_id', '')::uuid;
+    v_quote_id := nullif(to_jsonb(new)->>'quote_id', '');
+  end if;
+
+  if v_quote_id is null then
+    return coalesce(new, old);
+  end if;
+
+  -- Some quote child tables (e.g. quote_item_runs) do not have team_id column.
+  if v_team_id is null then
+    select q.team_id into v_team_id
+    from tosho.quotes q
+    where q.id::text = v_quote_id
+    limit 1;
   end if;
 
   if not public.is_entity_lock_allowed(v_team_id, 'quote', v_quote_id, v_user_id) then

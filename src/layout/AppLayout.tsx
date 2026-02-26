@@ -436,6 +436,19 @@ function formatDateTimeUA(iso: string) {
   return `${date} • ${time}`;
 }
 
+function normalizeIdentity(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function reminderKeyFromHref(href?: string | null) {
+  if (!href) return null;
+  const queryIndex = href.indexOf("?");
+  if (queryIndex === -1) return null;
+  const params = new URLSearchParams(href.slice(queryIndex + 1));
+  const value = params.get("reminder");
+  return value?.trim() || null;
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <PageHeaderActionsProvider>
@@ -575,6 +588,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [usdUahUpdatedAt, setUsdUahUpdatedAt] = useState<string | null>(null);
   const [usdUahLoading, setUsdUahLoading] = useState(false);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
+  const reminderAssigneeKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const fullNameRaw = session?.user?.user_metadata?.full_name;
+    if (typeof fullNameRaw === "string" && fullNameRaw.trim()) {
+      keys.add(normalizeIdentity(fullNameRaw));
+    }
+    const email = session?.user?.email ?? "";
+    if (email) {
+      keys.add(normalizeIdentity(email));
+      const localPart = email.split("@")[0];
+      if (localPart) keys.add(normalizeIdentity(localPart));
+    }
+    return keys;
+  }, [session]);
 
   useEffect(() => {
     try {
@@ -703,6 +730,130 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!userId || !teamId || reminderAssigneeKeys.size === 0) return;
+
+    let disposed = false;
+    let inFlight = false;
+
+    const run = async () => {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      try {
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const fromIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        const [customersResult, leadsResult, existingResult] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("customers")
+            .select("id,name,manager,reminder_at,reminder_comment")
+            .eq("team_id", teamId)
+            .not("reminder_at", "is", null)
+            .lte("reminder_at", nowIso)
+            .gte("reminder_at", fromIso)
+            .order("reminder_at", { ascending: false })
+            .limit(100),
+          supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id,company_name,manager,reminder_at,reminder_comment")
+            .eq("team_id", teamId)
+            .not("reminder_at", "is", null)
+            .lte("reminder_at", nowIso)
+            .gte("reminder_at", fromIso)
+            .order("reminder_at", { ascending: false })
+            .limit(100),
+          supabase
+            .from("notifications")
+            .select("href")
+            .eq("user_id", userId)
+            .not("href", "is", null)
+            .like("href", "/orders/customers?reminder=%")
+            .gte("created_at", fromIso)
+            .limit(500),
+        ]);
+
+        if (customersResult.error || leadsResult.error || existingResult.error) return;
+
+        const existingKeys = new Set(
+          (((existingResult.data ?? []) as Array<{ href?: string | null }>).map((row) =>
+            reminderKeyFromHref(row.href)
+          ).filter((value): value is string => Boolean(value)))
+        );
+
+        const toInsert: Array<{
+          user_id: string;
+          title: string;
+          body: string;
+          href: string;
+          type: "warning";
+        }> = [];
+
+        const pushReminder = (kind: "customer" | "lead", id: string, name: string, reminderAt: string, comment?: string) => {
+          const key = `${kind}:${id}:${reminderAt}`;
+          if (existingKeys.has(key)) return;
+          existingKeys.add(key);
+          const title = `Нагадування: ${name}`;
+          const description = comment?.trim()
+            ? `${comment.trim()}\nЗаплановано на ${formatDateTimeUA(reminderAt)}`
+            : `Заплановано на ${formatDateTimeUA(reminderAt)}`;
+          const href = `/orders/customers?reminder=${encodeURIComponent(key)}`;
+          toInsert.push({
+            user_id: userId,
+            title,
+            body: description,
+            href,
+            type: "warning",
+          });
+        };
+
+        for (const row of (customersResult.data ?? []) as Array<{
+          id: string;
+          name?: string | null;
+          manager?: string | null;
+          reminder_at?: string | null;
+          reminder_comment?: string | null;
+        }>) {
+          if (!row.reminder_at) continue;
+          const manager = normalizeIdentity(row.manager);
+          if (manager && !reminderAssigneeKeys.has(manager)) continue;
+          pushReminder("customer", row.id, row.name?.trim() || "Замовник", row.reminder_at, row.reminder_comment ?? "");
+        }
+
+        for (const row of (leadsResult.data ?? []) as Array<{
+          id: string;
+          company_name?: string | null;
+          manager?: string | null;
+          reminder_at?: string | null;
+          reminder_comment?: string | null;
+        }>) {
+          if (!row.reminder_at) continue;
+          const manager = normalizeIdentity(row.manager);
+          if (manager && !reminderAssigneeKeys.has(manager)) continue;
+          pushReminder("lead", row.id, row.company_name?.trim() || "Лід", row.reminder_at, row.reminder_comment ?? "");
+        }
+
+        if (toInsert.length > 0) {
+          await supabase.from("notifications").insert(toInsert);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void run();
+    const intervalId = window.setInterval(() => {
+      void run();
+    }, 60 * 1000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [reminderAssigneeKeys, teamId, userId]);
 
   useEffect(() => {
     loadActivityUnread();

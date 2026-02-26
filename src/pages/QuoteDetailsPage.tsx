@@ -450,7 +450,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await loadActivityLog();
       toast.success("Тиражі збережено");
     } catch (e: unknown) {
-      setRunsError(getErrorMessage(e, "Не вдалося зберегти тиражі."));
+      const message = getErrorMessage(e, "Не вдалося зберегти тиражі.");
+      if (/record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)) {
+        setRunsError(
+          "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
+        );
+      } else {
+        setRunsError(message);
+      }
       toast.error("Помилка збереження");
     } finally {
       setRunsSaving(false);
