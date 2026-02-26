@@ -86,6 +86,37 @@
     --danger-soft-border: 0 74% 86%;
     --danger-foreground: 0 72% 40%;
 
+    /* --- ENTITY AVATAR TOKENS (LIGHT) --- */
+    --entity-avatar-1-bg: 214 95% 93%;
+    --entity-avatar-1-border: 214 90% 86%;
+    --entity-avatar-1-fg: 221 83% 45%;
+    --entity-avatar-1-fallback: 214 92% 87%;
+
+    --entity-avatar-2-bg: 142 72% 93%;
+    --entity-avatar-2-border: 142 60% 83%;
+    --entity-avatar-2-fg: 142 55% 30%;
+    --entity-avatar-2-fallback: 142 62% 86%;
+
+    --entity-avatar-3-bg: 45 90% 92%;
+    --entity-avatar-3-border: 45 85% 80%;
+    --entity-avatar-3-fg: 45 90% 35%;
+    --entity-avatar-3-fallback: 45 88% 86%;
+
+    --entity-avatar-4-bg: 0 84% 95%;
+    --entity-avatar-4-border: 0 74% 86%;
+    --entity-avatar-4-fg: 0 72% 40%;
+    --entity-avatar-4-fallback: 0 78% 90%;
+
+    --entity-avatar-5-bg: 262 86% 95%;
+    --entity-avatar-5-border: 262 72% 86%;
+    --entity-avatar-5-fg: 262 70% 46%;
+    --entity-avatar-5-fallback: 262 78% 89%;
+
+    --entity-avatar-6-bg: 188 88% 93%;
+    --entity-avatar-6-border: 188 72% 82%;
+    --entity-avatar-6-fg: 192 78% 36%;
+    --entity-avatar-6-fallback: 188 80% 87%;
+
     /* --- RATING + LEADER TOKENS (LIGHT) --- */
     --rating-bronze-from: #e6beaa;
     --rating-bronze-to: #a87860;
@@ -259,6 +290,37 @@
     --danger-soft: 0 35% 22%;
     --danger-soft-border: 0 35% 30%;
     --danger-foreground: 0 80% 75%;
+
+    /* --- ENTITY AVATAR TOKENS (DARK) --- */
+    --entity-avatar-1-bg: 217 70% 20%;
+    --entity-avatar-1-border: 217 70% 28%;
+    --entity-avatar-1-fg: 214 95% 75%;
+    --entity-avatar-1-fallback: 217 62% 27%;
+
+    --entity-avatar-2-bg: 142 30% 20%;
+    --entity-avatar-2-border: 142 30% 28%;
+    --entity-avatar-2-fg: 142 70% 70%;
+    --entity-avatar-2-fallback: 142 30% 28%;
+
+    --entity-avatar-3-bg: 45 25% 20%;
+    --entity-avatar-3-border: 45 25% 28%;
+    --entity-avatar-3-fg: 45 90% 70%;
+    --entity-avatar-3-fallback: 45 24% 30%;
+
+    --entity-avatar-4-bg: 0 35% 22%;
+    --entity-avatar-4-border: 0 35% 30%;
+    --entity-avatar-4-fg: 0 80% 75%;
+    --entity-avatar-4-fallback: 0 32% 30%;
+
+    --entity-avatar-5-bg: 262 28% 22%;
+    --entity-avatar-5-border: 262 30% 31%;
+    --entity-avatar-5-fg: 262 88% 78%;
+    --entity-avatar-5-fallback: 262 30% 30%;
+
+    --entity-avatar-6-bg: 188 26% 21%;
+    --entity-avatar-6-border: 188 28% 30%;
+    --entity-avatar-6-fg: 188 84% 76%;
+    --entity-avatar-6-fallback: 188 26% 30%;
 
     /* --- RATING + LEADER TOKENS (DARK) --- */
     --rating-bronze-from: #6b4b3a;
@@ -836,6 +898,62 @@
 
   .kanban-column-status-cancelled .kanban-column-header {
     background-color: hsl(var(--kanban-col-cancelled-bg) / 0.92);
+  }
+
+  .entity-avatar-shell-tone-1 {
+    border-color: hsl(var(--entity-avatar-1-border));
+    background-color: hsl(var(--entity-avatar-1-bg));
+    color: hsl(var(--entity-avatar-1-fg));
+  }
+  .entity-avatar-shell-tone-2 {
+    border-color: hsl(var(--entity-avatar-2-border));
+    background-color: hsl(var(--entity-avatar-2-bg));
+    color: hsl(var(--entity-avatar-2-fg));
+  }
+  .entity-avatar-shell-tone-3 {
+    border-color: hsl(var(--entity-avatar-3-border));
+    background-color: hsl(var(--entity-avatar-3-bg));
+    color: hsl(var(--entity-avatar-3-fg));
+  }
+  .entity-avatar-shell-tone-4 {
+    border-color: hsl(var(--entity-avatar-4-border));
+    background-color: hsl(var(--entity-avatar-4-bg));
+    color: hsl(var(--entity-avatar-4-fg));
+  }
+  .entity-avatar-shell-tone-5 {
+    border-color: hsl(var(--entity-avatar-5-border));
+    background-color: hsl(var(--entity-avatar-5-bg));
+    color: hsl(var(--entity-avatar-5-fg));
+  }
+  .entity-avatar-shell-tone-6 {
+    border-color: hsl(var(--entity-avatar-6-border));
+    background-color: hsl(var(--entity-avatar-6-bg));
+    color: hsl(var(--entity-avatar-6-fg));
+  }
+
+  .entity-avatar-fallback-tone-1 {
+    background-color: hsl(var(--entity-avatar-1-fallback));
+    color: hsl(var(--entity-avatar-1-fg));
+  }
+  .entity-avatar-fallback-tone-2 {
+    background-color: hsl(var(--entity-avatar-2-fallback));
+    color: hsl(var(--entity-avatar-2-fg));
+  }
+  .entity-avatar-fallback-tone-3 {
+    background-color: hsl(var(--entity-avatar-3-fallback));
+    color: hsl(var(--entity-avatar-3-fg));
+  }
+  .entity-avatar-fallback-tone-4 {
+    background-color: hsl(var(--entity-avatar-4-fallback));
+    color: hsl(var(--entity-avatar-4-fg));
+  }
+  .entity-avatar-fallback-tone-5 {
+    background-color: hsl(var(--entity-avatar-5-fallback));
+    color: hsl(var(--entity-avatar-5-fg));
+  }
+  .entity-avatar-fallback-tone-6 {
+    background-color: hsl(var(--entity-avatar-6-fallback));
+    color: hsl(var(--entity-avatar-6-fg));
   }
 
   .quote-activity-accent-comment {

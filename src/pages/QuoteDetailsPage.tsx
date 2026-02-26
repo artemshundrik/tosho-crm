@@ -35,6 +35,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -2042,6 +2043,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         status: nextStatus,
         note: note ? note : undefined,
       });
+      try {
+        await notifyQuoteInitiatorOnStatusChange({
+          quoteId,
+          toStatus: nextStatus,
+          actorUserId: userId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify quote initiator about status change", notifyError);
+      }
       await logActivity({
         teamId,
         action: "змінив статус",

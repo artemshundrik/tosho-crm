@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
+import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import {
   listQuotes,
   listQuoteSets,
@@ -953,6 +954,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setRowStatusError(null);
     try {
       await setQuoteStatus({ quoteId, status: nextStatus });
+      try {
+        await notifyQuoteInitiatorOnStatusChange({
+          quoteId,
+          toStatus: nextStatus,
+          actorUserId: currentUserId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify quote initiator about status change", notifyError);
+      }
       setRows((prev) =>
         prev.map((row) => (row.id === quoteId ? { ...row, status: nextStatus } : row))
       );
@@ -2482,6 +2492,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!draggingId) return;
     try {
       await setQuoteStatus({ quoteId: draggingId, status });
+      try {
+        await notifyQuoteInitiatorOnStatusChange({
+          quoteId: draggingId,
+          toStatus: status,
+          actorUserId: currentUserId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify quote initiator about status change", notifyError);
+      }
       setRows((prev) =>
         prev.map((row) => (row.id === draggingId ? { ...row, status } : row))
       );
@@ -2660,6 +2679,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       await Promise.all(
         Array.from(selectedIds).map(async (id) => {
           await setQuoteStatus({ quoteId: id, status: nextStatus });
+          try {
+            await notifyQuoteInitiatorOnStatusChange({
+              quoteId: id,
+              toStatus: nextStatus,
+              actorUserId: currentUserId ?? null,
+            });
+          } catch (notifyError) {
+            console.warn("Failed to notify quote initiator about status change", notifyError);
+          }
           setRows((prev) =>
             prev.map((row) => (row.id === id ? { ...row, status: nextStatus } : row))
           );

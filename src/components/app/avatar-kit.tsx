@@ -70,12 +70,12 @@ type EntityAvatarProps = {
 };
 
 const ENTITY_AVATAR_TONES = [
-  { shell: "border-sky-400/40 bg-sky-500/10", fallback: "bg-sky-500/25 text-sky-100" },
-  { shell: "border-emerald-400/40 bg-emerald-500/10", fallback: "bg-emerald-500/25 text-emerald-100" },
-  { shell: "border-amber-400/40 bg-amber-500/10", fallback: "bg-amber-500/25 text-amber-100" },
-  { shell: "border-rose-400/40 bg-rose-500/10", fallback: "bg-rose-500/25 text-rose-100" },
-  { shell: "border-violet-400/40 bg-violet-500/10", fallback: "bg-violet-500/25 text-violet-100" },
-  { shell: "border-cyan-400/40 bg-cyan-500/10", fallback: "bg-cyan-500/25 text-cyan-100" },
+  { shell: "entity-avatar-shell-tone-1", fallback: "entity-avatar-fallback-tone-1" },
+  { shell: "entity-avatar-shell-tone-2", fallback: "entity-avatar-fallback-tone-2" },
+  { shell: "entity-avatar-shell-tone-3", fallback: "entity-avatar-fallback-tone-3" },
+  { shell: "entity-avatar-shell-tone-4", fallback: "entity-avatar-fallback-tone-4" },
+  { shell: "entity-avatar-shell-tone-5", fallback: "entity-avatar-fallback-tone-5" },
+  { shell: "entity-avatar-shell-tone-6", fallback: "entity-avatar-fallback-tone-6" },
 ];
 
 function getEntityAvatarTone(seed?: string | null) {

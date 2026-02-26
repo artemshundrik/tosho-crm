@@ -52,6 +52,7 @@ import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
   getDesignTaskTimerSummary,
@@ -1744,6 +1745,16 @@ export default function DesignTaskPage() {
         await loadHistory(task.id);
       } catch (logError) {
         console.warn("Failed to log design task status event", logError);
+      }
+      try {
+        await notifyQuoteInitiatorOnDesignStatusChange({
+          quoteId: task.quoteId,
+          designTaskId: task.id,
+          toStatus: nextStatus,
+          actorUserId: userId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify quote initiator about design status change", notifyError);
       }
 
       toast.success(`Статус оновлено: ${statusLabels[nextStatus]}`);

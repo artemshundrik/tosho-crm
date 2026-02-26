@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
   getDesignTasksTimerSummaryMap,
@@ -992,6 +993,16 @@ export default function DesignPage() {
         });
       } catch (logError) {
         console.warn("Failed to log design task status event", logError);
+      }
+      try {
+        await notifyQuoteInitiatorOnDesignStatusChange({
+          quoteId: task.quoteId,
+          designTaskId: task.id,
+          toStatus: next,
+          actorUserId: userId ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify quote initiator about design status change", notifyError);
       }
       try {
         const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, [task.id]);
