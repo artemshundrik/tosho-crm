@@ -1113,6 +1113,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         id: lead.id,
         name: lead.company_name ?? lead.legal_name ?? null,
         legal_name: lead.legal_name ?? null,
+        logo_url: lead.logo_url ?? null,
         entityType: "lead",
       }));
       const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
@@ -1152,10 +1153,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         data.customerType === "lead"
           ? (selectedParty?.name || selectedParty?.legal_name || "Лід").trim()
           : null;
+      const quoteCustomerName = (selectedParty?.name || selectedParty?.legal_name || "").trim() || null;
+      const quoteCustomerLogoUrl = selectedParty?.logo_url ?? null;
 
       const created = await createQuote({
         teamId,
         customerId: customerIdForQuote,
+        customerName: quoteCustomerName,
+        customerLogoUrl: quoteCustomerLogoUrl,
         title: quoteTitleFromLead,
         quoteType: data.quoteType,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,

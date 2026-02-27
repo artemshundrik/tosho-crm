@@ -61,13 +61,19 @@ export type TeamMemberRow = {
   jobRole?: string | null;
 };
 
-export type CustomerRow = { id: string; name?: string | null; legal_name?: string | null };
+export type CustomerRow = {
+  id: string;
+  name?: string | null;
+  legal_name?: string | null;
+  logo_url?: string | null;
+};
 export type LeadSearchRow = {
   id: string;
   company_name?: string | null;
   legal_name?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  logo_url?: string | null;
 };
 
 export type LeadRow = {
@@ -110,13 +116,19 @@ export async function listQuotes(params: ListQuotesParams) {
   const q = search?.trim() ?? "";
 
   const listFromQuotes = async () => {
-    const baseColumns =
+    const baseWithCustomerMeta =
+      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url";
+    const baseWithoutCustomerMeta =
       "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note";
     const variants = [
-      baseColumns,
-      `${baseColumns},processing_minutes`,
-      `${baseColumns},design_brief`,
-      `${baseColumns},design_brief,processing_minutes`,
+      baseWithCustomerMeta,
+      `${baseWithCustomerMeta},processing_minutes`,
+      `${baseWithCustomerMeta},design_brief`,
+      `${baseWithCustomerMeta},design_brief,processing_minutes`,
+      baseWithoutCustomerMeta,
+      `${baseWithoutCustomerMeta},processing_minutes`,
+      `${baseWithoutCustomerMeta},design_brief`,
+      `${baseWithoutCustomerMeta},design_brief,processing_minutes`,
     ];
 
     let lastError: unknown = null;
@@ -204,21 +216,32 @@ export async function listQuotes(params: ListQuotesParams) {
 
 export async function listCustomersBySearch(teamId: string, search: string) {
   const q = search.trim();
-  let query = supabase
-    .schema("tosho")
-    .from("customers")
-    .select("id,name,legal_name")
-    .eq("team_id", teamId)
-    .order("name", { ascending: true })
-    .limit(20);
+  const runQuery = async (withLogo: boolean) => {
+    const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+    let query = supabase
+      .schema("tosho")
+      .from("customers")
+      .select(columns)
+      .eq("team_id", teamId)
+      .order("name", { ascending: true })
+      .limit(20);
 
-  if (q.length > 0) {
-    query = query.or(`name.ilike.%${q}%,legal_name.ilike.%${q}%`);
+    if (q.length > 0) {
+      query = query.or(`name.ilike.%${q}%,legal_name.ilike.%${q}%`);
+    }
+    return await query;
+  };
+
+  let { data, error } = await runQuery(true);
+  if (
+    error &&
+    /column/i.test(error.message ?? "") &&
+    /logo_url/i.test(error.message ?? "")
+  ) {
+    ({ data, error } = await runQuery(false));
   }
-
-  const { data, error } = await query;
   handleError(error);
-  return (data as CustomerRow[]) ?? [];
+  return (data as unknown as CustomerRow[]) ?? [];
 }
 
 export async function listLeadsBySearch(teamId: string, search: string) {
@@ -226,7 +249,7 @@ export async function listLeadsBySearch(teamId: string, search: string) {
   let query = supabase
     .schema("tosho")
     .from("leads")
-    .select("id,company_name,legal_name,first_name,last_name")
+    .select("id,company_name,legal_name,first_name,last_name,logo_url")
     .eq("team_id", teamId)
     .order("company_name", { ascending: true })
     .limit(20);
@@ -260,6 +283,8 @@ export async function getLeadById(teamId: string, leadId: string) {
 export async function createQuote(params: {
   teamId: string;
   customerId?: string | null;
+  customerName?: string | null;
+  customerLogoUrl?: string | null;
   title?: string | null;
   quoteType?: string | null;
   printType?: string | null;
@@ -279,6 +304,8 @@ export async function createQuote(params: {
   const payload: Record<string, unknown> = {
     team_id: params.teamId,
     customer_id: params.customerId ?? null,
+    customer_name: params.customerName ?? null,
+    customer_logo_url: params.customerLogoUrl ?? null,
     title: params.title ?? null,
     comment: params.comment ?? null,
     design_brief: params.designBrief ?? null,
@@ -314,6 +341,14 @@ export async function createQuote(params: {
     let changed = false;
     if (message.includes("column") && message.includes("created_by")) {
       delete payload.created_by;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("customer_name")) {
+      delete payload.customer_name;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("customer_logo_url")) {
+      delete payload.customer_logo_url;
       changed = true;
     }
     if (message.includes("column") && message.includes("deadline_at")) {
@@ -356,18 +391,23 @@ export async function getQuoteSummary(quoteId: string) {
       return await supabase.schema("tosho").from("quotes").select(columns).eq("id", quoteId).maybeSingle();
     };
 
-    let { data: briefRow, error: briefError } = await readExtras("design_brief,delivery_details");
+    let { data: briefRow, error: briefError } = await readExtras("design_brief,delivery_details,customer_name,customer_logo_url");
     if (
       briefError &&
       /column/i.test(briefError.message ?? "") &&
-      (/design_brief/i.test(briefError.message ?? "") || /delivery_details/i.test(briefError.message ?? ""))
+      (/design_brief/i.test(briefError.message ?? "") ||
+        /delivery_details/i.test(briefError.message ?? "") ||
+        /customer_name/i.test(briefError.message ?? "") ||
+        /customer_logo_url/i.test(briefError.message ?? ""))
     ) {
-      ({ data: briefRow, error: briefError } = await readExtras("design_brief"));
+      ({ data: briefRow, error: briefError } = await readExtras("design_brief,customer_name,customer_logo_url"));
     }
     if (
       briefError &&
       /column/i.test(briefError.message ?? "") &&
-      /design_brief/i.test(briefError.message ?? "")
+      (/design_brief/i.test(briefError.message ?? "") ||
+        /customer_name/i.test(briefError.message ?? "") ||
+        /customer_logo_url/i.test(briefError.message ?? ""))
     ) {
       ({ data: briefRow, error: briefError } = await readExtras("id"));
     }
@@ -378,6 +418,14 @@ export async function getQuoteSummary(quoteId: string) {
       design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
       delivery_details:
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
+      customer_name:
+        summary.customer_name ??
+        (briefRow as { customer_name?: string | null } | null)?.customer_name ??
+        null,
+      customer_logo_url:
+        summary.customer_logo_url ??
+        (briefRow as { customer_logo_url?: string | null } | null)?.customer_logo_url ??
+        null,
     } as QuoteSummaryRow;
   } catch (error: unknown) {
     const message = getErrorMessage(error).toLowerCase();
