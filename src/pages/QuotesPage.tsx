@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/auth/AuthProvider";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,9 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 type QuotesPageProps = {
   teamId: string;
 };
+
+const ALL_MANAGERS_FILTER = "__all__";
+const NO_MANAGER_FILTER = "__none__";
 
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
@@ -233,6 +237,7 @@ function isBrokenSupabaseRestUrl(value?: string | null): boolean {
 }
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
+  const { accessRole, jobRole } = useAuth();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const navigate = useNavigate();
@@ -243,6 +248,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatusFilter] = useState("all");
+  const [managerFilter, setManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
+  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
@@ -401,11 +408,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => new Map(teamMembers.map((member) => [member.id, member.label])),
     [teamMembers]
   );
+  const isManagerUser = useMemo(() => {
+    const access = (accessRole ?? "").trim().toLowerCase();
+    const job = (jobRole ?? "").trim().toLowerCase();
+    return access === "owner" || access === "admin" || job === "manager" || job === "менеджер";
+  }, [accessRole, jobRole]);
   useEffect(() => {
     if (!currentUserId) return;
     const label = memberById.get(currentUserId)?.trim();
     if (label) setCurrentUserManagerLabel(label);
   }, [currentUserId, memberById]);
+  useEffect(() => {
+    if (defaultManagerFilterApplied) return;
+    if (managerFilter !== ALL_MANAGERS_FILTER) return;
+    if (!isManagerUser) return;
+    if (!currentUserId) return;
+    const hasAssignedRows = rows.some((row) => (row.assigned_to?.trim() ?? "") === currentUserId);
+    if (!hasAssignedRows) return;
+    setManagerFilter(currentUserId);
+    setDefaultManagerFilterApplied(true);
+  }, [
+    currentUserId,
+    defaultManagerFilterApplied,
+    isManagerUser,
+    managerFilter,
+    rows,
+  ]);
   const memberAvatarById = useMemo(
     () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
     [teamMembers]
@@ -416,6 +444,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (label) return label;
     return teamMembersLoaded ? "Користувач" : "Не вказано";
   };
+  const managerFilterOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    rows.forEach((row) => {
+      const assigned = row.assigned_to?.trim();
+      if (!assigned) return;
+      const label = memberById.get(assigned) ?? (teamMembersLoaded ? "Користувач" : "Не вказано");
+      options.set(assigned, label);
+    });
+    return Array.from(options.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
+  }, [memberById, rows, teamMembersLoaded]);
+  const filteredRowsByManager = useMemo(() => {
+    if (managerFilter === ALL_MANAGERS_FILTER) return rows;
+    if (managerFilter === NO_MANAGER_FILTER) {
+      return rows.filter((row) => !(row.assigned_to?.trim() ?? ""));
+    }
+    return rows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
+  }, [managerFilter, rows]);
 
   const selectedType = useMemo(
     () => catalogTypes.find((t) => t.id === selectedTypeId),
@@ -465,6 +512,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const first = parts[0][0] ?? "";
     const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
     return (first + last).toUpperCase() || "?";
+  };
+  const renderManagerFilterValue = (value: string) => {
+    if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
+    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
+    const label = memberById.get(value) ?? (teamMembersLoaded ? "Користувач" : "Не вказано");
+    const avatarUrl = memberAvatarById.get(value) ?? null;
+    return (
+      <span className="flex items-center gap-2 min-w-0">
+        <AvatarBase
+          src={avatarUrl}
+          name={label}
+          fallback={getInitials(label)}
+          size={18}
+          className="border-border/60 shrink-0"
+          fallbackClassName="text-[9px] font-semibold"
+        />
+        <span className="truncate">{label}</span>
+      </span>
+    );
   };
 
   const getDateLabels = (value?: string | null) => {
@@ -1877,14 +1943,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     foundCount,
     groupedByStatus,
     groupedQuotesView,
-    hasActiveFilters,
+    hasActiveFilters: hasActiveViewFilters,
     quickAddAvailableSets,
     quoteSetKpCount,
     quoteSetSetCount,
     selectionContext,
     selectedRows,
   } = useQuotesPageViewState({
-    rows,
+    rows: filteredRowsByManager,
     search,
     quickFilter,
     status,
@@ -1901,6 +1967,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsTarget,
     quoteSetDetailsItems,
   });
+  const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
 
   const bulkAddAvailableSets = useMemo(() => {
     if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
@@ -2472,6 +2539,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setSearch("");
     setQuickFilter("all");
     setStatusFilter("all");
+    setManagerFilter(ALL_MANAGERS_FILTER);
   };
 
   useEffect(() => {
@@ -3348,6 +3416,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       {STATUS_OPTIONS.map((s) => (
                         <SelectItem key={s} value={s}>
                           {formatStatusLabel(s)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={managerFilter} onValueChange={setManagerFilter}>
+                    <SelectTrigger className="h-9 w-[220px] bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40">
+                      <div className="min-w-0 flex items-center">
+                        {renderManagerFilterValue(managerFilter)}
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
+                      <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
+                      {managerFilterOptions.map((manager) => (
+                        <SelectItem key={manager.id} value={manager.id}>
+                          {renderManagerFilterValue(manager.id)}
                         </SelectItem>
                       ))}
                     </SelectContent>

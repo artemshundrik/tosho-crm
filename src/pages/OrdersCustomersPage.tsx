@@ -910,7 +910,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
             }}
           >
             <SelectTrigger className="w-[220px]">
-              {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
+              <div className="min-w-0 flex items-center">
+                {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
+              </div>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>

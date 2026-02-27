@@ -259,7 +259,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 icon={<Percent className="h-4 w-4" />}
                 active={!!form.vatRate && form.vatRate !== "none"}
               >
-                {currentVat?.label ?? "ПДВ"}
+                {currentVat?.value === "none" ? "ПДВ" : (currentVat?.label ?? "ПДВ")}
               </Chip>
             </PopoverTrigger>
             <PopoverContent className="w-40 p-2" align="start">
