@@ -69,16 +69,51 @@ export async function notifyUsers(params: NotifyUsersParams) {
   );
   if (uniqueUserIds.length === 0) return;
 
-  const rows = uniqueUserIds.map((userId) => ({
-    user_id: userId,
+  const payload = {
+    userIds: uniqueUserIds,
     title: params.title,
     body: params.body ?? null,
     href: params.href ?? null,
     type: params.type ?? "info",
-  }));
+  };
 
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error) {
+  const { error } = await supabase.from("notifications").insert(
+    uniqueUserIds.map((userId) => ({
+      user_id: userId,
+      title: payload.title,
+      body: payload.body,
+      href: payload.href,
+      type: payload.type,
+    }))
+  );
+  if (!error) return;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) {
     throw error;
+  }
+
+  const response = await fetch("/.netlify/functions/notify-users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+  let parsed: Record<string, unknown> = {};
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!response.ok) {
+    const parsedError = typeof parsed.error === "string" ? parsed.error : null;
+    throw new Error(parsedError || `HTTP ${response.status}`);
   }
 }

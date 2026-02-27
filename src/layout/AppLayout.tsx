@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 
 import { supabase } from "@/lib/supabaseClient";
 import { getAgencyLogo } from "@/lib/agencyAssets";
+import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
@@ -837,7 +838,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         }
 
         if (toInsert.length > 0) {
-          await supabase.from("notifications").insert(toInsert);
+          await Promise.all(
+            toInsert.map((row) =>
+              notifyUsers({
+                userIds: [row.user_id],
+                title: row.title,
+                body: row.body,
+                href: row.href,
+                type: row.type,
+              })
+            )
+          );
         }
       } finally {
         inFlight = false;

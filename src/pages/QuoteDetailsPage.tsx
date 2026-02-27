@@ -2810,15 +2810,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           const actorLabel = memberById.get(userId) ?? "Користувач";
           const quoteLabel = quote?.number ? `#${quote.number}` : quoteId;
           const trimmedBody = body.length > 220 ? `${body.slice(0, 217)}...` : body;
-          const notificationRows = mentionUserIdsList.map((mentionedUserId) => ({
-            user_id: mentionedUserId,
-            title: `${actorLabel} згадав(ла) вас у коментарі`,
-            body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
-            href: `/orders/estimates/${quoteId}`,
-            type: "info",
-          }));
-          const { error: notificationsError } = await supabase.from("notifications").insert(notificationRows);
-          if (notificationsError) {
+          try {
+            await notifyUsers({
+              userIds: mentionUserIdsList,
+              title: `${actorLabel} згадав(ла) вас у коментарі`,
+              body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
+              href: `/orders/estimates/${quoteId}`,
+              type: "info",
+            });
+          } catch (notificationsError) {
             console.warn("Failed to send mention notifications", notificationsError, notifyError);
           }
         }
