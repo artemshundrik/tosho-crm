@@ -164,14 +164,15 @@ export async function listQuotes(params: ListQuotesParams) {
   handleError(error);
 
   const rows = ((data as unknown) as QuoteListRow[]) ?? [];
+  const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
   const customerIds = Array.from(
     new Set(rows.map((row) => row.customer_id ?? null).filter((value): value is string => Boolean(value)))
   );
-  const missingLeadNames = Array.from(
+  const leadLookupNames = Array.from(
     new Set(
       rows
-        .filter((row) => !row.customer_id && !(row.customer_name ?? "").trim() && (row.title ?? "").trim())
-        .map((row) => (row.title ?? "").trim())
+        .filter((row) => !row.customer_id)
+        .map((row) => (row.customer_name ?? row.title ?? "").trim())
         .filter(Boolean)
     )
   );
@@ -212,8 +213,7 @@ export async function listQuotes(params: ListQuotesParams) {
   }
 
   let leadByName = new Map<string, { name: string; logo_url?: string | null }>();
-  if (missingLeadNames.length > 0) {
-    const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
+  if (leadLookupNames.length > 0) {
     const loadLeads = async (withLogo: boolean) => {
       const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
       const [byCompany, byLegal] = await Promise.all([
@@ -222,13 +222,13 @@ export async function listQuotes(params: ListQuotesParams) {
           .from("leads")
           .select(columns)
           .eq("team_id", teamId)
-          .in("company_name", missingLeadNames),
+          .in("company_name", leadLookupNames),
         supabase
           .schema("tosho")
           .from("leads")
           .select(columns)
           .eq("team_id", teamId)
-          .in("legal_name", missingLeadNames),
+          .in("legal_name", leadLookupNames),
       ]);
       return [byCompany, byLegal] as const;
     };
@@ -270,7 +270,8 @@ export async function listQuotes(params: ListQuotesParams) {
 
   return rows.map((row) => {
     const customer = row.customer_id ? customerById.get(row.customer_id) : undefined;
-    const leadFallback = !row.customer_id ? leadByName.get((row.title ?? "").trim().toLowerCase()) : undefined;
+    const leadLookupKey = !row.customer_id ? normalize((row.customer_name ?? row.title ?? "").trim()) : "";
+    const leadFallback = !row.customer_id && leadLookupKey ? leadByName.get(leadLookupKey) : undefined;
     return {
       ...row,
       customer_name:
