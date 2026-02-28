@@ -87,6 +87,7 @@ type DesignTask = {
   quoteNumber?: string | null;
   customerName?: string | null;
   customerLogoUrl?: string | null;
+  quoteManagerUserId?: string | null;
   designBrief?: string | null;
   createdAt?: string | null;
 };
@@ -294,6 +295,17 @@ const getErrorMessage = (error: unknown, fallback: string) => {
     if (typeof record.message === "string" && record.message) return record.message;
   }
   return fallback;
+};
+
+function isBrokenSupabaseRestUrl(value?: string | null): boolean {
+  if (!value) return false;
+  return /\/rest\/v1\//i.test(value);
+}
+
+const normalizeLogoUrl = (value?: string | null) => {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
 };
 
 export default function DesignTaskPage() {
@@ -548,6 +560,10 @@ export default function DesignTaskPage() {
         let quote: {
           number?: string | null;
           customer_id?: string | null;
+          customer_name?: string | null;
+          customer_logo_url?: string | null;
+          title?: string | null;
+          assigned_to?: string | null;
           created_at?: string | null;
           design_brief?: string | null;
           comment?: string | null;
@@ -556,7 +572,7 @@ export default function DesignTaskPage() {
           const { data: quoteData, error: quoteError } = await supabase
             .schema("tosho")
             .from("quotes")
-            .select("number, customer_id, created_at, design_brief, comment")
+            .select("number, customer_id, customer_name, customer_logo_url, title, assigned_to, created_at, design_brief, comment")
             .eq("id", quoteId)
             .maybeSingle();
           if (
@@ -567,13 +583,16 @@ export default function DesignTaskPage() {
             const { data: quoteFallback, error: quoteFallbackError } = await supabase
               .schema("tosho")
               .from("quotes")
-              .select("number, customer_id, created_at, comment")
+              .select("number, customer_id, customer_name, title, assigned_to, created_at, comment")
               .eq("id", quoteId)
               .maybeSingle();
             if (quoteFallbackError) throw quoteFallbackError;
             quote = quoteFallback as {
               number?: string | null;
               customer_id?: string | null;
+              customer_name?: string | null;
+              title?: string | null;
+              assigned_to?: string | null;
               created_at?: string | null;
               comment?: string | null;
             } | null;
@@ -583,6 +602,10 @@ export default function DesignTaskPage() {
             quote = quoteData as {
               number?: string | null;
               customer_id?: string | null;
+              customer_name?: string | null;
+              customer_logo_url?: string | null;
+              title?: string | null;
+              assigned_to?: string | null;
               created_at?: string | null;
               design_brief?: string | null;
               comment?: string | null;
@@ -591,8 +614,14 @@ export default function DesignTaskPage() {
         }
 
         let customerName: string | null =
-          typeof meta.customer_name === "string" && meta.customer_name.trim() ? meta.customer_name.trim() : null;
-        let customerLogoUrl: string | null = null;
+          (typeof meta.customer_name === "string" && meta.customer_name.trim() ? meta.customer_name.trim() : null) ??
+          (typeof quote?.customer_name === "string" && quote.customer_name.trim() ? quote.customer_name.trim() : null) ??
+          (typeof quote?.title === "string" && quote.title.trim() ? quote.title.trim() : null);
+        let customerLogoUrl: string | null =
+          normalizeLogoUrl(
+            typeof meta.customer_logo_url === "string" ? meta.customer_logo_url : null
+          ) ??
+          normalizeLogoUrl(quote?.customer_logo_url ?? null);
         if (quote?.customer_id) {
           let customerQuery = await supabase
             .schema("tosho")
@@ -615,8 +644,43 @@ export default function DesignTaskPage() {
           }
 
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = cust?.name ?? cust?.legal_name ?? null;
-          customerLogoUrl = cust?.logo_url ?? null;
+          customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
+          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(cust?.logo_url ?? null);
+        } else {
+          const leadLookupName = (customerName ?? quote?.title ?? "").trim();
+          if (leadLookupName) {
+            const loadLead = async (withLogo: boolean) => {
+              const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
+              const [byCompany, byLegal] = await Promise.all([
+                supabase
+                  .schema("tosho")
+                  .from("leads")
+                  .select(columns)
+                  .eq("team_id", effectiveTeamId)
+                  .eq("company_name", leadLookupName)
+                  .limit(1)
+                  .maybeSingle(),
+                supabase
+                  .schema("tosho")
+                  .from("leads")
+                  .select(columns)
+                  .eq("team_id", effectiveTeamId)
+                  .eq("legal_name", leadLookupName)
+                  .limit(1)
+                  .maybeSingle(),
+              ]);
+              return byCompany.data ?? byLegal.data ?? null;
+            };
+            let lead = await loadLead(true);
+            if (!lead) {
+              lead = await loadLead(false);
+            }
+            if (lead) {
+              const leadRow = lead as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null };
+              customerName = customerName ?? leadRow.company_name ?? leadRow.legal_name ?? null;
+              customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(leadRow.logo_url ?? null);
+            }
+          }
         }
 
         // first quote item (only for quote-linked tasks)
@@ -772,6 +836,11 @@ export default function DesignTaskPage() {
             null,
           customerName,
           customerLogoUrl,
+          quoteManagerUserId:
+            (typeof meta.manager_user_id === "string" && meta.manager_user_id.trim()
+              ? meta.manager_user_id
+              : null) ??
+            (typeof quote?.assigned_to === "string" && quote.assigned_to.trim() ? quote.assigned_to : null),
           designBrief:
             (typeof meta.design_brief === "string" && meta.design_brief.trim() ? meta.design_brief.trim() : null) ??
             quote?.design_brief ??
@@ -2519,7 +2588,7 @@ export default function DesignTaskPage() {
   const taskManagerUserId =
     typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
       ? (task.metadata.manager_user_id as string)
-      : null;
+      : task.quoteManagerUserId ?? null;
   const taskManagerLabel =
     (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
     (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");

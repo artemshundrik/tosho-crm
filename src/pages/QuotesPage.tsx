@@ -110,6 +110,7 @@ import { PageCanvas, PageCanvasBody, PageCanvasHeader } from "@/components/canva
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
+import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
 
 type QuotesPageProps = {
   teamId: string;
@@ -4295,12 +4296,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto px-4 pb-4 pt-3 md:px-5 md:pb-5">
-              <div className="w-max flex gap-4 pb-0">
+            <KanbanBoard>
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
-                    <div
+                    <KanbanColumn
                       key={column.id}
                       className={cn(
                         "kanban-column-surface",
@@ -4308,6 +4308,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
                         "basis-[320px] h-[calc(100dvh-17rem)] shrink-0 flex flex-col"
                       )}
+                      header={
+                        <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {(() => {
+                              const Icon = statusIcons[column.id] ?? Clock;
+                              return <Icon className={cn("h-3.5 w-3.5 shrink-0", statusColorClass[column.id] ?? "text-muted-foreground")} />;
+                            })()}
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                              {column.label}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                            {items.length}
+                          </span>
+                        </div>
+                      }
                       onDragOver={(e) => {
                         e.preventDefault();
                         if (dragOverColumnId !== column.id) {
@@ -4331,25 +4347,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         handleDropToStatus(column.id);
                       }}
                     >
-                      <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {(() => {
-                            const Icon = statusIcons[column.id] ?? Clock;
-                            return <Icon className={cn("h-3.5 w-3.5 shrink-0", statusColorClass[column.id] ?? "text-muted-foreground")} />;
-                          })()}
-                          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
-                            {column.label}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
-                          {items.length}
-                        </span>
-                      </div>
                       <div
-                        className={cn(
-                          "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2.5 pb-3.5 pt-2.5 space-y-2",
-                          draggingId && "pb-4"
-                        )}
+                        className={cn("px-2.5 pb-3.5 pt-2.5 space-y-2", draggingId && "pb-4")}
                         onDragOver={(e) => {
                           e.preventDefault();
                           if (!draggingId) return;
@@ -4406,8 +4405,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
                                   <div className="kanban-drop-placeholder-inline" />
                                 ) : null}
-                                <div
-                                  data-kanban-card="true"
+                                <KanbanCard
                                   draggable
                                   onDragStart={() => handleDragStart(row.id)}
                                   onDragEnd={() => {
@@ -4533,7 +4531,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       })()
                                     ) : null}
                                   </div>
-                                </div>
+                                </KanbanCard>
                               </div>
                             );
                           })
@@ -4545,11 +4543,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           <div className="kanban-drop-placeholder-inline" />
                         ) : null}
                       </div>
-                    </div>
+                    </KanbanColumn>
                   );
                 })}
-              </div>
-            </div>
+            </KanbanBoard>
           )}
         </EstimatesKanbanCanvas>
       ))}

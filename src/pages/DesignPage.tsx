@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Loader2, Palette, CheckCircle2, Paperclip, Clock, Timer, MoreVertical, Trash2, Plus, Building2, User, Calendar as CalendarIcon, Check } from "lucide-react";
+import { Loader2, Palette, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, Building2, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -29,7 +29,9 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
+import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -48,7 +50,11 @@ type DesignTask = {
   designDeadline?: string | null;
   quoteNumber?: string | null;
   customerName?: string | null;
+  customerLogoUrl?: string | null;
+  partyType?: "customer" | "lead" | null;
   productName?: string | null;
+  productImageUrl?: string | null;
+  productQtyLabel?: string | null;
   createdAt?: string | null;
 };
 
@@ -105,15 +111,33 @@ type DesignStatus =
   | "approved"
   | "cancelled";
 
-const DESIGN_COLUMNS: { id: DesignStatus; label: string; hint: string; color: string }[] = [
-  { id: "new", label: "Новий", hint: "Нові завдання", color: "design-status-dot-new" },
-  { id: "changes", label: "Правки", hint: "Повернуті від клієнта", color: "design-status-dot-changes" },
-  { id: "in_progress", label: "В роботі", hint: "Дизайнер працює", color: "design-status-dot-in-progress" },
-  { id: "pm_review", label: "На перевірці", hint: "PM перевіряє", color: "design-status-dot-pm-review" },
-  { id: "client_review", label: "На погодженні", hint: "Клієнт дивиться", color: "design-status-dot-client-review" },
-  { id: "approved", label: "Затверджено", hint: "Готово", color: "design-status-dot-approved" },
-  { id: "cancelled", label: "Скасовано", hint: "Скасовано", color: "design-status-dot-cancelled" },
+const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
+  { id: "new", label: "Новий" },
+  { id: "changes", label: "Правки" },
+  { id: "in_progress", label: "В роботі" },
+  { id: "pm_review", label: "На перевірці" },
+  { id: "client_review", label: "На погодженні" },
+  { id: "approved", label: "Затверджено" },
+  { id: "cancelled", label: "Скасовано" },
 ];
+const DESIGN_STATUS_ICON_BY_STATUS = {
+  new: Plus,
+  changes: RefreshCw,
+  in_progress: PlayCircle,
+  pm_review: ShieldCheck,
+  client_review: Hourglass,
+  approved: CheckCircle2,
+  cancelled: XCircle,
+} satisfies Record<DesignStatus, typeof CheckCircle2>;
+const DESIGN_STATUS_ICON_COLOR_BY_STATUS: Record<DesignStatus, string> = {
+  new: "text-muted-foreground",
+  changes: "text-warning-foreground",
+  in_progress: "text-info-foreground",
+  pm_review: "text-info-foreground",
+  client_review: "text-warning-foreground",
+  approved: "text-success-foreground",
+  cancelled: "text-danger-foreground",
+};
 const STATUS_BADGE_CLASS_BY_STATUS: Record<DesignStatus, string> = {
   new: "design-status-badge-new",
   changes: "design-status-badge-changes",
@@ -147,15 +171,6 @@ const DESIGN_FILES_BUCKET =
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 const MAX_BRIEF_FILES = 5;
-const HoverHint = ({ text, children }: { text: string; children: ReactNode }) => (
-  <span className="relative inline-flex group/tt">
-    {children}
-    <span className="pointer-events-none absolute left-0 top-full z-40 mt-2 w-max max-w-[320px] whitespace-normal rounded-md border border-border/60 bg-popover px-2 py-1 text-[11px] leading-4 text-popover-foreground shadow-md opacity-0 translate-y-1 transition-all duration-150 group-hover/tt:translate-y-0 group-hover/tt:opacity-100">
-      {text}
-    </span>
-  </span>
-);
-
 const formatEstimateMinutes = (minutes?: number | null) => {
   if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "Не вказано";
   const value = Math.round(minutes);
@@ -186,6 +201,57 @@ const getErrorMessage = (error: unknown, fallback: string) => {
     if (typeof record.message === "string" && record.message) return record.message;
   }
   return fallback;
+};
+
+const getTaskPartyLabel = () => "Клієнт";
+
+function isBrokenSupabaseRestUrl(value?: string | null): boolean {
+  if (!value) return false;
+  return /\/rest\/v1\//i.test(value);
+}
+
+const normalizeLogoUrl = (value?: string | null) => {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
+};
+
+const parseDateOnly = (value: string) => {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1);
+  }
+  return new Date(value);
+};
+
+const getDeadlineBadge = (value?: string | null) => {
+  if (!value) return { label: "Не вказано", tone: "none" as const };
+  const date = parseDateOnly(value);
+  if (Number.isNaN(date.getTime())) return { label: "Не вказано", tone: "none" as const };
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startOfDeadline = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { label: `Прострочено (${Math.abs(diffDays)} дн.)`, tone: "overdue" as const };
+  if (diffDays === 0) return { label: "Сьогодні", tone: "today" as const };
+  if (diffDays <= 2) return { label: diffDays === 1 ? "Завтра" : `Через ${diffDays} дн.`, tone: "soon" as const };
+  return { label: date.toLocaleDateString("uk-UA"), tone: "future" as const };
+};
+
+const formatDeadlineShort = (value: string) => {
+  const date = parseDateOnly(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+};
+
+const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
+  const qtyValue = Number(qty ?? 0);
+  if (!Number.isFinite(qtyValue) || qtyValue <= 0) return null;
+  const qtyLabel = Number.isInteger(qtyValue) ? String(qtyValue) : qtyValue.toLocaleString("uk-UA");
+  const rawUnit = (unit ?? "").trim().toLowerCase();
+  if (rawUnit === "pcs" || rawUnit === "pc") return `${qtyLabel} шт.`;
+  if (rawUnit === "шт" || rawUnit === "шт." || rawUnit === "штук") return `${qtyLabel} шт.`;
+  return `${qtyLabel} ${unit?.trim() || "шт."}`;
 };
 
 export default function DesignPage() {
@@ -509,6 +575,18 @@ export default function DesignPage() {
               typeof metadata.customer_name === "string" && metadata.customer_name.trim()
                 ? metadata.customer_name.trim()
                 : null,
+            customerLogoUrl:
+              typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
+                ? metadata.customer_logo_url.trim()
+                : null,
+            partyType:
+              typeof metadata.customer_type === "string"
+                ? (metadata.customer_type.trim().toLowerCase() === "lead"
+                    ? "lead"
+                    : metadata.customer_type.trim().toLowerCase() === "customer"
+                      ? "customer"
+                      : null)
+                : null,
             productName:
               typeof metadata.product_name === "string" && metadata.product_name.trim()
                 ? metadata.product_name.trim()
@@ -528,29 +606,35 @@ export default function DesignPage() {
       const quoteIds = Array.from(
         new Set(parsedRaw.map((t) => t.quoteId).filter((quoteId): quoteId is string => !!quoteId && isUuid(quoteId)))
       );
-      let quoteMap = new Map<string, { number: string | null; customerName: string | null }>();
-      let productNameByQuoteId = new Map<string, string | null>();
+      let quoteMap = new Map<string, { number: string | null; customerName: string | null; customerLogoUrl: string | null; partyType: "customer" | "lead" }>();
+      const productNameByQuoteId = new Map<string, string | null>();
+      const productImageByQuoteId = new Map<string, string | null>();
+      const productQtyByQuoteId = new Map<string, string | null>();
       if (quoteIds.length > 0) {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
           .from("quotes")
-          .select("id, number, customer_id")
+          .select("id, number, customer_id, customer_name, customer_logo_url, title")
           .in("id", quoteIds);
         if (quoteError) throw quoteError;
 
         const customerIds = Array.from(
           new Set((quoteRows ?? []).map((q) => q.customer_id).filter(Boolean) as string[])
         );
-        const customerMap = new Map<string, string | null>();
+        const customerMap = new Map<string, { name: string | null; logoUrl: string | null }>();
         if (customerIds.length > 0) {
           const { data: customers, error: custError } = await supabase
             .schema("tosho")
             .from("customers")
-            .select("id, name, legal_name")
+            .select("id, name, legal_name, logo_url")
             .in("id", customerIds);
           if (custError) throw custError;
           (customers ?? []).forEach((c) => {
-            customerMap.set(c.id, (c.name as string) ?? (c.legal_name as string) ?? null);
+            const name =
+              (typeof c.name === "string" && c.name.trim() ? c.name : null) ??
+              (typeof c.legal_name === "string" && c.legal_name.trim() ? c.legal_name : null);
+            const logoUrl = typeof c.logo_url === "string" && c.logo_url.trim() ? c.logo_url : null;
+            customerMap.set(c.id, { name, logoUrl });
           });
         }
 
@@ -559,7 +643,15 @@ export default function DesignPage() {
             q.id as string,
             {
               number: (q.number as string) ?? null,
-              customerName: customerMap.get(q.customer_id as string) ?? null,
+              customerName:
+                (typeof q.customer_name === "string" && q.customer_name.trim() ? q.customer_name.trim() : null) ??
+                customerMap.get(q.customer_id as string)?.name ??
+                (typeof q.title === "string" && q.title.trim() ? q.title.trim() : null),
+              customerLogoUrl:
+                normalizeLogoUrl(
+                  typeof q.customer_logo_url === "string" ? q.customer_logo_url : null
+                ) ?? normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null),
+              partyType: q.customer_id ? "customer" : "lead",
             },
           ])
         );
@@ -567,16 +659,83 @@ export default function DesignPage() {
         const { data: quoteItems, error: quoteItemsError } = await supabase
           .schema("tosho")
           .from("quote_items")
-          .select("quote_id, position, name")
+          .select("quote_id, position, name, qty, unit, attachment, catalog_model_id")
           .in("quote_id", quoteIds)
           .order("position", { ascending: true });
         if (quoteItemsError) throw quoteItemsError;
 
+        const firstItemByQuoteId = new Map<
+          string,
+          {
+            quote_id: string | null;
+            name?: string | null;
+            qty?: number | null;
+            unit?: string | null;
+            attachment?: unknown;
+            catalog_model_id?: string | null;
+          }
+        >();
         (quoteItems ?? []).forEach((item) => {
           const quoteId = typeof item.quote_id === "string" ? item.quote_id : null;
           if (!quoteId || productNameByQuoteId.has(quoteId)) return;
           const name = typeof item.name === "string" ? item.name.trim() : "";
           productNameByQuoteId.set(quoteId, name || null);
+          productQtyByQuoteId.set(
+            quoteId,
+            formatQtyLabel(
+              typeof item.qty === "number" ? item.qty : item.qty ? Number(item.qty) : null,
+              typeof item.unit === "string" ? item.unit : null
+            )
+          );
+          firstItemByQuoteId.set(quoteId, item);
+        });
+
+        const modelIds = Array.from(
+          new Set(
+            Array.from(firstItemByQuoteId.values())
+              .map((item) =>
+                typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
+                  ? item.catalog_model_id.trim()
+                  : ""
+              )
+              .filter(Boolean)
+          )
+        );
+        const modelImageById = new Map<string, string>();
+        if (modelIds.length > 0) {
+          const loadModels = async (withImage: boolean) => {
+            const columns = withImage ? "id,image_url" : "id";
+            return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", modelIds);
+          };
+          let { data: modelRows, error: modelError } = await loadModels(true);
+          if (
+            modelError &&
+            /column/i.test(modelError.message ?? "") &&
+            /image_url/i.test(modelError.message ?? "")
+          ) {
+            ({ data: modelRows, error: modelError } = await loadModels(false));
+          }
+          if (!modelError) {
+            (((modelRows ?? []) as unknown) as Array<{ id: string; image_url?: string | null }>).forEach((row) => {
+              const imageUrl = row.image_url?.trim();
+              if (!imageUrl) return;
+              modelImageById.set(row.id, imageUrl);
+            });
+          }
+        }
+
+        firstItemByQuoteId.forEach((item, quoteId) => {
+          const attachmentImage =
+            item.attachment &&
+            typeof item.attachment === "object" &&
+            typeof (item.attachment as Record<string, unknown>).url === "string"
+              ? String((item.attachment as Record<string, unknown>).url)
+              : null;
+          const catalogImage =
+            typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
+              ? modelImageById.get(item.catalog_model_id.trim()) ?? null
+              : null;
+          productImageByQuoteId.set(quoteId, attachmentImage || catalogImage || null);
         });
       }
 
@@ -584,7 +743,14 @@ export default function DesignPage() {
         ...t,
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
         customerName: t.customerName ?? quoteMap.get(t.quoteId)?.customerName ?? null,
+        customerLogoUrl:
+          normalizeLogoUrl(t.customerLogoUrl) ??
+          normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null) ??
+          null,
+        partyType: t.partyType ?? quoteMap.get(t.quoteId)?.partyType ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
+        productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
+        productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
       }));
 
       setTasks(parsed);
@@ -1551,12 +1717,11 @@ export default function DesignPage() {
 
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
-    const timerSummary = getTaskTimerSummary(task.id);
-    const trackedLabel = formatElapsedSeconds(getTaskTrackedSeconds(task.id));
-    const hasActiveTimer = !!timerSummary.activeStartedAt;
+    const partyLabel = getTaskPartyLabel();
+    const assigneeLabel = getMemberLabel(task.assigneeUserId);
+    const deadlineBadge = getDeadlineBadge(task.designDeadline);
     return (
-      <div
-        key={task.id}
+      <KanbanCard
         draggable={options?.draggable}
         onDragStart={
           options?.draggable ? (event) => startDraggingTask(event as React.DragEvent<HTMLDivElement>, task.id) : undefined
@@ -1580,7 +1745,7 @@ export default function DesignPage() {
           }
         }}
         className={cn(
-          "rounded-lg border border-border/60 bg-card/90 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer",
+          "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
           draggingId === task.id && "ring-2 ring-primary/40"
         )}
       >
@@ -1603,14 +1768,6 @@ export default function DesignPage() {
                 {task.title ?? task.quoteId.slice(0, 8)}
               </div>
             )}
-            <div className="text-[11px] text-muted-foreground truncate" title={task.customerName ?? ""}>
-              {task.customerName ?? "Не вказано"}
-            </div>
-            {isLinkedQuote ? (
-              <div className="text-[11px] text-muted-foreground truncate" title={task.productName ?? ""}>
-                Товар: {task.productName ?? "Не вказано"}
-              </div>
-            ) : null}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1683,24 +1840,76 @@ export default function DesignPage() {
           </DropdownMenu>
         </div>
         {task.title ? <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div> : null}
+        <div className="mt-3 space-y-3">
+          <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
+            <EntityAvatar
+              src={task.customerLogoUrl ?? null}
+              name={task.customerName ?? "Клієнт / Лід"}
+              fallback={getInitials(task.customerName)}
+              size={32}
+            />
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                {partyLabel}
+              </div>
+              <div className="truncate text-[14px] font-semibold" title={task.customerName ?? "Не вказано"}>
+                {task.customerName ?? "Не вказано"}
+              </div>
+            </div>
+          </div>
+        </div>
+        {isLinkedQuote && task.productName ? (
+          <div className="mt-3 rounded-[14px] border border-border/60 bg-background/35 px-3 py-2.5">
+            <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <Package className="h-3.5 w-3.5" />
+              Товар
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
+                {task.productImageUrl ? (
+                  <img
+                    src={task.productImageUrl}
+                    alt={task.productName}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+                    <Package className="h-4 w-4" />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[14px] font-medium" title={task.productName}>
+                  {task.productName}
+                </div>
+                {task.productQtyLabel ? (
+                  <div className="text-[13px] font-normal text-muted-foreground">{task.productQtyLabel}</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+          <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
+            <AvatarBase
+              src={task.assigneeUserId ? getMemberAvatar(task.assigneeUserId) : null}
+              name={assigneeLabel}
+              fallback={task.assigneeUserId ? getInitials(assigneeLabel) : "БВ"}
+              size={26}
+              className="text-[10px] font-semibold"
+            />
+            <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
+          </div>
+          {task.designDeadline ? (
+            (() => {
+              const shortLabel = formatDeadlineShort(task.designDeadline);
+              if (!shortLabel) return null;
+              return <QuoteDeadlineBadge tone={deadlineBadge.tone} label={shortLabel} compact />;
+            })()
+          ) : null}
+        </div>
         <div className="mt-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-            Виконавець:{" "}
-            {task.assigneeUserId ? (
-              <span className="inline-flex items-center gap-1">
-                  <AvatarBase
-                    src={getMemberAvatar(task.assigneeUserId)}
-                    name={getMemberLabel(task.assigneeUserId)}
-                    fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-                    size={14}
-                  className="shrink-0 border-border/70"
-                />
-                <span className="font-medium text-foreground">{getMemberLabel(task.assigneeUserId)}</span>
-              </span>
-            ) : (
-              <span className="font-medium text-warning-foreground">{getMemberLabel(task.assigneeUserId)}</span>
-            )}
-          </span>
           {!task.assigneeUserId && canSelfAssign && userId ? (
             <Button
               size="sm"
@@ -1715,69 +1924,7 @@ export default function DesignPage() {
             </Button>
           ) : null}
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-          {task.methodsCount ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {task.methodsCount} нанес.
-            </span>
-          ) : null}
-          {task.hasFiles ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-              <Paperclip className="h-3.5 w-3.5" /> Файли
-            </span>
-          ) : null}
-          {task.designDeadline ? (
-            <HoverHint
-              text={`Дедлайн: ${new Date(task.designDeadline).toLocaleDateString("uk-UA", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}`}
-            >
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <Clock className="h-3.5 w-3.5" />
-                {new Date(task.designDeadline).toLocaleDateString("uk-UA", {
-                  day: "numeric",
-                  month: "short",
-                })}
-              </span>
-            </HoverHint>
-          ) : null}
-          <HoverHint text={hasActiveTimer ? "Таймер активний (накопичений час)" : "Накопичений витрачений час"}>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-1",
-                hasActiveTimer ? "border-success-soft-border text-success-foreground bg-success-soft" : "border-border/60"
-              )}
-            >
-              <Clock className="h-3.5 w-3.5" /> {trackedLabel}
-            </span>
-          </HoverHint>
-          {hasActiveTimer ? (
-            <HoverHint
-              text={`Таймер зараз запущений${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}`}
-            >
-              <span className="inline-flex items-center gap-1 rounded-full border border-success-soft-border bg-success-soft px-2 py-1 text-success-foreground">
-                <span className="h-2 w-2 rounded-full design-status-dot-approved animate-pulse" />
-                Активний
-              </span>
-            </HoverHint>
-          ) : null}
-          {getTaskEstimateMinutes(task) ? (
-            <HoverHint text={`Естімейт: ${formatEstimateMinutes(getTaskEstimateMinutes(task))}`}>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <Timer className="h-3.5 w-3.5" /> {formatEstimateMinutes(getTaskEstimateMinutes(task))}
-              </span>
-            </HoverHint>
-          ) : (
-            <HoverHint text="Для задачі не встановлено естімейт">
-              <span className="inline-flex items-center gap-1 rounded-full border border-warning-soft-border bg-warning-soft px-2 py-1 text-warning-foreground">
-                <Timer className="h-3.5 w-3.5" /> Без естімейту
-              </span>
-            </HoverHint>
-          )}
-        </div>
-      </div>
+      </KanbanCard>
     );
   };
 
@@ -1842,21 +1989,35 @@ export default function DesignPage() {
       ) : null}
 
       {viewMode === "kanban" ? (
-        <div className="overflow-x-auto">
-          <div className="flex gap-4 min-w-[1100px]">
+        <KanbanBoard className="px-0 pb-0 pt-0" rowClassName="min-w-[1100px]">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
-              const activeTimersInColumn = items.filter(
-                (task) => !!getTaskTimerSummary(task.id).activeStartedAt
-              ).length;
               return (
-                <div
+                <KanbanColumn
                   key={col.id}
                   className={cn(
-                    "w-[240px] flex-shrink-0 bg-card/70 border border-border/60 rounded-lg shadow-sm flex flex-col transition-colors",
+                    "kanban-column-surface basis-[320px] h-[calc(100dvh-17rem)] transition-colors",
+                    `kanban-column-status-${col.id}`,
                     draggingId && "border-primary/35",
                     dropTargetStatus === col.id && "border-primary bg-primary/5"
                   )}
+                  header={
+                    <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {(() => {
+                          const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
+                          return <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />;
+                        })()}
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                          {col.label}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                        {items.length}
+                      </span>
+                    </div>
+                  }
+                  bodyClassName="px-2.5 pb-3.5 pt-2.5 space-y-2"
                   onDragOver={(event) => {
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "move";
@@ -1878,44 +2039,17 @@ export default function DesignPage() {
                     stopDraggingTask();
                   }}
                 >
-                  <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("h-2.5 w-2.5 rounded-full", col.color)} />
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-foreground">{col.label}</div>
-                        <div className="text-[11px] text-muted-foreground">{col.hint}</div>
-                      </div>
+                  {items.length === 0 ? (
+                    <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+                      Немає задач
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {activeTimersInColumn > 0 ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[11px] px-2 py-0.5 border-success-soft-border bg-success-soft text-success-foreground"
-                          title="Активні таймери"
-                        >
-                          <Clock className="h-3 w-3 mr-1" />
-                          {activeTimersInColumn}
-                        </Badge>
-                      ) : null}
-                      <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
-                        {items.length}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
-                    {items.length === 0 ? (
-                      <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
-                        Немає задач
-                      </div>
-                    ) : (
-                      items.map((task) => renderTaskCard(task, { draggable: true }))
-                    )}
-                  </div>
-                </div>
+                  ) : (
+                    items.map((task) => renderTaskCard(task, { draggable: true }))
+                  )}
+                </KanbanColumn>
               );
             })}
-          </div>
-        </div>
+        </KanbanBoard>
       ) : null}
 
       {viewMode === "timeline" ? (
@@ -2445,7 +2579,7 @@ export default function DesignPage() {
                       >
                         Використати: {createCustomerSearch.trim() || "назву"}
                       </Button>
-                      {!!createCustomer.trim() ? (
+                      {createCustomer.trim() ? (
                         <Button
                           type="button"
                           size="sm"
