@@ -498,14 +498,18 @@ export async function getQuoteSummary(quoteId: string) {
       summary.customer_name ??
       (briefRow as { customer_name?: string | null } | null)?.customer_name ??
       null;
+    const currentCustomerLogo =
+      summary.customer_logo_url ??
+      (briefRow as { customer_logo_url?: string | null } | null)?.customer_logo_url ??
+      null;
     let leadFallback: { name: string; logo_url?: string | null } | null = null;
+    const leadLookupName = (currentCustomerName ?? summary.title ?? "").trim();
     if (
       !summary.customer_id &&
-      !(currentCustomerName ?? "").trim() &&
-      (summary.title ?? "").trim() &&
+      leadLookupName &&
+      (!(currentCustomerLogo ?? "").trim() || !(currentCustomerName ?? "").trim()) &&
       (summary.team_id ?? "").trim()
     ) {
-      const leadTitle = (summary.title ?? "").trim();
       const teamId = (summary.team_id ?? "").trim();
       const loadLead = async (withLogo: boolean) => {
         const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
@@ -514,7 +518,7 @@ export async function getQuoteSummary(quoteId: string) {
           .from("leads")
           .select(columns)
           .eq("team_id", teamId)
-          .or(`company_name.eq.${leadTitle},legal_name.eq.${leadTitle}`)
+          .or(`company_name.eq.${leadLookupName},legal_name.eq.${leadLookupName}`)
           .limit(1)
           .maybeSingle<{
             company_name?: string | null;
@@ -532,7 +536,7 @@ export async function getQuoteSummary(quoteId: string) {
       }
       if (!leadError && leadRow) {
         leadFallback = {
-          name: (leadRow.company_name ?? leadRow.legal_name ?? "").trim() || leadTitle,
+          name: (leadRow.company_name ?? leadRow.legal_name ?? "").trim() || leadLookupName,
           logo_url: leadRow.logo_url ?? null,
         };
       }
@@ -545,8 +549,7 @@ export async function getQuoteSummary(quoteId: string) {
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
       customer_name: currentCustomerName ?? leadFallback?.name ?? ((summary.title ?? "").trim() || null),
       customer_logo_url:
-        summary.customer_logo_url ??
-        (briefRow as { customer_logo_url?: string | null } | null)?.customer_logo_url ??
+        currentCustomerLogo ??
         leadFallback?.logo_url ??
         null,
     } as QuoteSummaryRow;
