@@ -997,3 +997,11 @@
   background-size: 200% auto;
   animation: shimmer 2s linear infinite;
 }
+
+/* Remove non-popover shadows globally, keep shadows inside Radix popper content. */
+:where(*:not([data-radix-popper-content-wrapper], [data-radix-popper-content-wrapper] *)) {
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    0 0 #0000 !important;
+}

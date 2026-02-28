@@ -32,6 +32,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
+import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
 import {
   Building2,
@@ -113,9 +114,9 @@ const DELIVERY_PAYER_OPTIONS = [
  * Quantity units
  */
 const QUANTITY_UNITS = [
-  { value: "pcs", label: "шт" },
-  { value: "m", label: "м" },
-  { value: "m2", label: "м²" },
+  { value: "шт.", label: "шт." },
+  { value: "м", label: "м" },
+  { value: "м²", label: "м²" },
 ];
 
 /**
@@ -269,7 +270,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
   const [quantity, setQuantity] = React.useState<number>();
-  const [quantityUnit, setQuantityUnit] = React.useState("pcs");
+  const [quantityUnit, setQuantityUnit] = React.useState("шт.");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
   const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("with_print");
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
@@ -336,7 +337,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setKindId(initialValues?.kindId ?? "");
     setModelId(initialValues?.modelId ?? "");
     setQuantity(initialValues?.quantity);
-    setQuantityUnit(initialValues?.quantityUnit ?? "pcs");
+    setQuantityUnit(normalizeUnitLabel(initialValues?.quantityUnit ?? "шт."));
     setPrintApplications(nextPrintApplications);
     const nextPrintMode = nextPrintApplications.length > 0 ? "with_print" : "no_print";
     setPrintMode(nextPrintMode);
@@ -514,7 +515,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       kindId,
       modelId,
       quantity,
-      quantityUnit,
+      quantityUnit: normalizeUnitLabel(quantityUnit),
       printApplications: finalPrints,
       createDesignTask: shouldCreateDesignTask,
       files,

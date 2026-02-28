@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
@@ -337,7 +338,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState("");
   const [itemQty, setItemQty] = useState("1");
-  const [itemUnit, setItemUnit] = useState("шт");
+  const [itemUnit, setItemUnit] = useState("шт.");
   const [itemPrice, setItemPrice] = useState("0");
   const [itemDescription, setItemDescription] = useState("");
   const [itemTypeId, setItemTypeId] = useState("");
@@ -1503,7 +1504,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             position: row.position ?? undefined,
             title: row.name ?? "",
             qty: Number(row.qty ?? 0) || 0,
-            unit: row.unit ?? "шт",
+            unit: normalizeUnitLabel(row.unit),
             price: Number(row.unit_price ?? 0) || 0,
             description: row.description ?? undefined,
             catalogTypeId: row.catalog_type_id ?? undefined,
@@ -2172,7 +2173,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           name: (row.name as string | null) ?? "Позиція",
           description: (row.description as string | null) ?? null,
           qty: Number(row.qty ?? 1) || 1,
-          unit: (row.unit as string | null) ?? "шт",
+          unit: normalizeUnitLabel(row.unit as string | null),
           unit_price: Number(row.unit_price ?? 0) || 0,
           line_total: Number(row.line_total ?? 0) || 0,
           catalog_type_id: (row.catalog_type_id as string | null) ?? null,
@@ -2274,7 +2275,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setEditingItemId(null);
     setItemTitle("");
     setItemQty("1");
-    setItemUnit("шт");
+    setItemUnit("шт.");
     setItemPrice("0");
     setItemDescription("");
     setItemTypeId("");
@@ -2295,7 +2296,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setEditingItemId(item.id);
     setItemTitle(item.title);
     setItemQty(String(item.qty));
-    setItemUnit(item.unit);
+    setItemUnit(normalizeUnitLabel(item.unit));
     setItemPrice(String(item.price));
     setItemDescription(item.description ?? "");
     setItemTypeId(item.catalogTypeId ?? item.productTypeId ?? "");
@@ -2496,7 +2497,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       position: undefined,
       title: itemTitle.trim(),
       qty: Math.max(1, Number(itemQty) || 1),
-      unit: itemUnit,
+      unit: normalizeUnitLabel(itemUnit),
       price: computedItemPrice,
       description: itemDescription.trim() || undefined,
       catalogTypeId: itemFormMode === "advanced" ? itemTypeId : undefined,
@@ -2525,7 +2526,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             name: newItem.title,
             description: newItem.description ?? null,
             qty: newItem.qty,
-            unit: newItem.unit,
+            unit: normalizeUnitLabel(newItem.unit),
             unit_price: newItem.price,
             line_total: newItem.qty * newItem.price,
             catalog_type_id: newItem.catalogTypeId ?? null,
@@ -2554,7 +2555,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             name: newItem.title,
             description: newItem.description ?? null,
             qty: newItem.qty,
-            unit: newItem.unit,
+            unit: normalizeUnitLabel(newItem.unit),
             unit_price: newItem.price,
             line_total: newItem.qty * newItem.price,
             catalog_type_id: newItem.catalogTypeId ?? null,
@@ -2571,7 +2572,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           id: data?.id ?? newId,
           position: data?.position ?? nextPosition,
           qty: Number(data?.qty ?? newItem.qty),
-          unit: data?.unit ?? newItem.unit,
+          unit: normalizeUnitLabel((data?.unit as string | null | undefined) ?? newItem.unit),
           price: Number(data?.unit_price ?? newItem.price),
           description: data?.description ?? newItem.description,
         };
@@ -3269,12 +3270,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Building2 className="h-3.5 w-3.5" />
-                    Замовник
+                    {quote.customer_id ? "Клієнт" : "Лід"}
                   </div>
                   <div className="flex items-center gap-3">
                     <EntityAvatar
                       src={quote.customer_logo_url ?? null}
-                      name={quote.customer_name ?? "Замовник"}
+                      name={quote.customer_name ?? "Клієнт / Лід"}
                       fallback={getInitials(quote.customer_name)}
                       size={40}
                     />
@@ -3530,7 +3531,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         )}
                         <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                           <div>
-                            Одиниця: <span className="text-foreground">{item.unit}</span>
+                            Одиниця: <span className="text-foreground">{normalizeUnitLabel(item.unit)}</span>
                           </div>
                           {(positionLabel || sizeLabel) && (
                             <div className="sm:col-span-2 flex items-center gap-2">
@@ -4673,7 +4674,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="шт">шт</SelectItem>
+                        <SelectItem value="шт.">шт.</SelectItem>
                         <SelectItem value="м">м</SelectItem>
                         <SelectItem value="кг">кг</SelectItem>
                         <SelectItem value="л">л</SelectItem>
@@ -4899,7 +4900,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="шт">шт</SelectItem>
+                          <SelectItem value="шт.">шт.</SelectItem>
                           <SelectItem value="м">м</SelectItem>
                           <SelectItem value="кг">кг</SelectItem>
                         </SelectContent>

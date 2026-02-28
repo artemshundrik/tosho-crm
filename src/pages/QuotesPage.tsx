@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
@@ -63,8 +64,8 @@ import {
   Clock,
   XCircle,
   Pencil,
-  Calculator,
   Eye,
+  Package,
   Printer,
   Download,
   FileDown,
@@ -179,10 +180,18 @@ type CommercialDocument = {
   total: number;
 };
 
+type KanbanProductPreview = {
+  itemCount: number;
+  itemName: string;
+  qtyLabel: string;
+  imageUrl: string | null;
+};
+
 type QuotesPageCachePayload = {
   rows: QuoteListRow[];
   attachmentCounts: Record<string, number>;
   quoteMembershipEntries?: Array<[string, QuoteSetMembershipInfo]>;
+  kanbanProductEntries?: Array<[string, KanbanProductPreview]>;
   cachedAt: number;
 };
 
@@ -203,6 +212,16 @@ function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
         ? parsed.quoteMembershipEntries.filter(
             (entry): entry is [string, QuoteSetMembershipInfo] =>
               Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "string"
+          )
+        : [],
+      kanbanProductEntries: Array.isArray(parsed.kanbanProductEntries)
+        ? parsed.kanbanProductEntries.filter(
+            (entry): entry is [string, KanbanProductPreview] =>
+              Array.isArray(entry) &&
+              entry.length === 2 &&
+              typeof entry[0] === "string" &&
+              typeof entry[1] === "object" &&
+              entry[1] !== null
           )
         : [],
       cachedAt: Number(parsed.cachedAt ?? Date.now()),
@@ -309,7 +328,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [printConfigs, setPrintConfigs] = useState<PrintConfig[]>(() => [createPrintConfig()]);
   const [printMode, setPrintMode] = useState<"with_print" | "no_print">("with_print");
   const [itemQty, setItemQty] = useState("1");
-  const [itemUnit, setItemUnit] = useState("шт");
+  const [itemUnit, setItemUnit] = useState("шт.");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [deadlineNote, setDeadlineNote] = useState("");
   const [comment, setComment] = useState("");
@@ -332,6 +351,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>(
     () => initialCache?.attachmentCounts ?? {}
+  );
+  const [kanbanProductByQuoteId, setKanbanProductByQuoteId] = useState<Record<string, KanbanProductPreview>>(
+    () => Object.fromEntries(initialCache?.kanbanProductEntries ?? [])
   );
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
@@ -444,6 +466,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (label) return label;
     return teamMembersLoaded ? "Користувач" : "Не вказано";
   };
+  const getPartyLabel = (row: Pick<QuoteListRow, "customer_id">) =>
+    row.customer_id ? "Клієнт" : "Лід";
   const managerFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
     rows.forEach((row) => {
@@ -869,7 +893,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         };
       });
       const ids = mergedRows.map((row) => row.id).filter(Boolean);
-      const [membershipMap, counts] = await Promise.all([
+      const [membershipMap, counts, productMap] = await Promise.all([
         (async () => {
           if (ids.length === 0) return new Map<string, QuoteSetMembershipInfo>();
           try {
@@ -898,12 +922,94 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             return {} as Record<string, number>;
           }
         })(),
+        (async () => {
+          if (ids.length === 0) return {} as Record<string, KanbanProductPreview>;
+          try {
+            const itemRows = await listQuoteItemsForQuotes({ teamId, quoteIds: ids });
+            const countByQuoteId: Record<string, number> = {};
+            const firstItemByQuoteId = new Map<string, QuoteItemExportRow>();
+
+            itemRows.forEach((row) => {
+              const quoteId = row.quote_id?.trim();
+              if (!quoteId) return;
+              countByQuoteId[quoteId] = (countByQuoteId[quoteId] ?? 0) + 1;
+              if (!firstItemByQuoteId.has(quoteId)) {
+                firstItemByQuoteId.set(quoteId, row);
+              }
+            });
+
+            const modelIds = Array.from(
+              new Set(
+                Array.from(firstItemByQuoteId.values())
+                  .map((row) => row.catalog_model_id?.trim() ?? "")
+                  .filter(Boolean)
+              )
+            );
+            const modelImageById = new Map<string, string>();
+            if (modelIds.length > 0) {
+              const loadModels = async (withImage: boolean) => {
+                const columns = withImage ? "id,image_url" : "id";
+                return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", modelIds);
+              };
+              let { data: modelRows, error: modelError } = await loadModels(true);
+              if (
+                modelError &&
+                /column/i.test(modelError.message ?? "") &&
+                /image_url/i.test(modelError.message ?? "")
+              ) {
+                ({ data: modelRows, error: modelError } = await loadModels(false));
+              }
+              if (!modelError) {
+                (((modelRows ?? []) as unknown) as Array<{ id: string; image_url?: string | null }>).forEach((row) => {
+                  const imageUrl = row.image_url?.trim();
+                  if (!imageUrl) return;
+                  modelImageById.set(row.id, imageUrl);
+                });
+              }
+            }
+
+            const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
+              const qtyValue = Number(qty ?? 0);
+              if (!Number.isFinite(qtyValue) || qtyValue <= 0) return "Не вказано";
+              const qtyLabel = Number.isInteger(qtyValue) ? String(qtyValue) : qtyValue.toLocaleString("uk-UA");
+              return `${qtyLabel} ${normalizeUnitLabel(unit)}`;
+            };
+
+            const nextMap: Record<string, KanbanProductPreview> = {};
+            ids.forEach((quoteId) => {
+              const firstItem = firstItemByQuoteId.get(quoteId);
+              const itemCount = countByQuoteId[quoteId] ?? 0;
+              if (!firstItem || itemCount === 0) return;
+
+              const attachmentImage =
+                firstItem.attachment &&
+                typeof firstItem.attachment === "object" &&
+                typeof (firstItem.attachment as Record<string, unknown>).url === "string"
+                  ? String((firstItem.attachment as Record<string, unknown>).url)
+                  : null;
+              const catalogImage = firstItem.catalog_model_id
+                ? modelImageById.get(firstItem.catalog_model_id) ?? null
+                : null;
+              nextMap[quoteId] = {
+                itemCount,
+                itemName: firstItem.name?.trim() || "Товар без назви",
+                qtyLabel: formatQtyLabel(firstItem.qty, firstItem.unit),
+                imageUrl: attachmentImage || catalogImage,
+              };
+            });
+
+            return nextMap;
+          } catch {
+            return {} as Record<string, KanbanProductPreview>;
+          }
+        })(),
       ]);
 
       if (requestId !== quotesLoadRequestIdRef.current) return;
       setRows(mergedRows);
       setQuoteMembershipByQuoteId(membershipMap);
       setAttachmentCounts(counts);
+      setKanbanProductByQuoteId(productMap);
 
       try {
         sessionStorage.setItem(
@@ -912,6 +1018,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             rows: mergedRows,
             attachmentCounts: counts,
             quoteMembershipEntries: Array.from(membershipMap.entries()),
+            kanbanProductEntries: Object.entries(productMap),
             cachedAt: Date.now(),
           })
         );
@@ -924,6 +1031,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows([]);
       setAttachmentCounts({});
       setQuoteMembershipByQuoteId(new Map());
+      setKanbanProductByQuoteId({});
     } finally {
       if (requestId === quotesLoadRequestIdRef.current) {
         setLoading(false);
@@ -985,6 +1093,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setRows(cached.rows);
       setAttachmentCounts(cached.attachmentCounts ?? {});
       setQuoteMembershipByQuoteId(new Map(cached.quoteMembershipEntries ?? []));
+      setKanbanProductByQuoteId(Object.fromEntries(cached.kanbanProductEntries ?? []));
       setLoading(false);
       return;
     }
@@ -996,6 +1105,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setRows([]);
     setAttachmentCounts({});
     setQuoteMembershipByQuoteId(new Map());
+    setKanbanProductByQuoteId({});
     setLoading(true);
   }, [cacheKey, teamId]);
 
@@ -1051,7 +1161,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setSelectedModelId("");
     setPrintConfigs([createPrintConfig()]);
     setItemQty("1");
-    setItemUnit("шт");
+    setItemUnit("шт.");
     setDeadlineDate("");
     setDeadlineNote("");
     setComment("");
@@ -1223,7 +1333,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             print_width_mm: primaryPrint?.print_width_mm ?? null,
             print_height_mm: primaryPrint?.print_height_mm ?? null,
             methods: methodsPayload,
-            unit: data.quantityUnit,
+            unit: normalizeUnitLabel(data.quantityUnit),
           });
         if (itemError) throw itemError;
       }
@@ -1882,7 +1992,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           print_width_mm: primaryPrint?.print_width_mm ?? null,
           print_height_mm: primaryPrint?.print_height_mm ?? null,
           methods: methodsPayload,
-          unit: itemUnit,
+          unit: normalizeUnitLabel(itemUnit),
         });
       if (itemError) throw itemError;
 
@@ -1903,7 +2013,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setSelectedModelId("");
       setPrintConfigs([createPrintConfig()]);
       setItemQty("1");
-      setItemUnit("шт");
+      setItemUnit("шт.");
       setDeadlineDate("");
       setDeadlineNote("");
       setComment("");
@@ -2282,7 +2392,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           methodsSummary: parseMethodsSummary(row.methods),
           placementSummary,
           qty,
-          unit: row.unit?.trim() || "шт",
+          unit: normalizeUnitLabel(row.unit),
           unitPrice,
           lineTotal,
         };
@@ -3677,7 +3787,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <TableHead className="w-[12px]"></TableHead>
                   <TableHead>Назва</TableHead>
                   <TableHead>Тип</TableHead>
-                  <TableHead>Замовник</TableHead>
+                  <TableHead>Клієнт / Лід</TableHead>
                   <TableHead>Позицій</TableHead>
                   <TableHead>Створено</TableHead>
                   <TableHead className="w-[120px] text-right">Дія</TableHead>
@@ -3919,7 +4029,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableHead>
                     <TableHead className="w-[220px]">
                       <div className="flex items-center font-semibold">
-                        Замовник
+                        Клієнт / Лід
                       </div>
                     </TableHead>
                     <TableHead className="w-[200px]">
@@ -4034,7 +4144,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           <div className="flex items-center gap-3 min-w-0">
                             <EntityAvatar
                               src={row.customer_logo_url ?? null}
-                              name={row.customer_name ?? "Замовник"}
+                              name={row.customer_name ?? "Клієнт / Лід"}
                               fallback={getInitials(row.customer_name)}
                               size={36}
                             />
@@ -4185,8 +4295,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto px-4 pb-2 pt-3 md:px-5">
-              <div className="w-max flex gap-4 pb-5">
+            <div className="overflow-x-auto px-4 pb-4 pt-3 md:px-5 md:pb-5">
+              <div className="w-max flex gap-4 pb-0">
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
@@ -4196,7 +4306,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[300px] shrink-0 flex flex-col"
+                        "basis-[320px] h-[calc(100dvh-17rem)] shrink-0 flex flex-col"
                       )}
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -4237,7 +4347,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </div>
                       <div
                         className={cn(
-                          "flex-1 overflow-y-auto px-2.5 pb-3.5 pt-2.5 space-y-2 min-h-[120px]",
+                          "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2.5 pb-3.5 pt-2.5 space-y-2",
                           draggingId && "pb-4"
                         )}
                         onDragOver={(e) => {
@@ -4286,9 +4396,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         ) : (
                           items.map((row, index) => {
                             const badge = getDeadlineBadge(row.deadline_at ?? null);
+                            const ColumnStatusIcon = statusIcons[column.id] ?? Clock;
                             const Icon = quoteTypeIcon(row.quote_type);
-                            const normalizedStatus = normalizeStatus(row.status);
                             const membership = quoteMembershipByQuoteId.get(row.id);
+                            const productPreview = kanbanProductByQuoteId[row.id];
+                            const managerLabel = getManagerLabel(row.assigned_to);
                             return (
                               <div key={row.id}>
                                 {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
@@ -4305,93 +4417,119 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   }}
                                   onClick={() => navigate(`/orders/estimates/${row.id}`)}
                                   className={cn(
-                                    "kanban-estimate-card rounded-[var(--radius-md)] border border-border/60 bg-card p-2.5 transition-all hover:border-border hover:bg-card/90 cursor-pointer active:scale-[0.995]",
+                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
                                     draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                   )}
                                 >
-                                  <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
-                                      {(() => {
-                                        const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
-                                        return (
-                                          <StatusIcon
-                                            className={cn(
-                                              "h-4 w-4 shrink-0",
-                                              statusColorClass[normalizedStatus] ?? "text-muted-foreground"
-                                            )}
-                                          />
-                                        );
-                                      })()}
-                                      <span className="font-mono text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+                                      <ColumnStatusIcon
+                                        className={cn(
+                                          "h-4 w-4 shrink-0",
+                                          statusColorClass[column.id] ?? "text-muted-foreground/80"
+                                        )}
+                                      />
+                                      <span className="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
                                         {row.number ?? "Не вказано"}
                                       </span>
                                     </div>
-                                  </div>
-                                  <div className="mt-2.5 space-y-1.5">
-                                    {membership ? (
-                                      <div className="flex flex-wrap items-center gap-1.5">
-                                        {membership.kp_count > 0 ? (
-                                          <Badge
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
-                                          >
-                                            <FileText className="h-3 w-3" />
-                                            КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                          </Badge>
-                                        ) : null}
-                                        {membership.set_count > 0 ? (
-                                          <Badge
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
-                                          >
-                                            <Layers className="h-3 w-3" />
-                                            Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                          </Badge>
-                                        ) : null}
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <div className="inline-flex h-6 items-center gap-1 rounded-[9px] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                                        {Icon ? <Icon className="h-3 w-3" /> : null}
+                                        {quoteTypeLabel(row.quote_type)}
                                       </div>
-                                    ) : null}
-                                    <div className="flex items-center gap-2 text-[15px] font-medium">
+                                    </div>
+                                  </div>
+                                  {membership && (membership.kp_count > 0 || membership.set_count > 0) ? (
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                      {membership.kp_count > 0 ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                        >
+                                          <FileText className="h-3 w-3" />
+                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
+                                      {membership.set_count > 0 ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                        >
+                                          <Layers className="h-3 w-3" />
+                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 space-y-3">
+                                    <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
                                       <EntityAvatar
                                         src={row.customer_logo_url ?? null}
-                                        name={row.customer_name ?? "Замовник"}
+                                        name={row.customer_name ?? "Клієнт / Лід"}
                                         fallback={getInitials(row.customer_name)}
-                                        size={28}
+                                        size={32}
                                       />
-                                      <span className="truncate">{row.customer_name ?? "Не вказано"}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                                      <AvatarBase
-                                        src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                                        name={getManagerLabel(row.assigned_to)}
-                                        fallback={
-                                          row.assigned_to
-                                            ? getInitials(getManagerLabel(row.assigned_to))
-                                            : "Не вказано"
-                                        }
-                                        size={22}
-                                        className="text-[9px] font-semibold"
-                                      />
-                                      <span className="truncate">
-                                        {getManagerLabel(row.assigned_to)}
-                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                                          {getPartyLabel(row)}
+                                        </div>
+                                        <div className="truncate text-[14px] font-semibold">
+                                          {row.customer_name ?? "Не вказано"}
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="mt-2.5 flex items-center justify-between gap-2 text-xs">
-                                    <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-2 py-1 font-semibold">
-                                      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                                      {quoteTypeLabel(row.quote_type)}
+
+                                  {productPreview ? (
+                                    <div className="mt-3 rounded-[14px] border border-border/60 bg-background/35 px-3 py-2.5">
+                                      <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                        <Package className="h-3.5 w-3.5" />
+                                        Товар
+                                      </div>
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
+                                          {productPreview.imageUrl ? (
+                                            <img
+                                              src={productPreview.imageUrl}
+                                              alt={productPreview.itemName}
+                                              className="h-full w-full object-cover"
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+                                              <Package className="h-4 w-4" />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="truncate text-[14px] font-medium">
+                                            {productPreview.itemName}
+                                          </div>
+                                          <div className="text-[13px] font-normal text-muted-foreground">
+                                            {productPreview.qtyLabel}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : null}
+
+                                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+                                    <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
+                                      <AvatarBase
+                                        src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                                        name={managerLabel}
+                                        fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
+                                        size={26}
+                                        className="text-[10px] font-semibold"
+                                      />
+                                      <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
                                     </div>
                                     {row.deadline_at ? (
                                       (() => {
                                         const shortLabel = formatDeadlineShort(row.deadline_at!);
                                         if (!shortLabel) return null;
-                                        return (
-                                          <QuoteDeadlineBadge
-                                            tone={badge.tone}
-                                            label={shortLabel}
-                                            compact
-                                          />
-                                        );
+                                        return <QuoteDeadlineBadge tone={badge.tone} label={shortLabel} compact />;
                                       })()
                                     ) : null}
                                   </div>
