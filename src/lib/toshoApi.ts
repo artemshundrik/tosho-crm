@@ -167,6 +167,14 @@ export async function listQuotes(params: ListQuotesParams) {
   const customerIds = Array.from(
     new Set(rows.map((row) => row.customer_id ?? null).filter((value): value is string => Boolean(value)))
   );
+  const missingLeadNames = Array.from(
+    new Set(
+      rows
+        .filter((row) => !row.customer_id && !(row.customer_name ?? "").trim() && (row.title ?? "").trim())
+        .map((row) => (row.title ?? "").trim())
+        .filter(Boolean)
+    )
+  );
 
   let customerById = new Map<
     string,
@@ -203,12 +211,75 @@ export async function listQuotes(params: ListQuotesParams) {
     }
   }
 
+  let leadByName = new Map<string, { name: string; logo_url?: string | null }>();
+  if (missingLeadNames.length > 0) {
+    const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
+    const loadLeads = async (withLogo: boolean) => {
+      const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
+      const [byCompany, byLegal] = await Promise.all([
+        supabase
+          .schema("tosho")
+          .from("leads")
+          .select(columns)
+          .eq("team_id", teamId)
+          .in("company_name", missingLeadNames),
+        supabase
+          .schema("tosho")
+          .from("leads")
+          .select(columns)
+          .eq("team_id", teamId)
+          .in("legal_name", missingLeadNames),
+      ]);
+      return [byCompany, byLegal] as const;
+    };
+
+    let [companyResult, legalResult] = await loadLeads(true);
+    if (
+      (companyResult.error && /logo_url/i.test(companyResult.error.message ?? "")) ||
+      (legalResult.error && /logo_url/i.test(legalResult.error.message ?? ""))
+    ) {
+      [companyResult, legalResult] = await loadLeads(false);
+    }
+
+    if (!companyResult.error && !legalResult.error) {
+      const rows = [
+        ...(((companyResult.data ?? []) as unknown) as Array<{
+          company_name?: string | null;
+          legal_name?: string | null;
+          logo_url?: string | null;
+        }>),
+        ...(((legalResult.data ?? []) as unknown) as Array<{
+          company_name?: string | null;
+          legal_name?: string | null;
+          logo_url?: string | null;
+        }>),
+      ];
+      const map = new Map<string, { name: string; logo_url?: string | null }>();
+      rows.forEach((lead) => {
+        const company = (lead.company_name ?? "").trim();
+        const legal = (lead.legal_name ?? "").trim();
+        const preferred = company || legal;
+        if (!preferred) return;
+        const candidate = { name: preferred, logo_url: lead.logo_url ?? null };
+        if (company) map.set(normalize(company), candidate);
+        if (legal) map.set(normalize(legal), candidate);
+      });
+      leadByName = map;
+    }
+  }
+
   return rows.map((row) => {
     const customer = row.customer_id ? customerById.get(row.customer_id) : undefined;
+    const leadFallback = !row.customer_id ? leadByName.get((row.title ?? "").trim().toLowerCase()) : undefined;
     return {
       ...row,
-      customer_name: row.customer_name ?? customer?.name ?? customer?.legal_name ?? null,
-      customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? null,
+      customer_name:
+        row.customer_name ??
+        customer?.name ??
+        customer?.legal_name ??
+        leadFallback?.name ??
+        ((row.title ?? "").trim() || null),
+      customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? leadFallback?.logo_url ?? null,
       design_brief: row.design_brief ?? null,
     };
   });
@@ -304,8 +375,6 @@ export async function createQuote(params: {
   const payload: Record<string, unknown> = {
     team_id: params.teamId,
     customer_id: params.customerId ?? null,
-    customer_name: params.customerName ?? null,
-    customer_logo_url: params.customerLogoUrl ?? null,
     title: params.title ?? null,
     comment: params.comment ?? null,
     design_brief: params.designBrief ?? null,
@@ -318,6 +387,12 @@ export async function createQuote(params: {
     deadline_at: params.deadlineAt ?? null,
     deadline_note: params.deadlineNote ?? null,
   };
+  if (params.customerName !== undefined && params.customerName !== null) {
+    payload.customer_name = params.customerName;
+  }
+  if (params.customerLogoUrl !== undefined && params.customerLogoUrl !== null) {
+    payload.customer_logo_url = params.customerLogoUrl;
+  }
 
   if (userId) {
     payload.created_by = userId;
@@ -334,45 +409,50 @@ export async function createQuote(params: {
     return inserted as { id: string };
   };
 
-  try {
-    return await insertQuote(payload);
-  } catch (error: unknown) {
-    const message = getErrorMessage(error).toLowerCase();
-    let changed = false;
-    if (message.includes("column") && message.includes("created_by")) {
-      delete payload.created_by;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("customer_name")) {
-      delete payload.customer_name;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("customer_logo_url")) {
-      delete payload.customer_logo_url;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("deadline_at")) {
-      delete payload.deadline_at;
-      delete payload.deadline_note;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("delivery_type")) {
-      delete payload.delivery_type;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("delivery_details")) {
-      delete payload.delivery_details;
-      changed = true;
-    }
-    if (message.includes("column") && message.includes("design_brief")) {
-      delete payload.design_brief;
-      changed = true;
-    }
-    if (changed) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
       return await insertQuote(payload);
+    } catch (error: unknown) {
+      lastError = error;
+      const message = getErrorMessage(error).toLowerCase();
+      const isMissingColumnMessage =
+        message.includes("column") || message.includes("schema cache") || message.includes("could not find");
+      let changed = false;
+      const dropField = (field: string) => {
+        if (field in payload) {
+          delete payload[field];
+          changed = true;
+        }
+      };
+
+      if (isMissingColumnMessage && message.includes("created_by")) {
+        dropField("created_by");
+      }
+      if (isMissingColumnMessage && message.includes("customer_name")) {
+        dropField("customer_name");
+      }
+      if (isMissingColumnMessage && message.includes("customer_logo_url")) {
+        dropField("customer_logo_url");
+      }
+      if (isMissingColumnMessage && message.includes("deadline_at")) {
+        dropField("deadline_at");
+        dropField("deadline_note");
+      }
+      if (isMissingColumnMessage && message.includes("delivery_type")) {
+        dropField("delivery_type");
+      }
+      if (isMissingColumnMessage && message.includes("delivery_details")) {
+        dropField("delivery_details");
+      }
+      if (isMissingColumnMessage && message.includes("design_brief")) {
+        dropField("design_brief");
+      }
+
+      if (!changed) break;
     }
-    throw error;
   }
+  throw lastError;
 }
 
 export async function getQuoteSummary(quoteId: string) {
@@ -413,18 +493,60 @@ export async function getQuoteSummary(quoteId: string) {
     }
     handleError(briefError);
 
+    const currentCustomerName =
+      summary.customer_name ??
+      (briefRow as { customer_name?: string | null } | null)?.customer_name ??
+      null;
+    let leadFallback: { name: string; logo_url?: string | null } | null = null;
+    if (
+      !summary.customer_id &&
+      !(currentCustomerName ?? "").trim() &&
+      (summary.title ?? "").trim() &&
+      (summary.team_id ?? "").trim()
+    ) {
+      const leadTitle = (summary.title ?? "").trim();
+      const teamId = (summary.team_id ?? "").trim();
+      const loadLead = async (withLogo: boolean) => {
+        const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
+        return await supabase
+          .schema("tosho")
+          .from("leads")
+          .select(columns)
+          .eq("team_id", teamId)
+          .or(`company_name.eq.${leadTitle},legal_name.eq.${leadTitle}`)
+          .limit(1)
+          .maybeSingle<{
+            company_name?: string | null;
+            legal_name?: string | null;
+            logo_url?: string | null;
+          }>();
+      };
+      let { data: leadRow, error: leadError } = await loadLead(true);
+      if (
+        leadError &&
+        /column/i.test(leadError.message ?? "") &&
+        /logo_url/i.test(leadError.message ?? "")
+      ) {
+        ({ data: leadRow, error: leadError } = await loadLead(false));
+      }
+      if (!leadError && leadRow) {
+        leadFallback = {
+          name: (leadRow.company_name ?? leadRow.legal_name ?? "").trim() || leadTitle,
+          logo_url: leadRow.logo_url ?? null,
+        };
+      }
+    }
+
     return {
       ...summary,
       design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
       delivery_details:
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
-      customer_name:
-        summary.customer_name ??
-        (briefRow as { customer_name?: string | null } | null)?.customer_name ??
-        null,
+      customer_name: currentCustomerName ?? leadFallback?.name ?? ((summary.title ?? "").trim() || null),
       customer_logo_url:
         summary.customer_logo_url ??
         (briefRow as { customer_logo_url?: string | null } | null)?.customer_logo_url ??
+        leadFallback?.logo_url ??
         null,
     } as QuoteSummaryRow;
   } catch (error: unknown) {
