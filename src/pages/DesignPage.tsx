@@ -1839,7 +1839,9 @@ export default function DesignPage() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {task.title ? <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div> : null}
+        {isLinkedQuote && task.title ? (
+          <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
+        ) : null}
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
             <EntityAvatar
