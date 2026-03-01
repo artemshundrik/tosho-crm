@@ -46,6 +46,7 @@ import {
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { formatUserShortName } from "@/lib/userName";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -505,7 +506,12 @@ export default function DesignTaskPage() {
         const labels: Record<string, string> = {};
         const avatars: Record<string, string | null> = {};
         rows.forEach((row) => {
-          labels[row.user_id] = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
+          labels[row.user_id] =
+            formatUserShortName({
+              fullName: row.full_name ?? null,
+              email: row.email ?? null,
+              fallback: row.user_id,
+            }) || row.user_id;
           avatars[row.user_id] = row.avatar_url ?? null;
         });
         setMemberById(labels);

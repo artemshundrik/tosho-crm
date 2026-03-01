@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { formatUserShortName } from "@/lib/userName";
 
 type ListQuotesParams = {
   teamId: string;
@@ -806,8 +807,12 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
   }
 
   const formatLabel = (row: { user_id?: string | null; full_name?: string | null; email?: string | null }) => {
-    const fullName = row.full_name?.trim();
-    if (fullName) return fullName;
+    const displayName = formatUserShortName({
+      fullName: row.full_name ?? null,
+      email: row.email ?? null,
+      fallback: "",
+    });
+    if (displayName) return displayName;
 
     const emailLocalPart = toEmailLocalPart(row.email);
     if (emailLocalPart) return emailLocalPart;

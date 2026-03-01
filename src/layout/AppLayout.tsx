@@ -43,6 +43,7 @@ import { mapNotificationRow, type NotificationItem, type NotificationRow } from 
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
@@ -591,9 +592,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
   const reminderAssigneeKeys = useMemo(() => {
     const keys = new Set<string>();
-    const fullNameRaw = session?.user?.user_metadata?.full_name;
-    if (typeof fullNameRaw === "string" && fullNameRaw.trim()) {
-      keys.add(normalizeIdentity(fullNameRaw));
+    const resolvedName = buildUserNameFromMetadata(
+      session?.user?.user_metadata as Record<string, unknown> | undefined,
+      session?.user?.email
+    );
+    if (resolvedName.displayName) {
+      keys.add(normalizeIdentity(resolvedName.displayName));
+    }
+    if (resolvedName.fullName) {
+      keys.add(normalizeIdentity(resolvedName.fullName));
     }
     const email = session?.user?.email ?? "";
     if (email) {

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type ActivityLogPayload = {
   teamId?: string | null;
@@ -19,8 +20,11 @@ async function resolveActorName(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   const user = data?.user;
   if (!user) return null;
-  const fullName = (user.user_metadata?.full_name as string | undefined) || "";
-  const name = fullName.trim() || user.email || null;
+  const resolved = buildUserNameFromMetadata(
+    user.user_metadata as Record<string, unknown> | undefined,
+    user.email
+  );
+  const name = resolved.displayName || user.email || null;
   cachedActorName = name;
   return name;
 }

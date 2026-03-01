@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { User, Mail, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
+import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
@@ -13,12 +13,17 @@ import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { buildUserNameFromMetadata, getInitialsFromName, toFullName } from "@/lib/userName";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 type ProfileCache = {
   userId: string | null;
+  firstName: string;
+  lastName: string;
   fullName: string;
+  displayName: string;
+  birthDate: string;
   email: string;
   accessRole: string;
   jobRole: string | null;
@@ -63,7 +68,11 @@ export function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Form state
+  const [firstName, setFirstName] = useState(cached?.firstName ?? "");
+  const [lastName, setLastName] = useState(cached?.lastName ?? "");
   const [fullName, setFullName] = useState(cached?.fullName ?? "");
+  const [displayName, setDisplayName] = useState(cached?.displayName ?? cached?.fullName ?? "");
+  const [birthDate, setBirthDate] = useState(cached?.birthDate ?? "");
   const [email, setEmail] = useState(cached?.email ?? "");
   const [accessRole, setAccessRole] = useState(cached?.accessRole ?? "");
   const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
@@ -73,7 +82,11 @@ export function ProfilePage() {
     if (!userId) return;
     setCache({
       userId,
+      firstName,
+      lastName,
       fullName,
+      displayName,
+      birthDate,
       email,
       accessRole,
       jobRole,
@@ -103,17 +116,26 @@ export function ProfilePage() {
       if (user) {
         setUserId(user.id);
         setEmail(user.email || "");
-        const metaName = user.user_metadata?.full_name || "";
-        setFullName(metaName);
+        const meta = user.user_metadata as Record<string, unknown> | undefined;
+        const resolvedName = buildUserNameFromMetadata(
+          {
+            first_name: meta?.first_name,
+            last_name: meta?.last_name,
+            full_name: meta?.full_name,
+          },
+          user.email
+        );
+        const metaBirthDate = typeof meta?.birth_date === "string" ? meta.birth_date : "";
+        setFirstName(resolvedName.firstName);
+        setLastName(resolvedName.lastName);
+        setFullName(resolvedName.fullName);
+        setDisplayName(resolvedName.displayName);
+        setBirthDate(metaBirthDate);
         const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
         const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
         setAvatarUrl(displayAvatarUrl);
 
-        const i = (metaName || user.email || "U")
-          .split(" ")
-          .map((n: string) => n[0])
-          .join("")
-          .substring(0, 2).toUpperCase();
+        const i = getInitialsFromName(resolvedName.displayName, user.email);
         setInitials(i);
 
         const resolvedWorkspaceId = await resolveWorkspaceId(user.id);
@@ -138,7 +160,11 @@ export function ProfilePage() {
 
         setCache({
           userId: user.id,
-          fullName: metaName,
+          firstName: resolvedName.firstName,
+          lastName: resolvedName.lastName,
+          fullName: resolvedName.fullName,
+          displayName: resolvedName.displayName,
+          birthDate: metaBirthDate,
           email: user.email || "",
           accessRole: resolvedAccessRole,
           jobRole: resolvedJobRole,
@@ -274,20 +300,52 @@ export function ProfilePage() {
   const updateProfile = async () => {
     try {
       setUpdating(true);
+      const nextFirstName = firstName.trim();
+      const nextLastName = lastName.trim();
+      const nextFullName = toFullName(nextFirstName, nextLastName) || fullName.trim();
+      const nextDisplayName = buildUserNameFromMetadata(
+        { first_name: nextFirstName, last_name: nextLastName, full_name: nextFullName },
+        email
+      ).displayName;
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullName, avatar_url: avatarUrl }
+        data: {
+          first_name: nextFirstName || null,
+          last_name: nextLastName || null,
+          full_name: nextFullName || null,
+          birth_date: birthDate || null,
+          avatar_url: avatarUrl,
+        }
       });
 
       if (error) throw error;
-      const i = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
+      const i = getInitialsFromName(nextDisplayName, email);
       setInitials(i);
+      setFullName(nextFullName);
+      setDisplayName(nextDisplayName);
 
       toast.success("Профіль оновлено!", {
         description: "Твоє нове ім'я збережено в системі.",
       });
-      commitCache({ fullName, avatarUrl, initials: i });
+      commitCache({
+        firstName: nextFirstName,
+        lastName: nextLastName,
+        fullName: nextFullName,
+        displayName: nextDisplayName,
+        birthDate,
+        avatarUrl,
+        initials: i,
+      });
 
-      // Невеликий таймаут для візуального комфорту перед оновленням
+      window.dispatchEvent(
+        new CustomEvent("profile:name-updated", {
+          detail: {
+            firstName: nextFirstName,
+            lastName: nextLastName,
+            fullName: nextFullName,
+            displayName: nextDisplayName,
+          },
+        })
+      );
       setTimeout(() => window.location.reload(), 1000);
 
     } catch (error: unknown) {
@@ -327,7 +385,7 @@ export function ProfilePage() {
               <div className="relative group mx-auto sm:mx-0">
                 <AvatarBase
                   src={avatarUrl}
-                  name={fullName || "Користувач"}
+                  name={displayName || "Користувач"}
                   fallback={initials}
                   size={112}
                   shape="circle"
@@ -362,7 +420,7 @@ export function ProfilePage() {
               </div>
               
               <div className="mb-3 space-y-1.5 text-center sm:text-left">
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">{fullName || "Користувач"}</h2>
+                <h2 className="text-2xl font-bold text-foreground tracking-tight">{displayName || "Користувач"}</h2>
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                    {/* Role Badge: Soft style */}
                    <div
@@ -462,12 +520,36 @@ export function ProfilePage() {
               <div className="grid gap-2">
                 <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
                   <User className="w-4 h-4 text-muted-foreground" />
-                  Повне ім'я
+                  Імʼя
                 </label>
                 <Input 
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Введи своє ім'я"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Введи імʼя"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  Прізвище
+                </label>
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Введи прізвище"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  Дата народження
+                </label>
+                <Input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
                 />
               </div>
 

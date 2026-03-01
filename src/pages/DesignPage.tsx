@@ -33,6 +33,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { formatUserShortName } from "@/lib/userName";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -424,7 +425,12 @@ export default function DesignPage() {
         const labelById: Record<string, string> = {};
         const avatarById: Record<string, string | null> = {};
         rows.forEach((row) => {
-          const label = row.full_name?.trim() || row.email?.split("@")[0]?.trim() || row.user_id;
+          const label =
+            formatUserShortName({
+              fullName: row.full_name ?? null,
+              email: row.email ?? null,
+              fallback: row.user_id,
+            }) || row.user_id;
           labelById[row.user_id] = label;
           avatarById[row.user_id] = row.avatar_url ?? null;
         });

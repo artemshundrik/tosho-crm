@@ -57,6 +57,7 @@ import {
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -435,7 +436,12 @@ export function TeamMembersPage() {
           const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
 
           acc[id] = {
-            label: dbRow?.full_name?.trim() || dbRow?.email?.split("@")[0]?.trim() || emailFallback,
+            label:
+              formatUserShortName({
+                fullName: dbRow?.full_name ?? baseMember?.full_name ?? null,
+                email: dbRow?.email ?? baseMember?.email ?? null,
+                fallback: emailFallback,
+              }) || emailFallback,
             avatarUrl: dbRow?.avatar_url ?? baseMember?.avatar_url ?? null,
           };
           return acc;
@@ -454,9 +460,13 @@ export function TeamMembersPage() {
         const currentUserId = currentUserData.user?.id ?? null;
         const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
         if (currentUserId && currentUserAvatar) {
+          const resolvedName = buildUserNameFromMetadata(
+            currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
+            currentUserData.user?.email
+          );
           const existing = nextMap[currentUserId];
           nextMap[currentUserId] = {
-            label: existing?.label || currentUserData.user?.email?.split("@")[0] || "Користувач",
+            label: existing?.label || resolvedName.displayName || currentUserData.user?.email?.split("@")[0] || "Користувач",
             avatarUrl: existing?.avatarUrl ?? currentUserAvatar,
           };
         }
@@ -468,7 +478,10 @@ export function TeamMembersPage() {
           const { data: currentUserData } = await supabase.auth.getUser();
           const currentUserId = currentUserData.user?.id ?? null;
           const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
-          const currentUserLabel = currentUserData.user?.user_metadata?.full_name || currentUserData.user?.email?.split("@")[0] || "Користувач";
+          const currentUserLabel = buildUserNameFromMetadata(
+            currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
+            currentUserData.user?.email
+          ).displayName;
 
           if (currentUserId && currentUserAvatar) {
             setMemberProfilesByUserId({
@@ -1066,15 +1079,13 @@ export function TeamMembersPage() {
                 ) : (
                   filteredMembers.map((m) => {
                     const profile = memberProfilesByUserId[m.user_id];
-                    const displayName = m.full_name?.trim() || profile?.label || m.email || "Користувач";
-                    const fallbackFromName = displayName
-                      .split(" ")
-                      .filter(Boolean)
-                      .map((part) => part[0] ?? "")
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase();
-                    const initials = fallbackFromName || (m.email || "U").substring(0, 2).toUpperCase();
+                    const displayName =
+                      formatUserShortName({
+                        fullName: m.full_name ?? profile?.label ?? null,
+                        email: m.email ?? null,
+                        fallback: "Користувач",
+                      }) || "Користувач";
+                    const initials = getInitialsFromName(displayName, m.email ?? null);
                     return (
                       <TableRow key={m.user_id} className="hover:bg-muted/40 transition-colors group">
                         <TableCell className="pl-6">

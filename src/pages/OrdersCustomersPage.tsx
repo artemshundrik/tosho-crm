@@ -10,6 +10,7 @@ import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,12 +231,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
 
   const defaultManagerName = useMemo(() => {
-    const fullNameRaw = session?.user?.user_metadata?.full_name;
-    const fullName = typeof fullNameRaw === "string" ? fullNameRaw.trim() : "";
-    if (fullName) return fullName;
-    const email = session?.user?.email ?? "";
-    const local = email.split("@")[0]?.trim() ?? "";
-    return local;
+    const resolved = buildUserNameFromMetadata(
+      session?.user?.user_metadata as Record<string, unknown> | undefined,
+      session?.user?.email
+    );
+    return resolved.displayName;
   }, [session]);
 
   const customerManagerOptions = useMemo(() => {

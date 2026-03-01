@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 import {
   listQuotes,
   listQuoteSets,
@@ -420,10 +421,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       setCurrentUserId(user?.id);
-      const fullNameRaw = user?.user_metadata?.full_name;
-      const fullName = typeof fullNameRaw === "string" ? fullNameRaw.trim() : "";
-      const emailLocalPart = user?.email?.split("@")[0]?.trim() ?? "";
-      setCurrentUserManagerLabel(fullName || emailLocalPart);
+      const resolvedName = buildUserNameFromMetadata(
+        user?.user_metadata as Record<string, unknown> | undefined,
+        user?.email
+      );
+      setCurrentUserManagerLabel(resolvedName.displayName);
     });
   }, []);
 

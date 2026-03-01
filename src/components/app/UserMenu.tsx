@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -67,15 +68,11 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
       
       if (user) {
         // Пробуємо взяти ім'я з метаданих або з пошти
-        const fullName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Користувач";
-        
-        // Генеруємо ініціали
-        const initials = fullName
-          .split(" ")
-          .map((n: string) => n[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase();
+        const resolvedName = buildUserNameFromMetadata(
+          user.user_metadata as Record<string, unknown> | undefined,
+          user.email
+        );
+        const initials = getInitialsFromName(resolvedName.displayName, user.email);
 
         const workspaceId = await resolveWorkspaceId(user.id);
 
@@ -109,7 +106,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
         const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
 
         const nextData: UserState = {
-          name: fullName,
+          name: resolvedName.displayName,
           accessRole: accessRoleLabel,
           jobRole: jobRoleLabel,
           initials: initials,
@@ -139,6 +136,24 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
     window.addEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
     return () => {
       window.removeEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleNameUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ displayName?: string }>;
+      const nextName = customEvent.detail?.displayName?.trim();
+      if (!nextName) return;
+      setUserData((prev) => {
+        const next = { ...prev, name: nextName, initials: getInitialsFromName(nextName, null) };
+        cachedUserData = next;
+        return next;
+      });
+    };
+
+    window.addEventListener("profile:name-updated", handleNameUpdated as EventListener);
+    return () => {
+      window.removeEventListener("profile:name-updated", handleNameUpdated as EventListener);
     };
   }, []);
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { acquireEntityLock, releaseEntityLock, type EntityLockType } from "@/lib/entityLock";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type UseEntityLockParams = {
   teamId?: string | null;
@@ -34,10 +35,11 @@ const fallbackUserLabelFromAuth = async () => {
   const { data } = await supabase.auth.getUser();
   const user = data.user;
   if (!user) return "";
-  const fullNameRaw = user.user_metadata?.full_name;
-  const fullName = typeof fullNameRaw === "string" ? fullNameRaw.trim() : "";
-  if (fullName) return fullName;
-  return user.email?.split("@")[0]?.trim() ?? "";
+  const resolved = buildUserNameFromMetadata(
+    user.user_metadata as Record<string, unknown> | undefined,
+    user.email
+  );
+  return resolved.displayName || user.email?.split("@")[0]?.trim() || "";
 };
 
 export function useEntityLock({

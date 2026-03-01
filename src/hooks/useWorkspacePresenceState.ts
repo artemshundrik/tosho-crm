@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type PresenceEntityContext = {
   entityType: "quote" | "design_task" | null;
@@ -121,13 +122,14 @@ export function useWorkspacePresenceState({
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const entityContext = useMemo(() => parseEntityFromPath(pathname), [pathname]);
 
-  const selfDisplayName = useMemo(() => {
-    const metaName = (session?.user?.user_metadata?.full_name as string | undefined)?.trim();
-    if (metaName) return metaName;
-    const emailAlias = emailLocalPart(session?.user?.email);
-    if (emailAlias) return emailAlias;
-    return "Користувач";
-  }, [session?.user?.email, session?.user?.user_metadata]);
+  const selfDisplayName = useMemo(
+    () =>
+      buildUserNameFromMetadata(
+        session?.user?.user_metadata as Record<string, unknown> | undefined,
+        session?.user?.email
+      ).displayName || emailLocalPart(session?.user?.email) || "Користувач",
+    [session?.user?.email, session?.user?.user_metadata]
+  );
 
   const selfAvatarUrl = useMemo(() => {
     if (selfAvatarOverride) return selfAvatarOverride;
@@ -222,6 +224,49 @@ export function useWorkspacePresenceState({
       window.removeEventListener("profile:avatar-updated", handleAvatarUpdated as EventListener);
     };
   }, [currentLabel, entityContext.entityId, entityContext.entityType, pathname, selfDisplayName, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const handleNameUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ displayName?: string | null }>;
+      const nextDisplayName = customEvent.detail?.displayName?.trim();
+      if (!nextDisplayName) return;
+      const nowIso = new Date().toISOString();
+
+      setRealtimeByUserId((prev) => ({
+        ...prev,
+        [userId]: {
+          ...(prev[userId] ?? {}),
+          user_id: userId,
+          display_name: nextDisplayName,
+          avatar_url: prev[userId]?.avatar_url ?? selfAvatarUrl,
+          current_path: prev[userId]?.current_path ?? pathname,
+          current_label: prev[userId]?.current_label ?? currentLabel,
+          entity_type: prev[userId]?.entity_type ?? entityContext.entityType,
+          entity_id: prev[userId]?.entity_id ?? entityContext.entityId,
+          last_seen_at: nowIso,
+        },
+      }));
+
+      setDbRowsByUserId((prev) => {
+        const current = prev[userId];
+        if (!current) return prev;
+        return {
+          ...prev,
+          [userId]: {
+            ...current,
+            display_name: nextDisplayName,
+            last_seen_at: nowIso,
+          },
+        };
+      });
+    };
+
+    window.addEventListener("profile:name-updated", handleNameUpdated as EventListener);
+    return () => {
+      window.removeEventListener("profile:name-updated", handleNameUpdated as EventListener);
+    };
+  }, [currentLabel, entityContext.entityId, entityContext.entityType, pathname, selfAvatarUrl, userId]);
 
   useEffect(() => {
     if (!teamId || !userId) {

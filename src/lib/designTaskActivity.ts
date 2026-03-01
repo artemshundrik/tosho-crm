@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type LogDesignTaskActivityParams = {
   teamId: string | null | undefined;
@@ -22,8 +23,8 @@ type NotifyUsersParams = {
 
 const toActorName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
   if (!user) return "System";
-  const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
-  return fullName || user.email || "System";
+  const resolved = buildUserNameFromMetadata(user.user_metadata, user.email);
+  return resolved.displayName || user.email || "System";
 };
 
 export async function logDesignTaskActivity(params: LogDesignTaskActivityParams) {
