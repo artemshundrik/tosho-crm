@@ -13,8 +13,11 @@ import {
   ChevronRight,
   Edit2,
   MapPin,
+  Package,
   Plus,
+  Printer,
   Settings,
+  Shirt,
   Sparkles,
 } from "lucide-react";
 import type { CatalogType, CatalogKind } from "@/types/catalog";
@@ -48,6 +51,9 @@ export function ContentHeader({
   onUpdateMethod,
   onDeleteMethod,
 }: ContentHeaderProps) {
+  const quoteType = selectedType?.quote_type === "merch" || selectedType?.quote_type === "print" ? selectedType.quote_type : "other";
+  const quoteTypeLabel = quoteType === "merch" ? "мерч" : quoteType === "print" ? "поліграфія" : "інше";
+  const QuoteTypeIcon = quoteType === "merch" ? Shirt : quoteType === "print" ? Printer : Package;
   const availableMethods = selectedKind?.methods || [];
   const printPositions = selectedKind?.printPositions || [];
   const [positionModalOpen, setPositionModalOpen] = useState(false);
@@ -112,7 +118,10 @@ export function ContentHeader({
         <div className="space-y-1 flex-1 min-w-0">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">одяг</span>
+            <span className="text-muted-foreground inline-flex items-center gap-1.5">
+              <QuoteTypeIcon className="h-3.5 w-3.5" />
+              {quoteTypeLabel}
+            </span>
             <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
             <span className="font-semibold">{selectedType.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground/50" />

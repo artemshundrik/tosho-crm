@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderPlus, Tag, Trash2 } from "lucide-react";
+import { FolderPlus, Package, Printer, Shirt, Tag, Trash2 } from "lucide-react";
 import type { CatalogType, CategoryMode, QuoteType } from "@/types/catalog";
 
 interface CategoryDialogProps {
@@ -123,9 +123,24 @@ export function CategoryDialog({
                   <SelectValue placeholder="Оберіть тип" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="merch">Мерч</SelectItem>
-                  <SelectItem value="print">Поліграфія</SelectItem>
-                  <SelectItem value="other">Інше</SelectItem>
+                  <SelectItem value="merch">
+                    <span className="inline-flex items-center gap-2">
+                      <Shirt className="h-4 w-4" />
+                      Мерч
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="print">
+                    <span className="inline-flex items-center gap-2">
+                      <Printer className="h-4 w-4" />
+                      Поліграфія
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="other">
+                    <span className="inline-flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Інше
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

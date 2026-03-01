@@ -185,7 +185,7 @@ export default function ProductCatalogPage() {
   };
 
   const normalizeQuoteType = (value?: string | null): "merch" | "print" | "other" =>
-    value === "print" || value === "other" ? value : "merch";
+    value === "merch" || value === "print" || value === "other" ? value : "other";
 
   // Handle edit type
   const handleEditType = (typeId: string) => {

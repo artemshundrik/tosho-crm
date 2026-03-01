@@ -27,6 +27,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const normalizeQuoteType = (value?: string | null): "merch" | "print" | "other" =>
+  value === "merch" || value === "print" || value === "other" ? value : "other";
+
 export function useCatalogData(teamId: string | null) {
   const cacheKey = useMemo(() => (teamId ? `catalog:${teamId}` : "catalog:none"), [teamId]);
   const { cached, setCache, isStale } = usePageCache<CatalogType[]>(cacheKey);
@@ -195,7 +198,7 @@ export function useCatalogData(teamId: string | null) {
         const nextCatalog = (typeRows ?? []).map((row) => ({
           id: row.id,
           name: row.name,
-          quote_type: row.quote_type ?? null,
+          quote_type: normalizeQuoteType(row.quote_type),
           kinds: kindsByType.get(row.id) ?? [],
         }));
 

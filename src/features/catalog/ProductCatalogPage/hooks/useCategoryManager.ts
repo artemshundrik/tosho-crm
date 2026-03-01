@@ -39,7 +39,7 @@ export function useCategoryManager({
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryMode, setCategoryMode] = useState<CategoryMode>("type");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newTypeQuoteType, setNewTypeQuoteType] = useState<QuoteType>("merch");
+  const [newTypeQuoteType, setNewTypeQuoteType] = useState<QuoteType>("other");
   const [selectedTypeForKind, setSelectedTypeForKind] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -52,10 +52,10 @@ export function useCategoryManager({
   /**
    * Opens dialog to add a new type (category)
    */
-  const openAddType = () => {
+  const openAddType = (quoteType: QuoteType = "other") => {
     setCategoryMode("type");
     setNewCategoryName("");
-    setNewTypeQuoteType("merch");
+    setNewTypeQuoteType(quoteType);
     setEditingTypeId(null); // Clear editing state
     setCategoryError(null);
     setCategoryDialogOpen(true);
@@ -106,7 +106,7 @@ export function useCategoryManager({
   const openEditType = (typeId: string, typeName: string, quoteType: QuoteType | null) => {
     setCategoryMode("type");
     setNewCategoryName(typeName);
-    setNewTypeQuoteType(quoteType || "merch");
+    setNewTypeQuoteType(quoteType || "other");
     setEditingTypeId(typeId); // Set editing state
     setSelectedTypeId(typeId);
     setCategoryError(null);
@@ -163,7 +163,7 @@ export function useCategoryManager({
           const newType: CatalogType = {
             id: data.id,
             name: data.name,
-            quote_type: data.quote_type ?? null,
+            quote_type: (data.quote_type as QuoteType | null | undefined) ?? newTypeQuoteType,
             kinds: [],
           };
           
