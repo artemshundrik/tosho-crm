@@ -30,7 +30,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { formatUserShortName } from "@/lib/userName";
@@ -1873,20 +1873,15 @@ export default function DesignPage() {
               Товар
             </div>
             <div className="flex items-center gap-2.5">
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
-                {task.productImageUrl ? (
-                  <img
-                    src={task.productImageUrl}
-                    alt={task.productName}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
+              {task.productImageUrl ? (
+                <KanbanImageZoomPreview imageUrl={task.productImageUrl} alt={task.productName} />
+              ) : (
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
                   <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                     <Package className="h-4 w-4" />
                   </div>
-                )}
-              </div>
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="truncate text-[14px] font-medium" title={task.productName}>
                   {task.productName}

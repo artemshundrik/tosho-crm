@@ -111,7 +111,7 @@ import { PageCanvas, PageCanvasBody, PageCanvasHeader } from "@/components/canva
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
 
 type QuotesPageProps = {
   teamId: string;
@@ -4488,20 +4488,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         Товар
                                       </div>
                                       <div className="flex items-center gap-2.5">
-                                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
-                                          {productPreview.imageUrl ? (
-                                            <img
-                                              src={productPreview.imageUrl}
-                                              alt={productPreview.itemName}
-                                              className="h-full w-full object-cover"
-                                              loading="lazy"
-                                            />
-                                          ) : (
+                                        {productPreview.imageUrl ? (
+                                          <KanbanImageZoomPreview imageUrl={productPreview.imageUrl} alt={productPreview.itemName} />
+                                        ) : (
+                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
                                             <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                                               <Package className="h-4 w-4" />
                                             </div>
-                                          )}
-                                        </div>
+                                          </div>
+                                        )}
                                         <div className="min-w-0">
                                           <div className="truncate text-[14px] font-medium">
                                             {productPreview.itemName}
