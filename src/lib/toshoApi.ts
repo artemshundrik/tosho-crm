@@ -111,6 +111,38 @@ function getErrorMessage(error: unknown): string {
   return typeof message === "string" ? message : "";
 }
 
+function getQuoteMonthCode(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}${year}`;
+}
+
+function formatQuoteNumber(monthCode: string, sequence: number) {
+  return `TS-${monthCode}-${String(sequence).padStart(4, "0")}`;
+}
+
+async function getNextQuoteSequence(teamId: string, monthCode: string) {
+  const pattern = `TS-${monthCode}-%`;
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("number")
+    .eq("team_id", teamId)
+    .like("number", pattern)
+    .order("number", { ascending: false })
+    .limit(1);
+
+  handleError(error);
+  const lastNumber = ((data ?? []) as Array<{ number?: string | null }>)[0]?.number ?? null;
+  if (!lastNumber) return 1;
+
+  const parts = lastNumber.split("-");
+  if (parts.length !== 3) return 1;
+  const parsed = Number.parseInt(parts[2] ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return parsed + 1;
+}
+
 export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status } = params;
   const q = search?.trim() ?? "";
@@ -388,6 +420,9 @@ export async function createQuote(params: {
     deadline_at: params.deadlineAt ?? null,
     deadline_note: params.deadlineNote ?? null,
   };
+  const monthCode = getQuoteMonthCode();
+  let quoteSequence = await getNextQuoteSequence(params.teamId, monthCode);
+  payload.number = formatQuoteNumber(monthCode, quoteSequence);
   if (params.customerName !== undefined && params.customerName !== null) {
     payload.customer_name = params.customerName;
   }
@@ -413,12 +448,18 @@ export async function createQuote(params: {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
+      if (typeof payload.number === "string") {
+        payload.number = formatQuoteNumber(monthCode, quoteSequence);
+      }
       return await insertQuote(payload);
     } catch (error: unknown) {
       lastError = error;
       const message = getErrorMessage(error).toLowerCase();
+      const code = typeof error === "object" && error ? (error as { code?: unknown }).code : null;
       const isMissingColumnMessage =
         message.includes("column") || message.includes("schema cache") || message.includes("could not find");
+      const isDuplicateNumber =
+        code === "23505" && message.includes("number");
       let changed = false;
       const dropField = (field: string) => {
         if (field in payload) {
@@ -448,6 +489,14 @@ export async function createQuote(params: {
       }
       if (isMissingColumnMessage && message.includes("design_brief")) {
         dropField("design_brief");
+      }
+      if (isMissingColumnMessage && message.includes("number")) {
+        dropField("number");
+      }
+
+      if (isDuplicateNumber && typeof payload.number === "string") {
+        quoteSequence += 1;
+        changed = true;
       }
 
       if (!changed) break;
