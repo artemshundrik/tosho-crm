@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ type CustomerRow = {
   name?: string | null;
   legal_name?: string | null;
   manager?: string | null;
+  manager_user_id?: string | null;
   ownership_type?: string | null;
   vat_rate?: number | null;
   tax_id?: string | null;
@@ -74,6 +75,7 @@ type LeadRow = {
   source?: string | null;
   website?: string | null;
   manager?: string | null;
+  manager_user_id?: string | null;
   iban?: string | null;
   signatory_name?: string | null;
   signatory_position?: string | null;
@@ -145,6 +147,8 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const ALL_MANAGERS_FILTER = "__all__";
 const NO_MANAGER_FILTER = "__none__";
+const normalizeManagerKey = (value?: string | null) =>
+  (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 function CustomersPage({ teamId }: { teamId: string }) {
   const { session, userId, accessRole, jobRole } = useAuth();
@@ -175,6 +179,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     name: "",
     legalName: "",
     manager: "",
+    managerId: "",
     ownershipType: "",
     vatRate: "none",
     taxId: "",
@@ -216,6 +221,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     source: "",
     website: "",
     manager: "",
+    managerId: "",
     iban: "",
     signatoryName: "",
     signatoryPosition: "",
@@ -237,42 +243,93 @@ function CustomersPage({ teamId }: { teamId: string }) {
     );
     return resolved.displayName;
   }, [session]);
+  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  const memberByLabel = useMemo(
+    () => new Map(teamMembers.map((member) => [member.label, member])),
+    [teamMembers]
+  );
+  const memberByNormalizedLabel = useMemo(() => {
+    const counts = new Map<string, number>();
+    teamMembers.forEach((member) => {
+      const key = normalizeManagerKey(member.label);
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    const map = new Map<string, TeamMemberRow>();
+    teamMembers.forEach((member) => {
+      const key = normalizeManagerKey(member.label);
+      if (!key) return;
+      if ((counts.get(key) ?? 0) === 1) map.set(key, member);
+    });
+    return map;
+  }, [teamMembers]);
+  const memberByUniqueFirstToken = useMemo(() => {
+    const counts = new Map<string, number>();
+    teamMembers.forEach((member) => {
+      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      if (!token) return;
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    });
+    const map = new Map<string, TeamMemberRow>();
+    teamMembers.forEach((member) => {
+      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      if (!token) return;
+      if ((counts.get(token) ?? 0) === 1) map.set(token, member);
+    });
+    return map;
+  }, [teamMembers]);
+  const resolveManagerLabel = useCallback(
+    (managerUserId?: string | null, manager?: string | null) => {
+      const byId = managerUserId ? memberById.get(managerUserId)?.label?.trim() : "";
+      if (byId) return byId;
+      const fallback = manager?.trim() ?? "";
+      if (!fallback) return "";
+      const normalized = normalizeManagerKey(fallback);
+      const byExactLabel = memberByNormalizedLabel.get(normalized)?.label?.trim();
+      if (byExactLabel) return byExactLabel;
+      const token = normalized.split(" ")[0] ?? "";
+      const byToken = token ? memberByUniqueFirstToken.get(token)?.label?.trim() : "";
+      if (byToken) return byToken;
+      return fallback;
+    },
+    [memberById, memberByNormalizedLabel, memberByUniqueFirstToken]
+  );
 
   const customerManagerOptions = useMemo(() => {
     const values = new Set<string>();
     rows.forEach((row) => {
-      const value = row.manager?.trim();
+      const value = resolveManagerLabel(row.manager_user_id, row.manager);
       if (value) values.add(value);
     });
     return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
-  }, [rows]);
+  }, [resolveManagerLabel, rows]);
 
   const leadManagerOptions = useMemo(() => {
     const values = new Set<string>();
     leads.forEach((lead) => {
-      const value = lead.manager?.trim();
+      const value = resolveManagerLabel(lead.manager_user_id, lead.manager);
       if (value) values.add(value);
     });
     return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
-  }, [leads]);
+  }, [leads, resolveManagerLabel]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     let next = rows.filter((row) => {
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
-      const manager = row.manager?.toLowerCase() ?? "";
+      const manager = resolveManagerLabel(row.manager_user_id, row.manager).toLowerCase();
       return !q || name.includes(q) || legal.includes(q) || manager.includes(q);
     });
 
     if (customerManagerFilter === NO_MANAGER_FILTER) {
-      next = next.filter((row) => !(row.manager?.trim() ?? ""));
+      next = next.filter((row) => !resolveManagerLabel(row.manager_user_id, row.manager));
     } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
-      next = next.filter((row) => (row.manager?.trim() ?? "") === customerManagerFilter);
+      next = next.filter((row) => resolveManagerLabel(row.manager_user_id, row.manager) === customerManagerFilter);
     }
 
     return next;
-  }, [rows, search, customerManagerFilter]);
+  }, [customerManagerFilter, resolveManagerLabel, rows, search]);
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -283,7 +340,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const last = lead.last_name?.toLowerCase() ?? "";
       const email = lead.email?.toLowerCase() ?? "";
       const source = lead.source?.toLowerCase() ?? "";
-      const manager = lead.manager?.toLowerCase() ?? "";
+      const manager = resolveManagerLabel(lead.manager_user_id, lead.manager).toLowerCase();
       const phones = (lead.phone_numbers ?? []).join(" ").toLowerCase();
       return (
         !q ||
@@ -299,19 +356,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
 
     if (leadManagerFilter === NO_MANAGER_FILTER) {
-      next = next.filter((lead) => !(lead.manager?.trim() ?? ""));
+      next = next.filter((lead) => !resolveManagerLabel(lead.manager_user_id, lead.manager));
     } else if (leadManagerFilter !== ALL_MANAGERS_FILTER) {
-      next = next.filter((lead) => (lead.manager?.trim() ?? "") === leadManagerFilter);
+      next = next.filter((lead) => resolveManagerLabel(lead.manager_user_id, lead.manager) === leadManagerFilter);
     }
 
     return next;
-  }, [leads, search, leadManagerFilter]);
-
-  const memberByLabel = useMemo(
-    () => new Map(teamMembers.map((member) => [member.label, member])),
-    [teamMembers]
-  );
-  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  }, [leadManagerFilter, leads, resolveManagerLabel, search]);
   const currentManagerLabel = useMemo(() => {
     const fromMember = userId ? memberById.get(userId)?.label?.trim() : "";
     if (fromMember) return fromMember;
@@ -331,10 +382,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
     [linkedQuotes]
   );
 
-  const renderManagerCell = (manager?: string | null) => {
-    const managerLabel = manager?.trim();
+  const renderManagerCell = (managerUserId?: string | null, manager?: string | null) => {
+    const managerLabel = resolveManagerLabel(managerUserId, manager);
     if (!managerLabel) return "Не вказано";
-    const member = memberByLabel.get(managerLabel);
+    const member =
+      (managerUserId ? memberById.get(managerUserId) : undefined) ??
+      memberByLabel.get(managerLabel) ??
+      memberByNormalizedLabel.get(normalizeManagerKey(managerLabel));
     return (
       <div className="flex items-center gap-2 min-w-0">
         <AvatarBase
@@ -373,7 +427,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setForm({
       name: "",
       legalName: "",
-      manager: defaultManagerName,
+      manager: currentManagerLabel || defaultManagerName,
+      managerId: userId ?? "",
       ownershipType: "",
       vatRate: "none",
       taxId: "",
@@ -411,7 +466,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       phones: [""],
       source: "",
       website: "",
-      manager: defaultManagerName,
+      manager: currentManagerLabel || defaultManagerName,
+      managerId: userId ?? "",
       iban: "",
       signatoryName: "",
       signatoryPosition: "",
@@ -437,7 +493,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setForm({
       name: row.name ?? "",
       legalName: row.legal_name ?? "",
-      manager: row.manager ?? "",
+      manager: resolveManagerLabel(row.manager_user_id, row.manager),
+      managerId: row.manager_user_id ?? "",
       ownershipType: row.ownership_type ?? "",
       vatRate:
         row.vat_rate === null || row.vat_rate === undefined ? "none" : String(row.vat_rate),
@@ -489,7 +546,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       phones: lead.phone_numbers?.length ? lead.phone_numbers : [""],
       source: lead.source ?? "",
       website: lead.website ?? "",
-      manager: lead.manager ?? defaultManagerName,
+      manager: resolveManagerLabel(lead.manager_user_id, lead.manager) || (currentManagerLabel || defaultManagerName),
+      managerId: lead.manager_user_id ?? "",
       iban: lead.iban ?? "",
       signatoryName: lead.signatory_name ?? "",
       signatoryPosition: lead.signatory_position ?? "",
@@ -611,13 +669,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
     const vatOption = VAT_OPTIONS.find((option) => option.value === form.vatRate);
     const managerValue = form.manager.trim();
+    const selectedManagerLabel = form.managerId
+      ? memberById.get(form.managerId)?.label ?? managerValue
+      : managerValue;
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: form.name.trim(),
       legal_name: form.legalName.trim() || null,
       manager: editingId
-        ? (managerValue || null)
-        : (managerValue || defaultManagerName || null),
+        ? (selectedManagerLabel || null)
+        : (selectedManagerLabel || currentManagerLabel || defaultManagerName || null),
+      manager_user_id: form.managerId || null,
       ownership_type: form.ownershipType || null,
       vat_rate: vatOption?.rate ?? null,
       tax_id: form.taxId.trim() || null,
@@ -650,6 +712,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const removeOptionalFields = () => {
       const clone = { ...payload };
       delete clone.manager;
+      delete clone.manager_user_id;
       delete clone.ownership_type;
       delete clone.vat_rate;
       delete clone.tax_id;
@@ -749,6 +812,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadFormError(null);
 
     const managerValue = leadForm.manager.trim();
+    const selectedManagerLabel = leadForm.managerId
+      ? memberById.get(leadForm.managerId)?.label ?? managerValue
+      : managerValue;
     const payload: Record<string, unknown> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
@@ -760,7 +826,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       phone_numbers: phones,
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
-      manager: managerValue || defaultManagerName || null,
+      manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
+      manager_user_id: leadForm.managerId || null,
       iban: leadForm.iban.trim() || null,
       signatory_name: leadForm.signatoryName.trim() || null,
       signatory_position: leadForm.signatoryPosition.trim() || null,
@@ -795,6 +862,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
               .eq("id", leadEditingId)
               .eq("team_id", teamId);
             if (fallbackError) throw fallbackError;
+          } else if (message.includes("column") && message.includes("manager_user_id")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.manager_user_id;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .update(fallbackPayload)
+              .eq("id", leadEditingId)
+              .eq("team_id", teamId);
+            if (fallbackError) throw fallbackError;
           } else {
             throw updateError;
           }
@@ -809,6 +886,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
           if (message.includes("column") && message.includes("logo_url")) {
             const fallbackPayload = { ...payload };
             delete fallbackPayload.logo_url;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .insert(fallbackPayload);
+            if (fallbackError) throw fallbackError;
+          } else if (message.includes("column") && message.includes("manager_user_id")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.manager_user_id;
             const { error: fallbackError } = await supabase
               .schema("tosho")
               .from("leads")
@@ -1003,7 +1088,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         )}
                       </TableCell>
                       <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
-                      <TableCell>{renderManagerCell(row.manager)}</TableCell>
+                      <TableCell>{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
                       <TableCell
                         className="text-right pr-4"
                         onClick={(event) => event.stopPropagation()}
@@ -1103,7 +1188,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           "Не вказано"
                         )}
                       </TableCell>
-                      <TableCell>{renderManagerCell(lead.manager)}</TableCell>
+                      <TableCell>{renderManagerCell(lead.manager_user_id, lead.manager)}</TableCell>
                       <TableCell
                         className="text-right pr-4"
                         onClick={(event) => event.stopPropagation()}

@@ -46,6 +46,7 @@ export type CustomerFormState = {
   name: string;
   legalName: string;
   manager: string;
+  managerId: string;
   ownershipType: string;
   vatRate: string;
   taxId: string;
@@ -192,7 +193,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     [form.eventDate]
   );
 
-  const selectedManager = teamMembers.find((member) => member.label === form.manager);
+  const selectedManager =
+    teamMembers.find((member) => member.id === form.managerId) ??
+    teamMembers.find((member) => member.label === form.manager);
 
   React.useEffect(() => {
     if (!open) {
@@ -380,7 +383,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       size="sm"
                       className="w-full justify-start gap-2 h-9 text-sm truncate"
                       onClick={() => {
-                        setForm((prev) => ({ ...prev, manager: member.label }));
+                        setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
                         setManagerOpen(false);
                       }}
                       title={member.label}
@@ -405,7 +408,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     size="sm"
                     className="w-full justify-start text-sm text-muted-foreground"
                     onClick={() => {
-                      setForm((prev) => ({ ...prev, manager: "" }));
+                      setForm((prev) => ({ ...prev, manager: "", managerId: "" }));
                       setManagerOpen(false);
                     }}
                   >

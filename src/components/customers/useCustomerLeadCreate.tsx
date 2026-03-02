@@ -45,6 +45,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   name: prefillName,
   legalName: "",
   manager: defaultManagerLabel,
+  managerId: "",
   ownershipType: "",
   vatRate: "none",
   taxId: "",
@@ -78,6 +79,7 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   website: "",
   logoUrl: "",
   manager: defaultManagerLabel,
+  managerId: "",
   iban: "",
   signatoryName: "",
   signatoryPosition: "",
@@ -161,11 +163,16 @@ export const useCustomerLeadCreate = ({
     setCustomerError(null);
 
     const vatOption = VAT_OPTIONS.find((option) => option.value === customerForm.vatRate);
+    const managerValue = customerForm.manager.trim();
+    const selectedManagerLabel = customerForm.managerId
+      ? teamMembers.find((member) => member.id === customerForm.managerId)?.label ?? managerValue
+      : managerValue;
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: customerForm.name.trim(),
       legal_name: customerForm.legalName.trim() || null,
-      manager: customerForm.manager.trim() || defaultManagerLabel || null,
+      manager: selectedManagerLabel || defaultManagerLabel || null,
+      manager_user_id: customerForm.managerId || null,
       ownership_type: customerForm.ownershipType || null,
       vat_rate: vatOption?.rate ?? null,
       tax_id: customerForm.taxId.trim() || null,
@@ -191,12 +198,25 @@ export const useCustomerLeadCreate = ({
     };
 
     try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .insert(payload)
-        .select("id,name,legal_name,logo_url")
-        .single();
+      const createWithPayload = async (insertPayload: Record<string, unknown>) => {
+        return supabase
+          .schema("tosho")
+          .from("customers")
+          .insert(insertPayload)
+          .select("id,name,legal_name,logo_url")
+          .single();
+      };
+      let { data, error } = await createWithPayload(payload);
+      if (error) {
+        const message = error.message ?? "";
+        if (message.includes("column") && message.includes("manager_user_id")) {
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.manager_user_id;
+          const fallbackRes = await createWithPayload(fallbackPayload);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+      }
       if (error) throw error;
       const created = data as { id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null };
       onCreated({
@@ -212,7 +232,7 @@ export const useCustomerLeadCreate = ({
     } finally {
       setCustomerSaving(false);
     }
-  }, [customerForm, defaultManagerLabel, onCreated, resolveErrorMessage, teamId]);
+  }, [customerForm, defaultManagerLabel, onCreated, resolveErrorMessage, teamId, teamMembers]);
 
   const handleCreateLead = React.useCallback(async () => {
     if (!teamId) {
@@ -251,7 +271,12 @@ export const useCustomerLeadCreate = ({
       phone_numbers: phones,
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
-      manager: leadForm.manager.trim() || defaultManagerLabel || null,
+      manager: (
+        leadForm.managerId
+          ? teamMembers.find((member) => member.id === leadForm.managerId)?.label ?? leadForm.manager.trim()
+          : leadForm.manager.trim()
+      ) || defaultManagerLabel || null,
+      manager_user_id: leadForm.managerId || null,
       iban: leadForm.iban.trim() || null,
       signatory_name: leadForm.signatoryName.trim() || null,
       signatory_position: leadForm.signatoryPosition.trim() || null,
@@ -285,6 +310,12 @@ export const useCustomerLeadCreate = ({
           const fallbackRes = await createWithPayload(fallbackPayload);
           data = fallbackRes.data;
           error = fallbackRes.error;
+        } else if (message.includes("column") && message.includes("manager_user_id")) {
+          const fallbackPayload = { ...basePayload };
+          delete fallbackPayload.manager_user_id;
+          const fallbackRes = await createWithPayload(fallbackPayload);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
         }
       }
       if (error) throw error;
@@ -313,7 +344,7 @@ export const useCustomerLeadCreate = ({
     } finally {
       setLeadSaving(false);
     }
-  }, [defaultManagerLabel, leadForm, onCreated, resolveErrorMessage, teamId]);
+  }, [defaultManagerLabel, leadForm, onCreated, resolveErrorMessage, teamId, teamMembers]);
 
   const dialogs = (
     <>

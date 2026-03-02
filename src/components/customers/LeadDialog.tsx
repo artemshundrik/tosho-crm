@@ -33,6 +33,7 @@ export type LeadFormState = {
   website: string;
   logoUrl: string;
   manager: string;
+  managerId: string;
   iban: string;
   signatoryName: string;
   signatoryPosition: string;
@@ -135,8 +136,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   );
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
 
-  const hasManagerInList = teamMembers.some((member) => member.label === form.manager);
-  const selectedManager = teamMembers.find((member) => member.label === form.manager);
+  const hasManagerInList = teamMembers.some((member) => member.id === form.managerId || member.label === form.manager);
+  const selectedManager =
+    teamMembers.find((member) => member.id === form.managerId) ??
+    teamMembers.find((member) => member.label === form.manager);
   const reminderDateValue = React.useMemo(
     () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
     [form.reminderDate]
@@ -293,7 +296,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       size="sm"
                       className="w-full justify-start gap-2 h-9 text-sm truncate"
                       onClick={() => {
-                        setForm((prev) => ({ ...prev, manager: member.label }));
+                        setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
                         setManagerOpen(false);
                       }}
                       title={member.label}
@@ -310,7 +313,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <Check
                         className={cn(
                           "ml-auto h-3.5 w-3.5 text-primary",
-                          form.manager === member.label ? "opacity-100" : "opacity-0"
+                          form.managerId === member.id || form.manager === member.label ? "opacity-100" : "opacity-0"
                         )}
                       />
                     </Button>
@@ -318,6 +321,19 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 ) : (
                   <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
                 )}
+                {form.manager.trim() ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-sm text-muted-foreground"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, manager: "", managerId: "" }));
+                      setManagerOpen(false);
+                    }}
+                  >
+                    Очистити
+                  </Button>
+                ) : null}
               </div>
             </PopoverContent>
           </Popover>
