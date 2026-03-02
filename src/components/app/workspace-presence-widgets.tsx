@@ -48,11 +48,14 @@ type OnlineNowDropdownProps = {
   loading?: boolean;
 };
 
+const ONLINE_LIST_VISIBLE_ROWS = 6;
+const ONLINE_LIST_ROW_HEIGHT_PX = 60;
+
 export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) {
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const [showTopFade, setShowTopFade] = React.useState(false);
   const [showBottomFade, setShowBottomFade] = React.useState(false);
-  const hasScrollableContent = !loading && entries.length > 0;
+  const needsScroll = !loading && entries.length > ONLINE_LIST_VISIBLE_ROWS;
 
   const updateScrollHints = React.useCallback(() => {
     const node = listRef.current;
@@ -108,7 +111,11 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
             <div className="relative">
               <div
                 ref={listRef}
-                className="max-h-[300px] overflow-y-auto overscroll-contain"
+                className={cn(
+                  "overscroll-contain",
+                  needsScroll ? "overflow-y-auto" : "overflow-hidden"
+                )}
+                style={needsScroll ? { maxHeight: `${ONLINE_LIST_VISIBLE_ROWS * ONLINE_LIST_ROW_HEIGHT_PX}px` } : undefined}
                 onWheelCapture={(event) => event.stopPropagation()}
                 onScroll={updateScrollHints}
               >
@@ -135,10 +142,10 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
                   </div>
                 ))}
               </div>
-              {hasScrollableContent && showTopFade ? (
+              {needsScroll && showTopFade ? (
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-popover to-transparent" />
               ) : null}
-              {hasScrollableContent && showBottomFade ? (
+              {needsScroll && showBottomFade ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-popover to-transparent" />
               ) : null}
             </div>
