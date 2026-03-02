@@ -6,6 +6,7 @@ export type JobRole = string | null;
 export type AppPermissions = {
   isSuperAdmin: boolean;
   isAdmin: boolean;
+  isSeo: boolean;
   isManagerJob: boolean;
   isDesigner: boolean;
   canManageMembers: boolean;
@@ -48,11 +49,12 @@ export function buildPermissions({
 
   const isSuperAdmin = role === "super_admin" || normalizedAccessRole === "owner";
   const isAdmin = role === "manager" || normalizedAccessRole === "admin";
+  const isSeo = normalizedJobRole === "seo";
   const isManagerJob = normalizedJobRole === "manager";
   const isDesigner = isDesignerJobRole(jobRole);
 
-  const canManageMembers = isSuperAdmin || isAdmin;
-  const canEditMemberRoles = isSuperAdmin;
+  const canManageMembers = isSuperAdmin || isAdmin || isSeo;
+  const canEditMemberRoles = isSuperAdmin || isAdmin;
   const canManageAssignments = canManageMembers || isManagerJob;
   const canSelfAssignDesign = canManageAssignments || isDesigner;
   const canWriteStandings = canManageMembers || isManagerJob;
@@ -61,6 +63,7 @@ export function buildPermissions({
   return {
     isSuperAdmin,
     isAdmin,
+    isSeo,
     isManagerJob,
     isDesigner,
     canManageMembers,

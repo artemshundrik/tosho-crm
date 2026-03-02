@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Search,
   Mail,
+  Phone,
   Calendar,
   Link as LinkIcon,
   Clock,
@@ -14,6 +15,10 @@ import {
   Trash2,
   Loader2,
   AlertTriangle,
+  Activity,
+  UserCheck,
+  UserX,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,9 +60,11 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -70,6 +77,38 @@ type Member = {
   access_role: string | null;
   job_role: string | null;
   created_at: string;
+};
+
+type MemberProfileMeta = {
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  birthDate: string;
+  phone: string;
+  availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
+  startDate: string;
+  probationEndDate: string;
+  managerUserId: string;
+  moduleAccess: {
+    overview: boolean;
+    orders: boolean;
+    finance: boolean;
+    design: boolean;
+    logistics: boolean;
+    catalog: boolean;
+  };
+};
+
+type MemberPresence = {
+  currentLabel: string;
+  lastSeenAt: string;
+  online: boolean;
+};
+
+type TeamActivityItem = {
+  userId: string;
+  title: string;
+  createdAt: string;
 };
 
 type Invite = {
@@ -88,6 +127,7 @@ type TeamMembersPageCache = {
   members: Member[];
   invites: Invite[];
   memberProfilesByUserId: Record<string, { label: string; avatarUrl: string | null }>;
+  memberMetaByUserId: Record<string, MemberProfileMeta>;
 };
 
 type AccessRoleOption = {
@@ -132,6 +172,44 @@ const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "seo", label: "SEO" },
 ];
 
+const AVAILABILITY_OPTIONS = [
+  { value: "available", label: "Доступний" },
+  { value: "vacation", label: "Відпустка" },
+  { value: "sick_leave", label: "Лікарняний" },
+  { value: "offline", label: "Поза офісом" },
+] as const;
+
+const DEFAULT_MODULE_ACCESS = {
+  overview: true,
+  orders: true,
+  finance: false,
+  design: true,
+  logistics: false,
+  catalog: false,
+};
+
+const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
+  overview: "Огляд",
+  orders: "Замовлення",
+  finance: "Фінанси",
+  design: "Дизайн",
+  logistics: "Логістика",
+  catalog: "Каталог",
+};
+
+const DEFAULT_MEMBER_META: MemberProfileMeta = {
+  firstName: "",
+  lastName: "",
+  fullName: "",
+  birthDate: "",
+  phone: "",
+  availabilityStatus: "available",
+  startDate: "",
+  probationEndDate: "",
+  managerUserId: "",
+  moduleAccess: DEFAULT_MODULE_ACCESS,
+};
+
 function getAccessRoleLabel(role: string | null) {
   return ACCESS_ROLE_LABELS[role ?? ""] ?? "Member";
 }
@@ -149,6 +227,41 @@ function getAccessBadgeClass(role: string | null) {
 function getJobBadgeClass(role: string | null) {
   if (!role) return "bg-muted/50 border-border text-muted-foreground";
   return "bg-muted/30 border-border text-muted-foreground";
+}
+
+function getAvailabilityLabel(value: MemberProfileMeta["availabilityStatus"]) {
+  return AVAILABILITY_OPTIONS.find((option) => option.value === value)?.label ?? "Доступний";
+}
+
+function getAvailabilityBadgeClass(value: MemberProfileMeta["availabilityStatus"]) {
+  if (value === "vacation") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
+  if (value === "sick_leave") return "bg-danger-soft text-danger-foreground border-danger-soft-border";
+  if (value === "offline") return "bg-muted text-muted-foreground border-border";
+  return "bg-success-soft text-success-foreground border-success-soft-border";
+}
+
+function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"] {
+  const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  return {
+    overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
+    orders: typeof input.orders === "boolean" ? input.orders : DEFAULT_MODULE_ACCESS.orders,
+    finance: typeof input.finance === "boolean" ? input.finance : DEFAULT_MODULE_ACCESS.finance,
+    design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
+    logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
+    catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
+  };
+}
+
+function getRangeStartIso(range: "day" | "week" | "month") {
+  const date = new Date();
+  if (range === "day") {
+    date.setDate(date.getDate() - 1);
+  } else if (range === "week") {
+    date.setDate(date.getDate() - 7);
+  } else {
+    date.setMonth(date.getMonth() - 1);
+  }
+  return date.toISOString();
 }
 
 async function parseJsonSafe<T>(response: Response): Promise<T | null> {
@@ -188,6 +301,17 @@ function normalizeRoleForCompare(value: string | null | undefined) {
   return value;
 }
 
+function isRecoverableTeamProfileError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("team_member_profiles") &&
+    (normalized.includes("does not exist") ||
+      normalized.includes("relation") ||
+      normalized.includes("schema cache") ||
+      normalized.includes("column"))
+  );
+}
+
 function isMissingMembershipProfileColumnsError(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -198,7 +322,8 @@ function isMissingMembershipProfileColumnsError(message: string) {
 
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
+  const { onlineEntries } = useWorkspacePresence();
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
   const hasCache = Boolean(cached);
@@ -216,6 +341,15 @@ export function TeamMembersPage() {
     Record<string, { label: string; avatarUrl: string | null }>
   >(cached?.memberProfilesByUserId ?? {});
   const [memberProfilesLoading, setMemberProfilesLoading] = useState(false);
+  const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>(
+    cached?.memberMetaByUserId ?? {}
+  );
+  const [memberMetaLoading, setMemberMetaLoading] = useState(false);
+  const [memberProfileStorageAvailable, setMemberProfileStorageAvailable] = useState(true);
+  const [memberPresenceByUserId, setMemberPresenceByUserId] = useState<Record<string, MemberPresence>>({});
+  const [activityRange, setActivityRange] = useState<"day" | "week" | "month">("day");
+  const [teamActivityItems, setTeamActivityItems] = useState<TeamActivityItem[]>([]);
+  const [teamActivityLoading, setTeamActivityLoading] = useState(false);
 
   const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
   const [invitesLoading, setInvitesLoading] = useState(false);
@@ -236,10 +370,24 @@ export function TeamMembersPage() {
   const [editAccessRole, setEditAccessRole] = useState("member");
   const [editJobRole, setEditJobRole] = useState("member");
   const [editBusy, setEditBusy] = useState(false);
+  const [editProfileMember, setEditProfileMember] = useState<Member | null>(null);
+  const [editProfileFirstName, setEditProfileFirstName] = useState("");
+  const [editProfileLastName, setEditProfileLastName] = useState("");
+  const [editProfileBirthDate, setEditProfileBirthDate] = useState("");
+  const [editProfilePhone, setEditProfilePhone] = useState("");
+  const [editProfileAvailabilityStatus, setEditProfileAvailabilityStatus] =
+    useState<MemberProfileMeta["availabilityStatus"]>("available");
+  const [editProfileStartDate, setEditProfileStartDate] = useState("");
+  const [editProfileProbationEndDate, setEditProfileProbationEndDate] = useState("");
+  const [editProfileManagerUserId, setEditProfileManagerUserId] = useState("");
+  const [editProfileModuleAccess, setEditProfileModuleAccess] =
+    useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
+  const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [workspaceFunctionAvailable, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     const tab = params.get("tab");
-    if (tab === "invites" || tab === "members") {
+    if (tab === "invites" || tab === "members" || tab === "activity") {
       setActiveTab(tab);
     }
   }, [params]);
@@ -249,7 +397,8 @@ export function TeamMembersPage() {
     [currentUserId, members]
   );
   const isSuperAdmin = currentMembership?.access_role === "owner";
-  const canManage = currentMembership?.access_role === "owner" || currentMembership?.access_role === "admin";
+  const isAdmin = currentMembership?.access_role === "admin";
+  const canManage = isSuperAdmin || isAdmin;
 
   useEffect(() => {
     let cancelled = false;
@@ -506,7 +655,230 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, members]);
+
+  useEffect(() => {
+    if (!workspaceId || !canManage || members.length === 0) {
+      setMemberMetaLoading(false);
+      if (!canManage) setMemberMetaByUserId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMemberMeta = async () => {
+      setMemberMetaLoading(true);
+      try {
+        let profilesByUserId: Record<string, MemberProfileMeta> = {};
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("team_member_profiles")
+          .select("user_id,first_name,last_name,full_name,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access")
+          .eq("workspace_id", workspaceId);
+        if (error) {
+          if (
+            /does not exist|relation|could not find the table/i.test(error.message ?? "")
+          ) {
+            if (!cancelled) {
+              setMemberProfileStorageAvailable(false);
+            }
+          } else {
+            throw error;
+          }
+        } else {
+          profilesByUserId = ((data ?? []) as Array<{
+            user_id: string;
+            first_name?: string | null;
+            last_name?: string | null;
+            full_name?: string | null;
+            birth_date?: string | null;
+            phone?: string | null;
+            availability_status?: string | null;
+            start_date?: string | null;
+            probation_end_date?: string | null;
+            manager_user_id?: string | null;
+            module_access?: unknown;
+          }>).reduce<Record<string, MemberProfileMeta>>((acc, row) => {
+            acc[row.user_id] = {
+              firstName: row.first_name?.trim() || "",
+              lastName: row.last_name?.trim() || "",
+              fullName: row.full_name?.trim() || "",
+              birthDate: row.birth_date?.trim() || "",
+              phone: row.phone?.trim() || "",
+              availabilityStatus:
+                row.availability_status === "vacation" ||
+                row.availability_status === "sick_leave" ||
+                row.availability_status === "offline"
+                  ? row.availability_status
+                  : "available",
+              startDate: row.start_date?.trim() || "",
+              probationEndDate: row.probation_end_date?.trim() || "",
+              managerUserId: row.manager_user_id?.trim() || "",
+              moduleAccess: normalizeModuleAccess(row.module_access),
+            };
+            return acc;
+          }, {});
+        }
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (workspaceFunctionAvailable !== false && accessToken) {
+          const response = await fetch("/.netlify/functions/create-workspace-invite", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ mode: "list_workspace_member_profiles" }),
+          });
+          if (response.status === 404) {
+            setWorkspaceFunctionAvailable(false);
+          } else {
+            setWorkspaceFunctionAvailable(true);
+          }
+          const payload = await parseJsonSafe<{
+            profilesByUserId?: Record<
+              string,
+              {
+                firstName?: string;
+                lastName?: string;
+                fullName?: string;
+                birthDate?: string;
+                phone?: string;
+                availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline";
+                startDate?: string;
+                probationEndDate?: string;
+                managerUserId?: string;
+                moduleAccess?: Partial<MemberProfileMeta["moduleAccess"]>;
+              }
+            >;
+          }>(response);
+          if (response.ok) {
+            const fallback = payload?.profilesByUserId ?? {};
+            for (const [userId, profile] of Object.entries(fallback)) {
+              const existing = profilesByUserId[userId] ?? DEFAULT_MEMBER_META;
+              profilesByUserId[userId] = {
+                ...existing,
+                firstName: existing.firstName || (profile.firstName ?? "").trim(),
+                lastName: existing.lastName || (profile.lastName ?? "").trim(),
+                fullName: existing.fullName || (profile.fullName ?? "").trim(),
+                birthDate: existing.birthDate || (profile.birthDate ?? "").trim(),
+                phone: existing.phone || (profile.phone ?? "").trim(),
+                availabilityStatus:
+                  existing.availabilityStatus !== "available"
+                    ? existing.availabilityStatus
+                    : profile.availabilityStatus === "vacation" ||
+                        profile.availabilityStatus === "sick_leave" ||
+                        profile.availabilityStatus === "offline"
+                      ? profile.availabilityStatus
+                      : "available",
+                startDate: existing.startDate || (profile.startDate ?? "").trim(),
+                probationEndDate: existing.probationEndDate || (profile.probationEndDate ?? "").trim(),
+                managerUserId: existing.managerUserId || (profile.managerUserId ?? "").trim(),
+                moduleAccess: {
+                  ...existing.moduleAccess,
+                  ...(profile.moduleAccess ?? {}),
+                },
+              };
+            }
+          }
+        }
+
+        const { data: currentUserData } = await supabase.auth.getUser();
+        const selfUser = currentUserData.user;
+        if (selfUser?.id) {
+          const meta = (selfUser.user_metadata ?? {}) as Record<string, unknown>;
+          const existing = profilesByUserId[selfUser.id] ?? DEFAULT_MEMBER_META;
+          profilesByUserId[selfUser.id] = {
+            ...existing,
+            firstName: existing.firstName || (typeof meta.first_name === "string" ? meta.first_name.trim() : ""),
+            lastName: existing.lastName || (typeof meta.last_name === "string" ? meta.last_name.trim() : ""),
+            fullName: existing.fullName || (typeof meta.full_name === "string" ? meta.full_name.trim() : ""),
+            birthDate: existing.birthDate || (typeof meta.birth_date === "string" ? meta.birth_date.trim() : ""),
+            phone: existing.phone || (typeof meta.phone === "string" ? meta.phone.trim() : ""),
+          };
+        }
+
+        if (!cancelled) {
+          if (!error) setMemberProfileStorageAvailable(true);
+          setMemberMetaByUserId(profilesByUserId);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          toast.error("Не вдалося завантажити профілі команди", {
+            description: getErrorMessage(error),
+          });
+        }
+      } finally {
+        if (!cancelled) setMemberMetaLoading(false);
+      }
+    };
+
+    void loadMemberMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, canManage, members.length, workspaceFunctionAvailable]);
+
+  useEffect(() => {
+    if (!workspaceId || members.length === 0) {
+      setMemberPresenceByUserId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPresenceAndActivity = async () => {
+      try {
+        const loadPresenceRows = async () => {
+          const teamScoped = await supabase
+            .from("user_presence")
+            .select("user_id,current_label,last_seen_at")
+            .eq("team_id", workspaceId);
+          if (!teamScoped.error) return teamScoped.data ?? [];
+          const workspaceScoped = await supabase
+            .from("user_presence")
+            .select("user_id,current_label,last_seen_at")
+            .eq("workspace_id", workspaceId);
+          if (!workspaceScoped.error) return workspaceScoped.data ?? [];
+          return [];
+        };
+
+        const presenceRows = await loadPresenceRows();
+
+        if (cancelled) return;
+
+        const nowMs = Date.now();
+        const presenceMap = ((presenceRows ?? []) as Array<{ user_id?: string | null; current_label?: string | null; last_seen_at?: string | null }>).reduce<
+          Record<string, MemberPresence>
+        >((acc, row) => {
+          const userId = row.user_id ?? "";
+          if (!userId) return acc;
+          const lastSeenAt = row.last_seen_at ?? "";
+          const online =
+            !!lastSeenAt && nowMs - new Date(lastSeenAt).getTime() <= 2 * 60 * 1000;
+          acc[userId] = {
+            currentLabel: row.current_label?.trim() || "У CRM",
+            lastSeenAt,
+            online,
+          };
+          return acc;
+        }, {});
+
+        setMemberPresenceByUserId(presenceMap);
+      } catch {
+        if (cancelled) return;
+      }
+    };
+
+    void loadPresenceAndActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, members.length]);
 
   useEffect(() => {
     if (!workspaceId || !canManage) {
@@ -574,21 +946,97 @@ export function TeamMembersPage() {
   }, [invitesError]);
 
   useEffect(() => {
+    if (!workspaceId || activeTab !== "activity") {
+      setTeamActivityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadTeamActivity = async () => {
+      setTeamActivityLoading(true);
+      try {
+        const startIso = getRangeStartIso(activityRange);
+        const loadScoped = async (scope: "team" | "workspace" | "none") => {
+          let query = supabase
+            .from("activity_log")
+            .select("user_id,title,action,created_at")
+            .gte("created_at", startIso)
+            .order("created_at", { ascending: false })
+            .limit(500);
+          if (scope === "team") query = query.eq("team_id", workspaceId);
+          if (scope === "workspace") query = query.eq("workspace_id", workspaceId);
+          return query;
+        };
+
+        const [teamScoped, workspaceScoped, unscoped] = await Promise.all([
+          loadScoped("team"),
+          loadScoped("workspace"),
+          loadScoped("none"),
+        ]);
+
+        const candidates = [teamScoped, workspaceScoped, unscoped].filter((candidate) => !candidate.error);
+        const bestCandidate = candidates.sort((a, b) => (b.data?.length ?? 0) - (a.data?.length ?? 0))[0];
+        const rows = (bestCandidate?.data ?? []) as Array<{
+          user_id?: string | null;
+          title?: string | null;
+          action?: string | null;
+          created_at?: string | null;
+        }>;
+        if (cancelled) return;
+
+        const memberIds = new Set(members.map((member) => member.user_id));
+        setTeamActivityItems(
+          rows
+            .filter((row) => (row.user_id ?? "") && memberIds.has(row.user_id ?? ""))
+            .map((row) => ({
+              userId: row.user_id ?? "",
+              title: row.title?.trim() || row.action?.trim() || "Дія в CRM",
+              createdAt: row.created_at ?? "",
+            }))
+        );
+      } catch {
+        if (cancelled) return;
+        setTeamActivityItems([]);
+      } finally {
+        if (!cancelled) setTeamActivityLoading(false);
+      }
+    };
+
+    void loadTeamActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, activeTab, activityRange, members]);
+
+  useEffect(() => {
     if (!workspaceId) return;
     setCache({
       workspaceId,
       members,
       invites,
       memberProfilesByUserId,
+      memberMetaByUserId,
     });
-  }, [workspaceId, members, invites, memberProfilesByUserId, setCache]);
+  }, [workspaceId, members, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
 
   const filteredMembers = members.filter((m) => {
     const email = (m.email ?? "").toLowerCase();
     const name = (m.full_name ?? "").toLowerCase();
     const fallbackName = (memberProfilesByUserId[m.user_id]?.label ?? "").toLowerCase();
+    const firstName = (memberMetaByUserId[m.user_id]?.firstName ?? "").toLowerCase();
+    const lastName = (memberMetaByUserId[m.user_id]?.lastName ?? "").toLowerCase();
+    const phone = (memberMetaByUserId[m.user_id]?.phone ?? "").toLowerCase();
     const q = searchQuery.toLowerCase();
-    return email.includes(q) || name.includes(q) || fallbackName.includes(q);
+    return (
+      email.includes(q) ||
+      name.includes(q) ||
+      fallbackName.includes(q) ||
+      firstName.includes(q) ||
+      lastName.includes(q) ||
+      phone.includes(q)
+    );
   });
 
   const formatDate = (dateStr: string) => {
@@ -599,13 +1047,268 @@ export function TeamMembersPage() {
     });
   };
 
+  const formatBirthDate = (dateStr?: string | null) => {
+    if (!dateStr) return "Не вказано";
+    return new Date(dateStr).toLocaleDateString("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const formatRelativeTime = (dateStr?: string | null) => {
+    if (!dateStr) return "Немає даних";
+    const deltaMs = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(deltaMs / 60000);
+    if (minutes < 1) return "щойно";
+    if (minutes < 60) return `${minutes} хв тому`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} год тому`;
+    const days = Math.floor(hours / 24);
+    return `${days} дн тому`;
+  };
+
+  const getMemberDisplayName = (member: Member) => {
+    const profile = memberProfilesByUserId[member.user_id];
+    const meta = memberMetaByUserId[member.user_id];
+    return (
+      formatUserShortName({
+        fullName: meta?.fullName ?? member.full_name ?? profile?.label ?? null,
+        email: member.email ?? null,
+        fallback: "Користувач",
+      }) || "Користувач"
+    );
+  };
+
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
+  const localProfileFallbackHint =
+    "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
 
   const isExpired = (dateStr: string) => new Date(dateStr) < new Date();
 
-  const handleTabChange = (next: "members" | "invites") => {
+  const handleTabChange = (next: "members" | "invites" | "activity") => {
     setActiveTab(next);
-    setParams(next === "invites" ? { tab: "invites" } : {});
+    setParams(next === "members" ? {} : { tab: next });
+  };
+
+  const openEditProfileDialog = (member: Member) => {
+    const meta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
+    setEditProfileMember(member);
+    setEditProfileFirstName(meta?.firstName ?? "");
+    setEditProfileLastName(meta?.lastName ?? "");
+    setEditProfileBirthDate(meta?.birthDate ?? "");
+    setEditProfilePhone(meta?.phone ?? "");
+    setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
+    setEditProfileStartDate(meta?.startDate ?? "");
+    setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
+    setEditProfileManagerUserId(meta?.managerUserId ?? "");
+    setEditProfileModuleAccess(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS);
+  };
+
+  const saveMemberProfile = async () => {
+    if (!editProfileMember || !workspaceId || !canManage) return;
+
+    setEditProfileBusy(true);
+    try {
+      const firstName = editProfileFirstName.trim();
+      const lastName = editProfileLastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const birthDate = editProfileBirthDate.trim();
+      const phone = editProfilePhone.trim();
+      const availabilityStatus = editProfileAvailabilityStatus;
+      const startDate = editProfileStartDate.trim();
+      const probationEndDate = editProfileProbationEndDate.trim();
+      const managerUserId = editProfileManagerUserId.trim();
+      const moduleAccess = editProfileModuleAccess;
+
+      const { error } = await supabase
+        .schema("tosho")
+        .from("team_member_profiles")
+        .upsert(
+          {
+            workspace_id: workspaceId,
+            user_id: editProfileMember.user_id,
+            first_name: firstName || null,
+            last_name: lastName || null,
+            full_name: fullName || null,
+            birth_date: birthDate || null,
+            phone: phone || null,
+            availability_status: availabilityStatus,
+            start_date: startDate || null,
+            probation_end_date: probationEndDate || null,
+            manager_user_id: managerUserId || null,
+            module_access: moduleAccess,
+            updated_by: currentUserId ?? null,
+          },
+          { onConflict: "workspace_id,user_id" }
+        );
+
+      if (error) {
+        if (!isRecoverableTeamProfileError(error.message ?? "")) {
+          throw error;
+        }
+        setMemberProfileStorageAvailable(false);
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+        const response = await fetch("/.netlify/functions/create-workspace-invite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            mode: "update_member_profile",
+            userId: editProfileMember.user_id,
+            firstName,
+            lastName,
+            birthDate,
+            phone,
+            availabilityStatus,
+            startDate,
+            probationEndDate,
+            managerUserId,
+            moduleAccess,
+          }),
+        });
+        if (response.status === 404) {
+          setWorkspaceFunctionAvailable(false);
+          throw new Error(localProfileFallbackHint);
+        }
+        setWorkspaceFunctionAvailable(true);
+        const payload = await parseJsonSafe<{ error?: string }>(response);
+        if (!response.ok) {
+          throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`);
+        }
+      }
+
+      setMemberMetaByUserId((prev) => ({
+        ...prev,
+        [editProfileMember.user_id]: {
+          firstName,
+          lastName,
+          fullName,
+          birthDate,
+          phone,
+          availabilityStatus,
+          startDate,
+          probationEndDate,
+          managerUserId,
+          moduleAccess,
+        },
+      }));
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.user_id === editProfileMember.user_id
+            ? {
+                ...member,
+                full_name: fullName || member.full_name,
+              }
+            : member
+        )
+      );
+
+      toast.success("Профіль учасника оновлено");
+      setEditProfileMember(null);
+    } catch (error: unknown) {
+      toast.error("Не вдалося оновити профіль", { description: getErrorMessage(error) });
+    } finally {
+      setEditProfileBusy(false);
+    }
+  };
+
+  const sendPasswordReset = async (member: Member) => {
+    if (!member.email) {
+      toast.error("У користувача немає email");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Лист для скидання паролю надіслано");
+    } catch (error: unknown) {
+      toast.error("Не вдалося надіслати лист", { description: getErrorMessage(error) });
+    }
+  };
+
+  const updateAvailabilityStatus = async (member: Member, status: MemberProfileMeta["availabilityStatus"]) => {
+    if (!workspaceId) return;
+    try {
+      const currentMeta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
+      const upsertPayload = {
+        workspace_id: workspaceId,
+        user_id: member.user_id,
+        first_name: currentMeta.firstName || null,
+        last_name: currentMeta.lastName || null,
+        full_name: currentMeta.fullName || null,
+        birth_date: currentMeta.birthDate || null,
+        phone: currentMeta.phone || null,
+        availability_status: status,
+        start_date: currentMeta.startDate || null,
+        probation_end_date: currentMeta.probationEndDate || null,
+        manager_user_id: currentMeta.managerUserId || null,
+        module_access: currentMeta.moduleAccess,
+        updated_by: currentUserId ?? null,
+      };
+
+      const { error: profileUpsertError } = await supabase
+        .schema("tosho")
+        .from("team_member_profiles")
+        .upsert(upsertPayload, { onConflict: "workspace_id,user_id" });
+
+      if (profileUpsertError) {
+        if (!isRecoverableTeamProfileError(profileUpsertError.message ?? "")) {
+          throw profileUpsertError;
+        }
+        setMemberProfileStorageAvailable(false);
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+        const response = await fetch("/.netlify/functions/create-workspace-invite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            mode: "update_member_profile",
+            userId: member.user_id,
+            firstName: currentMeta.firstName,
+            lastName: currentMeta.lastName,
+            birthDate: currentMeta.birthDate,
+            phone: currentMeta.phone,
+            availabilityStatus: status,
+            startDate: currentMeta.startDate,
+            probationEndDate: currentMeta.probationEndDate,
+            managerUserId: currentMeta.managerUserId,
+            moduleAccess: currentMeta.moduleAccess,
+          }),
+        });
+        if (response.status === 404) {
+          setWorkspaceFunctionAvailable(false);
+          throw new Error(localProfileFallbackHint);
+        }
+        setWorkspaceFunctionAvailable(true);
+        const payload = await parseJsonSafe<{ error?: string }>(response);
+        if (!response.ok) {
+          throw new Error(payload?.error || `Не вдалося оновити статус (HTTP ${response.status})`);
+        }
+      }
+      setMemberMetaByUserId((prev) => ({
+        ...prev,
+        [member.user_id]: {
+          ...(prev[member.user_id] ?? DEFAULT_MEMBER_META),
+          availabilityStatus: status,
+        },
+      }));
+      toast.success(status === "offline" ? "Учасника переведено в неактивний стан" : "Статус учасника оновлено");
+    } catch (error: unknown) {
+      toast.error("Не вдалося змінити статус", { description: getErrorMessage(error) });
+    }
   };
 
   const openEditRolesDialog = (member: Member) => {
@@ -615,7 +1318,15 @@ export function TeamMembersPage() {
   };
 
   const saveMemberRoles = async () => {
-    if (!editMember || !workspaceId || !isSuperAdmin) return;
+    if (!editMember || !workspaceId || !canManage) return;
+    if (!isSuperAdmin && (editMember.access_role ?? null) === "owner") {
+      toast.error("Admin не може редагувати Super Admin");
+      return;
+    }
+    if (!isSuperAdmin && editAccessRole === "owner") {
+      toast.error("Admin не може призначати Super Admin");
+      return;
+    }
     const nextAccessRole = editAccessRole;
     const nextJobRole = editJobRole;
     const normalizedAccessRole = nextAccessRole === "member" ? null : nextAccessRole;
@@ -871,9 +1582,9 @@ export function TeamMembersPage() {
       }
 
       if (!response.ok && response.status === 404) {
-        toast.success("Ролі учасника оновлено (fallback)");
+        toast.success("Права учасника оновлено (fallback)");
       } else {
-        toast.success("Ролі учасника оновлено");
+        toast.success("Права учасника оновлено");
       }
       setEditMember(null);
     } catch (error: unknown) {
@@ -887,6 +1598,10 @@ export function TeamMembersPage() {
     if (!workspaceId) return;
     if (!inviteEmail) {
       toast.error("Вкажіть email для інвайту");
+      return;
+    }
+    if (!isSuperAdmin && inviteAccessRole === "owner") {
+      toast.error("Admin не може запрошувати Super Admin");
       return;
     }
 
@@ -967,8 +1682,41 @@ export function TeamMembersPage() {
   };
 
   const showSkeleton = useMinimumLoading(
-    (workspaceLoading || membersLoading || (activeTab === "invites" && invitesLoading)) && !hasCache
+    (workspaceLoading ||
+      membersLoading ||
+      (activeTab === "invites" && invitesLoading) ||
+      (activeTab === "activity" && teamActivityLoading)) &&
+      !hasCache
   );
+  const inviteAccessRoleOptions = isSuperAdmin
+    ? ACCESS_ROLE_OPTIONS
+    : ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
+  const memberAccessRoleOptions = isSuperAdmin
+    ? MEMBER_ACCESS_ROLE_OPTIONS
+    : MEMBER_ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
+  const activeInvitesCount = invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length;
+  const memberIdsSet = new Set(members.map((member) => member.user_id));
+  const onlineNowCount = onlineEntries.filter((entry) => memberIdsSet.has(entry.userId)).length;
+  const withoutJobRoleCount = members.filter((m) => !(m.job_role ?? "").trim()).length;
+  const unavailableCount = members.filter((m) => {
+    const status = memberMetaByUserId[m.user_id]?.availabilityStatus ?? "available";
+    return status !== "available";
+  }).length;
+  const managerOptions = members.map((member) => {
+    const profile = memberProfilesByUserId[member.user_id];
+    const label =
+      formatUserShortName({
+        fullName: member.full_name ?? profile?.label ?? null,
+        email: member.email ?? null,
+        fallback: member.email ?? member.user_id,
+      }) || "Користувач";
+    return {
+      id: member.user_id,
+      label,
+    };
+  });
+  const selectedManagerLabel =
+    managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
 
   if (showSkeleton) {
     return <ListSkeleton />;
@@ -992,8 +1740,8 @@ export function TeamMembersPage() {
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
       <PageHeader
-        title="Доступ до команди"
-        subtitle="Керування учасниками та рівнями доступу в workspace."
+        title="Управління командою"
+        subtitle="Учасники, ролі, доступи та профілі команди. Паролі змінюються тільки користувачем у профілі."
         icon={<ShieldAlert className="h-5 w-5" />}
         actions={
           canManage ? (
@@ -1014,6 +1762,38 @@ export function TeamMembersPage() {
           ) : null
         }
       />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border border-border/60 bg-card/70 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Усього в команді</div>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-foreground">{members.length}</div>
+        </Card>
+        <Card className="border border-border/60 bg-card/70 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Онлайн зараз</div>
+            <Activity className="h-4 w-4 text-success-foreground" />
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-foreground">{onlineNowCount}</div>
+        </Card>
+        <Card className="border border-border/60 bg-card/70 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Активні запрошення</div>
+            <UserCheck className="h-4 w-4 text-info-foreground" />
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-foreground">{activeInvitesCount}</div>
+        </Card>
+        <Card className="border border-border/60 bg-card/70 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Не в роботі</div>
+            <UserX className="h-4 w-4 text-warning-foreground" />
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-foreground">{unavailableCount}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Без посади: {withoutJobRoleCount}</div>
+        </Card>
+      </div>
 
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
         <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
@@ -1039,6 +1819,17 @@ export function TeamMembersPage() {
                   Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                 </Button>
               ) : null}
+              {canManage ? (
+                <Button
+                  type="button"
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={activeTab === "activity"}
+                  onClick={() => handleTabChange("activity")}
+                >
+                  Активність
+                </Button>
+              ) : null}
             </div>
 
             {activeTab === "members" ? (
@@ -1060,31 +1851,31 @@ export function TeamMembersPage() {
             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">
+                  <TableTextHeaderCell widthClass="w-[34%]" className="pl-6">
                     Користувач
                   </TableTextHeaderCell>
                   <TableTextHeaderCell>Доступ</TableTextHeaderCell>
-                  <TableTextHeaderCell>Роль</TableTextHeaderCell>
+                  <TableTextHeaderCell>Роль / Посада</TableTextHeaderCell>
+                  <TableTextHeaderCell>Статус</TableTextHeaderCell>
+                  <TableTextHeaderCell>Дата народження</TableTextHeaderCell>
                   <TableTextHeaderCell>Приєднався</TableTextHeaderCell>
                   <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {membersError ? (
-                  <TableEmptyRow colSpan={5}>Помилка завантаження: {membersError}</TableEmptyRow>
-                ) : memberProfilesLoading ? (
-                  <TableEmptyRow colSpan={5}>Завантаження профілів учасників...</TableEmptyRow>
+                  <TableEmptyRow colSpan={7}>Помилка завантаження: {membersError}</TableEmptyRow>
+                ) : memberProfilesLoading || memberMetaLoading ? (
+                  <TableEmptyRow colSpan={7}>Завантаження профілів учасників...</TableEmptyRow>
                 ) : filteredMembers.length === 0 ? (
-                  <TableEmptyRow colSpan={5}>Нема учасників.</TableEmptyRow>
+                  <TableEmptyRow colSpan={7}>Нема учасників.</TableEmptyRow>
                 ) : (
                   filteredMembers.map((m) => {
                     const profile = memberProfilesByUserId[m.user_id];
-                    const displayName =
-                      formatUserShortName({
-                        fullName: m.full_name ?? profile?.label ?? null,
-                        email: m.email ?? null,
-                        fallback: "Користувач",
-                      }) || "Користувач";
+                    const meta = memberMetaByUserId[m.user_id];
+                    const availability = meta?.availabilityStatus ?? "available";
+                    const presence = memberPresenceByUserId[m.user_id];
+                    const displayName = getMemberDisplayName(m);
                     const initials = getInitialsFromName(displayName, m.email ?? null);
                     return (
                       <TableRow key={m.user_id} className="hover:bg-muted/40 transition-colors group">
@@ -1103,9 +1894,15 @@ export function TeamMembersPage() {
                               <span className="text-sm font-semibold text-foreground">
                                 {displayName}
                               </span>
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Mail className="w-3 h-3 opacity-70" />
-                                <span className="truncate max-w-[200px]">{m.email || "Не вказано"}</span>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Mail className="w-3 h-3 opacity-70" />
+                                  <span className="truncate max-w-[170px]">{m.email || "Не вказано"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Phone className="w-3 h-3 opacity-70" />
+                                  <span>{meta?.phone || "—"}</span>
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -1127,6 +1924,43 @@ export function TeamMembersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Badge
+                              variant="outline"
+                              className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit", getAvailabilityBadgeClass(availability))}
+                            >
+                              {getAvailabilityLabel(availability)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {presence?.online ? "Онлайн" : `Був: ${formatRelativeTime(presence?.lastSeenAt)}`}
+                            </span>
+                            {canManage ? (
+                              <AppDropdown
+                                align="start"
+                                contentClassName="w-44"
+                                trigger={
+                                  <Button variant="ghost" size="xs" className="w-fit px-1 text-xs text-muted-foreground hover:text-foreground">
+                                    Змінити статус
+                                  </Button>
+                                }
+                                items={AVAILABILITY_OPTIONS.map((option) => ({
+                                  label:
+                                    option.value === availability
+                                      ? `• ${option.label}`
+                                      : option.label,
+                                  onSelect: () => void updateAvailabilityStatus(m, option.value),
+                                }))}
+                              />
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="w-3.5 h-3.5 opacity-70" />
+                            <span>{formatBirthDate(meta?.birthDate)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Calendar className="w-3.5 h-3.5 opacity-70" />
                             <span>{formatDate(m.created_at)}</span>
@@ -1144,16 +1978,61 @@ export function TeamMembersPage() {
                             items={[
                               { type: "label", label: "Дії" },
                               { type: "separator" },
-                              isSuperAdmin && m.user_id !== currentUserId
+                              canManage
+                                ? memberProfileStorageAvailable
+                                  ? {
+                                    label: "Редагувати профіль",
+                                    onSelect: () => openEditProfileDialog(m),
+                                  }
+                                  : {
+                                    label: "Профіль (read-only)",
+                                    disabled: true,
+                                    muted: true,
+                                  }
+                                : {
+                                    label: "Тільки перегляд",
+                                    disabled: true,
+                                    muted: true,
+                                  },
+                              canManage &&
+                              (isSuperAdmin ||
+                                (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
                                 ? {
-                                    label: "Змінити ролі",
+                                    label: "Змінити доступи",
                                     onSelect: () => openEditRolesDialog(m),
                                   }
                                 : {
                                     label:
-                                      isSuperAdmin && m.user_id === currentUserId
-                                        ? "Неможна змінити себе"
+                                      !isSuperAdmin && m.user_id === currentUserId
+                                        ? "Admin не може змінити себе"
                                         : "Тільки перегляд",
+                                    disabled: true,
+                                    muted: true,
+                                  },
+                              canManage
+                                ? {
+                                    label: "Надіслати reset паролю",
+                                    onSelect: () => void sendPasswordReset(m),
+                                  }
+                                : {
+                                    label: "Reset паролю недоступний",
+                                    disabled: true,
+                                    muted: true,
+                                  },
+                              canManage
+                                ? {
+                                    label:
+                                      availability === "offline"
+                                        ? "Повернути в роботу"
+                                        : "Позначити як неактивного",
+                                    onSelect: () =>
+                                      void updateAvailabilityStatus(
+                                        m,
+                                        availability === "offline" ? "available" : "offline"
+                                      ),
+                                  }
+                                : {
+                                    label: "Зміна статусу недоступна",
                                     disabled: true,
                                     muted: true,
                                   },
@@ -1281,6 +2160,79 @@ export function TeamMembersPage() {
             </Table>
           </div>
         ) : null}
+
+        {activeTab === "activity" && canManage ? (
+          <div className="p-5">
+            <div className="mb-4 inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+              <Button
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={activityRange === "day"}
+                onClick={() => setActivityRange("day")}
+              >
+                24 години
+              </Button>
+              <Button
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={activityRange === "week"}
+                onClick={() => setActivityRange("week")}
+              >
+                7 днів
+              </Button>
+              <Button
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={activityRange === "month"}
+                onClick={() => setActivityRange("month")}
+              >
+                30 днів
+              </Button>
+            </div>
+            {teamActivityLoading ? (
+              <div className="text-sm text-muted-foreground">Завантаження активності...</div>
+            ) : teamActivityItems.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Немає дій за обраний період.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table variant="list" size="md">
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="hover:bg-transparent border-border/50">
+                      <TableTextHeaderCell widthClass="w-[28%]" className="pl-6">
+                        Користувач
+                      </TableTextHeaderCell>
+                      <TableTextHeaderCell>Дія</TableTextHeaderCell>
+                      <TableTextHeaderCell>Коли</TableTextHeaderCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {teamActivityItems.map((item, index) => {
+                      const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
+                      const profile = member ? memberProfilesByUserId[member.user_id] : null;
+                      const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
+                      return (
+                        <TableRow key={`${item.userId}-${item.createdAt}-${index}`} className="hover:bg-muted/40 transition-colors">
+                          <TableCell className="pl-6">
+                            <div className="text-sm font-medium text-foreground">{displayName}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm text-foreground">{item.title}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm text-muted-foreground">{formatDate(item.createdAt)}</div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        ) : null}
       </Card>
 
       <Dialog
@@ -1315,10 +2267,10 @@ export function TeamMembersPage() {
                   <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
                   <Select value={inviteAccessRole} onValueChange={setInviteAccessRole}>
                     <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{
-                      ACCESS_ROLE_OPTIONS.find((o) => o.value === inviteAccessRole)?.label
+                      inviteAccessRoleOptions.find((o) => o.value === inviteAccessRole)?.label
                     }</SelectTrigger>
                     <SelectContent>
-                      {ACCESS_ROLE_OPTIONS.map((role) => (
+                      {inviteAccessRoleOptions.map((role) => (
                         <SelectItem key={role.value} value={role.value}>
                           {role.label}
                         </SelectItem>
@@ -1384,6 +2336,164 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog
+        open={!!editProfileMember}
+        onOpenChange={(open) => {
+          if (!open && !editProfileBusy) setEditProfileMember(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
+          <div className="p-6 border-b border-border bg-muted/10">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-foreground">Картка учасника</DialogTitle>
+              <DialogDescription className="mt-1.5 text-muted-foreground">
+                Редагування профілю учасника команди. Пароль змінюється тільки в його профілі.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="p-6 space-y-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Email</Label>
+              <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Імʼя</Label>
+                <Input
+                  value={editProfileFirstName}
+                  onChange={(event) => setEditProfileFirstName(event.target.value)}
+                  className="h-11"
+                  placeholder="Імʼя"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Прізвище</Label>
+                <Input
+                  value={editProfileLastName}
+                  onChange={(event) => setEditProfileLastName(event.target.value)}
+                  className="h-11"
+                  placeholder="Прізвище"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Дата народження</Label>
+                <Input
+                  type="date"
+                  value={editProfileBirthDate}
+                  onChange={(event) => setEditProfileBirthDate(event.target.value)}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Телефон</Label>
+                <Input
+                  value={editProfilePhone}
+                  onChange={(event) => setEditProfilePhone(event.target.value)}
+                  className="h-11"
+                  placeholder="+380..."
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
+                <Select
+                  value={editProfileAvailabilityStatus}
+                  onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
+                >
+                  <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                    {getAvailabilityLabel(editProfileAvailabilityStatus)}
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABILITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Менеджер</Label>
+                <Select
+                  value={editProfileManagerUserId || "__none__"}
+                  onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
+                >
+                  <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Не обрано</SelectItem>
+                    {managerOptions
+                      .filter((option) => option.id !== editProfileMember?.user_id)
+                      .map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Дата старту</Label>
+                <Input
+                  type="date"
+                  value={editProfileStartDate}
+                  onChange={(event) => setEditProfileStartDate(event.target.value)}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
+                <Input
+                  type="date"
+                  value={editProfileProbationEndDate}
+                  onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-foreground">Доступ до модулів</Label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {(Object.keys(MODULE_ACCESS_LABELS) as Array<keyof MemberProfileMeta["moduleAccess"]>).map((key) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
+                  >
+                    <Checkbox
+                      checked={editProfileModuleAccess[key]}
+                      onCheckedChange={(checked) =>
+                        setEditProfileModuleAccess((prev) => ({
+                          ...prev,
+                          [key]: checked === true,
+                        }))
+                      }
+                    />
+                    <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 h-11"
+                onClick={() => setEditProfileMember(null)}
+                disabled={editProfileBusy}
+              >
+                Скасувати
+              </Button>
+              <Button className="flex-1 h-11" onClick={saveMemberProfile} disabled={editProfileBusy}>
+                {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти профіль"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={!!editMember}
         onOpenChange={(open) => {
           if (!open && !editBusy) setEditMember(null);
@@ -1392,9 +2502,9 @@ export function TeamMembersPage() {
         <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
           <div className="p-6 border-b border-border bg-muted/10">
             <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-foreground">Змінити ролі учасника</DialogTitle>
+              <DialogTitle className="text-xl font-semibold text-foreground">Змінити доступи учасника</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
-                Ця дія доступна тільки Super Admin.
+                Доступно для Super Admin та Admin. Призначення Super Admin доступне лише Super Admin.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -1407,10 +2517,10 @@ export function TeamMembersPage() {
               <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
               <Select value={editAccessRole} onValueChange={setEditAccessRole}>
                 <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                  {MEMBER_ACCESS_ROLE_OPTIONS.find((o) => o.value === editAccessRole)?.label}
+                  {memberAccessRoleOptions.find((o) => o.value === editAccessRole)?.label}
                 </SelectTrigger>
                 <SelectContent>
-                  {MEMBER_ACCESS_ROLE_OPTIONS.map((role) => (
+                  {memberAccessRoleOptions.map((role) => (
                     <SelectItem key={role.value} value={role.value}>
                       {role.label}
                     </SelectItem>

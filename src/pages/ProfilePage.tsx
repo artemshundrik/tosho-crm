@@ -77,6 +77,7 @@ export function ProfilePage() {
   const [accessRole, setAccessRole] = useState(cached?.accessRole ?? "");
   const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
   const [initials, setInitials] = useState(cached?.initials ?? "");
+  const [phone, setPhone] = useState("");
 
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
     if (!userId) return;
@@ -126,11 +127,13 @@ export function ProfilePage() {
           user.email
         );
         const metaBirthDate = typeof meta?.birth_date === "string" ? meta.birth_date : "";
+        const metaPhone = typeof meta?.phone === "string" ? meta.phone : "";
         setFirstName(resolvedName.firstName);
         setLastName(resolvedName.lastName);
         setFullName(resolvedName.fullName);
         setDisplayName(resolvedName.displayName);
         setBirthDate(metaBirthDate);
+        setPhone(metaPhone);
         const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
         const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
         setAvatarUrl(displayAvatarUrl);
@@ -143,6 +146,42 @@ export function ProfilePage() {
         let resolvedJobRole: string | null = null;
 
         if (resolvedWorkspaceId) {
+          const { data: teamProfile } = await supabase
+            .schema("tosho")
+            .from("team_member_profiles")
+            .select("first_name,last_name,full_name,birth_date,phone")
+            .eq("workspace_id", resolvedWorkspaceId)
+            .eq("user_id", user.id)
+            .maybeSingle<{
+              first_name?: string | null;
+              last_name?: string | null;
+              full_name?: string | null;
+              birth_date?: string | null;
+              phone?: string | null;
+            }>();
+
+          if (teamProfile) {
+            const dbFirst = teamProfile.first_name?.trim() || "";
+            const dbLast = teamProfile.last_name?.trim() || "";
+            const dbFull = teamProfile.full_name?.trim() || "";
+            const dbBirthDate = teamProfile.birth_date?.trim() || "";
+            const dbPhone = teamProfile.phone?.trim() || "";
+            const resolvedFromDb = buildUserNameFromMetadata(
+              {
+                first_name: dbFirst || undefined,
+                last_name: dbLast || undefined,
+                full_name: dbFull || undefined,
+              },
+              user.email
+            );
+            setFirstName(resolvedFromDb.firstName);
+            setLastName(resolvedFromDb.lastName);
+            setFullName(resolvedFromDb.fullName);
+            setDisplayName(resolvedFromDb.displayName);
+            setBirthDate(dbBirthDate || metaBirthDate);
+            setPhone(dbPhone || metaPhone);
+          }
+
           const { data: membership } = await supabase
             .schema("tosho")
             .from("memberships_view")
@@ -313,6 +352,7 @@ export function ProfilePage() {
           last_name: nextLastName || null,
           full_name: nextFullName || null,
           birth_date: birthDate || null,
+          phone: phone || null,
           avatar_url: avatarUrl,
         }
       });
@@ -322,6 +362,31 @@ export function ProfilePage() {
       setInitials(i);
       setFullName(nextFullName);
       setDisplayName(nextDisplayName);
+
+      if (userId) {
+        const workspaceId = await resolveWorkspaceId(userId);
+        if (workspaceId) {
+          const { error: profileError } = await supabase
+            .schema("tosho")
+            .from("team_member_profiles")
+            .upsert(
+              {
+                workspace_id: workspaceId,
+                user_id: userId,
+                first_name: nextFirstName || null,
+                last_name: nextLastName || null,
+                full_name: nextFullName || null,
+                birth_date: birthDate || null,
+                phone: phone || null,
+                updated_by: userId,
+              },
+              { onConflict: "workspace_id,user_id" }
+            );
+          if (profileError) {
+            console.warn("Failed to upsert team member profile", profileError);
+          }
+        }
+      }
 
       toast.success("Профіль оновлено!", {
         description: "Твоє нове ім'я збережено в системі.",

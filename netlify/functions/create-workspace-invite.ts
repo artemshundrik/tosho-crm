@@ -2,12 +2,28 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 type InviteRequest = {
-  mode?: "create_invite" | "update_member_roles";
+  mode?: "create_invite" | "update_member_roles" | "list_workspace_member_profiles" | "update_member_profile";
   email?: string;
   accessRole?: string;
   jobRole?: string | null;
   expiresInDays?: number;
   userId?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  birthDate?: string | null;
+  phone?: string | null;
+  availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
+  startDate?: string | null;
+  probationEndDate?: string | null;
+  managerUserId?: string | null;
+  moduleAccess?: {
+    overview?: boolean;
+    orders?: boolean;
+    finance?: boolean;
+    design?: boolean;
+    logistics?: boolean;
+    catalog?: boolean;
+  } | null;
 };
 type HttpEvent = {
   httpMethod?: string;
@@ -37,6 +53,11 @@ const isRecoverableError = (message: string) => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const canManageTeam = (membership?: { access_role?: string | null; job_role?: string | null } | null) => {
+  if (!membership) return false;
+  return (membership.access_role ?? null) === "owner" || (membership.access_role ?? null) === "admin";
+};
 
 const resolveWorkspaceId = async (userClient: ReturnType<typeof createClient>, userId: string) => {
   const membershipSchemas = ["tosho", "public"] as const;
@@ -152,9 +173,6 @@ export const handler = async (event: HttpEvent) => {
     if (!targetUserId) {
       return jsonResponse(400, { error: "Missing userId" });
     }
-    if (targetUserId === userData.user.id) {
-      return jsonResponse(400, { error: "You cannot change your own roles" });
-    }
 
     const nextAccessRole = normalizeRole(payload.accessRole ?? "member");
     const nextJobRole = normalizeRole(payload.jobRole);
@@ -162,16 +180,23 @@ export const handler = async (event: HttpEvent) => {
     const { data: actorMembership, error: actorMembershipError } = await userClient
       .schema("tosho")
       .from("memberships_view")
-      .select("access_role")
+      .select("access_role,job_role")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userData.user.id)
-      .maybeSingle<{ access_role?: string | null }>();
+      .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
 
     if (actorMembershipError) {
       return jsonResponse(500, { error: actorMembershipError.message });
     }
-    if ((actorMembership?.access_role ?? null) !== "owner") {
-      return jsonResponse(403, { error: "Only Super Admin can update roles" });
+    if (!canManageTeam(actorMembership)) {
+      return jsonResponse(403, { error: "Only Super Admin or Admin can manage team" });
+    }
+    const actorIsOwner = (actorMembership?.access_role ?? null) === "owner";
+    if (targetUserId === userData.user.id && !actorIsOwner) {
+      return jsonResponse(400, { error: "Admin cannot change own roles" });
+    }
+    if (!actorIsOwner && nextAccessRole === "owner") {
+      return jsonResponse(403, { error: "Admin cannot assign Super Admin role" });
     }
 
     const recoverableErrors: string[] = [];
@@ -200,6 +225,10 @@ export const handler = async (event: HttpEvent) => {
         accessRole: currentAccessRole,
         jobRole: currentJobRole,
       });
+    }
+
+    if (!actorIsOwner && currentAccessRole === "owner") {
+      return jsonResponse(403, { error: "Admin cannot edit Super Admin members" });
     }
 
     const verifyUpdated = async () => {
@@ -397,6 +426,230 @@ export const handler = async (event: HttpEvent) => {
         error: error instanceof Error ? error.message : "Could not update roles",
       });
     }
+  }
+
+  if (payload.mode === "list_workspace_member_profiles") {
+    const { data: actorMembership, error: actorMembershipError } = await userClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("access_role,job_role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userData.user.id)
+      .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+
+    if (actorMembershipError) {
+      return jsonResponse(500, { error: actorMembershipError.message });
+    }
+    if (!canManageTeam(actorMembership)) {
+      return jsonResponse(403, { error: "Only Super Admin or Admin can manage team" });
+    }
+
+    const { data: rows, error: rowsError } = await adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("user_id")
+      .eq("workspace_id", workspaceId);
+
+    if (rowsError) {
+      return jsonResponse(500, { error: rowsError.message });
+    }
+
+    const userIds = Array.from(
+      new Set(((rows ?? []) as Array<{ user_id?: string | null }>).map((row) => row.user_id).filter(Boolean))
+    ) as string[];
+
+    const profilesByUserId: Record<
+      string,
+      {
+        firstName: string;
+        lastName: string;
+        fullName: string;
+        birthDate: string;
+        phone: string;
+        availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
+        startDate: string;
+        probationEndDate: string;
+        managerUserId: string;
+        moduleAccess: {
+          overview: boolean;
+          orders: boolean;
+          finance: boolean;
+          design: boolean;
+          logistics: boolean;
+          catalog: boolean;
+        };
+      }
+    > = {};
+
+    await Promise.all(
+      userIds.map(async (id) => {
+        try {
+          const { data: userProfile, error } = await adminClient.auth.admin.getUserById(id);
+          if (error || !userProfile?.user) return;
+          const meta = (userProfile.user.user_metadata ?? {}) as Record<string, unknown>;
+          profilesByUserId[id] = {
+            firstName: typeof meta.first_name === "string" ? meta.first_name : "",
+            lastName: typeof meta.last_name === "string" ? meta.last_name : "",
+            fullName: typeof meta.full_name === "string" ? meta.full_name : "",
+            birthDate: typeof meta.birth_date === "string" ? meta.birth_date : "",
+            phone: typeof meta.phone === "string" ? meta.phone : "",
+            availabilityStatus:
+              meta.availability_status === "vacation" ||
+              meta.availability_status === "sick_leave" ||
+              meta.availability_status === "offline"
+                ? meta.availability_status
+                : "available",
+            startDate: typeof meta.start_date === "string" ? meta.start_date : "",
+            probationEndDate: typeof meta.probation_end_date === "string" ? meta.probation_end_date : "",
+            managerUserId: typeof meta.manager_user_id === "string" ? meta.manager_user_id : "",
+            moduleAccess:
+              meta.module_access && typeof meta.module_access === "object"
+                ? {
+                    overview: Boolean((meta.module_access as Record<string, unknown>).overview),
+                    orders: Boolean((meta.module_access as Record<string, unknown>).orders),
+                    finance: Boolean((meta.module_access as Record<string, unknown>).finance),
+                    design: Boolean((meta.module_access as Record<string, unknown>).design),
+                    logistics: Boolean((meta.module_access as Record<string, unknown>).logistics),
+                    catalog: Boolean((meta.module_access as Record<string, unknown>).catalog),
+                  }
+                : {
+                    overview: true,
+                    orders: true,
+                    finance: false,
+                    design: true,
+                    logistics: false,
+                    catalog: false,
+                  },
+          };
+        } catch {
+          // ignore item-level failures
+        }
+      })
+    );
+
+    return jsonResponse(200, {
+      success: true,
+      profilesByUserId,
+    });
+  }
+
+  if (payload.mode === "update_member_profile") {
+    const targetUserId = payload.userId?.trim();
+    if (!targetUserId) {
+      return jsonResponse(400, { error: "Missing userId" });
+    }
+
+    const { data: actorMembership, error: actorMembershipError } = await userClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("access_role,job_role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userData.user.id)
+      .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+
+    if (actorMembershipError) {
+      return jsonResponse(500, { error: actorMembershipError.message });
+    }
+    if (!canManageTeam(actorMembership)) {
+      return jsonResponse(403, { error: "Only Super Admin or Admin can manage team" });
+    }
+    const actorIsOwner = (actorMembership?.access_role ?? null) === "owner";
+
+    const { data: targetMembership, error: targetMembershipError } = await adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("access_role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", targetUserId)
+      .maybeSingle<{ access_role?: string | null }>();
+
+    if (targetMembershipError) {
+      return jsonResponse(500, { error: targetMembershipError.message });
+    }
+    if (!targetMembership) {
+      return jsonResponse(404, { error: "Member not found in workspace" });
+    }
+    if (!actorIsOwner && (targetMembership.access_role ?? null) === "owner") {
+      return jsonResponse(403, { error: "Admin cannot edit Super Admin members" });
+    }
+
+    const { data: targetUser, error: targetUserError } = await adminClient.auth.admin.getUserById(targetUserId);
+    if (targetUserError || !targetUser?.user) {
+      return jsonResponse(500, { error: targetUserError?.message ?? "User not found" });
+    }
+
+    const firstName = (payload.firstName ?? "").toString().trim();
+    const lastName = (payload.lastName ?? "").toString().trim();
+    const birthDate = (payload.birthDate ?? "").toString().trim();
+    const phone = (payload.phone ?? "").toString().trim();
+    const availabilityStatus =
+      payload.availabilityStatus === "vacation" ||
+      payload.availabilityStatus === "sick_leave" ||
+      payload.availabilityStatus === "offline"
+        ? payload.availabilityStatus
+        : "available";
+    const startDate = (payload.startDate ?? "").toString().trim();
+    const probationEndDate = (payload.probationEndDate ?? "").toString().trim();
+    const managerUserId = (payload.managerUserId ?? "").toString().trim();
+    const moduleAccess =
+      payload.moduleAccess && typeof payload.moduleAccess === "object"
+        ? {
+            overview: Boolean(payload.moduleAccess.overview),
+            orders: Boolean(payload.moduleAccess.orders),
+            finance: Boolean(payload.moduleAccess.finance),
+            design: Boolean(payload.moduleAccess.design),
+            logistics: Boolean(payload.moduleAccess.logistics),
+            catalog: Boolean(payload.moduleAccess.catalog),
+          }
+        : {
+            overview: true,
+            orders: true,
+            finance: false,
+            design: true,
+            logistics: false,
+            catalog: false,
+          };
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+    const currentMeta = (targetUser.user.user_metadata ?? {}) as Record<string, unknown>;
+    const nextMeta: Record<string, unknown> = {
+      ...currentMeta,
+      first_name: firstName || null,
+      last_name: lastName || null,
+      full_name: fullName || null,
+      birth_date: birthDate || null,
+      phone: phone || null,
+      availability_status: availabilityStatus,
+      start_date: startDate || null,
+      probation_end_date: probationEndDate || null,
+      manager_user_id: managerUserId || null,
+      module_access: moduleAccess,
+    };
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(targetUserId, {
+      user_metadata: nextMeta,
+    });
+
+    if (updateError) {
+      return jsonResponse(500, { error: updateError.message });
+    }
+
+    return jsonResponse(200, {
+      success: true,
+      userId: targetUserId,
+      profile: {
+        firstName,
+        lastName,
+        fullName,
+        birthDate,
+        phone,
+        availabilityStatus,
+        startDate,
+        probationEndDate,
+        managerUserId,
+        moduleAccess,
+      },
+    });
   }
 
   const email = payload.email?.trim().toLowerCase();

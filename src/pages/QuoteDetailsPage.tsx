@@ -3644,7 +3644,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
                         {previewImage && file.url ? (
                           <KanbanImageZoomPreview
-                            imageUrl={file.url}
+                            imageUrl={file.url ?? ""}
                             alt={file.name}
                             className="h-32 w-full rounded-md border border-border/50 bg-muted/20"
                           />

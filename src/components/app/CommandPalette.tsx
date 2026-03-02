@@ -105,7 +105,7 @@ function pathToLabel(pathname: string): string {
   if (pathname.startsWith("/finance")) return "Фінанси";
   if (pathname.startsWith("/activity")) return "Активність";
   if (pathname.startsWith("/notifications")) return "Сповіщення";
-  if (pathname.startsWith("/settings/members")) return "Доступ / Ролі";
+  if (pathname.startsWith("/settings/members")) return "Управління командою";
   if (pathname.startsWith("/profile")) return "Профіль";
   return "Сторінка";
 }
