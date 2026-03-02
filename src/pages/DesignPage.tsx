@@ -58,6 +58,7 @@ type DesignTask = {
   methodsCount?: number;
   hasFiles?: boolean;
   designDeadline?: string | null;
+  designTaskNumber?: string | null;
   quoteNumber?: string | null;
   customerName?: string | null;
   customerLogoUrl?: string | null;
@@ -108,6 +109,37 @@ const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const getQuoteMonthCode = (value?: string | null) => {
+  const date = value ? new Date(value) : new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}${year}`;
+};
+
+const formatDesignTaskNumber = (monthCode: string, sequence: number) => `TS-${monthCode}-${String(Math.max(1, sequence)).padStart(4, "0")}`;
+
+const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: string | null; designTaskNumber?: string | null }>) => {
+  const counters = new Map<string, number>();
+  const map = new Map<string, string>();
+  const sorted = [...tasks].sort((a, b) => {
+    const aTime = new Date(a.createdAt ?? 0).getTime();
+    const bTime = new Date(b.createdAt ?? 0).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return a.id.localeCompare(b.id);
+  });
+  sorted.forEach((task) => {
+    if (task.designTaskNumber && !/^DZ-/i.test(task.designTaskNumber)) {
+      map.set(task.id, task.designTaskNumber);
+      return;
+    }
+    const monthCode = getQuoteMonthCode(task.createdAt ?? null);
+    const next = (counters.get(monthCode) ?? 0) + 1;
+    counters.set(monthCode, next);
+    map.set(task.id, formatDesignTaskNumber(monthCode, next));
+  });
+  return map;
+};
 
 type DesignStatus =
   | "new"
@@ -598,6 +630,10 @@ export default function DesignPage() {
             quoteId: resolvedQuoteId,
             title: (row.title as string) ?? null,
             status: (metadata.status as DesignStatus) ?? "new",
+            designTaskNumber:
+              typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
+                ? (/^DZ-/i.test(metadata.design_task_number.trim()) ? null : metadata.design_task_number.trim())
+                : null,
             assigneeUserId:
               typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
                 ? metadata.assignee_user_id
@@ -776,8 +812,17 @@ export default function DesignPage() {
         });
       }
 
+      const derivedNumbers = buildDerivedDesignTaskNumberMap(
+        parsedRaw.map((task) => ({
+          id: task.id,
+          createdAt: task.createdAt ?? null,
+          designTaskNumber: task.designTaskNumber ?? null,
+        }))
+      );
+
       const parsed: DesignTask[] = parsedRaw.map((t) => ({
         ...t,
+        designTaskNumber: t.designTaskNumber ?? derivedNumbers.get(t.id) ?? null,
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
         customerName: t.customerName ?? quoteMap.get(t.quoteId)?.customerName ?? null,
         customerLogoUrl:
@@ -816,6 +861,28 @@ export default function DesignPage() {
     void loadTasks();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId]);
+
+  const getTaskDisplayNumber = (task: DesignTask) => {
+    if (task.designTaskNumber) return task.designTaskNumber;
+    if (isUuid(task.quoteId) && task.quoteNumber) return task.quoteNumber;
+    return task.quoteId.slice(0, 8);
+  };
+
+  const getNextDesignTaskNumber = async (teamId: string, createdAtIso: string) => {
+    const date = new Date(createdAtIso);
+    const monthCode = getQuoteMonthCode(createdAtIso);
+    const monthStartIso = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+    const nextMonthStartIso = new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString();
+    const { count, error } = await supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId)
+      .eq("action", "design_task")
+      .gte("created_at", monthStartIso)
+      .lt("created_at", nextMonthStartIso);
+    if (error) throw error;
+    return formatDesignTaskNumber(monthCode, (count ?? 0) + 1);
+  };
 
   const filteredTasks = useMemo(() => {
     if (assignmentFilter === "all") return tasks;
@@ -1313,23 +1380,14 @@ export default function DesignPage() {
     );
 
     try {
-      let query = supabase
+      const query = supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
 
-      // Race-safe claim for "take task": update only when task still unassigned.
-      // Use ->> so JSON null is treated as SQL NULL in PostgREST filtering.
-      if (!task.assigneeUserId && nextAssigneeUserId) {
-        query = query.is("metadata->>assignee_user_id", null);
-      }
-
-      const { data, error: updateError } = await query.select("id");
+      const { error: updateError } = await query;
       if (updateError) throw updateError;
-      if (!task.assigneeUserId && nextAssigneeUserId && (!data || data.length === 0)) {
-        throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
-      }
 
       if (previousAssignee !== nextAssigneeUserId) {
         await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
@@ -1391,7 +1449,7 @@ export default function DesignPage() {
         console.warn("Failed to log design task assignment event", logError);
       }
 
-      const quoteLabel = task.quoteNumber ? `#${task.quoteNumber}` : task.quoteId.slice(0, 8);
+      const quoteLabel = `#${getTaskDisplayNumber(task)}`;
       try {
         if (nextAssigneeUserId && nextAssigneeUserId !== userId) {
           await notifyUsers({
@@ -1544,6 +1602,8 @@ export default function DesignPage() {
       const customerName = createCustomer.trim();
       const customerType = createCustomerType;
       const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
+      const createdAtIso = new Date().toISOString();
+      const designTaskNumber = await getNextDesignTaskNumber(effectiveTeamId, createdAtIso);
 
       const { data, error: insertError } = await supabase
         .from("activity_log")
@@ -1559,6 +1619,7 @@ export default function DesignPage() {
             source: "design_task_created_manual",
             task_kind: "standalone",
             status: "new",
+            design_task_number: designTaskNumber,
             quote_id: null,
             assignee_user_id: assigneeUserId,
             assigned_at: assignedAt,
@@ -1613,6 +1674,10 @@ export default function DesignPage() {
             : null,
         assignedAt: typeof metadata.assigned_at === "string" ? (metadata.assigned_at as string) : null,
         metadata,
+        designTaskNumber:
+          (typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
+            ? metadata.design_task_number.trim()
+            : designTaskNumber),
         quoteNumber: null,
         customerName: typeof metadata.customer_name === "string" ? (metadata.customer_name as string) : null,
         methodsCount: 0,
@@ -1816,13 +1881,13 @@ export default function DesignPage() {
                   event.stopPropagation();
                   navigate(`/orders/estimates/${task.quoteId}`);
                 }}
-                title={task.quoteNumber ?? task.quoteId}
+                title={getTaskDisplayNumber(task)}
               >
-                {task.quoteNumber ?? task.quoteId.slice(0, 8)}
+                {getTaskDisplayNumber(task)}
               </button>
             ) : (
-              <div className="text-sm font-semibold truncate" title={task.title ?? task.quoteId}>
-                {task.title ?? task.quoteId.slice(0, 8)}
+              <div className="text-sm font-semibold truncate" title={task.title ?? getTaskDisplayNumber(task)}>
+                {getTaskDisplayNumber(task)}
               </div>
             )}
           </div>
@@ -1897,6 +1962,9 @@ export default function DesignPage() {
           </DropdownMenu>
         </div>
         {isLinkedQuote && task.title ? (
+          <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
+        ) : null}
+        {!isLinkedQuote && task.title ? (
           <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
         ) : null}
         <div className="mt-3 space-y-3">
@@ -2181,7 +2249,7 @@ export default function DesignPage() {
                   const progressWidth = `calc(${spanUnits * progressRatio} * (100% / ${timelineAxis.columnCount}))`;
                   const barTitle = [
                     `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${
-                      isUuid(row.task.quoteId) ? row.task.quoteNumber ?? row.task.quoteId.slice(0, 8) : row.task.title ?? row.task.quoteId.slice(0, 8)
+                      getTaskDisplayNumber(row.task)
                     }`,
                     `Статус: ${statusLabel}`,
                     `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
@@ -2206,9 +2274,7 @@ export default function DesignPage() {
                         }}
                       >
                         <div className="truncate text-sm font-medium">
-                          {isUuid(row.task.quoteId)
-                            ? row.task.quoteNumber ?? row.task.quoteId.slice(0, 8)
-                            : row.task.title ?? row.task.quoteId.slice(0, 8)}
+                          {getTaskDisplayNumber(row.task)}
                         </div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
@@ -2378,12 +2444,10 @@ export default function DesignPage() {
                                 openTask(task.id, true);
                               }
                             }}
-                            title={task.title ?? task.quoteNumber ?? task.quoteId}
+                            title={task.title ?? getTaskDisplayNumber(task)}
                           >
                             <div className="font-medium truncate">
-                              {isLinkedQuote
-                                ? task.quoteNumber ?? task.quoteId.slice(0, 8)
-                                : task.title ?? task.quoteId.slice(0, 8)}
+                              {getTaskDisplayNumber(task)}
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {isLinkedQuote ? `Товар: ${task.productName ?? "Не вказано"}` : "Standalone"}
@@ -2865,8 +2929,8 @@ export default function DesignPage() {
         description={
           taskToDelete
             ? isUuid(taskToDelete.quoteId)
-              ? `Задача по прорахунку ${taskToDelete.quoteNumber ?? taskToDelete.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`
-              : `Дизайн-задача «${taskToDelete.title ?? taskToDelete.quoteId.slice(0, 8)}» буде видалена без можливості відновлення.`
+              ? `Задача по прорахунку ${getTaskDisplayNumber(taskToDelete)} буде видалена без можливості відновлення.`
+              : `Дизайн-задача «${taskToDelete.title ?? getTaskDisplayNumber(taskToDelete)}» буде видалена без можливості відновлення.`
             : undefined
         }
         confirmLabel="Видалити"

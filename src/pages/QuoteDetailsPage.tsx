@@ -1250,6 +1250,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
+  const getNextDesignTaskNumber = async (teamIdValue: string, createdAtIso: string) => {
+    const date = new Date(createdAtIso);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear()).slice(-2);
+    const monthCode = `${month}${year}`;
+    const monthStartIso = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+    const nextMonthStartIso = new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString();
+    const { count, error } = await supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamIdValue)
+      .eq("action", "design_task")
+      .gte("created_at", monthStartIso)
+      .lt("created_at", nextMonthStartIso);
+    if (error) throw error;
+    return `TS-${monthCode}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  };
+
   const createDesignTask = async () => {
     if (!teamId) return;
     setDesignTaskSaving(true);
@@ -1266,6 +1284,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const designDeadline = quote?.deadline_at ?? null;
       const assigneeUserId = designAssigneeId ?? null;
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
+      const createdAtIso = new Date().toISOString();
+      const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
 
       const { data, error } = await supabase
         .from("activity_log")
@@ -1280,6 +1300,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           metadata: {
             source: "design_task_created",
             status: "new",
+            design_task_number: designTaskNumber,
             quote_id: quoteId,
             design_task_id: null,
             assignee_user_id: assigneeUserId,

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -86,6 +87,7 @@ type DesignTask = {
   methodsCount?: number;
   hasFiles?: boolean;
   designDeadline?: string | null;
+  designTaskNumber?: string | null;
   quoteNumber?: string | null;
   customerName?: string | null;
   customerLogoUrl?: string | null;
@@ -209,6 +211,15 @@ const allStatuses: DesignStatus[] = [
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const getQuoteMonthCode = (value?: string | null) => {
+  const date = value ? new Date(value) : new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}${year}`;
+};
+
+const formatDesignTaskNumber = (monthCode: string, sequence: number) => `TS-${monthCode}-${String(Math.max(1, sequence)).padStart(4, "0")}`;
 
 const getInitials = (name?: string | null) => {
   if (!name) return "C";
@@ -366,6 +377,9 @@ export default function DesignTaskPage() {
   const [deletingTask, setDeletingTask] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [briefDraft, setBriefDraft] = useState("");
+  const [briefDirty, setBriefDirty] = useState(false);
+  const [briefSaving, setBriefSaving] = useState(false);
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
     totalSeconds: 0,
     activeSessionId: null,
@@ -405,6 +419,30 @@ export default function DesignTaskPage() {
   const getMemberAvatar = (id: string | null | undefined) => {
     if (!id) return null;
     return memberAvatarById[id] ?? null;
+  };
+
+  const getTaskDisplayNumber = (value: DesignTask | null) => {
+    if (!value) return "";
+    if (value.designTaskNumber) return value.designTaskNumber;
+    if (isUuid(value.quoteId) && value.quoteNumber) return value.quoteNumber;
+    return value.quoteId.slice(0, 8);
+  };
+
+  const getDesignTaskOrdinalByCreatedAt = async (teamIdValue: string, createdAt: string) => {
+    const date = new Date(createdAt);
+    const monthCode = getQuoteMonthCode(createdAt);
+    const monthStartIso = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+    const nextMonthStartIso = new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString();
+    const { count, error: countError } = await supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamIdValue)
+      .eq("action", "design_task")
+      .gte("created_at", monthStartIso)
+      .lte("created_at", createdAt)
+      .lt("created_at", nextMonthStartIso);
+    if (countError) throw countError;
+    return formatDesignTaskNumber(monthCode, count ?? 1);
   };
 
   const getMethodLabel = (value: string | null | undefined) => {
@@ -520,12 +558,46 @@ export default function DesignTaskPage() {
           Object.entries(avatars).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
         );
         setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
+
+        let roleById = new Map<string, string | null>();
+        const memberIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
+        if (memberIds.length > 0) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (workspaceId) {
+            const membershipColumns = [
+              "user_id,job_role",
+              "user_id,full_name,email,job_role",
+              "user_id,access_role,job_role",
+              "user_id",
+            ];
+            for (const columns of membershipColumns) {
+              const { data: roleRows, error: roleError } = await supabase
+                .schema("tosho")
+                .from("memberships_view")
+                .select(columns)
+                .eq("workspace_id", workspaceId)
+                .in("user_id", memberIds);
+              if (!roleError) {
+                roleById = new Map(
+                  (((roleRows as Array<{ user_id?: string | null; job_role?: string | null }> | null) ?? [])
+                    .map((row) => [row.user_id ?? "", row.job_role ?? null])) as Array<[string, string | null]>
+                );
+                break;
+              }
+              const message = (roleError.message ?? "").toLowerCase();
+              if (!message.includes("column") || !message.includes("does not exist")) {
+                throw roleError;
+              }
+            }
+          }
+        }
+
         setDesignerMembers(
           rows
-            .filter((row) => isDesignerRole(row.job_role))
+            .filter((row) => isDesignerRole(roleById.get(row.user_id) ?? row.job_role))
             .map((row) => ({ id: row.user_id, label: labels[row.user_id] ?? row.user_id }))
         );
-        let managerRows = rows.filter((row) => isManagerRole(row.access_role, row.job_role));
+        let managerRows = rows.filter((row) => isManagerRole(row.access_role, roleById.get(row.user_id) ?? row.job_role));
         if (managerRows.length === 0 && userId) {
           const me = rows.find((row) => row.user_id === userId);
           if (me) managerRows = [me];
@@ -822,11 +894,24 @@ export default function DesignTaskPage() {
           })
           .filter(Boolean) as DesignOutputLink[];
 
+        let designTaskNumber: string | null =
+          typeof meta.design_task_number === "string" && meta.design_task_number.trim()
+            ? (/^DZ-/i.test(meta.design_task_number.trim()) ? null : meta.design_task_number.trim())
+            : null;
+        if (!designTaskNumber && typeof row?.created_at === "string" && row.created_at) {
+          try {
+            designTaskNumber = await getDesignTaskOrdinalByCreatedAt(effectiveTeamId, row.created_at);
+          } catch (numberError) {
+            console.warn("Failed to derive design task number", numberError);
+          }
+        }
+
         setTask({
           id,
           quoteId,
           title: (row?.title as string) ?? null,
           status: (meta.status as DesignStatus) ?? "new",
+          designTaskNumber,
           assigneeUserId:
             typeof meta.assignee_user_id === "string" && meta.assignee_user_id ? meta.assignee_user_id : null,
           assignedAt: typeof meta.assigned_at === "string" ? meta.assigned_at : null,
@@ -1002,6 +1087,12 @@ export default function DesignTaskPage() {
     };
     void loadQuoteMentions();
   }, [taskIdForMentions, taskQuoteIdForMentions]);
+
+  useEffect(() => {
+    if (!task) return;
+    if (briefDirty) return;
+    setBriefDraft(task.designBrief ?? "");
+  }, [task, briefDirty]);
 
   useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
@@ -1998,6 +2089,97 @@ export default function DesignTaskPage() {
     }
   };
 
+  const saveDesignBrief = async () => {
+    if (!task || !effectiveTeamId || briefSaving) return;
+    if (!ensureCanEdit()) return;
+    const nextBrief = briefDraft.trim() ? briefDraft.trim() : null;
+    const previousBrief = task.designBrief ?? null;
+    if ((previousBrief ?? null) === (nextBrief ?? null)) {
+      setBriefDirty(false);
+      return;
+    }
+
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_brief: nextBrief,
+    };
+
+    const previousTask = task;
+    setBriefSaving(true);
+    setTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            designBrief: nextBrief,
+            metadata: nextMetadata,
+          }
+        : prev
+    );
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      if (isUuid(task.quoteId)) {
+        const { error: quoteBriefError } = await supabase
+          .schema("tosho")
+          .from("quotes")
+          .update({ design_brief: nextBrief })
+          .eq("id", task.quoteId);
+
+        if (
+          quoteBriefError &&
+          /column/i.test(quoteBriefError.message ?? "") &&
+          /design_brief/i.test(quoteBriefError.message ?? "")
+        ) {
+          const { error: quoteFallbackError } = await supabase
+            .schema("tosho")
+            .from("quotes")
+            .update({ comment: nextBrief })
+            .eq("id", task.quoteId);
+          if (quoteFallbackError) throw quoteFallbackError;
+        } else if (quoteBriefError) {
+          throw quoteBriefError;
+        }
+      }
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_brief",
+          title: "Оновлено ТЗ для дизайнера",
+          metadata: {
+            source: "design_task_brief",
+            from_brief: previousBrief,
+            to_brief: nextBrief,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task brief event", logError);
+      }
+
+      setBriefDirty(false);
+      toast.success("ТЗ для дизайнера оновлено");
+    } catch (e: unknown) {
+      setTask(previousTask);
+      const message = getErrorMessage(e, "Не вдалося оновити ТЗ");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setBriefSaving(false);
+    }
+  };
+
   const applyAssignee = async (nextAssigneeUserId: string | null, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || !canManageAssignments) return;
     if (!ensureCanEdit()) return;
@@ -2050,21 +2232,13 @@ export default function DesignTaskPage() {
     );
 
     try {
-      let query = supabase
+      const query = supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
-
-      if (!task.assigneeUserId && nextAssigneeUserId) {
-        query = query.is("metadata->>assignee_user_id", null);
-      }
-
-      const { data, error: updateError } = await query.select("id");
+      const { error: updateError } = await query;
       if (updateError) throw updateError;
-      if (!task.assigneeUserId && nextAssigneeUserId && (!data || data.length === 0)) {
-        throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
-      }
 
       if (previousAssignee !== nextAssigneeUserId) {
         await handlePauseTimer({ silent: true });
@@ -2128,10 +2302,8 @@ export default function DesignTaskPage() {
 
       const isLinkedQuoteTask = isUuid(task.quoteId);
       const taskLabel = isLinkedQuoteTask
-        ? task.quoteNumber
-          ? `#${task.quoteNumber}`
-          : task.quoteId.slice(0, 8)
-        : `«${task.title ?? task.quoteId.slice(0, 8)}»`;
+        ? `#${getTaskDisplayNumber(task)}`
+        : `«${task.title ?? getTaskDisplayNumber(task)}»`;
       try {
         if (nextAssigneeUserId && nextAssigneeUserId !== userId) {
           await notifyUsers({
@@ -2293,22 +2465,13 @@ export default function DesignTaskPage() {
     );
 
     try {
-      let query = supabase
+      const query = supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
-
-      if (!task.assigneeUserId) {
-        // Use ->> so JSON null is treated as SQL NULL in PostgREST filtering.
-        query = query.is("metadata->>assignee_user_id", null);
-      }
-
-      const { data, error: updateError } = await query.select("id");
+      const { error: updateError } = await query;
       if (updateError) throw updateError;
-      if (!task.assigneeUserId && (!data || data.length === 0)) {
-        throw new Error("Цю задачу вже призначив інший користувач. Оновіть дошку.");
-      }
 
       if (previousAssignee && previousAssignee !== userId) {
         await handlePauseTimer({ silent: true });
@@ -2384,11 +2547,9 @@ export default function DesignTaskPage() {
 
         if (previousAssignee && previousAssignee !== userId) {
           const isLinkedQuoteTask = isUuid(task.quoteId);
-          const taskLabel = isLinkedQuoteTask
-            ? task.quoteNumber
-              ? `#${task.quoteNumber}`
-              : task.quoteId.slice(0, 8)
-            : `«${task.title ?? task.quoteId.slice(0, 8)}»`;
+        const taskLabel = isLinkedQuoteTask
+            ? `#${getTaskDisplayNumber(task)}`
+            : `«${task.title ?? getTaskDisplayNumber(task)}»`;
           await notifyUsers({
             userIds: [previousAssignee],
             title: "Вас знято з дизайн-задачі",
@@ -2668,7 +2829,7 @@ export default function DesignTaskPage() {
   }
 
   const isLinkedQuote = isUuid(task.quoteId);
-  const taskHeaderTitle = task.quoteNumber ?? task.title ?? task.quoteId;
+  const taskHeaderTitle = getTaskDisplayNumber(task);
   const taskHeaderSubtitle = isLinkedQuote
     ? `${task.customerName ?? "Клієнт"} · ${quoteItem?.name ?? "Позиція"}`
     : `${task.customerName ?? "Клієнт"} · Дизайн-задача без прорахунку`;
@@ -2935,7 +3096,7 @@ export default function DesignTaskPage() {
               {isLinkedQuote ? (
                 <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                   <div className="text-xs text-muted-foreground mb-1">Прорахунок</div>
-                  <div className="font-mono font-medium">{task.quoteNumber ?? task.quoteId.slice(0, 8)}</div>
+                  <div className="font-mono font-medium">{getTaskDisplayNumber(task)}</div>
                 </div>
               ) : null}
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
@@ -2950,11 +3111,42 @@ export default function DesignTaskPage() {
             ) : null}
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
               <div className="text-xs text-muted-foreground mb-1">ТЗ для дизайнера</div>
-              {task.designBrief ? (
-                <div className="text-sm whitespace-pre-wrap">{task.designBrief}</div>
-              ) : (
-                <div className="text-sm text-muted-foreground">ТЗ поки не заповнено.</div>
-              )}
+              <div className="space-y-2">
+                <Textarea
+                  value={briefDraft}
+                  onChange={(event) => {
+                    setBriefDraft(event.target.value);
+                    setBriefDirty(true);
+                  }}
+                  placeholder="Опишіть задачу для дизайнера…"
+                  rows={4}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  className="resize-y min-h-[100px]"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void saveDesignBrief()}
+                    disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+                  >
+                    {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Зберегти ТЗ
+                  </Button>
+                  {briefDirty ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={briefSaving || designTaskLockedByOther}
+                      onClick={() => {
+                        setBriefDraft(task.designBrief ?? "");
+                        setBriefDirty(false);
+                      }}
+                    >
+                      Скасувати
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -3272,8 +3464,23 @@ export default function DesignTaskPage() {
                           key={member.id}
                           onClick={() => void applyAssignee(member.id)}
                           disabled={task.assigneeUserId === member.id}
+                          className="gap-2"
                         >
-                          {member.label}
+                          <AvatarBase
+                            src={getMemberAvatar(member.id)}
+                            name={member.label}
+                            fallback={getInitials(member.label)}
+                            size={18}
+                            className="shrink-0 border-border/70"
+                            fallbackClassName="text-[10px] font-semibold"
+                          />
+                          <span className="truncate">{member.label}</span>
+                          <Check
+                            className={cn(
+                              "ml-auto h-3.5 w-3.5 text-primary",
+                              task.assigneeUserId === member.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
                         </DropdownMenuItem>
                       ))
                     )}
@@ -3552,7 +3759,7 @@ export default function DesignTaskPage() {
                   {isLinkedQuote ? "Прорахунок" : "Контекст"}
                 </span>
                 <span className="font-medium text-right">
-                  {isLinkedQuote ? task.quoteNumber ?? task.quoteId.slice(0, 8) : "Без прорахунку"}
+                  {isLinkedQuote ? getTaskDisplayNumber(task) : "Без прорахунку"}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -3818,8 +4025,8 @@ export default function DesignTaskPage() {
         title="Видалити дизайн-задачу?"
         description={
           isLinkedQuote
-            ? `Задача по прорахунку ${task.quoteNumber ?? task.quoteId.slice(0, 8)} буде видалена без можливості відновлення.`
-            : `Дизайн-задача «${task.title ?? task.quoteId.slice(0, 8)}» буде видалена без можливості відновлення.`
+            ? `Задача по прорахунку ${getTaskDisplayNumber(task)} буде видалена без можливості відновлення.`
+            : `Дизайн-задача «${task.title ?? getTaskDisplayNumber(task)}» буде видалена без можливості відновлення.`
         }
         confirmLabel="Видалити"
         cancelLabel="Скасувати"
