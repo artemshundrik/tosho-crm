@@ -31,6 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
@@ -189,6 +190,7 @@ export interface NewQuoteDialogProps {
   customersLoading?: boolean;
   onCustomerSearch?: (search: string) => void;
   onCreateCustomer?: (name?: string) => void;
+  onCreateLead?: (name?: string) => void;
   teamMembers?: TeamMember[];
   catalogTypes?: CatalogType[];
   currentUserId?: string;
@@ -239,6 +241,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   customersLoading = false,
   onCustomerSearch,
   onCreateCustomer,
+  onCreateLead,
   teamMembers = [],
   catalogTypes = [],
   currentUserId,
@@ -528,7 +531,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const currentStatus = QUOTE_STATUSES.find((s) => s.value === status) ?? QUOTE_STATUSES[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
-  const selectedCustomer = customers.find((c) => c.id === customerId && (c.entityType ?? "customer") === customerType);
+  const customerOptions = React.useMemo<CustomerLeadOption[]>(
+    () =>
+      customers.map((customer) => ({
+        id: customer.id,
+        label: customer.name || customer.legal_name || "Без назви",
+        entityType: customer.entityType ?? "customer",
+      })),
+    [customers]
+  );
+  const selectedCustomer = customerOptions.find(
+    (customer) => customer.id === customerId && customer.entityType === customerType
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -597,79 +611,31 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               {customerLabel || "Клієнт"}
             </Chip>
           ) : (
-            <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Chip size="md" icon={<Building2 />} active={!!customerId}>
-                  {customerId
-                    ? selectedCustomer
-                      ? `${selectedCustomer.entityType === "lead" ? "Лід: " : ""}${selectedCustomer.name || selectedCustomer.legal_name || "Без назви"}`
-                      : "Контакт обрано"
-                    : "Клієнт / Лід"}
-                </Chip>
-              </PopoverTrigger>
-              <PopoverContent className="w-72 p-2" align="start">
-                <div className="space-y-2">
-                  <Input
-                    placeholder="Пошук клієнта або ліда..."
-                    value={customerSearch}
-                    onChange={(e) => {
-                      setCustomerSearch(e.target.value);
-                      onCustomerSearch?.(e.target.value);
-                    }}
-                    className="h-8"
-                  />
-                  <div className="max-h-60 overflow-y-auto space-y-1">
-                    {customersLoading ? (
-                      <div className="text-xs text-muted-foreground p-2">Завантаження...</div>
-                    ) : customers.length > 0 ? (
-                      customers.map((customer) => (
-                        <Button
-                          key={`${customer.entityType ?? "customer"}-${customer.id}`}
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start h-9 text-sm truncate"
-                          onClick={() => {
-                            setCustomerId(customer.id);
-                            setCustomerType(customer.entityType ?? "customer");
-                            setCustomerPopoverOpen(false);
-                          }}
-                          title={customer.name || customer.legal_name || "Без назви"}
-                        >
-                          <span className="truncate max-w-[220px] inline-flex items-center gap-2">
-                            <span className={cn(
-                              "inline-flex h-5 items-center rounded-full border px-2 text-[10px] uppercase tracking-wide",
-                              (customer.entityType ?? "customer") === "lead"
-                                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                            )}>
-                              {(customer.entityType ?? "customer") === "lead" ? "Лід" : "Клієнт"}
-                            </span>
-                            {customer.name || customer.legal_name || "Без назви"}
-                          </span>
-                        </Button>
-                      ))
-                    ) : customerSearch ? (
-                      <div className="space-y-2 p-2">
-                        <div className="text-xs text-muted-foreground">Клієнтів або лідів не знайдено</div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="w-full justify-center text-sm h-9"
-                          onClick={() => {
-                            onCreateCustomer?.(customerSearch.trim());
-                            setCustomerPopoverOpen(false);
-                          }}
-                        >
-                          Додати нового клієнта
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground p-2">Введіть назву для пошуку</div>
-                    )}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <CustomerLeadPicker
+              open={customerPopoverOpen}
+              onOpenChange={setCustomerPopoverOpen}
+              selectedLabel={selectedCustomer?.label ?? ""}
+              selectedType={customerType}
+              searchValue={customerSearch}
+              onSearchChange={(value) => {
+                setCustomerSearch(value);
+                onCustomerSearch?.(value);
+              }}
+              options={customerOptions}
+              loading={customersLoading}
+              onSelect={(customer) => {
+                setCustomerId(customer.id);
+                setCustomerType(customer.entityType);
+              }}
+              onCreateCustomer={onCreateCustomer}
+              onCreateLead={onCreateLead}
+              onClear={() => {
+                setCustomerId("");
+                setCustomerType("customer");
+                setCustomerSearch("");
+              }}
+              popoverClassName="w-72 p-2"
+            />
           )}
 
           {/* Manager */}

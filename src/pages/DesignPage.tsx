@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Loader2, Palette, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, Building2, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
+import { Loader2, Palette, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -31,6 +31,15 @@ import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageHeader } from "@/components/app/headers/PageHeader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
+import {
+  CustomerLeadPicker,
+  type CreatedCustomerLead,
+  type CustomerLeadOption,
+  getCreatedCustomerLeadLabel,
+  toCustomerLeadOption,
+  upsertByIdAndEntityType,
+  useCustomerLeadCreate,
+} from "@/components/customers";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { formatUserShortName } from "@/lib/userName";
@@ -75,10 +84,7 @@ type DesignTaskActivityRow = {
   created_at: string;
 };
 
-type CustomerOption = {
-  id: string;
-  label: string;
-};
+type CustomerOption = CustomerLeadOption;
 
 type AssignmentFilter = "mine" | "all" | "unassigned";
 type DesignViewMode = "kanban" | "timeline" | "assignee";
@@ -273,6 +279,7 @@ export default function DesignPage() {
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
   const [createCustomer, setCreateCustomer] = useState("");
+  const [createCustomerType, setCreateCustomerType] = useState<"customer" | "lead">("customer");
   const [createCustomerSearch, setCreateCustomerSearch] = useState("");
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
@@ -512,18 +519,42 @@ export default function DesignPage() {
       if (!effectiveTeamId) return;
       setCustomersLoading(true);
       try {
-        const { data, error: customersError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .select("id,name,legal_name")
-          .eq("team_id", effectiveTeamId)
-          .order("name", { ascending: true });
-        if (customersError) throw customersError;
-        const options = ((data as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? [])
-          .map((row) => ({
-            id: row.id,
-            label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
-          }))
+        const [customersRes, leadsRes] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("customers")
+            .select("id,name,legal_name")
+            .eq("team_id", effectiveTeamId)
+            .order("name", { ascending: true }),
+          supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id,company_name,legal_name")
+            .eq("team_id", effectiveTeamId)
+            .order("company_name", { ascending: true }),
+        ]);
+
+        if (customersRes.error) throw customersRes.error;
+        const customerOptions: CustomerOption[] =
+          ((customersRes.data as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? [])
+            .map((row) => ({
+              id: row.id,
+              label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
+              entityType: "customer" as const,
+            }));
+
+        let leadOptions: CustomerOption[] = [];
+        if (!leadsRes.error) {
+          leadOptions =
+            ((leadsRes.data as Array<{ id: string; company_name?: string | null; legal_name?: string | null }> | null) ?? [])
+              .map((row) => ({
+                id: row.id,
+                label: row.company_name?.trim() || row.legal_name?.trim() || "Лід без назви",
+                entityType: "lead" as const,
+              }));
+        }
+
+        const options = [...customerOptions, ...leadOptions]
           .sort((a, b) => a.label.localeCompare(b.label, "uk"));
         setCustomers(options);
       } catch {
@@ -1017,14 +1048,6 @@ export default function DesignPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTasks, memberById]);
 
-  const filteredCustomerOptions = useMemo(() => {
-    const q = createCustomerSearch.trim().toLowerCase();
-    if (!q) return customers.slice(0, 50);
-    return customers
-      .filter((customer) => customer.label.toLowerCase().includes(q))
-      .slice(0, 50);
-  }, [customers, createCustomerSearch]);
-
   const selectedAssignee = useMemo(
     () => designerMembers.find((member) => member.id === createAssigneeUserId) ?? null,
     [designerMembers, createAssigneeUserId]
@@ -1033,6 +1056,31 @@ export default function DesignPage() {
     () => managerMembers.find((member) => member.id === createManagerUserId) ?? null,
     [managerMembers, createManagerUserId]
   );
+
+  const handleCreatedParty = (created: CreatedCustomerLead) => {
+    const label = getCreatedCustomerLeadLabel(created);
+    setCustomers((prev) => {
+      const next = toCustomerLeadOption(created);
+      return upsertByIdAndEntityType(prev, next).sort((a, b) => a.label.localeCompare(b.label, "uk"));
+    });
+    setCreateCustomer(label);
+    setCreateCustomerType(created.entityType);
+    setCreateCustomerSearch(label);
+  };
+
+  const customerLeadCreate = useCustomerLeadCreate({
+    teamId: effectiveTeamId,
+    defaultManagerLabel: userId ? getMemberLabel(userId) : "",
+    teamMembers: managerMembers,
+    onCreated: handleCreatedParty,
+    resolveErrorMessage: getErrorMessage,
+    customerDialogTitle: "Новий клієнт",
+    customerDialogDescription: "Додайте дані клієнта для подальшої роботи в дизайн-задачах.",
+    customerSubmitLabel: "Створити клієнта",
+    leadDialogTitle: "Новий лід",
+    leadDialogDescription: "Додайте контакт ліда для подальшої роботи в дизайн-задачах.",
+    leadSubmitLabel: "Створити ліда",
+  });
 
   useEffect(() => {
     if (!createDialogOpen) return;
@@ -1494,6 +1542,7 @@ export default function DesignPage() {
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
       const brief = createBrief.trim();
       const customerName = createCustomer.trim();
+      const customerType = createCustomerType;
       const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
 
       const { data, error: insertError } = await supabase
@@ -1516,6 +1565,7 @@ export default function DesignPage() {
             manager_user_id: managerUserId,
             manager_label: managerLabel,
             customer_name: customerName || null,
+            customer_type: customerName ? customerType : null,
             design_brief: brief || null,
             standalone_brief_files: [],
             design_deadline: deadline,
@@ -1590,6 +1640,7 @@ export default function DesignPage() {
       setCreateTitle("");
       setCreateBrief("");
       setCreateCustomer("");
+      setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDeadline(undefined);
       setCreateDeadlinePopoverOpen(false);
@@ -2492,6 +2543,7 @@ export default function DesignPage() {
           if (!open) {
             setCreateError(null);
             setCreateSaving(false);
+            setCreateCustomerType("customer");
             setCreateCustomerPopoverOpen(false);
             setCreateAssigneePopoverOpen(false);
             setCreateManagerPopoverOpen(false);
@@ -2515,92 +2567,35 @@ export default function DesignPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Popover
+              <CustomerLeadPicker
                 open={createCustomerPopoverOpen}
                 onOpenChange={(open) => {
                   setCreateCustomerPopoverOpen(open);
                   if (open) setCreateCustomerSearch(createCustomer || "");
                 }}
-              >
-                <PopoverTrigger asChild>
-                  <Chip size="md" icon={<Building2 className="h-4 w-4" />} active={!!createCustomer.trim()}>
-                    {createCustomer.trim() || "Клієнт"}
-                  </Chip>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-2" align="start">
-                  <div className="space-y-2">
-                    <Input
-                      value={createCustomerSearch}
-                      onChange={(event) => setCreateCustomerSearch(event.target.value)}
-                      placeholder="Пошук клієнта..."
-                      className="h-9"
-                    />
-                    <div className="max-h-56 overflow-auto space-y-1">
-                      {customersLoading ? (
-                        <div className="text-xs text-muted-foreground p-2">Завантаження...</div>
-                      ) : filteredCustomerOptions.length > 0 ? (
-                        filteredCustomerOptions.map((customer) => (
-                          <Button
-                            key={customer.id}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start gap-2 h-9 text-sm"
-                            onClick={() => {
-                              setCreateCustomer(customer.label);
-                              setCreateCustomerSearch(customer.label);
-                              setCreateCustomerPopoverOpen(false);
-                            }}
-                            title={customer.label}
-                          >
-                            <span className="truncate">{customer.label}</span>
-                            <Check
-                              className={cn(
-                                "ml-auto h-3.5 w-3.5 text-primary",
-                                createCustomer.trim() === customer.label ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                          </Button>
-                        ))
-                      ) : (
-                        <div className="text-xs text-muted-foreground p-2">Клієнтів не знайдено</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/50">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-8"
-                        disabled={!createCustomerSearch.trim()}
-                        onClick={() => {
-                          const manualName = createCustomerSearch.trim();
-                          if (!manualName) return;
-                          setCreateCustomer(manualName);
-                          setCreateCustomerPopoverOpen(false);
-                        }}
-                      >
-                        Використати: {createCustomerSearch.trim() || "назву"}
-                      </Button>
-                      {createCustomer.trim() ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-muted-foreground"
-                          onClick={() => {
-                            setCreateCustomer("");
-                            setCreateCustomerSearch("");
-                            setCreateCustomerPopoverOpen(false);
-                          }}
-                        >
-                          Очистити
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
+                selectedLabel={createCustomer}
+                selectedType={createCustomerType}
+                searchValue={createCustomerSearch}
+                onSearchChange={setCreateCustomerSearch}
+                options={customers}
+                loading={customersLoading}
+                onSelect={(customer) => {
+                  setCreateCustomer(customer.label);
+                  setCreateCustomerType(customer.entityType);
+                  setCreateCustomerSearch(customer.label);
+                }}
+                onCreateCustomer={(name) => {
+                  customerLeadCreate.openCustomerCreate(name);
+                }}
+                onCreateLead={(name) => {
+                  customerLeadCreate.openLeadCreate(name);
+                }}
+                onClear={() => {
+                  setCreateCustomer("");
+                  setCreateCustomerType("customer");
+                  setCreateCustomerSearch("");
+                }}
+              />
 
               <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
                 <PopoverTrigger asChild>
@@ -2858,6 +2853,8 @@ export default function DesignPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {customerLeadCreate.dialogs}
 
       <ConfirmDialog
         open={!!taskToDelete}

@@ -3638,11 +3638,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 {designVisualizations.map((file) => {
                   const extension = getFileExtension(file.name);
-                  const previewImage = file.url && canPreviewImage(extension);
+                  const previewImage = Boolean(file.url) && canPreviewImage(extension);
                   return (
                     <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
                       <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
-                        {previewImage ? (
+                        {previewImage && file.url ? (
                           <KanbanImageZoomPreview
                             imageUrl={file.url}
                             alt={file.name}

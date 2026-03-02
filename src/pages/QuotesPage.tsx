@@ -47,7 +47,13 @@ import {
 } from "@/lib/toshoApi";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
-import { CustomerDialog } from "@/components/customers";
+import {
+  getCreatedCustomerLeadLabel,
+  toQuotePartyOption,
+  upsertByIdAndEntityType,
+  useCustomerLeadCreate,
+  type CreatedCustomerLead,
+} from "@/components/customers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -85,10 +91,8 @@ import {
   KANBAN_COLUMNS,
   MAX_ATTACHMENTS,
   MAX_ATTACHMENT_SIZE_BYTES,
-  OWNERSHIP_OPTIONS,
   QUOTE_ATTACHMENTS_BUCKET,
   STATUS_OPTIONS,
-  VAT_OPTIONS,
   createPrintConfig,
   emptyDeliveryDetails,
   getErrorMessage,
@@ -292,34 +296,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [customerId, setCustomerId] = useState("");
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const customerDropdownTimer = useRef<number | null>(null);
-  const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
-  const [customerCreateSaving, setCustomerCreateSaving] = useState(false);
-  const [customerCreateError, setCustomerCreateError] = useState<string | null>(null);
-  const [customerForm, setCustomerForm] = useState({
-    name: "",
-    legalName: "",
-    manager: "",
-    ownershipType: "",
-    vatRate: "none",
-    taxId: "",
-    website: "",
-    iban: "",
-    logoUrl: "",
-    contactName: "",
-    contactPosition: "",
-    contactPhone: "",
-    contactEmail: "",
-    contactBirthday: "",
-    signatoryName: "",
-    signatoryPosition: "",
-    reminderDate: "",
-    reminderTime: "",
-    reminderComment: "",
-    eventName: "",
-    eventDate: "",
-    eventComment: "",
-    notes: "",
-  });
   const [quoteType, setQuoteType] = useState("merch");
   const [catalogTypes, setCatalogTypes] = useState<CatalogType[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -1491,110 +1467,34 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setCustomerDropdownOpen(false);
   };
 
-  const resetCustomerForm = (prefillName = "") => {
-    setCustomerForm({
-      name: prefillName,
-      legalName: "",
-      manager: currentUserManagerLabel,
-      ownershipType: "",
-      vatRate: "none",
-      taxId: "",
-      website: "",
-      iban: "",
-      logoUrl: "",
-      contactName: "",
-      contactPosition: "",
-      contactPhone: "",
-      contactEmail: "",
-      contactBirthday: "",
-      signatoryName: "",
-      signatoryPosition: "",
-      reminderDate: "",
-      reminderTime: "",
-      reminderComment: "",
-      eventName: "",
-      eventDate: "",
-      eventComment: "",
-      notes: "",
+  const handleCreatedParty = (created: CreatedCustomerLead) => {
+    const label = getCreatedCustomerLeadLabel(created);
+    setCustomers((prev) => {
+      const nextParty = toQuotePartyOption(created) as QuotePartyOption;
+      return upsertByIdAndEntityType(prev, nextParty);
     });
-    setCustomerCreateError(null);
+    setCustomerId(created.id);
+    setCustomerSearch(label);
+    closeCustomerDropdown();
   };
 
-  const openCustomerCreate = (prefillName = "") => {
-    resetCustomerForm(prefillName);
-    setCustomerCreateOpen(true);
-  };
-  void openCustomerCreate;
-
-  const handleCustomerCreate = async () => {
-    if (!teamId) {
-      setCustomerCreateError("Не вдалося визначити команду.");
-      return;
-    }
-    if (!customerForm.name.trim()) {
-      setCustomerCreateError("Вкажіть назву компанії.");
-      return;
-    }
-
-    setCustomerCreateSaving(true);
-    setCustomerCreateError(null);
-
-    const vatOption = VAT_OPTIONS.find((option) => option.value === customerForm.vatRate);
-    const payload: Record<string, unknown> = {
-      team_id: teamId,
-      name: customerForm.name.trim(),
-      legal_name: customerForm.legalName.trim() || null,
-      manager: customerForm.manager.trim() || currentUserManagerLabel || null,
-      ownership_type: customerForm.ownershipType || null,
-      vat_rate: vatOption?.rate ?? null,
-      tax_id: customerForm.taxId.trim() || null,
-      website: customerForm.website.trim() || null,
-      iban: customerForm.iban.trim() || null,
-      logo_url: customerForm.logoUrl.trim() || null,
-      contact_name: customerForm.contactName.trim() || null,
-      contact_position: customerForm.contactPosition || null,
-      contact_phone: customerForm.contactPhone.trim() || null,
-      contact_email: customerForm.contactEmail.trim() || null,
-      contact_birthday: customerForm.contactBirthday || null,
-      signatory_name: customerForm.signatoryName.trim() || null,
-      signatory_position: customerForm.signatoryPosition.trim() || null,
-      reminder_at:
-        customerForm.reminderDate && customerForm.reminderTime
-          ? `${customerForm.reminderDate}T${customerForm.reminderTime}:00`
-          : null,
-      reminder_comment: customerForm.reminderComment.trim() || null,
-      event_name: customerForm.eventName.trim() || null,
-      event_at: customerForm.eventDate || null,
-      event_comment: customerForm.eventComment.trim() || null,
-      notes: customerForm.notes.trim() || null,
-    };
-
-    try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .insert(payload)
-        .select("id,name,legal_name")
-        .single();
-      if (error) throw error;
-
-      const created = data as CustomerRow;
-      setCustomers((prev) => {
-        const exists = prev.some((row) => row.id === created.id);
-        if (exists) return prev;
-        return [created, ...prev];
-      });
-      const label = created.name || created.legal_name || customerForm.name.trim();
-      setCustomerId(created.id);
-      setCustomerSearch(label);
-      closeCustomerDropdown();
-      setCustomerCreateOpen(false);
-    } catch (err: unknown) {
-      setCustomerCreateError(getErrorMessage(err, "Не вдалося створити клієнта."));
-    } finally {
-      setCustomerCreateSaving(false);
-    }
-  };
+  const customerLeadCreate = useCustomerLeadCreate({
+    teamId,
+    defaultManagerLabel: currentUserManagerLabel,
+    teamMembers: teamMembers.map((member) => ({
+      id: member.id,
+      label: member.label,
+      avatarUrl: member.avatarUrl ?? null,
+    })),
+    onCreated: handleCreatedParty,
+    resolveErrorMessage: getErrorMessage,
+    customerDialogTitle: "Новий замовник",
+    customerDialogDescription: "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
+    customerSubmitLabel: "Створити клієнта",
+    leadDialogTitle: "Новий лід",
+    leadDialogDescription: "Додайте контакт ліда для подальшої роботи в прорахунках і задачах.",
+    leadSubmitLabel: "Створити ліда",
+  });
 
   const validateStep2 = () => {
     setCreateError(null);
@@ -4572,8 +4472,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         customersLoading={customersLoading}
         onCustomerSearch={handleCustomerSearchChange}
         onCreateCustomer={(name) => {
-          resetCustomerForm(name || "");
-          setCustomerCreateOpen(true);
+          customerLeadCreate.openCustomerCreate(name || "");
+        }}
+        onCreateLead={(name) => {
+          customerLeadCreate.openLeadCreate(name || "");
         }}
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
@@ -4582,26 +4484,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
 
-      <CustomerDialog
-        open={customerCreateOpen}
-        onOpenChange={(open) => {
-          setCustomerCreateOpen(open);
-          if (!open) {
-            resetCustomerForm();
-          }
-        }}
-        form={customerForm}
-        setForm={setCustomerForm}
-        ownershipOptions={OWNERSHIP_OPTIONS}
-        vatOptions={VAT_OPTIONS}
-        teamMembers={teamMembers}
-        saving={customerCreateSaving}
-        error={customerCreateError}
-        title="Новий замовник"
-        description="Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
-        submitLabel="Створити клієнта"
-        onSubmit={handleCustomerCreate}
-      />
+      {customerLeadCreate.dialogs}
 
       <Dialog
         open={quoteSetDetailsOpen}
