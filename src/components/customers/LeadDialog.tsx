@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
@@ -87,6 +88,18 @@ const getInitials = (value?: string) => {
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();
 };
+
+const POSITION_OPTIONS = [
+  "Директор",
+  "Власник",
+  "Адміністратор",
+  "Маркетолог",
+  "Керівник відділу маркетингу",
+  "Директор з маркетингу",
+  "Менеджер відділу закупівель",
+  "Офіс-менеджер",
+  "Секретар",
+];
 
 const normalizeTime = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 4);
@@ -618,12 +631,21 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>Посада підписанта</Label>
-                    <Input
+                    <Select
                       value={form.signatoryPosition}
-                      onChange={(e) => setForm((prev) => ({ ...prev, signatoryPosition: e.target.value }))}
-                      placeholder="Напр. Директор"
-                      className="h-9"
-                    />
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, signatoryPosition: value }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть посаду" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {POSITION_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </TabsContent>
