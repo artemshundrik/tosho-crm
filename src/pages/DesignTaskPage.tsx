@@ -50,6 +50,7 @@ import { formatUserShortName } from "@/lib/userName";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
+import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
@@ -2836,18 +2837,17 @@ export default function DesignTaskPage() {
                 <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                   <div className="text-xs text-muted-foreground mb-1">Позиція</div>
                   <div className="flex items-center gap-2.5">
-                    <div className="h-10 w-10 rounded-md border border-border/60 bg-muted/30 overflow-hidden shrink-0 flex items-center justify-center">
-                      {productPreviewUrl ? (
-                        <img
-                          src={productPreviewUrl}
-                          alt={quoteItem?.name ?? "Товар"}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
+                    {productPreviewUrl ? (
+                      <KanbanImageZoomPreview
+                        imageUrl={productPreviewUrl}
+                        alt={quoteItem?.name ?? "Товар"}
+                        className="h-10 w-10 rounded-md border border-border/60 bg-muted/30"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md border border-border/60 bg-muted/30 overflow-hidden shrink-0 flex items-center justify-center">
                         <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
+                      </div>
+                    )}
                     <div className="font-medium">{quoteItem?.name ?? "Не вказано"}</div>
                   </div>
                 </div>
@@ -2957,11 +2957,10 @@ export default function DesignTaskPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex items-start gap-2.5">
                           {isImage && fileUrl ? (
-                            <img
-                              src={fileUrl}
+                            <KanbanImageZoomPreview
+                              imageUrl={fileUrl}
                               alt={file.file_name}
-                              className="h-11 w-11 rounded-md border border-border/60 object-cover shrink-0"
-                              loading="lazy"
+                              className="h-11 w-11 rounded-md border border-border/60 shrink-0"
                             />
                           ) : (
                             <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
@@ -3368,11 +3367,10 @@ export default function DesignTaskPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex items-start gap-2.5">
                           {isImage && fileUrl ? (
-                            <img
-                              src={fileUrl}
+                            <KanbanImageZoomPreview
+                              imageUrl={fileUrl}
                               alt={file.file_name ?? "preview"}
-                              className="h-11 w-11 rounded-md border border-border/60 object-cover shrink-0"
-                              loading="lazy"
+                              className="h-11 w-11 rounded-md border border-border/60 shrink-0"
                             />
                           ) : (
                             <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">

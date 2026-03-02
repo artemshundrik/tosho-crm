@@ -4966,11 +4966,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {section.visualizations.map((visual, idx) => (
-                            <img
+                            <KanbanImageZoomPreview
                               key={`${section.quoteId}-visual-${idx}`}
-                              src={visual.url}
+                              imageUrl={visual.url}
                               alt={visual.name || `${section.quoteNumber} visual ${idx + 1}`}
-                              className="h-24 w-40 rounded-md border border-border/60 object-cover bg-muted/20"
+                              className="h-24 w-40 rounded-md border border-border/60 bg-muted/20"
                             />
                           ))}
                         </div>
@@ -5002,10 +5002,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               <TableCell className="text-muted-foreground">{item.position}</TableCell>
                               <TableCell>
                                 {item.imageUrl ? (
-                                  <img
-                                    src={item.imageUrl}
+                                  <KanbanImageZoomPreview
+                                    imageUrl={item.imageUrl}
                                     alt={item.name}
-                                    className="h-12 w-12 rounded-md border border-border/60 object-cover bg-muted/20"
+                                    className="h-12 w-12 rounded-md border border-border/60 bg-muted/20"
                                   />
                                 ) : (
                                   <div className="h-12 w-12 rounded-md border border-border/60 bg-muted/20 grid place-items-center text-xs text-muted-foreground">

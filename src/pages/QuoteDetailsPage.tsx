@@ -40,6 +40,7 @@ import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications"
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
+import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { useEntityLock } from "@/hooks/useEntityLock";
@@ -3506,18 +3507,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
                     <div className="flex items-center gap-4">
-                      <div className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
-                        {productPreview?.type === "image" ? (
-                          <img
-                            src={productPreview.url}
-                            alt={modelLabel ?? "Товар"}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
+                      {productPreview?.type === "image" ? (
+                        <KanbanImageZoomPreview
+                          imageUrl={productPreview.url}
+                          alt={modelLabel ?? "Товар"}
+                          className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30"
+                        />
+                      ) : (
+                        <div className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
                           <Package className="h-6 w-6 text-muted-foreground/60" />
-                        )}
-                      </div>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="text-base font-semibold truncate">{item.title}</div>
                         {metaLine && (
@@ -3643,7 +3643,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
                       <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
                         {previewImage ? (
-                          <img src={file.url} alt={file.name} className="h-full w-full object-cover" loading="lazy" />
+                          <KanbanImageZoomPreview
+                            imageUrl={file.url}
+                            alt={file.name}
+                            className="h-32 w-full rounded-md border border-border/50 bg-muted/20"
+                          />
                         ) : (
                           <div className="text-xs text-muted-foreground">{extension}</div>
                         )}
@@ -4394,11 +4398,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-visible">
                                 {showImagePreview ? (
-                                  <img
-                                    src={file.url}
+                                  <KanbanImageZoomPreview
+                                    imageUrl={file.url!}
                                     alt={file.name}
-                                    className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-150"
-                                    loading="lazy"
+                                    className="h-10 w-10 rounded-lg border border-border/60 bg-primary/10"
                                   />
                                 ) : showPdfPreview ? (
                                   <iframe
