@@ -194,6 +194,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
   const selectedManager = teamMembers.find((member) => member.label === form.manager);
 
+  React.useEffect(() => {
+    if (!open) {
+      setOwnershipOpen(false);
+      setVatOpen(false);
+      setLogoOpen(false);
+      setManagerOpen(false);
+      setBirthdayOpen(false);
+      setReminderDateOpen(false);
+      setEventDateOpen(false);
+    }
+  }, [open]);
+
   const handleReminderTimeChange = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 4);
     const masked = digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`;
@@ -387,7 +399,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 ) : (
                   <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
                 )}
-                {!!form.manager.trim() ? (
+                {form.manager.trim() ? (
                   <Button
                     variant="ghost"
                     size="sm"

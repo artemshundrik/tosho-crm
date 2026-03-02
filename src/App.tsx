@@ -93,6 +93,7 @@ function RouteSuspense({
 }
 
 const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";
+const DOM_RECOVERY_RELOAD_GUARD_KEY = "app_dom_recovery_reload_once";
 
 function getRuntimeErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
@@ -113,6 +114,15 @@ function isChunkLikeError(error: unknown): boolean {
   );
 }
 
+function isDomDetachRaceError(error: unknown): boolean {
+  const message = getRuntimeErrorMessage(error).toLowerCase();
+  return (
+    message.includes("failed to execute 'removechild'") ||
+    (message.includes("the node to be removed is not a child of this node") &&
+      message.includes("removechild"))
+  );
+}
+
 function reloadOnceForChunkError(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -120,6 +130,20 @@ function reloadOnceForChunkError(): boolean {
       return false;
     }
     window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, "1");
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function reloadOnceForDomError(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.sessionStorage.getItem(DOM_RECOVERY_RELOAD_GUARD_KEY) === "1") {
+      return false;
+    }
+    window.sessionStorage.setItem(DOM_RECOVERY_RELOAD_GUARD_KEY, "1");
     window.location.reload();
     return true;
   } catch {
@@ -148,6 +172,17 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
         this.setState({
           hasError: true,
           message: "Не вдалося завантажити оновлення сторінки. Спробуйте оновити сторінку.",
+        });
+      }
+      return;
+    }
+    if (isDomDetachRaceError(error)) {
+      const reloaded = reloadOnceForDomError();
+      if (!reloaded) {
+        this.setState({
+          hasError: true,
+          message:
+            "Сталася тимчасова помилка DOM. Оновіть сторінку та вимкніть розширення перекладу/інʼєкції сторінки для цього сайту.",
         });
       }
     }

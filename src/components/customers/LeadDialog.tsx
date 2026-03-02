@@ -146,6 +146,15 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
     [form.eventDate]
   );
 
+  React.useEffect(() => {
+    if (!open) {
+      setLogoOpen(false);
+      setManagerOpen(false);
+      setReminderDateOpen(false);
+      setEventDateOpen(false);
+    }
+  }, [open]);
+
   const updatePhone = (index: number, value: string) => {
     setForm((prev) => ({
       ...prev,
