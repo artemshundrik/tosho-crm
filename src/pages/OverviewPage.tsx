@@ -104,13 +104,18 @@ const quoteStatusLabel: Record<QuoteStatus, string> = {
   cancelled: "Скасовано",
 };
 
-const quoteStatusClass: Record<QuoteStatus, string> = {
-  new: "bg-muted/40 text-muted-foreground border-border",
-  estimating: "bg-sky-500/15 text-sky-200 border-sky-500/40",
-  estimated: "bg-violet-500/15 text-violet-200 border-violet-500/40",
-  awaiting_approval: "bg-amber-500/15 text-amber-200 border-amber-500/40",
-  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
-  cancelled: "bg-rose-500/15 text-rose-200 border-rose-500/40",
+type StatusBadgeStyle = {
+  tone?: "neutral" | "info" | "success" | "danger" | "destructive";
+  className?: string;
+};
+
+const quoteStatusBadgeStyle: Record<QuoteStatus, StatusBadgeStyle> = {
+  new: { tone: "neutral" },
+  estimating: { tone: "info" },
+  estimated: { tone: "info" },
+  awaiting_approval: { className: "bg-warning-soft text-warning-foreground border-warning-soft-border" },
+  approved: { tone: "success" },
+  cancelled: { tone: "danger" },
 };
 
 const designStatusLabel: Record<DesignStatus, string> = {
@@ -123,14 +128,14 @@ const designStatusLabel: Record<DesignStatus, string> = {
   cancelled: "Скасовано",
 };
 
-const designStatusClass: Record<DesignStatus, string> = {
-  new: "bg-muted/40 text-muted-foreground border-border",
-  changes: "bg-amber-500/15 text-amber-200 border-amber-500/40",
-  in_progress: "bg-sky-500/15 text-sky-200 border-sky-500/40",
-  pm_review: "bg-indigo-500/15 text-indigo-200 border-indigo-500/40",
-  client_review: "bg-yellow-500/15 text-yellow-200 border-yellow-500/40",
-  approved: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
-  cancelled: "bg-rose-500/15 text-rose-200 border-rose-500/40",
+const designStatusBadgeStyle: Record<DesignStatus, StatusBadgeStyle> = {
+  new: { tone: "neutral" },
+  changes: { className: "bg-warning-soft text-warning-foreground border-warning-soft-border" },
+  in_progress: { tone: "info" },
+  pm_review: { tone: "info" },
+  client_review: { className: "bg-warning-soft text-warning-foreground border-warning-soft-border" },
+  approved: { tone: "success" },
+  cancelled: { tone: "danger" },
 };
 
 const quoteStatusFromDb = (value?: string | null): QuoteStatus => {
@@ -521,7 +526,12 @@ export function OverviewPage() {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {QUOTE_STATUSES.map((status) => (
-                <Badge key={status} variant="outline" className={cn("text-xs", quoteStatusClass[status])}>
+                <Badge
+                  key={status}
+                  variant="outline"
+                  tone={quoteStatusBadgeStyle[status].tone}
+                  className={cn("text-xs", quoteStatusBadgeStyle[status].className)}
+                >
                   {quoteStatusLabel[status]}: {safeData.quoteCounts[status]}
                 </Badge>
               ))}
@@ -546,7 +556,11 @@ export function OverviewPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant="outline" className={cn("text-[11px]", quoteStatusClass[status])}>
+                        <Badge
+                          variant="outline"
+                          tone={quoteStatusBadgeStyle[status].tone}
+                          className={cn("text-[11px]", quoteStatusBadgeStyle[status].className)}
+                        >
                           {quoteStatusLabel[status]}
                         </Badge>
                         <span className="text-xs text-muted-foreground">{formatDateTime(quote.created_at)}</span>
@@ -573,7 +587,12 @@ export function OverviewPage() {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {DESIGN_STATUSES.map((status) => (
-                <Badge key={status} variant="outline" className={cn("text-xs", designStatusClass[status])}>
+                <Badge
+                  key={status}
+                  variant="outline"
+                  tone={designStatusBadgeStyle[status].tone}
+                  className={cn("text-xs", designStatusBadgeStyle[status].className)}
+                >
                   {designStatusLabel[status]}: {designStatusView[status]}
                 </Badge>
               ))}
@@ -598,7 +617,11 @@ export function OverviewPage() {
                       <div className="text-xs text-muted-foreground truncate">{task.title ?? "Дизайн-задача"}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className={cn("text-[11px]", designStatusClass[task.status])}>
+                      <Badge
+                        variant="outline"
+                        tone={designStatusBadgeStyle[task.status].tone}
+                        className={cn("text-[11px]", designStatusBadgeStyle[task.status].className)}
+                      >
                         {designStatusLabel[task.status]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">{formatDateTime(task.createdAt)}</span>

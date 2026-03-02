@@ -59,8 +59,8 @@ export function usePageData<T>({
   const isStale = cached ? Date.now() - cached.updatedAt > cacheTTL : true;
   
   const [data, setData] = useState<T | null>(cached?.data ?? null);
-  // loading = true тільки якщо немає кешу або кеш застарів і треба оновити
-  const [loading, setLoading] = useState(!cached || (isStale && !showSkeletonOnStale));
+  // loading = true тільки якщо немає кешу або треба показати skeleton на застарілому кеші
+  const [loading, setLoading] = useState(!cached || (isStale && showSkeletonOnStale));
   const [error, setError] = useState<Error | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(!cached);
   
