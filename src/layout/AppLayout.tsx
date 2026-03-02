@@ -462,10 +462,20 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session } = useAuth();
+  const { userId, teamId, session, permissions } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
-  const sidebarRoutes = useMemo(() => sidebarLinks.map((link) => link.to), []);
+  const visibleSidebarLinks = useMemo(
+    () =>
+      sidebarLinks.filter((link) => {
+        if (link.to === ROUTES.membersAccess) {
+          return permissions.canEditMemberRoles;
+        }
+        return true;
+      }),
+    [permissions.canEditMemberRoles]
+  );
+  const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
     return sidebarRoutes.some((route) => {
       if (location.pathname === route) return true;
@@ -1040,7 +1050,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative", sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
               <SidebarGroup
                 label="Головне"
-                links={sidebarLinks.filter((l) => l.group === "overview")}
+                links={visibleSidebarLinks.filter((l) => l.group === "overview")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
@@ -1049,7 +1059,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Замовлення"
-                links={sidebarLinks.filter((l) => l.group === "orders")}
+                links={visibleSidebarLinks.filter((l) => l.group === "orders")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
@@ -1058,7 +1068,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Фінанси"
-                links={sidebarLinks.filter((l) => l.group === "finance")}
+                links={visibleSidebarLinks.filter((l) => l.group === "finance")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
@@ -1067,7 +1077,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Операції"
-                links={sidebarLinks.filter((l) => l.group === "operations")}
+                links={visibleSidebarLinks.filter((l) => l.group === "operations")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
@@ -1076,7 +1086,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative", sidebarCollapsed ? "py-2.5 pb-0" : "")}>
               <SidebarGroup
                 label="Акаунт"
-                links={sidebarLinks.filter((l) => l.group === "account")}
+                links={visibleSidebarLinks.filter((l) => l.group === "account")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
@@ -1154,35 +1164,35 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     <div className="border-t border-border px-4 py-4 pb-8">
                       <SidebarGroup
                         label="Головне"
-                        links={sidebarLinks.filter((l) => l.group === "overview")}
+                        links={visibleSidebarLinks.filter((l) => l.group === "overview")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                         notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Замовлення"
-                        links={sidebarLinks.filter((l) => l.group === "orders")}
+                        links={visibleSidebarLinks.filter((l) => l.group === "orders")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                         notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Фінанси"
-                        links={sidebarLinks.filter((l) => l.group === "finance")}
+                        links={visibleSidebarLinks.filter((l) => l.group === "finance")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                         notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Операції"
-                        links={sidebarLinks.filter((l) => l.group === "operations")}
+                        links={visibleSidebarLinks.filter((l) => l.group === "operations")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                         notificationsUnreadCount={unreadCount}
                       />
                       <SidebarGroup
                         label="Акаунт"
-                        links={sidebarLinks.filter((l) => l.group === "account")}
+                        links={visibleSidebarLinks.filter((l) => l.group === "account")}
                         currentPath={location.pathname}
                         onNavigate={() => setMobileMenuOpen(false)}
                         notificationsUnreadCount={unreadCount}
