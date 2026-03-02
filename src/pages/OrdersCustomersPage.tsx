@@ -101,6 +101,7 @@ const OWNERSHIP_OPTIONS: OwnershipOption[] = [
   { value: "tov", label: "ТОВ" },
   { value: "pp", label: "ПП" },
   { value: "vp", label: "ВП" },
+  { value: "go", label: "ГО" },
   { value: "at", label: "АТ" },
   { value: "dp", label: "ДП" },
   { value: "fop", label: "ФОП" },
