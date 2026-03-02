@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Eye, Users } from "lucide-react";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
@@ -48,6 +49,34 @@ type OnlineNowDropdownProps = {
 };
 
 export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) {
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const [showTopFade, setShowTopFade] = React.useState(false);
+  const [showBottomFade, setShowBottomFade] = React.useState(false);
+  const hasScrollableContent = !loading && entries.length > 0;
+
+  const updateScrollHints = React.useCallback(() => {
+    const node = listRef.current;
+    if (!node) {
+      setShowTopFade(false);
+      setShowBottomFade(false);
+      return;
+    }
+    const maxScrollTop = node.scrollHeight - node.clientHeight;
+    if (maxScrollTop <= 1) {
+      setShowTopFade(false);
+      setShowBottomFade(false);
+      return;
+    }
+    setShowTopFade(node.scrollTop > 2);
+    setShowBottomFade(node.scrollTop < maxScrollTop - 2);
+  }, []);
+
+  React.useEffect(() => {
+    const node = listRef.current;
+    if (node) node.scrollTop = 0;
+    updateScrollHints();
+  }, [entries.length, loading, updateScrollHints]);
+
   return (
     <AppDropdown
       align="end"
@@ -76,29 +105,42 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
           ) : entries.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">Наразі нікого онлайн.</div>
           ) : (
-            <div className="max-h-[300px] overflow-auto">
-              {entries.map((entry) => (
-                <div key={entry.userId} className="flex items-center gap-2 px-3 py-2">
-                  <AvatarBase
-                    src={entry.avatarUrl}
-                    name={entry.displayName}
-                    fallback={entry.displayName.slice(0, 2).toUpperCase()}
-                    size={28}
-                    className="border-border"
-                    fallbackClassName="text-[10px] font-semibold"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {entry.displayName}
-                      {entry.isSelf ? " (ви)" : ""}
+            <div className="relative">
+              <div
+                ref={listRef}
+                className="max-h-[300px] overflow-y-auto overscroll-contain"
+                onWheelCapture={(event) => event.stopPropagation()}
+                onScroll={updateScrollHints}
+              >
+                {entries.map((entry) => (
+                  <div key={entry.userId} className="flex items-center gap-2 px-3 py-2">
+                    <AvatarBase
+                      src={entry.avatarUrl}
+                      name={entry.displayName}
+                      fallback={entry.displayName.slice(0, 2).toUpperCase()}
+                      size={28}
+                      className="border-border"
+                      fallbackClassName="text-[10px] font-semibold"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {entry.displayName}
+                        {entry.isSelf ? " (ви)" : ""}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {entry.currentLabel ?? entry.currentPath ?? "У CRM"}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {entry.currentLabel ?? entry.currentPath ?? "У CRM"}
-                    </div>
+                    <span className={cn("h-2.5 w-2.5 rounded-full", entry.online ? "bg-emerald-400" : "bg-amber-400")} />
                   </div>
-                  <span className={cn("h-2.5 w-2.5 rounded-full", entry.online ? "bg-emerald-400" : "bg-amber-400")} />
-                </div>
-              ))}
+                ))}
+              </div>
+              {hasScrollableContent && showTopFade ? (
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-popover to-transparent" />
+              ) : null}
+              {hasScrollableContent && showBottomFade ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-popover to-transparent" />
+              ) : null}
             </div>
           )}
         </div>
