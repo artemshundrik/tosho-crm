@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,7 +65,6 @@ import {
 } from "@/lib/designTaskTimer";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { uk } from "date-fns/locale";
 
 type DesignStatus =
   | "new"
@@ -931,9 +931,11 @@ export default function DesignTaskPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, effectiveTeamId]);
 
+  const taskIdForMentions = task?.id ?? null;
+  const taskQuoteIdForMentions = task?.quoteId ?? null;
   useEffect(() => {
     const loadQuoteMentions = async () => {
-      if (!task || !isUuid(task.quoteId)) {
+      if (!taskIdForMentions || !taskQuoteIdForMentions || !isUuid(taskQuoteIdForMentions)) {
         setQuoteMentionComments([]);
         setQuoteMentionsError(null);
         setQuoteMentionsLoading(false);
@@ -944,13 +946,13 @@ export default function DesignTaskPage() {
       setQuoteMentionsError(null);
       try {
         let rows: QuoteMentionComment[] = [];
-        const { data, error: commentsError } = await supabase
-          .schema("tosho")
-          .from("quote_comments")
-          .select("id,body,created_at,created_by")
-          .eq("quote_id", task.quoteId)
-          .order("created_at", { ascending: false })
-          .limit(30);
+          const { data, error: commentsError } = await supabase
+            .schema("tosho")
+            .from("quote_comments")
+            .select("id,body,created_at,created_by")
+            .eq("quote_id", taskQuoteIdForMentions)
+            .order("created_at", { ascending: false })
+            .limit(30);
 
         if (!commentsError) {
           rows =
@@ -971,7 +973,7 @@ export default function DesignTaskPage() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ mode: "list", quoteId: task.quoteId }),
+            body: JSON.stringify({ mode: "list", quoteId: taskQuoteIdForMentions }),
           });
           if (!response.ok) throw commentsError;
           const payload = await parseJsonSafe<{ comments?: unknown[] }>(response);
@@ -999,7 +1001,7 @@ export default function DesignTaskPage() {
       }
     };
     void loadQuoteMentions();
-  }, [task?.id, task?.quoteId]);
+  }, [taskIdForMentions, taskQuoteIdForMentions]);
 
   useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
@@ -1011,7 +1013,13 @@ export default function DesignTaskPage() {
 
   useEffect(() => {
     if (!headerDeadlinePopoverOpen && !deadlinePopoverOpen) return;
-    setDeadlineTime(extractDeadlineTime(task?.designDeadline ?? null));
+    const match = (task?.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
+    if (!match) {
+      setDeadlineTime("12:00");
+      return;
+    }
+    const parsed = `${match[1]}:${match[2]}`;
+    setDeadlineTime(isValidDeadlineTime(parsed) ? parsed : "12:00");
   }, [headerDeadlinePopoverOpen, deadlinePopoverOpen, task?.designDeadline]);
 
   const deadlineLabel = useMemo(() => {
@@ -1266,13 +1274,6 @@ export default function DesignTaskPage() {
   };
 
   const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-
-  const extractDeadlineTime = (value: string | null | undefined) => {
-    const match = value?.match(/t(\d{2}):(\d{2})/i);
-    if (!match) return "12:00";
-    const parsed = `${match[1]}:${match[2]}`;
-    return isValidDeadlineTime(parsed) ? parsed : "12:00";
-  };
 
   const historyEvents = useMemo<DesignTaskHistoryEvent[]>(() => {
     return historyRows.map((row) => {
@@ -1607,6 +1608,23 @@ export default function DesignTaskPage() {
     try {
       const nextFiles = designOutputFiles.filter((file) => file.id !== fileId);
       await persistDesignOutputs(nextFiles, designOutputLinks);
+      if (selectedDesignOutputFileId === fileId && task && effectiveTeamId) {
+        const nextMetadata: Record<string, unknown> = {
+          ...(task.metadata ?? {}),
+          selected_design_output_file_id: null,
+          selected_design_output_file_name: null,
+          selected_design_output_selected_at: null,
+          selected_design_output_selected_by: null,
+          selected_design_output_selected_by_label: null,
+        };
+        const { error: resetError } = await supabase
+          .from("activity_log")
+          .update({ metadata: nextMetadata })
+          .eq("id", task.id)
+          .eq("team_id", effectiveTeamId);
+        if (resetError) throw resetError;
+        setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      }
       setDesignOutputFiles(nextFiles);
       if (target.storage_bucket && target.storage_path) {
         await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
@@ -1626,6 +1644,64 @@ export default function DesignTaskPage() {
       toast.success("Посилання видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити посилання"));
+    }
+  };
+
+  const handleSelectDesignOutputFile = async (fileId: string) => {
+    if (!task || !effectiveTeamId) return;
+    if (!canManageAssignments) {
+      toast.error("Тільки менеджер може зафіксувати обраний варіант замовника.");
+      return;
+    }
+    if (!ensureCanEdit()) return;
+    if (outputSaving) return;
+
+    const nextSelectedId = selectedDesignOutputFileId === fileId ? null : fileId;
+    const selectedFile = nextSelectedId
+      ? designOutputFiles.find((file) => file.id === nextSelectedId) ?? null
+      : null;
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+
+    setOutputSaving(true);
+    try {
+      const nextMetadata: Record<string, unknown> = {
+        ...(task.metadata ?? {}),
+        selected_design_output_file_id: nextSelectedId,
+        selected_design_output_file_name: selectedFile?.file_name ?? null,
+        selected_design_output_selected_at: nextSelectedId ? new Date().toISOString() : null,
+        selected_design_output_selected_by: nextSelectedId ? (userId ?? null) : null,
+        selected_design_output_selected_by_label: nextSelectedId ? actorLabel : null,
+      };
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_output_selection",
+        title: nextSelectedId
+          ? `Замовник обрав варіант: ${selectedFile?.file_name ?? "макет"}`
+          : "Скасовано вибір варіанту замовником",
+        metadata: {
+          source: "design_output_selection",
+          selected_design_output_file_id: nextSelectedId,
+          selected_design_output_file_name: selectedFile?.file_name ?? null,
+        },
+      });
+      await loadHistory(task.id);
+      toast.success(nextSelectedId ? "Варіант замовника зафіксовано" : "Вибір варіанту скасовано");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося зберегти вибір варіанту"));
+    } finally {
+      setOutputSaving(false);
     }
   };
 
@@ -2481,6 +2557,10 @@ export default function DesignTaskPage() {
 
   const isStatusStartable = task?.status === "new" || task?.status === "changes";
   const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId;
+  const selectedDesignOutputFileId = useMemo(() => {
+    const value = task?.metadata?.selected_design_output_file_id;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }, [task?.metadata]);
   const canTakeOverForSelf =
     !!task &&
     canSelfAssign &&
@@ -2971,6 +3051,14 @@ export default function DesignTaskPage() {
                             <div className="truncate text-sm font-medium" title={file.file_name}>
                               {file.file_name}
                             </div>
+                            {selectedDesignOutputFileId === file.id ? (
+                              <Badge
+                                variant="outline"
+                                className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
+                              >
+                                Обрано замовником
+                              </Badge>
+                            ) : null}
                             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
                               <span>{formatFileSize(file.file_size)}</span>
                               <span>·</span>
@@ -2990,6 +3078,15 @@ export default function DesignTaskPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                            <Checkbox
+                              checked={selectedDesignOutputFileId === file.id}
+                              disabled={outputSaving || !canManageAssignments}
+                              onCheckedChange={() => void handleSelectDesignOutputFile(file.id)}
+                              aria-label={`Вибір замовника: ${file.file_name}`}
+                            />
+                            <span>Вибір замовника</span>
+                          </label>
                           {fileUrl ? (
                             <>
                               <Button size="icon" variant="ghost" asChild>
