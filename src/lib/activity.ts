@@ -28,6 +28,50 @@ export type ActivityItem = {
   type?: string;
 };
 
+export function resolveActivityType(input: {
+  entity_type?: string | null;
+  action?: string | null;
+  title?: string | null;
+}): "quotes" | "design" | "finance" | "team" | "other" {
+  const haystack = `${input.entity_type ?? ""} ${input.action ?? ""} ${input.title ?? ""}`.toLowerCase();
+  if (
+    haystack.includes("design") ||
+    haystack.includes("дизайн") ||
+    haystack.includes("макет")
+  ) {
+    return "design";
+  }
+  if (
+    haystack.includes("finance") ||
+    haystack.includes("invoice") ||
+    haystack.includes("transaction") ||
+    haystack.includes("payment") ||
+    haystack.includes("рахунок") ||
+    haystack.includes("плат")
+  ) {
+    return "finance";
+  }
+  if (
+    haystack.includes("team") ||
+    haystack.includes("member") ||
+    haystack.includes("invite") ||
+    haystack.includes("workspace") ||
+    haystack.includes("команд") ||
+    haystack.includes("інвайт")
+  ) {
+    return "team";
+  }
+  if (
+    haystack.includes("quote") ||
+    haystack.includes("estimate") ||
+    haystack.includes("order") ||
+    haystack.includes("прорах")
+  ) {
+    return "quotes";
+  }
+  return "other";
+}
+
 export function formatActivityTime(iso: string) {
   const d = new Date(iso);
   const date = new Intl.DateTimeFormat("uk-UA", {
@@ -87,6 +131,6 @@ export function mapActivityRow(row: ActivityRow): ActivityItem {
     href: row.href ?? undefined,
     time: formatActivityTime(row.created_at),
     created_at: row.created_at,
-    type: row.entity_type ?? undefined,
+    type: resolveActivityType(row),
   };
 }

@@ -1,13 +1,15 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Clock3, FileText, LayoutGrid, Palette, Plus, RefreshCw } from "lucide-react";
+import { Activity as ActivityIcon, ArrowRight, Clock3, FileText, LayoutGrid, Palette, Plus, RefreshCw, Users, Wallet } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveActivityType } from "@/lib/activity";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { usePageData } from "@/hooks/usePageData";
@@ -52,8 +54,13 @@ type ActivityRow = {
   id: string;
   title?: string | null;
   action?: string | null;
+  actor_name?: string | null;
+  user_id?: string | null;
+  entity_type?: string | null;
   href?: string | null;
   created_at?: string | null;
+  avatar_url?: string | null;
+  type?: "quotes" | "design" | "finance" | "team" | "other";
 };
 
 type OverviewData = {
@@ -150,6 +157,21 @@ const formatDateTime = (value?: string | null) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const getInitials = (name?: string | null) => {
+  const source = name?.trim() || "Користувач";
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+};
+
+const overviewActivityIcon = (type?: string) => {
+  if (type === "quotes") return FileText;
+  if (type === "design") return Palette;
+  if (type === "finance") return Wallet;
+  if (type === "team") return Users;
+  return ActivityIcon;
 };
 
 const emptyCounts = <T extends string>(statuses: readonly T[]): Record<T, number> =>
@@ -300,7 +322,7 @@ export function OverviewPage() {
 
       const activityPromise = supabase
         .from("activity_log")
-        .select("id,title,action,href,created_at")
+        .select("id,title,action,actor_name,user_id,entity_type,href,created_at")
         .eq("team_id", teamId)
         .order("created_at", { ascending: false })
         .limit(8);
@@ -325,6 +347,23 @@ export function OverviewPage() {
       if (myQuotesRes.error) throw myQuotesRes.error;
       if (designTasksRes.error) throw designTasksRes.error;
       if (activityRes.error) throw activityRes.error;
+
+      const activityRows = (activityRes.data as ActivityRow[] | null) ?? [];
+      const activityUserIds = Array.from(new Set(activityRows.map((row) => row.user_id).filter(Boolean))) as string[];
+      const memberByUserId = new Map<string, { avatar_url: string | null; full_name: string | null }>();
+      if (activityUserIds.length > 0) {
+        const { data: membersData } = await supabase
+          .from("team_members_view")
+          .select("user_id,avatar_url,full_name")
+          .eq("team_id", teamId)
+          .in("user_id", activityUserIds);
+        (((membersData as Array<{ user_id: string; avatar_url?: string | null; full_name?: string | null }> | null) ?? [])).forEach((row) => {
+          memberByUserId.set(row.user_id, {
+            avatar_url: row.avatar_url ?? null,
+            full_name: row.full_name ?? null,
+          });
+        });
+      }
 
       const quoteCounts = emptyCounts(QUOTE_STATUSES);
       quoteCountsRows.forEach((row) => {
@@ -375,10 +414,17 @@ export function OverviewPage() {
         unassignedActiveDesignCount,
         managerDesignQueue,
         myDesignQueue,
-        activity: ((activityRes.data as ActivityRow[] | null) ?? []).map((row) => ({
-          ...row,
-          title: row.title?.trim() || row.action?.trim() || "Подія",
-        })),
+        activity: activityRows.map((row) => {
+          const member = row.user_id ? memberByUserId.get(row.user_id) : undefined;
+          const actorName = row.actor_name?.trim() || member?.full_name?.trim() || "Користувач";
+          return {
+            ...row,
+            title: row.title?.trim() || row.action?.trim() || "Подія",
+            actor_name: actorName,
+            avatar_url: member?.avatar_url ?? null,
+            type: resolveActivityType(row),
+          };
+        }),
       };
     },
     cacheTTL: 60 * 1000,
@@ -595,13 +641,30 @@ export function OverviewPage() {
             <div className="space-y-2">
               {safeData.activity.map((row) => {
                 const destination = row.href ?? "/activity";
+                const Icon = overviewActivityIcon(row.type);
                 return (
                   <Link
                     key={row.id}
                     to={destination}
                     className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 hover:bg-muted/20 transition-colors"
                   >
-                    <div className="min-w-0 text-sm truncate">{row.title ?? "Подія"}</div>
+                    <div className="min-w-0 flex items-center gap-3">
+                      <AvatarBase
+                        src={row.avatar_url ?? null}
+                        name={row.actor_name ?? "Користувач"}
+                        fallback={getInitials(row.actor_name)}
+                        variant="sm"
+                      />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted/50 text-muted-foreground">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm truncate">{row.title ?? "Подія"}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          Користувач: {row.actor_name ?? "Користувач"}
+                        </div>
+                      </div>
+                    </div>
                     <span className="text-xs text-muted-foreground shrink-0">{formatDateTime(row.created_at)}</span>
                   </Link>
                 );

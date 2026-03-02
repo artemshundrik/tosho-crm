@@ -1026,7 +1026,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         {/* Nav */}
         <nav
           className={cn(
-            "flex-1 overflow-visible transition-[padding] duration-[220ms] ease-linear",
+            "min-h-0 flex-1 overflow-y-auto overflow-x-visible transition-[padding] duration-[220ms] ease-linear",
             sidebarCollapsed ? "px-2 py-3" : "px-4 py-5"
           )}
         >

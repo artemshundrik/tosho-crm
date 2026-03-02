@@ -18,11 +18,10 @@ import {
   type ActivityItem,
   type ActivityRow,
 } from "@/lib/activity";
-import { Activity, Trophy, UserPlus, Users, Wallet, Dumbbell } from "lucide-react";
+import { Activity, FileText, Palette, Users, Wallet } from "lucide-react";
 
-type FilterMode = "all" | "matches" | "trainings" | "finance" | "team";
+type FilterMode = "all" | "quotes" | "design" | "finance" | "team" | "other";
 type MemberAvatar = { user_id: string; avatar_url: string | null; full_name: string | null };
-type TitleParts = { title: string; eventLine?: string };
 
 type ActivityPageCache = {
   items: ActivityItem[];
@@ -158,23 +157,19 @@ export default function ActivityPage() {
   }
 
   const iconForItem = (item: ActivityItem) => {
-    const title = item.title.toLowerCase();
-    if (title.includes("інвайт")) return UserPlus;
-    if (item.type === "trainings") return Dumbbell;
-    if (item.type === "matches") return Trophy;
+    if (item.type === "quotes") return FileText;
+    if (item.type === "design") return Palette;
     if (item.type === "finance") return Wallet;
     if (item.type === "team") return Users;
     return Activity;
   };
 
   const badgeForItem = (item: ActivityItem) => {
-    const title = item.title.toLowerCase();
-    if (title.includes("інвайт")) return { label: "Інвайти", tone: "info" as const };
-    if (item.type === "trainings") return { label: "Тренування", tone: "info" as const };
-    if (item.type === "matches") return { label: "Матчі", tone: "success" as const };
+    if (item.type === "quotes") return { label: "Прорахунки", tone: "info" as const };
+    if (item.type === "design") return { label: "Дизайн", tone: "success" as const };
     if (item.type === "finance") return { label: "Фінанси", tone: "danger" as const };
     if (item.type === "team") return { label: "Команда", tone: "neutral" as const };
-    return { label: "Активність", tone: "neutral" as const };
+    return { label: "Інше", tone: "neutral" as const };
   };
 
   const initialsForItem = (item: ActivityItem) => {
@@ -182,92 +177,6 @@ export default function ActivityPage() {
     const parts = actor.split(" ").filter(Boolean);
     const initials = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : actor.slice(0, 2);
     return initials.toUpperCase();
-  };
-
-  const parseEventDateTime = (text: string) => {
-    const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-    const dmMatch = text.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b/);
-    const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    const time = timeMatch ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}` : null;
-    if (isoMatch) {
-      const year = Number(isoMatch[1]);
-      const month = Number(isoMatch[2]);
-      const day = Number(isoMatch[3]);
-      return { date: new Date(year, month - 1, day), time };
-    }
-    if (dmMatch) {
-      const day = Number(dmMatch[1]);
-      const month = Number(dmMatch[2]);
-      const year = dmMatch[3] ? Number(dmMatch[3]) : new Date().getFullYear();
-      return { date: new Date(year, month - 1, day), time };
-    }
-    return { date: null, time };
-  };
-
-  const parseEventDate = (value: string | null | undefined) => {
-    if (!value) return null;
-    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-    const dm = value.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
-    if (dm) return new Date(Number(dm[3] || new Date().getFullYear()), Number(dm[2]) - 1, Number(dm[1]));
-    return null;
-  };
-
-  const formatEventDateLabel = (date: Date) => {
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const weekday = new Intl.DateTimeFormat("uk-UA", { weekday: "long" }).format(date);
-    const weekdayLabel = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    return { dateLabel: `${day}.${month}`, weekdayLabel };
-  };
-
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  void isSameDay;
-
-  const stripDateTime = (text: string) =>
-    text
-      .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, "")
-      .replace(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b/g, "")
-      .replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g, "")
-      .replace(/\s+/g, " ")
-      .replace(/[(),–—-]+\s*$/g, "")
-      .trim();
-
-  const getTitleParts = (item: ActivityItem): TitleParts => {
-    const title = item.title.trim();
-    const isTraining = item.type === "trainings" || title.toLowerCase().includes("тренуван");
-    const isMatch = item.type === "matches" || title.toLowerCase().includes("матч");
-    const metaDate = parseEventDate(item.event_date);
-    const metaTime = item.event_time || null;
-    const { date: fallbackDate, time: fallbackTime } = parseEventDateTime(title);
-    const date = metaDate ?? fallbackDate;
-    const time = metaTime ?? fallbackTime;
-    if (isTraining && date) {
-      return {
-        title: "Тренування",
-        eventLine: `${formatEventDateLabel(date).dateLabel} (${formatEventDateLabel(date).weekdayLabel})${
-          time ? ` о ${time}` : ""
-        }`,
-      };
-    }
-
-    if (isMatch) {
-      const opponentMatch = title.match(/проти\s+(.+)/i);
-      const opponentRaw = opponentMatch ? opponentMatch[1] : title.replace(/матч[:\s]+/i, "");
-      const opponent = stripDateTime(opponentRaw);
-      if (date) {
-        return {
-          title: opponent ? `Матч: ${opponent}` : title,
-          eventLine: `${formatEventDateLabel(date).dateLabel} (${formatEventDateLabel(date).weekdayLabel})${
-            time ? ` о ${time}` : ""
-          }`,
-        };
-      }
-      return { title: opponent ? `Матч: ${opponent}` : title };
-    }
-
-    return { title };
   };
 
   return (
@@ -303,7 +212,7 @@ export default function ActivityPage() {
                 Всі
               </TabsTrigger>
               <TabsTrigger
-                value="matches"
+                value="quotes"
                 className={cn(
                   "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -311,10 +220,10 @@ export default function ActivityPage() {
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
-                Матчі
+                Прорахунки
               </TabsTrigger>
               <TabsTrigger
-                value="trainings"
+                value="design"
                 className={cn(
                   "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -322,7 +231,7 @@ export default function ActivityPage() {
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
-                Тренування
+                Дизайн
               </TabsTrigger>
               <TabsTrigger
                 value="finance"
@@ -346,6 +255,17 @@ export default function ActivityPage() {
               >
                 Команда
               </TabsTrigger>
+              <TabsTrigger
+                value="other"
+                className={cn(
+                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
+                )}
+              >
+                Інше
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -366,7 +286,6 @@ export default function ActivityPage() {
                     {dayItems.map((item) => {
                       const Icon = iconForItem(item);
                       const badge = badgeForItem(item);
-                      const titleParts = getTitleParts(item);
                       return (
                         <Button
                           key={item.id}
@@ -395,17 +314,12 @@ export default function ActivityPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-3">
                                 <span className="text-sm font-semibold text-foreground truncate">
-                                  {titleParts.title}
+                                  {item.title}
                                 </span>
                                 <Badge tone={badge.tone} size="sm" pill>
                                   {badge.label}
                                 </Badge>
                               </div>
-                              {titleParts.eventLine ? (
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {titleParts.eventLine}
-                                </div>
-                              ) : null}
                               {item.actor ? (
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   Зробив: <span className="font-medium text-foreground">{item.actor}</span>

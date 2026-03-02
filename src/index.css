@@ -441,8 +441,15 @@
     padding: 0;
     overflow-x: hidden;
   }
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     color: hsl(var(--foreground));
+  }
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
 
   /* Global scrollbar styling (Windows/Chrome + Firefox) */

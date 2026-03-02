@@ -85,7 +85,7 @@ export function AppDropdown({
   triggerClassName,
   open,
   onOpenChange,
-  modal,
+  modal = false,
 }: AppDropdownProps) {
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={modal}>
