@@ -306,6 +306,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const designerMembers = React.useMemo(() => {
     return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
   }, [teamMembers]);
+  const availableStatuses = React.useMemo(() => {
+    if (isEditMode) return QUOTE_STATUSES;
+    return QUOTE_STATUSES.filter(
+      (statusOption) => statusOption.value === "new" || statusOption.value === "estimating"
+    );
+  }, [isEditMode]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -317,7 +323,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       height: app.height ?? "",
     }));
 
-    setStatus(initialValues?.status ?? "new");
+    const initialStatus = initialValues?.status ?? "new";
+    const nextStatus = availableStatuses.some((statusOption) => statusOption.value === initialStatus)
+      ? initialStatus
+      : availableStatuses[0]?.value ?? "new";
+    setStatus(nextStatus);
     setComment(initialValues?.comment ?? "");
     setCustomerId(initialValues?.customerId ?? "");
     setCustomerType(initialValues?.customerType ?? "customer");
@@ -360,7 +370,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCurrencyPopoverOpen(false);
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
-  }, [open, initialValues, currentUserId]);
+  }, [open, initialValues, currentUserId, availableStatuses]);
 
   // Add print application
   const handleAddPrintApplication = () => {
@@ -528,7 +538,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   };
 
   // Get current status
-  const currentStatus = QUOTE_STATUSES.find((s) => s.value === status) ?? QUOTE_STATUSES[0];
+  const currentStatus = availableStatuses.find((s) => s.value === status) ?? availableStatuses[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
@@ -586,7 +596,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             </PopoverTrigger>
             <PopoverContent className="w-56 p-2" align="start">
               <div className="space-y-1">
-                {QUOTE_STATUSES.map((statusOption) => (
+                {availableStatuses.map((statusOption) => (
                   <Button
                     key={statusOption.value}
                     variant="ghost"

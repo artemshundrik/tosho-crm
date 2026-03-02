@@ -798,7 +798,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const canEditRuns = useMemo(
     () =>
-      ["estimating", "estimated", "awaiting_approval", "approved"].includes(
+      ["new", "estimating", "estimated", "awaiting_approval", "approved"].includes(
         currentStatus ?? ""
       ),
     [currentStatus]

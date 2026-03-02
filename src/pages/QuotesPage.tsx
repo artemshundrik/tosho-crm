@@ -1226,6 +1226,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!teamId) {
         throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       }
+      const qtyValue = Number(data.quantity ?? 0);
+      if (!data.modelId || !Number.isFinite(qtyValue) || qtyValue <= 0) {
+        throw new Error("Не можна створити прорахунок без товару. Оберіть позицію з каталогу та кількість.");
+      }
       // 1. Create quote
       const formatDateOnly = (date: Date) => {
         const y = date.getFullYear();
@@ -1271,7 +1275,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const kind = type?.kinds.find((k) => k.id === data.kindId);
       const model = kind?.models.find((m) => m.id === data.modelId);
 
-      // 2. Create quote item if model is selected
+      // 2. Create quote item
       if (data.modelId && data.quantity) {
 
         // Prepare methods payload from print applications
