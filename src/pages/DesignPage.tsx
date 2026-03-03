@@ -1601,8 +1601,13 @@ export default function DesignPage() {
   const createStandaloneTask = async () => {
     if (!effectiveTeamId || createSaving) return;
     const subject = createTitle.trim();
+    const customerName = createCustomer.trim();
     if (!subject) {
       setCreateError("Вкажіть назву задачі.");
+      return;
+    }
+    if (!customerName) {
+      toast.error("Клієнт/лід обов'язковий");
       return;
     }
 
@@ -1619,7 +1624,6 @@ export default function DesignPage() {
       const actorName = userId ? getMemberLabel(userId) : "System";
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
       const brief = createBrief.trim();
-      const customerName = createCustomer.trim();
       const customerType = createCustomerType;
       const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
       const createdAtIso = new Date().toISOString();
@@ -2930,7 +2934,11 @@ export default function DesignPage() {
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={createSaving}>
               Скасувати
             </Button>
-            <Button onClick={() => void createStandaloneTask()} disabled={createSaving} className="gap-2">
+            <Button
+              onClick={() => void createStandaloneTask()}
+              disabled={createSaving}
+              className="gap-2"
+            >
               {createSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {createSaving ? "Створення..." : "Створити задачу"}
             </Button>
