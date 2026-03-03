@@ -482,11 +482,8 @@ export default function DesignTaskPage() {
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
-  const [changeRequestReason, setChangeRequestReason] = useState("");
-  const [changeRequestImpact, setChangeRequestImpact] = useState("");
-  const [changeRequestPriority, setChangeRequestPriority] = useState<"low" | "medium" | "high">("medium");
   const [changeRequestSaving, setChangeRequestSaving] = useState(false);
-  const [changeRequestResolvingId, setChangeRequestResolvingId] = useState<string | null>(null);
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
     totalSeconds: 0,
     activeSessionId: null,
@@ -578,10 +575,11 @@ export default function DesignTaskPage() {
     }
     return briefVersions[briefVersions.length - 1] ?? null;
   }, [briefVersions, task?.metadata]);
-  const pendingBriefChangeRequests = useMemo(
-    () => briefChangeRequests.filter((row) => row.status === "pending"),
+  const briefChangeRequestById = useMemo(
+    () => new Map(briefChangeRequests.map((row) => [row.id, row] as const)),
     [briefChangeRequests]
   );
+  const hasBriefHistory = briefVersions.length > 1;
 
   const loadTimerSummary = async (taskId: string) => {
     if (!effectiveTeamId) return;
@@ -1603,13 +1601,10 @@ export default function DesignTaskPage() {
       }
 
       if (source === "design_task_brief_change_request") {
-        const status = typeof metadata.status === "string" ? metadata.status : "pending";
-        const statusLabel =
-          status === "approved" ? "Правку погоджено" : status === "rejected" ? "Правку відхилено" : "Створено правку";
         return {
           id: row.id,
           created_at: row.created_at,
-          title: statusLabel,
+          title: "Додано правку до ТЗ",
           actorLabel,
           actorUserId: row.user_id ?? null,
           icon: Clock,
@@ -2410,16 +2405,18 @@ export default function DesignTaskPage() {
     }
 
     const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const nowIso = new Date().toISOString();
+
     const nextChangeRequest: DesignBriefChangeRequest = {
       id: crypto.randomUUID(),
       status: "pending",
       request_text: requestText,
-      reason: changeRequestReason.trim() || null,
-      priority: changeRequestPriority,
-      impact: changeRequestImpact.trim() || null,
+      reason: null,
+      priority: null,
+      impact: null,
       requested_by: userId ?? null,
       requested_by_label: actorLabel,
-      requested_at: new Date().toISOString(),
+      requested_at: nowIso,
       decision_at: null,
       decided_by: null,
       decided_by_label: null,
@@ -2442,10 +2439,9 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+
       setChangeRequestDraft("");
-      setChangeRequestReason("");
-      setChangeRequestImpact("");
-      setChangeRequestPriority("medium");
+      setChangeRequestOpen(false);
 
       try {
         await logDesignTaskActivity({
@@ -2455,178 +2451,22 @@ export default function DesignTaskPage() {
           userId,
           actorName: actorLabel,
           action: "design_task_brief_change_request",
-          title: "Створено запит на правку ТЗ",
+          title: "Додано правку до ТЗ",
           metadata: {
             source: "design_task_brief_change_request",
             change_request_id: nextChangeRequest.id,
             status: "pending",
-            priority: nextChangeRequest.priority,
           },
         });
         await loadHistory(task.id);
       } catch (logError) {
         console.warn("Failed to log design task brief change request event", logError);
       }
-      toast.success("Запит на правку додано");
+      toast.success("Правку додано");
     } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Не вдалося створити запит на правку"));
+      toast.error(getErrorMessage(e, "Не вдалося додати правку"));
     } finally {
       setChangeRequestSaving(false);
-    }
-  };
-
-  const resolveBriefChangeRequest = async (
-    changeRequestId: string,
-    nextStatus: Exclude<DesignBriefChangeRequestStatus, "pending">
-  ) => {
-    if (!task || !effectiveTeamId || changeRequestResolvingId) return;
-    if (!ensureCanEdit()) return;
-    const currentRequest = briefChangeRequests.find((row) => row.id === changeRequestId);
-    if (!currentRequest || currentRequest.status !== "pending") return;
-
-    const actorLabel = userId ? getMemberLabel(userId) : "System";
-    const nowIso = new Date().toISOString();
-    const nextRequests = briefChangeRequests.map((row) =>
-      row.id === changeRequestId
-        ? {
-            ...row,
-            status: nextStatus,
-            decision_at: nowIso,
-            decided_by: userId ?? null,
-            decided_by_label: actorLabel,
-            decision_note: nextStatus === "approved" ? "Approved and applied to brief" : "Rejected",
-          }
-        : row
-    );
-
-    let nextBrief = activeBriefVersion?.brief ?? task.designBrief ?? null;
-    let nextVersions = [...briefVersions];
-    let nextActiveVersionId = toNonEmptyString(task.metadata?.design_brief_active_version_id);
-    let appliedVersionId: string | null = null;
-
-    if (nextStatus === "approved") {
-      const baselineVersions =
-        nextVersions.length > 0
-          ? nextVersions
-          : nextBrief !== null
-            ? [
-                {
-                  id: crypto.randomUUID(),
-                  version: 1,
-                  brief: nextBrief,
-                  created_at: task.createdAt ?? nowIso,
-                  created_by: null,
-                  created_by_label: "System",
-                  change_request_id: null,
-                  note: "Initial brief",
-                } satisfies DesignBriefVersion,
-              ]
-            : [];
-      const nextVersionNumber =
-        baselineVersions.reduce((max, row) => Math.max(max, row.version), 0) + 1;
-      const addition = `Правка: ${currentRequest.request_text}`;
-      nextBrief = nextBrief ? `${nextBrief}\n\n${addition}` : addition;
-      const nextVersion: DesignBriefVersion = {
-        id: crypto.randomUUID(),
-        version: nextVersionNumber,
-        brief: nextBrief,
-        created_at: nowIso,
-        created_by: userId ?? null,
-        created_by_label: actorLabel,
-        change_request_id: changeRequestId,
-        note: "Approved change request",
-      };
-      appliedVersionId = nextVersion.id;
-      nextVersions = [...baselineVersions, nextVersion];
-      nextActiveVersionId = nextVersion.id;
-    }
-
-    const requestsWithAppliedVersion = nextRequests.map((row) =>
-      row.id === changeRequestId ? { ...row, applied_version_id: appliedVersionId } : row
-    );
-
-    const nextMetadata: Record<string, unknown> = {
-      ...(task.metadata ?? {}),
-      design_brief: nextBrief,
-      design_brief_change_requests: requestsWithAppliedVersion,
-      design_brief_versions: nextVersions,
-      design_brief_active_version_id: nextActiveVersionId,
-    };
-
-    setChangeRequestResolvingId(changeRequestId);
-    const previousTask = task;
-    setTask((prev) =>
-      prev
-        ? {
-            ...prev,
-            metadata: nextMetadata,
-            designBrief: nextBrief,
-          }
-        : prev
-    );
-
-    try {
-      const { error: updateError } = await supabase
-        .from("activity_log")
-        .update({ metadata: nextMetadata })
-        .eq("id", task.id)
-        .eq("team_id", effectiveTeamId);
-      if (updateError) throw updateError;
-
-      if (nextStatus === "approved" && isUuid(task.quoteId)) {
-        const { error: quoteBriefError } = await supabase
-          .schema("tosho")
-          .from("quotes")
-          .update({ design_brief: nextBrief })
-          .eq("id", task.quoteId);
-        if (
-          quoteBriefError &&
-          /column/i.test(quoteBriefError.message ?? "") &&
-          /design_brief/i.test(quoteBriefError.message ?? "")
-        ) {
-          const { error: quoteFallbackError } = await supabase
-            .schema("tosho")
-            .from("quotes")
-            .update({ comment: nextBrief })
-            .eq("id", task.quoteId);
-          if (quoteFallbackError) throw quoteFallbackError;
-        } else if (quoteBriefError) {
-          throw quoteBriefError;
-        }
-      }
-
-      if (nextStatus === "approved") {
-        setBriefDraft(nextBrief ?? "");
-        setBriefDirty(false);
-      }
-
-      try {
-        await logDesignTaskActivity({
-          teamId: effectiveTeamId,
-          designTaskId: task.id,
-          quoteId: task.quoteId,
-          userId,
-          actorName: actorLabel,
-          action: "design_task_brief_change_request",
-          title: nextStatus === "approved" ? "Правку ТЗ погоджено" : "Правку ТЗ відхилено",
-          metadata: {
-            source: "design_task_brief_change_request",
-            change_request_id: changeRequestId,
-            status: nextStatus,
-            applied_version_id: appliedVersionId,
-          },
-        });
-        await loadHistory(task.id);
-      } catch (logError) {
-        console.warn("Failed to log design task brief change request decision", logError);
-      }
-
-      toast.success(nextStatus === "approved" ? "Правку погоджено та застосовано" : "Правку відхилено");
-    } catch (e: unknown) {
-      setTask(previousTask);
-      toast.error(getErrorMessage(e, "Не вдалося оновити статус правки"));
-    } finally {
-      setChangeRequestResolvingId(null);
     }
   };
 
@@ -3560,137 +3400,113 @@ export default function DesignTaskPage() {
               </div>
             ) : null}
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
-                <Badge variant="outline">Активна: v{activeBriefVersion?.version ?? 1}</Badge>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div>
+                  <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
+                  <div className="text-sm text-muted-foreground">Пишіть поточну версію, правки ведіть окремо.</div>
+                </div>
+                <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
               </div>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Textarea
-                    value={briefDraft}
-                    onChange={(event) => {
-                      setBriefDraft(event.target.value);
-                      setBriefDirty(true);
-                    }}
-                    placeholder="Опишіть задачу для дизайнера…"
-                    rows={5}
-                    disabled={briefSaving || designTaskLockedByOther}
-                    className="resize-y min-h-[120px]"
-                  />
-                  <div className="flex items-center gap-2">
+
+              <div className="mt-3 space-y-3">
+                <Textarea
+                  value={briefDraft}
+                  onChange={(event) => {
+                    setBriefDraft(event.target.value);
+                    setBriefDirty(true);
+                  }}
+                  placeholder="Опишіть задачу для дизайнера…"
+                  rows={4}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  className="resize-y min-h-[96px]"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void saveDesignBrief()}
+                    disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+                  >
+                    {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Зберегти нову версію
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={changeRequestSaving || designTaskLockedByOther}
+                    onClick={() => setChangeRequestOpen((prev) => !prev)}
+                  >
+                    Додати правку
+                  </Button>
+                  {briefDirty ? (
                     <Button
                       size="sm"
-                      onClick={() => void saveDesignBrief()}
-                      disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+                      variant="ghost"
+                      disabled={briefSaving || designTaskLockedByOther}
+                      onClick={() => {
+                        setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+                        setBriefDirty(false);
+                      }}
                     >
-                      {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Зберегти як нову версію
+                      Скасувати
                     </Button>
-                    {briefDirty ? (
+                  ) : null}
+                </div>
+
+                {briefChangeRequests.length > 0 ? (
+                  <div className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2">
+                    <div className="text-xs text-muted-foreground">Останні правки ({briefChangeRequests.length})</div>
+                    <div className="space-y-1.5">
+                      {briefChangeRequests.slice(0, 3).map((request) => (
+                        <div key={request.id} className="text-sm">
+                          <span className="text-muted-foreground">
+                            {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
+                          </span>{" "}
+                          <span>{request.request_text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {changeRequestOpen ? (
+                  <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-2">
+                    <Textarea
+                      value={changeRequestDraft}
+                      onChange={(event) => setChangeRequestDraft(event.target.value)}
+                      placeholder="Опишіть правку…"
+                      rows={2}
+                      disabled={changeRequestSaving || designTaskLockedByOther}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void createBriefChangeRequest()}
+                        disabled={changeRequestSaving || designTaskLockedByOther || !changeRequestDraft.trim()}
+                      >
+                        {changeRequestSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Ок
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        disabled={briefSaving || designTaskLockedByOther}
+                        disabled={changeRequestSaving || designTaskLockedByOther}
                         onClick={() => {
-                          setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
-                          setBriefDirty(false);
+                          setChangeRequestDraft("");
+                          setChangeRequestOpen(false);
                         }}
                       >
                         Скасувати
                       </Button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-2">
-                  <div className="text-xs text-muted-foreground">Запит на правку</div>
-                  <Textarea
-                    value={changeRequestDraft}
-                    onChange={(event) => setChangeRequestDraft(event.target.value)}
-                    placeholder="Що потрібно змінити у ТЗ?"
-                    rows={3}
-                    disabled={changeRequestSaving || designTaskLockedByOther}
-                  />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <Input
-                      value={changeRequestReason}
-                      onChange={(event) => setChangeRequestReason(event.target.value)}
-                      placeholder="Причина"
-                      disabled={changeRequestSaving || designTaskLockedByOther}
-                    />
-                    <Input
-                      value={changeRequestImpact}
-                      onChange={(event) => setChangeRequestImpact(event.target.value)}
-                      placeholder="Вплив на дедлайн/оцінку"
-                      disabled={changeRequestSaving || designTaskLockedByOther}
-                    />
-                    <Select
-                      value={changeRequestPriority}
-                      onValueChange={(value: "low" | "medium" | "high") => setChangeRequestPriority(value)}
-                    >
-                      <SelectTrigger disabled={changeRequestSaving || designTaskLockedByOther}>
-                        <SelectValue placeholder="Пріоритет" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Низький</SelectItem>
-                        <SelectItem value="medium">Середній</SelectItem>
-                        <SelectItem value="high">Високий</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void createBriefChangeRequest()}
-                    disabled={changeRequestSaving || designTaskLockedByOther || !changeRequestDraft.trim()}
-                  >
-                    {changeRequestSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Додати правку
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">Правки в очікуванні</div>
-                  {pendingBriefChangeRequests.length > 0 ? (
-                    <div className="space-y-2">
-                      {pendingBriefChangeRequests.map((request) => (
-                        <div key={request.id} className="rounded-md border border-border/60 bg-background/60 p-3 space-y-2">
-                          <div className="text-sm whitespace-pre-wrap">{request.request_text}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {request.requested_by_label ?? "Користувач"} · {formatDate(request.requested_at, true)} · {request.priority ?? "medium"}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void resolveBriefChangeRequest(request.id, "approved")}
-                              disabled={!!changeRequestResolvingId || designTaskLockedByOther}
-                            >
-                              {changeRequestResolvingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                              Погодити
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => void resolveBriefChangeRequest(request.id, "rejected")}
-                              disabled={!!changeRequestResolvingId || designTaskLockedByOther}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Відхилити
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
                     </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">Немає правок у статусі pending.</div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
 
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">Історія версій ТЗ</div>
-                  {briefVersions.length > 0 ? (
-                    <div className="space-y-2 max-h-56 overflow-auto pr-1">
+                {hasBriefHistory ? (
+                <div className="pt-1 space-y-2">
+                  <div className="text-xs text-muted-foreground">Історія версій ({briefVersions.length})</div>
+                  {briefVersions.length > 1 ? (
+                    <div className="space-y-2 max-h-64 overflow-auto pr-1">
                       {[...briefVersions].reverse().map((version) => (
                         <div key={version.id} className="rounded-md border border-border/60 bg-background/60 p-3 space-y-1">
                           <div className="flex items-center justify-between gap-2">
@@ -3699,18 +3515,24 @@ export default function DesignTaskPage() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {version.created_by_label ?? "System"}
-                            {version.change_request_id ? " · з запиту на правку" : ""}
+                            {version.change_request_id ? " • з правки" : ""}
                           </div>
-                          <div className="text-sm whitespace-pre-wrap">
-                            {version.brief?.trim() ? version.brief : "Порожнє ТЗ"}
-                          </div>
+                          {version.change_request_id && briefChangeRequestById.get(version.change_request_id)?.request_text ? (
+                            <div className="text-sm">
+                              Правка: {briefChangeRequestById.get(version.change_request_id)?.request_text}
+                            </div>
+                          ) : null}
+                          <div className="text-sm whitespace-pre-wrap">{version.brief?.trim() ? version.brief : "Порожнє ТЗ"}</div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground">Історія версій буде створена після першого збереження.</div>
+                    <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-xs text-muted-foreground">
+                      Історія версій зʼявиться після першого збереження.
+                    </div>
                   )}
                 </div>
+                ) : null}
               </div>
             </div>
           </div>
