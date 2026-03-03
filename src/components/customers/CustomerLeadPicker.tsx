@@ -10,6 +10,7 @@ export type CustomerLeadOption = {
   id: string;
   label: string;
   entityType: "customer" | "lead";
+  logoUrl?: string | null;
 };
 
 export type CustomerLeadPickerProps = {

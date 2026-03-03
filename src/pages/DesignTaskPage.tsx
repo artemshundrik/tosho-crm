@@ -845,6 +845,16 @@ export default function DesignTaskPage() {
             typeof meta.customer_logo_url === "string" ? meta.customer_logo_url : null
           ) ??
           normalizeLogoUrl(quote?.customer_logo_url ?? null);
+        const metadataCustomerId =
+          typeof meta.customer_id === "string" && meta.customer_id.trim() ? meta.customer_id.trim() : null;
+        const metadataCustomerTypeRaw =
+          typeof meta.customer_type === "string" && meta.customer_type.trim()
+            ? meta.customer_type.trim().toLowerCase()
+            : null;
+        const metadataCustomerType =
+          metadataCustomerTypeRaw === "lead" || metadataCustomerTypeRaw === "customer"
+            ? metadataCustomerTypeRaw
+            : null;
         if (quote?.customer_id) {
           let customerQuery = await supabase
             .schema("tosho")
@@ -869,10 +879,56 @@ export default function DesignTaskPage() {
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
           customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
           customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(cust?.logo_url ?? null);
+        } else if (metadataCustomerId && metadataCustomerType === "customer") {
+          let customerQuery = await supabase
+            .schema("tosho")
+            .from("customers")
+            .select("name, legal_name, logo_url")
+            .eq("id", metadataCustomerId)
+            .maybeSingle();
+          if (
+            customerQuery.error &&
+            /column/i.test(customerQuery.error.message ?? "") &&
+            /logo_url/i.test(customerQuery.error.message ?? "")
+          ) {
+            customerQuery = await supabase
+              .schema("tosho")
+              .from("customers")
+              .select("name, legal_name")
+              .eq("id", metadataCustomerId)
+              .maybeSingle();
+          }
+          const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+          customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
+          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(cust?.logo_url ?? null);
+        } else if (metadataCustomerId && metadataCustomerType === "lead") {
+          let leadQuery = await supabase
+            .schema("tosho")
+            .from("leads")
+            .select("company_name,legal_name,logo_url")
+            .eq("team_id", effectiveTeamId)
+            .eq("id", metadataCustomerId)
+            .maybeSingle();
+          if (
+            leadQuery.error &&
+            /column/i.test(leadQuery.error.message ?? "") &&
+            /logo_url/i.test(leadQuery.error.message ?? "")
+          ) {
+            leadQuery = await supabase
+              .schema("tosho")
+              .from("leads")
+              .select("company_name,legal_name")
+              .eq("team_id", effectiveTeamId)
+              .eq("id", metadataCustomerId)
+              .maybeSingle();
+          }
+          const leadRow = leadQuery.data as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+          customerName = customerName ?? leadRow?.company_name ?? leadRow?.legal_name ?? null;
+          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(leadRow?.logo_url ?? null);
         } else {
           const leadLookupName = (customerName ?? quote?.title ?? "").trim();
           if (leadLookupName) {
-            const loadLead = async (withLogo: boolean) => {
+            const loadLeadExact = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
               const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
               const [byCompany, byLegal] = await Promise.all([
                 supabase
@@ -880,7 +936,7 @@ export default function DesignTaskPage() {
                   .from("leads")
                   .select(columns)
                   .eq("team_id", effectiveTeamId)
-                  .eq("company_name", leadLookupName)
+                  .ilike("company_name", leadLookupName)
                   .limit(1)
                   .maybeSingle(),
                 supabase
@@ -888,20 +944,61 @@ export default function DesignTaskPage() {
                   .from("leads")
                   .select(columns)
                   .eq("team_id", effectiveTeamId)
-                  .eq("legal_name", leadLookupName)
+                  .ilike("legal_name", leadLookupName)
                   .limit(1)
                   .maybeSingle(),
               ]);
-              return byCompany.data ?? byLegal.data ?? null;
+              return (byCompany.data as Record<string, unknown> | null) ?? (byLegal.data as Record<string, unknown> | null) ?? null;
             };
-            let lead = await loadLead(true);
+            const loadLeadByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
+              const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
+              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
+              const { data: leadRows } = await supabase
+                .schema("tosho")
+                .from("leads")
+                .select(columns)
+                .eq("team_id", effectiveTeamId)
+                .or(`company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
+                .limit(1);
+              return ((leadRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
+            };
+            const loadCustomerByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
+              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
+              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
+              const { data: customerRows } = await supabase
+                .schema("tosho")
+                .from("customers")
+                .select(columns)
+                .eq("team_id", effectiveTeamId)
+                .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
+                .limit(1);
+              return ((customerRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
+            };
+
+            let lead = await loadLeadExact(true);
             if (!lead) {
-              lead = await loadLead(false);
+              lead = await loadLeadExact(false);
+            }
+            if (!lead) {
+              lead = await loadLeadByContains(true);
+            }
+            if (!lead) {
+              lead = await loadLeadByContains(false);
             }
             if (lead) {
               const leadRow = lead as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null };
               customerName = customerName ?? leadRow.company_name ?? leadRow.legal_name ?? null;
               customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(leadRow.logo_url ?? null);
+            } else {
+              let customerFallback = await loadCustomerByContains(true);
+              if (!customerFallback) {
+                customerFallback = await loadCustomerByContains(false);
+              }
+              if (customerFallback) {
+                const customerRow = customerFallback as { name?: string | null; legal_name?: string | null; logo_url?: string | null };
+                customerName = customerName ?? customerRow.name ?? customerRow.legal_name ?? null;
+                customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(customerRow.logo_url ?? null);
+              }
             }
           }
         }

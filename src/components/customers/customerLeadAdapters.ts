@@ -24,6 +24,7 @@ export const toCustomerLeadOption = (created: CreatedCustomerLead): CustomerLead
   id: created.id,
   label: getCreatedCustomerLeadLabel(created),
   entityType: created.entityType,
+  logoUrl: created.logoUrl,
 });
 
 export const toQuotePartyOption = (created: CreatedCustomerLead): QuotePartyOptionLike => ({

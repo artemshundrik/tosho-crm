@@ -293,6 +293,14 @@ const formatQtyLabel = (qty: number | null | undefined, unit: string | null | un
   return `${qtyLabel} ${unit?.trim() || "шт."}`;
 };
 
+const normalizePartyLabel = (value?: string | null) => {
+  const raw = (value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.replace(/[`"'’«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+};
+
+const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
+
 export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
@@ -311,6 +319,8 @@ export default function DesignPage() {
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
   const [createCustomer, setCreateCustomer] = useState("");
+  const [createCustomerId, setCreateCustomerId] = useState<string | null>(null);
+  const [createCustomerLogoUrl, setCreateCustomerLogoUrl] = useState<string | null>(null);
   const [createCustomerType, setCreateCustomerType] = useState<"customer" | "lead">("customer");
   const [createCustomerSearch, setCreateCustomerSearch] = useState("");
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
@@ -575,34 +585,36 @@ export default function DesignPage() {
           supabase
             .schema("tosho")
             .from("customers")
-            .select("id,name,legal_name")
+            .select("id,name,legal_name,logo_url")
             .eq("team_id", effectiveTeamId)
             .order("name", { ascending: true }),
           supabase
             .schema("tosho")
             .from("leads")
-            .select("id,company_name,legal_name")
+            .select("id,company_name,legal_name,logo_url")
             .eq("team_id", effectiveTeamId)
             .order("company_name", { ascending: true }),
         ]);
 
         if (customersRes.error) throw customersRes.error;
         const customerOptions: CustomerOption[] =
-          ((customersRes.data as Array<{ id: string; name?: string | null; legal_name?: string | null }> | null) ?? [])
+          ((customersRes.data as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }> | null) ?? [])
             .map((row) => ({
               id: row.id,
               label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
               entityType: "customer" as const,
+              logoUrl: normalizeLogoUrl(row.logo_url ?? null),
             }));
 
         let leadOptions: CustomerOption[] = [];
         if (!leadsRes.error) {
           leadOptions =
-            ((leadsRes.data as Array<{ id: string; company_name?: string | null; legal_name?: string | null }> | null) ?? [])
+            ((leadsRes.data as Array<{ id: string; company_name?: string | null; legal_name?: string | null; logo_url?: string | null }> | null) ?? [])
               .map((row) => ({
                 id: row.id,
                 label: row.company_name?.trim() || row.legal_name?.trim() || "Лід без назви",
                 entityType: "lead" as const,
+                logoUrl: normalizeLogoUrl(row.logo_url ?? null),
               }));
         }
 
@@ -617,6 +629,51 @@ export default function DesignPage() {
     };
     void loadCustomers();
   }, [effectiveTeamId]);
+
+  useEffect(() => {
+    if (customers.length === 0) return;
+    const logoByPartyAndLabel = new Map<string, string>();
+    const logoByPartyAndCompactLabel = new Map<string, string>();
+    const logoByLabel = new Map<string, string>();
+    const logoByCompactLabel = new Map<string, string>();
+    customers.forEach((row) => {
+      const normalizedLabel = normalizePartyLabel(row.label);
+      const normalizedCompactLabel = compactPartyLabel(row.label);
+      const key = `${row.entityType}:${normalizedLabel}`;
+      const compactKey = `${row.entityType}:${normalizedCompactLabel}`;
+      const logoUrl = normalizeLogoUrl(row.logoUrl ?? null);
+      if (!logoUrl) return;
+      logoByPartyAndLabel.set(key, logoUrl);
+      logoByPartyAndCompactLabel.set(compactKey, logoUrl);
+      if (!logoByLabel.has(normalizedLabel)) {
+        logoByLabel.set(normalizedLabel, logoUrl);
+      }
+      if (!logoByCompactLabel.has(normalizedCompactLabel)) {
+        logoByCompactLabel.set(normalizedCompactLabel, logoUrl);
+      }
+    });
+
+    setTasks((prev) => {
+      let changed = false;
+      const next = prev.map((task) => {
+        if (task.customerLogoUrl) return task;
+        const label = normalizePartyLabel(task.customerName ?? "");
+        const compactLabel = compactPartyLabel(task.customerName ?? "");
+        const partyType = task.partyType ?? "customer";
+        const fallbackLogo = label
+          ? logoByPartyAndLabel.get(`${partyType}:${label}`) ??
+            logoByPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
+            logoByLabel.get(label) ??
+            logoByCompactLabel.get(compactLabel) ??
+            null
+          : null;
+        if (!fallbackLogo) return task;
+        changed = true;
+        return { ...task, customerLogoUrl: fallbackLogo };
+      });
+      return changed ? next : prev;
+    });
+  }, [customers, tasks]);
 
   useEffect(() => {
     if (permissions.isDesigner) {
@@ -1151,6 +1208,8 @@ export default function DesignPage() {
       return upsertByIdAndEntityType(prev, next).sort((a, b) => a.label.localeCompare(b.label, "uk"));
     });
     setCreateCustomer(label);
+    setCreateCustomerId(created.id);
+    setCreateCustomerLogoUrl(normalizeLogoUrl(created.logoUrl));
     setCreateCustomerType(created.entityType);
     setCreateCustomerSearch(label);
   };
@@ -1625,6 +1684,8 @@ export default function DesignPage() {
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
       const brief = createBrief.trim();
       const customerType = createCustomerType;
+      const customerId = createCustomerId;
+      const customerLogoUrl = normalizeLogoUrl(createCustomerLogoUrl);
       const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(effectiveTeamId, createdAtIso);
@@ -1649,8 +1710,10 @@ export default function DesignPage() {
             assigned_at: assignedAt,
             manager_user_id: managerUserId,
             manager_label: managerLabel,
+            customer_id: customerId,
             customer_name: customerName || null,
             customer_type: customerName ? customerType : null,
+            customer_logo_url: customerLogoUrl,
             design_brief: brief || null,
             standalone_brief_files: [],
             design_deadline: deadline,
@@ -1704,6 +1767,10 @@ export default function DesignPage() {
             : designTaskNumber),
         quoteNumber: null,
         customerName: typeof metadata.customer_name === "string" ? (metadata.customer_name as string) : null,
+        customerLogoUrl:
+          typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
+            ? normalizeLogoUrl(metadata.customer_logo_url as string)
+            : null,
         methodsCount: 0,
         hasFiles: createFiles.length > 0,
         designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
@@ -1729,6 +1796,8 @@ export default function DesignPage() {
       setCreateTitle("");
       setCreateBrief("");
       setCreateCustomer("");
+      setCreateCustomerId(null);
+      setCreateCustomerLogoUrl(null);
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDeadline(undefined);
@@ -2631,6 +2700,8 @@ export default function DesignPage() {
           if (!open) {
             setCreateError(null);
             setCreateSaving(false);
+            setCreateCustomerId(null);
+            setCreateCustomerLogoUrl(null);
             setCreateCustomerType("customer");
             setCreateCustomerPopoverOpen(false);
             setCreateAssigneePopoverOpen(false);
@@ -2669,6 +2740,8 @@ export default function DesignPage() {
                 loading={customersLoading}
                 onSelect={(customer) => {
                   setCreateCustomer(customer.label);
+                  setCreateCustomerId(customer.id);
+                  setCreateCustomerLogoUrl(normalizeLogoUrl(customer.logoUrl ?? null));
                   setCreateCustomerType(customer.entityType);
                   setCreateCustomerSearch(customer.label);
                 }}
@@ -2680,6 +2753,8 @@ export default function DesignPage() {
                 }}
                 onClear={() => {
                   setCreateCustomer("");
+                  setCreateCustomerId(null);
+                  setCreateCustomerLogoUrl(null);
                   setCreateCustomerType("customer");
                   setCreateCustomerSearch("");
                 }}
