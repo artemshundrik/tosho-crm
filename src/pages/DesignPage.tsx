@@ -208,6 +208,7 @@ const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
 const MAX_BRIEF_FILES = 5;
 const formatEstimateMinutes = (minutes?: number | null) => {
@@ -300,6 +301,13 @@ const normalizePartyLabel = (value?: string | null) => {
 };
 
 const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
+const normalizeDeadlineTimeInput = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
+const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
 export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
@@ -326,6 +334,7 @@ export default function DesignPage() {
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
+  const [createDeadlineTime, setCreateDeadlineTime] = useState("12:00");
   const [createManagerUserId, setCreateManagerUserId] = useState<string>("none");
   const [createManagerPopoverOpen, setCreateManagerPopoverOpen] = useState(false);
   const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string>("none");
@@ -1692,7 +1701,8 @@ export default function DesignPage() {
       const customerType = createCustomerType;
       const customerId = createCustomerId;
       const customerLogoUrl = normalizeLogoUrl(createCustomerLogoUrl);
-      const deadline = createDeadline ? format(createDeadline, "yyyy-MM-dd") : null;
+      const normalizedDeadlineTime = isValidDeadlineTime(createDeadlineTime.trim()) ? createDeadlineTime.trim() : "12:00";
+      const deadline = createDeadline ? `${format(createDeadline, "yyyy-MM-dd")}T${normalizedDeadlineTime}:00` : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(effectiveTeamId, createdAtIso);
 
@@ -1809,6 +1819,7 @@ export default function DesignPage() {
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDeadline(undefined);
+      setCreateDeadlineTime("12:00");
       setCreateDeadlinePopoverOpen(false);
       setCreateManagerUserId(userId ?? "none");
       setCreateManagerPopoverOpen(false);
@@ -2771,22 +2782,48 @@ export default function DesignPage() {
               <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Chip size="md" icon={<CalendarIcon className="h-4 w-4" />} active={!!createDeadline}>
-                    {createDeadline ? format(createDeadline, "d MMM yyyy", { locale: uk }) : "Дедлайн"}
+                    {createDeadline
+                      ? `${format(createDeadline, "d MMM yyyy", { locale: uk })} · ${isValidDeadlineTime(createDeadlineTime) ? createDeadlineTime : "12:00"}`
+                      : "Дедлайн"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={createDeadline}
                     onSelect={(date) => {
                       setCreateDeadline(date);
-                      setCreateDeadlinePopoverOpen(false);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
                     toYear={new Date().getFullYear() + 5}
                     initialFocus
                   />
+                  <div className="space-y-2 border-t border-border/50 px-2 py-3">
+                    <Input
+                      value={createDeadlineTime}
+                      onChange={(event) => setCreateDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
+                      onBlur={() => {
+                        setCreateDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
+                      }}
+                      placeholder="HH:MM"
+                      className="h-9 text-sm"
+                    />
+                    <div className="grid w-full grid-cols-4 gap-1.5">
+                      {DEADLINE_PRESET_TIMES.map((time) => (
+                        <Button
+                          key={time}
+                          type="button"
+                          size="xs"
+                          variant={createDeadlineTime === time ? "secondary" : "outline"}
+                          className="w-full justify-center"
+                          onClick={() => setCreateDeadlineTime(time)}
+                        >
+                          {time}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                   <DateQuickActions
                     onSelect={(date) => {
                       setCreateDeadline(date ?? undefined);

@@ -3330,7 +3330,7 @@ export default function DesignTaskPage() {
                     row: "flex w-full mt-1",
                     day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
                     day_selected:
-                      "rounded-full bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                      "rounded-full !bg-primary !text-primary-foreground hover:!bg-primary hover:!text-primary-foreground focus:!bg-primary focus:!text-primary-foreground font-semibold",
                   }}
                   initialFocus
                 />
@@ -4066,7 +4066,7 @@ export default function DesignTaskPage() {
                       row: "flex w-full mt-1",
                       day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
                       day_selected:
-                        "rounded-full bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                        "rounded-full !bg-primary !text-primary-foreground hover:!bg-primary hover:!text-primary-foreground focus:!bg-primary focus:!text-primary-foreground font-semibold",
                     }}
                     initialFocus
                   />
