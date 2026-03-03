@@ -1709,6 +1709,8 @@ export default function DesignPage() {
           metadata: {
             source: "design_task_created_manual",
             task_kind: "standalone",
+            task_owner_role: permissions.isDesigner ? "designer" : "manager",
+            created_by_user_id: userId ?? null,
             status: "new",
             design_task_number: designTaskNumber,
             quote_id: null,

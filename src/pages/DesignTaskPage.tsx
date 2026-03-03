@@ -81,6 +81,7 @@ type DesignTask = {
   quoteId: string;
   title: string | null;
   status: DesignStatus;
+  creatorUserId?: string | null;
   assigneeUserId?: string | null;
   assignedAt?: string | null;
   metadata?: Record<string, unknown>;
@@ -422,6 +423,18 @@ const normalizeLogoUrl = (value?: string | null) => {
   return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
 };
 
+const getTaskOwnerRole = (
+  metadata: Record<string, unknown> | undefined,
+  creatorUserId: string | null | undefined,
+  memberRoleById: Record<string, string>
+): "designer" | "manager" => {
+  const raw = typeof metadata?.task_owner_role === "string" ? metadata.task_owner_role.trim().toLowerCase() : "";
+  if (raw === "designer") return "designer";
+  if (raw === "manager") return "manager";
+  if (creatorUserId && isDesignerRole(memberRoleById[creatorUserId] ?? null)) return "designer";
+  return "manager";
+};
+
 export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, permissions } = useAuth();
@@ -441,6 +454,7 @@ export default function DesignTaskPage() {
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
+  const [memberRoleById, setMemberRoleById] = useState<Record<string, string>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [assigningSelf, setAssigningSelf] = useState(false);
@@ -735,6 +749,14 @@ export default function DesignTaskPage() {
             }
           }
         }
+        const resolvedRoleById: Record<string, string> = {};
+        rows.forEach((row) => {
+          const role = roleById.get(row.user_id) ?? row.job_role;
+          if (typeof role === "string" && role.trim()) {
+            resolvedRoleById[row.user_id] = role.trim();
+          }
+        });
+        setMemberRoleById(resolvedRoleById);
 
         setDesignerMembers(
           rows
@@ -768,7 +790,7 @@ export default function DesignTaskPage() {
       try {
         const { data: row, error: rowError } = await supabase
           .from("activity_log")
-          .select("id,entity_id,metadata,title,created_at")
+          .select("id,entity_id,metadata,title,created_at,user_id")
           .eq("team_id", effectiveTeamId)
           .eq("id", id)
           .single();
@@ -1161,6 +1183,12 @@ export default function DesignTaskPage() {
           quoteId,
           title: (row?.title as string) ?? null,
           status: (meta.status as DesignStatus) ?? "new",
+          creatorUserId:
+            typeof row?.user_id === "string" && row.user_id.trim()
+              ? row.user_id.trim()
+              : (typeof meta.created_by_user_id === "string" && meta.created_by_user_id.trim()
+                  ? meta.created_by_user_id.trim()
+                  : null),
           designTaskNumber,
           assigneeUserId:
             typeof meta.assignee_user_id === "string" && meta.assignee_user_id ? meta.assignee_user_id : null,
@@ -1643,10 +1671,13 @@ export default function DesignTaskPage() {
       if (source === "design_task_manager") {
         const fromLabel = typeof metadata.from_manager_label === "string" ? metadata.from_manager_label : "Не вказано";
         const toLabel = typeof metadata.to_manager_label === "string" ? metadata.to_manager_label : "Не вказано";
+        const roleLabel = typeof metadata.role_label === "string" && metadata.role_label.trim()
+          ? metadata.role_label.trim()
+          : "Менеджер";
         return {
           id: row.id,
           created_at: row.created_at,
-          title: `Менеджер: ${fromLabel} → ${toLabel}`,
+          title: `${roleLabel}: ${fromLabel} → ${toLabel}`,
           actorLabel,
           actorUserId: row.user_id ?? null,
           icon: UserRound,
@@ -2743,6 +2774,9 @@ export default function DesignTaskPage() {
       (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
       (previousManagerUserId ? getMemberLabel(previousManagerUserId) : "Не вказано");
     const nextManagerLabel = nextManagerUserId ? getMemberLabel(nextManagerUserId) : "Не вказано";
+    const ownerRole = getTaskOwnerRole(task.metadata, task.creatorUserId ?? null, memberRoleById);
+    const roleLabel = ownerRole === "designer" ? "Дизайнер" : "Менеджер";
+    const roleLabelLower = ownerRole === "designer" ? "дизайнера" : "менеджера";
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       manager_user_id: nextManagerUserId,
@@ -2770,9 +2804,10 @@ export default function DesignTaskPage() {
           userId,
           actorName: actorLabel,
           action: "design_task_manager",
-          title: `Менеджер: ${previousManagerLabel} → ${nextManagerLabel}`,
+          title: `${roleLabel}: ${previousManagerLabel} → ${nextManagerLabel}`,
           metadata: {
             source: "design_task_manager",
+            role_label: roleLabel,
             from_manager_user_id: previousManagerUserId,
             from_manager_label: previousManagerLabel,
             to_manager_user_id: nextManagerUserId,
@@ -2784,10 +2819,10 @@ export default function DesignTaskPage() {
         console.warn("Failed to log manager update", logError);
       }
 
-      toast.success(nextManagerUserId ? `Менеджера змінено: ${nextManagerLabel}` : "Менеджера очищено");
+      toast.success(nextManagerUserId ? `${roleLabel}а змінено: ${nextManagerLabel}` : `${roleLabelLower} очищено`);
     } catch (e: unknown) {
       setTask(previousTask);
-      const message = getErrorMessage(e, "Не вдалося оновити менеджера");
+      const message = getErrorMessage(e, `Не вдалося оновити ${roleLabelLower}`);
       setError(message);
       toast.error(message);
     } finally {
@@ -3224,6 +3259,9 @@ export default function DesignTaskPage() {
     typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
       ? (task.metadata.manager_user_id as string)
       : task.quoteManagerUserId ?? null;
+  const taskOwnerRole = getTaskOwnerRole(task.metadata, task.creatorUserId ?? null, memberRoleById);
+  const taskRoleLabel = taskOwnerRole === "designer" ? "Дизайнер" : "Менеджер";
+  const taskRoleLabelLower = taskOwnerRole === "designer" ? "дизайнера" : "менеджера";
   const taskManagerLabel =
     (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
     (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");
@@ -3400,7 +3438,7 @@ export default function DesignTaskPage() {
                 </div>
               </div>
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-                <div className="text-xs text-muted-foreground mb-1">Менеджер</div>
+                <div className="text-xs text-muted-foreground mb-1">{taskRoleLabel}</div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2.5">
                     <AvatarBase
@@ -3421,11 +3459,11 @@ export default function DesignTaskPage() {
                         disabled={managerSaving || designTaskLockedByOther || managerMembers.length === 0}
                       >
                         {managerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Змінити менеджера
+                        {`Змінити ${taskRoleLabelLower}`}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-64">
-                      <DropdownMenuLabel>Відповідальний менеджер</DropdownMenuLabel>
+                      <DropdownMenuLabel>{`Відповідальний ${taskRoleLabelLower}`}</DropdownMenuLabel>
                       {managerMembers.map((member) => (
                         <DropdownMenuItem
                           key={member.id}
@@ -3455,7 +3493,7 @@ export default function DesignTaskPage() {
                         onClick={() => void applyManager(null)}
                         disabled={!taskManagerUserId || managerSaving}
                       >
-                        <span className="truncate">Очистити менеджера</span>
+                        <span className="truncate">{`Очистити ${taskRoleLabelLower}`}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -4260,7 +4298,7 @@ export default function DesignTaskPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Менеджер</span>
+                <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />{taskRoleLabel}</span>
                 <span className="inline-flex items-center gap-1.5 min-w-0">
                   <AvatarBase
                     src={taskManagerAvatar}
