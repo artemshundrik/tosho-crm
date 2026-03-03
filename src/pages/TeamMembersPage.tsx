@@ -2341,8 +2341,8 @@ export function TeamMembersPage() {
           if (!open && !editProfileBusy) setEditProfileMember(null);
         }}
       >
-        <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
-          <div className="p-6 border-b border-border bg-muted/10">
+        <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground max-h-[90dvh] flex flex-col">
+          <div className="p-6 border-b border-border bg-muted/10 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Картка учасника</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
@@ -2350,7 +2350,7 @@ export function TeamMembersPage() {
               </DialogDescription>
             </DialogHeader>
           </div>
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 overflow-y-auto">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">Email</Label>
               <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />

@@ -165,6 +165,36 @@ type DesignTaskHistoryEvent = {
   accentClass: string;
 };
 
+type DesignBriefVersion = {
+  id: string;
+  version: number;
+  brief: string | null;
+  created_at: string;
+  created_by: string | null;
+  created_by_label: string | null;
+  change_request_id: string | null;
+  note: string | null;
+};
+
+type DesignBriefChangeRequestStatus = "pending" | "approved" | "rejected";
+
+type DesignBriefChangeRequest = {
+  id: string;
+  status: DesignBriefChangeRequestStatus;
+  request_text: string;
+  reason: string | null;
+  priority: string | null;
+  impact: string | null;
+  requested_by: string | null;
+  requested_by_label: string | null;
+  requested_at: string;
+  decision_at: string | null;
+  decided_by: string | null;
+  decided_by_label: string | null;
+  decision_note: string | null;
+  applied_version_id: string | null;
+};
+
 const statusLabels: Record<DesignStatus, string> = {
   new: "Новий",
   changes: "Правки",
@@ -258,6 +288,77 @@ const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
+};
+
+const toNonEmptyString = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+};
+
+const parseBriefVersions = (value: unknown): DesignBriefVersion[] => {
+  if (!Array.isArray(value)) return [];
+  const rows = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const id = toNonEmptyString(row.id);
+      const versionRaw = typeof row.version === "number" ? row.version : Number(row.version);
+      const createdAt = toNonEmptyString(row.created_at);
+      const brief =
+        row.brief === null || row.brief === undefined
+          ? null
+          : typeof row.brief === "string"
+            ? row.brief
+            : String(row.brief);
+      if (!id || !Number.isFinite(versionRaw) || versionRaw < 1 || !createdAt) return null;
+      return {
+        id,
+        version: Math.round(versionRaw),
+        brief,
+        created_at: createdAt,
+        created_by: toNonEmptyString(row.created_by),
+        created_by_label: toNonEmptyString(row.created_by_label),
+        change_request_id: toNonEmptyString(row.change_request_id),
+        note: toNonEmptyString(row.note),
+      } satisfies DesignBriefVersion;
+    })
+    .filter(Boolean) as DesignBriefVersion[];
+  return rows.sort((a, b) => a.version - b.version);
+};
+
+const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] => {
+  if (!Array.isArray(value)) return [];
+  const rows = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const id = toNonEmptyString(row.id);
+      const requestText = toNonEmptyString(row.request_text);
+      const requestedAt = toNonEmptyString(row.requested_at);
+      const statusRaw = toNonEmptyString(row.status) ?? "pending";
+      const status: DesignBriefChangeRequestStatus =
+        statusRaw === "approved" || statusRaw === "rejected" ? statusRaw : "pending";
+      if (!id || !requestText || !requestedAt) return null;
+      return {
+        id,
+        status,
+        request_text: requestText,
+        reason: toNonEmptyString(row.reason),
+        priority: toNonEmptyString(row.priority),
+        impact: toNonEmptyString(row.impact),
+        requested_by: toNonEmptyString(row.requested_by),
+        requested_by_label: toNonEmptyString(row.requested_by_label),
+        requested_at: requestedAt,
+        decision_at: toNonEmptyString(row.decision_at),
+        decided_by: toNonEmptyString(row.decided_by),
+        decided_by_label: toNonEmptyString(row.decided_by_label),
+        decision_note: toNonEmptyString(row.decision_note),
+        applied_version_id: toNonEmptyString(row.applied_version_id),
+      } satisfies DesignBriefChangeRequest;
+    })
+    .filter(Boolean) as DesignBriefChangeRequest[];
+  return rows.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime());
 };
 
 const isDesignerRole = (value?: string | null) => {
@@ -380,6 +481,12 @@ export default function DesignTaskPage() {
   const [briefDraft, setBriefDraft] = useState("");
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
+  const [changeRequestDraft, setChangeRequestDraft] = useState("");
+  const [changeRequestReason, setChangeRequestReason] = useState("");
+  const [changeRequestImpact, setChangeRequestImpact] = useState("");
+  const [changeRequestPriority, setChangeRequestPriority] = useState<"low" | "medium" | "high">("medium");
+  const [changeRequestSaving, setChangeRequestSaving] = useState(false);
+  const [changeRequestResolvingId, setChangeRequestResolvingId] = useState<string | null>(null);
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
     totalSeconds: 0,
     activeSessionId: null,
@@ -456,6 +563,25 @@ export default function DesignTaskPage() {
     if (positionLabelById[value]) return positionLabelById[value];
     return isUuid(value) ? "Позиція з каталогу" : value;
   };
+
+  const briefVersions = useMemo(() => parseBriefVersions(task?.metadata?.design_brief_versions), [task?.metadata]);
+  const briefChangeRequests = useMemo(
+    () => parseBriefChangeRequests(task?.metadata?.design_brief_change_requests),
+    [task?.metadata]
+  );
+  const activeBriefVersion = useMemo(() => {
+    if (briefVersions.length === 0) return null;
+    const activeVersionId = toNonEmptyString(task?.metadata?.design_brief_active_version_id);
+    if (activeVersionId) {
+      const found = briefVersions.find((row) => row.id === activeVersionId);
+      if (found) return found;
+    }
+    return briefVersions[briefVersions.length - 1] ?? null;
+  }, [briefVersions, task?.metadata]);
+  const pendingBriefChangeRequests = useMemo(
+    () => briefChangeRequests.filter((row) => row.status === "pending"),
+    [briefChangeRequests]
+  );
 
   const loadTimerSummary = async (taskId: string) => {
     if (!effectiveTeamId) return;
@@ -926,6 +1052,15 @@ export default function DesignTaskPage() {
           }
         }
 
+        const metaBriefVersions = parseBriefVersions(meta.design_brief_versions);
+        const metaActiveBriefVersionId = toNonEmptyString(meta.design_brief_active_version_id);
+        const activeBriefVersion =
+          (metaActiveBriefVersionId
+            ? metaBriefVersions.find((entry) => entry.id === metaActiveBriefVersionId)
+            : null) ??
+          metaBriefVersions[metaBriefVersions.length - 1] ??
+          null;
+
         setTask({
           id,
           quoteId,
@@ -954,6 +1089,7 @@ export default function DesignTaskPage() {
               : null) ??
             (typeof quote?.assigned_to === "string" && quote.assigned_to.trim() ? quote.assigned_to : null),
           designBrief:
+            activeBriefVersion?.brief ??
             (typeof meta.design_brief === "string" && meta.design_brief.trim() ? meta.design_brief.trim() : null) ??
             quote?.design_brief ??
             quote?.comment ??
@@ -1111,8 +1247,8 @@ export default function DesignTaskPage() {
   useEffect(() => {
     if (!task) return;
     if (briefDirty) return;
-    setBriefDraft(task.designBrief ?? "");
-  }, [task, briefDirty]);
+    setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+  }, [task, briefDirty, activeBriefVersion]);
 
   useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
@@ -1450,6 +1586,34 @@ export default function DesignTaskPage() {
           actorUserId: row.user_id ?? null,
           icon: CalendarClock,
           accentClass: "quote-activity-accent-deadline",
+        };
+      }
+
+      if (source === "design_task_brief_version") {
+        const versionRaw = typeof metadata.brief_version === "number" ? metadata.brief_version : Number(metadata.brief_version);
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: Number.isFinite(versionRaw) ? `Оновлено ТЗ до v${Math.round(versionRaw)}` : "Оновлено ТЗ",
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          icon: Check,
+          accentClass: "quote-activity-accent-comment",
+        };
+      }
+
+      if (source === "design_task_brief_change_request") {
+        const status = typeof metadata.status === "string" ? metadata.status : "pending";
+        const statusLabel =
+          status === "approved" ? "Правку погоджено" : status === "rejected" ? "Правку відхилено" : "Створено правку";
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: statusLabel,
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          icon: Clock,
+          accentClass: "quote-activity-accent-comment",
         };
       }
 
@@ -2113,15 +2277,50 @@ export default function DesignTaskPage() {
     if (!task || !effectiveTeamId || briefSaving) return;
     if (!ensureCanEdit()) return;
     const nextBrief = briefDraft.trim() ? briefDraft.trim() : null;
-    const previousBrief = task.designBrief ?? null;
+    const previousBrief = activeBriefVersion?.brief ?? task.designBrief ?? null;
     if ((previousBrief ?? null) === (nextBrief ?? null)) {
       setBriefDirty(false);
       return;
     }
 
+    const nowIso = new Date().toISOString();
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const baselineVersions =
+      briefVersions.length > 0
+        ? briefVersions
+        : previousBrief !== null
+          ? [
+              {
+                id: crypto.randomUUID(),
+                version: 1,
+                brief: previousBrief,
+                created_at: task.createdAt ?? nowIso,
+                created_by: null,
+                created_by_label: "System",
+                change_request_id: null,
+                note: "Initial brief",
+              } satisfies DesignBriefVersion,
+            ]
+          : [];
+    const nextVersionNumber =
+      baselineVersions.reduce((max, row) => Math.max(max, row.version), 0) + 1;
+    const nextVersion: DesignBriefVersion = {
+      id: crypto.randomUUID(),
+      version: nextVersionNumber,
+      brief: nextBrief,
+      created_at: nowIso,
+      created_by: userId ?? null,
+      created_by_label: actorLabel,
+      change_request_id: null,
+      note: "Manual update",
+    };
+    const nextVersions = [...baselineVersions, nextVersion];
+
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       design_brief: nextBrief,
+      design_brief_versions: nextVersions,
+      design_brief_active_version_id: nextVersion.id,
     };
 
     const previousTask = task;
@@ -2160,14 +2359,13 @@ export default function DesignTaskPage() {
             .schema("tosho")
             .from("quotes")
             .update({ comment: nextBrief })
-            .eq("id", task.quoteId);
+          .eq("id", task.quoteId);
           if (quoteFallbackError) throw quoteFallbackError;
         } else if (quoteBriefError) {
           throw quoteBriefError;
         }
       }
 
-      const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
         await logDesignTaskActivity({
           teamId: effectiveTeamId,
@@ -2175,12 +2373,14 @@ export default function DesignTaskPage() {
           quoteId: task.quoteId,
           userId,
           actorName: actorLabel,
-          action: "design_task_brief",
-          title: "Оновлено ТЗ для дизайнера",
+          action: "design_task_brief_version",
+          title: `Оновлено ТЗ: v${nextVersion.version}`,
           metadata: {
-            source: "design_task_brief",
+            source: "design_task_brief_version",
             from_brief: previousBrief,
             to_brief: nextBrief,
+            brief_version: nextVersion.version,
+            brief_version_id: nextVersion.id,
           },
         });
         await loadHistory(task.id);
@@ -2189,7 +2389,7 @@ export default function DesignTaskPage() {
       }
 
       setBriefDirty(false);
-      toast.success("ТЗ для дизайнера оновлено");
+      toast.success(`ТЗ оновлено до v${nextVersion.version}`);
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити ТЗ");
@@ -2197,6 +2397,236 @@ export default function DesignTaskPage() {
       toast.error(message);
     } finally {
       setBriefSaving(false);
+    }
+  };
+
+  const createBriefChangeRequest = async () => {
+    if (!task || !effectiveTeamId || changeRequestSaving) return;
+    if (!ensureCanEdit()) return;
+    const requestText = changeRequestDraft.trim();
+    if (!requestText) {
+      toast.error("Опишіть суть правки");
+      return;
+    }
+
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const nextChangeRequest: DesignBriefChangeRequest = {
+      id: crypto.randomUUID(),
+      status: "pending",
+      request_text: requestText,
+      reason: changeRequestReason.trim() || null,
+      priority: changeRequestPriority,
+      impact: changeRequestImpact.trim() || null,
+      requested_by: userId ?? null,
+      requested_by_label: actorLabel,
+      requested_at: new Date().toISOString(),
+      decision_at: null,
+      decided_by: null,
+      decided_by_label: null,
+      decision_note: null,
+      applied_version_id: null,
+    };
+    const nextRequests = [nextChangeRequest, ...briefChangeRequests];
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_brief_change_requests: nextRequests,
+    };
+
+    setChangeRequestSaving(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      setChangeRequestDraft("");
+      setChangeRequestReason("");
+      setChangeRequestImpact("");
+      setChangeRequestPriority("medium");
+
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_brief_change_request",
+          title: "Створено запит на правку ТЗ",
+          metadata: {
+            source: "design_task_brief_change_request",
+            change_request_id: nextChangeRequest.id,
+            status: "pending",
+            priority: nextChangeRequest.priority,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task brief change request event", logError);
+      }
+      toast.success("Запит на правку додано");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося створити запит на правку"));
+    } finally {
+      setChangeRequestSaving(false);
+    }
+  };
+
+  const resolveBriefChangeRequest = async (
+    changeRequestId: string,
+    nextStatus: Exclude<DesignBriefChangeRequestStatus, "pending">
+  ) => {
+    if (!task || !effectiveTeamId || changeRequestResolvingId) return;
+    if (!ensureCanEdit()) return;
+    const currentRequest = briefChangeRequests.find((row) => row.id === changeRequestId);
+    if (!currentRequest || currentRequest.status !== "pending") return;
+
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const nowIso = new Date().toISOString();
+    const nextRequests = briefChangeRequests.map((row) =>
+      row.id === changeRequestId
+        ? {
+            ...row,
+            status: nextStatus,
+            decision_at: nowIso,
+            decided_by: userId ?? null,
+            decided_by_label: actorLabel,
+            decision_note: nextStatus === "approved" ? "Approved and applied to brief" : "Rejected",
+          }
+        : row
+    );
+
+    let nextBrief = activeBriefVersion?.brief ?? task.designBrief ?? null;
+    let nextVersions = [...briefVersions];
+    let nextActiveVersionId = toNonEmptyString(task.metadata?.design_brief_active_version_id);
+    let appliedVersionId: string | null = null;
+
+    if (nextStatus === "approved") {
+      const baselineVersions =
+        nextVersions.length > 0
+          ? nextVersions
+          : nextBrief !== null
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  version: 1,
+                  brief: nextBrief,
+                  created_at: task.createdAt ?? nowIso,
+                  created_by: null,
+                  created_by_label: "System",
+                  change_request_id: null,
+                  note: "Initial brief",
+                } satisfies DesignBriefVersion,
+              ]
+            : [];
+      const nextVersionNumber =
+        baselineVersions.reduce((max, row) => Math.max(max, row.version), 0) + 1;
+      const addition = `Правка: ${currentRequest.request_text}`;
+      nextBrief = nextBrief ? `${nextBrief}\n\n${addition}` : addition;
+      const nextVersion: DesignBriefVersion = {
+        id: crypto.randomUUID(),
+        version: nextVersionNumber,
+        brief: nextBrief,
+        created_at: nowIso,
+        created_by: userId ?? null,
+        created_by_label: actorLabel,
+        change_request_id: changeRequestId,
+        note: "Approved change request",
+      };
+      appliedVersionId = nextVersion.id;
+      nextVersions = [...baselineVersions, nextVersion];
+      nextActiveVersionId = nextVersion.id;
+    }
+
+    const requestsWithAppliedVersion = nextRequests.map((row) =>
+      row.id === changeRequestId ? { ...row, applied_version_id: appliedVersionId } : row
+    );
+
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_brief: nextBrief,
+      design_brief_change_requests: requestsWithAppliedVersion,
+      design_brief_versions: nextVersions,
+      design_brief_active_version_id: nextActiveVersionId,
+    };
+
+    setChangeRequestResolvingId(changeRequestId);
+    const previousTask = task;
+    setTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            metadata: nextMetadata,
+            designBrief: nextBrief,
+          }
+        : prev
+    );
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      if (nextStatus === "approved" && isUuid(task.quoteId)) {
+        const { error: quoteBriefError } = await supabase
+          .schema("tosho")
+          .from("quotes")
+          .update({ design_brief: nextBrief })
+          .eq("id", task.quoteId);
+        if (
+          quoteBriefError &&
+          /column/i.test(quoteBriefError.message ?? "") &&
+          /design_brief/i.test(quoteBriefError.message ?? "")
+        ) {
+          const { error: quoteFallbackError } = await supabase
+            .schema("tosho")
+            .from("quotes")
+            .update({ comment: nextBrief })
+            .eq("id", task.quoteId);
+          if (quoteFallbackError) throw quoteFallbackError;
+        } else if (quoteBriefError) {
+          throw quoteBriefError;
+        }
+      }
+
+      if (nextStatus === "approved") {
+        setBriefDraft(nextBrief ?? "");
+        setBriefDirty(false);
+      }
+
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_brief_change_request",
+          title: nextStatus === "approved" ? "Правку ТЗ погоджено" : "Правку ТЗ відхилено",
+          metadata: {
+            source: "design_task_brief_change_request",
+            change_request_id: changeRequestId,
+            status: nextStatus,
+            applied_version_id: appliedVersionId,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task brief change request decision", logError);
+      }
+
+      toast.success(nextStatus === "approved" ? "Правку погоджено та застосовано" : "Правку відхилено");
+    } catch (e: unknown) {
+      setTask(previousTask);
+      toast.error(getErrorMessage(e, "Не вдалося оновити статус правки"));
+    } finally {
+      setChangeRequestResolvingId(null);
     }
   };
 
@@ -3130,41 +3560,156 @@ export default function DesignTaskPage() {
               </div>
             ) : null}
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-              <div className="text-xs text-muted-foreground mb-1">ТЗ для дизайнера</div>
-              <div className="space-y-2">
-                <Textarea
-                  value={briefDraft}
-                  onChange={(event) => {
-                    setBriefDraft(event.target.value);
-                    setBriefDirty(true);
-                  }}
-                  placeholder="Опишіть задачу для дизайнера…"
-                  rows={4}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  className="resize-y min-h-[100px]"
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => void saveDesignBrief()}
-                    disabled={briefSaving || designTaskLockedByOther || !briefDirty}
-                  >
-                    {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Зберегти ТЗ
-                  </Button>
-                  {briefDirty ? (
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
+                <Badge variant="outline">Активна: v{activeBriefVersion?.version ?? 1}</Badge>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Textarea
+                    value={briefDraft}
+                    onChange={(event) => {
+                      setBriefDraft(event.target.value);
+                      setBriefDirty(true);
+                    }}
+                    placeholder="Опишіть задачу для дизайнера…"
+                    rows={5}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    className="resize-y min-h-[120px]"
+                  />
+                  <div className="flex items-center gap-2">
                     <Button
                       size="sm"
-                      variant="ghost"
-                      disabled={briefSaving || designTaskLockedByOther}
-                      onClick={() => {
-                        setBriefDraft(task.designBrief ?? "");
-                        setBriefDirty(false);
-                      }}
+                      onClick={() => void saveDesignBrief()}
+                      disabled={briefSaving || designTaskLockedByOther || !briefDirty}
                     >
-                      Скасувати
+                      {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Зберегти як нову версію
                     </Button>
-                  ) : null}
+                    {briefDirty ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={briefSaving || designTaskLockedByOther}
+                        onClick={() => {
+                          setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+                          setBriefDirty(false);
+                        }}
+                      >
+                        Скасувати
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-2">
+                  <div className="text-xs text-muted-foreground">Запит на правку</div>
+                  <Textarea
+                    value={changeRequestDraft}
+                    onChange={(event) => setChangeRequestDraft(event.target.value)}
+                    placeholder="Що потрібно змінити у ТЗ?"
+                    rows={3}
+                    disabled={changeRequestSaving || designTaskLockedByOther}
+                  />
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Input
+                      value={changeRequestReason}
+                      onChange={(event) => setChangeRequestReason(event.target.value)}
+                      placeholder="Причина"
+                      disabled={changeRequestSaving || designTaskLockedByOther}
+                    />
+                    <Input
+                      value={changeRequestImpact}
+                      onChange={(event) => setChangeRequestImpact(event.target.value)}
+                      placeholder="Вплив на дедлайн/оцінку"
+                      disabled={changeRequestSaving || designTaskLockedByOther}
+                    />
+                    <Select
+                      value={changeRequestPriority}
+                      onValueChange={(value: "low" | "medium" | "high") => setChangeRequestPriority(value)}
+                    >
+                      <SelectTrigger disabled={changeRequestSaving || designTaskLockedByOther}>
+                        <SelectValue placeholder="Пріоритет" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Низький</SelectItem>
+                        <SelectItem value="medium">Середній</SelectItem>
+                        <SelectItem value="high">Високий</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void createBriefChangeRequest()}
+                    disabled={changeRequestSaving || designTaskLockedByOther || !changeRequestDraft.trim()}
+                  >
+                    {changeRequestSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Додати правку
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">Правки в очікуванні</div>
+                  {pendingBriefChangeRequests.length > 0 ? (
+                    <div className="space-y-2">
+                      {pendingBriefChangeRequests.map((request) => (
+                        <div key={request.id} className="rounded-md border border-border/60 bg-background/60 p-3 space-y-2">
+                          <div className="text-sm whitespace-pre-wrap">{request.request_text}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {request.requested_by_label ?? "Користувач"} · {formatDate(request.requested_at, true)} · {request.priority ?? "medium"}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void resolveBriefChangeRequest(request.id, "approved")}
+                              disabled={!!changeRequestResolvingId || designTaskLockedByOther}
+                            >
+                              {changeRequestResolvingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                              Погодити
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void resolveBriefChangeRequest(request.id, "rejected")}
+                              disabled={!!changeRequestResolvingId || designTaskLockedByOther}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Відхилити
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Немає правок у статусі pending.</div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">Історія версій ТЗ</div>
+                  {briefVersions.length > 0 ? (
+                    <div className="space-y-2 max-h-56 overflow-auto pr-1">
+                      {[...briefVersions].reverse().map((version) => (
+                        <div key={version.id} className="rounded-md border border-border/60 bg-background/60 p-3 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-medium">v{version.version}</div>
+                            <div className="text-xs text-muted-foreground">{formatDate(version.created_at, true)}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {version.created_by_label ?? "System"}
+                            {version.change_request_id ? " · з запиту на правку" : ""}
+                          </div>
+                          <div className="text-sm whitespace-pre-wrap">
+                            {version.brief?.trim() ? version.brief : "Порожнє ТЗ"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Історія версій буде створена після першого збереження.</div>
+                  )}
                 </div>
               </div>
             </div>
