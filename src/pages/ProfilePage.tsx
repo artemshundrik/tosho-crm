@@ -188,7 +188,8 @@ export function ProfilePage() {
             .select("access_role, job_role")
             .eq("workspace_id", resolvedWorkspaceId)
             .eq("user_id", user.id)
-            .single();
+            .limit(1)
+            .maybeSingle();
 
           resolvedAccessRole = (membership?.access_role as string) || "member";
           resolvedJobRole = (membership?.job_role as string) || null;

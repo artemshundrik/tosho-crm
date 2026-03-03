@@ -473,6 +473,26 @@ export default function DesignPage() {
           labelById[row.user_id] = label;
           avatarById[row.user_id] = row.avatar_url ?? null;
         });
+
+        const missingAvatarIds = rows
+          .map((row) => row.user_id)
+          .filter((id) => !avatarById[id]);
+        if (effectiveTeamId && missingAvatarIds.length > 0) {
+          const { data: avatarRows, error: avatarError } = await supabase
+            .from("team_members_view")
+            .select("user_id,avatar_url")
+            .eq("team_id", effectiveTeamId)
+            .in("user_id", missingAvatarIds);
+          if (!avatarError) {
+            ((avatarRows as Array<{ user_id: string; avatar_url?: string | null }> | null) ?? []).forEach((row) => {
+              if (!row.user_id) return;
+              if (!avatarById[row.user_id] && row.avatar_url) {
+                avatarById[row.user_id] = row.avatar_url;
+              }
+            });
+          }
+        }
+
         setMemberById(labelById);
         const resolvedAvatarEntries = await Promise.all(
           Object.entries(avatarById).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)

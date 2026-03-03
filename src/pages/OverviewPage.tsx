@@ -13,6 +13,7 @@ import { resolveActivityType } from "@/lib/activity";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { usePageData } from "@/hooks/usePageData";
+import { listTeamMembers } from "@/lib/toshoApi";
 
 type QuoteStatus =
   | "new"
@@ -357,17 +358,17 @@ export function OverviewPage() {
       const activityUserIds = Array.from(new Set(activityRows.map((row) => row.user_id).filter(Boolean))) as string[];
       const memberByUserId = new Map<string, { avatar_url: string | null; full_name: string | null }>();
       if (activityUserIds.length > 0) {
-        const { data: membersData } = await supabase
-          .from("team_members_view")
-          .select("user_id,avatar_url,full_name")
-          .eq("team_id", teamId)
-          .in("user_id", activityUserIds);
-        (((membersData as Array<{ user_id: string; avatar_url?: string | null; full_name?: string | null }> | null) ?? [])).forEach((row) => {
-          memberByUserId.set(row.user_id, {
-            avatar_url: row.avatar_url ?? null,
-            full_name: row.full_name ?? null,
+        try {
+          const teamMembers = await listTeamMembers(teamId);
+          teamMembers.forEach((row) => {
+            memberByUserId.set(row.id, {
+              avatar_url: row.avatarUrl ?? null,
+              full_name: row.label ?? null,
+            });
           });
-        });
+        } catch {
+          // Keep activity usable even if member lookup fails.
+        }
       }
 
       const quoteCounts = emptyCounts(QUOTE_STATUSES);

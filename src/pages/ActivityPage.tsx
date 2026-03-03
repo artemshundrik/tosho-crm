@@ -18,11 +18,10 @@ import {
   type ActivityItem,
   type ActivityRow,
 } from "@/lib/activity";
+import { listTeamMembers } from "@/lib/toshoApi";
 import { Activity, FileText, Palette, Users, Wallet } from "lucide-react";
 
 type FilterMode = "all" | "quotes" | "design" | "finance" | "team" | "other";
-type MemberAvatar = { user_id: string; avatar_url: string | null; full_name: string | null };
-
 type ActivityPageCache = {
   items: ActivityItem[];
 };
@@ -74,13 +73,14 @@ export default function ActivityPage() {
         setItems(hydrated);
         const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean))) as string[];
         if (userIds.length > 0) {
-          const { data: members, error: membersError } = await supabase
-            .from("team_members_view")
-            .select("user_id, avatar_url, full_name")
-            .eq("team_id", teamId)
-            .in("user_id", userIds);
-          if (!membersError && members) {
-            const byId = new Map((members as MemberAvatar[]).map((m) => [m.user_id, m]));
+          try {
+            const teamMembers = await listTeamMembers(teamId);
+            const byId = new Map(
+              teamMembers.map((m) => [
+                m.id,
+                { user_id: m.id, avatar_url: m.avatarUrl ?? null, full_name: m.label },
+              ])
+            );
             const enriched = hydrated.map((item) => {
               if (!item.user_id) return item;
               const member = byId.get(item.user_id);
@@ -93,7 +93,7 @@ export default function ActivityPage() {
             });
             setItems(enriched);
             setCache({ items: enriched });
-          } else {
+          } catch {
             setItems(hydrated);
             setCache({ items: hydrated });
           }
