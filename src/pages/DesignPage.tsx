@@ -358,6 +358,7 @@ export default function DesignPage() {
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const canManageAssignments = permissions.canManageAssignments;
   const canSelfAssign = permissions.canSelfAssignDesign;
+  const shouldForceSelfAssignee = permissions.isDesigner && !canManageAssignments && !!userId;
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -1232,7 +1233,10 @@ export default function DesignPage() {
     if (!createDialogOpen) return;
     if (!userId) return;
     setCreateManagerUserId((prev) => (prev && prev !== "none" ? prev : userId));
-  }, [createDialogOpen, userId]);
+    if (shouldForceSelfAssignee) {
+      setCreateAssigneeUserId(userId);
+    }
+  }, [createDialogOpen, userId, shouldForceSelfAssignee]);
 
   const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
     setDraggingId(taskId);
@@ -1673,7 +1677,9 @@ export default function DesignPage() {
     setCreateSaving(true);
     setCreateError(null);
     try {
-      const assigneeUserId = createAssigneeUserId === "none" ? null : createAssigneeUserId;
+      const assigneeUserId = shouldForceSelfAssignee
+        ? (userId ?? null)
+        : (createAssigneeUserId === "none" ? null : createAssigneeUserId);
       const managerUserId =
         createManagerUserId === "none"
           ? (userId ?? null)
@@ -2851,87 +2857,110 @@ export default function DesignPage() {
                 </PopoverContent>
               </Popover>
 
-              <Popover open={createAssigneePopoverOpen} onOpenChange={setCreateAssigneePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Chip
-                    size="md"
-                    icon={
-                      selectedAssignee ? (
-                        <AvatarBase
-                          src={selectedAssignee.avatarUrl ?? null}
-                          name={selectedAssignee.label}
-                          fallback={getInitials(selectedAssignee.label)}
-                          size={20}
-                          className="border-border/60"
-                          fallbackClassName="text-[10px] font-semibold"
-                        />
-                      ) : (
-                        <User className="h-4 w-4" />
-                      )
-                    }
-                    active={createAssigneeUserId !== "none"}
-                  >
-                    {selectedAssignee?.label ?? "Виконавець"}
-                  </Chip>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 p-2" align="start">
-                  <div className="space-y-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start gap-2 h-9 text-sm"
-                      onClick={() => {
-                        setCreateAssigneeUserId("none");
-                        setCreateAssigneePopoverOpen(false);
-                      }}
-                    >
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      Без виконавця
-                      <Check
-                        className={cn(
-                          "ml-auto h-3.5 w-3.5 text-primary",
-                          createAssigneeUserId === "none" ? "opacity-100" : "opacity-0"
-                        )}
+              {shouldForceSelfAssignee ? (
+                <Chip
+                  size="md"
+                  icon={
+                    userId ? (
+                      <AvatarBase
+                        src={getMemberAvatar(userId)}
+                        name={getMemberLabel(userId)}
+                        fallback={getInitials(getMemberLabel(userId))}
+                        size={20}
+                        className="border-border/60"
+                        fallbackClassName="text-[10px] font-semibold"
                       />
-                    </Button>
-                    {designerMembers.length > 0 ? (
-                      designerMembers.map((member) => (
-                        <Button
-                          key={member.id}
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start gap-2 h-9 text-sm"
-                          onClick={() => {
-                            setCreateAssigneeUserId(member.id);
-                            setCreateAssigneePopoverOpen(false);
-                          }}
-                          title={member.label}
-                        >
+                    ) : (
+                      <User className="h-4 w-4" />
+                    )
+                  }
+                  active
+                >
+                  {userId ? getMemberLabel(userId) : "Виконавець"}
+                </Chip>
+              ) : (
+                <Popover open={createAssigneePopoverOpen} onOpenChange={setCreateAssigneePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Chip
+                      size="md"
+                      icon={
+                        selectedAssignee ? (
                           <AvatarBase
-                            src={member.avatarUrl ?? null}
-                            name={member.label}
-                            fallback={getInitials(member.label)}
+                            src={selectedAssignee.avatarUrl ?? null}
+                            name={selectedAssignee.label}
+                            fallback={getInitials(selectedAssignee.label)}
                             size={20}
-                            className="border-border/60 shrink-0"
+                            className="border-border/60"
                             fallbackClassName="text-[10px] font-semibold"
                           />
-                          <span className="truncate">{member.label}</span>
-                          <Check
-                            className={cn(
-                              "ml-auto h-3.5 w-3.5 text-primary",
-                              createAssigneeUserId === member.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                        </Button>
-                      ))
-                    ) : (
-                      <div className="text-xs text-muted-foreground p-2">Немає користувачів</div>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                        ) : (
+                          <User className="h-4 w-4" />
+                        )
+                      }
+                      active={createAssigneeUserId !== "none"}
+                    >
+                      {selectedAssignee?.label ?? "Виконавець"}
+                    </Chip>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="start">
+                    <div className="space-y-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-9 text-sm"
+                        onClick={() => {
+                          setCreateAssigneeUserId("none");
+                          setCreateAssigneePopoverOpen(false);
+                        }}
+                      >
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        Без виконавця
+                        <Check
+                          className={cn(
+                            "ml-auto h-3.5 w-3.5 text-primary",
+                            createAssigneeUserId === "none" ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                      </Button>
+                      {designerMembers.length > 0 ? (
+                        designerMembers.map((member) => (
+                          <Button
+                            key={member.id}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start gap-2 h-9 text-sm"
+                            onClick={() => {
+                              setCreateAssigneeUserId(member.id);
+                              setCreateAssigneePopoverOpen(false);
+                            }}
+                            title={member.label}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl ?? null}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={20}
+                              className="border-border/60 shrink-0"
+                              fallbackClassName="text-[10px] font-semibold"
+                            />
+                            <span className="truncate">{member.label}</span>
+                            <Check
+                              className={cn(
+                                "ml-auto h-3.5 w-3.5 text-primary",
+                                createAssigneeUserId === member.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </Button>
+                        ))
+                      ) : (
+                        <div className="text-xs text-muted-foreground p-2">Немає користувачів</div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
