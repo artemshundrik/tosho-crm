@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Loader2, Palette, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
+import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -28,7 +28,7 @@ import {
 } from "@/lib/designTaskTimer";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
-import { PageHeader } from "@/components/app/headers/PageHeader";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
 import {
@@ -89,6 +89,11 @@ type CustomerOption = CustomerLeadOption;
 
 type AssignmentFilter = "mine" | "all" | "unassigned";
 type DesignViewMode = "kanban" | "timeline" | "assignee";
+
+type DesignPageCachePayload = {
+  tasks: DesignTask[];
+  cachedAt: number;
+};
 
 const isDesignerRole = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -264,6 +269,22 @@ const parseDateOnly = (value: string) => {
   return new Date(value);
 };
 
+function readDesignPageCache(teamId: string): DesignPageCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`design-page-cache:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DesignPageCachePayload;
+    if (!Array.isArray(parsed.tasks)) return null;
+    return {
+      tasks: parsed.tasks,
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const getDeadlineBadge = (value?: string | null) => {
   if (!value) return { label: "Не вказано", tone: "none" as const };
   const date = parseDateOnly(value);
@@ -313,10 +334,12 @@ export default function DesignPage() {
   const { teamId, userId, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
+  const initialCache = readDesignPageCache(effectiveTeamId ?? "");
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
+  const [refreshing, setRefreshing] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
-  const [tasks, setTasks] = useState<DesignTask[]>([]);
+  const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
   const [error, setError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<DesignStatus | null>(null);
@@ -693,7 +716,11 @@ export default function DesignPage() {
 
   const loadTasks = async () => {
     if (!effectiveTeamId) return;
-    setLoading(true);
+    if (tasks.length > 0) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const { data, error: fetchError } = await supabase
@@ -923,6 +950,15 @@ export default function DesignPage() {
       }));
 
       setTasks(parsed);
+      if (typeof window !== "undefined" && effectiveTeamId) {
+        sessionStorage.setItem(
+          `design-page-cache:${effectiveTeamId}`,
+          JSON.stringify({
+            tasks: parsed,
+            cachedAt: Date.now(),
+          } satisfies DesignPageCachePayload)
+        );
+      }
       try {
         const timerSummaryMap = await getDesignTasksTimerSummaryMap(
           effectiveTeamId,
@@ -941,6 +977,7 @@ export default function DesignPage() {
       setError(getErrorMessage(e, "Не вдалося завантажити задачі дизайну"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -2162,22 +2199,41 @@ export default function DesignPage() {
     );
   };
 
-  return (
-    <section className="space-y-3">
-      <PageHeader
-        title="Дизайн"
-        subtitle="Задачі на макети, правки та погодження."
-        icon={<Palette className="h-5 w-5" />}
-        actions={
-          <Button size="lg" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
+  const designHeaderActions = useMemo(
+    () => (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+          <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
+            <Button
+              size="sm"
+              variant={viewMode === "kanban" ? "secondary" : "ghost"}
+              onClick={() => setViewMode("kanban")}
+            >
+              Kanban
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "timeline" ? "secondary" : "ghost"}
+              onClick={() => setViewMode("timeline")}
+            >
+              Timeline
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "assignee" ? "secondary" : "ghost"}
+              onClick={() => setViewMode("assignee")}
+            >
+              По дизайнерах
+            </Button>
+          </div>
+          <Button size="sm" className="h-10 gap-2" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             Нова дизайн-задача
           </Button>
-        }
-      >
-        <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+        </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant={assignmentFilter === "mine" ? "secondary" : "outline"}
@@ -2202,19 +2258,16 @@ export default function DesignPage() {
           <Badge variant="outline" className="ml-1">
             {filteredTasks.length} задач
           </Badge>
-          <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
-            <Button size="sm" variant={viewMode === "kanban" ? "secondary" : "ghost"} onClick={() => setViewMode("kanban")}>
-              Kanban
-            </Button>
-            <Button size="sm" variant={viewMode === "timeline" ? "secondary" : "ghost"} onClick={() => setViewMode("timeline")}>
-              Timeline
-            </Button>
-            <Button size="sm" variant={viewMode === "assignee" ? "secondary" : "ghost"} onClick={() => setViewMode("assignee")}>
-              По дизайнерах
-            </Button>
-          </div>
         </div>
-      </PageHeader>
+      </div>
+    ),
+    [assignmentFilter, filteredTasks.length, viewMode, workspacePresence.activeHereEntries]
+  );
+
+  usePageHeaderActions(designHeaderActions, [designHeaderActions]);
+
+  return (
+    <section className="space-y-3">
 
       {error ? (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -2223,14 +2276,14 @@ export default function DesignPage() {
       ) : null}
 
       {viewMode === "kanban" ? (
-        <KanbanBoard className="px-0 pb-0 pt-0" rowClassName="min-w-[1100px]">
+        <KanbanBoard rowClassName="min-w-[1100px]">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
               return (
                 <KanbanColumn
                   key={col.id}
                   className={cn(
-                    "kanban-column-surface basis-[320px] h-[calc(100dvh-17rem)] transition-colors",
+                    "kanban-column-surface basis-[320px] h-[calc(100dvh-13.5rem)] transition-colors",
                     `kanban-column-status-${col.id}`,
                     draggingId && "border-primary/35",
                     dropTargetStatus === col.id && "border-primary bg-primary/5"
@@ -2251,7 +2304,7 @@ export default function DesignPage() {
                       </span>
                     </div>
                   }
-                  bodyClassName="px-2.5 pb-3.5 pt-2.5 space-y-2"
+                  bodyClassName="px-2.5 pb-1.5 pt-2.5 space-y-2"
                   onDragOver={(event) => {
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "move";
@@ -2705,10 +2758,14 @@ export default function DesignPage() {
         </DialogContent>
       </Dialog>
 
-      {(loading || membersLoading) && (
+      {((loading && tasks.length === 0) || membersLoading || refreshing) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          {loading ? "Завантаження задач..." : "Завантаження учасників..."}
+          {membersLoading
+            ? "Завантаження учасників..."
+            : refreshing
+            ? "Оновлення задач..."
+            : "Завантаження задач..."}
         </div>
       )}
 

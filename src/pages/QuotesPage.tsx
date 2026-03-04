@@ -84,8 +84,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   DELIVERY_TYPE_OPTIONS,
   KANBAN_COLUMNS,
@@ -111,7 +110,7 @@ import {
 } from "@/components/ui/controlStyles";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
-import { PageCanvas, PageCanvasBody, PageCanvasHeader } from "@/components/canvas/PageCanvas";
+import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
@@ -266,7 +265,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const navigate = useNavigate();
-  const workspacePresence = useWorkspacePresence();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
@@ -3302,238 +3300,187 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     );
   }, [bulkAddAvailableSets, bulkAddExistingOpen]);
 
-  return (
-    <PageCanvas>
-      {/* Modern Linea-style Header Block */}
-      <PageCanvasHeader sticky>
-        <div className="px-5 pt-4 pb-4 space-y-4">
-          {/* Header Section */}
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="min-w-0 flex items-center gap-3">
-                <h1 className="text-2xl leading-none font-semibold tracking-tight">Прорахунки</h1>
-                <ActiveHereCard
-                  entries={workspacePresence.activeHereEntries}
-                  title="Тут"
-                  className="h-8 px-3 py-0 bg-muted/20 border-border/50"
-                />
-              </div>
-              <p className="hidden xl:block text-sm text-muted-foreground">Керуйте прорахунками та пропозиціями</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* View Mode Switcher */}
-              <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-              <Button onClick={openCreate} size="sm" className="gap-2 h-10">
-                <PlusIcon className="h-4 w-4" />
-                Новий прорахунок
-              </Button>
-            </div>
+  const estimatesHeaderActions = useMemo(() => (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={contentView === "quotes"}
+              onClick={() => setContentView("quotes")}
+            >
+              Прорахунки
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={contentView === "sets"}
+              onClick={() => setContentView("sets")}
+            >
+              КП та набори
+            </Button>
           </div>
-
-          {/* Search and Filters Row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Content Type Tabs */}
-            <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border sm:w-auto">
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={contentView === "quotes"}
-                onClick={() => setContentView("quotes")}
-              >
-                Прорахунки
-              </Button>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={contentView === "sets"}
-                onClick={() => setContentView("sets")}
-              >
-                КП та набори
-              </Button>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={contentView === "all"}
-                onClick={() => setContentView("all")}
-              >
-                Все
-              </Button>
-            </div>
-
-            {/* Right Side: Search, Results Count, Clear Filters */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-1 sm:justify-end">
-              {/* Search Input */}
-              <div className="relative flex-1 min-w-[240px] max-w-[520px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={contentView === "sets" ? quoteSetSearch : search}
-                  onChange={(e) =>
-                    contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
-                  }
-                  placeholder={
-                    contentView === "sets"
-                      ? "Пошук по КП та наборах..."
-                      : "Пошук за назвою, номером або замовником..."
-                  }
-                  className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
-                />
-                {(contentView === "sets" ? quoteSetSearch : search) && (
-                  <Button
-                    type="button"
-                    variant="control"
-                    size="iconSm"
-                    aria-label="Очистити пошук"
-                    className="absolute right-2 top-1/2 -translate-y-1/2"
-                    onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-                {(loading || refreshing) && contentView !== "sets" && search && (
-                  <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-
-              {/* Results Count */}
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="font-semibold px-2.5 py-1 h-10 flex items-center gap-1.5">
-                  <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
-                  <span className="text-muted-foreground text-xs hidden sm:inline">знайдено</span>
-                </Badge>
-              </div>
-
-              {/* Clear Filters */}
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground shrink-0">
-                  Скинути фільтри
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Status Filters Row */}
-          <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              {contentView !== "sets" ? (
-                <>
-                  {/* Quick Filter Buttons */}
-                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quickFilter === "all"}
-                      onClick={() => setQuickFilter("all")}
-                    >
-                      Всі
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quickFilter === "new"}
-                      onClick={() => setQuickFilter("new")}
-                      className="gap-1.5"
-                    >
-                      <FileText className="h-3 w-3" />
-                      Нові
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quickFilter === "estimated"}
-                      onClick={() => setQuickFilter("estimated")}
-                    >
-                      Пораховано
-                    </Button>
-                  </div>
-                  {/* Status Select */}
-                  <Select value={status} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9 w-[180px] bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40">
-                      <SelectValue placeholder="Статус" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Всі статуси</SelectItem>
-                      {STATUS_OPTIONS.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {formatStatusLabel(s)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={managerFilter} onValueChange={setManagerFilter}>
-                    <SelectTrigger className="h-9 w-[220px] bg-background border-input hover:bg-muted/20 hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40">
-                      <div className="min-w-0 flex items-center">
-                        {renderManagerFilterValue(managerFilter)}
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
-                      <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
-                      {managerFilterOptions.map((manager) => (
-                        <SelectItem key={manager.id} value={manager.id}>
-                          {renderManagerFilterValue(manager.id)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              ) : (
-                <>
-                  {/* Quote Set Kind Filters */}
-                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quoteSetKindFilter === "all"}
-                      onClick={() => setQuoteSetKindFilter("all")}
-                    >
-                      Всі
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quoteSetKindFilter === "kp"}
-                      onClick={() => setQuoteSetKindFilter("kp")}
-                    >
-                      КП
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={quoteSetKindFilter === "set"}
-                      onClick={() => setQuoteSetKindFilter("set")}
-                    >
-                      Набори
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* List Mode Toggle (only for table view) */}
-            {contentView !== "sets" && viewMode === "table" ? (
-              <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={quoteListMode === "flat"}
-                  onClick={() => setQuoteListMode("flat")}
-                >
-                  Список
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={quoteListMode === "grouped"}
-                  onClick={() => setQuoteListMode("grouped")}
-                >
-                  Групи
-                </Button>
-              </div>
-            ) : null}
+          <div className="flex items-center gap-2 self-end lg:self-auto">
+            <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
+            <Button onClick={openCreate} size="sm" className="h-10 gap-2">
+              <PlusIcon className="h-4 w-4" />
+              Новий прорахунок
+            </Button>
           </div>
         </div>
-      </PageCanvasHeader>
 
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative w-full xl:max-w-[370px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={contentView === "sets" ? quoteSetSearch : search}
+              onChange={(e) =>
+                contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
+              }
+              placeholder={contentView === "sets" ? "Пошук по КП та наборах..." : "Пошук за назвою..."}
+              className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
+            />
+            {(contentView === "sets" ? quoteSetSearch : search) ? (
+              <Button
+                type="button"
+                variant="control"
+                size="iconSm"
+                aria-label="Очистити пошук"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {(loading || refreshing) && contentView !== "sets" && search ? (
+              <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1">
+            {contentView !== "sets" ? (
+              <>
+                <Select value={status} onValueChange={setStatusFilter}>
+                  <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[170px]")}>
+                    <SelectValue placeholder="Статус" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Всі статуси</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {formatStatusLabel(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={managerFilter} onValueChange={setManagerFilter}>
+                  <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[210px]")}>
+                    <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_MANAGERS_FILTER}>
+                      {renderManagerFilterValue(ALL_MANAGERS_FILTER)}
+                    </SelectItem>
+                    <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
+                    {managerFilterOptions.map((manager) => (
+                      <SelectItem key={manager.id} value={manager.id}>
+                        {renderManagerFilterValue(manager.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {viewMode === "table" ? (
+                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quoteListMode === "flat"}
+                      onClick={() => setQuoteListMode("flat")}
+                    >
+                      Список
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={quoteListMode === "grouped"}
+                      onClick={() => setQuoteListMode("grouped")}
+                    >
+                      Групи
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={quoteSetKindFilter === "all"}
+                  onClick={() => setQuoteSetKindFilter("all")}
+                >
+                  Всі
+                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{filteredQuoteSets.length}</span>
+                </Button>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={quoteSetKindFilter === "kp"}
+                  onClick={() => setQuoteSetKindFilter("kp")}
+                >
+                  КП
+                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetKpCount}</span>
+                </Button>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={quoteSetKindFilter === "set"}
+                  onClick={() => setQuoteSetKindFilter("set")}
+                >
+                  Набори
+                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {hasActiveFilters ? (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0 text-muted-foreground">
+                Скинути фільтри
+              </Button>
+            ) : null}
+            <div className="text-sm font-semibold text-foreground">
+              <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
+              <span className="ml-1 text-muted-foreground">знайдено</span>
+            </div>
+          </div>
+        </div>
+      </div>
+  ), [
+    contentView,
+    foundCount,
+    hasActiveFilters,
+    loading,
+    managerFilter,
+    managerFilterOptions,
+    quoteListMode,
+    quoteSetKindFilter,
+    quoteSetKpCount,
+    quoteSetSearch,
+    quoteSetSetCount,
+    refreshing,
+    rows.length,
+    search,
+    status,
+    viewMode,
+    filteredQuoteSets.length,
+  ]);
+
+  usePageHeaderActions(estimatesHeaderActions, [estimatesHeaderActions]);
+
+  return (
+    <PageCanvas>
       {/* Bulk actions */}
       {contentView !== "sets" && selectedIds.size > 0 && (
         <PageCanvasBody className="px-5 py-3">
@@ -3673,23 +3620,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       {contentView !== "quotes" && (
       <EstimatesTableCanvas>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
-          <div>
-            <div className="text-base font-semibold">КП та набори</div>
-            <div className="text-sm text-muted-foreground mt-1">Натисніть на рядок, щоб подивитися склад</div>
-            <div className="mt-2 flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                КП: {quoteSetKpCount}
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                Набори: {quoteSetSetCount}
-              </Badge>
-            </div>
-          </div>
-          <Badge variant="outline" className="font-semibold px-2.5 py-1 h-9">
-            {filteredQuoteSets.length}
-          </Badge>
-        </div>
         {quoteSetsLoading ? (
           <div className="px-5 py-12 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
@@ -4229,7 +4159,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[320px] h-[calc(100dvh-17rem)] shrink-0 flex flex-col"
+                        "basis-[320px] h-[calc(100dvh-13.5rem)] shrink-0 flex flex-col"
                       )}
                       header={
                         <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
@@ -4271,7 +4201,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       }}
                     >
                       <div
-                        className={cn("px-2.5 pb-3.5 pt-2.5 space-y-2", draggingId && "pb-4")}
+                        className={cn("px-2.5 pb-1.5 pt-2.5 space-y-2", draggingId && "pb-2")}
                         onDragOver={(e) => {
                           e.preventDefault();
                           if (!draggingId) return;

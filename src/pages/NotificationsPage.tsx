@@ -5,14 +5,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
-import { PageHeader } from "@/components/app/headers/PageHeader";
-import { Bell } from "lucide-react";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 
 type FilterMode = "all" | "unread";
 
@@ -128,10 +126,6 @@ export default function NotificationsPage() {
 
   const showSkeleton = useMinimumLoading(loading);
 
-  if (showSkeleton) {
-    return <ListSkeleton />;
-  }
-
   const openNotification = async (n: NotificationItem) => {
     setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
     if (!n.read) {
@@ -140,13 +134,32 @@ export default function NotificationsPage() {
     if (n.href) navigate(n.href);
   };
 
-  return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
-      <PageHeader
-        title="Сповіщення"
-        subtitle="Всі події та оновлення в одному місці."
-        icon={<Bell className="h-5 w-5" />}
-        actions={
+  const notificationsHeaderActions = useMemo(() => (
+    <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={filter === "all"}
+            onClick={() => setFilter("all")}
+          >
+            Всі
+          </Button>
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={filter === "unread"}
+            onClick={() => setFilter("unread")}
+          >
+            Непрочитані
+          </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-semibold text-foreground">
+            {filtered.length}
+            <span className="ml-1 text-muted-foreground">знайдено</span>
+          </div>
           <Button
             variant="secondary"
             className="h-10 px-4"
@@ -155,41 +168,19 @@ export default function NotificationsPage() {
           >
             Позначити всі
           </Button>
-        }
-      >
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
-          <TabsList
-            className={cn(
-              "inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1",
-              "bg-muted border border-border"
-            )}
-          >
-            <TabsTrigger
-              value="all"
-              className={cn(
-                "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-                "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-              )}
-            >
-              Всі
-            </TabsTrigger>
-            <TabsTrigger
-              value="unread"
-              className={cn(
-                "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-                "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-              )}
-            >
-              Непрочитані
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </PageHeader>
+        </div>
+      </div>
+    </div>
+  ), [filter, filtered.length, unreadCount]);
 
+  usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
+
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
+
+  return (
+    <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
       {filtered.length === 0 ? (
         <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.

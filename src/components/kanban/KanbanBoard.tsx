@@ -8,9 +8,8 @@ type KanbanBoardProps = PropsWithChildren<{
 
 export function KanbanBoard({ className, rowClassName, children }: KanbanBoardProps) {
   return (
-    <div className={cn("overflow-x-auto px-4 pb-4 pt-3 md:px-5 md:pb-5", className)}>
+    <div className={cn("overflow-x-auto p-4 md:p-5", className)}>
       <div className={cn("w-max flex gap-4 pb-0", rowClassName)}>{children}</div>
     </div>
   );
 }
-

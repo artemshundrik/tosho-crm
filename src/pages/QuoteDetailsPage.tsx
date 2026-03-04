@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -371,6 +371,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState("new");
+
+  const downloadFileToDevice = useCallback(async (url: string, filename?: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = (filename && filename.trim()) || "file";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      toast.error("Не вдалося завантажити файл", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    }
+  }, []);
 
   const getRunTotal = (run: QuoteRun) => {
     const qty = Number(run.quantity) || 0;
@@ -3678,16 +3700,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </div>
                       <div className="mt-2 flex items-center gap-1">
                         {file.url ? (
-                          <>
-                            <Button size="sm" variant="outline" asChild>
-                              <a href={file.url} target="_blank" rel="noopener noreferrer">Переглянути</a>
-                            </Button>
-                            <Button size="sm" variant="ghost" asChild>
-                              <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}>
-                                Завантажити
-                              </a>
-                            </Button>
-                          </>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void downloadFileToDevice(file.url!, file.name)}
+                          >
+                            Завантажити
+                          </Button>
                         ) : null}
                       </div>
                     </div>
@@ -4463,7 +4482,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               size="icon"
                               className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                               onClick={() => {
-                                if (file.url) window.open(file.url, "_blank", "noopener,noreferrer");
+                                if (file.url) {
+                                  void downloadFileToDevice(file.url, file.name);
+                                }
                               }}
                               disabled={!file.url}
                             >
@@ -4956,14 +4977,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 className="w-full max-h-48 object-contain rounded-md border border-border/50 bg-background"
                               />
                             ) : (
-                              <a
-                                href={itemAttachment.url}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
                                 className="text-xs text-primary underline"
+                                onClick={() => void downloadFileToDevice(itemAttachment.url, itemAttachment.name)}
                               >
-                                Відкрити PDF
-                              </a>
+                                Завантажити PDF
+                              </button>
                             )}
                             <Button
                               type="button"

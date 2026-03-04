@@ -41,7 +41,7 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { PageHeader } from "@/components/app/headers/PageHeader";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -1718,6 +1718,33 @@ export function TeamMembersPage() {
   const selectedManagerLabel =
     managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
 
+  const teamMembersHeaderActions = useMemo(
+    () => (
+      <div className="flex items-center justify-end">
+        {canManage ? (
+          <Button
+            size="sm"
+            className="h-10"
+            onClick={() => {
+              setActiveTab("invites");
+              setInviteOpen(true);
+              setGeneratedLink(null);
+              setInviteEmail("");
+              setInviteAccessRole("admin");
+              setInviteJobRole("member");
+              setParams({ tab: "invites" });
+            }}
+          >
+            Інвайт
+          </Button>
+        ) : null}
+      </div>
+    ),
+    [canManage, setParams]
+  );
+
+  usePageHeaderActions(teamMembersHeaderActions, [teamMembersHeaderActions]);
+
   if (showSkeleton) {
     return <ListSkeleton />;
   }
@@ -1739,30 +1766,6 @@ export function TeamMembersPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
-      <PageHeader
-        title="Управління командою"
-        subtitle="Учасники, ролі, доступи та профілі команди. Паролі змінюються тільки користувачем у профілі."
-        icon={<ShieldAlert className="h-5 w-5" />}
-        actions={
-          canManage ? (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setActiveTab("invites");
-                setInviteOpen(true);
-                setGeneratedLink(null);
-                setInviteEmail("");
-                setInviteAccessRole("admin");
-                setInviteJobRole("member");
-                setParams({ tab: "invites" });
-              }}
-            >
-              Інвайт
-            </Button>
-          ) : null
-        }
-      />
-
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border border-border/60 bg-card/70 p-4">
           <div className="flex items-center justify-between">

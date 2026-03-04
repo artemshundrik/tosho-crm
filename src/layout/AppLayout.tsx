@@ -489,7 +489,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   ) : (
     children
   );
-  const isCanvasMode = location.pathname === ROUTES.ordersEstimates;
+  const isCanvasMode =
+    location.pathname === ROUTES.ordersEstimates ||
+    location.pathname.startsWith(ROUTES.ordersCustomers) ||
+    location.pathname.startsWith(ROUTES.design);
 
   // /matches/:matchId/events
   const matchEventsRoute = useMemo(() => {
@@ -1422,9 +1425,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           data-canvas-mode={isCanvasMode ? "on" : "off"}
         >
           <div className={cn(isCanvasMode ? "min-w-0" : "mx-auto max-w-[1600px] space-y-6 min-w-0")}>
-            {/* Page header (desktop) */}
+            {/* Page header / page-level actions */}
             {header.showPageHeader === false ? (
-              header.eyebrow ? (
+              headerActions ? (
+                <div className="border-b border-border/70 bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
+                  <div className={cn("px-4 py-3 md:px-5 lg:px-6", !isCanvasMode && "px-0 py-0 md:px-0 lg:px-0")}>
+                    {headerActions}
+                  </div>
+                </div>
+              ) : header.eyebrow ? (
                 <div className="hidden md:flex">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                     {header.eyebrow}

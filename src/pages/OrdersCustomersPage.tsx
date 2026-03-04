@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CustomerDialog, LeadDialog } from "@/components/customers";
-import { PageHeader } from "@/components/app/headers/PageHeader";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata } from "@/lib/userName";
@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
 
 type OwnershipOption = {
@@ -965,68 +965,93 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   };
 
-  return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
-      <PageHeader
-        title="Замовники та ліди"
-        subtitle="База компаній, контактів, лідів і відповідальних менеджерів."
-        icon={<Building2 className="h-5 w-5" />}
-        actions={
-          <Button onClick={activeTab === "customers" ? openCreate : openCreateLead} className="gap-2">
-            <PlusCircle className="h-4 w-4" />
-            {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
-          </Button>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[240px] max-w-[420px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
-              className="pl-9"
-            />
-          </div>
-          <Select
-            value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
-            onValueChange={(value) => {
-              if (activeTab === "customers") setCustomerManagerFilter(value);
-              else setLeadManagerFilter(value);
-            }}
+  const customersHeaderActions = useMemo(() => (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={activeTab === "customers"}
+            onClick={() => setActiveTab("customers")}
+            className="gap-2"
           >
-            <SelectTrigger className="w-[220px]">
-              <div className="min-w-0 flex items-center">
-                {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
-              <SelectItem value={NO_MANAGER_FILTER}>Без менеджера</SelectItem>
-              {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
-                <SelectItem key={manager} value={manager}>
-                  {renderManagerFilterValue(manager)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </PageHeader>
-
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
-        <TabsList className="w-fit">
-          <TabsTrigger value="customers" className="gap-2">
             <Building2 className="h-4 w-4" />
             Замовники
-          </TabsTrigger>
-          <TabsTrigger value="leads" className="gap-2">
+          </Button>
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={activeTab === "leads"}
+            onClick={() => setActiveTab("leads")}
+            className="gap-2"
+          >
             <Users className="h-4 w-4" />
             Ліди
-          </TabsTrigger>
-        </TabsList>
+          </Button>
+        </div>
+        <Button onClick={activeTab === "customers" ? openCreate : openCreateLead} className="h-10 gap-2">
+          <PlusCircle className="h-4 w-4" />
+          {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
+        </Button>
+      </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[240px] max-w-[420px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
+          onValueChange={(value) => {
+            if (activeTab === "customers") setCustomerManagerFilter(value);
+            else setLeadManagerFilter(value);
+          }}
+        >
+          <SelectTrigger className="w-[220px]">
+            <div className="min-w-0 flex items-center">
+              {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
+            <SelectItem value={NO_MANAGER_FILTER}>Без менеджера</SelectItem>
+            {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
+              <SelectItem key={manager} value={manager}>
+                {renderManagerFilterValue(manager)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="ml-auto text-sm font-semibold text-foreground">
+          {activeTab === "customers" ? filteredRows.length : filteredLeads.length}
+          <span className="ml-1 text-muted-foreground">знайдено</span>
+        </div>
+      </div>
+    </div>
+  ), [
+    activeTab,
+    customerManagerFilter,
+    customerManagerOptions,
+    filteredLeads.length,
+    filteredRows.length,
+    leadManagerFilter,
+    leadManagerOptions,
+    search,
+  ]);
+
+  usePageHeaderActions(customersHeaderActions, [customersHeaderActions]);
+
+  return (
+    <div className="w-full pb-20 md:pb-0 space-y-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
         <TabsContent value="customers" className="mt-4">
-          <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
+          <div className="overflow-hidden">
             {customersLoading ? (
               <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
             ) : customersError ? (
@@ -1122,7 +1147,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </TabsContent>
 
         <TabsContent value="leads" className="mt-4">
-          <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
+          <div className="overflow-hidden">
             {leadsLoading ? (
               <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
             ) : leadsError ? (

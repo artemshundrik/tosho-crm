@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -1824,6 +1824,26 @@ export default function DesignTaskPage() {
     (file.storage_bucket && file.storage_path
       ? supabase.storage.from(file.storage_bucket).getPublicUrl(file.storage_path).data.publicUrl
       : null);
+
+  const downloadFileToDevice = useCallback(async (url: string, filename?: string | null) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = (filename && filename.trim()) || "file";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      toast.error("Не вдалося завантажити файл", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    }
+  }, []);
 
   const persistDesignOutputs = async (nextFiles: DesignOutputFile[], nextLinks: DesignOutputLink[]) => {
     if (!task || !effectiveTeamId) return;
@@ -3808,16 +3828,13 @@ export default function DesignTaskPage() {
                                   <Eye className="h-4 w-4" />
                                 </a>
                               </Button>
-                              <Button size="icon" variant="ghost" asChild>
-                                <a
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  download={file.file_name}
-                                  aria-label="Завантажити файл"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </a>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label="Завантажити файл"
+                                onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                              >
+                                <Download className="h-4 w-4" />
                               </Button>
                             </>
                           ) : (
@@ -4237,16 +4254,13 @@ export default function DesignTaskPage() {
                                   <Eye className="h-4 w-4" />
                                 </a>
                               </Button>
-                              <Button size="icon" variant="ghost" asChild>
-                                <a
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  download={file.file_name ?? undefined}
-                                  aria-label="Завантажити файл"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </a>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label="Завантажити файл"
+                                onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                              >
+                                <Download className="h-4 w-4" />
                               </Button>
                             </>
                           ) : (
