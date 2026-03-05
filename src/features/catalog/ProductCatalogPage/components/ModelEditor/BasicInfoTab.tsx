@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Image as ImageIcon, Link2, Upload, X } from "lucide-react";
-import type { CatalogType, ImageUploadMode } from "@/types/catalog";
+import type { CatalogModelMetadata, CatalogType, ImageUploadMode } from "@/types/catalog";
 
 interface BasicInfoTabProps {
   catalog: CatalogType[];
@@ -17,10 +17,12 @@ interface BasicInfoTabProps {
   draftKindId: string;
   draftName: string;
   draftImageUrl: string;
+  draftMetadata: CatalogModelMetadata;
   imageUploadMode: ImageUploadMode;
   onTypeChange: (value: string) => void;
   onKindChange: (value: string) => void;
   onNameChange: (value: string) => void;
+  onMetadataChange: (value: CatalogModelMetadata) => void;
   onImageUrlChange: (value: string) => void;
   onImageUploadModeChange: (value: ImageUploadMode) => void;
   onImageFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -32,15 +34,19 @@ export function BasicInfoTab({
   draftKindId,
   draftName,
   draftImageUrl,
+  draftMetadata,
   imageUploadMode,
   onTypeChange,
   onKindChange,
   onNameChange,
+  onMetadataChange,
   onImageUrlChange,
   onImageUploadModeChange,
   onImageFileUpload,
 }: BasicInfoTabProps) {
   const draftKinds = catalog.find((t) => t.id === draftTypeId)?.kinds ?? [];
+  const draftType = catalog.find((t) => t.id === draftTypeId);
+  const showConfiguratorPreset = draftType?.quote_type === "print";
 
   return (
     <div className="space-y-8">
@@ -161,6 +167,28 @@ export function BasicInfoTab({
             className="bg-background/60 border-border/60"
           />
         </div>
+        {showConfiguratorPreset ? (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Preset конфігуратора</Label>
+            <Select
+              value={draftMetadata.configuratorPreset ?? "none"}
+              onValueChange={(value) =>
+                onMetadataChange({
+                  ...draftMetadata,
+                  configuratorPreset: value === "none" ? null : (value as "print_package"),
+                })
+              }
+            >
+              <SelectTrigger className="bg-background/60 border-border/60">
+                <SelectValue placeholder="Без додаткового конфігуратора" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Без додаткового конфігуратора</SelectItem>
+                <SelectItem value="print_package">Паперовий пакет</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
     </div>
   );

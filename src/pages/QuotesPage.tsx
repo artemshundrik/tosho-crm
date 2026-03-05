@@ -14,6 +14,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { formatPrintPackageSummary, type QuoteItemMetadata } from "@/lib/printPackage";
 import {
   listQuotes,
   listQuoteSets,
@@ -128,7 +129,12 @@ type QuotePartyOption = CustomerRow & {
 };
 
 type CatalogMethod = { id: string; name: string; price?: number };
-type CatalogModel = { id: string; name: string; price?: number };
+type CatalogModel = {
+  id: string;
+  name: string;
+  price?: number;
+  metadata?: { configuratorPreset?: "print_package" | null };
+};
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 type CatalogKind = {
   id: string;
@@ -689,7 +695,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           .from("catalog_types")
           .select("id,name,quote_type,sort_order")
           .eq("team_id", teamId)
-          .eq("quote_type", quoteType)
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true });
         if (typeError) throw typeError;
@@ -714,7 +719,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ? await supabase
               .schema("tosho")
               .from("catalog_models")
-              .select("id,kind_id,name,price")
+              .select("id,kind_id,name,price,metadata")
               .eq("team_id", teamId)
               .in("kind_id", kindIds)
               .order("name", { ascending: true })
@@ -753,7 +758,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const modelsByKind = new Map<string, CatalogModel[]>();
         (modelRows ?? []).forEach((row) => {
           const list = modelsByKind.get(row.kind_id) ?? [];
-          list.push({ id: row.id, name: row.name, price: row.price ?? undefined });
+          list.push({
+            id: row.id,
+            name: row.name,
+            price: row.price ?? undefined,
+            metadata:
+              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as CatalogModel["metadata"])
+                : undefined,
+          });
           modelsByKind.set(row.kind_id, list);
         });
 
@@ -809,7 +822,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [createOpen, teamId, quoteType]);
+  }, [createOpen, teamId]);
 
   const loadQuotes = async () => {
     const requestId = ++quotesLoadRequestIdRef.current;
@@ -1224,9 +1237,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!teamId) {
         throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       }
+      const isPrintPackageQuote = data.productConfiguratorPreset === "print_package";
       const qtyValue = Number(data.quantity ?? 0);
-      if (!data.modelId || !Number.isFinite(qtyValue) || qtyValue <= 0) {
-        throw new Error("Не можна створити прорахунок без товару. Оберіть позицію з каталогу та кількість.");
+      if ((!isPrintPackageQuote && !data.modelId) || !Number.isFinite(qtyValue) || qtyValue <= 0) {
+        throw new Error(
+          isPrintPackageQuote
+            ? "Не можна створити прорахунок без коректної кількості."
+            : "Не можна створити прорахунок без товару. Оберіть позицію з каталогу та кількість."
+        );
       }
       // 1. Create quote
       const formatDateOnly = (date: Date) => {
@@ -1272,9 +1290,31 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const type = catalogTypes.find((t) => t.id === data.categoryId);
       const kind = type?.kinds.find((k) => k.id === data.kindId);
       const model = kind?.models.find((m) => m.id === data.modelId);
+      const packageConfig = data.printPackageConfig;
+      const packageItemDescription =
+        packageConfig && isPrintPackageQuote
+          ? formatPrintPackageSummary(packageConfig).join(" • ")
+          : null;
+      const packageItemMetadata: QuoteItemMetadata | null =
+        isPrintPackageQuote && packageConfig
+          ? {
+              configuratorPreset: "print_package",
+              printPackage: packageConfig,
+            }
+          : null;
+      const packageItemName =
+        isPrintPackageQuote && packageConfig
+          ? `Пакет${
+              packageConfig.packageType === "ready"
+                ? " готовий"
+                : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
+                  ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
+                  : ""
+            }`
+          : null;
 
       // 2. Create quote item
-      if (data.modelId && data.quantity) {
+      if ((data.modelId || isPrintPackageQuote) && data.quantity) {
 
         // Prepare methods payload from print applications
         const isUuid = (value?: string | null) =>
@@ -1294,35 +1334,61 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const primaryPrint = methodsPayload?.[0] ?? null;
 
-        const { error: itemError } = await supabase
+        const itemPayload = {
+          id: crypto.randomUUID(),
+          team_id: teamId,
+          quote_id: created.id,
+          position: 1,
+          name: packageItemName ?? model?.name ?? "Позиція",
+          description: packageItemDescription,
+          qty: data.quantity,
+          unit_price: isPrintPackageQuote ? 0 : model?.price ?? 0,
+          line_total: data.quantity * (isPrintPackageQuote ? 0 : model?.price ?? 0),
+          catalog_type_id: isPrintPackageQuote ? null : data.categoryId,
+          catalog_kind_id: isPrintPackageQuote ? null : data.kindId,
+          catalog_model_id: isPrintPackageQuote ? null : data.modelId,
+          print_position_id: primaryPrint?.print_position_id ?? null,
+          print_width_mm: primaryPrint?.print_width_mm ?? null,
+          print_height_mm: primaryPrint?.print_height_mm ?? null,
+          methods: isPrintPackageQuote ? null : methodsPayload,
+          metadata: packageItemMetadata,
+          unit: normalizeUnitLabel(data.quantityUnit),
+        };
+        let { error: itemError } = await supabase
           .schema("tosho")
           .from("quote_items")
-          .insert({
-            id: crypto.randomUUID(),
-            team_id: teamId,
-            quote_id: created.id,
-            position: 1,
-            name: model?.name ?? "Позиція",
-            description: null,
-            qty: data.quantity,
-            unit_price: model?.price ?? 0,
-            line_total: data.quantity * (model?.price ?? 0),
-            catalog_type_id: data.categoryId,
-            catalog_kind_id: data.kindId,
-            catalog_model_id: data.modelId,
-            print_position_id: primaryPrint?.print_position_id ?? null,
-            print_width_mm: primaryPrint?.print_width_mm ?? null,
-            print_height_mm: primaryPrint?.print_height_mm ?? null,
-            methods: methodsPayload,
-            unit: normalizeUnitLabel(data.quantityUnit),
-          });
+          .insert(itemPayload);
+        if (itemError && /column/i.test(itemError.message ?? "") && /metadata/i.test(itemError.message ?? "")) {
+          ({ error: itemError } = await supabase
+            .schema("tosho")
+            .from("quote_items")
+            .insert({
+              id: itemPayload.id,
+              team_id: itemPayload.team_id,
+              quote_id: itemPayload.quote_id,
+              position: itemPayload.position,
+              name: itemPayload.name,
+              description: itemPayload.description,
+              qty: itemPayload.qty,
+              unit_price: itemPayload.unit_price,
+              line_total: itemPayload.line_total,
+              catalog_type_id: itemPayload.catalog_type_id,
+              catalog_kind_id: itemPayload.catalog_kind_id,
+              catalog_model_id: itemPayload.catalog_model_id,
+              print_position_id: itemPayload.print_position_id,
+              print_width_mm: itemPayload.print_width_mm,
+              print_height_mm: itemPayload.print_height_mm,
+              methods: itemPayload.methods,
+              unit: itemPayload.unit,
+            }));
+        }
         if (itemError) throw itemError;
       }
 
       // 3. Optionally create design task (lightweight, via activity_log)
       const shouldCreateDesignTask =
         data.createDesignTask &&
-        (data.printApplications.length > 0 || data.files.length > 0);
+        (data.printApplications.length > 0 || data.files.length > 0 || isPrintPackageQuote);
       let createdDesignTaskId: string | null = null;
       if (shouldCreateDesignTask && teamId) {
         const actorName =
@@ -1345,7 +1411,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           .lt("created_at", nextMonthStartIso);
         if (taskCountError) throw taskCountError;
         const designTaskNumber = `TS-${monthCode}-${String((taskCount ?? 0) + 1).padStart(4, "0")}`;
-        const modelName = model?.name ?? "Позиція";
+        const modelName = packageItemName ?? model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
         const assigneeUserId = data.designAssigneeId ?? null;
         const assignedAt = assigneeUserId ? new Date().toISOString() : null;
@@ -1368,7 +1434,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               assignee_user_id: assigneeUserId,
               assigned_at: assignedAt,
               quote_type: data.quoteType,
-              methods_count: data.printApplications.length,
+              methods_count: isPrintPackageQuote ? 1 : data.printApplications.length,
               has_files: data.files.length > 0,
               design_deadline: designDeadline,
               deadline: designDeadline,

@@ -86,7 +86,7 @@ export function useCatalogData(teamId: string | null) {
           supabase
             .schema("tosho")
             .from("catalog_models")
-            .select("id,kind_id,name,price,image_url")
+            .select("id,kind_id,name,price,image_url,metadata")
             .eq("team_id", teamId)
             .order("name", { ascending: true }),
           supabase
@@ -176,6 +176,10 @@ export function useCatalogData(teamId: string | null) {
             name: row.name,
             price: row.price ?? undefined,
             imageUrl: row.image_url ?? undefined,
+            metadata:
+              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as CatalogModel["metadata"])
+                : undefined,
             methodIds: methodIdsByModel.get(row.id) ?? [],
             priceTiers: tiersByModel.get(row.id),
           });

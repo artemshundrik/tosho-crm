@@ -1246,6 +1246,7 @@ export type QuoteItemExportRow = {
   position?: number | null;
   name?: string | null;
   description?: string | null;
+  metadata?: Record<string, unknown> | null;
   qty?: number | null;
   unit?: string | null;
   unit_price?: number | null;
@@ -1572,12 +1573,15 @@ export async function listQuoteItemsForQuotes(params: {
 }): Promise<QuoteItemExportRow[]> {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   if (uniqueQuoteIds.length === 0) return [];
+  const columnsWithMetadata =
+    "id,quote_id,position,name,description,metadata,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm";
+  const columnsWithoutMetadata =
+    "id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm";
 
-  const readRows = async (withTeamFilter: boolean) => {
-    let query = supabase
-      .schema("tosho")
-      .from("quote_items")
-      .select("id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm")
+  const readRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
+    const quoteItemsTable: any = supabase.schema("tosho").from("quote_items");
+    let query: any = quoteItemsTable
+      .select(withMetadata ? columnsWithMetadata : columnsWithoutMetadata)
       .in("quote_id", uniqueQuoteIds)
       .order("quote_id", { ascending: true })
       .order("position", { ascending: true });
@@ -1587,9 +1591,17 @@ export async function listQuoteItemsForQuotes(params: {
     return await query;
   };
 
-  let { data, error } = await readRows(true);
+  let data: unknown[] | null = null;
+  let error: { message?: string | null } | null = null;
+  ({ data, error } = await readRows(true, true));
+  if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+    ({ data, error } = await readRows(true, false));
+  }
   if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
-    ({ data, error } = await readRows(false));
+    ({ data, error } = await readRows(false, true));
+    if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+      ({ data, error } = await readRows(false, false));
+    }
   }
   handleError(error);
   return ((data ?? []) as unknown) as QuoteItemExportRow[];

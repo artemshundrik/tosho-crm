@@ -19,7 +19,7 @@ import { Trash2 } from "lucide-react";
 import { BasicInfoTab } from "./BasicInfoTab";
 import { PricingSection } from "./PricingSection";
 import { MethodsSection } from "./MethodsSection";
-import type { CatalogType, CatalogMethod, CatalogPriceTier, PriceMode, ImageUploadMode } from "@/types/catalog";
+import type { CatalogType, CatalogMethod, CatalogModelMetadata, CatalogPriceTier, PriceMode, ImageUploadMode } from "@/types/catalog";
 
 interface ModelEditorProps {
   open: boolean;
@@ -37,6 +37,7 @@ interface ModelEditorProps {
   draftTiers: CatalogPriceTier[];
   draftMethodIds: string[];
   draftImageUrl: string;
+  draftMetadata: CatalogModelMetadata;
   imageUploadMode: ImageUploadMode;
   
   // Methods
@@ -50,6 +51,7 @@ interface ModelEditorProps {
   onTypeChange: (value: string) => void;
   onKindChange: (value: string) => void;
   onNameChange: (value: string) => void;
+  onMetadataChange: (value: CatalogModelMetadata) => void;
   onPriceModeChange: (mode: PriceMode) => void;
   onFixedPriceChange: (value: string) => void;
   onTierUpdate: (id: string, patch: Partial<CatalogPriceTier>) => void;
@@ -80,6 +82,7 @@ export function ModelEditor({
   draftTiers,
   draftMethodIds,
   draftImageUrl,
+  draftMetadata,
   imageUploadMode,
   availableMethods,
   newMethodName,
@@ -89,6 +92,7 @@ export function ModelEditor({
   onTypeChange,
   onKindChange,
   onNameChange,
+  onMetadataChange,
   onPriceModeChange,
   onFixedPriceChange,
   onTierUpdate,
@@ -210,10 +214,12 @@ export function ModelEditor({
               draftKindId={draftKindId}
               draftName={draftName}
               draftImageUrl={draftImageUrl}
+              draftMetadata={draftMetadata}
               imageUploadMode={imageUploadMode}
               onTypeChange={onTypeChange}
               onKindChange={onKindChange}
               onNameChange={onNameChange}
+              onMetadataChange={onMetadataChange}
               onImageUrlChange={onImageUrlChange}
               onImageUploadModeChange={onImageUploadModeChange}
               onImageFileUpload={onImageFileUpload}

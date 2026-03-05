@@ -34,6 +34,11 @@ export type CatalogModel = {
   priceTiers?: CatalogPriceTier[];
   methodIds?: string[];
   imageUrl?: string;
+  metadata?: CatalogModelMetadata;
+};
+
+export type CatalogModelMetadata = {
+  configuratorPreset?: "print_package" | null;
 };
 
 /**

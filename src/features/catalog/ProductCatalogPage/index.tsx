@@ -474,6 +474,7 @@ export default function ProductCatalogPage() {
         draftTiers={modelEditor.draftTiers}
         draftMethodIds={modelEditor.draftMethodIds}
         draftImageUrl={modelEditor.draftImageUrl}
+        draftMetadata={modelEditor.draftMetadata}
         imageUploadMode={modelEditor.imageUploadMode}
         availableMethods={availableMethodsForDraft}
         newMethodName={modelEditor.newMethodName}
@@ -483,6 +484,7 @@ export default function ProductCatalogPage() {
         onTypeChange={modelEditor.handleDraftTypeChange}
         onKindChange={modelEditor.handleDraftKindChange}
         onNameChange={modelEditor.setDraftName}
+        onMetadataChange={modelEditor.setDraftMetadata}
         onPriceModeChange={modelEditor.handlePriceModeChange}
         onFixedPriceChange={modelEditor.setDraftFixedPrice}
         onTierUpdate={modelEditor.updateDraftTier}

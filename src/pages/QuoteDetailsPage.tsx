@@ -31,6 +31,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import {
+  formatPrintPackageSummary,
+  isPrintPackageMetadata,
+  type QuoteItemMetadata,
+} from "@/lib/printPackage";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
@@ -169,6 +174,7 @@ type QuoteItem = {
   unit: string;
   price: number;
   description?: string;
+  metadata?: QuoteItemMetadata | null;
   catalogTypeId?: string;
   catalogKindId?: string;
   catalogModelId?: string;
@@ -247,6 +253,11 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   }
   if (typeof value === "object") return value as Record<string, unknown>;
   return {};
+};
+
+const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
+  if (!isPrintPackageMetadata(value)) return null;
+  return value;
 };
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
@@ -1059,7 +1070,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const { data: modelRows, error: modelError } = await supabase
           .schema("tosho")
           .from("catalog_models")
-          .select("id,kind_id,name,price,image_url")
+          .select("id,kind_id,name,price,image_url,metadata")
           .eq("team_id", teamId)
           .order("name", { ascending: true });
         if (modelError) throw modelError;
@@ -1142,6 +1153,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             name: row.name,
             price: row.price ?? undefined,
             imageUrl: row.image_url ?? undefined,
+            metadata:
+              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as CatalogModel["metadata"])
+                : undefined,
             priceTiers: tiersByModel.get(row.id),
           });
           modelsByKind.set(row.kind_id, list);
@@ -1479,11 +1494,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemsLoading(true);
     setItemsError(null);
     try {
-      const loadRows = async (withTeamFilter: boolean) => {
-        let query = supabase
-          .schema("tosho")
-          .from("quote_items")
-          .select("id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm")
+      const quoteItemColumnsWithMetadata =
+        "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+      const quoteItemColumnsWithoutMetadata =
+        "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+      const loadRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
+        const quoteItemsTable: any = supabase.schema("tosho").from("quote_items");
+        let query: any = quoteItemsTable
+          .select(withMetadata ? quoteItemColumnsWithMetadata : quoteItemColumnsWithoutMetadata)
           .eq("quote_id", quoteId)
           .order("position", { ascending: true });
         if (withTeamFilter && teamId) {
@@ -1492,19 +1510,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         return await query;
       };
 
-      let { data, error } = await loadRows(!!teamId);
+      let { data, error } = await loadRows(!!teamId, true);
+      if (
+        error &&
+        /column/i.test(error.message ?? "") &&
+        /metadata/i.test(error.message ?? "")
+      ) {
+        ({ data, error } = await loadRows(!!teamId, false));
+      }
       if (
         error &&
         teamId &&
         /column/i.test(error.message ?? "") &&
         /team_id/i.test(error.message ?? "")
       ) {
-        ({ data, error } = await loadRows(false));
+        ({ data, error } = await loadRows(false, true));
+        if (
+          error &&
+          /column/i.test(error.message ?? "") &&
+          /metadata/i.test(error.message ?? "")
+        ) {
+          ({ data, error } = await loadRows(false, false));
+        }
       }
       if (error) throw error;
       const rows = data ?? [];
       setItems(
-        rows.map((row) => {
+        rows.map((row: any) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
           const parsedMethods: ItemMethod[] = rawMethods
             .map((method: unknown) => {
@@ -1551,6 +1583,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             unit: normalizeUnitLabel(row.unit),
             price: Number(row.unit_price ?? 0) || 0,
             description: row.description ?? undefined,
+            metadata: parseQuoteItemMetadata((row as Record<string, unknown>).metadata),
             catalogTypeId: row.catalog_type_id ?? undefined,
             catalogKindId: row.catalog_kind_id ?? undefined,
             catalogModelId: row.catalog_model_id ?? undefined,
@@ -2194,14 +2227,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const newQuoteId = created?.id;
       if (!newQuoteId) throw new Error("Не вдалося створити дублікат прорахунку.");
 
-      const { data: sourceItems, error: sourceItemsError } = await supabase
-        .schema("tosho")
-        .from("quote_items")
-        .select(
-          "id,position,name,description,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
-        )
-        .eq("quote_id", sourceQuoteId)
-        .order("position", { ascending: true });
+      const loadSourceItems = async (withMetadata: boolean) =>
+        await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .select(
+            withMetadata
+              ? "id,position,name,description,metadata,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
+              : "id,position,name,description,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
+          )
+          .eq("quote_id", sourceQuoteId)
+          .order("position", { ascending: true });
+      let { data: sourceItems, error: sourceItemsError } = await loadSourceItems(true);
+      if (
+        sourceItemsError &&
+        /column/i.test(sourceItemsError.message ?? "") &&
+        /metadata/i.test(sourceItemsError.message ?? "")
+      ) {
+        ({ data: sourceItems, error: sourceItemsError } = await loadSourceItems(false));
+      }
       if (sourceItemsError) throw sourceItemsError;
 
       const itemIdMap = new Map<string, string>();
@@ -2216,6 +2260,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           position: Number(row.position ?? index + 1) || index + 1,
           name: (row.name as string | null) ?? "Позиція",
           description: (row.description as string | null) ?? null,
+          metadata: ((row.metadata as Record<string, unknown> | null | undefined) ?? null),
           qty: Number(row.qty ?? 1) || 1,
           unit: normalizeUnitLabel(row.unit as string | null),
           unit_price: Number(row.unit_price ?? 0) || 0,
@@ -2535,6 +2580,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           url: itemAttachment.url,
         }
       : null;
+    const existingItemMetadata =
+      editingItemId ? items.find((item) => item.id === editingItemId)?.metadata ?? null : null;
 
     const newItem: QuoteItem = {
       id: editingItemId || createLocalId(),
@@ -2544,6 +2591,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       unit: normalizeUnitLabel(itemUnit),
       price: computedItemPrice,
       description: itemDescription.trim() || undefined,
+      metadata: existingItemMetadata,
       catalogTypeId: itemFormMode === "advanced" ? itemTypeId : undefined,
       catalogKindId: itemFormMode === "advanced" ? itemKindId : undefined,
       catalogModelId: itemFormMode === "advanced" ? itemModelId : undefined,
@@ -2563,23 +2611,44 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     try {
       if (editingItemId) {
-        const { error } = await supabase
+        const updatePayload = {
+          name: newItem.title,
+          description: newItem.description ?? null,
+          metadata: newItem.metadata ?? null,
+          qty: newItem.qty,
+          unit: normalizeUnitLabel(newItem.unit),
+          unit_price: newItem.price,
+          line_total: newItem.qty * newItem.price,
+          catalog_type_id: newItem.catalogTypeId ?? null,
+          catalog_kind_id: newItem.catalogKindId ?? null,
+          catalog_model_id: newItem.catalogModelId ?? null,
+          methods: methodsPayload,
+          attachment: attachmentPayload,
+        };
+        let { error } = await supabase
           .schema("tosho")
           .from("quote_items")
-          .update({
-            name: newItem.title,
-            description: newItem.description ?? null,
-            qty: newItem.qty,
-            unit: normalizeUnitLabel(newItem.unit),
-            unit_price: newItem.price,
-            line_total: newItem.qty * newItem.price,
-            catalog_type_id: newItem.catalogTypeId ?? null,
-            catalog_kind_id: newItem.catalogKindId ?? null,
-            catalog_model_id: newItem.catalogModelId ?? null,
-            methods: methodsPayload,
-            attachment: attachmentPayload,
-          })
+          .update(updatePayload)
           .eq("id", editingItemId);
+        if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+          ({ error } = await supabase
+            .schema("tosho")
+            .from("quote_items")
+            .update({
+              name: newItem.title,
+              description: newItem.description ?? null,
+              qty: newItem.qty,
+              unit: normalizeUnitLabel(newItem.unit),
+              unit_price: newItem.price,
+              line_total: newItem.qty * newItem.price,
+              catalog_type_id: newItem.catalogTypeId ?? null,
+              catalog_kind_id: newItem.catalogKindId ?? null,
+              catalog_model_id: newItem.catalogModelId ?? null,
+              methods: methodsPayload,
+              attachment: attachmentPayload,
+            })
+            .eq("id", editingItemId));
+        }
         if (error) throw error;
         setItems((prev) =>
           prev.map((item) => (item.id === editingItemId ? newItem : item))
@@ -2588,28 +2657,54 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const newId = crypto.randomUUID();
         const nextPosition =
           items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1;
-        const { data, error } = await supabase
+        const insertPayload = {
+          id: newId,
+          team_id: effectiveTeamId,
+          quote_id: quoteId,
+          position: nextPosition,
+          name: newItem.title,
+          description: newItem.description ?? null,
+          metadata: newItem.metadata ?? null,
+          qty: newItem.qty,
+          unit: normalizeUnitLabel(newItem.unit),
+          unit_price: newItem.price,
+          line_total: newItem.qty * newItem.price,
+          catalog_type_id: newItem.catalogTypeId ?? null,
+          catalog_kind_id: newItem.catalogKindId ?? null,
+          catalog_model_id: newItem.catalogModelId ?? null,
+          methods: methodsPayload,
+          attachment: attachmentPayload,
+        };
+        let { data, error } = await supabase
           .schema("tosho")
           .from("quote_items")
-          .insert({
-            id: newId,
-            team_id: effectiveTeamId,
-            quote_id: quoteId,
-            position: nextPosition,
-            name: newItem.title,
-            description: newItem.description ?? null,
-            qty: newItem.qty,
-            unit: normalizeUnitLabel(newItem.unit),
-            unit_price: newItem.price,
-            line_total: newItem.qty * newItem.price,
-            catalog_type_id: newItem.catalogTypeId ?? null,
-            catalog_kind_id: newItem.catalogKindId ?? null,
-            catalog_model_id: newItem.catalogModelId ?? null,
-            methods: methodsPayload,
-            attachment: attachmentPayload,
-          })
-          .select("id, position, name, description, qty, unit, unit_price, methods, attachment")
+          .insert(insertPayload)
+          .select("id, position, name, description, metadata, qty, unit, unit_price, methods, attachment")
           .single();
+        if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+          ({ data, error } = await supabase
+            .schema("tosho")
+            .from("quote_items")
+            .insert({
+              id: newId,
+              team_id: effectiveTeamId,
+              quote_id: quoteId,
+              position: nextPosition,
+              name: newItem.title,
+              description: newItem.description ?? null,
+              qty: newItem.qty,
+              unit: normalizeUnitLabel(newItem.unit),
+              unit_price: newItem.price,
+              line_total: newItem.qty * newItem.price,
+              catalog_type_id: newItem.catalogTypeId ?? null,
+              catalog_kind_id: newItem.catalogKindId ?? null,
+              catalog_model_id: newItem.catalogModelId ?? null,
+              methods: methodsPayload,
+              attachment: attachmentPayload,
+            })
+            .select("id, position, name, description, qty, unit, unit_price, methods, attachment")
+            .single());
+        }
         if (error) throw error;
         const inserted: QuoteItem = {
           ...newItem,
@@ -2619,6 +2714,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit: normalizeUnitLabel((data?.unit as string | null | undefined) ?? newItem.unit),
           price: Number(data?.unit_price ?? newItem.price),
           description: data?.description ?? newItem.description,
+          metadata: parseQuoteItemMetadata((data as Record<string, unknown> | null | undefined)?.metadata) ?? newItem.metadata ?? null,
         };
         setItems((prev) => [...prev, inserted]);
       }
@@ -3546,6 +3642,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 const productPreview = catalogImage
                   ? { type: "image" as const, url: catalogImage }
                   : null;
+                const packageSummary =
+                  item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
+                    ? formatPrintPackageSummary(item.metadata.printPackage)
+                    : [];
 
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
@@ -3576,6 +3676,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div>
                             Одиниця: <span className="text-foreground">{normalizeUnitLabel(item.unit)}</span>
                           </div>
+                          {packageSummary.length > 0 ? (
+                            <div className="sm:col-span-2">
+                              Параметри пакета:{" "}
+                              <span className="text-foreground">{packageSummary.join(" • ")}</span>
+                            </div>
+                          ) : null}
                           {(positionLabel || sizeLabel) && (
                             <div className="sm:col-span-2 flex items-center gap-2">
                               <Badge variant="outline" className="text-[11px]">

@@ -35,6 +35,14 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
+import { createEmptyPrintPackageConfig, type PrintPackageConfig } from "@/lib/printPackage";
+import {
+  PrintPackageConfigurator,
+  PRINT_PACKAGE_DENSITIES,
+  PRINT_PACKAGE_HANDLES,
+  PRINT_PACKAGE_PRINT_TYPES,
+  type ConfiguratorProductOption,
+} from "@/components/quotes/PrintPackageConfigurator";
 import {
   Building2,
   User,
@@ -215,6 +223,8 @@ export type NewQuoteFormData = {
   categoryId?: string;
   kindId?: string;
   modelId?: string;
+  productConfiguratorPreset?: "print_package" | null;
+  printPackageConfig?: PrintPackageConfig;
   quantity?: number;
   quantityUnit: string;
   printApplications: PrintApplication[];
@@ -272,6 +282,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
+  const [printPackageConfig, setPrintPackageConfig] = React.useState<PrintPackageConfig>(
+    createEmptyPrintPackageConfig()
+  );
   const [quantity, setQuantity] = React.useState<number>();
   const [quantityUnit, setQuantityUnit] = React.useState("шт.");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
@@ -296,6 +309,69 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const selectedKind = React.useMemo(
     () => selectedType?.kinds.find((kind) => kind.id === kindId),
     [selectedType, kindId]
+  );
+  const selectedModel = React.useMemo(
+    () => selectedKind?.models.find((model) => model.id === modelId),
+    [selectedKind, modelId]
+  );
+  const activeConfiguratorPreset = selectedModel?.metadata?.configuratorPreset ?? null;
+  const isPrintPackageMode = activeConfiguratorPreset === "print_package";
+  const configuratorProductOptions = React.useMemo<ConfiguratorProductOption[]>(() => {
+    return catalogTypes.flatMap((type) =>
+      type.quote_type && type.quote_type !== quoteType
+        ? []
+        : type.kinds.flatMap((kind) =>
+            kind.models.flatMap((model) => {
+              const preset = model.metadata?.configuratorPreset ?? null;
+              if (preset !== "print_package") return [];
+              return [
+                {
+                  typeId: type.id,
+                  typeName: type.name,
+                  kindId: kind.id,
+                  kindName: kind.name,
+                  modelId: model.id,
+                  modelName: model.name,
+                  preset,
+                  productLabel: "Пакет",
+                },
+              ];
+            })
+          )
+    );
+  }, [catalogTypes, quoteType]);
+  const selectedConfiguratorProduct = React.useMemo(
+    () =>
+      configuratorProductOptions.find(
+        (option) =>
+          option.typeId === categoryId && option.kindId === kindId && option.modelId === modelId
+      ) ?? null,
+    [categoryId, configuratorProductOptions, kindId, modelId]
+  );
+  const availablePackageDensities = React.useMemo(
+    () =>
+      PRINT_PACKAGE_DENSITIES.filter((option) => {
+        if (option.onlyFor === "kraft") return printPackageConfig.paperType === "kraft";
+        if (option.onlyFor === "cardboard") return printPackageConfig.paperType === "cardboard";
+        return true;
+      }),
+    [printPackageConfig.paperType]
+  );
+  const availablePackageHandles = React.useMemo(
+    () =>
+      PRINT_PACKAGE_HANDLES.filter((option) => {
+        if (option.onlyFor === "kraft") return printPackageConfig.paperType === "kraft";
+        return true;
+      }),
+    [printPackageConfig.paperType]
+  );
+  const availablePackagePrintTypes = React.useMemo(
+    () =>
+      PRINT_PACKAGE_PRINT_TYPES.filter((option) => {
+        if (option.notForReady) return printPackageConfig.packageType !== "ready";
+        return true;
+      }),
+    [printPackageConfig.packageType]
   );
   const availablePrintMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
@@ -349,6 +425,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCategoryId(initialValues?.categoryId ?? "");
     setKindId(initialValues?.kindId ?? "");
     setModelId(initialValues?.modelId ?? "");
+    setPrintPackageConfig({
+      ...createEmptyPrintPackageConfig(),
+      ...(initialValues?.printPackageConfig ?? {}),
+      productKind:
+        (initialValues?.quoteType ?? "merch") === "print"
+          ? initialValues?.printPackageConfig?.productKind ?? "package"
+          : initialValues?.printPackageConfig?.productKind ?? "",
+    });
     setQuantity(initialValues?.quantity);
     setQuantityUnit(normalizeUnitLabel(initialValues?.quantityUnit ?? "шт."));
     setPrintApplications(nextPrintApplications);
@@ -371,6 +455,77 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
   }, [open, initialValues, currentUserId, availableStatuses]);
+
+  React.useEffect(() => {
+    if (quoteType !== "print") return;
+    if (isPrintPackageMode) return;
+    if (categoryId || kindId || modelId) return;
+    if (configuratorProductOptions.length !== 1) return;
+    const [defaultOption] = configuratorProductOptions;
+    setCategoryId(defaultOption.typeId);
+    setKindId(defaultOption.kindId);
+    setModelId(defaultOption.modelId);
+    setPrintPackageConfig((prev) => ({
+      ...createEmptyPrintPackageConfig(),
+      ...prev,
+      productKind: defaultOption.productLabel.toLowerCase(),
+    }));
+  }, [
+    categoryId,
+    configuratorProductOptions,
+    isPrintPackageMode,
+    kindId,
+    modelId,
+    quoteType,
+  ]);
+
+  React.useEffect(() => {
+    if (!isPrintPackageMode) return;
+    const activeHandleValid = availablePackageHandles.some((option) => option.value === printPackageConfig.handleType);
+    const activeDensityValid = availablePackageDensities.some((option) => option.value === printPackageConfig.density);
+    const shouldHideEyelets =
+      printPackageConfig.packageType !== "custom" || printPackageConfig.paperType === "kraft";
+    const nextKraftColor = printPackageConfig.paperType === "kraft" ? printPackageConfig.kraftColor : "";
+    const nextHandleType = activeHandleValid ? printPackageConfig.handleType : "";
+    const nextDensity = activeDensityValid ? printPackageConfig.density : "";
+    const nextEyelets = shouldHideEyelets ? "" : printPackageConfig.eyelets;
+    if (
+      nextKraftColor !== printPackageConfig.kraftColor ||
+      nextHandleType !== printPackageConfig.handleType ||
+      nextDensity !== printPackageConfig.density ||
+      nextEyelets !== printPackageConfig.eyelets
+    ) {
+      setPrintPackageConfig((prev) => ({
+        ...prev,
+        kraftColor: nextKraftColor,
+        handleType: nextHandleType,
+        density: nextDensity,
+        eyelets: nextEyelets,
+      }));
+    }
+  }, [
+    availablePackageDensities,
+    availablePackageHandles,
+    isPrintPackageMode,
+    printPackageConfig.density,
+    printPackageConfig.eyelets,
+    printPackageConfig.handleType,
+    printPackageConfig.kraftColor,
+    printPackageConfig.packageType,
+    printPackageConfig.paperType,
+  ]);
+
+  React.useEffect(() => {
+    if (!isPrintPackageMode) return;
+    const activePrintTypeValid = availablePackagePrintTypes.some((option) => option.value === printPackageConfig.printType);
+    if (activePrintTypeValid) return;
+    setPrintPackageConfig((prev) => ({
+      ...prev,
+      printType: "",
+      pantoneCount: "",
+      stickerSize: "",
+    }));
+  }, [availablePackagePrintTypes, isPrintPackageMode, printPackageConfig.printType]);
 
   // Add print application
   const handleAddPrintApplication = () => {
@@ -409,14 +564,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setFilesDragActive(false);
-    if (printMode === "no_print") return;
+    if (printMode === "no_print" && !isPrintPackageMode) return;
     const droppedFiles = Array.from(e.dataTransfer.files);
     setFiles([...files, ...droppedFiles].slice(0, 5));
   };
 
   // Handle file select
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (printMode === "no_print") return;
+    if (printMode === "no_print" && !isPrintPackageMode) return;
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files);
       setFiles([...files, ...selectedFiles].slice(0, 5));
@@ -484,8 +639,83 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       }
     }
 
+    if (!isEditMode && isPrintPackageMode) {
+      const qtyValue = Number(quantity ?? 0);
+      const numericFieldsValid = (value: string) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0;
+      };
+
+      if (!printPackageConfig.packageType) {
+        alert("Оберіть тип пакету");
+        return;
+      }
+      if (printPackageConfig.packageType === "custom") {
+        if (!numericFieldsValid(printPackageConfig.widthMm) || !numericFieldsValid(printPackageConfig.heightMm) || !numericFieldsValid(printPackageConfig.lengthMm)) {
+          alert("Для індивідуального пакету вкажіть коректні ширину, висоту і довжину");
+          return;
+        }
+      }
+      if (printPackageConfig.packageType === "ready" && !printPackageConfig.supplierLink.trim()) {
+        alert("Для готового пакету додайте посилання на пакет постачальника");
+        return;
+      }
+      if (!printPackageConfig.orientation) {
+        alert("Оберіть орієнтацію пакету");
+        return;
+      }
+      if (!printPackageConfig.paperType) {
+        alert("Оберіть вид паперу");
+        return;
+      }
+      if (printPackageConfig.paperType === "kraft" && !printPackageConfig.kraftColor) {
+        alert("Оберіть колір крафту");
+        return;
+      }
+      if (!printPackageConfig.density) {
+        alert("Оберіть щільність");
+        return;
+      }
+      if (!printPackageConfig.handleType) {
+        alert("Оберіть тип ручок");
+        return;
+      }
+      if (printPackageConfig.packageType === "custom" && printPackageConfig.paperType !== "kraft" && !printPackageConfig.eyelets) {
+        alert("Оберіть, чи потрібні люверси");
+        return;
+      }
+      if (!printPackageConfig.printSides) {
+        alert("Оберіть кількість нанесень");
+        return;
+      }
+      if (!printPackageConfig.printType) {
+        alert("Оберіть тип нанесення");
+        return;
+      }
+      if (
+        (printPackageConfig.printType === "pantone" || printPackageConfig.printType === "cmyk_pantone") &&
+        (!numericFieldsValid(printPackageConfig.pantoneCount) || !Number.isInteger(Number(printPackageConfig.pantoneCount)))
+      ) {
+        alert("Вкажіть коректну кількість пантонів");
+        return;
+      }
+      if (printPackageConfig.printType === "sticker" && !printPackageConfig.stickerSize.trim()) {
+        alert("Вкажіть розмір наліпки/стікера");
+        return;
+      }
+      if (printPackageConfig.packageType === "custom" && !printPackageConfig.lamination) {
+        alert("Оберіть, чи потрібна ламінація");
+        return;
+      }
+      if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+        alert("Вкажіть коректну кількість");
+        return;
+      }
+    }
+
     const finalPrints = printMode === "no_print" ? [] : printApplications;
-    const shouldCreateDesignTask = printMode !== "no_print" && createDesignTask;
+    const shouldCreateDesignTask =
+      ((printMode !== "no_print" && !isPrintPackageMode) || isPrintPackageMode) && createDesignTask;
     const sanitizedDeliveryDetails: DeliveryDetails = {
       region: "",
       city: "",
@@ -527,6 +757,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       categoryId,
       kindId,
       modelId,
+      productConfiguratorPreset: activeConfiguratorPreset,
+      printPackageConfig: isPrintPackageMode ? printPackageConfig : undefined,
       quantity,
       quantityUnit: normalizeUnitLabel(quantityUnit),
       printApplications: finalPrints,
@@ -1029,11 +1261,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 type="single"
                 value={quoteType}
                 onValueChange={(value) => {
-                  if (typeof value === "string") {
-                    setQuoteType(value);
-                  } else if (Array.isArray(value) && value[0]) {
-                    setQuoteType(value[0]);
-                  }
+                  const nextValue =
+                    typeof value === "string" ? value : Array.isArray(value) && value[0] ? value[0] : "";
+                  if (!nextValue) return;
+                  setQuoteType(nextValue);
+                  setCategoryId("");
+                  setKindId("");
+                  setModelId("");
+                  setPrintApplications([]);
+                  setPrintMode("with_print");
+                  setPrintPackageConfig(createEmptyPrintPackageConfig());
                 }}
                 className="w-full justify-start gap-2"
               >
@@ -1057,68 +1294,92 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
             {!isEditMode ? (
               <>
-                {/* Cascading selects */}
-                <div className="grid grid-cols-3 gap-3">
-                  <Select 
-                    value={categoryId} 
-                    onValueChange={(value) => {
-                      setCategoryId(value);
-                      setKindId("");
-                      setModelId("");
+                {isPrintPackageMode ? (
+                  <PrintPackageConfigurator
+                    config={printPackageConfig}
+                    onConfigChange={setPrintPackageConfig}
+                    selectedConfiguratorProduct={selectedConfiguratorProduct}
+                    configuratorProductOptions={configuratorProductOptions}
+                    selectedTypeName={selectedType?.name}
+                    selectedKindName={selectedKind?.name}
+                    selectedModelName={selectedModel?.name}
+                    availablePackageDensities={availablePackageDensities}
+                    availablePackageHandles={availablePackageHandles}
+                    availablePackagePrintTypes={availablePackagePrintTypes}
+                    onSelectProduct={(nextOption) => {
+                      setCategoryId(nextOption.typeId);
+                      setKindId(nextOption.kindId);
+                      setModelId(nextOption.modelId);
+                      setPrintPackageConfig((prev) => ({
+                        ...createEmptyPrintPackageConfig(),
+                        ...prev,
+                        productKind: nextOption.productLabel.toLowerCase(),
+                      }));
                     }}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Категорія" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalogTypes
-                        .filter(type => !quoteType || type.quote_type === quoteType || !type.quote_type)
-                        .map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  />
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    <Select 
+                      value={categoryId} 
+                      onValueChange={(value) => {
+                        setCategoryId(value);
+                        setKindId("");
+                        setModelId("");
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Категорія" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalogTypes
+                          .filter(type => !quoteType || type.quote_type === quoteType || !type.quote_type)
+                          .map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
 
-                  <Select 
-                    value={kindId} 
-                    onValueChange={(value) => {
-                      setKindId(value);
-                      setModelId("");
-                    }}
-                    disabled={!categoryId}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Вид" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalogTypes
-                        .find(t => t.id === categoryId)
-                        ?.kinds.map((kind) => (
-                          <SelectItem key={kind.id} value={kind.id}>
-                            {kind.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                    <Select 
+                      value={kindId} 
+                      onValueChange={(value) => {
+                        setKindId(value);
+                        setModelId("");
+                      }}
+                      disabled={!categoryId}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Вид" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalogTypes
+                          .find(t => t.id === categoryId)
+                          ?.kinds.map((kind) => (
+                            <SelectItem key={kind.id} value={kind.id}>
+                              {kind.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
 
-                  <Select value={modelId} onValueChange={setModelId} disabled={!kindId}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Модель" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalogTypes
-                        .find(t => t.id === categoryId)
-                        ?.kinds.find(k => k.id === kindId)
-                        ?.models.map((model) => (
-                          <SelectItem key={model.id} value={model.id}>
-                            {model.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <Select value={modelId} onValueChange={setModelId} disabled={!kindId}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Модель" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalogTypes
+                          .find(t => t.id === categoryId)
+                          ?.kinds.find(k => k.id === kindId)
+                          ?.models.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Quantity */}
                 <div className="grid grid-cols-[auto_1fr] items-center gap-2">
@@ -1155,7 +1416,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         </div>
 
         {/* Print applications section */}
-        {!isEditMode ? (
+        {!isEditMode && !isPrintPackageMode ? (
         <div className="space-y-4">
           <div className="flex items-center gap-3 -mx-6 px-6">
             <span className="text-xs uppercase tracking-wider text-muted-foreground font-normal">
@@ -1308,7 +1569,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         ) : null}
 
         {/* Design section */}
-        {!isEditMode && printMode !== "no_print" ? (
+        {!isEditMode && (isPrintPackageMode || printMode !== "no_print") ? (
         <div className="space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
           <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/5 p-4 space-y-4">

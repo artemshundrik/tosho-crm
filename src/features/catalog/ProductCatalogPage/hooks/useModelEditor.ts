@@ -9,6 +9,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogModel,
+  CatalogModelMetadata,
   CatalogPriceTier,
   CatalogType,
   PriceMode,
@@ -53,6 +54,7 @@ export function useModelEditor({
   const [draftTiers, setDraftTiers] = useState<CatalogPriceTier[]>([]);
   const [draftMethodIds, setDraftMethodIds] = useState<string[]>([]);
   const [draftImageUrl, setDraftImageUrl] = useState("");
+  const [draftMetadata, setDraftMetadata] = useState<CatalogModelMetadata>({});
   const [imageUploadMode, setImageUploadMode] = useState<ImageUploadMode>("url");
 
   // Methods management
@@ -83,6 +85,7 @@ export function useModelEditor({
     setDraftTiers([]);
     setDraftMethodIds([]);
     setDraftImageUrl("");
+    setDraftMetadata({});
     setDrawerOpen(true);
   };
 
@@ -101,6 +104,7 @@ export function useModelEditor({
     setDraftName(model.name);
     setDraftMethodIds(model.methodIds ?? []);
     setDraftImageUrl(model.imageUrl || "");
+    setDraftMetadata(model.metadata ?? {});
 
     if (model.priceTiers && model.priceTiers.length > 0) {
       setDraftPriceMode("tiers");
@@ -505,6 +509,7 @@ export function useModelEditor({
       priceTiers: draftPriceMode === "tiers" ? draftTiers : undefined,
       methodIds: draftMethodIds,
       imageUrl: draftImageUrl || undefined,
+      metadata: Object.keys(draftMetadata ?? {}).length > 0 ? draftMetadata : undefined,
     };
 
     try {
@@ -518,6 +523,7 @@ export function useModelEditor({
             name: nextModel.name,
             price: nextModel.price ?? null,
             image_url: nextModel.imageUrl ?? null,
+            metadata: nextModel.metadata ?? null,
             kind_id: draftKindId,
           })
           .eq("id", editingModelId)
@@ -534,6 +540,7 @@ export function useModelEditor({
             name: nextModel.name,
             price: nextModel.price ?? null,
             image_url: nextModel.imageUrl ?? null,
+            metadata: nextModel.metadata ?? null,
           })
           .select("id")
           .single();
@@ -799,6 +806,8 @@ export function useModelEditor({
     setDraftMethodIds,
     draftImageUrl,
     setDraftImageUrl,
+    draftMetadata,
+    setDraftMetadata,
     imageUploadMode,
     setImageUploadMode,
     newMethodName,

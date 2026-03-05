@@ -7,6 +7,7 @@ export type CatalogModel = {
   price?: number;
   priceTiers?: CatalogPriceTier[];
   imageUrl?: string;
+  metadata?: { configuratorPreset?: "print_package" | null };
 };
 export type CatalogKind = {
   id: string;
