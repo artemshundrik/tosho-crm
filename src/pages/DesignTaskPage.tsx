@@ -56,6 +56,13 @@ import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import {
+  canChangeDesignStatus,
+  DESIGN_ALL_STATUSES,
+  DESIGN_STATUS_LABELS,
+  DESIGN_STATUS_QUICK_ACTIONS,
+  type DesignStatus,
+} from "@/lib/designTaskStatus";
 import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
@@ -66,15 +73,6 @@ import {
 } from "@/lib/designTaskTimer";
 import { toast } from "sonner";
 import { format } from "date-fns";
-
-type DesignStatus =
-  | "new"
-  | "changes"
-  | "in_progress"
-  | "pm_review"
-  | "client_review"
-  | "approved"
-  | "cancelled";
 
 type DesignTask = {
   id: string;
@@ -196,15 +194,7 @@ type DesignBriefChangeRequest = {
   applied_version_id: string | null;
 };
 
-const statusLabels: Record<DesignStatus, string> = {
-  new: "Новий",
-  changes: "Правки",
-  in_progress: "В роботі",
-  pm_review: "На перевірці",
-  client_review: "На погодженні",
-  approved: "Затверджено",
-  cancelled: "Скасовано",
-};
+const statusLabels = DESIGN_STATUS_LABELS;
 
 const statusColors: Record<DesignStatus, string> = {
   new: "design-status-badge-new",
@@ -216,29 +206,8 @@ const statusColors: Record<DesignStatus, string> = {
   cancelled: "design-status-badge-cancelled",
 };
 
-const statusQuickActions: Partial<Record<DesignStatus, Array<{ next: DesignStatus; label: string }>>> = {
-  new: [{ next: "in_progress", label: "Почати роботу" }],
-  changes: [{ next: "in_progress", label: "Почати правки" }],
-  in_progress: [{ next: "pm_review", label: "Передати на перевірку PM" }],
-  pm_review: [
-    { next: "client_review", label: "Передати клієнту" },
-    { next: "in_progress", label: "Повернути в роботу" },
-  ],
-  client_review: [
-    { next: "approved", label: "Позначити як затверджено" },
-    { next: "changes", label: "Повернути на правки" },
-  ],
-};
-
-const allStatuses: DesignStatus[] = [
-  "new",
-  "changes",
-  "in_progress",
-  "pm_review",
-  "client_review",
-  "approved",
-  "cancelled",
-];
+const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
+const allStatuses = DESIGN_ALL_STATUSES;
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -510,6 +479,7 @@ export default function DesignTaskPage() {
 
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
+  const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
   const isAssignedToMe = !!userId && task?.assigneeUserId === userId;
   const designTaskLock = useEntityLock({
@@ -1557,7 +1527,24 @@ export default function DesignTaskPage() {
     void loadMethodAndPositionLabels();
   }, [effectiveTeamId, methods]);
 
-  const quickActions = task ? statusQuickActions[task.status] ?? [] : [];
+  const allowedStatusTransitions = useMemo(
+    () =>
+      task
+        ? allStatuses.filter((nextStatus) =>
+            canChangeDesignStatus({
+              currentStatus: task.status,
+              nextStatus,
+              canManageAssignments: canManageDesignStatuses,
+              isAssignedToCurrentUser: isAssignedToMe,
+            })
+          )
+        : [],
+    [allStatuses, canManageDesignStatuses, isAssignedToMe, task]
+  );
+  const quickActions = useMemo(
+    () => (task ? (statusQuickActions[task.status] ?? []).filter((action) => allowedStatusTransitions.includes(action.next)) : []),
+    [allowedStatusTransitions, task]
+  );
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
     if (!sourceTask) return null;
     const raw = (sourceTask.metadata ?? {}).estimate_minutes;
@@ -2210,6 +2197,17 @@ export default function DesignTaskPage() {
   const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
     if (!ensureCanEdit()) return;
+    if (
+      !canChangeDesignStatus({
+        currentStatus: task.status,
+        nextStatus,
+        canManageAssignments: canManageDesignStatuses,
+        isAssignedToCurrentUser: isAssignedToMe,
+      })
+    ) {
+      toast.error("Ви не можете перевести задачу в цей статус");
+      return;
+    }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (nextStatus === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
       requestEstimateDialog({ mode: "status", nextStatus });
@@ -3926,10 +3924,10 @@ export default function DesignTaskPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {allStatuses.map((status) => (
+                  {allowedStatusTransitions.map((status) => (
                     <DropdownMenuItem
                       key={status}
-                      disabled={task.status === status || !!statusSaving}
+                      disabled={!!statusSaving}
                       onClick={() => void updateTaskStatus(status)}
                     >
                       {statusLabels[status]}

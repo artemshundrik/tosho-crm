@@ -19,6 +19,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import {
+  canChangeDesignStatus,
+  DESIGN_STATUS_LABELS,
+  type DesignStatus,
+} from "@/lib/designTaskStatus";
 import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
@@ -146,23 +151,14 @@ const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: 
   return map;
 };
 
-type DesignStatus =
-  | "new"
-  | "changes"
-  | "in_progress"
-  | "pm_review"
-  | "client_review"
-  | "approved"
-  | "cancelled";
-
 const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
-  { id: "new", label: "Новий" },
-  { id: "changes", label: "Правки" },
-  { id: "in_progress", label: "В роботі" },
-  { id: "pm_review", label: "На перевірці" },
-  { id: "client_review", label: "На погодженні" },
-  { id: "approved", label: "Затверджено" },
-  { id: "cancelled", label: "Скасовано" },
+  { id: "new", label: DESIGN_STATUS_LABELS.new },
+  { id: "changes", label: DESIGN_STATUS_LABELS.changes },
+  { id: "in_progress", label: DESIGN_STATUS_LABELS.in_progress },
+  { id: "pm_review", label: DESIGN_STATUS_LABELS.pm_review },
+  { id: "client_review", label: DESIGN_STATUS_LABELS.client_review },
+  { id: "approved", label: DESIGN_STATUS_LABELS.approved },
+  { id: "cancelled", label: DESIGN_STATUS_LABELS.cancelled },
 ];
 const DESIGN_STATUS_ICON_BY_STATUS = {
   new: Plus,
@@ -389,6 +385,7 @@ export default function DesignPage() {
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const canManageAssignments = permissions.canManageAssignments;
+  const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
   const shouldForceSelfAssignee = permissions.isDesigner && !canManageAssignments && !!userId;
   const openTask = (taskId: string, inNewTab = false) => {
@@ -408,6 +405,15 @@ export default function DesignPage() {
     if (!id) return null;
     return memberAvatarById[id] ?? null;
   };
+  const getAllowedStatusTransitions = (task: DesignTask) =>
+    DESIGN_COLUMNS.filter((column) =>
+      canChangeDesignStatus({
+        currentStatus: task.status,
+        nextStatus: column.id,
+        canManageAssignments: canManageDesignStatuses,
+        isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+      })
+    );
 
   const getTaskTimerSummary = (taskId: string): DesignTaskTimerSummary => {
     return (
@@ -1303,11 +1309,31 @@ export default function DesignPage() {
     const draggedTask = tasks.find((task) => task.id === draggingId);
     if (!draggedTask) return;
     if (draggedTask.status === nextStatus) return;
+    if (!canChangeDesignStatus({
+      currentStatus: draggedTask.status,
+      nextStatus,
+      canManageAssignments: canManageDesignStatuses,
+      isAssignedToCurrentUser: !!userId && draggedTask.assigneeUserId === userId,
+    })) {
+      toast.error("Ви не можете перевести задачу в цей статус");
+      return;
+    }
     void handleStatusChange(draggedTask, nextStatus);
   };
 
   const handleStatusChange = async (task: DesignTask, next: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!effectiveTeamId || task.status === next) return;
+    if (
+      !canChangeDesignStatus({
+        currentStatus: task.status,
+        nextStatus: next,
+        canManageAssignments: canManageDesignStatuses,
+        isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+      })
+    ) {
+      toast.error("Ви не можете перевести задачу в цей статус");
+      return;
+    }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (next === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
       requestEstimateBeforeAction({ mode: "status", task, nextStatus: next });
@@ -2089,7 +2115,7 @@ export default function DesignPage() {
                 </>
               ) : null}
               <DropdownMenuSeparator />
-              {DESIGN_COLUMNS.map((target) => (
+              {getAllowedStatusTransitions(task).map((target) => (
                 <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
                   {target.label}
                 </DropdownMenuItem>
@@ -2658,7 +2684,7 @@ export default function DesignPage() {
                                   Оновити естімейт
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                {DESIGN_COLUMNS.map((target) => (
+                                {getAllowedStatusTransitions(task).map((target) => (
                                   <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
                                     Статус: {target.label}
                                   </DropdownMenuItem>
