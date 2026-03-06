@@ -74,6 +74,27 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
     setShowBottomFade(node.scrollTop < maxScrollTop - 2);
   }, []);
 
+  const handleListWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const node = listRef.current;
+    if (!node || !needsScroll) return;
+
+    const maxScrollTop = node.scrollHeight - node.clientHeight;
+    if (maxScrollTop <= 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, node.scrollTop + event.deltaY));
+    if (nextScrollTop !== node.scrollTop) {
+      node.scrollTop = nextScrollTop;
+      updateScrollHints();
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  }, [needsScroll, updateScrollHints]);
+
   React.useEffect(() => {
     const node = listRef.current;
     if (node) node.scrollTop = 0;
@@ -99,7 +120,13 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
         </Button>
       }
       content={
-        <div className="py-1">
+        <div
+          className="py-1"
+          onWheelCapture={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
           <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Онлайн зараз ({entries.length})
           </div>
@@ -116,6 +143,7 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
                   needsScroll ? "overflow-y-auto" : "overflow-hidden"
                 )}
                 style={needsScroll ? { maxHeight: `${ONLINE_LIST_VISIBLE_ROWS * ONLINE_LIST_ROW_HEIGHT_PX}px` } : undefined}
+                onWheel={handleListWheel}
                 onWheelCapture={(event) => event.stopPropagation()}
                 onScroll={updateScrollHints}
               >
