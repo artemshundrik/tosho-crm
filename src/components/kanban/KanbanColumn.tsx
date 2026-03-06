@@ -1,4 +1,4 @@
-import type { HTMLAttributes, PropsWithChildren, ReactNode } from "react";
+import type { HTMLAttributes, PropsWithChildren, ReactNode, WheelEvent } from "react";
 import { cn } from "@/lib/utils";
 
 type KanbanColumnProps = PropsWithChildren<
@@ -16,12 +16,19 @@ export function KanbanColumn({
   children,
   ...props
 }: KanbanColumnProps) {
+  const handleWheelCapture = (event: WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      event.stopPropagation();
+    }
+  };
+
   return (
     <div className={cn("shrink-0 flex flex-col", className)} {...props}>
       {header}
       <div
         data-kanban-column-body="true"
         className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain", bodyClassName)}
+        onWheelCapture={handleWheelCapture}
       >
         {children}
       </div>
