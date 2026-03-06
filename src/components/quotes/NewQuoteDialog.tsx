@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import {
   Select,
@@ -18,10 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group";
 import {
   Popover,
   PopoverContent,
@@ -45,12 +40,14 @@ import {
 } from "@/components/quotes/PrintPackageConfigurator";
 import {
   Building2,
+  ChevronDown,
   User,
   CalendarIcon,
   DollarSign,
   Shirt,
   Printer,
   Package,
+  Layers3,
   Plus,
   Trash2,
   Paperclip,
@@ -63,6 +60,8 @@ import {
   Truck,
   MapPin,
   Car,
+  Ruler,
+  Palette,
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -159,6 +158,85 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     <Separator className="flex-1 bg-border/40" />
   </div>
 );
+
+const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({
+  icon,
+  label,
+  value,
+}) => (
+  <div className="rounded-[16px] border border-border/50 bg-muted/20 px-3 py-2.5">
+    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+      {icon}
+      <span>{label}</span>
+    </div>
+    <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+  </div>
+);
+
+const ChipDropdown: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  placeholder: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  popoverClassName?: string;
+  isActive?: boolean;
+}> = ({ value, onChange, options, placeholder, icon, disabled = false, popoverClassName, isActive }) => {
+  const [open, setOpen] = React.useState(false);
+  const selected = options.find((option) => option.value === value) ?? null;
+  const active = isActive ?? Boolean(selected);
+
+  return (
+    <Popover open={disabled ? false : open} onOpenChange={(next) => !disabled && setOpen(next)}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            active
+              ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70",
+            disabled && "pointer-events-none opacity-50"
+          )}
+        >
+          <span className={cn("mr-2 shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", active ? "text-primary" : "text-muted-foreground")}>{icon}</span>
+          <span className={cn("min-w-0 flex-1 truncate text-left font-medium", !active && "text-muted-foreground")}>
+            {selected?.label ?? placeholder}
+          </span>
+          <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className={cn("w-[260px] p-2", popoverClassName)}>
+        <div className="space-y-1">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <Button
+                key={option.value}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 w-full justify-between text-sm",
+                  active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                )}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+              >
+                <span>{option.label}</span>
+                {active ? <Check className="h-4 w-4" /> : null}
+              </Button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 /**
  * Customer type
@@ -288,7 +366,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [quantity, setQuantity] = React.useState<number>();
   const [quantityUnit, setQuantityUnit] = React.useState("шт.");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
-  const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("with_print");
+  const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("no_print");
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
   const [files, setFiles] = React.useState<File[]>([]);
   const [filesDragActive, setFilesDragActive] = React.useState(false);
@@ -306,10 +384,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     () => catalogTypes.find((type) => type.id === categoryId),
     [catalogTypes, categoryId]
   );
+  const filteredCatalogTypes = React.useMemo(
+    () => catalogTypes.filter((type) => !quoteType || type.quote_type === quoteType || !type.quote_type),
+    [catalogTypes, quoteType]
+  );
+  const availableKinds = React.useMemo(() => selectedType?.kinds ?? [], [selectedType]);
   const selectedKind = React.useMemo(
     () => selectedType?.kinds.find((kind) => kind.id === kindId),
     [selectedType, kindId]
   );
+  const availableModels = React.useMemo(() => selectedKind?.models ?? [], [selectedKind]);
   const selectedModel = React.useMemo(
     () => selectedKind?.models.find((model) => model.id === modelId),
     [selectedKind, modelId]
@@ -375,6 +459,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   );
   const availablePrintMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
+  const productSelectionReady = Boolean(categoryId && kindId && modelId);
   const hasRoleInfo = React.useMemo(
     () => teamMembers.some((member) => !!member.jobRole),
     [teamMembers]
@@ -527,9 +612,20 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     }));
   }, [availablePackagePrintTypes, isPrintPackageMode, printPackageConfig.printType]);
 
+  React.useEffect(() => {
+    if (isPrintPackageMode) return;
+    const hasApplications = printApplications.length > 0;
+    setPrintMode(hasApplications ? "with_print" : "no_print");
+    if (!hasApplications) {
+      setFiles([]);
+      setCreateDesignTask(false);
+      setDesignAssigneeId(null);
+    }
+  }, [isPrintPackageMode, printApplications.length]);
+
   // Add print application
   const handleAddPrintApplication = () => {
-    if (printMode === "no_print") return;
+    setPrintMode("with_print");
     setPrintApplications([
       ...printApplications,
       {
@@ -788,7 +884,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-[800px] max-h-[85vh] overflow-hidden p-0">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden p-0">
         <div className="flex max-h-[85vh] flex-col">
           <DialogHeader className="px-6 pt-6 pb-3">
             <DialogTitle className="text-base font-medium flex items-center gap-2">
@@ -1253,445 +1349,439 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         <div className="mt-5 space-y-4">
           <SectionHeader>Продукція</SectionHeader>
 
-          <div className="space-y-3">
-            {/* Type toggle */}
-            <div className="grid grid-cols-[auto_1fr] items-center gap-2">
-              <span className="text-sm text-muted-foreground">Тип:</span>
-              <ToggleGroup
-                type="single"
-                value={quoteType}
-                onValueChange={(value) => {
-                  const nextValue =
-                    typeof value === "string" ? value : Array.isArray(value) && value[0] ? value[0] : "";
-                  if (!nextValue) return;
-                  setQuoteType(nextValue);
-                  setCategoryId("");
-                  setKindId("");
-                  setModelId("");
-                  setPrintApplications([]);
-                  setPrintMode("with_print");
-                  setPrintPackageConfig(createEmptyPrintPackageConfig());
-                }}
-                className="w-full justify-start gap-2"
-              >
-                {QUOTE_TYPES.map((type) => (
-                  <ToggleGroupItem
-                    key={type.value}
-                    value={type.value}
-                    className={cn(
-                      "gap-1.5 h-9 px-3 rounded-[var(--radius-md)] border border-border/50",
-                      "bg-muted/20 text-sm text-foreground",
-                      "data-[state=on]:bg-primary/12 data-[state=on]:border-primary/40 data-[state=on]:text-primary",
-                      "data-[state=on]:shadow-sm"
-                    )}
-                  >
-                    <type.icon className="h-3.5 w-3.5" />
-                    {type.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
-
-            {!isEditMode ? (
-              <>
-                {isPrintPackageMode ? (
-                  <PrintPackageConfigurator
-                    config={printPackageConfig}
-                    onConfigChange={setPrintPackageConfig}
-                    selectedConfiguratorProduct={selectedConfiguratorProduct}
-                    configuratorProductOptions={configuratorProductOptions}
-                    selectedTypeName={selectedType?.name}
-                    selectedKindName={selectedKind?.name}
-                    selectedModelName={selectedModel?.name}
-                    availablePackageDensities={availablePackageDensities}
-                    availablePackageHandles={availablePackageHandles}
-                    availablePackagePrintTypes={availablePackagePrintTypes}
-                    onSelectProduct={(nextOption) => {
-                      setCategoryId(nextOption.typeId);
-                      setKindId(nextOption.kindId);
-                      setModelId(nextOption.modelId);
-                      setPrintPackageConfig((prev) => ({
-                        ...createEmptyPrintPackageConfig(),
-                        ...prev,
-                        productKind: nextOption.productLabel.toLowerCase(),
-                      }));
-                    }}
-                  />
-                ) : (
-                  <div className="grid grid-cols-3 gap-3">
-                    <Select 
-                      value={categoryId} 
-                      onValueChange={(value) => {
-                        setCategoryId(value);
-                        setKindId("");
-                        setModelId("");
-                      }}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Категорія" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogTypes
-                          .filter(type => !quoteType || type.quote_type === quoteType || !type.quote_type)
-                          .map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select 
-                      value={kindId} 
-                      onValueChange={(value) => {
-                        setKindId(value);
-                        setModelId("");
-                      }}
-                      disabled={!categoryId}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Вид" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogTypes
-                          .find(t => t.id === categoryId)
-                          ?.kinds.map((kind) => (
-                            <SelectItem key={kind.id} value={kind.id}>
-                              {kind.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={modelId} onValueChange={setModelId} disabled={!kindId}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Модель" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogTypes
-                          .find(t => t.id === categoryId)
-                          ?.kinds.find(k => k.id === kindId)
-                          ?.models.map((model) => (
-                            <SelectItem key={model.id} value={model.id}>
-                              {model.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-border/40 bg-background/30 p-4 md:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Вибір продукту
                   </div>
-                )}
-
-                {/* Quantity */}
-                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Кількість:</span>
-                  <div className="flex gap-2 flex-1">
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={quantity || ""}
-                      onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
-                      className="h-9 max-w-[120px]"
-                    />
-                    <Select value={quantityUnit} onValueChange={setQuantityUnit}>
-                      <SelectTrigger className="h-9 w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {QUANTITY_UNITS.map((unit) => (
-                          <SelectItem key={unit.value} value={unit.value}>
-                            {unit.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <div className="text-lg font-semibold text-foreground">Виберіть напрямок і продукт</div>
                 </div>
-              </>
-            ) : (
-              <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                Категорія/вид/модель і кількість редагуються в деталях прорахунку.
+
+                <div className="inline-flex rounded-full border border-border/50 bg-background/40 p-1">
+                  {QUOTE_TYPES.map((type) => {
+                    const active = quoteType === type.value;
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => {
+                          setQuoteType(type.value);
+                          setCategoryId("");
+                          setKindId("");
+                          setModelId("");
+                          setPrintApplications([]);
+                          setPrintMode("no_print");
+                          setPrintPackageConfig(createEmptyPrintPackageConfig());
+                        }}
+                        className={cn(
+                          "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
+                          active
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                        )}
+                      >
+                        <type.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />
+                        <span>{type.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            )}
+
+              {!isEditMode ? (
+                isPrintPackageMode ? (
+                  <div className="mt-4 space-y-4">
+                    <PrintPackageConfigurator
+                      config={printPackageConfig}
+                      onConfigChange={setPrintPackageConfig}
+                      selectedConfiguratorProduct={selectedConfiguratorProduct}
+                      configuratorProductOptions={configuratorProductOptions}
+                      selectedTypeName={selectedType?.name}
+                      selectedKindName={selectedKind?.name}
+                      selectedModelName={selectedModel?.name}
+                      availablePackageDensities={availablePackageDensities}
+                      availablePackageHandles={availablePackageHandles}
+                      availablePackagePrintTypes={availablePackagePrintTypes}
+                      onSelectProduct={(nextOption) => {
+                        setCategoryId(nextOption.typeId);
+                        setKindId(nextOption.kindId);
+                        setModelId(nextOption.modelId);
+                        setPrintPackageConfig((prev) => ({
+                          ...createEmptyPrintPackageConfig(),
+                          ...prev,
+                          productKind: nextOption.productLabel.toLowerCase(),
+                        }));
+                      }}
+                    />
+
+                    <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-foreground">Кількість</div>
+                        <div className="text-xs text-muted-foreground">
+                          {quantity && quantity > 0 ? "Заповнено" : "Не заповнено"}
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:max-w-[380px] sm:grid-cols-[220px_140px]">
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Тираж</div>
+                          <Input
+                            type="number"
+                            placeholder="Наприклад, 500"
+                            value={quantity || ""}
+                            onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
+                            className="h-9 bg-background/70"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Одиниця</div>
+                          <ChipDropdown
+                            value={quantityUnit}
+                            onChange={setQuantityUnit}
+                            options={QUANTITY_UNITS}
+                            placeholder="Одиниця"
+                            icon={<Ruler className="h-3.5 w-3.5" />}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_180px_140px] md:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Категорія</div>
+                          <ChipDropdown
+                            value={categoryId}
+                            onChange={(value) => {
+                              setCategoryId(value);
+                              setKindId("");
+                              setModelId("");
+                            }}
+                            options={filteredCatalogTypes.map((type) => ({
+                              value: type.id,
+                              label: type.name,
+                            }))}
+                            placeholder="Оберіть категорію"
+                            icon={<Layers3 className="h-3.5 w-3.5" />}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Вид</div>
+                          <ChipDropdown
+                            value={kindId}
+                            onChange={(value) => {
+                              setKindId(value);
+                              setModelId("");
+                            }}
+                            disabled={!categoryId}
+                            options={availableKinds.map((kind) => ({
+                              value: kind.id,
+                              label: kind.name,
+                            }))}
+                            placeholder="Оберіть вид"
+                            icon={<Package className="h-3.5 w-3.5" />}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Модель</div>
+                          <ChipDropdown
+                            value={modelId}
+                            onChange={setModelId}
+                            disabled={!kindId}
+                            options={availableModels.map((model) => ({
+                              value: model.id,
+                              label: model.name,
+                            }))}
+                            placeholder="Оберіть модель"
+                            icon={<Shirt className="h-3.5 w-3.5" />}
+                            popoverClassName="w-[320px]"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Тираж</div>
+                          <Input
+                            type="number"
+                            placeholder="Наприклад, 500"
+                            value={quantity || ""}
+                            onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
+                            className="h-9 bg-background/70"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="text-xs text-muted-foreground">Одиниця</div>
+                          <ChipDropdown
+                            value={quantityUnit}
+                            onChange={setQuantityUnit}
+                            options={QUANTITY_UNITS}
+                            placeholder="Одиниця"
+                            icon={<Ruler className="h-3.5 w-3.5" />}
+                          />
+                        </div>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="mt-4 rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                  Категорія/вид/модель і кількість редагуються в деталях прорахунку.
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Print applications section */}
         {!isEditMode && !isPrintPackageMode ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 -mx-6 px-6">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-normal">
-              Нанесення
-            </span>
-            <Separator className="flex-1 bg-border/40" />
-            <ToggleGroup
-              type="single"
-              value={printMode}
-              onValueChange={(value) => {
-                const next = (value as "with_print" | "no_print" | null) ?? "with_print";
-                setPrintMode(next);
-                if (next === "no_print") {
-                  setPrintApplications([]);
-                  setFiles([]);
-                  setCreateDesignTask(false);
-                  setDesignAssigneeId(null);
-                }
-              }}
-              className="hidden sm:flex"
-            >
-              <ToggleGroupItem value="with_print" className="px-3 py-1 text-xs">
-                З нанесенням
-              </ToggleGroupItem>
-              <ToggleGroupItem value="no_print" className="px-3 py-1 text-xs">
-                Без нанесення
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleAddPrintApplication}
-              className="h-7 gap-1.5 text-xs -mr-2"
-              disabled={printMode === "no_print"}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Додати
-            </Button>
-          </div>
+        <div className="mt-8 space-y-4">
+          <SectionHeader>Нанесення</SectionHeader>
+          <div className="rounded-[24px] border border-border/40 bg-background/30 p-4 md:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-lg font-semibold text-foreground">Нанесення</div>
+              </div>
 
-          {/* Print applications list */}
-          <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={printApplications.length > 0 ? "outline" : "primary"}
+                  size="sm"
+                  onClick={handleAddPrintApplication}
+                  className="h-10 gap-1.5 rounded-[14px] px-4 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  {printApplications.length > 0 ? "Додати ще нанесення" : "Додати нанесення"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <InfoPill icon={<Palette className="h-3.5 w-3.5" />} label="Режим" value={printMode === "with_print" ? "З нанесенням" : "Без нанесення"} />
+              <InfoPill icon={<Package className="h-3.5 w-3.5" />} label="Конфігурацій" value={`${printApplications.length}`} />
+              <InfoPill icon={<Ruler className="h-3.5 w-3.5" />} label="Позиції" value={availablePrintPositions.length > 0 ? `${availablePrintPositions.length} доступно` : "Не налаштовано"} />
+            </div>
+
+            <div className="mt-4 space-y-3">
             {printApplications.map((app) => (
               <div
                 key={app.id}
-                className="flex items-end gap-3 p-3 rounded-[var(--radius-md)] border border-border/40 bg-muted/5"
+                className="rounded-[20px] border border-border/40 bg-background/45 p-4"
               >
-                <div className="space-y-1">
-                  <div className="px-1 text-[11px] font-medium text-foreground/80">
-                    Метод
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Нанесення #{printApplications.findIndex((entry) => entry.id === app.id) + 1}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">Метод, позиція, розмір.</div>
                   </div>
-                  <Select
-                    value={app.method}
-                    onValueChange={(value) =>
-                      handleUpdatePrintApplication(app.id, "method", value)
-                    }
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    onClick={() => handleRemovePrintApplication(app.id)}
+                    className="text-muted-foreground hover:text-destructive"
                   >
-                    <SelectTrigger className="h-8 w-[140px]">
-                      <SelectValue placeholder="Метод" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availablePrintMethods.map((method) => (
-                        <SelectItem key={method.id} value={method.id}>
-                          {method.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="px-1 text-[11px] font-medium text-foreground/80">
-                    Місце
-                  </div>
-                  <Select
-                    value={app.position}
-                    onValueChange={(value) =>
-                      handleUpdatePrintApplication(app.id, "position", value)
-                    }
-                  >
-                    <SelectTrigger className="h-8 w-[140px]">
-                      <SelectValue placeholder="Місце" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availablePrintPositions.map((pos) => (
-                        <SelectItem key={pos.id} value={pos.id}>
-                          {pos.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-end gap-1.5">
-                  <div className="space-y-1">
-                    <div className="px-1 text-[11px] font-medium text-foreground/80">
-                      Ширина, мм
-                    </div>
-                    <Input
-                      type="number"
-                      aria-label="Ширина нанесення, мм"
-                      placeholder="0"
-                      value={app.width}
-                      onChange={(e) =>
-                        handleUpdatePrintApplication(app.id, "width", e.target.value)
-                      }
-                      className="h-8 w-[84px]"
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_280px]">
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-muted-foreground">Метод</div>
+                    <ChipDropdown
+                      value={app.method}
+                      onChange={(value) => handleUpdatePrintApplication(app.id, "method", value)}
+                      options={availablePrintMethods.map((method) => ({
+                        value: method.id,
+                        label: method.name,
+                      }))}
+                      placeholder="Оберіть метод"
+                      icon={<Palette className="h-3.5 w-3.5" />}
+                      popoverClassName="w-[320px]"
                     />
                   </div>
-                  <span className="mb-2 text-sm text-muted-foreground">×</span>
-                  <div className="space-y-1">
-                    <div className="px-1 text-[11px] font-medium text-foreground/80">
-                      Висота, мм
-                    </div>
-                    <Input
-                      type="number"
-                      aria-label="Висота нанесення, мм"
-                      placeholder="0"
-                      value={app.height}
-                      onChange={(e) =>
-                        handleUpdatePrintApplication(app.id, "height", e.target.value)
-                      }
-                      className="h-8 w-[84px]"
+
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-muted-foreground">Позиція</div>
+                    <ChipDropdown
+                      value={app.position}
+                      onChange={(value) => handleUpdatePrintApplication(app.id, "position", value)}
+                      options={availablePrintPositions.map((pos) => ({
+                        value: pos.id,
+                        label: pos.label,
+                      }))}
+                      placeholder="Оберіть позицію"
+                      icon={<MapPin className="h-3.5 w-3.5" />}
+                      popoverClassName="w-[320px]"
                     />
                   </div>
-                </div>
 
-                <Button
-                  variant="ghost"
-                  size="iconSm"
-                  onClick={() => handleRemovePrintApplication(app.id)}
-                  className="ml-auto text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-muted-foreground">Розмір, мм</div>
+                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_minmax(110px,1fr)] items-center gap-2">
+                      <Input
+                        type="number"
+                        aria-label="Ширина нанесення, мм"
+                        placeholder="Ширина"
+                        value={app.width}
+                        onChange={(e) => handleUpdatePrintApplication(app.id, "width", e.target.value)}
+                        className="h-9 bg-background/70"
+                      />
+                      <span className="text-sm text-muted-foreground">×</span>
+                      <Input
+                        type="number"
+                        aria-label="Висота нанесення, мм"
+                        placeholder="Висота"
+                        value={app.height}
+                        onChange={(e) => handleUpdatePrintApplication(app.id, "height", e.target.value)}
+                        className="h-9 bg-background/70"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
 
-            {printMode === "no_print" ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                Нанесення не потрібне для цього прорахунку.
-              </div>
-            ) : printApplications.length === 0 ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                Немає нанесень. Натисніть "Додати", щоб створити.
+            {printApplications.length === 0 ? (
+              <div className="rounded-[18px] border border-dashed border-border/60 bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
+                Для цього прорахунку друк не потрібен. Дизайн-блок і файли теж будуть приховані.
               </div>
             ) : null}
+            </div>
           </div>
         </div>
         ) : null}
 
         {/* Design section */}
         {!isEditMode && (isPrintPackageMode || printMode !== "no_print") ? (
-        <div className="space-y-4">
+        <div className="mt-8 space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
-          <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/5 p-4 space-y-4">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,1fr)]">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
-                <Textarea
-                  className="min-h-[120px] resize-y text-foreground placeholder:text-muted-foreground"
-                  placeholder="Опишіть задачу для дизайнера: референси, текст, побажання, обмеження"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={createDesignTask}
-                    onCheckedChange={(checked) => {
-                      const next = !!checked;
+          <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+            <div className="grid gap-5">
+              <div className="grid gap-4 md:grid-cols-[280px_280px]">
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Задача на дизайн
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !createDesignTask;
                       setCreateDesignTask(next);
                       if (!next) setDesignAssigneeId(null);
                     }}
-                    className="mt-1"
-                  />
-                  <div className="space-y-1 text-sm">
-                    <div className="font-medium">Створити задачу на дизайн</div>
-                    <p className="text-muted-foreground text-xs">
-                      Використайте, коли потрібен макет від дизайнера.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
-                  <Select
-                    value={designAssigneeId ?? "none"}
-                    onValueChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
-                    disabled={!createDesignTask}
+                    className={cn(
+                      "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm font-medium transition-all",
+                      createDesignTask
+                        ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+                        : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
+                    )}
                   >
-                    <SelectTrigger className="h-9 w-full text-foreground">
-                      <SelectValue
-                        className="text-foreground"
-                        placeholder={createDesignTask ? "Без виконавця" : "Увімкніть задачу"}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Без виконавця</SelectItem>
-                      {designerMembers.length > 0 ? (
-                        designerMembers.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.label}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="empty" disabled>
-                          {teamMembers.length === 0
-                            ? "Немає учасників"
-                            : hasRoleInfo
-                              ? "Немає дизайнерів"
-                              : "Ролі не налаштовані"}
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                    <Palette className={cn("mr-2 h-3.5 w-3.5", createDesignTask ? "text-primary" : "text-muted-foreground")} />
+                    <span>{createDesignTask ? "Створити задачу" : "Не створювати"}</span>
+                  </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Файли для дизайнера</div>
-              <div
-                onDrop={handleFileDrop}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (!filesDragActive) setFilesDragActive(true);
-                }}
-                onDragLeave={() => setFilesDragActive(false)}
-                className={cn(
-                  "relative border-2 border-dashed rounded-[var(--radius-md)] p-6 text-center transition-colors cursor-pointer",
-                  filesDragActive
-                    ? "border-primary/70 bg-primary/10"
-                    : "border-border/40 hover:border-border/60"
-                )}
-              >
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  accept="*/*"
-                />
-                <div className="flex flex-col items-center gap-2">
-                  <Paperclip className={cn("h-5 w-5", filesDragActive ? "text-primary" : "text-muted-foreground")} />
-                  <div className={cn("text-sm", filesDragActive ? "text-primary font-medium" : "text-foreground")}>
-                    {filesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Виконавець
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    до 5 файлів, до 50MB
-                  </div>
+                  <ChipDropdown
+                    value={designAssigneeId ?? "none"}
+                    onChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
+                    disabled={!createDesignTask}
+                    options={
+                      designerMembers.length > 0
+                        ? [
+                            { value: "none", label: "Без виконавця" },
+                            ...designerMembers.map((member) => ({
+                              value: member.id,
+                              label: member.label,
+                            })),
+                          ]
+                        : [
+                            {
+                              value: "none",
+                              label:
+                                teamMembers.length === 0
+                                  ? "Немає учасників"
+                                  : hasRoleInfo
+                                    ? "Немає дизайнерів"
+                                    : "Ролі не налаштовані",
+                            },
+                          ]
+                    }
+                    placeholder={createDesignTask ? "Без виконавця" : "Увімкніть задачу"}
+                    icon={<User className="h-3.5 w-3.5" />}
+                    popoverClassName="w-[320px]"
+                    isActive={Boolean(designAssigneeId)}
+                  />
                 </div>
               </div>
 
-              {files.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {files.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30 text-sm"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                      <span className="text-xs">{file.name}</span>
-                      <button
-                        onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
+                  <Textarea
+                    className="min-h-[180px] resize-y text-foreground placeholder:text-muted-foreground"
+                    placeholder="Опишіть задачу для дизайнера: референси, текст, побажання, обмеження"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Файли для дизайнера</div>
+                  <div
+                    onDrop={handleFileDrop}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (!filesDragActive) setFilesDragActive(true);
+                    }}
+                    onDragLeave={() => setFilesDragActive(false)}
+                    className={cn(
+                      "relative flex min-h-[180px] items-center justify-center border-2 border-dashed rounded-[18px] p-6 text-center transition-colors cursor-pointer",
+                      filesDragActive
+                        ? "border-primary/70 bg-primary/10"
+                        : "border-border/40 hover:border-border/60"
+                    )}
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleFileSelect}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      accept="*/*"
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <Paperclip className={cn("h-5 w-5", filesDragActive ? "text-primary" : "text-muted-foreground")} />
+                      <div className={cn("text-sm", filesDragActive ? "font-medium text-primary" : "text-foreground")}>
+                        {filesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">до 5 файлів, до 50MB</div>
                     </div>
-                  ))}
+                  </div>
+
+                  {files.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {files.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 px-3 py-1.5 text-sm"
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          <span className="text-xs">{file.name}</span>
+                          <button
+                            onClick={() => setFiles(files.filter((_, i) => i !== index))}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
