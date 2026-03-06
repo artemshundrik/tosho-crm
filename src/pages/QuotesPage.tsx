@@ -1247,13 +1247,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         );
       }
       // 1. Create quote
-      const formatDateOnly = (date: Date) => {
+      const formatDeadlineValue = (date: Date) => {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, "0");
         const d = String(date.getDate()).padStart(2, "0");
-        return `${y}-${m}-${d}`;
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        return `${y}-${m}-${d}T${hours}:${minutes}:00`;
       };
-      const deadlineAt = data.deadline ? formatDateOnly(data.deadline) : null;
+      const deadlineAt = data.deadline ? formatDeadlineValue(data.deadline) : null;
       const selectedParty = customers.find(
         (item) => item.id === data.customerId && (item.entityType ?? "customer") === (data.customerType ?? "customer")
       );
@@ -1280,6 +1282,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         assignedTo: data.managerId || null,
         deadlineAt,
         deadlineNote: data.deadlineNote?.trim() || null,
+        deadlineReminderOffsetMinutes: data.deadlineReminderOffsetMinutes ?? null,
+        deadlineReminderComment: data.deadlineReminderComment?.trim() || null,
       });
 
       if (!created?.id) {
@@ -2718,12 +2722,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setEditLoading(true);
     setEditTarget(row);
     const initialDeadline =
-      row.deadline_at && row.deadline_at.length >= 10
-        ? new Date(
-            Number(row.deadline_at.slice(0, 4)),
-            Number(row.deadline_at.slice(5, 7)) - 1,
-            Number(row.deadline_at.slice(8, 10))
-          )
+      row.deadline_at && !Number.isNaN(new Date(row.deadline_at).getTime())
+        ? new Date(row.deadline_at)
         : undefined;
     setEditInitialValues({
       status: normalizeStatus(row.status),
@@ -2731,6 +2731,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       managerId: row.assigned_to ?? "",
       deadline: initialDeadline,
       deadlineNote: row.deadline_note ?? "",
+      deadlineReminderOffsetMinutes: row.deadline_reminder_offset_minutes ?? 0,
+      deadlineReminderComment: row.deadline_reminder_comment ?? "",
       currency: row.currency ?? "UAH",
       quoteType: row.quote_type ?? "merch",
       deliveryType: row.delivery_type ?? row.print_type ?? "",
@@ -2742,12 +2744,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const fresh = await getQuoteSummary(row.id);
       setEditTarget((prev) => ({ ...(prev ?? row), ...fresh }));
       const freshDeadline =
-        fresh.deadline_at && fresh.deadline_at.length >= 10
-          ? new Date(
-              Number(fresh.deadline_at.slice(0, 4)),
-              Number(fresh.deadline_at.slice(5, 7)) - 1,
-              Number(fresh.deadline_at.slice(8, 10))
-            )
+        fresh.deadline_at && !Number.isNaN(new Date(fresh.deadline_at).getTime())
+          ? new Date(fresh.deadline_at)
           : undefined;
       setEditInitialValues({
         status: normalizeStatus(fresh.status),
@@ -2755,6 +2753,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         managerId: fresh.assigned_to ?? "",
         deadline: freshDeadline,
         deadlineNote: fresh.deadline_note ?? "",
+        deadlineReminderOffsetMinutes: fresh.deadline_reminder_offset_minutes ?? 0,
+        deadlineReminderComment: fresh.deadline_reminder_comment ?? "",
         currency: fresh.currency ?? row.currency ?? "UAH",
         quoteType: fresh.quote_type ?? "merch",
         deliveryType: fresh.delivery_type ?? fresh.print_type ?? "",
@@ -2770,12 +2770,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
-  const formatDateOnly = (date?: Date) => {
+  const formatDeadlineValue = (date?: Date) => {
     if (!date) return null;
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${d}T${hours}:${minutes}:00`;
   };
 
   const handleEditSubmit = async (data: NewQuoteFormData) => {
@@ -2790,8 +2792,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         comment: data.comment?.trim() || null,
         designBrief: data.comment?.trim() || null,
         assignedTo: data.managerId?.trim() ? data.managerId : null,
-        deadlineAt: formatDateOnly(data.deadline),
+        deadlineAt: formatDeadlineValue(data.deadline),
         deadlineNote: data.deadlineNote?.trim() || null,
+        deadlineReminderOffsetMinutes: data.deadlineReminderOffsetMinutes ?? null,
+        deadlineReminderComment: data.deadlineReminderComment?.trim() || null,
         quoteType: data.quoteType?.trim() ? data.quoteType : null,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,
@@ -2805,8 +2809,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 comment: data.comment?.trim() || null,
                 design_brief: data.comment?.trim() || null,
                 assigned_to: data.managerId?.trim() ? data.managerId : null,
-                deadline_at: formatDateOnly(data.deadline),
+                deadline_at: formatDeadlineValue(data.deadline),
                 deadline_note: data.deadlineNote?.trim() || null,
+                deadline_reminder_offset_minutes: data.deadlineReminderOffsetMinutes ?? null,
+                deadline_reminder_comment: data.deadlineReminderComment?.trim() || null,
                 quote_type: data.quoteType?.trim() ? data.quoteType : null,
                 delivery_type: data.deliveryType?.trim() ? data.deliveryType : null,
                 delivery_details: data.deliveryDetails ?? null,

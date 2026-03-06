@@ -159,6 +159,16 @@ type QuoteDetailsPageProps = {
   quoteId: string;
 };
 
+const DEFAULT_DEADLINE_TIME = "09:00";
+const DEADLINE_REMINDER_OPTIONS = [
+  { value: "none", label: "Без сповіщення" },
+  { value: "0", label: "У момент дедлайну" },
+  { value: "15", label: "За 15 хвилин" },
+  { value: "60", label: "За 1 годину" },
+  { value: "180", label: "За 3 години" },
+  { value: "1440", label: "За 1 день" },
+] as const;
+
 type ItemMethod = {
   id: string;
   methodId: string;
@@ -368,7 +378,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [catalogSearchValue, setCatalogSearchValue] = useState("");
   const [lastAutoTitle, setLastAutoTitle] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineTime, setDeadlineTime] = useState(DEFAULT_DEADLINE_TIME);
   const [deadlineNote, setDeadlineNote] = useState("");
+  const [deadlineReminderOffset, setDeadlineReminderOffset] = useState<string>("0");
+  const [deadlineReminderComment, setDeadlineReminderComment] = useState("");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
@@ -449,6 +462,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const saveRuns = async (nextRuns?: QuoteRun[] | unknown) => {
+    if (quoteRequirements.length > 0) {
+      const message = `Щоб зберегти розрахунок, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
+      setRunsError(message);
+      toast.error(message);
+      return;
+    }
     const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
     setRunsSaving(true);
     setRunsError(null);
@@ -501,6 +520,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const removeRun = async (index: number) => {
+    if (quoteRequirements.length > 0) {
+      const message = `Щоб зберегти розрахунок, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
+      setRunsError(message);
+      toast.error(message);
+      return;
+    }
     const removed = runs[index];
     const next = runs.filter((_, i) => i !== index);
     setRuns(next);
@@ -530,6 +555,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const saveBrief = async () => {
     if (!quote || !teamId || briefSaving) return;
+    if (quoteRequirements.length > 0) {
+      const message = `Щоб зберегти ТЗ, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
+      setBriefError(message);
+      toast.error(message);
+      return;
+    }
     setBriefSaving(true);
     setBriefError(null);
     try {
@@ -610,6 +641,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return `${y}-${m}-${d}`;
   };
 
+  const toTimeInputValue = (value?: string | null) => {
+    if (!value) return DEFAULT_DEADLINE_TIME;
+    const directMatch = value.match(/T(\d{2}):(\d{2})/);
+    if (directMatch) return `${directMatch[1]}:${directMatch[2]}`;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return DEFAULT_DEADLINE_TIME;
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const combineDeadlineValue = (date?: string | null, time?: string | null) => {
+    const normalizedDate = (date ?? "").trim();
+    if (!normalizedDate) return "";
+    const normalizedTime = (time ?? "").trim() || DEFAULT_DEADLINE_TIME;
+    return `${normalizedDate}T${normalizedTime}:00`;
+  };
+
   const toLocalDate = (value?: string | null) => {
     if (!value) return undefined;
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -638,11 +685,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const formatDeadlineLabel = (value?: string | null) => {
     const date = parseDeadlineDate(value);
     if (!date) return "Без дедлайну";
-    return date.toLocaleDateString("uk-UA", {
+    const dateLabel = date.toLocaleDateString("uk-UA", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
+    if (!/T\d{2}:\d{2}/.test(value ?? "")) return dateLabel;
+    return `${dateLabel}, ${date.toLocaleTimeString("uk-UA", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
   };
 
   const formatDeliveryLabel = (value?: string | null) => {
@@ -654,6 +706,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       cargo: "Вантажне перевезення",
     };
     return map[value] ?? value;
+  };
+
+  const formatReminderOffsetLabel = (value?: number | null) => {
+    if (value === null || value === undefined) return null;
+    if (value === 0) return "у момент дедлайну";
+    if (value === 15) return "за 15 хвилин";
+    if (value === 60) return "за 1 годину";
+    if (value === 180) return "за 3 години";
+    if (value === 1440) return "за 1 день";
+    if (value > 0) return `за ${value} хв`;
+    return null;
   };
 
   const getDeadlineBadge = (value?: string | null) => {
@@ -792,6 +855,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
   const currentStatus = normalizeStatus(quote?.status);
+  const quoteRequirements = useMemo(() => {
+    const issues: string[] = [];
+    const hasParty = Boolean(quote?.customer_id || (quote?.customer_name ?? "").trim());
+    const hasDeadline = Boolean((deadlineDate || "").trim() || (quote?.deadline_at ?? "").trim());
+    if (!hasParty) issues.push("Замовник або Лід");
+    if (!hasDeadline) issues.push("Дедлайн прорахунку");
+    return issues;
+  }, [deadlineDate, quote?.customer_id, quote?.customer_name, quote?.deadline_at]);
+  const quoteRequirementsHint = quoteRequirements.length
+    ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
+    : null;
   const baseTotalForStatus = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
   const nextAction = STATUS_NEXT_ACTION[currentStatus] ?? STATUS_NEXT_ACTION.new;
 
@@ -839,6 +913,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
 
   const openStatusDialog = () => {
+    if (quoteRequirements.length > 0) {
+      const message = `Щоб змінити статус, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
+      setStatusError(message);
+      toast.error(message);
+      return;
+    }
     setStatusTarget(currentStatus ?? "new");
     setStatusNote("");
     setStatusDialogOpen(true);
@@ -846,6 +926,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const handlePrimaryStatusAction = () => {
     if (statusBusy) return;
+    if (quoteRequirements.length > 0) {
+      const message = `Щоб змінити статус, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
+      setStatusError(message);
+      toast.error(message);
+      return;
+    }
     if (!nextAction.nextStatus) {
       openStatusDialog();
       return;
@@ -1232,7 +1318,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
       setQuote(summary);
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
+      setDeadlineTime(toTimeInputValue(summary.deadline_at ?? null));
       setDeadlineNote(summary.deadline_note ?? "");
+      setDeadlineReminderOffset(
+        summary.deadline_reminder_offset_minutes === null || summary.deadline_reminder_offset_minutes === undefined
+          ? "0"
+          : String(summary.deadline_reminder_offset_minutes)
+      );
+      setDeadlineReminderComment(summary.deadline_reminder_comment ?? "");
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити прорахунок.");
       if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
@@ -2070,27 +2163,56 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAttachmentsDragActive(false);
   };
 
-  const handleSaveDeadline = async (overrides?: { date?: string; note?: string }) => {
+  const handleSaveDeadline = async (overrides?: {
+    date?: string;
+    note?: string;
+    time?: string;
+    reminderOffset?: string;
+    reminderComment?: string;
+  }) => {
     if (!quote) return;
+    const nextDatePart = (overrides?.date ?? deadlineDate) || "";
+    const nextTimePart = (overrides?.time ?? deadlineTime) || DEFAULT_DEADLINE_TIME;
+    if (!nextDatePart) {
+      const message = "Дедлайн прорахунку є обов'язковим.";
+      setDeadlineError(message);
+      toast.error(message);
+      return;
+    }
     setDeadlineSaving(true);
     setDeadlineError(null);
     try {
-      const prevDate = toDateInputValue(quote.deadline_at ?? null);
+      const prevDate = quote.deadline_at ?? "";
       const prevNote = quote.deadline_note ?? "";
-      const nextDate = (overrides?.date ?? deadlineDate) || "";
+      const prevReminderOffset = quote.deadline_reminder_offset_minutes;
+      const prevReminderComment = quote.deadline_reminder_comment ?? "";
+      const nextDate = combineDeadlineValue(nextDatePart, nextTimePart);
       const nextNote = (overrides?.note ?? deadlineNote).trim();
-      const deadlineChanged = prevDate !== nextDate || prevNote.trim() !== nextNote;
+      const nextReminderOffsetRaw = overrides?.reminderOffset ?? deadlineReminderOffset;
+      const nextReminderOffset =
+        nextReminderOffsetRaw === "none" ? null : Number(nextReminderOffsetRaw || "0");
+      const nextReminderComment = (overrides?.reminderComment ?? deadlineReminderComment).trim();
+      const deadlineChanged =
+        prevDate !== nextDate ||
+        prevNote.trim() !== nextNote ||
+        (prevReminderOffset ?? null) !== (Number.isFinite(nextReminderOffset ?? NaN) ? nextReminderOffset : null) ||
+        prevReminderComment.trim() !== nextReminderComment;
 
       const payload = {
         deadline_at: nextDate || null,
         deadline_note: nextNote || null,
+        deadline_reminder_offset_minutes:
+          Number.isFinite(nextReminderOffset ?? NaN) ? nextReminderOffset : null,
+        deadline_reminder_comment: nextReminderComment || null,
       };
-      const { error } = await supabase
-        .schema("tosho")
-        .from("quotes")
-        .update(payload)
-        .eq("id", quote.id);
-      if (error) throw error;
+      await updateQuote({
+        quoteId: quote.id,
+        teamId,
+        deadlineAt: payload.deadline_at,
+        deadlineNote: payload.deadline_note,
+        deadlineReminderOffsetMinutes: payload.deadline_reminder_offset_minutes,
+        deadlineReminderComment: payload.deadline_reminder_comment,
+      });
       if (deadlineChanged) {
         await logActivity({
           teamId,
@@ -2104,6 +2226,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             from: prevDate || null,
             to: nextDate || null,
             note: nextNote || null,
+            reminder_offset_minutes: payload.deadline_reminder_offset_minutes,
+            reminder_comment: payload.deadline_reminder_comment,
           },
         });
         await loadActivityLog();
@@ -2224,6 +2348,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         assignedTo: quote.assigned_to ?? null,
         deadlineAt: quote.deadline_at ?? null,
         deadlineNote: quote.deadline_note ?? null,
+        deadlineReminderOffsetMinutes: quote.deadline_reminder_offset_minutes ?? null,
+        deadlineReminderComment: quote.deadline_reminder_comment ?? null,
       });
       const newQuoteId = created?.id;
       if (!newQuoteId) throw new Error("Не вдалося створити дублікат прорахунку.");
@@ -3056,7 +3182,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               const deadlineDate = parseDeadlineDate(quote.deadline_at ?? null);
               const titleParts = [
                 deadlineDate
-                  ? `Дата: ${deadlineDate.toLocaleDateString("uk-UA")}`
+                  ? `Дата: ${formatDeadlineLabel(quote.deadline_at ?? null)}`
                   : "Дедлайн не задано",
                 quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
               ].filter(Boolean);
@@ -3066,6 +3192,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   label={badge.label}
                   title={titleParts.join(" · ")}
                 />
+              );
+            })()}
+            {(() => {
+              const reminderLabel = formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null);
+              if (!reminderLabel) return null;
+              const titleParts = [
+                `Налаштовано ${reminderLabel}`,
+                quote.deadline_reminder_comment ? `Текст: ${quote.deadline_reminder_comment}` : null,
+              ].filter(Boolean);
+              return (
+                <Badge
+                  variant="outline"
+                  title={titleParts.join(" · ")}
+                  className="inline-flex h-6 items-center gap-1.5 border-warning-soft-border bg-warning-soft text-warning-foreground"
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {`Нагадування: ${reminderLabel}`}
+                </Badge>
               );
             })()}
             {quoteSetMembership?.kp_count ? (
@@ -3092,7 +3236,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               variant="primary"
               size="sm"
               className="gap-2 shadow-sm"
-              disabled={statusBusy || quoteLockedByOther}
+              disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
               onClick={handlePrimaryStatusAction}
             >
               {createElement(
@@ -3105,7 +3249,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               variant="outline"
               size="sm"
               className="gap-2"
-              disabled={statusBusy || quoteLockedByOther}
+              disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
               onClick={openStatusDialog}
             >
               Змінити статус
@@ -3235,6 +3379,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       )}
 
+      {quoteRequirementsHint ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+          <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
+          {quoteRequirementsHint}
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={deleteQuoteDialogOpen}
         onOpenChange={setDeleteQuoteDialogOpen}
@@ -3326,7 +3477,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 void handleQuickStatusChange(statusTarget, statusNote);
                 setStatusDialogOpen(false);
               }}
-              disabled={statusBusy || statusTarget === currentStatus}
+              disabled={statusBusy || statusTarget === currentStatus || quoteRequirements.length > 0}
             >
               Застосувати
             </Button>
@@ -3402,7 +3553,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </DialogContent>
       </Dialog>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2.7fr)_minmax(320px,0.92fr)] 2xl:grid-cols-[minmax(0,2.9fr)_380px]">
         <div className="space-y-6">
           {/* Quote Info Card - Improved */}
           <Card className="p-6 bg-gradient-to-br from-card via-card to-muted/10 border-border/60 shadow-sm">
@@ -3500,7 +3651,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <Calendar className="h-3.5 w-3.5" />
                     Дедлайн (готовність до відвантаження)
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[240px_1fr_auto]">
+                  <div className="grid gap-2 sm:grid-cols-[240px_120px_1fr_auto]">
                     <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -3509,7 +3660,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           onClick={() => setDeadlinePopoverOpen(true)}
                         >
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {deadlineDate ? formatDeadlineLabel(deadlineDate) : "Оберіть дату"}
+                          {deadlineDate ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime)) : "Оберіть дату"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
@@ -3525,7 +3676,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           initialFocus
                         />
                         <DateQuickActions
-                          clearLabel="Очистити"
                           onSelect={async (date) => {
                             const nextDate = formatDateInput(date ?? null);
                             setDeadlineDate(nextDate);
@@ -3536,8 +3686,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </PopoverContent>
                     </Popover>
                     <Input
+                      type="time"
                       className="h-9"
-                      placeholder="Коментар до дедлайну (опціонально)"
+                      value={deadlineTime}
+                      onChange={(e) => setDeadlineTime(e.target.value)}
+                      onBlur={() => void handleSaveDeadline()}
+                    />
+                    <Input
+                      className="h-9"
+                      placeholder="Коментар до дедлайну / текст нагадування"
                       value={deadlineNote}
                       onChange={(e) => setDeadlineNote(e.target.value)}
                       onBlur={() => void handleSaveDeadline()}
@@ -3555,7 +3712,42 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Поточний дедлайн: {formatDeadlineLabel(deadlineDate)}
+                    Поточний дедлайн: {formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[240px_1fr]">
+                    <Select
+                      value={deadlineReminderOffset}
+                      onValueChange={(value) => {
+                        setDeadlineReminderOffset(value);
+                        void handleSaveDeadline({ reminderOffset: value });
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Оберіть момент сповіщення" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEADLINE_REMINDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="h-9"
+                      placeholder="Коментар до сповіщення"
+                      value={deadlineReminderComment}
+                      onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                      onBlur={() => void handleSaveDeadline()}
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Сповіщення:{" "}
+                    {
+                      DEADLINE_REMINDER_OPTIONS.find((option) => option.value === deadlineReminderOffset)?.label ??
+                      "Без сповіщення"
+                    }
                   </div>
                   {deadlineError && (
                     <div className="text-xs text-destructive">{deadlineError}</div>
@@ -3867,70 +4059,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
           </Card>
 
-          {/* Visualization placeholder */}
-          <Card className="quote-muted-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
-                <span role="img" aria-hidden="true">🎨</span> Візуалізація
-              </div>
-              <Badge variant="outline" className="text-[11px]">
-                {designVisualizations.length}
-              </Badge>
-            </div>
-            {designVisualizations.length === 0 ? (
-              <div className="border-2 border-dashed border-border/60 rounded-xl p-10 text-center bg-background/30">
-                <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                  <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
-                    <Image className="h-6 w-6" />
-                  </div>
-                  <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
-                  <div className="text-xs text-muted-foreground">
-                    Тут будуть макети від дизайнера після їх створення
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {designVisualizations.map((file) => {
-                  const extension = getFileExtension(file.name);
-                  const previewImage = Boolean(file.url) && canPreviewImage(extension);
-                  return (
-                    <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
-                      <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
-                        {previewImage && file.url ? (
-                          <KanbanImageZoomPreview
-                            imageUrl={file.url ?? ""}
-                            alt={file.name}
-                            className="h-32 w-full rounded-md border border-border/50 bg-muted/20"
-                          />
-                        ) : (
-                          <div className="text-xs text-muted-foreground">{extension}</div>
-                        )}
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground truncate" title={file.name}>
-                        {file.name}
-                      </div>
-                      <div className="mt-2 flex items-center gap-1">
-                        {file.url ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void downloadFileToDevice(file.url!, file.name)}
-                          >
-                            Завантажити
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
+          <div className="space-y-6">
           {/* Calculation (manager) */}
-          <Card className="quote-soft-card p-6">
-            <div className="flex items-center justify-between mb-4">
+          <Card className="quote-soft-card p-5">
+            <div className="mb-4 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="text-lg font-semibold flex items-center gap-2">
                 💰 Розрахунок
               </div>
@@ -3965,19 +4097,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="overflow-x-auto -mx-6 px-6">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent border-b">
                         <TableHead className="w-12"></TableHead>
-                        <TableHead className="font-semibold w-32">Кількість</TableHead>
-                        <TableHead className="font-semibold w-40">
-                          Ціна модель, {quote.currency}
+                        <TableHead className="w-28 font-semibold text-xs leading-tight">Кількість</TableHead>
+                        <TableHead className="w-32 font-semibold text-xs leading-tight">
+                          Ціна модель
+                          <div className="text-[11px] font-normal text-muted-foreground">{quote.currency}</div>
                         </TableHead>
-                        <TableHead className="font-semibold w-44">
-                          Ціна нанесення, {quote.currency}
+                        <TableHead className="w-32 font-semibold text-xs leading-tight">
+                          Ціна нанесення
+                          <div className="text-[11px] font-normal text-muted-foreground">{quote.currency}</div>
                         </TableHead>
-                        <TableHead className="font-semibold w-40 text-right">Сума</TableHead>
+                        <TableHead className="w-36 font-semibold text-xs text-right leading-tight">Сума</TableHead>
                         <TableHead className="w-16"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -4085,7 +4219,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 )}
                 {canEditRuns && (
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
+                    <Button size="sm" onClick={saveRuns} disabled={runsSaving || quoteRequirements.length > 0}>
                       {runsSaving ? "Збереження..." : "Зберегти розрахунок"}
                     </Button>
                   </div>
@@ -4097,12 +4231,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       🚚 Логістика
                     </div>
                   </div>
-                  <div className="overflow-x-auto -mx-6 px-6">
+                  <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent border-b">
-                          <TableHead className="w-32 font-semibold">Кількість</TableHead>
-                          <TableHead className="w-48 font-semibold">Вартість доставки</TableHead>
+                          <TableHead className="w-28 font-semibold text-xs">Кількість</TableHead>
+                          <TableHead className="w-40 font-semibold text-xs">Вартість доставки</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -4137,7 +4271,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </Table>
                     {canEditRuns && (
                       <div className="flex justify-end gap-2 mt-4">
-                        <Button size="sm" onClick={saveRuns} disabled={runsSaving}>
+                        <Button size="sm" onClick={saveRuns} disabled={runsSaving || quoteRequirements.length > 0}>
                           {runsSaving ? "Збереження..." : "Зберегти логістику"}
                         </Button>
                       </div>
@@ -4148,15 +4282,77 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             )}
           </Card>
 
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.92fr)] items-start">
+          {/* Visualization placeholder */}
+          <Card className="quote-muted-card h-full p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
+                <span role="img" aria-hidden="true">🎨</span> Візуалізація
+              </div>
+              <Badge variant="outline" className="text-[11px]">
+                {designVisualizations.length}
+              </Badge>
+            </div>
+            {designVisualizations.length === 0 ? (
+              <div className="border-2 border-dashed border-border/60 rounded-xl p-8 text-center bg-background/30">
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
+                    <Image className="h-6 w-6" />
+                  </div>
+                  <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
+                  <div className="text-xs text-muted-foreground">
+                    Тут будуть макети від дизайнера після їх створення
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {designVisualizations.map((file) => {
+                  const extension = getFileExtension(file.name);
+                  const previewImage = Boolean(file.url) && canPreviewImage(extension);
+                  return (
+                    <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
+                      <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
+                        {previewImage && file.url ? (
+                          <KanbanImageZoomPreview
+                            imageUrl={file.url ?? ""}
+                            alt={file.name}
+                            className="h-32 w-full rounded-md border border-border/50 bg-muted/20"
+                          />
+                        ) : (
+                          <div className="text-xs text-muted-foreground">{extension}</div>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground truncate" title={file.name}>
+                        {file.name}
+                      </div>
+                      <div className="mt-2 flex items-center gap-1">
+                        {file.url ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void downloadFileToDevice(file.url!, file.name)}
+                          >
+                            Завантажити
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
           {/* Summary Card - Improved */}
-          <Card className="p-6 bg-gradient-to-br from-card to-muted/5 border-border/60 shadow-sm">
+          <Card className="h-full p-4 bg-gradient-to-br from-card to-muted/5 border-border/60 shadow-sm 2xl:p-5">
             <div className="text-lg font-semibold mb-4">Підсумок</div>
             
             <div className="space-y-3">
               {/* Subtotal */}
               <div className="flex justify-between items-center py-2">
                 <span className="text-muted-foreground">Підсумок</span>
-                <span className="font-mono text-lg font-semibold tabular-nums">
+                <span className="font-mono text-base font-semibold tabular-nums 2xl:text-lg">
                   {formatCurrency(totals.subtotal, quote.currency)}
                 </span>
               </div>
@@ -4170,7 +4366,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       type="number"
                       value={discount}
                       onChange={(e) => setDiscount(e.target.value)}
-                      className="h-8 w-16 text-right text-sm"
+                      className="h-8 w-14 text-right text-sm 2xl:w-16"
                       placeholder="0"
                       min="0"
                       max="100"
@@ -4178,7 +4374,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <span className="text-xs text-muted-foreground">%</span>
                   </div>
                 </div>
-                <span className="font-mono text-lg font-semibold text-destructive tabular-nums flex items-center gap-1">
+                <span className="font-mono text-base font-semibold text-destructive tabular-nums flex items-center gap-1 2xl:text-lg">
                   <TrendingDown className="h-4 w-4" />
                   {formatCurrency(totals.discountAmount, quote.currency)}
                 </span>
@@ -4193,7 +4389,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       type="number"
                       value={tax}
                       onChange={(e) => setTax(e.target.value)}
-                      className="h-8 w-16 text-right text-sm"
+                      className="h-8 w-14 text-right text-sm 2xl:w-16"
                       placeholder="0"
                       min="0"
                       max="100"
@@ -4201,7 +4397,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <span className="text-xs text-muted-foreground">%</span>
                   </div>
                 </div>
-                <span className="font-mono text-lg font-semibold text-emerald-600 tabular-nums flex items-center gap-1">
+                <span className="font-mono text-base font-semibold text-emerald-600 tabular-nums flex items-center gap-1 2xl:text-lg">
                   <TrendingUp className="h-4 w-4" />
                   {formatCurrency(totals.taxAmount, quote.currency)}
                 </span>
@@ -4209,8 +4405,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               
               {/* Total */}
               <div className="flex justify-between items-center py-4 border-t-2 border-border">
-                <span className="font-semibold text-lg">Загальна сума</span>
-                <span className="font-mono text-2xl font-bold text-primary tabular-nums">
+                <span className="font-semibold text-base 2xl:text-lg">Загальна сума</span>
+                <span className="font-mono text-xl font-bold text-primary tabular-nums 2xl:text-2xl">
                   {formatCurrency(totals.total, quote.currency)}
                 </span>
               </div>
@@ -4239,11 +4435,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
             )}
-          </Card>
+	          </Card>
+	          </div>
+	          </div>
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
+	        {/* Right Column */}
+	        <div className="space-y-6">
           {/* Designer brief */}
           <Card className="quote-soft-card p-5">
             <div className="flex items-center justify-between mb-4">
@@ -4315,7 +4513,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   type="button"
                   size="sm"
                   onClick={() => void saveBrief()}
-                  disabled={!briefDirty || briefSaving}
+                  disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
                   className="gap-2"
                 >
                   {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}

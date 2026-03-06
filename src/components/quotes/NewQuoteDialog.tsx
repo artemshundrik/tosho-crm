@@ -118,6 +118,16 @@ const DELIVERY_PAYER_OPTIONS = [
   { value: "client", label: "Клієнт" },
 ];
 
+const DEFAULT_DEADLINE_TIME = "09:00";
+const DEADLINE_REMINDER_OPTIONS = [
+  { value: "none", label: "Без сповіщення" },
+  { value: "0", label: "У момент дедлайну" },
+  { value: "15", label: "За 15 хвилин" },
+  { value: "60", label: "За 1 годину" },
+  { value: "180", label: "За 3 години" },
+  { value: "1440", label: "За 1 день" },
+] as const;
+
 /**
  * Quantity units
  */
@@ -294,6 +304,8 @@ export type NewQuoteFormData = {
   designAssigneeId?: string | null;
   deadline?: Date;
   deadlineNote?: string;
+  deadlineReminderOffsetMinutes?: number | null;
+  deadlineReminderComment?: string;
   currency: string;
   quoteType: string;
   deliveryType?: string;
@@ -345,6 +357,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [managerId, setManagerId] = React.useState<string>("");
   const [deadline, setDeadline] = React.useState<Date>();
   const [deadlineNote, setDeadlineNote] = React.useState("");
+  const [deadlineReminderOffset, setDeadlineReminderOffset] = React.useState<string>("0");
+  const [deadlineReminderComment, setDeadlineReminderComment] = React.useState("");
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
   const [deliveryType, setDeliveryType] = React.useState("");
@@ -379,6 +393,29 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = React.useState(false);
   const [deliveryPopoverOpen, setDeliveryPopoverOpen] = React.useState(false);
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
+  const deadlineTime = React.useMemo(() => {
+    if (!deadline) return DEFAULT_DEADLINE_TIME;
+    return `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}`;
+  }, [deadline]);
+
+  const updateDeadlineDate = React.useCallback((date?: Date) => {
+    if (!date) {
+      setDeadline(undefined);
+      return;
+    }
+    const [hours, minutes] = deadlineTime.split(":").map((part) => Number(part) || 0);
+    const next = new Date(date);
+    next.setHours(hours, minutes, 0, 0);
+    setDeadline(next);
+  }, [deadlineTime]);
+
+  const updateDeadlineTime = React.useCallback((value: string) => {
+    if (!deadline) return;
+    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
+    const next = new Date(deadline);
+    next.setHours(hours, minutes, 0, 0);
+    setDeadline(next);
+  }, [deadline]);
 
   const selectedType = React.useMemo(
     () => catalogTypes.find((type) => type.id === categoryId),
@@ -496,6 +533,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setManagerId(initialValues?.managerId ?? currentUserId ?? "");
     setDeadline(initialValues?.deadline);
     setDeadlineNote(initialValues?.deadlineNote ?? "");
+    setDeadlineReminderOffset(
+      initialValues?.deadlineReminderOffsetMinutes === null || initialValues?.deadlineReminderOffsetMinutes === undefined
+        ? "0"
+        : String(initialValues.deadlineReminderOffsetMinutes)
+    );
+    setDeadlineReminderComment(initialValues?.deadlineReminderComment ?? "");
     setCurrency(initialValues?.currency ?? "UAH");
     setQuoteType(initialValues?.quoteType ?? "merch");
     setDeliveryType(initialValues?.deliveryType ?? "");
@@ -678,8 +721,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const handleSubmit = async () => {
     // Validation
     if (!isEditMode && !customerId) {
-      alert("Оберіть клієнта або ліда");
+      alert("Оберіть замовника або ліда");
       setCustomerPopoverOpen(true);
+      return;
+    }
+    if (!isEditMode && !deadline) {
+      alert("Вкажіть дедлайн прорахунку з датою та часом");
+      setDeadlinePopoverOpen(true);
       return;
     }
 
@@ -846,6 +894,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       designAssigneeId: shouldCreateDesignTask ? designAssigneeId : null,
       deadline,
       deadlineNote,
+      deadlineReminderOffsetMinutes:
+        deadlineReminderOffset === "none" ? null : Number(deadlineReminderOffset),
+      deadlineReminderComment,
       currency,
       quoteType,
       deliveryType,
@@ -1046,8 +1097,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             <PopoverTrigger asChild>
               <Chip size="md" icon={<CalendarIcon />} active={!!deadline}>
                 {deadline
-                  ? format(deadline, "d MMM", { locale: uk })
-                  : "Дедлайн"}
+                  ? format(deadline, "d MMM, HH:mm", { locale: uk })
+                  : "Дедлайн *"}
               </Chip>
             </PopoverTrigger>
             <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
@@ -1055,18 +1106,27 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 mode="single"
                 selected={deadline}
                 onSelect={(date) => {
-                  setDeadline(date);
-                  setDeadlinePopoverOpen(false);
+                  updateDeadlineDate(date ?? undefined);
                 }}
                 captionLayout="dropdown-buttons"
                 fromYear={currentYear - 3}
                 toYear={currentYear + 5}
                 initialFocus
               />
+              <div className="border-t border-border/50 px-3 py-3">
+                <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  Час дедлайну
+                </div>
+                <Input
+                  type="time"
+                  value={deadlineTime}
+                  onChange={(e) => updateDeadlineTime(e.target.value)}
+                  className="mt-2 h-9"
+                />
+              </div>
               <DateQuickActions
                 onSelect={(date) => {
-                  setDeadline(date ?? undefined);
-                  setDeadlinePopoverOpen(false);
+                  updateDeadlineDate(date ?? undefined);
                 }}
               />
             </PopoverContent>
@@ -1144,14 +1204,58 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
         <div className="mt-5 space-y-4">
           <SectionHeader>Деталі</SectionHeader>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Нотатка до дедлайну</div>
-            <Input
-              value={deadlineNote}
-              onChange={(e) => setDeadlineNote(e.target.value)}
-              placeholder="Напр. До 12:00 погодити макет"
-              className="h-9"
-            />
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Замовник або Лід *</div>
+              <div className={cn(
+                "rounded-xl border px-3 py-2 text-sm",
+                customerId ? "border-emerald-500/30 bg-emerald-500/5 text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
+              )}>
+                {customerId ? "Поле заповнено" : "Потрібно обрати замовника або ліда перед збереженням"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Дедлайн прорахунку *</div>
+              <div className={cn(
+                "rounded-xl border px-3 py-2 text-sm",
+                deadline ? "border-emerald-500/30 bg-emerald-500/5 text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
+              )}>
+                {deadline ? format(deadline, "d MMMM yyyy, HH:mm", { locale: uk }) : "Потрібно вказати дату та час дедлайну"}
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <div className="text-sm text-muted-foreground">Коментар до дедлайну / текст нагадування</div>
+              <Input
+                value={deadlineNote}
+                onChange={(e) => setDeadlineNote(e.target.value)}
+                placeholder="Напр. До 12:00 погодити макет"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Сповіщення про дедлайн</div>
+              <Select value={deadlineReminderOffset} onValueChange={setDeadlineReminderOffset}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Оберіть момент сповіщення" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEADLINE_REMINDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Текст сповіщення</div>
+              <Input
+                value={deadlineReminderComment}
+                onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                placeholder="Напр. Перевірити готовність і зв'язатись з клієнтом"
+                className="h-9"
+              />
+            </div>
           </div>
         </div>
 
