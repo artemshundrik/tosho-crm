@@ -3676,141 +3676,277 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 const shouldShowDescription =
                   item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
 
+                const specHighlights = [
+                  { label: "Кількість", value: `${item.qty}` },
+                  { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
+                  ...(positionLabel || sizeLabel
+                    ? [
+                        {
+                          label: "Нанесення",
+                          value: [positionLabel ?? "Не вказано", sizeLabel].filter(Boolean).join(" · "),
+                        },
+                      ]
+                    : []),
+                ];
+
                 return (
-                  <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
-                    <div className="flex items-center gap-4">
-                      {productPreview?.type === "image" ? (
-                        <KanbanImageZoomPreview
-                          imageUrl={productPreview.url}
-                          alt={modelLabel ?? "Товар"}
-                          className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30"
-                        />
-                      ) : (
-                        <div className="h-20 w-20 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground overflow-hidden">
-                          <Package className="h-6 w-6 text-muted-foreground/60" />
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-[28px] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(248,250,252,0.9)_100%)] shadow-sm"
+                  >
+                    <div className="grid gap-6 p-5 lg:grid-cols-[240px_minmax(0,1fr)] lg:p-6">
+                      <aside className="space-y-4">
+                        <div className="rounded-[24px] border border-border/50 bg-background/70 p-4">
+                          <div className="flex items-start gap-4">
+                            {productPreview?.type === "image" ? (
+                              <KanbanImageZoomPreview
+                                imageUrl={productPreview.url}
+                                alt={modelLabel ?? "Товар"}
+                                className="h-20 w-20 rounded-[20px] border border-border/50 bg-muted/20"
+                              />
+                            ) : (
+                              <div className="flex h-20 w-20 items-center justify-center rounded-[20px] border border-border/50 bg-muted/20 text-muted-foreground">
+                                <Package className="h-7 w-7 text-muted-foreground/60" />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Специфікація
+                              </div>
+                              <div className="mt-1 text-xl font-semibold leading-tight text-foreground">
+                                {item.title}
+                              </div>
+                              {metaLine ? (
+                                <div className="mt-1 text-sm text-muted-foreground">
+                                  {metaLine}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {packageSummary.length > 0 ? (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {packageSummary.slice(0, 4).map((entry) => (
+                                <Badge
+                                  key={entry}
+                                  variant="outline"
+                                  className="rounded-full border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium"
+                                >
+                                  {entry}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-base font-semibold truncate">{item.title}</div>
-                        {metaLine && (
-                          <div className="text-xs text-muted-foreground mt-0.5 truncate">{metaLine}</div>
-                        )}
-                        {!hasMethodPrints && (positionLabel || sizeLabel) && (
-                          <div className="text-xs text-muted-foreground mt-2">
-                            {positionLabel ? `Місце: ${positionLabel}` : "Місце: Н/Д"}
-                            {sizeLabel ? ` · ${sizeLabel}` : ""}
+
+                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                          {specHighlights.map((fact) => (
+                            <div
+                              key={`${item.id}:${fact.label}`}
+                              className="rounded-[20px] border border-border/45 bg-background/65 px-4 py-3"
+                            >
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                {fact.label}
+                              </div>
+                              <div className="mt-1.5 text-sm font-semibold leading-snug text-foreground">
+                                {fact.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {shouldShowDescription ? (
+                          <div className="rounded-[20px] border border-border/45 bg-background/65 px-4 py-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Опис
+                            </div>
+                            <div className="mt-1.5 text-sm leading-6 text-foreground">
+                              {item.description}
+                            </div>
                           </div>
-                        )}
-                        <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                          <div>
-                            Одиниця: <span className="text-foreground">{normalizeUnitLabel(item.unit)}</span>
+                        ) : null}
+
+                        {item.attachment ? (
+                          <div className="rounded-[20px] border border-border/45 bg-background/65 px-4 py-3">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/20">
+                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Візуалізація
+                                </div>
+                                <div className="mt-1 truncate text-sm font-medium text-foreground">
+                                  {item.attachment.name}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatFileSize(item.attachment.size)}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          {packageSections.length > 0 ? (
-                            <div className="sm:col-span-2">
-                              <div className="rounded-xl border border-border/60 bg-background/60 p-3 sm:p-4">
-                                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        ) : null}
+                      </aside>
+
+                      <div className="space-y-4">
+                        {packageSections.length > 0 ? (
+                          <div className="rounded-[24px] border border-border/50 bg-background/70 p-4 md:p-5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                                   Параметри пакета
                                 </div>
-                                <div className="grid gap-3 md:grid-cols-3">
-                                  {packageSections.map((section) => (
-                                    <div
-                                      key={section.title}
-                                      className="rounded-lg border border-border/50 bg-muted/20 p-3"
-                                    >
-                                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                                        {section.title}
-                                      </div>
-                                      <div className="space-y-2">
-                                        {section.fields.map((field) => (
-                                          <div
-                                            key={`${section.title}:${field.label}:${field.value}`}
-                                            className="rounded-md border border-border/40 bg-background/70 px-2.5 py-2"
-                                          >
-                                            <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                              {field.label}
-                                            </div>
-                                            <div className="mt-1 text-xs font-medium leading-snug text-foreground">
-                                              {field.value}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ))}
+                                <div className="mt-1 text-base font-semibold text-foreground">
+                                  Конструкція, матеріал і друк
                                 </div>
                               </div>
-                            </div>
-                          ) : null}
-                          {(positionLabel || sizeLabel) && (
-                            <div className="sm:col-span-2 flex items-center gap-2">
-                              <Badge variant="outline" className="text-[11px]">
-                                Місце нанесення
+                              <Badge
+                                variant="secondary"
+                                className="rounded-full bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground"
+                              >
+                                {packageDetailFields.length} параметрів
                               </Badge>
-                              <span className="text-foreground">
-                                {positionLabel ?? "Не вказано"}
-                                {sizeLabel ? ` · ${sizeLabel}` : ""}
-                              </span>
                             </div>
-                          )}
-                          {shouldShowDescription ? (
-                            <div className="sm:col-span-2">
-                              Опис: <span className="text-foreground">{item.description}</span>
+
+                            <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                              {packageSections.map((section) => (
+                                <div
+                                  key={section.title}
+                                  className="rounded-[20px] border border-border/45 bg-muted/15 p-4"
+                                >
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    {section.title}
+                                  </div>
+                                  <div className="mt-3 divide-y divide-border/35">
+                                    {section.fields.map((field) => (
+                                      <div
+                                        key={`${section.title}:${field.label}:${field.value}`}
+                                        className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                                      >
+                                        <div className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                          {field.label}
+                                        </div>
+                                        <div className="max-w-[65%] text-right text-sm font-semibold leading-snug text-foreground">
+                                          {field.value}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ) : null}
-                          {item.attachment ? (
-                            <div className="sm:col-span-2">
-                              Візуалізація:{" "}
-                              <span className="text-foreground">
-                                {item.attachment.name} ({formatFileSize(item.attachment.size)})
-                              </span>
+                          </div>
+                        ) : (
+                          <div className="rounded-[24px] border border-border/50 bg-background/70 p-4 md:p-5">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                              Параметри позиції
                             </div>
-                          ) : null}
-                        </div>
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              {specHighlights.map((fact) => (
+                                <div
+                                  key={`${item.id}:main:${fact.label}`}
+                                  className="rounded-[18px] border border-border/45 bg-muted/15 px-4 py-3"
+                                >
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    {fact.label}
+                                  </div>
+                                  <div className="mt-1.5 text-sm font-semibold text-foreground">
+                                    {fact.value}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {item.methods && item.methods.length > 0 ? (
+                          <div className="rounded-[24px] border border-border/50 bg-background/70 p-4 md:p-5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                  Нанесення
+                                </div>
+                                <div className="mt-1 text-base font-semibold text-foreground">
+                                  Конфігурації методів
+                                </div>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className="rounded-full bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground"
+                              >
+                                {item.methods.length}
+                              </Badge>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              {item.methods.map((method) => {
+                                const methodName =
+                                  getMethodLabel(
+                                    catalogTypes,
+                                    item.catalogTypeId,
+                                    item.catalogKindId,
+                                    method.methodId
+                                  ) ?? "Метод";
+                                const place =
+                                  getPrintPositionLabel(
+                                    catalogTypes,
+                                    item.catalogTypeId,
+                                    item.catalogKindId,
+                                    method.printPositionId
+                                  ) ?? positionLabel ?? "Місце не вказано";
+                                const size =
+                                  method.printWidthMm && method.printHeightMm
+                                    ? `${method.printWidthMm}×${method.printHeightMm} мм`
+                                    : method.printWidthMm
+                                    ? `${method.printWidthMm} мм`
+                                    : method.printHeightMm
+                                    ? `${method.printHeightMm} мм`
+                                    : sizeLabel;
+
+                                return (
+                                  <div
+                                    key={method.id}
+                                    className="rounded-[18px] border border-border/45 bg-muted/15 px-4 py-3"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <Badge
+                                        variant="outline"
+                                        className="rounded-full border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-semibold"
+                                      >
+                                        {methodName}
+                                        {method.count > 1 ? ` ×${method.count}` : ""}
+                                      </Badge>
+                                      <div className="text-xs text-muted-foreground">Нанесення</div>
+                                    </div>
+                                    <div className="mt-3 space-y-2 text-sm">
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                          Позиція
+                                        </div>
+                                        <div className="max-w-[65%] text-right font-medium text-foreground">
+                                          {place}
+                                        </div>
+                                      </div>
+                                      {size ? (
+                                        <div className="flex items-start justify-between gap-4">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                            Розмір
+                                          </div>
+                                          <div className="max-w-[65%] text-right font-medium text-foreground">
+                                            {size}
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                    {item.methods && item.methods.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        {item.methods.map((method) => {
-                          const methodName =
-                            getMethodLabel(
-                              catalogTypes,
-                              item.catalogTypeId,
-                              item.catalogKindId,
-                              method.methodId
-                            ) ?? "Метод";
-                          const place =
-                            getPrintPositionLabel(
-                              catalogTypes,
-                              item.catalogTypeId,
-                              item.catalogKindId,
-                              method.printPositionId
-                            ) ?? positionLabel ?? "Місце не вказано";
-                          const size =
-                            method.printWidthMm && method.printHeightMm
-                              ? `${method.printWidthMm}×${method.printHeightMm} мм`
-                              : method.printWidthMm
-                              ? `${method.printWidthMm} мм`
-                              : method.printHeightMm
-                              ? `${method.printHeightMm} мм`
-                              : sizeLabel;
-                          return (
-                            <div
-                              key={method.id}
-                              className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 flex items-center gap-2"
-                            >
-                              <Badge variant="secondary" className="text-[11px] font-semibold">
-                                {methodName}
-                                {method.count > 1 && ` ×${method.count}`}
-                              </Badge>
-                              <div className="text-[11px] text-muted-foreground">
-                                {place}
-                                {size ? ` · ${size}` : ""}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 );
               })
