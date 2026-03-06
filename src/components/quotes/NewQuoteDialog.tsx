@@ -148,6 +148,11 @@ type PrintApplication = {
   height: string;
 };
 
+type QuoteRunDraft = {
+  id: string;
+  quantity: string;
+};
+
 type DeliveryDetails = {
   region: string;
   city: string;
@@ -179,7 +184,87 @@ const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string }
       {icon}
       <span>{label}</span>
     </div>
-    <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+  <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+  </div>
+);
+
+const RunsEditor: React.FC<{
+  runs: QuoteRunDraft[];
+  quantityUnit: string;
+  onRunChange: (runId: string, value: string) => void;
+  onAddRun: () => void;
+  onRemoveRun: (runId: string) => void;
+  onUnitChange: (value: string) => void;
+  compact?: boolean;
+  showHeader?: boolean;
+}> = ({
+  runs,
+  quantityUnit,
+  onRunChange,
+  onAddRun,
+  onRemoveRun,
+  onUnitChange,
+  compact = false,
+  showHeader = true,
+}) => (
+  <div className="space-y-3">
+    {showHeader ? (
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">Тиражі</div>
+          <div className="text-xs text-muted-foreground">Можна додати кілька варіантів одразу</div>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onAddRun} className="gap-1.5">
+          <Plus className="h-4 w-4" />
+          Додати
+        </Button>
+      </div>
+    ) : null}
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        {runs.map((run, index) => (
+          <div key={run.id} className="space-y-1.5">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Тираж</span>
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border/40 bg-background/60 px-1.5 text-[11px] font-medium text-foreground">
+                {index + 1}
+              </span>
+            </div>
+            <div className="flex h-9 items-center gap-1.5 rounded-full border border-border/50 bg-background/55 px-2">
+              <Input
+                type="number"
+                min={1}
+                placeholder="Тираж"
+                value={run.quantity}
+                onChange={(e) => onRunChange(run.id, e.target.value)}
+                className={cn(
+                  "h-9 border-0 bg-transparent px-2 shadow-none",
+                  compact ? "w-28" : "w-32"
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => onRemoveRun(run.id)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Видалити тираж ${index + 1}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className={cn("space-y-1.5", compact ? "w-[140px]" : "w-[148px]")}>
+        <div className="text-xs text-muted-foreground">Одиниця</div>
+        <ChipDropdown
+          value={quantityUnit}
+          onChange={onUnitChange}
+          options={QUANTITY_UNITS}
+          placeholder="Одиниця"
+          icon={<Ruler className="h-3.5 w-3.5" />}
+        />
+      </div>
+    </div>
   </div>
 );
 
@@ -316,6 +401,7 @@ export type NewQuoteFormData = {
   productConfiguratorPreset?: "print_package" | null;
   printPackageConfig?: PrintPackageConfig;
   quantity?: number;
+  runs?: Array<{ quantity: number }>;
   quantityUnit: string;
   printApplications: PrintApplication[];
   createDesignTask?: boolean;
@@ -378,6 +464,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     createEmptyPrintPackageConfig()
   );
   const [quantity, setQuantity] = React.useState<number>();
+  const [runs, setRuns] = React.useState<QuoteRunDraft[]>([{ id: crypto.randomUUID(), quantity: "" }]);
   const [quantityUnit, setQuantityUnit] = React.useState("шт.");
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
   const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("no_print");
@@ -562,6 +649,20 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           : initialValues?.printPackageConfig?.productKind ?? "",
     });
     setQuantity(initialValues?.quantity);
+    const nextRuns =
+      (initialValues?.runs ?? [])
+        .filter((run) => Number(run.quantity) > 0)
+        .map((run, index) => ({
+          id: `${Date.now()}-${index}`,
+          quantity: String(run.quantity),
+        })) ?? [];
+    if (nextRuns.length > 0) {
+      setRuns(nextRuns);
+      setQuantity(Number(nextRuns[0]?.quantity) || initialValues?.quantity);
+    } else {
+      const initialQuantity = initialValues?.quantity ? String(initialValues.quantity) : "";
+      setRuns([{ id: `${Date.now()}-0`, quantity: initialQuantity }]);
+    }
     setQuantityUnit(normalizeUnitLabel(initialValues?.quantityUnit ?? "шт."));
     setPrintApplications(nextPrintApplications);
     const nextPrintMode = nextPrintApplications.length > 0 ? "with_print" : "no_print";
@@ -717,6 +818,22 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     }
   };
 
+  const updateRunDraft = (runId: string, value: string) => {
+    const sanitized = value.replace(/[^\d]/g, "");
+    setRuns((prev) => prev.map((run) => (run.id === runId ? { ...run, quantity: sanitized } : run)));
+  };
+
+  const addRunDraft = () => {
+    setRuns((prev) => [...prev, { id: crypto.randomUUID(), quantity: "" }]);
+  };
+
+  const removeRunDraft = (runId: string) => {
+    setRuns((prev) => {
+      if (prev.length <= 1) return [{ ...prev[0], quantity: "" }];
+      return prev.filter((run) => run.id !== runId);
+    });
+  };
+
   // Handle submit
   const handleSubmit = async () => {
     // Validation
@@ -783,8 +900,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       }
     }
 
+    const normalizedRuns = runs
+      .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+      .filter((run) => run.quantity > 0);
+    const primaryQuantity = normalizedRuns[0]?.quantity ?? Number(quantity ?? 0);
+
     if (!isEditMode && isPrintPackageMode) {
-      const qtyValue = Number(quantity ?? 0);
+      const qtyValue = primaryQuantity;
       const numericFieldsValid = (value: string) => {
         const parsed = Number(value);
         return Number.isFinite(parsed) && parsed > 0;
@@ -857,6 +979,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       }
     }
 
+    if (!isEditMode && normalizedRuns.length === 0) {
+      alert("Додайте хоча б один коректний тираж");
+      return;
+    }
+
     const finalPrints = printMode === "no_print" ? [] : printApplications;
     const shouldCreateDesignTask =
       ((printMode !== "no_print" && !isPrintPackageMode) || isPrintPackageMode) && createDesignTask;
@@ -906,7 +1033,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       modelId,
       productConfiguratorPreset: activeConfiguratorPreset,
       printPackageConfig: isPrintPackageMode ? printPackageConfig : undefined,
-      quantity,
+      quantity: primaryQuantity || undefined,
+      runs: normalizedRuns,
       quantityUnit: normalizeUnitLabel(quantityUnit),
       printApplications: finalPrints,
       createDesignTask: shouldCreateDesignTask,
@@ -920,6 +1048,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const currentStatus = availableStatuses.find((s) => s.value === status) ?? availableStatuses[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
+  const runsSummary = runs.filter((run) => Number(run.quantity) > 0);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
     () =>
       customers.map((customer) => ({
@@ -1521,39 +1650,28 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     />
 
                     <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div className="text-sm font-semibold text-foreground">Кількість</div>
-                        <div className="text-xs text-muted-foreground">
-                          {quantity && quantity > 0 ? "Заповнено" : "Не заповнено"}
-                        </div>
-                      </div>
-                      <div className="grid gap-3 md:max-w-[380px] sm:grid-cols-[220px_140px]">
-                        <div className="space-y-1.5">
-                          <div className="text-xs text-muted-foreground">Тираж</div>
-                          <Input
-                            type="number"
-                            placeholder="Наприклад, 500"
-                            value={quantity || ""}
-                            onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
-                            className="h-9 bg-background/70"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="text-xs text-muted-foreground">Одиниця</div>
-                          <ChipDropdown
-                            value={quantityUnit}
-                            onChange={setQuantityUnit}
-                            options={QUANTITY_UNITS}
-                            placeholder="Одиниця"
-                            icon={<Ruler className="h-3.5 w-3.5" />}
-                          />
-                        </div>
-                      </div>
+                      <RunsEditor
+                        runs={runs}
+                        quantityUnit={quantityUnit}
+                        onRunChange={updateRunDraft}
+                        onAddRun={addRunDraft}
+                        onRemoveRun={removeRunDraft}
+                        onUnitChange={setQuantityUnit}
+                        compact
+                        showHeader
+                      />
                     </div>
                   </div>
                 ) : (
                   <div className="mt-4 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
-                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_180px_140px] md:grid-cols-3">
+                    <div
+                      className={cn(
+                        "grid gap-3 md:grid-cols-3",
+                        quoteType === "print"
+                          ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(320px,1.2fr)]"
+                          : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+                      )}
+                    >
                         <div className="space-y-1.5">
                           <div className="text-xs text-muted-foreground">Категорія</div>
                           <ChipDropdown
@@ -1605,28 +1723,33 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                             popoverClassName="w-[320px]"
                           />
                         </div>
-
-                        <div className="space-y-1.5">
-                          <div className="text-xs text-muted-foreground">Тираж</div>
-                          <Input
-                            type="number"
-                            placeholder="Наприклад, 500"
-                            value={quantity || ""}
-                            onChange={(e) => setQuantity(Number(e.target.value) || undefined)}
-                            className="h-9 bg-background/70"
-                          />
+                        {quoteType === "print" ? (
+                          <div className="space-y-1.5 xl:col-span-1">
+                            <RunsEditor
+                              runs={runs}
+                              quantityUnit={quantityUnit}
+                              onRunChange={updateRunDraft}
+                              onAddRun={addRunDraft}
+                              onRemoveRun={removeRunDraft}
+                              onUnitChange={setQuantityUnit}
+                              compact
+                              showHeader
+                            />
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="text-xs text-muted-foreground">Одиниця</div>
-                          <ChipDropdown
-                            value={quantityUnit}
-                            onChange={setQuantityUnit}
-                            options={QUANTITY_UNITS}
-                            placeholder="Одиниця"
-                            icon={<Ruler className="h-3.5 w-3.5" />}
-                          />
-                        </div>
+                        ) : null}
                     </div>
+                    {quoteType !== "print" ? (
+                      <div className="mt-4">
+                        <RunsEditor
+                          runs={runs}
+                          quantityUnit={quantityUnit}
+                          onRunChange={updateRunDraft}
+                          onAddRun={addRunDraft}
+                          onRemoveRun={removeRunDraft}
+                          onUnitChange={setQuantityUnit}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 )
               ) : (

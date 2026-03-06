@@ -1238,7 +1238,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       }
       const isPrintPackageQuote = data.productConfiguratorPreset === "print_package";
-      const qtyValue = Number(data.quantity ?? 0);
+      const normalizedRuns = (data.runs ?? []).filter((run) => Number(run.quantity) > 0);
+      const primaryRunQuantity = normalizedRuns[0]?.quantity ?? Number(data.quantity ?? 0);
+      const qtyValue = Number(primaryRunQuantity ?? 0);
       if ((!isPrintPackageQuote && !data.modelId) || !Number.isFinite(qtyValue) || qtyValue <= 0) {
         throw new Error(
           isPrintPackageQuote
@@ -1318,7 +1320,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           : null;
 
       // 2. Create quote item
-      if ((data.modelId || isPrintPackageQuote) && data.quantity) {
+      if ((data.modelId || isPrintPackageQuote) && primaryRunQuantity) {
 
         // Prepare methods payload from print applications
         const isUuid = (value?: string | null) =>
@@ -1345,9 +1347,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           position: 1,
           name: packageItemName ?? model?.name ?? "Позиція",
           description: packageItemDescription,
-          qty: data.quantity,
+          qty: primaryRunQuantity,
           unit_price: isPrintPackageQuote ? 0 : model?.price ?? 0,
-          line_total: data.quantity * (isPrintPackageQuote ? 0 : model?.price ?? 0),
+          line_total: primaryRunQuantity * (isPrintPackageQuote ? 0 : model?.price ?? 0),
           catalog_type_id: isPrintPackageQuote ? null : data.categoryId,
           catalog_kind_id: isPrintPackageQuote ? null : data.kindId,
           catalog_model_id: isPrintPackageQuote ? null : data.modelId,
@@ -1387,6 +1389,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             }));
         }
         if (itemError) throw itemError;
+
+        if (normalizedRuns.length > 0) {
+          const runRows = normalizedRuns.map((run) => ({
+            id: crypto.randomUUID(),
+            quote_id: created.id,
+            quote_item_id: itemPayload.id,
+            quantity: run.quantity,
+            unit_price_model: 0,
+            unit_price_print: 0,
+            logistics_cost: 0,
+            team_id: teamId,
+          }));
+          let { error: runsError } = await supabase
+            .schema("tosho")
+            .from("quote_item_runs")
+            .insert(runRows);
+          if (
+            runsError &&
+            /column/i.test(runsError.message ?? "") &&
+            /team_id/i.test(runsError.message ?? "")
+          ) {
+            ({ error: runsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .insert(
+                runRows.map(({ team_id: _teamId, ...row }) => row)
+              ));
+          }
+          if (runsError) throw runsError;
+        }
       }
 
       // 3. Optionally create design task (lightweight, via activity_log)

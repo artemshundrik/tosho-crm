@@ -3867,10 +3867,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   : [];
                 const shouldShowDescription =
                   item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
+                const isMerchQuote = (quote?.quote_type ?? "") === "merch";
+                const specRuns = runs.length > 0
+                  ? runs
+                      .map((run) => Number(run.quantity) || 0)
+                      .filter((qty) => qty > 0)
+                  : item.qty > 0
+                  ? [item.qty]
+                  : [];
 
                 const specHighlights = [
-                  { label: "Кількість", value: `${item.qty}` },
-                  { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
+                  ...(!isMerchQuote
+                    ? [
+                        { label: "Кількість", value: `${item.qty}` },
+                        { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
+                      ]
+                    : []),
                   ...(positionLabel || sizeLabel
                     ? [
                         {
@@ -3906,12 +3918,32 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div className="mt-0.5 text-sm text-muted-foreground">{metaLine}</div>
                         ) : null}
                       </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-2xl font-bold tabular-nums leading-tight text-foreground">
-                          {item.qty}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {normalizeUnitLabel(item.unit)}
+                      <div className="shrink-0">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {specRuns.map((qty, index) => {
+                            const isActiveRun =
+                              selectedRun && (Number(selectedRun.quantity) || 0) === qty;
+                            return (
+                              <div
+                                key={`${item.id}:spec-run:${qty}:${index}`}
+                                className={cn(
+                                  "rounded-2xl border px-3 py-2.5",
+                                  isActiveRun
+                                    ? "border-primary/40 bg-primary/10"
+                                    : "border-border/50 bg-muted/10"
+                                )}
+                              >
+                                <div className="flex items-baseline justify-end gap-1.5">
+                                  <div className="text-lg font-bold tabular-nums leading-tight text-foreground">
+                                    {qty}
+                                  </div>
+                                  <div className="text-[11px] font-medium text-muted-foreground">
+                                  {normalizeUnitLabel(item.unit)}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -3942,7 +3974,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
                         ))}
                       </div>
-                    ) : (
+                    ) : specHighlights.length > 0 ? (
                       /* ── Non-Print Parameters ── */
                       <div className="rounded-2xl border border-border/50 px-5 py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1.5">
@@ -3961,7 +3993,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           ))}
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* ── Methods ── */}
                     {item.methods && item.methods.length > 0 ? (
