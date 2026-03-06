@@ -379,12 +379,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [lastAutoTitle, setLastAutoTitle] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [deadlineTime, setDeadlineTime] = useState(DEFAULT_DEADLINE_TIME);
+  const [customerDeadlineDate, setCustomerDeadlineDate] = useState("");
+  const [customerDeadlineTime, setCustomerDeadlineTime] = useState(DEFAULT_DEADLINE_TIME);
+  const [designDeadlineDate, setDesignDeadlineDate] = useState("");
+  const [designDeadlineTime, setDesignDeadlineTime] = useState(DEFAULT_DEADLINE_TIME);
   const [deadlineNote, setDeadlineNote] = useState("");
   const [deadlineReminderOffset, setDeadlineReminderOffset] = useState<string>("0");
   const [deadlineReminderComment, setDeadlineReminderComment] = useState("");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
+  const [customerDeadlinePopoverOpen, setCustomerDeadlinePopoverOpen] = useState(false);
+  const [designDeadlinePopoverOpen, setDesignDeadlinePopoverOpen] = useState(false);
 
   // Inline editing for quantity
   const [editingQty, setEditingQty] = useState<string | null>(null);
@@ -697,6 +703,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     })}`;
   };
 
+  const formatShortDeadlineLabel = (value?: string | null) => {
+    const date = parseDeadlineDate(value);
+    if (!date) return "Не вказано";
+    const dateLabel = date.toLocaleDateString("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+    const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
+    if (!hasTime) return dateLabel;
+    return `${dateLabel} до ${date.toLocaleTimeString("uk-UA", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  };
+
   const formatDeliveryLabel = (value?: string | null) => {
     if (!value) return "Не вказано";
     const map: Record<string, string> = {
@@ -866,6 +887,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteRequirementsHint = quoteRequirements.length
     ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
     : null;
+  const shortTaskText = briefText.trim();
+  const designBriefPreview = [ 
+    designDeadlineDate
+      ? `Дедлайн дизайну: ${formatShortDeadlineLabel(
+          combineDeadlineValue(designDeadlineDate, designDeadlineTime)
+        )}`
+      : null,
+    shortTaskText || null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const baseTotalForStatus = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
   const nextAction = STATUS_NEXT_ACTION[currentStatus] ?? STATUS_NEXT_ACTION.new;
 
@@ -1319,6 +1351,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setQuote(summary);
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
       setDeadlineTime(toTimeInputValue(summary.deadline_at ?? null));
+      setCustomerDeadlineDate(toDateInputValue(summary.customer_deadline_at ?? null));
+      setCustomerDeadlineTime(toTimeInputValue(summary.customer_deadline_at ?? null));
+      setDesignDeadlineDate(toDateInputValue(summary.design_deadline_at ?? null));
+      setDesignDeadlineTime(toTimeInputValue(summary.design_deadline_at ?? null));
       setDeadlineNote(summary.deadline_note ?? "");
       setDeadlineReminderOffset(
         summary.deadline_reminder_offset_minutes === null || summary.deadline_reminder_offset_minutes === undefined
@@ -1412,7 +1448,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         "System";
       const modelName = items[0]?.title ?? "Позиція";
       const methodsCount = items[0]?.methods?.length ?? 0;
-      const designDeadline = quote?.deadline_at ?? null;
+      const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
       const assigneeUserId = designAssigneeId ?? null;
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
@@ -1441,7 +1477,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             has_files: attachments.length > 0,
             design_deadline: designDeadline,
             deadline: designDeadline,
-            design_brief: quote?.design_brief ?? quote?.comment ?? null,
+            design_brief: designBriefPreview || quote?.design_brief || quote?.comment || null,
             model: modelName,
           },
         })
@@ -2240,6 +2276,58 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
+  const handleSaveSecondaryDeadline = async (
+    field: "customer_deadline_at" | "design_deadline_at",
+    options: {
+      date: string;
+      time: string;
+      title: string;
+      action: string;
+      nextDate?: string;
+      nextTime?: string;
+    }
+  ) => {
+    if (!quote) return;
+    const nextDatePart = options.nextDate ?? options.date;
+    const nextTimePart = options.nextTime ?? options.time ?? DEFAULT_DEADLINE_TIME;
+    const nextValue = nextDatePart ? combineDeadlineValue(nextDatePart, nextTimePart) : null;
+    const prevValue =
+      field === "customer_deadline_at"
+        ? quote.customer_deadline_at ?? null
+        : quote.design_deadline_at ?? null;
+    if ((prevValue ?? null) === (nextValue ?? null)) return;
+
+    setDeadlineSaving(true);
+    setDeadlineError(null);
+    try {
+      await updateQuote({
+        quoteId: quote.id,
+        teamId,
+        customerDeadlineAt: field === "customer_deadline_at" ? nextValue : undefined,
+        designDeadlineAt: field === "design_deadline_at" ? nextValue : undefined,
+      });
+      await logActivity({
+        teamId,
+        action: options.action,
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `${options.title}: ${formatDeadlineLabel(prevValue)} → ${formatDeadlineLabel(nextValue)}`,
+        href: `/orders/estimates/${quoteId}`,
+        metadata: {
+          source: field,
+          from: prevValue,
+          to: nextValue,
+        },
+      });
+      await loadActivityLog();
+      await loadQuote();
+    } catch (e: unknown) {
+      setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
+    } finally {
+      setDeadlineSaving(false);
+    }
+  };
+
   // Quick status change
   const handleQuickStatusChange = async (newStatus: string, noteOverride?: string) => {
     const nextStatus = normalizeStatus(newStatus);
@@ -2347,6 +2435,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         currency: quote.currency ?? "UAH",
         assignedTo: quote.assigned_to ?? null,
         deadlineAt: quote.deadline_at ?? null,
+        customerDeadlineAt: quote.customer_deadline_at ?? null,
+        designDeadlineAt: quote.design_deadline_at ?? null,
         deadlineNote: quote.deadline_note ?? null,
         deadlineReminderOffsetMinutes: quote.deadline_reminder_offset_minutes ?? null,
         deadlineReminderComment: quote.deadline_reminder_comment ?? null,
@@ -3636,119 +3726,312 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </div>
 
-                {quote.design_brief || quote.comment ? (
-                  <div className="space-y-1">
+                {shortTaskText ? (
+                  <div className="space-y-1 sm:col-span-2">
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <MessageSquare className="h-3.5 w-3.5" />
-                      ТЗ (коротко)
+                      Коротко про задачу (1-2 речення)
                     </div>
-                    <div className="font-medium text-sm line-clamp-2">{quote.design_brief ?? quote.comment}</div>
+                    <div className="font-medium text-sm line-clamp-2">{shortTaskText}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Тут тільки суть задачі без дедлайнів. Дедлайни винесені в окремі поля нижче.
+                    </div>
                   </div>
                 ) : null}
 
-                <div className="space-y-2 sm:col-span-2">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Дедлайн (готовність до відвантаження)
+                <div className="space-y-3 sm:col-span-2">
+                  <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 md:p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                          <Truck className="h-3.5 w-3.5" />
+                          Головний дедлайн
+                        </div>
+                        <div className="text-base font-semibold text-foreground">
+                          Дедлайн Замовника: готовність до відвантаження
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Кінцева дата, на яку продукція має бути готова до відвантаження Замовнику.
+                        </div>
+                      </div>
+                      <div className="rounded-full border border-primary/20 bg-background/60 px-3 py-1 text-xs font-medium text-primary">
+                        Основний
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,240px)_120px]">
+                      <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="h-10 justify-start gap-2 font-normal"
+                            onClick={() => setCustomerDeadlinePopoverOpen(true)}
+                          >
+                            <Truck className="h-4 w-4 text-muted-foreground" />
+                            {customerDeadlineDate
+                              ? formatDeadlineLabel(combineDeadlineValue(customerDeadlineDate, customerDeadlineTime))
+                              : "Оберіть дату"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
+                          <CalendarPicker
+                            mode="single"
+                            selected={toLocalDate(customerDeadlineDate)}
+                            onSelect={async (date) => {
+                              const nextDate = formatDateInput(date ?? null);
+                              setCustomerDeadlineDate(nextDate);
+                              setCustomerDeadlinePopoverOpen(false);
+                              await handleSaveSecondaryDeadline("customer_deadline_at", {
+                                date: customerDeadlineDate,
+                                time: customerDeadlineTime,
+                                nextDate,
+                                title: "Дедлайн Замовника",
+                                action: "змінив дедлайн замовника",
+                              });
+                            }}
+                            initialFocus
+                          />
+                          <DateQuickActions
+                            onSelect={async (date) => {
+                              const nextDate = formatDateInput(date ?? null);
+                              setCustomerDeadlineDate(nextDate);
+                              setCustomerDeadlinePopoverOpen(false);
+                              await handleSaveSecondaryDeadline("customer_deadline_at", {
+                                date: customerDeadlineDate,
+                                time: customerDeadlineTime,
+                                nextDate,
+                                title: "Дедлайн Замовника",
+                                action: "змінив дедлайн замовника",
+                              });
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <Input
+                        type="time"
+                        className="h-10"
+                        value={customerDeadlineTime}
+                        onChange={(e) => setCustomerDeadlineTime(e.target.value)}
+                        onBlur={() =>
+                          void handleSaveSecondaryDeadline("customer_deadline_at", {
+                            date: customerDeadlineDate,
+                            time: customerDeadlineTime,
+                            title: "Дедлайн Замовника",
+                            action: "змінив дедлайн замовника",
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {customerDeadlineDate
+                        ? `Поточне значення: ${formatDeadlineLabel(
+                            combineDeadlineValue(customerDeadlineDate, customerDeadlineTime)
+                          )}`
+                        : "Не вказано. Заповнюйте, коли вже є очікування від Замовника по відвантаженню."}
+                    </div>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[240px_120px_1fr_auto]">
-                    <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                      <PopoverTrigger asChild>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-border/50 bg-background/35 p-4">
+                      <div className="space-y-1">
+                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5" />
+                          Внутрішній етап
+                        </div>
+                        <div className="text-sm font-semibold text-foreground">
+                          Внутрішній дедлайн: дедлайн прорахунку для відповіді Замовнику
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          До якої дати і години менеджеру потрібен прорахунок вартості.
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,220px)_110px_auto]">
+                        <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-9 justify-start gap-2 font-normal"
+                              onClick={() => setDeadlinePopoverOpen(true)}
+                            >
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              {deadlineDate
+                                ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))
+                                : "Оберіть дату"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
+                            <CalendarPicker
+                              mode="single"
+                              selected={toLocalDate(deadlineDate)}
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDeadlineDate(nextDate);
+                                setDeadlinePopoverOpen(false);
+                                await handleSaveDeadline({ date: nextDate });
+                              }}
+                              initialFocus
+                            />
+                            <DateQuickActions
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDeadlineDate(nextDate);
+                                setDeadlinePopoverOpen(false);
+                                await handleSaveDeadline({ date: nextDate });
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          type="time"
+                          className="h-9"
+                          value={deadlineTime}
+                          onChange={(e) => setDeadlineTime(e.target.value)}
+                          onBlur={() => void handleSaveDeadline()}
+                        />
                         <Button
+                          size="icon"
                           variant="outline"
-                          className="h-9 justify-start gap-2 font-normal"
-                          onClick={() => setDeadlinePopoverOpen(true)}
+                          className="h-9 w-9"
+                          onClick={() => void handleSaveDeadline()}
+                          disabled={deadlineSaving}
+                          aria-label="Зберегти дедлайн прорахунку"
                         >
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {deadlineDate ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime)) : "Оберіть дату"}
+                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
-                        <CalendarPicker
-                          mode="single"
-                          selected={toLocalDate(deadlineDate)}
-                          onSelect={async (date) => {
-                            const nextDate = formatDateInput(date ?? null);
-                            setDeadlineDate(nextDate);
-                            setDeadlinePopoverOpen(false);
-                            await handleSaveDeadline({ date: nextDate });
-                          }}
-                          initialFocus
+                      </div>
+                      <div className="mt-2">
+                        <Input
+                          className="h-9"
+                          placeholder="Коментар до внутрішнього дедлайну"
+                          value={deadlineNote}
+                          onChange={(e) => setDeadlineNote(e.target.value)}
+                          onBlur={() => void handleSaveDeadline()}
+                          maxLength={200}
                         />
-                        <DateQuickActions
-                          onSelect={async (date) => {
-                            const nextDate = formatDateInput(date ?? null);
-                            setDeadlineDate(nextDate);
-                            setDeadlinePopoverOpen(false);
-                            await handleSaveDeadline({ date: nextDate });
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Дедлайн прорахунку: {formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))}
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[220px_1fr]">
+                        <Select
+                          value={deadlineReminderOffset}
+                          onValueChange={(value) => {
+                            setDeadlineReminderOffset(value);
+                            void handleSaveDeadline({ reminderOffset: value });
                           }}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Коли нагадати" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DEADLINE_REMINDER_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          className="h-9"
+                          placeholder="Текст нагадування"
+                          value={deadlineReminderComment}
+                          onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                          onBlur={() => void handleSaveDeadline()}
+                          maxLength={200}
                         />
-                      </PopoverContent>
-                    </Popover>
-                    <Input
-                      type="time"
-                      className="h-9"
-                      value={deadlineTime}
-                      onChange={(e) => setDeadlineTime(e.target.value)}
-                      onBlur={() => void handleSaveDeadline()}
-                    />
-                    <Input
-                      className="h-9"
-                      placeholder="Коментар до дедлайну / текст нагадування"
-                      value={deadlineNote}
-                      onChange={(e) => setDeadlineNote(e.target.value)}
-                      onBlur={() => void handleSaveDeadline()}
-                      maxLength={200}
-                    />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-9 w-9"
-                      onClick={() => void handleSaveDeadline()}
-                      disabled={deadlineSaving}
-                      aria-label="Зберегти дедлайн"
-                    >
-                      {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Сповіщення:{" "}
+                        {DEADLINE_REMINDER_OPTIONS.find((option) => option.value === deadlineReminderOffset)?.label ??
+                          "Без сповіщення"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/50 bg-background/35 p-4">
+                      <div className="space-y-1">
+                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Внутрішній етап
+                        </div>
+                        <div className="text-sm font-semibold text-foreground">
+                          Дедлайн дизайну: погодити макет
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Окремий дедлайн для макету, адаптації або візуалу. Потрапляє в дизайн-задачу автоматично.
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,220px)_110px]">
+                        <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-9 justify-start gap-2 font-normal"
+                              onClick={() => setDesignDeadlinePopoverOpen(true)}
+                            >
+                              <Sparkles className="h-4 w-4 text-muted-foreground" />
+                              {designDeadlineDate
+                                ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
+                                : "Оберіть дату"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
+                            <CalendarPicker
+                              mode="single"
+                              selected={toLocalDate(designDeadlineDate)}
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDesignDeadlineDate(nextDate);
+                                setDesignDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("design_deadline_at", {
+                                  date: designDeadlineDate,
+                                  time: designDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн дизайну",
+                                  action: "змінив дедлайн дизайну",
+                                });
+                              }}
+                              initialFocus
+                            />
+                            <DateQuickActions
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDesignDeadlineDate(nextDate);
+                                setDesignDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("design_deadline_at", {
+                                  date: designDeadlineDate,
+                                  time: designDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн дизайну",
+                                  action: "змінив дедлайн дизайну",
+                                });
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          type="time"
+                          className="h-9"
+                          value={designDeadlineTime}
+                          onChange={(e) => setDesignDeadlineTime(e.target.value)}
+                          onBlur={() =>
+                            void handleSaveSecondaryDeadline("design_deadline_at", {
+                              date: designDeadlineDate,
+                              time: designDeadlineTime,
+                              title: "Дедлайн дизайну",
+                              action: "змінив дедлайн дизайну",
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {designDeadlineDate
+                          ? `Поточне значення: ${formatDeadlineLabel(
+                              combineDeadlineValue(designDeadlineDate, designDeadlineTime)
+                            )}`
+                          : "Не вказано. Використовуйте, коли треба окремо погодити макет або візуал."}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Поточний дедлайн: {formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))}
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-[240px_1fr]">
-                    <Select
-                      value={deadlineReminderOffset}
-                      onValueChange={(value) => {
-                        setDeadlineReminderOffset(value);
-                        void handleSaveDeadline({ reminderOffset: value });
-                      }}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть момент сповіщення" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DEADLINE_REMINDER_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      className="h-9"
-                      placeholder="Коментар до сповіщення"
-                      value={deadlineReminderComment}
-                      onChange={(e) => setDeadlineReminderComment(e.target.value)}
-                      onBlur={() => void handleSaveDeadline()}
-                      maxLength={200}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Сповіщення:{" "}
-                    {
-                      DEADLINE_REMINDER_OPTIONS.find((option) => option.value === deadlineReminderOffset)?.label ??
-                      "Без сповіщення"
-                    }
-                  </div>
+
                   {deadlineError && (
                     <div className="text-xs text-destructive">{deadlineError}</div>
                   )}
@@ -4498,7 +4781,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         "Референси:",
                         "Текст/копі:",
                         "Обмеження:",
-                        "Дедлайн:",
                       ].join("\n")
                     );
                     setBriefDirty(true);
@@ -4511,13 +4793,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="space-y-2">
+              <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+                  Автоматично піде в дизайн-задачу
+                </div>
+                <div className="whitespace-pre-wrap text-sm text-foreground">
+                  {designBriefPreview || "Спочатку вкажіть дедлайн дизайну або текст задачі."}
+                </div>
+              </div>
               <Textarea
                 value={briefText}
                 onChange={(event) => {
                   setBriefText(event.target.value);
                   setBriefDirty(true);
                 }}
-                placeholder="Опишіть задачу для дизайнера. Це основне ТЗ, яке бачить команда."
+                placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
                 className="min-h-[180px] resize-y"
               />
               <div className="flex items-center justify-between text-xs text-muted-foreground">

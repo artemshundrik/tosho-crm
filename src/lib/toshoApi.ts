@@ -30,6 +30,8 @@ export type QuoteListRow = {
   assigned_to?: string | null;
   processing_minutes?: number | null;
   deadline_at?: string | null;
+  customer_deadline_at?: string | null;
+  design_deadline_at?: string | null;
   deadline_note?: string | null;
   deadline_reminder_offset_minutes?: number | null;
   deadline_reminder_comment?: string | null;
@@ -402,6 +404,8 @@ export async function createQuote(params: {
   currency?: string | null;
   assignedTo?: string | null;
   deadlineAt?: string | null;
+  customerDeadlineAt?: string | null;
+  designDeadlineAt?: string | null;
   deadlineNote?: string | null;
   deadlineReminderOffsetMinutes?: number | null;
   deadlineReminderComment?: string | null;
@@ -423,6 +427,8 @@ export async function createQuote(params: {
     delivery_type: params.deliveryType ?? null,
     delivery_details: params.deliveryDetails ?? null,
     deadline_at: params.deadlineAt ?? null,
+    customer_deadline_at: params.customerDeadlineAt ?? null,
+    design_deadline_at: params.designDeadlineAt ?? null,
     deadline_note: params.deadlineNote ?? null,
     deadline_reminder_offset_minutes: params.deadlineReminderOffsetMinutes ?? null,
     deadline_reminder_comment: params.deadlineReminderComment ?? null,
@@ -486,9 +492,17 @@ export async function createQuote(params: {
       }
       if (isMissingColumnMessage && message.includes("deadline_at")) {
         dropField("deadline_at");
+        dropField("customer_deadline_at");
+        dropField("design_deadline_at");
         dropField("deadline_note");
         dropField("deadline_reminder_offset_minutes");
         dropField("deadline_reminder_comment");
+      }
+      if (isMissingColumnMessage && message.includes("customer_deadline_at")) {
+        dropField("customer_deadline_at");
+      }
+      if (isMissingColumnMessage && message.includes("design_deadline_at")) {
+        dropField("design_deadline_at");
       }
       if (isMissingColumnMessage && message.includes("deadline_reminder_offset_minutes")) {
         dropField("deadline_reminder_offset_minutes");
@@ -535,7 +549,7 @@ export async function getQuoteSummary(quoteId: string) {
     };
 
     let { data: briefRow, error: briefError } = await readExtras(
-      "design_brief,delivery_details,customer_name,customer_logo_url,deadline_reminder_offset_minutes,deadline_reminder_comment"
+      "design_brief,delivery_details,customer_name,customer_logo_url,customer_deadline_at,design_deadline_at,deadline_reminder_offset_minutes,deadline_reminder_comment"
     );
     if (
       briefError &&
@@ -544,6 +558,8 @@ export async function getQuoteSummary(quoteId: string) {
         /delivery_details/i.test(briefError.message ?? "") ||
         /customer_name/i.test(briefError.message ?? "") ||
         /customer_logo_url/i.test(briefError.message ?? "") ||
+        /customer_deadline_at/i.test(briefError.message ?? "") ||
+        /design_deadline_at/i.test(briefError.message ?? "") ||
         /deadline_reminder_offset_minutes/i.test(briefError.message ?? "") ||
         /deadline_reminder_comment/i.test(briefError.message ?? ""))
     ) {
@@ -557,6 +573,8 @@ export async function getQuoteSummary(quoteId: string) {
       (/design_brief/i.test(briefError.message ?? "") ||
         /customer_name/i.test(briefError.message ?? "") ||
         /customer_logo_url/i.test(briefError.message ?? "") ||
+        /customer_deadline_at/i.test(briefError.message ?? "") ||
+        /design_deadline_at/i.test(briefError.message ?? "") ||
         /deadline_reminder_offset_minutes/i.test(briefError.message ?? "") ||
         /deadline_reminder_comment/i.test(briefError.message ?? ""))
     ) {
@@ -617,6 +635,10 @@ export async function getQuoteSummary(quoteId: string) {
       design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
       delivery_details:
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
+      customer_deadline_at:
+        (briefRow as { customer_deadline_at?: string | null } | null)?.customer_deadline_at ?? null,
+      design_deadline_at:
+        (briefRow as { design_deadline_at?: string | null } | null)?.design_deadline_at ?? null,
       deadline_reminder_offset_minutes:
         (briefRow as { deadline_reminder_offset_minutes?: number | null } | null)?.deadline_reminder_offset_minutes ?? null,
       deadline_reminder_comment:
@@ -679,6 +701,8 @@ export async function getQuoteSummary(quoteId: string) {
           ? Number(fallback.processing_minutes)
           : null,
       deadline_at: (fallback.deadline_at as string | null | undefined) ?? null,
+      customer_deadline_at: (fallback.customer_deadline_at as string | null | undefined) ?? null,
+      design_deadline_at: (fallback.design_deadline_at as string | null | undefined) ?? null,
       deadline_note: (fallback.deadline_note as string | null | undefined) ?? null,
       deadline_reminder_offset_minutes:
         typeof fallback.deadline_reminder_offset_minutes === "number"
@@ -1155,6 +1179,8 @@ export async function updateQuote(params: {
   designBrief?: string | null;
   assignedTo?: string | null;
   deadlineAt?: string | null;
+  customerDeadlineAt?: string | null;
+  designDeadlineAt?: string | null;
   deadlineNote?: string | null;
   deadlineReminderOffsetMinutes?: number | null;
   deadlineReminderComment?: string | null;
@@ -1168,6 +1194,8 @@ export async function updateQuote(params: {
   if (params.designBrief !== undefined) payload.design_brief = params.designBrief;
   if (params.assignedTo !== undefined) payload.assigned_to = params.assignedTo;
   if (params.deadlineAt !== undefined) payload.deadline_at = params.deadlineAt;
+  if (params.customerDeadlineAt !== undefined) payload.customer_deadline_at = params.customerDeadlineAt;
+  if (params.designDeadlineAt !== undefined) payload.design_deadline_at = params.designDeadlineAt;
   if (params.deadlineNote !== undefined) payload.deadline_note = params.deadlineNote;
   if (params.deadlineReminderOffsetMinutes !== undefined) {
     payload.deadline_reminder_offset_minutes = params.deadlineReminderOffsetMinutes;
@@ -1187,7 +1215,7 @@ export async function updateQuote(params: {
       .update(nextPayload)
       .eq("id", params.quoteId)
       .eq("team_id", params.teamId)
-      .select("id,status,comment,design_brief,quote_type,delivery_type,delivery_details,assigned_to,deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment,updated_at")
+      .select("id,status,comment,design_brief,quote_type,delivery_type,delivery_details,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment,updated_at")
       .single();
     handleError(error);
     return data;
@@ -1214,6 +1242,14 @@ export async function updateQuote(params: {
     }
     if (message.includes("column") && message.includes("design_brief")) {
       delete fallbackPayload.design_brief;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("customer_deadline_at")) {
+      delete fallbackPayload.customer_deadline_at;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("design_deadline_at")) {
+      delete fallbackPayload.design_deadline_at;
       changed = true;
     }
     if (message.includes("column") && message.includes("deadline_reminder_offset_minutes")) {
