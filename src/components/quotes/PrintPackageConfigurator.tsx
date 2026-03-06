@@ -1,5 +1,8 @@
 import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -7,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type { PrintPackageConfig } from "@/lib/printPackage";
 
@@ -96,13 +98,11 @@ export const PRINT_PACKAGE_EMBOSSING: Array<{ value: string; label: string }> = 
 
 const ConfigSection: React.FC<{
   title: string;
-  description?: string;
   children: React.ReactNode;
-}> = ({ title, description, children }) => (
-  <div className="rounded-[var(--radius-lg)] border border-border/50 bg-background/40 p-4 md:p-5 space-y-4">
+}> = ({ title, children }) => (
+  <div className="rounded-[var(--radius-lg)] border border-border/40 bg-background/15 p-4 md:p-5 space-y-4">
     <div className="space-y-1">
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      {description ? <div className="text-xs text-muted-foreground">{description}</div> : null}
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{title}</div>
     </div>
     {children}
   </div>
@@ -113,51 +113,53 @@ const ConfigField: React.FC<{
   hint?: string;
   children: React.ReactNode;
 }> = ({ label, hint, children }) => (
-  <label className="space-y-1.5">
+  <div className="space-y-1.5">
     <div className="flex items-center gap-2">
       <span className="text-sm font-medium text-foreground/90">{label}</span>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
     </div>
     {children}
-  </label>
+  </div>
 );
 
-const SegmentedOptions: React.FC<{
+const PillSelect: React.FC<{
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
-  columns?: "two" | "auto" | "single";
-}> = ({ value, onChange, options, columns = "two" }) => (
-  <ToggleGroup
-    type="single"
-    value={value}
-    onValueChange={(next) => {
-      if (typeof next === "string" && next) onChange(next);
-    }}
-    className={cn(
-      "grid w-full gap-2",
-      columns === "single"
-        ? "grid-cols-1"
-        : columns === "two"
-          ? "grid-cols-2"
-          : "grid-cols-1 md:grid-cols-2"
-    )}
-  >
-    {options.map((option) => (
-      <ToggleGroupItem
-        key={option.value}
-        value={option.value}
-        className={cn(
-          "min-h-10 whitespace-normal break-words text-center leading-snug",
-          "justify-center rounded-[var(--radius-md)] border border-border/60 bg-background/60 px-3 py-2 text-sm",
-          "text-muted-foreground data-[state=on]:border-primary/40 data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
-        )}
-      >
-        {option.label}
-      </ToggleGroupItem>
-    ))}
-  </ToggleGroup>
-);
+  placeholder: string;
+  contentClassName?: string;
+}> = ({ value, onChange, options, placeholder, contentClassName }) => {
+  const [open, setOpen] = React.useState(false);
+  const selectedOption = options.find((option) => option.value === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Chip active={!!selectedOption} className="max-w-full">
+          <span className="truncate">{selectedOption?.label ?? placeholder}</span>
+        </Chip>
+      </PopoverTrigger>
+      <PopoverContent align="start" className={cn("w-56 p-2", contentClassName)}>
+        <div className="space-y-1">
+          {options.map((option) => (
+            <Button
+              key={option.value}
+              variant="ghost"
+              size="sm"
+              className="h-9 w-full justify-start text-sm"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ChoiceCards: React.FC<{
   value: string;
@@ -183,9 +185,6 @@ const ChoiceCards: React.FC<{
           <div className={cn("text-sm font-semibold", active ? "text-primary" : "text-foreground")}>
             {option.title}
           </div>
-          {option.description ? (
-            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{option.description}</div>
-          ) : null}
         </button>
       );
     })}
@@ -241,7 +240,7 @@ export function PrintPackageConfigurator({
   }, [config]);
 
   return (
-    <div className="space-y-4 rounded-[var(--radius-xl)] border border-primary/15 bg-gradient-to-b from-primary/[0.07] via-background/60 to-background/40 p-4 md:p-5">
+    <div className="space-y-4 rounded-[var(--radius-lg)] border border-border/30 bg-muted/[0.03] p-4 md:p-5">
       <div className="w-full md:max-w-[260px]">
         <ConfigField label="Вид продукції">
           <Select
@@ -265,10 +264,10 @@ export function PrintPackageConfigurator({
         </ConfigField>
       </div>
 
-      <ConfigSection title="Конструкція" description="Спочатку задайте тип пакета і його базову геометрію.">
+      <ConfigSection title="Конструкція">
         <div className="grid gap-4 md:grid-cols-2">
           <ConfigField label="Тип пакету">
-            <SegmentedOptions
+            <PillSelect
               value={config.packageType}
               onChange={(value) =>
                 onConfigChange((prev) => ({
@@ -282,6 +281,7 @@ export function PrintPackageConfigurator({
                 }))
               }
               options={PRINT_PACKAGE_TYPES}
+              placeholder="Оберіть тип пакету"
             />
           </ConfigField>
           {config.packageType === "ready" ? (
@@ -315,36 +315,52 @@ export function PrintPackageConfigurator({
 
         <div className="grid gap-4 md:grid-cols-2">
           <ConfigField label="Орієнтація">
-            <SegmentedOptions value={config.orientation} onChange={(value) => onConfigChange((prev) => ({ ...prev, orientation: value }))} options={PRINT_PACKAGE_ORIENTATIONS} />
+            <PillSelect
+              value={config.orientation}
+              onChange={(value) => onConfigChange((prev) => ({ ...prev, orientation: value }))}
+              options={PRINT_PACKAGE_ORIENTATIONS}
+              placeholder="Оберіть орієнтацію"
+            />
           </ConfigField>
           {config.packageType === "custom" && config.paperType !== "kraft" ? (
             <ConfigField label="Люверси">
-              <SegmentedOptions value={config.eyelets} onChange={(value) => onConfigChange((prev) => ({ ...prev, eyelets: value }))} options={YES_NO_OPTIONS} />
+              <PillSelect
+                value={config.eyelets}
+                onChange={(value) => onConfigChange((prev) => ({ ...prev, eyelets: value }))}
+                options={YES_NO_OPTIONS}
+                placeholder="Оберіть варіант"
+                contentClassName="w-40"
+              />
             </ConfigField>
           ) : null}
         </div>
       </ConfigSection>
 
-      <ConfigSection title="Матеріал" description="Оберіть основу пакета, щільність і тип ручок.">
+      <ConfigSection title="Матеріал">
         {isPackageStructureComplete ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            className={cn(
+              "grid gap-4 md:grid-cols-2",
+              config.paperType === "kraft" ? "xl:grid-cols-4" : "xl:grid-cols-3"
+            )}
+          >
             <ConfigField label="Вид паперу">
-              <Select value={config.paperType} onValueChange={(value) => onConfigChange((prev) => ({ ...prev, paperType: value }))}>
-                <SelectTrigger className="h-10 bg-background/70">
-                  <SelectValue placeholder="Оберіть вид паперу" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRINT_PACKAGE_PAPER_TYPES.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PillSelect
+                value={config.paperType}
+                onChange={(value) => onConfigChange((prev) => ({ ...prev, paperType: value }))}
+                options={PRINT_PACKAGE_PAPER_TYPES}
+                placeholder="Оберіть папір"
+              />
             </ConfigField>
             {config.paperType === "kraft" ? (
               <ConfigField label="Колір крафту">
-                <SegmentedOptions value={config.kraftColor} onChange={(value) => onConfigChange((prev) => ({ ...prev, kraftColor: value }))} options={PRINT_PACKAGE_KRAFT_COLORS} />
+                <PillSelect
+                  value={config.kraftColor}
+                  onChange={(value) => onConfigChange((prev) => ({ ...prev, kraftColor: value }))}
+                  options={PRINT_PACKAGE_KRAFT_COLORS}
+                  placeholder="Оберіть колір"
+                  contentClassName="w-40"
+                />
               </ConfigField>
             ) : null}
             <ConfigField label="Щільність">
@@ -383,7 +399,7 @@ export function PrintPackageConfigurator({
         )}
       </ConfigSection>
 
-      <ConfigSection title="Друк та оздоблення" description="Налаштуйте нанесення й додаткові ефекти після вибору конструкції та матеріалу.">
+      <ConfigSection title="Друк та оздоблення">
         {isPackageStructureComplete && isPackageMaterialComplete ? (
           <>
             <div className="grid gap-4 md:grid-cols-2">
@@ -395,12 +411,10 @@ export function PrintPackageConfigurator({
                     {
                       value: "one_side",
                       title: "З одної сторони",
-                      description: "Одна зона друку. Підійде для простого або економного нанесення.",
                     },
                     {
                       value: "two_sides",
                       title: "З двох сторін",
-                      description: "Друк з обох боків пакета, з однаковим або різним зображенням.",
                     },
                   ]}
                 />
@@ -434,7 +448,13 @@ export function PrintPackageConfigurator({
             <div className="grid gap-4 md:grid-cols-3">
               {config.packageType === "custom" ? (
                 <ConfigField label="Ламінація">
-                  <SegmentedOptions value={config.lamination} onChange={(value) => onConfigChange((prev) => ({ ...prev, lamination: value }))} options={YES_NO_OPTIONS} />
+                  <PillSelect
+                    value={config.lamination}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, lamination: value }))}
+                    options={YES_NO_OPTIONS}
+                    placeholder="Оберіть варіант"
+                    contentClassName="w-40"
+                  />
                 </ConfigField>
               ) : null}
               <ConfigField label="Додаткове оздоблення">

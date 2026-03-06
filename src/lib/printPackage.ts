@@ -25,6 +25,11 @@ export type QuoteItemMetadata = {
   printPackage?: PrintPackageConfig | null;
 };
 
+export type PrintPackageDetailField = {
+  label: string;
+  value: string;
+};
+
 export const createEmptyPrintPackageConfig = (): PrintPackageConfig => ({
   productKind: "",
   packageType: "",
@@ -132,6 +137,19 @@ export function formatPrintPackageSummary(config: PrintPackageConfig): string[] 
     embossingLabel ? `Тиснення: ${embossingLabel}` : null,
     config.supplierLink.trim() ? `Постачальник: ${config.supplierLink.trim()}` : null,
   ].filter(Boolean) as string[];
+}
+
+export function getPrintPackageDetailFields(config: PrintPackageConfig): PrintPackageDetailField[] {
+  return formatPrintPackageSummary(config)
+    .map((entry) => {
+      const separatorIndex = entry.indexOf(": ");
+      if (separatorIndex < 0) return null;
+      return {
+        label: entry.slice(0, separatorIndex),
+        value: entry.slice(separatorIndex + 2),
+      };
+    })
+    .filter(Boolean) as PrintPackageDetailField[];
 }
 
 export function isPrintPackageMetadata(value: unknown): value is QuoteItemMetadata {

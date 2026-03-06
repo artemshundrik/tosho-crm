@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   formatPrintPackageSummary,
+  getPrintPackageDetailFields,
   isPrintPackageMetadata,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
@@ -3646,6 +3647,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
                     ? formatPrintPackageSummary(item.metadata.printPackage)
                     : [];
+                const packageDetailFields =
+                  item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
+                    ? getPrintPackageDetailFields(item.metadata.printPackage)
+                    : [];
+                const packageSections = packageDetailFields.length
+                  ? [
+                      {
+                        title: "Конструкція",
+                        fields: packageDetailFields.filter((field) =>
+                          ["Тип", "Орієнтація", "Розмір", "Люверси", "Постачальник"].includes(field.label)
+                        ),
+                      },
+                      {
+                        title: "Матеріал",
+                        fields: packageDetailFields.filter((field) =>
+                          ["Матеріал", "Щільність", "Ручки"].includes(field.label)
+                        ),
+                      },
+                      {
+                        title: "Друк та оздоблення",
+                        fields: packageDetailFields.filter((field) =>
+                          ["Нанесення", "Тип нанесення", "Ламінація", "Додаткове оздоблення", "Тиснення"].includes(field.label)
+                        ),
+                      },
+                    ].filter((section) => section.fields.length > 0)
+                  : [];
+                const shouldShowDescription =
+                  item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
 
                 return (
                   <div key={item.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
@@ -3676,10 +3705,40 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div>
                             Одиниця: <span className="text-foreground">{normalizeUnitLabel(item.unit)}</span>
                           </div>
-                          {packageSummary.length > 0 ? (
+                          {packageSections.length > 0 ? (
                             <div className="sm:col-span-2">
-                              Параметри пакета:{" "}
-                              <span className="text-foreground">{packageSummary.join(" • ")}</span>
+                              <div className="rounded-xl border border-border/60 bg-background/60 p-3 sm:p-4">
+                                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                  Параметри пакета
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-3">
+                                  {packageSections.map((section) => (
+                                    <div
+                                      key={section.title}
+                                      className="rounded-lg border border-border/50 bg-muted/20 p-3"
+                                    >
+                                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                        {section.title}
+                                      </div>
+                                      <div className="space-y-2">
+                                        {section.fields.map((field) => (
+                                          <div
+                                            key={`${section.title}:${field.label}:${field.value}`}
+                                            className="rounded-md border border-border/40 bg-background/70 px-2.5 py-2"
+                                          >
+                                            <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                              {field.label}
+                                            </div>
+                                            <div className="mt-1 text-xs font-medium leading-snug text-foreground">
+                                              {field.value}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           ) : null}
                           {(positionLabel || sizeLabel) && (
@@ -3693,7 +3752,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </span>
                             </div>
                           )}
-                          {item.description ? (
+                          {shouldShowDescription ? (
                             <div className="sm:col-span-2">
                               Опис: <span className="text-foreground">{item.description}</span>
                             </div>
