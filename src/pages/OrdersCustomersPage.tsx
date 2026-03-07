@@ -10,7 +10,7 @@ import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { buildUserNameFromMetadata } from "@/lib/userName";
+import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -151,22 +151,49 @@ const NO_MANAGER_FILTER = "__none__";
 const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
+type CustomersPageCachePayload = {
+  rows: CustomerRow[];
+  leads: LeadRow[];
+  teamMembers: TeamMemberRow[];
+  cachedAt: number;
+};
+
+function readCustomersPageCache(teamId: string): CustomersPageCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`customers-page-cache:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CustomersPageCachePayload;
+    return {
+      rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+      leads: Array.isArray(parsed.leads) ? parsed.leads : [],
+      teamMembers: Array.isArray(parsed.teamMembers) ? parsed.teamMembers : [],
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function CustomersPage({ teamId }: { teamId: string }) {
   const { session, userId, accessRole, jobRole } = useAuth();
+  const initialCache = readCustomersPageCache(teamId);
   const [activeTab, setActiveTab] = useState<"customers" | "leads">("customers");
   const [search, setSearch] = useState("");
   const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
   const [leadManagerFilter, setLeadManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
 
-  const [rows, setRows] = useState<CustomerRow[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(true);
+  const [rows, setRows] = useState<CustomerRow[]>(() => initialCache?.rows ?? []);
+  const [customersLoading, setCustomersLoading] = useState(() => !initialCache);
+  const [customersRefreshing, setCustomersRefreshing] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
 
-  const [leads, setLeads] = useState<LeadRow[]>([]);
-  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leads, setLeads] = useState<LeadRow[]>(() => initialCache?.leads ?? []);
+  const [leadsLoading, setLeadsLoading] = useState(() => !initialCache);
+  const [leadsRefreshing, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialCache?.teamMembers ?? []);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -291,7 +318,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const token = normalized.split(" ")[0] ?? "";
       const byToken = token ? memberByUniqueFirstToken.get(token)?.label?.trim() : "";
       if (byToken) return byToken;
-      return fallback;
+      return formatUserShortName({ fullName: fallback, fallback });
     },
     [memberById, memberByNormalizedLabel, memberByUniqueFirstToken]
   );
@@ -583,7 +610,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   const loadCustomers = async () => {
-    setCustomersLoading(true);
+    if (rows.length > 0) {
+      setCustomersRefreshing(true);
+    } else {
+      setCustomersLoading(true);
+    }
     setCustomersError(null);
     try {
       const { data, error: loadError } = await supabase
@@ -598,11 +629,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
     } finally {
       setCustomersLoading(false);
+      setCustomersRefreshing(false);
     }
   };
 
   const loadLeads = async () => {
-    setLeadsLoading(true);
+    if (leads.length > 0) {
+      setLeadsRefreshing(true);
+    } else {
+      setLeadsLoading(true);
+    }
     setLeadsError(null);
     try {
       const { data, error: loadError } = await supabase
@@ -622,6 +658,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }
     } finally {
       setLeadsLoading(false);
+      setLeadsRefreshing(false);
     }
   };
 
@@ -633,6 +670,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setTeamMembers([]);
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !teamId) return;
+    sessionStorage.setItem(
+      `customers-page-cache:${teamId}`,
+      JSON.stringify({
+        rows,
+        leads,
+        teamMembers,
+        cachedAt: Date.now(),
+      } satisfies CustomersPageCachePayload)
+    );
+  }, [leads, rows, teamId, teamMembers]);
 
   useEffect(() => {
     void loadCustomers();
@@ -978,6 +1028,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Building2 className="h-4 w-4" />
             Замовники
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{rows.length}</span>
           </Button>
           <Button
             variant="segmented"
@@ -988,6 +1039,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Users className="h-4 w-4" />
             Ліди
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{leads.length}</span>
           </Button>
         </div>
         <Button onClick={activeTab === "customers" ? openCreate : openCreateLead} className="h-10 gap-2">
@@ -1042,6 +1094,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     filteredRows.length,
     leadManagerFilter,
     leadManagerOptions,
+    leads.length,
+    rows.length,
     search,
   ]);
 
