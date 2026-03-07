@@ -86,6 +86,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import {
   DELIVERY_TYPE_OPTIONS,
   KANBAN_COLUMNS,
@@ -268,6 +270,7 @@ function isBrokenSupabaseRestUrl(value?: string | null): boolean {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { accessRole, jobRole } = useAuth();
+  const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const navigate = useNavigate();
@@ -3514,37 +3517,41 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </div>
                 ) : null}
+                <ActiveHereCard entries={workspacePresence.activeHereEntries} />
               </>
             ) : (
-              <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={quoteSetKindFilter === "all"}
-                  onClick={() => setQuoteSetKindFilter("all")}
-                >
-                  Всі
-                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{filteredQuoteSets.length}</span>
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={quoteSetKindFilter === "kp"}
-                  onClick={() => setQuoteSetKindFilter("kp")}
-                >
-                  КП
-                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetKpCount}</span>
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={quoteSetKindFilter === "set"}
-                  onClick={() => setQuoteSetKindFilter("set")}
-                >
-                  Набори
-                  <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
-                </Button>
-              </div>
+              <>
+                <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+                  <Button
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={quoteSetKindFilter === "all"}
+                    onClick={() => setQuoteSetKindFilter("all")}
+                  >
+                    Всі
+                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{filteredQuoteSets.length}</span>
+                  </Button>
+                  <Button
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={quoteSetKindFilter === "kp"}
+                    onClick={() => setQuoteSetKindFilter("kp")}
+                  >
+                    КП
+                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetKpCount}</span>
+                  </Button>
+                  <Button
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={quoteSetKindFilter === "set"}
+                    onClick={() => setQuoteSetKindFilter("set")}
+                  >
+                    Набори
+                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
+                  </Button>
+                </div>
+                <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+              </>
             )}
           </div>
 
@@ -3579,6 +3586,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     status,
     viewMode,
     filteredQuoteSets.length,
+    workspacePresence.activeHereEntries,
   ]);
 
   usePageHeaderActions(estimatesHeaderActions, [estimatesHeaderActions]);

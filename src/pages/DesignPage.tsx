@@ -36,6 +36,7 @@ import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
+import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import {
   CustomerLeadPicker,
   type CreatedCustomerLead,
@@ -51,6 +52,7 @@ import { formatUserShortName } from "@/lib/userName";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
+import { CalendarRange, LayoutGrid, Search, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -92,8 +94,11 @@ type DesignTaskActivityRow = {
 
 type CustomerOption = CustomerLeadOption;
 
-type AssignmentFilter = "mine" | "all" | "unassigned";
 type DesignViewMode = "kanban" | "timeline" | "assignee";
+type DesignContentView = "linked" | "standalone";
+
+const ALL_DESIGNERS_FILTER = "__all__";
+const NO_DESIGNER_FILTER = "__none__";
 
 type DesignPageCachePayload = {
   tasks: DesignTask[];
@@ -375,8 +380,12 @@ export default function DesignPage() {
     nextAssigneeUserId?: string | null;
     nextStatus?: DesignStatus;
   } | null>(null);
-  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
+  const [contentView, setContentView] = useState<DesignContentView>("linked");
   const [viewMode, setViewMode] = useState<DesignViewMode>("kanban");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DesignStatus | "all">("all");
+  const [designerFilter, setDesignerFilter] = useState<string>(ALL_DESIGNERS_FILTER);
+  const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
@@ -715,10 +724,16 @@ export default function DesignPage() {
   }, [customers, tasks]);
 
   useEffect(() => {
-    if (permissions.isDesigner) {
-      setAssignmentFilter((prev) => (prev === "all" ? "mine" : prev));
+    if (defaultDesignerFilterApplied) return;
+    if (designerFilter !== ALL_DESIGNERS_FILTER) return;
+    if (!permissions.isDesigner || !userId) return;
+    if (loading && tasks.length === 0) return;
+    const hasOwnTasks = tasks.some((task) => task.assigneeUserId === userId);
+    if (hasOwnTasks) {
+      setDesignerFilter(userId);
     }
-  }, [permissions.isDesigner]);
+    setDefaultDesignerFilterApplied(true);
+  }, [defaultDesignerFilterApplied, designerFilter, loading, permissions.isDesigner, tasks, userId]);
 
   const loadTasks = async () => {
     if (!effectiveTeamId) return;
@@ -1014,13 +1029,73 @@ export default function DesignPage() {
     return formatDesignTaskNumber(monthCode, (count ?? 0) + 1);
   };
 
+  const linkedTasksCount = useMemo(() => tasks.filter((task) => isUuid(task.quoteId)).length, [tasks]);
+  const standaloneTasksCount = useMemo(() => tasks.filter((task) => !isUuid(task.quoteId)).length, [tasks]);
+
+  const designerFilterOptions = useMemo(
+    () =>
+      [...designerMembers].sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" })),
+    [designerMembers]
+  );
+
+  const renderDesignerFilterValue = (value: string) => {
+    if (value === ALL_DESIGNERS_FILTER) return <span>Всі дизайнери</span>;
+    if (value === NO_DESIGNER_FILTER) return <span>Без дизайнера</span>;
+    const label = memberById[value] ?? "Користувач";
+    const avatarUrl = getMemberAvatar(value);
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <AvatarBase
+          src={avatarUrl}
+          name={label}
+          fallback={getInitials(label)}
+          size={18}
+          className="shrink-0 border-border/60"
+          fallbackClassName="text-[9px] font-semibold"
+        />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  };
+
   const filteredTasks = useMemo(() => {
-    if (assignmentFilter === "all") return tasks;
-    if (assignmentFilter === "mine") {
-      return tasks.filter((task) => !!userId && task.assigneeUserId === userId);
-    }
-    return tasks.filter((task) => !task.assigneeUserId);
-  }, [assignmentFilter, tasks, userId]);
+    const query = search.trim().toLowerCase();
+    return tasks.filter((task) => {
+      const isLinkedTask = isUuid(task.quoteId);
+      if (contentView === "linked" && !isLinkedTask) return false;
+      if (contentView === "standalone" && isLinkedTask) return false;
+
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+
+      if (designerFilter === NO_DESIGNER_FILTER && task.assigneeUserId) return false;
+      if (designerFilter !== ALL_DESIGNERS_FILTER && designerFilter !== NO_DESIGNER_FILTER && task.assigneeUserId !== designerFilter) {
+        return false;
+      }
+
+      if (!query) return true;
+
+      const haystack = [
+        task.designTaskNumber,
+        task.quoteNumber,
+        task.title,
+        task.customerName,
+        task.productName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [contentView, designerFilter, search, statusFilter, tasks]);
+
+  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "all" || designerFilter !== ALL_DESIGNERS_FILTER;
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setDesignerFilter(ALL_DESIGNERS_FILTER);
+  };
 
   useEffect(() => {
     const hasActive = Object.values(timerSummaryByTaskId).some((summary) => !!summary.activeStartedAt);
@@ -2228,66 +2303,156 @@ export default function DesignPage() {
   const designHeaderActions = useMemo(
     () => (
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <ActiveHereCard entries={workspacePresence.activeHereEntries} />
-          <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-card/60 p-1">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
             <Button
-              size="sm"
-              variant={viewMode === "kanban" ? "secondary" : "ghost"}
-              onClick={() => setViewMode("kanban")}
+              variant="segmented"
+              size="xs"
+              aria-pressed={contentView === "linked"}
+              onClick={() => setContentView("linked")}
             >
-              Kanban
+              З прорах.
+              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{linkedTasksCount}</span>
             </Button>
             <Button
-              size="sm"
-              variant={viewMode === "timeline" ? "secondary" : "ghost"}
-              onClick={() => setViewMode("timeline")}
+              variant="segmented"
+              size="xs"
+              aria-pressed={contentView === "standalone"}
+              onClick={() => setContentView("standalone")}
             >
-              Timeline
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "assignee" ? "secondary" : "ghost"}
-              onClick={() => setViewMode("assignee")}
-            >
-              По дизайнерах
+              Окремі
+              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{standaloneTasksCount}</span>
             </Button>
           </div>
-          <Button size="sm" className="h-10 gap-2" onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Нова дизайн-задача
-          </Button>
+          <div className="flex items-center gap-2 self-end lg:self-auto">
+            <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={viewMode === "kanban"}
+                onClick={() => setViewMode("kanban")}
+                className="gap-1.5"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden xl:inline">Kanban</span>
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={viewMode === "timeline"}
+                onClick={() => setViewMode("timeline")}
+                className="gap-1.5"
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                <span className="hidden xl:inline">Timeline</span>
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={viewMode === "assignee"}
+                onClick={() => setViewMode("assignee")}
+                className="gap-1.5"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span className="hidden xl:inline">Дизайнери</span>
+              </Button>
+            </div>
+            <Button size="sm" className="h-10 gap-2" onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Нова дизайн-задача
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant={assignmentFilter === "mine" ? "secondary" : "outline"}
-            onClick={() => setAssignmentFilter("mine")}
-          >
-            Мої
-          </Button>
-          <Button
-            size="sm"
-            variant={assignmentFilter === "all" ? "secondary" : "outline"}
-            onClick={() => setAssignmentFilter("all")}
-          >
-            Всі
-          </Button>
-          <Button
-            size="sm"
-            variant={assignmentFilter === "unassigned" ? "secondary" : "outline"}
-            onClick={() => setAssignmentFilter("unassigned")}
-          >
-            Без виконавця
-          </Button>
-          <Badge variant="outline" className="ml-1">
-            {filteredTasks.length} задач
-          </Badge>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative w-full xl:max-w-[370px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={contentView === "linked" ? "Пошук по задачах з прорахунку..." : "Пошук по окремих задачах..."}
+              className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
+            />
+            {search ? (
+              <Button
+                type="button"
+                variant="control"
+                size="iconSm"
+                aria-label="Очистити пошук"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={() => setSearch("")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {(loading || refreshing) && search ? (
+              <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1">
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}>
+              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[180px]")}>
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Всі статуси</SelectItem>
+                {DESIGN_COLUMNS.map((column) => (
+                  <SelectItem key={column.id} value={column.id}>
+                    {column.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={designerFilter} onValueChange={setDesignerFilter}>
+              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[220px]")}>
+                <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_DESIGNERS_FILTER}>{renderDesignerFilterValue(ALL_DESIGNERS_FILTER)}</SelectItem>
+                <SelectItem value={NO_DESIGNER_FILTER}>{renderDesignerFilterValue(NO_DESIGNER_FILTER)}</SelectItem>
+                {designerFilterOptions.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {renderDesignerFilterValue(member.id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {hasActiveFilters ? (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0 text-muted-foreground">
+                Скинути фільтри
+              </Button>
+            ) : null}
+            <div className="text-sm font-semibold text-foreground">
+              <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
+              <span className="ml-1 text-muted-foreground">знайдено</span>
+            </div>
+          </div>
         </div>
       </div>
     ),
-    [assignmentFilter, filteredTasks.length, viewMode, workspacePresence.activeHereEntries]
+    [
+      contentView,
+      designerFilter,
+      designerFilterOptions,
+      filteredTasks.length,
+      hasActiveFilters,
+      linkedTasksCount,
+      loading,
+      refreshing,
+      search,
+      standaloneTasksCount,
+      statusFilter,
+      tasks.length,
+      viewMode,
+      workspacePresence.activeHereEntries,
+    ]
   );
 
   usePageHeaderActions(designHeaderActions, [designHeaderActions]);
