@@ -47,8 +47,9 @@ import {
   useCustomerLeadCreate,
 } from "@/components/customers";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
+import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
-import { formatUserShortName } from "@/lib/userName";
+import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -95,7 +96,7 @@ type DesignTaskActivityRow = {
 type CustomerOption = CustomerLeadOption;
 
 type DesignViewMode = "kanban" | "timeline" | "assignee";
-type DesignContentView = "linked" | "standalone";
+type DesignContentView = "all" | "linked" | "standalone";
 
 const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
@@ -332,7 +333,7 @@ const normalizeDeadlineTimeInput = (value: string) => {
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
 export default function DesignPage() {
-  const { teamId, userId, permissions } = useAuth();
+  const { teamId, userId, permissions, session } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   const initialCache = readDesignPageCache(effectiveTeamId ?? "");
@@ -380,7 +381,7 @@ export default function DesignPage() {
     nextAssigneeUserId?: string | null;
     nextStatus?: DesignStatus;
   } | null>(null);
-  const [contentView, setContentView] = useState<DesignContentView>("linked");
+  const [contentView, setContentView] = useState<DesignContentView>("all");
   const [viewMode, setViewMode] = useState<DesignViewMode>("kanban");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DesignStatus | "all">("all");
@@ -397,6 +398,18 @@ export default function DesignPage() {
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
   const shouldForceSelfAssignee = permissions.isDesigner && !canManageAssignments && !!userId;
+  const currentUserDisplayName = useMemo(() => {
+    const user = session?.user;
+    if (!user) return "";
+    return buildUserNameFromMetadata(
+      user.user_metadata as Record<string, unknown> | undefined,
+      user.email
+    ).displayName;
+  }, [session?.user]);
+  const currentUserAvatarUrl = useMemo(() => {
+    const raw = session?.user?.user_metadata?.avatar_url;
+    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+  }, [session?.user?.user_metadata]);
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -408,10 +421,12 @@ export default function DesignPage() {
 
   const getMemberLabel = (id: string | null | undefined) => {
     if (!id) return "Без виконавця";
+    if (id === userId && currentUserDisplayName) return currentUserDisplayName;
     return memberById[id] ?? id.slice(0, 8);
   };
   const getMemberAvatar = (id: string | null | undefined) => {
     if (!id) return null;
+    if (id === userId && currentUserAvatarUrl) return currentUserAvatarUrl;
     return memberAvatarById[id] ?? null;
   };
   const getAllowedStatusTransitions = (task: DesignTask) =>
@@ -1029,6 +1044,7 @@ export default function DesignPage() {
     return formatDesignTaskNumber(monthCode, (count ?? 0) + 1);
   };
 
+  const allTasksCount = tasks.length;
   const linkedTasksCount = useMemo(() => tasks.filter((task) => isUuid(task.quoteId)).length, [tasks]);
   const standaloneTasksCount = useMemo(() => tasks.filter((task) => !isUuid(task.quoteId)).length, [tasks]);
 
@@ -1041,7 +1057,7 @@ export default function DesignPage() {
   const renderDesignerFilterValue = (value: string) => {
     if (value === ALL_DESIGNERS_FILTER) return <span>Всі дизайнери</span>;
     if (value === NO_DESIGNER_FILTER) return <span>Без дизайнера</span>;
-    const label = memberById[value] ?? "Користувач";
+    const label = value === userId && currentUserDisplayName ? currentUserDisplayName : (memberById[value] ?? "Користувач");
     const avatarUrl = getMemberAvatar(value);
     return (
       <span className="flex min-w-0 items-center gap-2">
@@ -2281,8 +2297,8 @@ export default function DesignPage() {
             })()
           ) : null}
         </div>
-        <div className="mt-2">
-          {!task.assigneeUserId && canSelfAssign && userId ? (
+        {!task.assigneeUserId && canSelfAssign && userId ? (
+          <div className="mt-2">
             <Button
               size="sm"
               variant="outline"
@@ -2294,8 +2310,8 @@ export default function DesignPage() {
             >
               Взяти в роботу
             </Button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </KanbanCard>
     );
   };
@@ -2305,6 +2321,15 @@ export default function DesignPage() {
       <div className="space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={contentView === "all"}
+              onClick={() => setContentView("all")}
+            >
+              Всі
+              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{allTasksCount}</span>
+            </Button>
             <Button
               variant="segmented"
               size="xs"
@@ -2354,7 +2379,7 @@ export default function DesignPage() {
                 className="gap-1.5"
               >
                 <Users className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">Дизайнери</span>
+              <span className="hidden xl:inline">Дизайнери</span>
               </Button>
             </div>
             <Button size="sm" className="h-10 gap-2" onClick={() => setCreateDialogOpen(true)}>
@@ -2370,7 +2395,13 @@ export default function DesignPage() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder={contentView === "linked" ? "Пошук по задачах з прорахунку..." : "Пошук по окремих задачах..."}
+              placeholder={
+                contentView === "linked"
+                  ? "Пошук по задачах з прорахунку..."
+                  : contentView === "standalone"
+                    ? "Пошук по окремих задачах..."
+                    : "Пошук по всіх дизайн-задачах..."
+              }
               className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
             />
             {search ? (
@@ -2439,6 +2470,7 @@ export default function DesignPage() {
     ),
     [
       contentView,
+      allTasksCount,
       designerFilter,
       designerFilterOptions,
       filteredTasks.length,
@@ -2467,7 +2499,8 @@ export default function DesignPage() {
       ) : null}
 
       {viewMode === "kanban" ? (
-        <KanbanBoard rowClassName="min-w-[1100px]">
+        <EstimatesKanbanCanvas>
+          <KanbanBoard rowClassName="min-w-[1100px]">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
               return (
@@ -2527,7 +2560,8 @@ export default function DesignPage() {
                 </KanbanColumn>
               );
             })}
-        </KanbanBoard>
+          </KanbanBoard>
+        </EstimatesKanbanCanvas>
       ) : null}
 
       {viewMode === "timeline" ? (
