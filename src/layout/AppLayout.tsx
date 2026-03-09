@@ -491,6 +491,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   );
   const isCanvasMode =
     location.pathname === ROUTES.ordersEstimates ||
+    location.pathname.startsWith(`${ROUTES.ordersEstimates}/`) ||
     location.pathname.startsWith(ROUTES.ordersCustomers) ||
     location.pathname.startsWith(ROUTES.design);
 

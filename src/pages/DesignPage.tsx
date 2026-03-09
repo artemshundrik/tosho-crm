@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package } from "lucide-react";
+import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -261,6 +261,13 @@ const normalizeLogoUrl = (value?: string | null) => {
   const normalized = value?.trim() ?? "";
   if (!normalized) return null;
   return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
+};
+
+const isTaskAttachedFromStandalone = (task: DesignTask) => {
+  const source = typeof task.metadata?.source === "string" ? task.metadata.source.trim() : "";
+  const attachedQuoteAt =
+    typeof task.metadata?.attached_quote_at === "string" ? task.metadata.attached_quote_at.trim() : "";
+  return source === "design_task_created_manual" || !!attachedQuoteAt;
 };
 
 const parseDateOnly = (value: string) => {
@@ -2105,6 +2112,7 @@ export default function DesignPage() {
 
   const renderTaskCard = (task: DesignTask, options?: { draggable?: boolean }) => {
     const isLinkedQuote = isUuid(task.quoteId);
+    const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
     const partyLabel = getTaskPartyLabel();
     const assigneeLabel = getMemberLabel(task.assigneeUserId);
     const deadlineBadge = getDeadlineBadge(task.designDeadline);
@@ -2140,22 +2148,29 @@ export default function DesignPage() {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
-            {isLinkedQuote ? (
-              <button
-                className="text-sm font-mono font-semibold hover:underline truncate"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  navigate(`/orders/estimates/${task.quoteId}`);
-                }}
-                title={getTaskDisplayNumber(task)}
-              >
-                {getTaskDisplayNumber(task)}
-              </button>
-            ) : (
-              <div className="text-sm font-semibold truncate" title={task.title ?? getTaskDisplayNumber(task)}>
-                {getTaskDisplayNumber(task)}
-              </div>
-            )}
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              {isLinkedQuote ? (
+                <button
+                  className="text-sm font-mono font-semibold hover:underline truncate"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    navigate(`/orders/estimates/${task.quoteId}`);
+                  }}
+                  title={getTaskDisplayNumber(task)}
+                >
+                  {getTaskDisplayNumber(task)}
+                </button>
+              ) : (
+                <div className="text-sm font-semibold truncate" title={task.title ?? getTaskDisplayNumber(task)}>
+                  {getTaskDisplayNumber(task)}
+                </div>
+              )}
+              {isAttachedFromStandalone ? (
+                <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                  Привʼязано
+                </Badge>
+              ) : null}
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -2232,6 +2247,12 @@ export default function DesignPage() {
         ) : null}
         {!isLinkedQuote && task.title ? (
           <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
+        ) : null}
+        {isAttachedFromStandalone ? (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/6 px-2.5 py-1 text-[11px] text-muted-foreground">
+            <Link2 className="h-3.5 w-3.5 text-primary" />
+            <span>Окрема задача привʼязана до прорахунку</span>
+          </div>
         ) : null}
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
@@ -2631,6 +2652,7 @@ export default function DesignPage() {
 
                 {timelineData.rows.map((row) => {
                   const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
+                  const isAttachedFromStandalone = isTaskAttachedFromStandalone(row.task) && isUuid(row.task.quoteId);
                   const offsetUnits = row.offset / timelineAxis.bucketSize;
                   const spanUnits = Math.max(timelineZoom === "day" ? 1 : 0.6, row.span / timelineAxis.bucketSize);
                   const barLeft = `calc(${offsetUnits} * (100% / ${timelineAxis.columnCount}))`;
@@ -2666,6 +2688,9 @@ export default function DesignPage() {
                         <div className="truncate text-sm font-medium">
                           {getTaskDisplayNumber(row.task)}
                         </div>
+                        {isAttachedFromStandalone ? (
+                          <div className="mt-1 text-[11px] text-primary">Привʼязано з окремої дизайн-задачі</div>
+                        ) : null}
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
                           {isUuid(row.task.quoteId) ? (
@@ -2812,6 +2837,7 @@ export default function DesignPage() {
                     </div>
                     {group.tasks.map((task) => {
                       const isLinkedQuote = isUuid(task.quoteId);
+                      const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
                       const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
                       const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
                       const hasValidDeadline = !!deadlineDate && !Number.isNaN(deadlineDate.getTime());
@@ -2840,7 +2866,11 @@ export default function DesignPage() {
                               {getTaskDisplayNumber(task)}
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
-                              {isLinkedQuote ? `Товар: ${task.productName ?? "Не вказано"}` : "Standalone"}
+                              {isLinkedQuote
+                                ? isAttachedFromStandalone
+                                  ? `Привʼязано · Товар: ${task.productName ?? "Не вказано"}`
+                                  : `Товар: ${task.productName ?? "Не вказано"}`
+                                : "Standalone"}
                             </div>
                           </button>
                           <div className="truncate">{task.customerName ?? "Не вказано"}</div>

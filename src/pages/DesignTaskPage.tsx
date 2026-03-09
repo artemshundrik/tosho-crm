@@ -146,6 +146,15 @@ type DesignOutputLink = {
   created_by: string | null;
 };
 
+type QuoteCandidate = {
+  id: string;
+  number: string | null;
+  status: string | null;
+  customerName: string | null;
+  customerLogoUrl: string | null;
+  createdAt: string | null;
+};
+
 type QuoteMentionComment = {
   id: string;
   body: string;
@@ -392,6 +401,13 @@ const normalizeLogoUrl = (value?: string | null) => {
   return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
 };
 
+const normalizePartyMatch = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[«»"'`]/g, "");
+
 const getTaskOwnerRole = (
   metadata: Record<string, unknown> | undefined,
   creatorUserId: string | null | undefined,
@@ -442,6 +458,10 @@ export default function DesignTaskPage() {
   const [addLinkUrl, setAddLinkUrl] = useState("https://");
   const [addLinkLabel, setAddLinkLabel] = useState("");
   const [addLinkError, setAddLinkError] = useState<string | null>(null);
+  const [attachQuoteDialogOpen, setAttachQuoteDialogOpen] = useState(false);
+  const [quoteCandidates, setQuoteCandidates] = useState<QuoteCandidate[]>([]);
+  const [quoteCandidatesLoading, setQuoteCandidatesLoading] = useState(false);
+  const [attachingQuoteId, setAttachingQuoteId] = useState<string | null>(null);
   const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
   const [estimateInput, setEstimateInput] = useState("2");
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -1901,6 +1921,19 @@ export default function DesignTaskPage() {
     if (insertError) throw insertError;
   };
 
+  const clearSelectedDesignOutputMetadata = (metadata: Record<string, unknown>) => ({
+    ...metadata,
+    selected_design_output_file_id: null,
+    selected_design_output_file_name: null,
+    selected_design_output_storage_bucket: null,
+    selected_design_output_storage_path: null,
+    selected_design_output_mime_type: null,
+    selected_design_output_file_size: null,
+    selected_design_output_selected_at: null,
+    selected_design_output_selected_by: null,
+    selected_design_output_selected_by_label: null,
+  });
+
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
     if (!ensureCanEdit()) return;
@@ -1951,7 +1984,7 @@ export default function DesignTaskPage() {
       setDesignOutputFiles(nextFiles);
       try {
         if (uploaded.length > 0) {
-          await syncDesignFileToQuoteVisualizations(uploaded[0]);
+          await Promise.all(uploaded.map((file) => syncDesignFileToQuoteVisualizations(file)));
         }
       } catch (syncError: unknown) {
         console.warn("Failed to sync design file to quote visualizations", syncError);
@@ -2014,14 +2047,7 @@ export default function DesignTaskPage() {
       const nextFiles = designOutputFiles.filter((file) => file.id !== fileId);
       await persistDesignOutputs(nextFiles, designOutputLinks);
       if (selectedDesignOutputFileId === fileId && task && effectiveTeamId) {
-        const nextMetadata: Record<string, unknown> = {
-          ...(task.metadata ?? {}),
-          selected_design_output_file_id: null,
-          selected_design_output_file_name: null,
-          selected_design_output_selected_at: null,
-          selected_design_output_selected_by: null,
-          selected_design_output_selected_by_label: null,
-        };
+        const nextMetadata = clearSelectedDesignOutputMetadata(task.metadata ?? {});
         const { error: resetError } = await supabase
           .from("activity_log")
           .update({ metadata: nextMetadata })
@@ -2070,9 +2096,13 @@ export default function DesignTaskPage() {
     setOutputSaving(true);
     try {
       const nextMetadata: Record<string, unknown> = {
-        ...(task.metadata ?? {}),
+        ...(nextSelectedId ? (task.metadata ?? {}) : clearSelectedDesignOutputMetadata(task.metadata ?? {})),
         selected_design_output_file_id: nextSelectedId,
         selected_design_output_file_name: selectedFile?.file_name ?? null,
+        selected_design_output_storage_bucket: selectedFile?.storage_bucket ?? null,
+        selected_design_output_storage_path: selectedFile?.storage_path ?? null,
+        selected_design_output_mime_type: selectedFile?.mime_type ?? null,
+        selected_design_output_file_size: selectedFile?.file_size ?? null,
         selected_design_output_selected_at: nextSelectedId ? new Date().toISOString() : null,
         selected_design_output_selected_by: nextSelectedId ? (userId ?? null) : null,
         selected_design_output_selected_by_label: nextSelectedId ? actorLabel : null,
@@ -2085,6 +2115,13 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      if (selectedFile) {
+        try {
+          await syncDesignFileToQuoteVisualizations(selectedFile);
+        } catch (syncError) {
+          console.warn("Failed to sync selected design file to quote visualizations", syncError);
+        }
+      }
       await logDesignTaskActivity({
         teamId: effectiveTeamId,
         designTaskId: task.id,
@@ -2107,6 +2144,149 @@ export default function DesignTaskPage() {
       toast.error(getErrorMessage(e, "Не вдалося зберегти вибір варіанту"));
     } finally {
       setOutputSaving(false);
+    }
+  };
+
+  const loadQuoteCandidates = async () => {
+    if (!effectiveTeamId || !task) {
+      setQuoteCandidates([]);
+      return;
+    }
+    setQuoteCandidatesLoading(true);
+    try {
+      const metadata = task.metadata ?? {};
+      const customerId =
+        typeof metadata.customer_id === "string" && metadata.customer_id.trim()
+          ? metadata.customer_id.trim()
+          : null;
+      const customerName = normalizePartyMatch(task.customerName ?? null);
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("quotes")
+        .select("id,number,status,customer_id,customer_name,customer_logo_url,created_at,title")
+        .eq("team_id", effectiveTeamId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const nextCandidates = (((data ?? []) as Array<{
+        id: string;
+        number?: string | null;
+        status?: string | null;
+        customer_id?: string | null;
+        customer_name?: string | null;
+        customer_logo_url?: string | null;
+        created_at?: string | null;
+        title?: string | null;
+      }>)
+        .filter((row) => row.id !== task.quoteId)
+        .filter((row) => {
+          if (customerId && row.customer_id) return row.customer_id === customerId;
+          return normalizePartyMatch(row.customer_name ?? row.title ?? null) === customerName;
+        })
+        .map((row) => ({
+          id: row.id,
+          number: row.number ?? null,
+          status: row.status ?? null,
+          customerName: row.customer_name ?? row.title ?? null,
+          customerLogoUrl: normalizeLogoUrl(row.customer_logo_url ?? null),
+          createdAt: row.created_at ?? null,
+        }))) as QuoteCandidate[];
+
+      setQuoteCandidates(nextCandidates);
+    } catch (e) {
+      console.warn("Failed to load quote candidates", e);
+      setQuoteCandidates([]);
+    } finally {
+      setQuoteCandidatesLoading(false);
+    }
+  };
+
+  const attachTaskToQuote = async (quoteCandidate: QuoteCandidate) => {
+    if (!task || !effectiveTeamId || attachingQuoteId) return;
+    if (!ensureCanEdit()) return;
+    setAttachingQuoteId(quoteCandidate.id);
+    try {
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      const selectedFile =
+        selectedDesignOutputFileId
+          ? designOutputFiles.find((file) => file.id === selectedDesignOutputFileId) ?? null
+          : null;
+      const nextMetadata: Record<string, unknown> = {
+        ...(task.metadata ?? {}),
+        quote_id: quoteCandidate.id,
+        quote_number: quoteCandidate.number,
+        task_kind: "linked",
+        attached_quote_at: new Date().toISOString(),
+        attached_quote_by: userId ?? null,
+      };
+
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata, entity_id: quoteCandidate.id })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      if (selectedFile) {
+        const { data: existing, error: existingError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .select("id")
+          .eq("quote_id", quoteCandidate.id)
+          .eq("storage_bucket", selectedFile.storage_bucket)
+          .eq("storage_path", selectedFile.storage_path)
+          .maybeSingle();
+        if (existingError) throw existingError;
+        if (!existing?.id) {
+          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+            team_id: effectiveTeamId,
+            quote_id: quoteCandidate.id,
+            file_name: selectedFile.file_name,
+            mime_type: selectedFile.mime_type || null,
+            file_size: selectedFile.file_size,
+            storage_bucket: selectedFile.storage_bucket,
+            storage_path: selectedFile.storage_path,
+            uploaded_by: selectedFile.uploaded_by ?? userId ?? null,
+          });
+          if (insertError) throw insertError;
+        }
+      }
+
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: quoteCandidate.id,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_attachment",
+        title: `Задачу прив’язано до прорахунку ${quoteCandidate.number ?? quoteCandidate.id.slice(0, 8)}`,
+        metadata: {
+          source: "design_task_attachment",
+          from_quote_id: isUuid(task.quoteId) ? task.quoteId : null,
+          to_quote_id: quoteCandidate.id,
+          selected_design_output_file_id: selectedFile?.id ?? null,
+        },
+      });
+
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              quoteId: quoteCandidate.id,
+              quoteNumber: quoteCandidate.number,
+              metadata: nextMetadata,
+            }
+          : prev
+      );
+      setAttachQuoteDialogOpen(false);
+      toast.success("Задачу прив’язано до прорахунку");
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося прив’язати задачу до прорахунку");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setAttachingQuoteId(null);
     }
   };
 
@@ -3162,6 +3342,11 @@ export default function DesignTaskPage() {
     const value = task?.metadata?.selected_design_output_file_id;
     return typeof value === "string" && value.trim() ? value.trim() : null;
   }, [task?.metadata]);
+  useEffect(() => {
+    if (!attachQuoteDialogOpen || !task || isUuid(task.quoteId)) return;
+    void loadQuoteCandidates();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachQuoteDialogOpen, task?.id, task?.quoteId, task?.customerName]);
   const canTakeOverForSelf =
     !!task &&
     canSelfAssign &&
@@ -3414,7 +3599,16 @@ export default function DesignTaskPage() {
                 <ExternalLink className="h-4 w-4" />
                 Відкрити прорахунок
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setAttachQuoteDialogOpen(true)}
+              >
+                <Link2 className="h-4 w-4" />
+                Привʼязати до прорахунку
+              </Button>
+            )}
             <Button disabled={primaryActionDisabled || designTaskLockedByOther} onClick={primaryActionClick ?? undefined}>
               {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {primaryActionLabel}
@@ -4548,6 +4742,85 @@ export default function DesignTaskPage() {
             <Button onClick={() => void handleSubmitDesignLink()} disabled={outputSaving}>
               {outputSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Додати
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={attachQuoteDialogOpen} onOpenChange={setAttachQuoteDialogOpen}>
+        <DialogContent className="sm:max-w-[760px]">
+          <DialogHeader>
+            <DialogTitle>Привʼязати до прорахунку</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              Показані прорахунки цього ж замовника. Якщо у задачі вже обрано візуал, він одразу потрапить у вибраний
+              прорахунок.
+            </div>
+            {quoteCandidatesLoading ? (
+              <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/5 px-4 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Завантаження...
+              </div>
+            ) : quoteCandidates.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/50 px-4 py-6 text-sm text-muted-foreground">
+                Немає прорахунків цього замовника для привʼязки.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {quoteCandidates.map((candidate) => (
+                  <div
+                    key={candidate.id}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border/50 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-mono text-sm font-semibold text-foreground">
+                          {candidate.number ?? candidate.id.slice(0, 8)}
+                        </div>
+                        {candidate.status ? (
+                          <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                            {candidate.status}
+                          </Badge>
+                        ) : null}
+                        <div className="text-xs text-muted-foreground">
+                          {candidate.createdAt
+                            ? new Date(candidate.createdAt).toLocaleDateString("uk-UA", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })
+                            : "Без дати"}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <EntityAvatar
+                          src={candidate.customerLogoUrl}
+                          name={candidate.customerName ?? undefined}
+                          fallback={getInitials(candidate.customerName)}
+                          size={24}
+                        />
+                        <div className="truncate text-sm text-foreground">
+                          {candidate.customerName ?? "Клієнт не вказано"}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => void attachTaskToQuote(candidate)}
+                      disabled={attachingQuoteId === candidate.id}
+                    >
+                      {attachingQuoteId === candidate.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Привʼязати
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttachQuoteDialogOpen(false)}>
+              Закрити
             </Button>
           </DialogFooter>
         </DialogContent>

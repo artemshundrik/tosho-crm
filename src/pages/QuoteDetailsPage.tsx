@@ -48,7 +48,6 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import {
   createQuote,
@@ -72,6 +71,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Copy,
+  Eye,
   FileDown,
   FileText,
   MoreHorizontal,
@@ -79,10 +79,10 @@ import {
   Trash2,
   Paperclip,
   MessageSquare,
+  CircleHelp,
   Check,
   Clock,
   Send,
-  Sparkles,
   XCircle,
   Building2,
   Truck,
@@ -100,6 +100,7 @@ import {
   Image,
   Lock,
   Calculator,
+  Palette,
 } from "lucide-react";
 import {
   ATTACHMENTS_ACCEPT,
@@ -133,6 +134,7 @@ import {
   statusIcons,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
+import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
 import {
   QuoteDeadlineBadge,
   type QuoteDeadlineTone,
@@ -239,6 +241,28 @@ type QuoteAttachment = {
   storagePath?: string | null;
 };
 
+type DesignOutputMetaFile = {
+  id: string;
+  file_name: string;
+  file_size: number | null;
+  mime_type: string | null;
+  storage_bucket: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+type DesignTaskCandidate = {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  designTaskNumber: string | null;
+  status: string | null;
+  metadata: Record<string, unknown>;
+  selectedFile: DesignOutputMetaFile | null;
+  outputsCount: number;
+};
+
 type ActivityIcon = LucideIcon;
 
 type ActivityEvent = {
@@ -266,6 +290,38 @@ const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (typeof value === "object") return value as Record<string, unknown>;
   return {};
 };
+
+const parseDesignOutputMetaFiles = (value: unknown): DesignOutputMetaFile[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const entry = row as Record<string, unknown>;
+      const fileName = typeof entry.file_name === "string" && entry.file_name ? entry.file_name : null;
+      const storageBucket =
+        typeof entry.storage_bucket === "string" && entry.storage_bucket ? entry.storage_bucket : null;
+      const storagePath = typeof entry.storage_path === "string" && entry.storage_path ? entry.storage_path : null;
+      if (!fileName || !storageBucket || !storagePath) return null;
+      return {
+        id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
+        file_name: fileName,
+        file_size: entry.file_size == null ? null : Number(entry.file_size),
+        mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
+        uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
+        created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
+      } satisfies DesignOutputMetaFile;
+    })
+    .filter(Boolean) as DesignOutputMetaFile[];
+};
+
+const normalizePartyMatch = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[«»"'`]/g, "");
 
 const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
   if (!isPrintPackageMetadata(value)) return null;
@@ -330,7 +386,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [activityError, setActivityError] = useState<string | null>(null);
 
   const [filesCustomerOpen, setFilesCustomerOpen] = useState(true);
-  const [filesDesignOpen, setFilesDesignOpen] = useState(true);
   const [filesDocsOpen, setFilesDocsOpen] = useState(true);
 
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
@@ -356,6 +411,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
   const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
+  const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
+  const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
+  const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
+  const [attachingDesignTaskId, setAttachingDesignTaskId] = useState<string | null>(null);
+  const [designVisualizationSyncing, setDesignVisualizationSyncing] = useState(false);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
@@ -790,6 +850,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const designerMembers = useMemo(() => {
     return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
   }, [teamMembers]);
+  const selectedDesignOutputFile = useMemo(() => {
+    const metadata = designTask?.metadata ?? {};
+    const selectedId =
+      typeof metadata.selected_design_output_file_id === "string"
+        ? metadata.selected_design_output_file_id.trim()
+        : "";
+    const files = parseDesignOutputMetaFiles(metadata.design_output_files);
+    return files.find((file) => file.id === selectedId) ?? null;
+  }, [designTask?.metadata]);
+  const selectedDesignOutputStoragePath = useMemo(() => {
+    const value = designTask?.metadata?.selected_design_output_storage_path;
+    if (typeof value === "string" && value.trim()) return value.trim();
+    return selectedDesignOutputFile?.storage_path ?? null;
+  }, [designTask?.metadata, selectedDesignOutputFile]);
+  const selectedDesignOutputFileName = useMemo(() => {
+    const value = designTask?.metadata?.selected_design_output_file_name;
+    if (typeof value === "string" && value.trim()) return value.trim();
+    return selectedDesignOutputFile?.file_name ?? null;
+  }, [designTask?.metadata, selectedDesignOutputFile]);
+  const visibleDesignVisualizations = useMemo(() => {
+    const selected = designVisualizations.find(
+      (file) =>
+        (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
+        (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName)
+    );
+    const rest = designVisualizations.filter((file) => file.id !== selected?.id);
+    return selected ? [selected, ...rest] : designVisualizations;
+  }, [designVisualizations, selectedDesignOutputFileName, selectedDesignOutputStoragePath]);
   const getMemberLabel = (userId?: string | null) => {
     if (!userId) return "Не вказано";
     return memberById.get(userId) ?? userId;
@@ -1055,7 +1143,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           typeof metadata?.note === "string" ? metadata.note : undefined;
         const Icon: ActivityIcon =
           source === "quote_runs"
-            ? Sparkles
+            ? Calculator
             : source === "quote_status" && toStatus
             ? (statusIcons[toStatus] as ActivityIcon) ?? Clock
             : source === "quote_deadline"
@@ -1394,7 +1482,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .order("created_at", { ascending: false })
         .limit(1);
       if (error) throw error;
-      const row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+      let row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+      if (!row) {
+        const { data: fallbackRows, error: fallbackError } = await supabase
+          .from("activity_log")
+          .select("id, metadata, created_at")
+          .eq("action", "design_task")
+          .eq("team_id", teamId)
+          .order("created_at", { ascending: false });
+        if (fallbackError) throw fallbackError;
+        row = ((fallbackRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>).find(
+          (candidate) => {
+            const metadata = candidate.metadata ?? {};
+            return typeof metadata.quote_id === "string" && metadata.quote_id.trim() === quoteId;
+          }
+        );
+      }
       if (!row) {
         setDesignTask(null);
         setDesignAssigneeId(null);
@@ -1415,6 +1518,178 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTask(null);
     } finally {
       setDesignTaskLoading(false);
+    }
+  };
+
+  const loadDesignTaskCandidates = async () => {
+    if (!teamId || !quote) {
+      setDesignTaskCandidates([]);
+      return;
+    }
+    if (designTask) {
+      setDesignTaskCandidates([]);
+      return;
+    }
+    setDesignTaskCandidatesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("id, title, metadata, created_at")
+        .eq("action", "design_task")
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const quoteCustomerId =
+        typeof (quote as unknown as { customer_id?: string | null }).customer_id === "string" &&
+        (quote as unknown as { customer_id?: string | null }).customer_id
+          ? ((quote as unknown as { customer_id?: string | null }).customer_id as string)
+          : null;
+      const quoteCustomerName = normalizePartyMatch(quote.customer_name ?? null);
+
+      const nextCandidates = ((data ?? []) as Array<{
+        id: string;
+        title: string | null;
+        metadata?: Record<string, unknown> | null;
+        created_at?: string | null;
+      }>)
+        .map((row) => {
+          const metadata = row.metadata ?? {};
+          const taskKind = typeof metadata.task_kind === "string" ? metadata.task_kind.trim() : null;
+          const metaQuoteId = typeof metadata.quote_id === "string" ? metadata.quote_id.trim() : "";
+          const customerId = typeof metadata.customer_id === "string" ? metadata.customer_id.trim() : "";
+          const customerName =
+            typeof metadata.customer_name === "string" ? normalizePartyMatch(metadata.customer_name) : "";
+          const status = typeof metadata.status === "string" ? metadata.status.trim() : null;
+          const files = parseDesignOutputMetaFiles(metadata.design_output_files);
+          const selectedId =
+            typeof metadata.selected_design_output_file_id === "string"
+              ? metadata.selected_design_output_file_id.trim()
+              : "";
+          const selectedFile = files.find((file) => file.id === selectedId) ?? null;
+          const sameCustomer =
+            (quoteCustomerId && customerId && quoteCustomerId === customerId) ||
+            (!!quoteCustomerName && !!customerName && quoteCustomerName === customerName);
+          const isStandalone =
+            !metaQuoteId &&
+            (taskKind === "standalone" ||
+              typeof metadata.source === "string" && metadata.source === "design_task_created_manual");
+          if (!sameCustomer || !isStandalone || status === "cancelled") return null;
+          return {
+            id: row.id,
+            title: row.title ?? null,
+            createdAt: row.created_at ?? new Date().toISOString(),
+            designTaskNumber:
+              typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
+                ? metadata.design_task_number.trim()
+                : null,
+            status,
+            metadata,
+            selectedFile,
+            outputsCount: files.length,
+          } satisfies DesignTaskCandidate;
+        })
+        .filter(Boolean) as DesignTaskCandidate[];
+
+      setDesignTaskCandidates(nextCandidates);
+    } catch (e) {
+      console.warn("Failed to load standalone design task candidates", e);
+      setDesignTaskCandidates([]);
+    } finally {
+      setDesignTaskCandidatesLoading(false);
+    }
+  };
+
+  const attachExistingDesignTask = async (candidate: DesignTaskCandidate) => {
+    if (!teamId || !quote || attachingDesignTaskId) return;
+    setAttachingDesignTaskId(candidate.id);
+    setDesignTaskError(null);
+    try {
+      const actorName = userId ? memberById.get(userId) ?? userId : "System";
+      const nextMetadata: Record<string, unknown> = {
+        ...(candidate.metadata ?? {}),
+        quote_id: quoteId,
+        quote_number: quote.number ?? null,
+        quote_type: quote.quote_type ?? null,
+        customer_name: quote.customer_name ?? null,
+        customer_logo_url: quote.customer_logo_url ?? null,
+        task_kind: "linked",
+        attached_quote_at: new Date().toISOString(),
+        attached_quote_by: userId ?? null,
+      };
+
+      const { error } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", candidate.id)
+        .eq("team_id", teamId);
+      if (error) throw error;
+
+      if (candidate.selectedFile) {
+        const { data: existing, error: existingError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .select("id")
+          .eq("quote_id", quoteId)
+          .eq("storage_bucket", candidate.selectedFile.storage_bucket)
+          .eq("storage_path", candidate.selectedFile.storage_path)
+          .maybeSingle();
+        if (existingError) throw existingError;
+        if (!existing?.id) {
+          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+            team_id: teamId,
+            quote_id: quoteId,
+            file_name: candidate.selectedFile.file_name,
+            mime_type: candidate.selectedFile.mime_type || null,
+            file_size: candidate.selectedFile.file_size,
+            storage_bucket: candidate.selectedFile.storage_bucket,
+            storage_path: candidate.selectedFile.storage_path,
+            uploaded_by: candidate.selectedFile.uploaded_by ?? userId ?? null,
+          });
+          if (insertError) throw insertError;
+        }
+      }
+
+      await logDesignTaskActivity({
+        teamId,
+        designTaskId: candidate.id,
+        quoteId,
+        userId,
+        actorName,
+        action: "design_task_attachment",
+        title: `Задачу прив’язано до прорахунку ${quote.number ?? quoteId.slice(0, 8)}`,
+        metadata: {
+          source: "design_task_attachment",
+          from_quote_id: null,
+          to_quote_id: quoteId,
+          selected_design_output_file_id:
+            typeof candidate.metadata.selected_design_output_file_id === "string"
+              ? candidate.metadata.selected_design_output_file_id
+              : null,
+        },
+      });
+      await logActivity({
+        teamId,
+        action: "привʼязав дизайн-задачу",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `Привʼязав дизайн-задачу до прорахунку ${quote.number ?? ""}`.trim(),
+        href: `/orders/estimates/${quoteId}`,
+        metadata: {
+          source: "design_task_attachment",
+          design_task_id: candidate.id,
+        },
+      });
+
+      setAttachDesignTaskDialogOpen(false);
+      toast.success("Дизайн-задачу прив’язано");
+      await Promise.all([loadDesignTask(), loadAttachments(), loadActivityLog()]);
+    } catch (e) {
+      const message = getErrorMessage(e, "Не вдалося прив’язати дизайн-задачу.");
+      setDesignTaskError(message);
+      toast.error(message);
+    } finally {
+      setAttachingDesignTaskId(null);
     }
   };
 
@@ -2152,6 +2427,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [quoteId, teamId]);
 
   useEffect(() => {
+    if (!quote || quote.id !== quoteId || !teamId) {
+      setDesignTaskCandidates([]);
+      return;
+    }
+    void loadDesignTaskCandidates();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id, quoteId, teamId, designTask?.id]);
+
+  useEffect(() => {
     if (!quote || quote.id !== quoteId || error) return;
     void loadHistory();
     void loadItems();
@@ -2174,6 +2458,62 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       })
     );
   }, [memberById, attachments.length]);
+
+  useEffect(() => {
+    if (!teamId || !quoteId || !selectedDesignOutputFile || designVisualizationSyncing) return;
+    const alreadyVisible = designVisualizations.some(
+      (file) =>
+        file.storageBucket === selectedDesignOutputFile.storage_bucket &&
+        file.storagePath === selectedDesignOutputFile.storage_path
+    );
+    if (alreadyVisible) return;
+
+    let active = true;
+    const syncSelectedVisualization = async () => {
+      setDesignVisualizationSyncing(true);
+      try {
+        const { data: existing, error: existingError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .select("id")
+          .eq("quote_id", quoteId)
+          .eq("storage_bucket", selectedDesignOutputFile.storage_bucket)
+          .eq("storage_path", selectedDesignOutputFile.storage_path)
+          .maybeSingle();
+        if (existingError) throw existingError;
+
+        if (!existing?.id) {
+          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+            team_id: teamId,
+            quote_id: quoteId,
+            file_name: selectedDesignOutputFile.file_name,
+            mime_type: selectedDesignOutputFile.mime_type || null,
+            file_size: selectedDesignOutputFile.file_size,
+            storage_bucket: selectedDesignOutputFile.storage_bucket,
+            storage_path: selectedDesignOutputFile.storage_path,
+            uploaded_by: selectedDesignOutputFile.uploaded_by ?? userId ?? null,
+          });
+          if (insertError) throw insertError;
+        }
+
+        if (active) {
+          await loadAttachments();
+        }
+      } catch (error) {
+        console.warn("Failed to backfill selected design visualization into quote", error);
+      } finally {
+        if (active) {
+          setDesignVisualizationSyncing(false);
+        }
+      }
+    };
+
+    void syncSelectedVisualization();
+    return () => {
+      active = false;
+    };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, quoteId, selectedDesignOutputFile, designVisualizations, userId]);
 
   useEffect(() => {
     if (itemAttachmentUploading) return;
@@ -3234,264 +3574,2298 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }
 
   return (
-    <div className="quote-details-page-canvas">
-      <EntityHeader
-        topBar={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/orders/estimates")}
-            className="gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            До прорахунків
-          </Button>
-        }
-        title={`Прорахунок #${quote.number ?? quote.id}`}
-        subtitle={
-          <>
-            {formatQuoteType(quote.quote_type)}
-            {(quote.delivery_type ?? quote.print_type)
-              ? ` · ${formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}`
-              : ""}
-          </>
-        }
-        viewers={
-          <EntityViewersBar
-            entries={quoteViewers}
-            label="Переглядають прорахунок"
-            className="mt-1"
-          />
-        }
-        meta={
-          <>
-            <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
-              {formatStatusLabel(currentStatus)}
-            </Badge>
-            {(() => {
-              const badge = getDeadlineBadge(quote.deadline_at ?? null);
-              const deadlineDate = parseDeadlineDate(quote.deadline_at ?? null);
-              const titleParts = [
-                deadlineDate
-                  ? `Дата: ${formatDeadlineLabel(quote.deadline_at ?? null)}`
-                  : "Дедлайн не задано",
-                quote.deadline_note ? `Коментар: ${quote.deadline_note}` : null,
-              ].filter(Boolean);
-              return (
-                <QuoteDeadlineBadge
-                  tone={badge.tone}
-                  label={badge.label}
-                  title={titleParts.join(" · ")}
-                />
-              );
-            })()}
-            {(() => {
-              const reminderLabel = formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null);
-              if (!reminderLabel) return null;
-              const titleParts = [
-                `Налаштовано ${reminderLabel}`,
-                quote.deadline_reminder_comment ? `Текст: ${quote.deadline_reminder_comment}` : null,
-              ].filter(Boolean);
-              return (
-                <Badge
-                  variant="outline"
-                  title={titleParts.join(" · ")}
-                  className="inline-flex h-6 items-center gap-1.5 border-warning-soft-border bg-warning-soft text-warning-foreground"
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                  {`Нагадування: ${reminderLabel}`}
-                </Badge>
-              );
-            })()}
-            {quoteSetMembership?.kp_count ? (
-              <QuoteKindBadge
-                kind="kp"
-                className="h-6"
-                title={quoteSetMembership.kp_names.join(", ")}
-                label={`КП${quoteSetMembership.kp_count > 1 ? ` +${quoteSetMembership.kp_count - 1}` : ""}`}
-              />
-            ) : null}
-            {quoteSetMembership?.set_count ? (
-              <QuoteKindBadge
-                kind="set"
-                className="h-6"
-                title={quoteSetMembership.set_names.join(", ")}
-                label={`Набір${quoteSetMembership.set_count > 1 ? ` +${quoteSetMembership.set_count - 1}` : ""}`}
-              />
-            ) : null}
-          </>
-        }
-        actions={
-          <>
-            <Button
-              variant="primary"
-              size="sm"
-              className="gap-2 shadow-sm"
-              disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
-              onClick={handlePrimaryStatusAction}
-            >
-              {createElement(
-                statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock,
-                { className: "h-4 w-4" }
-              )}
-              {nextAction.ctaLabel}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
-              onClick={openStatusDialog}
-            >
-              Змінити статус
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Експорт PDF
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={duplicateQuoteBusy || !quote?.id}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    void handleDuplicateQuote();
-                  }}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  {duplicateQuoteBusy ? "Дублювання..." : "Дублювати"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    setDeleteQuoteDialogOpen(true);
-                  }}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Видалити
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        }
-      />
+    <div className="text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-transparent">
+        <div className="px-4 py-2 md:px-5 lg:px-6">
+          <div className="flex min-h-10 items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/orders/estimates")}
+                className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Назад"
+                title="Назад"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
 
-      {quoteLockedByOther ? (
-        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <span className="font-medium">Режим лише перегляду.</span>{" "}
-          Запис редагує {quoteLock.holderName ?? "інший користувач"}.
-        </div>
-      ) : null}
-
-      {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
-        <Card className="quote-soft-card p-4">
-          <div className="text-sm font-semibold">Пов'язано з КП та наборами</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {quoteSetMembership.kp_names.map((name) => (
-              <QuoteKindBadge key={`kp-${name}`} kind="kp" label={name} />
-            ))}
-            {quoteSetMembership.set_names.map((name) => (
-              <QuoteKindBadge key={`set-${name}`} kind="set" label={name} />
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      <Card className="quote-soft-card p-4 sm:p-5">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {STATUS_FLOW.map((status, index) => {
-              const reached = STATUS_FLOW.indexOf(currentStatus) >= index;
-              const active = currentStatus === status;
-              return (
-                <div key={status} className="flex items-center gap-2">
-                  {index > 0 ? (
-                    <div className={cn("h-px w-5", reached ? "bg-primary/40" : "bg-border")} />
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div className="truncate text-[17px] font-semibold text-foreground">
+                    {quote.number ?? quote.id}
+                  </div>
+                  {(() => {
+                    const Icon = quoteTypeIcon(quote.quote_type);
+                    return (
+                      <div className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                        {Icon ? <Icon className="h-3 w-3" /> : null}
+                        {quoteTypeLabel(quote.quote_type)}
+                      </div>
+                    );
+                  })()}
+                  <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
+                    {formatStatusLabel(currentStatus)}
+                  </Badge>
+                  {quoteViewers.length > 0 ? (
+                    <div className="ml-1 inline-flex items-center gap-1.5 text-muted-foreground">
+                      <Eye className="h-3.5 w-3.5" />
+                      <div className="flex items-center -space-x-1.5">
+                        {quoteViewers.slice(0, 4).map((viewer) => (
+                          <AvatarBase
+                            key={viewer.userId}
+                            src={viewer.avatarUrl}
+                            name={viewer.displayName}
+                            fallback={viewer.displayName.slice(0, 2).toUpperCase()}
+                            size={20}
+                            className="border-2 border-background"
+                            fallbackClassName="text-[9px] font-semibold"
+                          />
+                        ))}
+                      </div>
+                      {quoteViewers.length > 4 ? (
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          +{quoteViewers.length - 4}
+                        </span>
+                      ) : null}
+                    </div>
                   ) : null}
-                  <div
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold",
-                      active
-                        ? "border-primary/50 bg-primary/10 text-primary"
-                        : reached
-                        ? "border-success-soft-border bg-success-soft text-success-foreground"
-                        : "border-border text-muted-foreground"
-                    )}
-                  >
-                    {reached ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                    {formatStatusLabel(status)}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-foreground">{nextAction.title}</div>
-              <div className="text-sm text-muted-foreground">{nextAction.description}</div>
-              <div className="space-y-1.5 pt-1">
-                {stageHints.map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 text-xs">
-                    {item.done ? (
-                      <Check className="h-3.5 w-3.5 text-success-foreground" />
-                    ) : (
-                      <Clock className="h-3.5 w-3.5 text-warning-foreground" />
-                    )}
-                    <span className={item.done ? "text-foreground/90" : "text-muted-foreground"}>
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <Badge variant={pendingHintsCount > 0 ? "secondary" : "outline"} className="text-xs">
-                {pendingHintsCount > 0 ? `Потрібно: ${pendingHintsCount}` : "Готово"}
-              </Badge>
+              <Button
+                variant="primary"
+                size="sm"
+                className="h-8 gap-2"
+                disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
+                onClick={handlePrimaryStatusAction}
+              >
+                {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock, {
+                  className: "h-4 w-4",
+                })}
+                {nextAction.ctaLabel}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2"
+                disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
+                onClick={openStatusDialog}
+              >
+                Змінити статус
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={duplicateQuoteBusy || !quote?.id}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleDuplicateQuote();
+                    }}
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    {duplicateQuoteBusy ? "Дублювання..." : "Дублювати"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setDeleteQuoteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Видалити
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
-      </Card>
+      </header>
 
-      {statusError && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-center gap-2">
-          <XCircle className="h-4 w-4" />
-          {statusError}
-        </div>
-      )}
+      <div className="flex w-full gap-8 px-4 pb-10 pt-2 md:px-5 lg:px-6">
+        <main className="min-w-0 flex-1">
+          <div className="space-y-6">
+            {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
+              <div className="space-y-3">
+                {quoteLockedByOther ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    <span className="font-medium">Режим лише перегляду.</span>{" "}
+                    Запис редагує {quoteLock.holderName ?? "інший користувач"}.
+                  </div>
+                ) : null}
 
-      {quoteRequirementsHint ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
-          <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
-          {quoteRequirementsHint}
-        </div>
-      ) : null}
+                {statusError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    <XCircle className="h-4 w-4" />
+                    {statusError}
+                  </div>
+                )}
 
-      <ConfirmDialog
-        open={deleteQuoteDialogOpen}
-        onOpenChange={setDeleteQuoteDialogOpen}
-        title="Видалити прорахунок?"
+                {quoteRequirementsHint ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
+                    {quoteRequirementsHint}
+                  </div>
+                ) : null}
+
+                {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
+                  <div className="flex flex-wrap gap-2">
+                    {quoteSetMembership.kp_names.map((name) => (
+                      <QuoteKindBadge key={`kp-${name}`} kind="kp" label={name} />
+                    ))}
+                    {quoteSetMembership.set_names.map((name) => (
+                      <QuoteKindBadge key={`set-${name}`} kind="set" label={name} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <details open className="group py-2">
+              <summary className="mb-3 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Специфікація</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про специфікацію"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Зафіксована модель і параметри позиції. Щоб змінити специфікацію, створіть новий прорахунок.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    <Lock className="h-3.5 w-3.5" />
+                    Зафіксовано
+                  </Badge>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </div>
+              </summary>
+
+              {items.length === 0 && (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 px-6 py-10 text-center">
+                  <Package className="h-10 w-10 text-muted-foreground/30" />
+                  <div>
+                    <p className="font-medium">Модель не обрана</p>
+                    <p className="text-sm text-muted-foreground">Оберіть модель для розрахунку</p>
+                  </div>
+                  <Button size="sm" onClick={openNewItem} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Обрати модель
+                  </Button>
+                </div>
+              )}
+
+              {itemsLoading ? (
+                <div className="py-10 text-center">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Завантаження...</p>
+                </div>
+              ) : itemsError ? (
+                <div className="py-4 text-sm text-destructive">{itemsError}</div>
+              ) : items.length === 0 ? null : (
+                <div>
+                  {items.slice(0, 1).map((item) => {
+                    const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
+                    const resolvedKindId = item.catalogKindId ?? item.productKindId;
+                    const resolvedModelId = item.catalogModelId ?? item.productModelId;
+                    const typeLabel = getTypeLabel(catalogTypes, resolvedTypeId);
+                    const kindLabel = getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
+                    const modelLabel = getModelLabel(
+                      catalogTypes,
+                      resolvedTypeId,
+                      resolvedKindId,
+                      resolvedModelId
+                    );
+                    const metaLine = [typeLabel, kindLabel, modelLabel].filter(Boolean).join(" / ");
+                    const positionLabel = getPrintPositionLabel(
+                      catalogTypes,
+                      resolvedTypeId,
+                      resolvedKindId,
+                      item.printPositionId
+                    );
+                    const sizeLabel =
+                      item.printWidthMm && item.printHeightMm
+                        ? `${item.printWidthMm}×${item.printHeightMm} мм`
+                        : item.printWidthMm
+                        ? `${item.printWidthMm} мм`
+                        : item.printHeightMm
+                        ? `${item.printHeightMm} мм`
+                        : null;
+                    const catalogImage = getModelImage(
+                      catalogTypes,
+                      resolvedTypeId,
+                      resolvedKindId,
+                      resolvedModelId
+                    );
+                    const productPreview = catalogImage
+                      ? { type: "image" as const, url: catalogImage }
+                      : null;
+                    const packageSummary =
+                      item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
+                        ? formatPrintPackageSummary(item.metadata.printPackage)
+                        : [];
+                    const packageDetailFields =
+                      item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
+                        ? getPrintPackageDetailFields(item.metadata.printPackage)
+                        : [];
+                    const packageSections = packageDetailFields.length
+                      ? [
+                          {
+                            title: "Конструкція",
+                            fields: packageDetailFields.filter((field) =>
+                              ["Тип", "Орієнтація", "Розмір", "Люверси", "Постачальник"].includes(field.label)
+                            ),
+                          },
+                          {
+                            title: "Матеріал",
+                            fields: packageDetailFields.filter((field) =>
+                              ["Матеріал", "Щільність", "Ручки"].includes(field.label)
+                            ),
+                          },
+                          {
+                            title: "Друк та оздоблення",
+                            fields: packageDetailFields.filter((field) =>
+                              ["Нанесення", "Тип нанесення", "Ламінація", "Додаткове оздоблення", "Тиснення"].includes(field.label)
+                            ),
+                          },
+                        ].filter((section) => section.fields.length > 0)
+                      : [];
+                    const shouldShowDescription =
+                      item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
+                    const isMerchQuote = (quote?.quote_type ?? "") === "merch";
+                    const specRuns = runs.length > 0
+                      ? runs
+                          .map((run) => Number(run.quantity) || 0)
+                          .filter((qty) => qty > 0)
+                      : item.qty > 0
+                      ? [item.qty]
+                      : [];
+
+                    const specHighlights = [
+                      ...(!isMerchQuote
+                        ? [
+                            { label: "Кількість", value: `${item.qty}` },
+                            { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
+                          ]
+                        : []),
+                      ...((positionLabel || sizeLabel) && (!item.methods || item.methods.length === 0)
+                        ? [
+                            {
+                              label: "Нанесення",
+                              value: [positionLabel ?? "Не вказано", sizeLabel].filter(Boolean).join(" · "),
+                            },
+                          ]
+                        : []),
+                    ];
+                    const methodSections = item.methods && item.methods.length > 0
+                      ? [
+                          {
+                            title: "Нанесення",
+                            fields: item.methods.map((method) => {
+                              const methodName =
+                                getMethodLabel(
+                                  catalogTypes,
+                                  item.catalogTypeId,
+                                  item.catalogKindId,
+                                  method.methodId
+                                ) ?? "Метод";
+                              const place =
+                                getPrintPositionLabel(
+                                  catalogTypes,
+                                  item.catalogTypeId,
+                                  item.catalogKindId,
+                                  method.printPositionId
+                                ) ?? positionLabel ?? "Місце не вказано";
+                              const size =
+                                method.printWidthMm && method.printHeightMm
+                                  ? `${method.printWidthMm}×${method.printHeightMm} мм`
+                                  : method.printWidthMm
+                                  ? `${method.printWidthMm} мм`
+                                  : method.printHeightMm
+                                  ? `${method.printHeightMm} мм`
+                                  : sizeLabel;
+
+                              return {
+                                label: method.count > 1 ? `${methodName} ×${method.count}` : methodName,
+                                value: [place, size].filter(Boolean).join(" · "),
+                              };
+                            }),
+                          },
+                        ]
+                      : [];
+                    const defaultSpecSections = [
+                      specHighlights.length > 0
+                        ? {
+                            title: "Параметри",
+                            fields: specHighlights,
+                          }
+                        : null,
+                      ...methodSections,
+                    ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
+                    const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
+
+                    return (
+                      <div key={item.id} className="py-5">
+                        <div className="flex items-start gap-4">
+                          <div className="shrink-0">
+                            {productPreview?.type === "image" ? (
+                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-muted/20">
+                                <KanbanImageZoomPreview
+                                  imageUrl={productPreview.url}
+                                  alt={modelLabel ?? "Товар"}
+                                  className="h-16 w-16 rounded-xl object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-border/40 bg-muted/40">
+                                <Package className="h-6 w-6 text-muted-foreground/50" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="truncate text-base font-semibold text-foreground">{item.title}</div>
+                                {metaLine ? (
+                                  <div className="mt-1 text-sm text-muted-foreground">{metaLine}</div>
+                                ) : null}
+                              </div>
+
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {specRuns.map((qty, index) => {
+                                  const isActiveRun =
+                                    selectedRun && (Number(selectedRun.quantity) || 0) === qty;
+                                  return (
+                                    <div
+                                      key={`${item.id}:spec-run:${qty}:${index}`}
+                                      className={cn(
+                                        "rounded-lg border px-3 py-2",
+                                        isActiveRun
+                                          ? "border-primary/40 bg-primary/10"
+                                          : "border-border/50 bg-muted/10"
+                                      )}
+                                    >
+                                      <div className="flex items-baseline gap-1.5">
+                                        <div className="text-lg font-semibold tabular-nums text-foreground">
+                                          {qty}
+                                        </div>
+                                        <div className="text-[11px] font-medium text-muted-foreground">
+                                          {normalizeUnitLabel(item.unit)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {renderedSections.length > 0 ? (
+                              <div className="mt-5 grid gap-6 lg:grid-cols-3">
+                                {renderedSections.map((section) => (
+                                  <div
+                                    key={section.title}
+                                    className="min-w-0 space-y-3"
+                                  >
+                                    <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                      {section.title}
+                                    </div>
+                                    <div className="space-y-3">
+                                      {section.fields.map((field) => (
+                                        <div
+                                          key={`${section.title}:${field.label}`}
+                                          className="space-y-1"
+                                        >
+                                          <span className="text-xs font-medium text-muted-foreground">
+                                            {field.label}
+                                          </span>
+                                          <div className="text-sm font-semibold text-foreground">
+                                            {field.value}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            {shouldShowDescription ? (
+                              <div className="mt-5">
+                                <div className="mb-2 text-xs font-medium text-muted-foreground">Опис</div>
+                                <div className="text-sm leading-relaxed text-foreground">{item.description}</div>
+                              </div>
+                            ) : null}
+
+                            {item.attachment ? (
+                              <div className="mt-5 flex items-center gap-3">
+                                <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-semibold text-foreground">
+                                    {item.attachment.name}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatFileSize(item.attachment.size)}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+            </details>
+
+            <details open className="group py-2">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Calculator className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Тиражі</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про тиражі"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Тиражі для розрахунку цін і підсумкової суми по прорахунку.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {canEditRuns ? (
+                    <Button variant="ghost" size="sm" onClick={addRun} className="h-8 gap-1.5 px-2.5 text-xs">
+                      <Plus className="h-3.5 w-3.5" />
+                      Додати тираж
+                    </Button>
+                  ) : null}
+                  {runs.length > 0 && (
+                    <div className="text-xs text-muted-foreground tabular-nums">({runs.length})</div>
+                  )}
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </div>
+              </summary>
+
+              {runsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Завантаження...</span>
+                </div>
+              ) : runsError ? (
+                <div className="py-4 text-sm text-destructive">{runsError}</div>
+              ) : runs.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60">
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Немає тиражів</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Додайте тираж для розрахунку вартості</p>
+                  </div>
+                  {canEditRuns ? (
+                    <Button size="sm" variant="outline" onClick={addRun} className="mt-1 h-8 gap-1.5 text-xs">
+                      <Plus className="h-3.5 w-3.5" />
+                      Додати тираж
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <div className="hidden items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
+                      <div>Тираж</div>
+                      <div>Кількість</div>
+                      <div>{`Ціна модель (${quote.currency})`}</div>
+                      <div>{`Ціна нанесення (${quote.currency})`}</div>
+                      <div>{`Доставка (${quote.currency})`}</div>
+                      <div className="text-right">Сума</div>
+                      <div />
+                    </div>
+
+                    {runs.map((run, idx) => {
+                      const qty = Number(run.quantity) || 0;
+                      const modelPrice = Number(run.unit_price_model) || 0;
+                      const printPrice = Number(run.unit_price_print) || 0;
+                      const logistics = Number(run.logistics_cost) || 0;
+                      const total = (modelPrice + printPrice) * qty + logistics;
+                      const disabled = !canEditRuns;
+                      const isSelected = !!run.id && run.id === selectedRunId;
+                      return (
+                        <div
+                          key={run.id ?? idx}
+                          onClick={() => setSelectedRunId(run.id ?? null)}
+                          className={cn(
+                            "group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors",
+                            isSelected
+                              ? "border-primary/30 bg-primary/[0.04]"
+                              : "border-border/40 hover:bg-muted/10"
+                          )}
+                        >
+                          <div className="grid items-center gap-3 xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div
+                                className={cn(
+                                  "h-2.5 w-2.5 rounded-full transition-all",
+                                  isSelected
+                                    ? "scale-110 bg-primary"
+                                    : "bg-border group-hover:bg-muted-foreground/40"
+                                )}
+                              />
+                              <div>
+                                <div className="text-sm font-semibold text-foreground">
+                                  {`Тираж ${idx + 1}`}
+                                </div>
+                                {isSelected ? (
+                                  <div className="mt-0.5 text-[11px] font-medium text-primary">
+                                    Активний
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">Кількість</div>
+                              <Input
+                                type="number"
+                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                value={run.quantity ?? ""}
+                                disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.quantity === 0) e.target.select();
+                                }}
+                                min={1}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                                Ціна модель <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
+                              </div>
+                              <Input
+                                type="number"
+                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                value={run.unit_price_model ?? ""}
+                                disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.unit_price_model === 0) e.target.select();
+                                }}
+                                min={0}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                                Ціна нанесення <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
+                              </div>
+                              <Input
+                                type="number"
+                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                value={run.unit_price_print ?? ""}
+                                disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
+                                onFocus={(e) => {
+                                  if (run.unit_price_print === 0) e.target.select();
+                                }}
+                                min={0}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                                Доставка <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
+                              </div>
+                              <Input
+                                type="number"
+                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                value={run.logistics_cost ?? ""}
+                                disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
+                                onFocus={(e) => {
+                                  if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
+                                }}
+                                placeholder="—"
+                                min={0}
+                              />
+                            </div>
+
+                            <div className="min-w-0 text-right">
+                              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                                {formatCurrency(total, quote.currency)}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
+                                {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end">
+                              {!disabled ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void removeRun(idx);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-4">
+                      {selectedUnitCost !== null && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Собівартість / од.:</span>
+                          <span className="font-mono text-xs font-semibold text-foreground">
+                            {formatCurrency(selectedUnitCost, quote.currency)}
+                          </span>
+                        </div>
+                      )}
+                      <span className="text-xs text-muted-foreground/60">
+                        Обраний тираж використовується в підсумку
+                      </span>
+                    </div>
+                    {canEditRuns && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={saveRuns}
+                        disabled={runsSaving || quoteRequirements.length > 0}
+                        className="h-8 gap-1.5 text-xs"
+                      >
+                        {runsSaving ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        {runsSaving ? "Збереження..." : "Зберегти"}
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </details>
+
+            <details open className="group py-2">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Calendar className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Дедлайни та задача</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про дедлайни та задачу"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Ключові дати прорахунку, нагадування і постановка задачі для дизайну.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div className="space-y-4">
+                <Tabs defaultValue="internal" className="w-full">
+                  <TabsList className="mb-5 grid auto-rows-fr h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 md:grid-cols-3">
+                    <TabsTrigger
+                      value="customer"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
+                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
+                          <CircleHelp className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                          Готовність до відвантаження.
+                        </div>
+                      </div>
+                      <div>
+                        {customerDeadlineDate ? (
+                          (() => {
+                            const value = combineDeadlineValue(customerDeadlineDate, customerDeadlineTime);
+                            const badge = getDeadlineBadge(value);
+                            const parsed = parseDeadlineDate(value);
+                            const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
+                            const timeLabel = parsed && hasTime
+                              ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+                              : null;
+                            return (
+                              <QuoteDeadlineBadge
+                                tone={badge.tone}
+                                label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
+                                title={formatDeadlineLabel(value)}
+                                compact
+                              />
+                            );
+                          })()
+                        ) : (
+                          <Badge variant="outline" className="h-6 px-2 text-[11px] quote-neutral-badge">
+                            Не вказано
+                          </Badge>
+                        )}
+                      </div>
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="internal"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
+                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
+                          <CircleHelp className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                          Відповідь замовнику.
+                        </div>
+                      </div>
+                      <div>
+                        {(() => {
+                          const value = combineDeadlineValue(deadlineDate, deadlineTime);
+                          const badge = getDeadlineBadge(value);
+                          const parsed = parseDeadlineDate(value);
+                          const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
+                          const timeLabel = parsed && hasTime
+                            ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+                            : null;
+                          return (
+                            <QuoteDeadlineBadge
+                              tone={badge.tone}
+                              label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
+                              title={formatDeadlineLabel(value)}
+                              compact
+                            />
+                          );
+                        })()}
+                      </div>
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="design"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                    >
+                      <div className="relative flex items-center gap-2">
+                        <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
+                        <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
+                          <CircleHelp className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                          Погодити макет.
+                        </div>
+                      </div>
+                      <div>
+                        {designDeadlineDate ? (
+                          (() => {
+                            const value = combineDeadlineValue(designDeadlineDate, designDeadlineTime);
+                            const badge = getDeadlineBadge(value);
+                            const parsed = parseDeadlineDate(value);
+                            const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
+                            const timeLabel = parsed && hasTime
+                              ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+                              : null;
+                            return (
+                              <QuoteDeadlineBadge
+                                tone={badge.tone}
+                                label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
+                                title={formatDeadlineLabel(value)}
+                                compact
+                              />
+                            );
+                          })()
+                        ) : (
+                          <Badge variant="outline" className="h-6 px-2 text-[11px] quote-neutral-badge">
+                            Не вказано
+                          </Badge>
+                        )}
+                      </div>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <div className="p-0">
+                    <TabsContent value="customer" className="mt-0">
+                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px]">
+                        <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-9 justify-start gap-2 border-border/50 font-normal"
+                              onClick={() => setCustomerDeadlinePopoverOpen(true)}
+                            >
+                              {customerDeadlineDate
+                                ? formatDeadlineLabel(combineDeadlineValue(customerDeadlineDate, customerDeadlineTime))
+                                : "Оберіть дату"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                            <CalendarPicker
+                              mode="single"
+                              selected={toLocalDate(customerDeadlineDate)}
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setCustomerDeadlineDate(nextDate);
+                                setCustomerDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("customer_deadline_at", {
+                                  date: customerDeadlineDate,
+                                  time: customerDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн Замовника",
+                                  action: "змінив дедлайн замовника",
+                                });
+                              }}
+                              initialFocus
+                            />
+                            <DateQuickActions
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setCustomerDeadlineDate(nextDate);
+                                setCustomerDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("customer_deadline_at", {
+                                  date: customerDeadlineDate,
+                                  time: customerDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн Замовника",
+                                  action: "змінив дедлайн замовника",
+                                });
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          type="time"
+                          className="h-9 border-border/40 bg-muted/[0.03]"
+                          value={customerDeadlineTime}
+                          onChange={(e) => setCustomerDeadlineTime(e.target.value)}
+                          onBlur={() =>
+                            void handleSaveSecondaryDeadline("customer_deadline_at", {
+                              date: customerDeadlineDate,
+                              time: customerDeadlineTime,
+                              title: "Дедлайн Замовника",
+                              action: "змінив дедлайн замовника",
+                            })
+                          }
+                        />
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="internal" className="mt-0">
+                      <div className="max-w-[720px] space-y-2">
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,220px)_104px_40px]">
+                          <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="h-9 justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                onClick={() => setDeadlinePopoverOpen(true)}
+                              >
+                                {deadlineDate
+                                  ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))
+                                  : "Оберіть дату"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                              <CalendarPicker
+                                mode="single"
+                                selected={toLocalDate(deadlineDate)}
+                                onSelect={async (date) => {
+                                  const nextDate = formatDateInput(date ?? null);
+                                  setDeadlineDate(nextDate);
+                                  setDeadlinePopoverOpen(false);
+                                  await handleSaveDeadline({ date: nextDate });
+                                }}
+                                initialFocus
+                              />
+                              <DateQuickActions
+                                onSelect={async (date) => {
+                                  const nextDate = formatDateInput(date ?? null);
+                                  setDeadlineDate(nextDate);
+                                  setDeadlinePopoverOpen(false);
+                                  await handleSaveDeadline({ date: nextDate });
+                                }}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <Input
+                            type="time"
+                            className="h-9 border-border/40 bg-muted/[0.03]"
+                            value={deadlineTime}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
+                            onBlur={() => void handleSaveDeadline()}
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-10 border-border/40 bg-muted/[0.03]"
+                            onClick={() => void handleSaveDeadline()}
+                            disabled={deadlineSaving}
+                            aria-label="Зберегти дедлайн прорахунку"
+                          >
+                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[220px_minmax(0,1fr)]">
+                          <Select
+                            value={deadlineReminderOffset}
+                            onValueChange={(value) => {
+                              setDeadlineReminderOffset(value);
+                              void handleSaveDeadline({ reminderOffset: value });
+                            }}
+                          >
+                            <SelectTrigger className="h-9 border-border/40 bg-muted/[0.03]">
+                              <SelectValue placeholder="Коли нагадати" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DEADLINE_REMINDER_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            className="h-9 border-border/40 bg-muted/[0.03]"
+                            placeholder="Текст нагадування"
+                            value={deadlineReminderComment}
+                            onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                            onBlur={() => void handleSaveDeadline()}
+                            maxLength={200}
+                          />
+                        </div>
+                        <Input
+                          className="h-9 max-w-[520px] border-border/40 bg-muted/[0.03]"
+                          placeholder="Коментар до внутрішнього дедлайну"
+                          value={deadlineNote}
+                          onChange={(e) => setDeadlineNote(e.target.value)}
+                          onBlur={() => void handleSaveDeadline()}
+                          maxLength={200}
+                        />
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="design" className="mt-0">
+                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px]">
+                        <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-9 justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                              onClick={() => setDesignDeadlinePopoverOpen(true)}
+                            >
+                              {designDeadlineDate
+                                ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
+                                : "Оберіть дату"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                            <CalendarPicker
+                              mode="single"
+                              selected={toLocalDate(designDeadlineDate)}
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDesignDeadlineDate(nextDate);
+                                setDesignDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("design_deadline_at", {
+                                  date: designDeadlineDate,
+                                  time: designDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн дизайну",
+                                  action: "змінив дедлайн дизайну",
+                                });
+                              }}
+                              initialFocus
+                            />
+                            <DateQuickActions
+                              onSelect={async (date) => {
+                                const nextDate = formatDateInput(date ?? null);
+                                setDesignDeadlineDate(nextDate);
+                                setDesignDeadlinePopoverOpen(false);
+                                await handleSaveSecondaryDeadline("design_deadline_at", {
+                                  date: designDeadlineDate,
+                                  time: designDeadlineTime,
+                                  nextDate,
+                                  title: "Дедлайн дизайну",
+                                  action: "змінив дедлайн дизайну",
+                                });
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          type="time"
+                          className="h-9 border-border/40 bg-muted/[0.03]"
+                          value={designDeadlineTime}
+                          onChange={(e) => setDesignDeadlineTime(e.target.value)}
+                          onBlur={() =>
+                            void handleSaveSecondaryDeadline("design_deadline_at", {
+                              date: designDeadlineDate,
+                              time: designDeadlineTime,
+                              title: "Дедлайн дизайну",
+                              action: "змінив дедлайн дизайну",
+                            })
+                          }
+                        />
+                      </div>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              </div>
+
+              {deadlineError && <div className="mt-4 text-xs text-destructive">{deadlineError}</div>}
+              {updatedMinutes !== null && <></>}
+            </details>
+
+            <details open className="group py-2">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Palette className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Дизайн</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про дизайн"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      ТЗ для дизайнера, превʼю задачі і готові візуалізації в одному місці.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <Tabs defaultValue="brief" className="w-full">
+                <TabsList className="mb-5 h-auto justify-start rounded-none border-b border-border/30 bg-transparent p-0">
+                  <TabsTrigger
+                    value="brief"
+                    className="rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    ТЗ
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="visuals"
+                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    Візуалізації
+                    <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="task"
+                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    Задача
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="brief" className="mt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">ТЗ для дизайнера</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Короткий опис задачі без дедлайнів і службових деталей.
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBriefText(
+                            [
+                              "Мета:",
+                              "Аудиторія:",
+                              "Формат/носій:",
+                              "Розмір/пропорції:",
+                              "Лого/брендгайд:",
+                              "Кольори/шрифти:",
+                              "Референси:",
+                              "Текст/копі:",
+                              "Обмеження:",
+                            ].join("\n")
+                          );
+                          setBriefDirty(true);
+                          setBriefError(null);
+                        }}
+                      >
+                        Шаблон
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                      <div className="space-y-3">
+                        <Textarea
+                          value={briefText}
+                          onChange={(event) => {
+                            setBriefText(event.target.value);
+                            setBriefDirty(true);
+                          }}
+                          placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
+                          className="min-h-[220px] resize-y border-border/40 bg-muted/[0.03]"
+                        />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{briefText.length} символів</span>
+                          {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
+                        </div>
+                        {briefError ? <div className="text-sm text-destructive">{briefError}</div> : null}
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setBriefText(quote?.design_brief ?? quote?.comment ?? "");
+                              setBriefDirty(false);
+                              setBriefError(null);
+                            }}
+                            disabled={!briefDirty}
+                          >
+                            Скинути
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void saveBrief()}
+                            disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
+                            className="gap-2"
+                          >
+                            {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                            {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-border/30 bg-muted/[0.02] px-4 py-4">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">Превʼю задачі</div>
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                          {designBriefPreview || "Спочатку вкажіть дедлайн дизайну або текст задачі."}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="visuals" className="mt-0">
+                  {visibleDesignVisualizations.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/50 px-6 py-10 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/20">
+                          <Image className="h-5 w-5" />
+                        </div>
+                        <div className="text-sm font-medium text-foreground">Візуалізації ще не додані</div>
+                        <div className="text-xs text-muted-foreground">
+                          Тут будуть макети, превʼю та фінальні файли від дизайнера.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {visibleDesignVisualizations.map((file) => {
+                        const extension = getFileExtension(file.name);
+                        const previewImage = Boolean(file.url) && canPreviewImage(extension);
+                        const isSelectedVisualization =
+                          (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
+                          (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName);
+                        return (
+                          <div key={file.id} className="group rounded-xl border border-border/40 p-3 transition-colors hover:bg-muted/10">
+                            <div className="flex h-40 items-center justify-center overflow-hidden rounded-lg bg-muted/20">
+                              {previewImage && file.url ? (
+                                <KanbanImageZoomPreview
+                                  imageUrl={file.url ?? ""}
+                                  alt={file.name}
+                                  className="h-40 w-full rounded-lg object-cover"
+                                />
+                              ) : (
+                                <div className="text-xs text-muted-foreground">{extension}</div>
+                              )}
+                            </div>
+                            <div className="mt-3 truncate text-sm font-medium text-foreground" title={file.name}>
+                              {file.name}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <div className="text-xs text-muted-foreground">
+                                {extension ? extension.toUpperCase() : "Файл"}
+                              </div>
+                              {isSelectedVisualization ? (
+                                <Badge
+                                  variant="outline"
+                                  className="h-5 border-success/40 bg-success/10 px-2 text-[10px] text-success-foreground"
+                                >
+                                  Обрано
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              {file.url ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void downloadFileToDevice(file.url!, file.name)}
+                                >
+                                  Завантажити
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="task" className="mt-0">
+                  {designTaskLoading ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-border/30 bg-muted/[0.02] px-4 py-4 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Завантаження...
+                    </div>
+                  ) : designTaskError ? (
+                    <div className="text-sm text-destructive">{designTaskError}</div>
+                  ) : designTask ? (
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                      <div className="space-y-2">
+                        <div className="text-sm font-semibold text-foreground">Дизайн-задача</div>
+                        {selectedDesignOutputFileName ? (
+                          <div className="text-xs text-muted-foreground">
+                            Обраний візуал: <span className="font-medium text-foreground">{selectedDesignOutputFileName}</span>
+                          </div>
+                        ) : null}
+                        <div className="max-w-[360px]">
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">Виконавець</div>
+                          <Select
+                            value={designAssigneeId ?? "none"}
+                            onValueChange={(value) => void updateDesignAssignee(value === "none" ? null : value)}
+                            disabled={designTaskSaving}
+                          >
+                            <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                              {designAssigneeId ? (
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <AvatarBase
+                                    src={memberAvatarById.get(designAssigneeId) ?? null}
+                                    name={memberById.get(designAssigneeId) ?? designAssigneeId}
+                                    fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
+                                    size={20}
+                                    className="text-[9px] font-semibold"
+                                  />
+                                  <span className="truncate">
+                                    {memberById.get(designAssigneeId) ?? designAssigneeId}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Без виконавця</span>
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Без виконавця</SelectItem>
+                              {designerMembers.length > 0 ? (
+                                designerMembers.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>
+                                    <div className="flex items-center gap-2">
+                                      <AvatarBase
+                                        src={member.avatarUrl}
+                                        name={member.label}
+                                        fallback={getInitials(member.label)}
+                                        size={20}
+                                        className="text-[9px] font-semibold"
+                                      />
+                                      <span>{member.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="empty" disabled>
+                                  {teamMembers.length === 0
+                                    ? "Немає учасників"
+                                    : hasRoleInfo
+                                    ? "Немає дизайнерів"
+                                    : "Ролі не налаштовані"}
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/design/${designTask.id}`)}
+                      >
+                        Відкрити
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] px-4 py-5">
+                      <div className="text-sm font-medium text-foreground">
+                        Дизайн-задача ще не створена
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Створи нову задачу або привʼяжи існуючу дизайн-задачу цього ж замовника.
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>
+                          {designTaskSaving ? "Створення..." : "Створити задачу"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setAttachDesignTaskDialogOpen(true)}
+                          disabled={designTaskCandidatesLoading || designTaskCandidates.length === 0}
+                        >
+                          {designTaskCandidatesLoading
+                            ? "Пошук..."
+                            : designTaskCandidates.length > 0
+                            ? `Підтягнути з дизайну (${designTaskCandidates.length})`
+                            : "Немає задач для привʼязки"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </details>
+
+            <details open className="group py-2">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Обговорення</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про обговорення"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Загальні коментарі, вкладення від замовника і журнал активності по прорахунку.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <Tabs defaultValue="comments" className="w-full">
+                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-b border-border/30 bg-transparent p-0">
+                  <TabsTrigger
+                    value="comments"
+                    className="rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    Коментарі
+                    {comments.length > 0 ? (
+                      <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
+                    ) : null}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="files"
+                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    Вкладення
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="activity"
+                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                  >
+                    Активність
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="comments" className="mt-0">
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
+                      <div className="relative">
+                        <Textarea
+                          ref={commentTextareaRef}
+                          value={commentText}
+                          onChange={(event) => {
+                            const cursor = event.target.selectionStart ?? event.target.value.length;
+                            setCommentText(event.target.value);
+                            syncMentionContext(event.target.value, cursor);
+                          }}
+                          onSelect={(event) => {
+                            const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                            syncMentionContext(event.currentTarget.value, cursor);
+                          }}
+                          onKeyDown={handleCommentTextKeyDown}
+                          placeholder="Напишіть коментар... (використовуйте @ім'я для згадки)"
+                          className="min-h-[88px] resize-none"
+                        />
+
+                        {mentionContext ? (
+                          <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                            {filteredMentionSuggestions.length > 0 ? (
+                              <div className="max-h-56 overflow-y-auto py-1">
+                                {filteredMentionSuggestions.map((member, index) => (
+                                  <button
+                                    key={member.id}
+                                    type="button"
+                                    className={cn(
+                                      "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                                      index === mentionActiveIndex
+                                        ? "bg-primary/10 text-foreground"
+                                        : "hover:bg-muted/60"
+                                    )}
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      applyMentionSuggestion(member);
+                                    }}
+                                  >
+                                    <AvatarBase
+                                      src={member.avatarUrl}
+                                      name={member.label}
+                                      fallback={getInitials(member.label)}
+                                      size={24}
+                                      className="text-[10px] font-semibold"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate text-sm font-medium">{member.label}</div>
+                                      <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="px-3 py-2 text-xs text-muted-foreground">
+                                Немає збігів для @{mentionContext.query}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{commentText.length} символів</span>
+                        <Button
+                          size="sm"
+                          onClick={handleAddComment}
+                          disabled={!commentText.trim() || commentSaving}
+                          className="gap-2"
+                        >
+                          {commentSaving ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Send className="h-3 w-3" />
+                          )}
+                          {commentSaving ? "Збереження..." : "Додати"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {commentsLoading ? (
+                      <div className="py-6 text-center">
+                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Завантаження...</p>
+                      </div>
+                    ) : commentsError ? (
+                      <div className="text-sm text-destructive">{commentsError}</div>
+                    ) : comments.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border/40 bg-muted/[0.02] py-8 text-center">
+                        <MessageSquare className="mx-auto mb-2 h-10 w-10 text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">Коментарів ще немає</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/40">
+                        {comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="py-4 transition-colors hover:bg-muted/10"
+                          >
+                            <div className="flex items-start gap-3">
+                              <AvatarBase
+                                src={comment.created_by ? memberAvatarById.get(comment.created_by) ?? null : null}
+                                name={
+                                  comment.created_by
+                                    ? memberById.get(comment.created_by) ?? comment.created_by
+                                    : "Користувач"
+                                }
+                                fallback={
+                                  comment.created_by
+                                    ? getInitials(memberById.get(comment.created_by) ?? comment.created_by)
+                                    : "Не вказано"
+                                }
+                                size={32}
+                                className="text-[10px] font-semibold"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline justify-between gap-2">
+                                  <div className="text-sm font-semibold">
+                                    {comment.created_by
+                                      ? memberById.get(comment.created_by) ?? "Користувач"
+                                      : "Користувач"}
+                                  </div>
+                                  <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                    {new Date(comment.created_at).toLocaleDateString("uk-UA", {
+                                      day: "numeric",
+                                      month: "short",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="mt-2 text-sm leading-relaxed text-foreground">
+                                  {renderTextWithMentions(comment.body ?? "")}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="files" className="mt-0">
+                  <div className="space-y-4">
+                    <input
+                      ref={attachmentsInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      accept={ATTACHMENTS_ACCEPT}
+                      onChange={(event) => uploadAttachments(event.target.files)}
+                    />
+
+                    {attachmentsUploading && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Завантаження файлів...
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="flex w-full cursor-pointer items-center justify-between text-left"
+                        onClick={() => setFilesCustomerOpen((v) => !v)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setFilesCustomerOpen((v) => !v);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          Від замовника
+                          {attachments.length > 0 && (
+                            <Badge variant="secondary" className="text-[11px]">
+                              {attachments.length}
+                            </Badge>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            attachmentsInputRef.current?.click();
+                          }}
+                          disabled={attachmentsUploading}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Додати
+                        </Button>
+                      </div>
+
+                      {filesCustomerOpen && (
+                        <div className="mt-3 space-y-2">
+                          {attachmentsLoading ? (
+                            <div className="py-4 text-center">
+                              <Loader2 className="mx-auto mb-1 h-4 w-4 animate-spin text-muted-foreground" />
+                              <p className="text-xs text-muted-foreground">Завантаження...</p>
+                            </div>
+                          ) : attachmentsError ? (
+                            <div className="text-sm text-destructive">{attachmentsError}</div>
+                          ) : attachments.length === 0 ? (
+                            <div
+                              className={cn(
+                                "cursor-pointer rounded-xl border border-dashed p-6 text-center transition-colors",
+                                attachmentsDragActive
+                                  ? "border-primary/60 bg-primary/10"
+                                  : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                              )}
+                              onClick={() => attachmentsInputRef.current?.click()}
+                              onDrop={handleAttachmentsDrop}
+                              onDragOver={handleAttachmentsDragOver}
+                              onDragLeave={handleAttachmentsDragLeave}
+                            >
+                              <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+                              <p className="mb-1 text-sm font-medium">Перетягніть файли сюди</p>
+                              <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
+                              </p>
+                            </div>
+                          ) : (
+                            <div
+                              className={cn(
+                                "space-y-2 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-2",
+                                attachmentsDragActive && "border-primary/60 bg-primary/5"
+                              )}
+                              onDrop={handleAttachmentsDrop}
+                              onDragOver={handleAttachmentsDragOver}
+                              onDragLeave={handleAttachmentsDragLeave}
+                            >
+                              {attachments.map((file) => {
+                                const extension = getFileExtension(file.name);
+                                const showImagePreview = !!file.url && canPreviewImage(extension);
+                                const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
+                                return (
+                                  <div
+                                    key={file.id}
+                                    className="group flex items-center justify-between rounded-xl border border-border/30 p-3 transition-colors hover:bg-muted/10"
+                                  >
+                                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
+                                        {showImagePreview ? (
+                                          <KanbanImageZoomPreview
+                                            imageUrl={file.url!}
+                                            alt={file.name}
+                                            className="h-10 w-10 rounded-lg border border-border/60 bg-primary/10"
+                                          />
+                                        ) : showPdfPreview ? (
+                                          <iframe
+                                            src={`${file.url}#page=1&view=FitH`}
+                                            title={`Preview ${file.name}`}
+                                            className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
+                                          />
+                                        ) : (
+                                          <Paperclip className="h-5 w-5 text-primary" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <div className="truncate text-sm font-semibold" title={file.name}>
+                                            {file.name}
+                                          </div>
+                                          {extension && (
+                                            <Badge variant="secondary" className="text-[10px] uppercase">
+                                              {extension}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {file.size} ·{" "}
+                                          {new Date(file.created_at).toLocaleString("uk-UA", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                          {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="ml-4 flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                        onClick={() => {
+                                          if (file.url) {
+                                            void downloadFileToDevice(file.url, file.name);
+                                          }
+                                        }}
+                                        disabled={!file.url}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shrink-0 text-destructive opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                        onClick={() => requestDeleteAttachment(file)}
+                                        disabled={attachmentsDeletingId === file.id}
+                                      >
+                                        {attachmentsDeletingId === file.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="flex w-full cursor-pointer items-center justify-between text-left"
+                        onClick={() => setFilesDocsOpen((v) => !v)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setFilesDocsOpen((v) => !v);
+                          }
+                        }}
+                      >
+                        <div className="text-sm font-semibold">Документи</div>
+                        <Button size="sm" variant="ghost" className="gap-2" disabled>
+                          <Upload className="h-4 w-4" />
+                          Додати
+                        </Button>
+                      </div>
+                      {filesDocsOpen && (
+                        <div className="mt-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] p-4 text-xs text-muted-foreground">
+                          Рахунки, договори, акти — скоро буде доступно.
+                        </div>
+                      )}
+                    </div>
+
+                    {attachmentsUploadError && (
+                      <div className="text-xs text-destructive">{attachmentsUploadError}</div>
+                    )}
+                    {attachmentsDeleteError && (
+                      <div className="text-xs text-destructive">{attachmentsDeleteError}</div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="activity" className="mt-0">
+                  <div className="space-y-4">
+                    {activityLoading || historyLoading || commentsLoading ? (
+                      <div className="py-6 text-center">
+                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Завантаження...</p>
+                      </div>
+                    ) : activityEvents.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border/40 bg-muted/[0.02] py-8 text-center">
+                        <Clock className="mx-auto mb-2 h-10 w-10 text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">Активність порожня</p>
+                        {(activityError || historyError || commentsError) && (
+                          <p className="mt-2 text-xs text-destructive">
+                            {activityError ?? historyError ?? commentsError}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {(activityError || historyError || commentsError) && (
+                          <div className="text-xs text-destructive">
+                            {activityError ?? historyError ?? commentsError}
+                          </div>
+                        )}
+                        <div className="space-y-6">
+                          {activityGroups.map((group) => (
+                            <div key={group.label} className="space-y-3">
+                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {group.label}
+                              </div>
+                              <div className="divide-y divide-border/40">
+                                {group.items.map((event) => {
+                                  const Icon = event.icon;
+                                  return (
+                                    <div
+                                      key={event.id}
+                                      className="flex items-start gap-3 py-4 transition-colors hover:bg-muted/10"
+                                    >
+                                      <div
+                                        className={cn(
+                                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
+                                          event.accentClass ?? "border-border bg-muted/20 text-muted-foreground"
+                                        )}
+                                      >
+                                        <Icon className="h-4 w-4" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="text-sm font-semibold">{event.title}</div>
+                                          <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                            {formatActivityClock(event.created_at)}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">{event.actorLabel}</div>
+                                        {event.description && (
+                                          <p className="mt-1 text-xs text-muted-foreground">{event.description}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </details>
+          </div>
+        </main>
+
+        <aside className="hidden w-[min(32vw,380px)] min-w-[320px] shrink-0 xl:block">
+          <div className="sticky top-[4.5rem] space-y-4">
+            <details open className="group pb-2">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Building2 className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Контекст замовлення</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про контекст замовлення"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Основні дані по прорахунку, контакту і процесу.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div>
+                <div className="flex items-center gap-4 py-3">
+                  <EntityAvatar
+                    src={quote.customer_logo_url ?? null}
+                    name={quote.customer_name ?? "Клієнт / Лід"}
+                    fallback={getInitials(quote.customer_name)}
+                    size={44}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      {quote.customer_id ? "Клієнт" : "Лід"}
+                    </div>
+                    <div className="mt-0.5 truncate text-base font-semibold text-foreground">
+                      {quote.customer_name ?? "Не вказано"}
+                    </div>
+                  </div>
+                </div>
+
+                <dl className="mt-1 space-y-0.5">
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Менеджер</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                      <div className="flex items-center justify-end gap-2">
+                        <AvatarBase
+                          src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
+                          name={
+                            quote.assigned_to
+                              ? memberById.get(quote.assigned_to) ?? quote.assigned_to
+                              : "Не призначено"
+                          }
+                          fallback={
+                            quote.assigned_to
+                              ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
+                              : "Не вказано"
+                          }
+                          size={20}
+                          className="text-[9px] font-semibold"
+                        />
+                        <span className="truncate">
+                          {quote.assigned_to
+                            ? memberById.get(quote.assigned_to) ?? quote.assigned_to
+                            : "Не призначено"}
+                        </span>
+                      </div>
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      {(() => {
+                        const Icon = quoteTypeIcon(quote.quote_type);
+                        return Icon ? (
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Shirt className="h-4 w-4 text-muted-foreground" />
+                        );
+                      })()}
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Тип прорахунку</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right">
+                      <div className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                        {(() => {
+                          const Icon = quoteTypeIcon(quote.quote_type);
+                          return Icon ? <Icon className="h-3 w-3" /> : null;
+                        })()}
+                        {quoteTypeLabel(quote.quote_type)}
+                      </div>
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Truck className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Доставка</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                      {formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн замовника</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right">
+                      {quote.deadline_at ? (
+                        (() => {
+                          const badge = getDeadlineBadge(quote.deadline_at);
+                          const parsed = parseDeadlineDate(quote.deadline_at);
+                          const hasTime = /T\d{2}:\d{2}/.test(quote.deadline_at ?? "");
+                          const timeLabel = parsed && hasTime
+                            ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+                            : null;
+                          return (
+                            <QuoteDeadlineBadge
+                              tone={badge.tone}
+                              label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
+                              title={formatDeadlineLabel(quote.deadline_at)}
+                              compact
+                              className="justify-end"
+                            />
+                          );
+                        })()
+                      ) : (
+                        <span className="text-sm font-semibold text-foreground">Не вказано</span>
+                      )}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Нагадування</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                      {formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null) ?? "Без нагадування"}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Створено</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                      {quote.created_at
+                        ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })
+                        : "Не вказано"}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Внутрішній дедлайн</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right">
+                      {(() => {
+                        const deadlineValue = combineDeadlineValue(deadlineDate, deadlineTime);
+                        const badge = getDeadlineBadge(deadlineValue);
+                        const parsed = parseDeadlineDate(deadlineValue);
+                        const hasTime = /T\d{2}:\d{2}/.test(deadlineValue ?? "");
+                        const timeLabel = parsed && hasTime
+                          ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+                          : null;
+                        return (
+                          <QuoteDeadlineBadge
+                            tone={badge.tone}
+                            label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
+                            title={formatDeadlineLabel(deadlineValue)}
+                            compact
+                            className="justify-end"
+                          />
+                        );
+                      })()}
+                    </dd>
+                  </div>
+
+                  <div className="flex items-start gap-3 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                      <Palette className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн дизайну</dt>
+                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                      {designDeadlineDate
+                        ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
+                        : "Не вказано"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </details>
+
+            <details open className="group pb-1">
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Calculator className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Підсумок</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про підсумок"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Фінальний підсумок по вибраному тиражу, знижці, податку і загальній сумі.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div className="space-y-3 px-0 py-0">
+                <div className="flex items-center justify-between py-1 text-sm">
+                  <span className="text-muted-foreground">Підсумок</span>
+                  <span className="font-mono font-semibold tabular-nums">
+                    {formatCurrency(totals.subtotal, quote.currency)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 py-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Знижка</span>
+                    <div className="flex items-center">
+                      <Input
+                        type="number"
+                        value={discount}
+                        onChange={(e) => setDiscount(e.target.value)}
+                        className="h-7 w-14 border-transparent bg-muted/20 px-1.5 text-right text-xs hover:border-border focus:border-border focus:bg-background"
+                        placeholder="0"
+                        min="0"
+                        max="100"
+                      />
+                      <span className="ml-1 text-xs text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-sm font-medium tabular-nums text-destructive">
+                    −{formatCurrency(totals.discountAmount, quote.currency)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 py-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Податок</span>
+                    <div className="flex items-center">
+                      <Input
+                        type="number"
+                        value={tax}
+                        onChange={(e) => setTax(e.target.value)}
+                        className="h-7 w-14 border-transparent bg-muted/20 px-1.5 text-right text-xs hover:border-border focus:border-border focus:bg-background"
+                        placeholder="0"
+                        min="0"
+                        max="100"
+                      />
+                      <span className="ml-1 text-xs text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-sm font-medium tabular-nums text-emerald-600">
+                    +{formatCurrency(totals.taxAmount, quote.currency)}
+                  </span>
+                </div>
+
+                <div className="border-t border-border/50 pt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">Загальна сума</span>
+                    <span className="font-mono text-2xl font-bold tabular-nums text-primary">
+                      {formatCurrency(totals.total, quote.currency)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1 border-t border-border/40 pt-3">
+                  <div className="text-[11px] text-muted-foreground/60">
+                    Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
+                  </div>
+                  {items.length > 0 && (
+                    <div className="flex justify-between text-[11px] text-muted-foreground/60">
+                      <span>Позицій:</span>
+                      <span className="font-medium text-muted-foreground">{items.length}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </details>
+          </div>
+        </aside>
+      </div>
+
+    <ConfirmDialog
+      open={deleteQuoteDialogOpen}
+      onOpenChange={setDeleteQuoteDialogOpen}
+      title="Видалити прорахунок?"
         description={`Прорахунок #${quote.number ?? quote.id} буде видалено без можливості відновлення.`}
         icon={<Trash2 className="h-5 w-5 text-destructive" />}
         confirmLabel="Видалити"
         cancelLabel="Скасувати"
         confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
         onConfirm={handleDeleteQuote}
-        loading={deleteQuoteBusy}
-      />
+      loading={deleteQuoteBusy}
+    />
 
-      <Dialog
-        open={statusDialogOpen}
+    <Dialog open={attachDesignTaskDialogOpen} onOpenChange={setAttachDesignTaskDialogOpen}>
+      <DialogContent className="sm:max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>Привʼязати існуючу дизайн-задачу</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="text-sm text-muted-foreground">
+            Показані standalone дизайн-задачі цього ж замовника. Якщо у задачі вже обрано візуал, він одразу
+            підтягнеться у прорахунок.
+          </div>
+          {designTaskCandidatesLoading ? (
+            <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Завантаження...
+            </div>
+          ) : designTaskCandidates.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border/40 px-4 py-6 text-sm text-muted-foreground">
+              Немає standalone дизайн-задач для цього замовника.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {designTaskCandidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border/40 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-foreground">
+                        {candidate.designTaskNumber ?? "Дизайн-задача"}
+                      </div>
+                      {candidate.status ? (
+                        <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                          {candidate.status}
+                        </Badge>
+                      ) : null}
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(candidate.createdAt).toLocaleDateString("uk-UA", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-1 truncate text-sm text-foreground">
+                      {candidate.title ?? "Без назви"}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{candidate.outputsCount} файл(ів)</span>
+                      {candidate.selectedFile ? (
+                        <Badge
+                          variant="outline"
+                          className="h-5 border-success/40 bg-success/10 px-2 text-[10px] text-success-foreground"
+                        >
+                          Обрано: {candidate.selectedFile.file_name}
+                        </Badge>
+                      ) : (
+                        <span>Візуал ще не вибрано</span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => void attachExistingDesignTask(candidate)}
+                    disabled={attachingDesignTaskId === candidate.id}
+                    className="shrink-0"
+                  >
+                    {attachingDesignTaskId === candidate.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    Привʼязати
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAttachDesignTaskDialogOpen(false)}>
+            Закрити
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={statusDialogOpen}
         onOpenChange={(open) => {
           setStatusDialogOpen(open);
           if (!open) {
@@ -3500,11 +5874,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
-          <DialogHeader className="p-5 border-b border-border/60 bg-muted/10">
+        <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
+          <DialogHeader className="border-b border-border/60 bg-muted/10 p-5">
             <DialogTitle className="text-lg">Зміна статусу</DialogTitle>
           </DialogHeader>
-          <div className="p-5 space-y-4">
+          <div className="space-y-4 p-5">
             <div className="text-xs text-muted-foreground">
               Оберіть новий статус та залиште примітку, якщо потрібно.
             </div>
@@ -3526,7 +5900,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   >
                     <Icon className="h-4 w-4" />
                     <span className="font-medium">{formatStatusLabel(s)}</span>
-                    {isActive && <Check className="h-4 w-4 ml-auto" />}
+                    {isActive && <Check className="ml-auto h-4 w-4" />}
                   </button>
                 );
               })}
@@ -3541,7 +5915,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               />
             </div>
           </div>
-          <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/5">
+          <DialogFooter className="border-t border-border/60 bg-muted/5 px-5 py-4">
             <Button
               size="sm"
               variant="outline"
@@ -3587,11 +5961,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
-          <DialogHeader className="p-5 border-b border-border/60 bg-muted/10">
+        <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
+          <DialogHeader className="border-b border-border/60 bg-muted/10 p-5">
             <DialogTitle className="text-lg">Скасування прорахунку</DialogTitle>
           </DialogHeader>
-          <div className="p-5 space-y-4">
+          <div className="space-y-4 p-5">
             <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
               Вкажи причину скасування — вона збережеться в історії та допоможе аналізу.
             </div>
@@ -3623,7 +5997,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
             {cancelError && <div className="text-xs text-destructive">{cancelError}</div>}
           </div>
-          <DialogFooter className="px-5 py-4 border-t border-border/60 bg-muted/5">
+          <DialogFooter className="border-t border-border/60 bg-muted/5 px-5 py-4">
             <Button
               size="sm"
               variant="outline"
@@ -3644,1750 +6018,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </DialogContent>
       </Dialog>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2.7fr)_minmax(320px,0.92fr)] 2xl:grid-cols-[minmax(0,2.9fr)_380px]">
-        <div className="space-y-6">
-          {/* Quote Info Card - Improved */}
-          <Card className="p-6 bg-gradient-to-br from-card via-card to-muted/10 border-border/60 shadow-sm">
-            <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Building2 className="h-3.5 w-3.5" />
-                    {quote.customer_id ? "Клієнт" : "Лід"}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <EntityAvatar
-                      src={quote.customer_logo_url ?? null}
-                      name={quote.customer_name ?? "Клієнт / Лід"}
-                      fallback={getInitials(quote.customer_name)}
-                      size={40}
-                    />
-                    <div className="font-semibold text-base">{quote.customer_name ?? "Не вказано"}</div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Створено
-                  </div>
-                  <div className="font-medium">
-                    {quote.created_at ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric"
-                    }) : "Не вказано"}
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5" />
-                    Менеджер
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <AvatarBase
-                      src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
-                      name={
-                        quote.assigned_to
-                          ? memberById.get(quote.assigned_to) ?? quote.assigned_to
-                          : "Не призначено"
-                      }
-                      fallback={
-                        quote.assigned_to
-                          ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
-                          : "Не вказано"
-                      }
-                      size={28}
-                      className="text-[10px] font-semibold"
-                    />
-                    <div className="font-medium">
-                      {quote.assigned_to
-                        ? memberById.get(quote.assigned_to) ?? quote.assigned_to
-                        : "Не призначено"}
-                    </div>
-                  </div>
-                </div>
+      <ConfirmDialog
+        open={deleteAttachmentOpen}
+        onOpenChange={setDeleteAttachmentOpen}
+        title="Видалити файл?"
+        description={deleteAttachmentTarget ? deleteAttachmentTarget.name : undefined}
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={confirmDeleteAttachment}
+        loading={!!attachmentsDeletingId}
+      />
 
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Shirt className="h-3.5 w-3.5" />
-                    Тип прорахунку
-                  </div>
-                  <div className="font-medium">{formatQuoteType(quote.quote_type)}</div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Truck className="h-3.5 w-3.5" />
-                    Доставка
-                  </div>
-                  <div className="font-medium">
-                    {formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}
-                  </div>
-                </div>
-
-                {shortTaskText ? (
-                  <div className="space-y-1 sm:col-span-2">
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      Коротко про задачу (1-2 речення)
-                    </div>
-                    <div className="font-medium text-sm line-clamp-2">{shortTaskText}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Тут тільки суть задачі без дедлайнів. Дедлайни винесені в окремі поля нижче.
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-3 sm:col-span-2">
-                  <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 md:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
-                          <Truck className="h-3.5 w-3.5" />
-                          Головний дедлайн
-                        </div>
-                        <div className="text-base font-semibold text-foreground">
-                          Дедлайн Замовника: готовність до відвантаження
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Кінцева дата, на яку продукція має бути готова до відвантаження Замовнику.
-                        </div>
-                      </div>
-                      <div className="rounded-full border border-primary/20 bg-background/60 px-3 py-1 text-xs font-medium text-primary">
-                        Основний
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,240px)_120px]">
-                      <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="h-10 justify-start gap-2 font-normal"
-                            onClick={() => setCustomerDeadlinePopoverOpen(true)}
-                          >
-                            <Truck className="h-4 w-4 text-muted-foreground" />
-                            {customerDeadlineDate
-                              ? formatDeadlineLabel(combineDeadlineValue(customerDeadlineDate, customerDeadlineTime))
-                              : "Оберіть дату"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
-                          <CalendarPicker
-                            mode="single"
-                            selected={toLocalDate(customerDeadlineDate)}
-                            onSelect={async (date) => {
-                              const nextDate = formatDateInput(date ?? null);
-                              setCustomerDeadlineDate(nextDate);
-                              setCustomerDeadlinePopoverOpen(false);
-                              await handleSaveSecondaryDeadline("customer_deadline_at", {
-                                date: customerDeadlineDate,
-                                time: customerDeadlineTime,
-                                nextDate,
-                                title: "Дедлайн Замовника",
-                                action: "змінив дедлайн замовника",
-                              });
-                            }}
-                            initialFocus
-                          />
-                          <DateQuickActions
-                            onSelect={async (date) => {
-                              const nextDate = formatDateInput(date ?? null);
-                              setCustomerDeadlineDate(nextDate);
-                              setCustomerDeadlinePopoverOpen(false);
-                              await handleSaveSecondaryDeadline("customer_deadline_at", {
-                                date: customerDeadlineDate,
-                                time: customerDeadlineTime,
-                                nextDate,
-                                title: "Дедлайн Замовника",
-                                action: "змінив дедлайн замовника",
-                              });
-                            }}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <Input
-                        type="time"
-                        className="h-10"
-                        value={customerDeadlineTime}
-                        onChange={(e) => setCustomerDeadlineTime(e.target.value)}
-                        onBlur={() =>
-                          void handleSaveSecondaryDeadline("customer_deadline_at", {
-                            date: customerDeadlineDate,
-                            time: customerDeadlineTime,
-                            title: "Дедлайн Замовника",
-                            action: "змінив дедлайн замовника",
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {customerDeadlineDate
-                        ? `Поточне значення: ${formatDeadlineLabel(
-                            combineDeadlineValue(customerDeadlineDate, customerDeadlineTime)
-                          )}`
-                        : "Не вказано. Заповнюйте, коли вже є очікування від Замовника по відвантаженню."}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-2xl border border-border/50 bg-background/35 p-4">
-                      <div className="space-y-1">
-                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5" />
-                          Внутрішній етап
-                        </div>
-                        <div className="text-sm font-semibold text-foreground">
-                          Внутрішній дедлайн: дедлайн прорахунку для відповіді Замовнику
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          До якої дати і години менеджеру потрібен прорахунок вартості.
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,220px)_110px_auto]">
-                        <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="h-9 justify-start gap-2 font-normal"
-                              onClick={() => setDeadlinePopoverOpen(true)}
-                            >
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              {deadlineDate
-                                ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))
-                                : "Оберіть дату"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
-                            <CalendarPicker
-                              mode="single"
-                              selected={toLocalDate(deadlineDate)}
-                              onSelect={async (date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDeadlineDate(nextDate);
-                                setDeadlinePopoverOpen(false);
-                                await handleSaveDeadline({ date: nextDate });
-                              }}
-                              initialFocus
-                            />
-                            <DateQuickActions
-                              onSelect={async (date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDeadlineDate(nextDate);
-                                setDeadlinePopoverOpen(false);
-                                await handleSaveDeadline({ date: nextDate });
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Input
-                          type="time"
-                          className="h-9"
-                          value={deadlineTime}
-                          onChange={(e) => setDeadlineTime(e.target.value)}
-                          onBlur={() => void handleSaveDeadline()}
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-9 w-9"
-                          onClick={() => void handleSaveDeadline()}
-                          disabled={deadlineSaving}
-                          aria-label="Зберегти дедлайн прорахунку"
-                        >
-                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      <div className="mt-2">
-                        <Input
-                          className="h-9"
-                          placeholder="Коментар до внутрішнього дедлайну"
-                          value={deadlineNote}
-                          onChange={(e) => setDeadlineNote(e.target.value)}
-                          onBlur={() => void handleSaveDeadline()}
-                          maxLength={200}
-                        />
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Дедлайн прорахунку: {formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))}
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-[220px_1fr]">
-                        <Select
-                          value={deadlineReminderOffset}
-                          onValueChange={(value) => {
-                            setDeadlineReminderOffset(value);
-                            void handleSaveDeadline({ reminderOffset: value });
-                          }}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Коли нагадати" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DEADLINE_REMINDER_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          className="h-9"
-                          placeholder="Текст нагадування"
-                          value={deadlineReminderComment}
-                          onChange={(e) => setDeadlineReminderComment(e.target.value)}
-                          onBlur={() => void handleSaveDeadline()}
-                          maxLength={200}
-                        />
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Сповіщення:{" "}
-                        {DEADLINE_REMINDER_OPTIONS.find((option) => option.value === deadlineReminderOffset)?.label ??
-                          "Без сповіщення"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/50 bg-background/35 p-4">
-                      <div className="space-y-1">
-                        <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Внутрішній етап
-                        </div>
-                        <div className="text-sm font-semibold text-foreground">
-                          Дедлайн дизайну: погодити макет
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Окремий дедлайн для макету, адаптації або візуалу. Потрапляє в дизайн-задачу автоматично.
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,220px)_110px]">
-                        <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="h-9 justify-start gap-2 font-normal"
-                              onClick={() => setDesignDeadlinePopoverOpen(true)}
-                            >
-                              <Sparkles className="h-4 w-4 text-muted-foreground" />
-                              {designDeadlineDate
-                                ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
-                                : "Оберіть дату"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="p-0 w-fit max-w-[calc(100vw-2rem)]">
-                            <CalendarPicker
-                              mode="single"
-                              selected={toLocalDate(designDeadlineDate)}
-                              onSelect={async (date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDesignDeadlineDate(nextDate);
-                                setDesignDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("design_deadline_at", {
-                                  date: designDeadlineDate,
-                                  time: designDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн дизайну",
-                                  action: "змінив дедлайн дизайну",
-                                });
-                              }}
-                              initialFocus
-                            />
-                            <DateQuickActions
-                              onSelect={async (date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDesignDeadlineDate(nextDate);
-                                setDesignDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("design_deadline_at", {
-                                  date: designDeadlineDate,
-                                  time: designDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн дизайну",
-                                  action: "змінив дедлайн дизайну",
-                                });
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Input
-                          type="time"
-                          className="h-9"
-                          value={designDeadlineTime}
-                          onChange={(e) => setDesignDeadlineTime(e.target.value)}
-                          onBlur={() =>
-                            void handleSaveSecondaryDeadline("design_deadline_at", {
-                              date: designDeadlineDate,
-                              time: designDeadlineTime,
-                              title: "Дедлайн дизайну",
-                              action: "змінив дедлайн дизайну",
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {designDeadlineDate
-                          ? `Поточне значення: ${formatDeadlineLabel(
-                              combineDeadlineValue(designDeadlineDate, designDeadlineTime)
-                            )}`
-                          : "Не вказано. Використовуйте, коли треба окремо погодити макет або візуал."}
-                      </div>
-                    </div>
-                  </div>
-
-                  {deadlineError && (
-                    <div className="text-xs text-destructive">{deadlineError}</div>
-                  )}
-                </div>
-              </div>
-              
-            </div>
-            
-            {updatedMinutes !== null && <></>}
-          </Card>
-
-          {/* Spec (read-only) */}
-          <Card className="quote-muted-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
-                <span role="img" aria-hidden="true">📋</span> Специфікація
-              </div>
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <Lock className="h-3.5 w-3.5" />
-                Зафіксовано
-              </Badge>
-            </div>
-            {items.length === 0 && (
-              <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/70 p-8 text-center">
-                <Package className="h-12 w-12 text-muted-foreground/30" />
-                <div>
-                  <p className="font-medium mb-1">Модель не обрана</p>
-                  <p className="text-sm text-muted-foreground">Оберіть модель для розрахунку</p>
-                </div>
-                <Button size="sm" onClick={openNewItem} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Обрати модель
-                </Button>
-              </div>
-            )}
-
-            {itemsLoading ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : itemsError ? (
-              <div className="text-sm text-destructive py-4">{itemsError}</div>
-            ) : items.length === 0 ? null : (
-              items.slice(0, 1).map((item) => {
-                const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
-                const resolvedKindId = item.catalogKindId ?? item.productKindId;
-                const resolvedModelId = item.catalogModelId ?? item.productModelId;
-                const typeLabel = getTypeLabel(catalogTypes, resolvedTypeId);
-                const kindLabel = getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
-                const modelLabel = getModelLabel(
-                  catalogTypes,
-                  resolvedTypeId,
-                  resolvedKindId,
-                  resolvedModelId
-                );
-                const metaLine = [typeLabel, kindLabel, modelLabel].filter(Boolean).join(" / ");
-                const positionLabel = getPrintPositionLabel(
-                  catalogTypes,
-                  resolvedTypeId,
-                  resolvedKindId,
-                  item.printPositionId
-                );
-                const sizeLabel =
-                  item.printWidthMm && item.printHeightMm
-                    ? `${item.printWidthMm}×${item.printHeightMm} мм`
-                    : item.printWidthMm
-                    ? `${item.printWidthMm} мм`
-                    : item.printHeightMm
-                    ? `${item.printHeightMm} мм`
-                    : null;
-                const hasMethodPrints = Boolean(
-                  item.methods?.some(
-                    (method) =>
-                      method.printPositionId || method.printWidthMm || method.printHeightMm
-                  )
-                );
-                const catalogImage = getModelImage(
-                  catalogTypes,
-                  resolvedTypeId,
-                  resolvedKindId,
-                  resolvedModelId
-                );
-                const productPreview = catalogImage
-                  ? { type: "image" as const, url: catalogImage }
-                  : null;
-                const packageSummary =
-                  item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
-                    ? formatPrintPackageSummary(item.metadata.printPackage)
-                    : [];
-                const packageDetailFields =
-                  item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
-                    ? getPrintPackageDetailFields(item.metadata.printPackage)
-                    : [];
-                const packageSections = packageDetailFields.length
-                  ? [
-                      {
-                        title: "Конструкція",
-                        fields: packageDetailFields.filter((field) =>
-                          ["Тип", "Орієнтація", "Розмір", "Люверси", "Постачальник"].includes(field.label)
-                        ),
-                      },
-                      {
-                        title: "Матеріал",
-                        fields: packageDetailFields.filter((field) =>
-                          ["Матеріал", "Щільність", "Ручки"].includes(field.label)
-                        ),
-                      },
-                      {
-                        title: "Друк та оздоблення",
-                        fields: packageDetailFields.filter((field) =>
-                          ["Нанесення", "Тип нанесення", "Ламінація", "Додаткове оздоблення", "Тиснення"].includes(field.label)
-                        ),
-                      },
-                    ].filter((section) => section.fields.length > 0)
-                  : [];
-                const shouldShowDescription =
-                  item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
-                const isMerchQuote = (quote?.quote_type ?? "") === "merch";
-                const specRuns = runs.length > 0
-                  ? runs
-                      .map((run) => Number(run.quantity) || 0)
-                      .filter((qty) => qty > 0)
-                  : item.qty > 0
-                  ? [item.qty]
-                  : [];
-
-                const specHighlights = [
-                  ...(!isMerchQuote
-                    ? [
-                        { label: "Кількість", value: `${item.qty}` },
-                        { label: "Одиниця", value: normalizeUnitLabel(item.unit) },
-                      ]
-                    : []),
-                  ...(positionLabel || sizeLabel
-                    ? [
-                        {
-                          label: "Нанесення",
-                          value: [positionLabel ?? "Не вказано", sizeLabel].filter(Boolean).join(" · "),
-                        },
-                      ]
-                    : []),
-                ];
-
-                return (
-                  <div key={item.id} className="space-y-4">
-                    {/* ── Product Header ── */}
-                    <div className="flex items-start gap-4">
-                      <div className="shrink-0">
-                        {productPreview?.type === "image" ? (
-                          <KanbanImageZoomPreview
-                            imageUrl={productPreview.url}
-                            alt={modelLabel ?? "Товар"}
-                            className="h-14 w-14 rounded-2xl border border-border/50 bg-muted/20 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/50 bg-muted/20">
-                            <Package className="h-6 w-6 text-muted-foreground/50" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-lg font-semibold leading-tight text-foreground">
-                          {item.title}
-                        </div>
-                        {metaLine ? (
-                          <div className="mt-0.5 text-sm text-muted-foreground">{metaLine}</div>
-                        ) : null}
-                      </div>
-                      <div className="shrink-0">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {specRuns.map((qty, index) => {
-                            const isActiveRun =
-                              selectedRun && (Number(selectedRun.quantity) || 0) === qty;
-                            return (
-                              <div
-                                key={`${item.id}:spec-run:${qty}:${index}`}
-                                className={cn(
-                                  "rounded-2xl border px-3 py-2.5",
-                                  isActiveRun
-                                    ? "border-primary/40 bg-primary/10"
-                                    : "border-border/50 bg-muted/10"
-                                )}
-                              >
-                                <div className="flex items-baseline justify-end gap-1.5">
-                                  <div className="text-lg font-bold tabular-nums leading-tight text-foreground">
-                                    {qty}
-                                  </div>
-                                  <div className="text-[11px] font-medium text-muted-foreground">
-                                  {normalizeUnitLabel(item.unit)}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ── Print Package Parameters ── */}
-                    {packageSections.length > 0 ? (
-                      <div className="rounded-2xl border border-border/50 divide-y divide-border/40 overflow-hidden">
-                        {packageSections.map((section) => (
-                          <div key={section.title} className="px-5 py-4">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
-                              {section.title}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1.5">
-                              {section.fields.map((field) => (
-                                <div
-                                  key={`${section.title}:${field.label}`}
-                                  className="flex items-baseline justify-between gap-3 py-1"
-                                >
-                                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                    {field.label}
-                                  </span>
-                                  <span className="text-sm font-medium text-foreground text-right">
-                                    {field.value}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : specHighlights.length > 0 ? (
-                      /* ── Non-Print Parameters ── */
-                      <div className="rounded-2xl border border-border/50 px-5 py-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-1.5">
-                          {specHighlights.map((fact) => (
-                            <div
-                              key={`${item.id}:main:${fact.label}`}
-                              className="flex items-baseline justify-between gap-3 py-1"
-                            >
-                              <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                {fact.label}
-                              </span>
-                              <span className="text-sm font-medium text-foreground text-right">
-                                {fact.value}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* ── Methods ── */}
-                    {item.methods && item.methods.length > 0 ? (
-                      <div className="rounded-2xl border border-border/50 px-5 py-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            Нанесення
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {item.methods.length}{" "}
-                            {item.methods.length === 1 ? "метод" : "методів"}
-                          </span>
-                        </div>
-                        <div className="grid gap-2.5 sm:grid-cols-2">
-                          {item.methods.map((method) => {
-                            const methodName =
-                              getMethodLabel(
-                                catalogTypes,
-                                item.catalogTypeId,
-                                item.catalogKindId,
-                                method.methodId
-                              ) ?? "Метод";
-                            const place =
-                              getPrintPositionLabel(
-                                catalogTypes,
-                                item.catalogTypeId,
-                                item.catalogKindId,
-                                method.printPositionId
-                              ) ?? positionLabel ?? "Місце не вказано";
-                            const size =
-                              method.printWidthMm && method.printHeightMm
-                                ? `${method.printWidthMm}×${method.printHeightMm} мм`
-                                : method.printWidthMm
-                                ? `${method.printWidthMm} мм`
-                                : method.printHeightMm
-                                ? `${method.printHeightMm} мм`
-                                : sizeLabel;
-
-                            return (
-                              <div
-                                key={method.id}
-                                className="rounded-xl border border-border/40 bg-muted/10 px-4 py-3"
-                              >
-                                <div className="text-sm font-medium text-foreground">
-                                  {methodName}
-                                  {method.count > 1 ? (
-                                    <span className="ml-1 text-muted-foreground">
-                                      ×{method.count}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <div className="mt-1 text-sm text-muted-foreground">
-                                  {place}
-                                  {size ? ` · ${size}` : ""}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* ── Description ── */}
-                    {shouldShowDescription ? (
-                      <div className="rounded-2xl border border-border/50 px-5 py-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
-                          Опис
-                        </div>
-                        <div className="text-sm leading-relaxed text-foreground">
-                          {item.description}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* ── Attachment ── */}
-                    {item.attachment ? (
-                      <div className="flex items-center gap-3 rounded-2xl border border-border/50 px-5 py-3">
-                        <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {item.attachment.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatFileSize(item.attachment.size)}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-            <div className="mt-4 text-xs text-muted-foreground">
-              Щоб змінити специфікацію — створіть новий прорахунок.
-            </div>
-          </Card>
-
-          <div className="space-y-6">
-          {/* Calculation (manager) */}
-          <Card className="quote-soft-card p-0 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/60">
-              <div className="flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">Тиражі</span>
-                {runs.length > 0 && (
-                  <span className="text-xs text-muted-foreground tabular-nums">({runs.length})</span>
-                )}
-              </div>
-              {canEditRuns ? (
-                <Button variant="ghost" size="sm" onClick={addRun} className="h-7 gap-1.5 text-xs px-2.5">
-                  <Plus className="h-3.5 w-3.5" />
-                  Додати тираж
-                </Button>
-              ) : null}
-            </div>
-
-            {runsLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Завантаження...</span>
-              </div>
-            ) : runsError ? (
-              <div className="px-5 py-4 text-sm text-destructive">{runsError}</div>
-            ) : runs.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60">
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Немає тиражів</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Додайте тираж для розрахунку вартості</p>
-                </div>
-                {canEditRuns ? (
-                  <Button size="sm" variant="outline" onClick={addRun} className="mt-1 h-7 gap-1.5 text-xs">
-                    <Plus className="h-3.5 w-3.5" />
-                    Додати тираж
-                  </Button>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                {/* Unified table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border/60 bg-muted/20">
-                        <th className="w-6 px-2 py-2.5" />
-                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Кількість
-                        </th>
-                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Ціна модель
-                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
-                        </th>
-                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Ціна нанесення
-                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
-                        </th>
-                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Доставка
-                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
-                        </th>
-                        <th className="px-2 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Сума
-                        </th>
-                        <th className="w-8 px-1 py-2.5" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/40">
-                      {runs.map((run, idx) => {
-                        const qty = Number(run.quantity) || 0;
-                        const modelPrice = Number(run.unit_price_model) || 0;
-                        const printPrice = Number(run.unit_price_print) || 0;
-                        const logistics = Number(run.logistics_cost) || 0;
-                        const total = (modelPrice + printPrice) * qty + logistics;
-                        const disabled = !canEditRuns;
-                        const isSelected = !!run.id && run.id === selectedRunId;
-                        return (
-                          <tr
-                            key={run.id ?? idx}
-                            onClick={() => setSelectedRunId(run.id ?? null)}
-                            className={cn(
-                              "group cursor-pointer transition-colors",
-                              isSelected ? "bg-primary/[0.04]" : "hover:bg-muted/30"
-                            )}
-                          >
-                            {/* Selection dot */}
-                            <td className="w-6 px-2 py-3">
-                              <div
-                                className={cn(
-                                  "mx-auto h-2 w-2 rounded-full transition-all",
-                                  isSelected
-                                    ? "bg-primary scale-110"
-                                    : "bg-border group-hover:bg-muted-foreground/40"
-                                )}
-                              />
-                            </td>
-                            {/* Quantity */}
-                            <td className="px-2 py-2">
-                              <Input
-                                type="number"
-                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.quantity ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
-                                onFocus={(e) => { if (run.quantity === 0) e.target.select(); }}
-                                min={1}
-                              />
-                            </td>
-                            {/* Model price */}
-                            <td className="px-2 py-2">
-                              <Input
-                                type="number"
-                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.unit_price_model ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
-                                onFocus={(e) => { if (run.unit_price_model === 0) e.target.select(); }}
-                                min={0}
-                              />
-                            </td>
-                            {/* Print price */}
-                            <td className="px-2 py-2">
-                              <Input
-                                type="number"
-                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.unit_price_print ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
-                                onFocus={(e) => { if (run.unit_price_print === 0) e.target.select(); }}
-                                min={0}
-                              />
-                            </td>
-                            {/* Logistics */}
-                            <td className="px-2 py-2">
-                              <Input
-                                type="number"
-                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
-                                value={run.logistics_cost ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
-                                onFocus={(e) => { if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select(); }}
-                                placeholder="—"
-                                min={0}
-                              />
-                            </td>
-                            {/* Total */}
-                            <td className="px-2 py-2 text-right">
-                              <div className="font-mono text-sm font-semibold tabular-nums whitespace-nowrap">
-                                {formatCurrency(total, quote.currency)}
-                              </div>
-                              {isSelected && (
-                                <div className="mt-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
-                                  ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
-                                  {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
-                                </div>
-                              )}
-                            </td>
-                            {/* Delete */}
-                            <td className="px-1 py-2">
-                              {!disabled && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                                  onClick={(e) => { e.stopPropagation(); void removeRun(idx); }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-5 py-3">
-                  <div className="flex flex-wrap items-center gap-4">
-                    {selectedUnitCost !== null && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Собівартість / од.:</span>
-                        <span className="font-mono text-xs font-semibold text-foreground">
-                          {formatCurrency(selectedUnitCost, quote.currency)}
-                        </span>
-                      </div>
-                    )}
-                    <span className="text-xs text-muted-foreground/50">Обраний тираж використовується в підсумку</span>
-                  </div>
-                  {canEditRuns && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={saveRuns}
-                      disabled={runsSaving || quoteRequirements.length > 0}
-                      className="h-7 gap-1.5 text-xs"
-                    >
-                      {runsSaving ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Check className="h-3 w-3" />
-                      )}
-                      {runsSaving ? "Збереження..." : "Зберегти"}
-                    </Button>
-                  )}
-                </div>
-              </>
-            )}
-          </Card>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.92fr)] items-start">
-          {/* Visualization placeholder */}
-          <Card className="quote-muted-card h-full p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold tracking-[0.08em] uppercase flex items-center gap-2">
-                <span role="img" aria-hidden="true">🎨</span> Візуалізація
-              </div>
-              <Badge variant="outline" className="text-[11px]">
-                {designVisualizations.length}
-              </Badge>
-            </div>
-            {designVisualizations.length === 0 ? (
-              <div className="border-2 border-dashed border-border/60 rounded-xl p-8 text-center bg-background/30">
-                <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                  <div className="h-12 w-12 rounded-lg border border-border/60 flex items-center justify-center">
-                    <Image className="h-6 w-6" />
-                  </div>
-                  <div className="text-sm font-medium text-foreground">Візуалізація ще не додана</div>
-                  <div className="text-xs text-muted-foreground">
-                    Тут будуть макети від дизайнера після їх створення
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {designVisualizations.map((file) => {
-                  const extension = getFileExtension(file.name);
-                  const previewImage = Boolean(file.url) && canPreviewImage(extension);
-                  return (
-                    <div key={file.id} className="rounded-xl border border-border/60 bg-background/40 p-3">
-                      <div className="h-32 rounded-md border border-border/50 bg-muted/20 overflow-hidden flex items-center justify-center">
-                        {previewImage && file.url ? (
-                          <KanbanImageZoomPreview
-                            imageUrl={file.url ?? ""}
-                            alt={file.name}
-                            className="h-32 w-full rounded-md border border-border/50 bg-muted/20"
-                          />
-                        ) : (
-                          <div className="text-xs text-muted-foreground">{extension}</div>
-                        )}
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground truncate" title={file.name}>
-                        {file.name}
-                      </div>
-                      <div className="mt-2 flex items-center gap-1">
-                        {file.url ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void downloadFileToDevice(file.url!, file.name)}
-                          >
-                            Завантажити
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          {/* Summary Card */}
-          <Card className="h-full overflow-hidden border-border/60 bg-gradient-to-br from-card to-muted/5 p-0 shadow-sm">
-            {/* Header */}
-            <div className="border-b border-border/60 px-5 py-3.5">
-              <div className="text-sm font-semibold">Підсумок</div>
-            </div>
-
-            <div className="px-5 py-4">
-              {/* Subtotal */}
-              <div className="flex items-center justify-between py-2.5 text-sm">
-                <span className="text-muted-foreground">Підсумок</span>
-                <span className="font-mono font-semibold tabular-nums">
-                  {formatCurrency(totals.subtotal, quote.currency)}
-                </span>
-              </div>
-
-              <div className="border-t border-dashed border-border/50" />
-
-              {/* Discount */}
-              <div className="flex items-center justify-between py-2.5 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Знижка</span>
-                  <div className="flex items-center">
-                    <Input
-                      type="number"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      className="h-6 w-12 border-border/40 bg-muted/20 px-1.5 text-right text-xs focus:bg-background"
-                      placeholder="0"
-                      min="0"
-                      max="100"
-                    />
-                    <span className="ml-1 text-xs text-muted-foreground">%</span>
-                  </div>
-                </div>
-                <span className="font-mono text-sm font-medium tabular-nums text-destructive">
-                  −{formatCurrency(totals.discountAmount, quote.currency)}
-                </span>
-              </div>
-
-              {/* Tax */}
-              <div className="flex items-center justify-between py-2.5 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Податок</span>
-                  <div className="flex items-center">
-                    <Input
-                      type="number"
-                      value={tax}
-                      onChange={(e) => setTax(e.target.value)}
-                      className="h-6 w-12 border-border/40 bg-muted/20 px-1.5 text-right text-xs focus:bg-background"
-                      placeholder="0"
-                      min="0"
-                      max="100"
-                    />
-                    <span className="ml-1 text-xs text-muted-foreground">%</span>
-                  </div>
-                </div>
-                <span className="font-mono text-sm font-medium tabular-nums text-emerald-600">
-                  +{formatCurrency(totals.taxAmount, quote.currency)}
-                </span>
-              </div>
-
-              {/* Total */}
-              <div className="mt-1 border-t-2 border-border pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Загальна сума</span>
-                  <span className="font-mono text-xl font-bold tabular-nums text-primary">
-                    {formatCurrency(totals.total, quote.currency)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Meta */}
-              <div className="mt-3 space-y-1.5 border-t border-dashed border-border/40 pt-3">
-                <div className="text-[11px] text-muted-foreground/60">
-                  Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
-                </div>
-                {items.length > 0 && (
-                  <div className="flex justify-between text-[11px] text-muted-foreground/60">
-                    <span>Позицій:</span>
-                    <span className="font-medium text-muted-foreground">{items.length}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-	          </div>
-	          </div>
-        </div>
-
-	        {/* Right Column */}
-	        <div className="space-y-6">
-          {/* Designer brief */}
-          <Card className="quote-soft-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-lg font-semibold">
-                <FileText className="h-5 w-5" />
-                ТЗ для дизайнера
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setBriefText(
-                      [
-                        "Мета:",
-                        "Аудиторія:",
-                        "Формат/носій:",
-                        "Розмір/пропорції:",
-                        "Лого/брендгайд:",
-                        "Кольори/шрифти:",
-                        "Референси:",
-                        "Текст/копі:",
-                        "Обмеження:",
-                      ].join("\n")
-                    );
-                    setBriefDirty(true);
-                    setBriefError(null);
-                  }}
-                >
-                  Шаблон
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">
-                  Автоматично піде в дизайн-задачу
-                </div>
-                <div className="whitespace-pre-wrap text-sm text-foreground">
-                  {designBriefPreview || "Спочатку вкажіть дедлайн дизайну або текст задачі."}
-                </div>
-              </div>
-              <Textarea
-                value={briefText}
-                onChange={(event) => {
-                  setBriefText(event.target.value);
-                  setBriefDirty(true);
-                }}
-                placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-                className="min-h-[180px] resize-y"
-              />
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{briefText.length} символів</span>
-                {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
-              </div>
-              {briefError ? (
-                <div className="text-sm text-destructive">{briefError}</div>
-              ) : null}
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setBriefText(quote?.design_brief ?? quote?.comment ?? "");
-                    setBriefDirty(false);
-                    setBriefError(null);
-                  }}
-                  disabled={!briefDirty}
-                >
-                  Скинути
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void saveBrief()}
-                  disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
-                  className="gap-2"
-                >
-                  {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {/* Design task */}
-          <Card className="quote-soft-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-lg font-semibold">
-                <Sparkles className="h-5 w-5" />
-                Дизайн-задача
-              </div>
-              {designTask ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/design/${designTask.id}`)}
-                >
-                  Відкрити
-                </Button>
-              ) : null}
-            </div>
-
-            {designTaskLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Завантаження...
-              </div>
-            ) : designTaskError ? (
-              <div className="text-sm text-destructive">{designTaskError}</div>
-            ) : designTask ? (
-              <div className="space-y-3">
-                <div className="text-xs text-muted-foreground">Виконавець (дизайнер)</div>
-                <Select
-                  value={designAssigneeId ?? "none"}
-                  onValueChange={(value) => void updateDesignAssignee(value === "none" ? null : value)}
-                  disabled={designTaskSaving}
-                >
-                  <SelectTrigger className="h-9 max-w-[280px]">
-                    <SelectValue placeholder="Без виконавця" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Без виконавця</SelectItem>
-                    {designerMembers.length > 0 ? (
-                      designerMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.label}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="empty" disabled>
-                        {teamMembers.length === 0
-                          ? "Немає учасників"
-                          : hasRoleInfo
-                            ? "Немає дизайнерів"
-                            : "Ролі не налаштовані"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  Дизайн-задача ще не створена для цього прорахунку.
-                </div>
-                <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>
-                  {designTaskSaving ? "Створення..." : "Створити задачу"}
-                </Button>
-              </div>
-            )}
-          </Card>
-
-          {/* Comments Card - Improved */}
-          <Card className="quote-soft-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-lg font-semibold">
-                <MessageSquare className="h-5 w-5" />
-                Коментарі
-                {comments.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">{comments.length}</Badge>
-                )}
-              </div>
-            </div>
-            
-            {/* Add comment form first */}
-            <div className="space-y-3 mb-4 pb-4 border-b border-border/40">
-              <div className="relative">
-                <Textarea
-                  ref={commentTextareaRef}
-                  value={commentText}
-                  onChange={(event) => {
-                    const cursor = event.target.selectionStart ?? event.target.value.length;
-                    setCommentText(event.target.value);
-                    syncMentionContext(event.target.value, cursor);
-                  }}
-                  onSelect={(event) => {
-                    const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
-                    syncMentionContext(event.currentTarget.value, cursor);
-                  }}
-                  onKeyDown={handleCommentTextKeyDown}
-                  placeholder="Напишіть коментар... (використовуйте @ім'я для згадки)"
-                  className="min-h-[80px] resize-none"
-                />
-
-                {mentionContext ? (
-                  <div className="absolute left-0 right-0 top-full z-30 mt-1 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
-                    {filteredMentionSuggestions.length > 0 ? (
-                      <div className="max-h-56 overflow-y-auto py-1">
-                        {filteredMentionSuggestions.map((member, index) => (
-                          <button
-                            key={member.id}
-                            type="button"
-                            className={cn(
-                              "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                              index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
-                            )}
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              applyMentionSuggestion(member);
-                            }}
-                          >
-                            <AvatarBase
-                              src={member.avatarUrl}
-                              name={member.label}
-                              fallback={getInitials(member.label)}
-                              size={24}
-                              className="text-[10px] font-semibold"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium">{member.label}</div>
-                              <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
-                        Немає збігів для @{mentionContext.query}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">
-                  {commentText.length} символів
-                </span>
-                <Button 
-                  size="sm" 
-                  onClick={handleAddComment} 
-                  disabled={!commentText.trim() || commentSaving}
-                  className="gap-2"
-                >
-                  {commentSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                  {commentSaving ? "Збереження..." : "Додати"}
-                </Button>
-              </div>
-            </div>
-            
-            {commentsLoading ? (
-              <div className="text-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : commentsError ? (
-              <div className="text-sm text-destructive">{commentsError}</div>
-            ) : comments.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">Коментарів ще немає</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {comments.map((comment) => (
-                  <div 
-                    key={comment.id} 
-                    className="rounded-lg border border-border/60 p-3 hover:bg-muted/20 transition-colors"
-                  >
-                    <div className="flex items-start gap-3 mb-2">
-                      <AvatarBase
-                        src={comment.created_by ? memberAvatarById.get(comment.created_by) ?? null : null}
-                        name={
-                          comment.created_by
-                            ? memberById.get(comment.created_by) ?? comment.created_by
-                            : "Користувач"
-                        }
-                        fallback={
-                          comment.created_by
-                            ? getInitials(memberById.get(comment.created_by) ?? comment.created_by)
-                            : "Не вказано"
-                        }
-                        size={32}
-                        className="text-[10px] font-semibold"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <div className="text-sm font-medium">
-                            {comment.created_by
-                              ? memberById.get(comment.created_by) ?? "Користувач"
-                              : "Користувач"}
-                          </div>
-                          <div className="text-xs text-muted-foreground whitespace-nowrap">
-                            {new Date(comment.created_at).toLocaleDateString("uk-UA", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-sm leading-relaxed pl-11">{renderTextWithMentions(comment.body ?? "")}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Files Card - Categorized */}
-          <Card className="quote-soft-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-lg font-semibold">
-                <Paperclip className="h-5 w-5" />
-                Файли
-              </div>
-            </div>
-
-            <input
-              ref={attachmentsInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              accept={ATTACHMENTS_ACCEPT}
-              onChange={(event) => uploadAttachments(event.target.files)}
-            />
-
-            {attachmentsUploading && (
-              <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Завантаження файлів...
-              </div>
-            )}
-
-            {/* Від замовника */}
-            <div className="mb-4">
-              <div
-                role="button"
-                tabIndex={0}
-                className="w-full flex items-center justify-between text-left cursor-pointer"
-                onClick={() => setFilesCustomerOpen((v) => !v)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setFilesCustomerOpen((v) => !v);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  Від замовника
-                  {attachments.length > 0 && (
-                    <Badge variant="secondary" className="text-[11px]">{attachments.length}</Badge>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="gap-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    attachmentsInputRef.current?.click();
-                  }}
-                  disabled={attachmentsUploading}
-                >
-                  <Upload className="h-4 w-4" />
-                  Додати
-                </Button>
-              </div>
-              {filesCustomerOpen && (
-                <div className="mt-2 space-y-2">
-                  {attachmentsLoading ? (
-                    <div className="text-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground">Завантаження...</p>
-                    </div>
-                  ) : attachmentsError ? (
-                    <div className="text-sm text-destructive">{attachmentsError}</div>
-                  ) : attachments.length === 0 ? (
-                    <div
-                      className={cn(
-                        "border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer",
-                        attachmentsDragActive
-                          ? "border-primary/60 bg-primary/10"
-                          : "border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                      )}
-                      onClick={() => attachmentsInputRef.current?.click()}
-                      onDrop={handleAttachmentsDrop}
-                      onDragOver={handleAttachmentsDragOver}
-                      onDragLeave={handleAttachmentsDragLeave}
-                    >
-                      <Upload className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                      <p className="text-sm font-medium mb-1">Перетягніть файли сюди</p>
-                      <p className="text-xs text-muted-foreground">або натисніть для вибору</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        До {MAX_QUOTE_ATTACHMENTS} файлів · до 50 MB · PDF, AI, SVG, PNG, JPG, ZIP
-                      </p>
-                    </div>
-                  ) : (
-                    <div
-                      className={cn(
-                        "space-y-2 rounded-xl border border-dashed border-border/50 p-2",
-                        attachmentsDragActive && "border-primary/60 bg-primary/5"
-                      )}
-                      onDrop={handleAttachmentsDrop}
-                      onDragOver={handleAttachmentsDragOver}
-                      onDragLeave={handleAttachmentsDragLeave}
-                    >
-                      {attachments.map((file) => {
-                        const extension = getFileExtension(file.name);
-                        const showImagePreview = !!file.url && canPreviewImage(extension);
-                        const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
-                        return (
-                          <div
-                            key={file.id}
-                            className="flex items-center justify-between p-3 rounded-lg border border-border/60 hover:bg-muted/20 transition-colors group"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-visible">
-                                {showImagePreview ? (
-                                  <KanbanImageZoomPreview
-                                    imageUrl={file.url!}
-                                    alt={file.name}
-                                    className="h-10 w-10 rounded-lg border border-border/60 bg-primary/10"
-                                  />
-                                ) : showPdfPreview ? (
-                                  <iframe
-                                    src={`${file.url}#page=1&view=FitH`}
-                                    title={`Preview ${file.name}`}
-                                    className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
-                                  />
-                                ) : (
-                                  <Paperclip className="h-5 w-5 text-primary" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-medium text-sm truncate" title={file.name}>
-                                    {file.name}
-                                  </div>
-                                  {extension && (
-                                    <Badge variant="secondary" className="text-[10px] uppercase">
-                                      {extension}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {file.size} ·{" "}
-                                  {new Date(file.created_at).toLocaleString("uk-UA", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                  {file.uploadedByLabel ? ` · ${file.uploadedByLabel}` : ""}
-                                </div>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                              onClick={() => {
-                                if (file.url) {
-                                  void downloadFileToDevice(file.url, file.name);
-                                }
-                              }}
-                              disabled={!file.url}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive hover:text-destructive"
-                              onClick={() => requestDeleteAttachment(file)}
-                              disabled={attachmentsDeletingId === file.id}
-                            >
-                              {attachmentsDeletingId === file.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Візуалізації */}
-            <div className="mb-4">
-              <div
-                role="button"
-                tabIndex={0}
-                className="w-full flex items-center justify-between text-left cursor-pointer"
-                onClick={() => setFilesDesignOpen((v) => !v)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setFilesDesignOpen((v) => !v);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  Візуалізації
-                </div>
-                <Badge variant="outline" className="text-[11px]">скоро</Badge>
-              </div>
-              {filesDesignOpen && (
-                <div className="mt-2 border border-dashed border-border/50 rounded-xl p-4 text-center text-xs text-muted-foreground">
-                  Буде доступно після створення макетів дизайнером.
-                </div>
-              )}
-            </div>
-
-            {/* Документи */}
-            <div>
-              <div
-                role="button"
-                tabIndex={0}
-                className="w-full flex items-center justify-between text-left cursor-pointer"
-                onClick={() => setFilesDocsOpen((v) => !v)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setFilesDocsOpen((v) => !v);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  Документи
-                </div>
-                <Button size="sm" variant="ghost" className="gap-2" disabled>
-                  <Upload className="h-4 w-4" />
-                  Додати
-                </Button>
-              </div>
-              {filesDocsOpen && (
-                <div className="mt-2 border border-dashed border-border/50 rounded-xl p-4 text-xs text-muted-foreground">
-                  Рахунки, договори, акти — скоро буде доступно.
-                </div>
-              )}
-            </div>
-
-            {attachmentsUploadError && (
-              <div className="text-xs text-destructive mt-2">{attachmentsUploadError}</div>
-            )}
-            {attachmentsDeleteError && (
-              <div className="text-xs text-destructive mt-2">{attachmentsDeleteError}</div>
-            )}
-          </Card>
-
-          <ConfirmDialog
-            open={deleteAttachmentOpen}
-            onOpenChange={setDeleteAttachmentOpen}
-            title="Видалити файл?"
-            description={deleteAttachmentTarget ? deleteAttachmentTarget.name : undefined}
-            icon={<Trash2 className="h-5 w-5 text-destructive" />}
-            confirmLabel="Видалити"
-            cancelLabel="Скасувати"
-            confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onConfirm={confirmDeleteAttachment}
-            loading={!!attachmentsDeletingId}
-          />
-
-          {/* Activity Card */}
-          <Card className="quote-soft-card p-5">
-            <div className="text-lg font-semibold mb-4">Активність</div>
-
-            {activityLoading || historyLoading || commentsLoading ? (
-              <div className="text-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Завантаження...</p>
-              </div>
-            ) : activityEvents.length === 0 ? (
-              <div className="text-center py-8">
-                <Clock className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">Активність порожня</p>
-                {(activityError || historyError || commentsError) && (
-                  <p className="text-xs text-destructive mt-2">
-                    {activityError ?? historyError ?? commentsError}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {(activityError || historyError || commentsError) && (
-                  <div className="text-xs text-destructive">
-                    {activityError ?? historyError ?? commentsError}
-                  </div>
-                )}
-                {activityGroups.map((group) => (
-                  <div key={group.label} className="space-y-3">
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      {group.label}
-                    </div>
-                    <div className="space-y-4">
-                      {group.items.map((event) => {
-                        const Icon = event.icon;
-                        return (
-                          <div key={event.id} className="flex items-start gap-3">
-                            <div
-                              className={cn(
-                                "h-9 w-9 rounded-full border flex items-center justify-center shrink-0",
-                                event.accentClass ?? "bg-muted/20 text-muted-foreground border-border"
-                              )}
-                            >
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="text-sm font-medium">{event.title}</div>
-                                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {formatActivityClock(event.created_at)}
-                                </div>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {event.actorLabel}
-                              </div>
-                              {event.description && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {event.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
-
-      {/* Item Modal - Improved with Tabs */}
       <Dialog open={itemModalOpen} onOpenChange={setItemModalOpen}>
-      <DialogContent className="w-[min(1040px,calc(100vw-32px))] max-h-[90vh] p-0 gap-0 overflow-hidden border border-border/60 bg-card text-foreground">
-          <div className="p-6 border-b border-border bg-muted/5">
+        <DialogContent className="w-[min(1040px,calc(100vw-32px))] max-h-[90vh] gap-0 overflow-hidden border border-border/60 bg-card p-0 text-foreground">
+          <div className="border-b border-border bg-muted/5 p-6">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">
                 {editingItemId ? "Редагувати позицію" : "Додати позицію"}
@@ -5395,43 +6041,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </DialogHeader>
           </div>
 
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="max-h-[calc(90vh-180px)] overflow-y-auto p-6">
             <Tabs
               value={itemFormMode}
               onValueChange={(v) => setItemFormMode(v as "simple" | "advanced")}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-muted/30 p-1 shadow-inner">
+              <TabsList className="mb-6 grid w-full grid-cols-2 rounded-xl bg-muted/30 p-1 shadow-inner">
                 <TabsTrigger
                   value="simple"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border/50"
+                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Проста позиція
                 </TabsTrigger>
                 <TabsTrigger
                   value="advanced"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border/50"
+                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Із каталогу
                 </TabsTrigger>
               </TabsList>
-              
-              <TabsContent value="simple" className="space-y-4 mt-0">
+
+              <TabsContent value="simple" className="mt-0 space-y-4">
                 <div className="space-y-2">
                   <Label>Назва <span className="text-destructive">*</span></Label>
-                  <Input 
-                    value={itemTitle} 
+                  <Input
+                    value={itemTitle}
                     onChange={(e) => setItemTitle(e.target.value)}
                     placeholder="Наприклад: Футболки з логотипом"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label>Кількість</Label>
-                    <Input 
-                      type="number" 
-                      value={itemQty} 
+                    <Input
+                      type="number"
+                      value={itemQty}
                       onChange={(e) => setItemQty(e.target.value)}
                       min="1"
                     />
@@ -5452,7 +6098,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                   <div className="space-y-2">
                     <Label>Ціна за од.</Label>
-                    <Input 
+                    <Input
                       type="number"
                       value={itemPrice}
                       onChange={(e) => setItemPrice(e.target.value)}
@@ -5461,32 +6107,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Опис (опціонально)</Label>
-                  <Textarea 
-                    value={itemDescription} 
+                  <Textarea
+                    value={itemDescription}
                     onChange={(e) => setItemDescription(e.target.value)}
                     placeholder="Додаткова інформація про позицію..."
                     rows={3}
                     className="resize-none"
                   />
                 </div>
-                
-                {/* Preview */}
-                <div className="rounded-lg bg-muted/30 p-4 border border-border/40">
-                  <div className="text-xs text-muted-foreground mb-2">Попередній перегляд:</div>
+
+                <div className="rounded-lg border border-border/40 bg-muted/30 p-4">
+                  <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд:</div>
                   <div className="space-y-1">
                     <div className="font-medium">{itemTitle || "Назва позиції"}</div>
                     <div className="text-sm text-muted-foreground">
-                      {itemQty || "1"} {itemUnit} × {itemPrice || "0"} = {
-                        ((Number(itemQty) || 1) * (Number(itemPrice) || 0)).toLocaleString("uk-UA")
-                      }
+                      {itemQty || "1"} {itemUnit} × {itemPrice || "0"} ={" "}
+                      {((Number(itemQty) || 1) * (Number(itemPrice) || 0)).toLocaleString("uk-UA")}
                     </div>
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="advanced" className="mt-0">
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
                   <div className="space-y-5">
@@ -5501,7 +6145,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <div className="space-y-2">
                       <Label>Швидкий пошук у каталозі</Label>
-                      <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
                         <Command>
                           <CommandInput
                             placeholder="Пошук по моделях..."
@@ -5625,13 +6269,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 type="button"
                                 onClick={() => toggleMethod(method.id)}
                                 className={cn(
-                                  "flex items-center justify-between p-3 rounded-lg border-2 transition-all text-left",
+                                  "flex items-center justify-between rounded-lg border-2 p-3 text-left transition-all",
                                   isSelected
                                     ? "border-primary bg-primary/10"
                                     : "border-border hover:border-border/60"
                                 )}
                               >
-                                <span className="font-medium text-sm">{method.name}</span>
+                                <span className="text-sm font-medium">{method.name}</span>
                                 <span className="text-xs text-muted-foreground">{method.price ?? 0} UAH</span>
                               </button>
                             );
@@ -5678,7 +6322,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <div className="space-y-2">
                       <Label>Візуалізація (файл)</Label>
-                      <div className="rounded-lg border border-dashed border-border/60 p-4 bg-muted/10 space-y-3">
+                      <div className="space-y-3 rounded-lg border border-dashed border-border/60 bg-muted/10 p-4">
                         <input
                           type="file"
                           accept=".png,.jpg,.jpeg,.pdf"
@@ -5698,7 +6342,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <img
                                 src={itemAttachment.url}
                                 alt={itemAttachment.name}
-                                className="w-full max-h-48 object-contain rounded-md border border-border/50 bg-background"
+                                className="max-h-48 w-full rounded-md border border-border/50 bg-background object-contain"
                               />
                             ) : (
                               <button
@@ -5720,15 +6364,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </Button>
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground">
-                            Підтримуються PNG/JPG/PDF.
-                          </div>
+                          <div className="text-xs text-muted-foreground">Підтримуються PNG/JPG/PDF.</div>
                         )}
                       </div>
                     </div>
 
-                    <div className="sticky top-4 rounded-lg bg-primary/5 border border-primary/20 p-4">
-                      <div className="text-xs text-muted-foreground mb-2">Розрахунок ціни:</div>
+                    <div className="sticky top-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                      <div className="mb-2 text-xs text-muted-foreground">Розрахунок ціни:</div>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span>Базова ціна:</span>
@@ -5748,7 +6390,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </span>
                           </div>
                         )}
-                        <div className="flex justify-between pt-2 border-t border-primary/20 font-semibold">
+                        <div className="flex justify-between border-t border-primary/20 pt-2 font-semibold">
                           <span>Ціна за одиницю:</span>
                           <span className="font-mono text-primary">{computedItemPrice}</span>
                         </div>
@@ -5766,11 +6408,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </Tabs>
           </div>
 
-          <DialogFooter className="p-6 border-t border-border bg-muted/5">
+          <DialogFooter className="border-t border-border bg-muted/5 p-6">
             <Button variant="outline" onClick={() => setItemModalOpen(false)}>
               Скасувати
             </Button>
-            <Button 
+            <Button
               onClick={handleSaveItem}
               disabled={!itemTitle.trim() || itemAttachmentUploading}
               className="gap-2"
