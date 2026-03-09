@@ -69,6 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userId = session?.user?.id ?? null;
   const userIdRef = useRef<string | null>(null);
 
+  const resetTeamContext = useCallback(() => {
+    setTeamId(null);
+    setRole(null);
+    setAccessRole(null);
+    setJobRole(null);
+  }, []);
+
   useEffect(() => {
     userIdRef.current = userId;
   }, [userId]);
@@ -76,10 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshTeamContext = useCallback(async (targetUserId?: string | null) => {
     const effectiveUserId = targetUserId ?? userId;
     if (!effectiveUserId) {
-      setTeamId(null);
-      setRole(null);
-      setAccessRole(null);
-      setJobRole(null);
+      resetTeamContext();
       return;
     }
 
@@ -110,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(roleValue);
     setAccessRole(accessRoleValue);
     setJobRole(jobRoleValue);
-  }, [userId]);
+  }, [resetTeamContext, userId]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -120,17 +124,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      const nextSession = data.session ?? null;
-      setSession(nextSession);
-      if (nextSession?.user?.id) {
-        await refreshTeamContext(nextSession.user.id);
-      } else {
-        setTeamId(null);
-        setRole(null);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        const nextSession = data.session ?? null;
+        setSession(nextSession);
+        if (nextSession?.user?.id) {
+          await refreshTeamContext(nextSession.user.id);
+        } else {
+          resetTeamContext();
+        }
+      } catch (error) {
+        console.error("Failed to initialize auth state", error);
+        if (!mounted) return;
+        setSession(null);
+        resetTeamContext();
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, nextSession) => {
@@ -145,20 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Lightweight handling for sign-out.
       if (event === "SIGNED_OUT") {
-        setTeamId(null);
-        setRole(null);
-        setAccessRole(null);
-        setJobRole(null);
+        resetTeamContext();
         setLoading(false);
         return;
       }
 
       const nextUserId = nextSession?.user?.id ?? null;
       if (!nextUserId) {
-        setTeamId(null);
-        setRole(null);
-        setAccessRole(null);
-        setJobRole(null);
+        resetTeamContext();
         setLoading(false);
         return;
       }
@@ -166,15 +173,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Keep UI stable for any auth event affecting the same user
       // (token refresh, session sync, user profile updates, etc).
       if (nextUserId === userIdRef.current) {
-        void refreshTeamContext(nextUserId);
+        void refreshTeamContext(nextUserId).catch((error) => {
+          console.error("Failed to refresh auth context", error);
+        });
         return;
       }
 
       // Only block UI when auth context switches to another user.
       setLoading(true);
       void (async () => {
-        await refreshTeamContext(nextUserId);
-        if (mounted) setLoading(false);
+        try {
+          await refreshTeamContext(nextUserId);
+        } catch (error) {
+          console.error("Failed to switch auth context", error);
+          if (mounted) {
+            resetTeamContext();
+          }
+        } finally {
+          if (mounted) setLoading(false);
+        }
       })();
     });
 
@@ -187,15 +204,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       if (!session?.user?.id) {
-        setTeamId(null);
-        setRole(null);
-        setAccessRole(null);
-        setJobRole(null);
+        resetTeamContext();
         return;
       }
-      await refreshTeamContext(session.user.id);
+      try {
+        await refreshTeamContext(session.user.id);
+      } catch (error) {
+        console.error("Failed to refresh team context", error);
+        resetTeamContext();
+      }
     })();
-  }, [session?.user?.id, refreshTeamContext]);
+  }, [resetTeamContext, session?.user?.id, refreshTeamContext]);
 
   const permissions = useMemo(
     () => buildPermissions({ role, accessRole, jobRole }),
