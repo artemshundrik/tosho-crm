@@ -296,6 +296,17 @@ function isRecoverableRoleUpdateError(message: string) {
   );
 }
 
+function isRecoverableMemberDeleteError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("does not exist") ||
+    normalized.includes("relation") ||
+    normalized.includes("column") ||
+    normalized.includes("could not find the table") ||
+    normalized.includes("schema cache")
+  );
+}
+
 function normalizeRoleForCompare(value: string | null | undefined) {
   if (!value || value === "member") return null;
   return value;
@@ -370,6 +381,8 @@ export function TeamMembersPage() {
   const [editAccessRole, setEditAccessRole] = useState("member");
   const [editJobRole, setEditJobRole] = useState("member");
   const [editBusy, setEditBusy] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [memberDeleteBusy, setMemberDeleteBusy] = useState(false);
   const [editProfileMember, setEditProfileMember] = useState<Member | null>(null);
   const [editProfileFirstName, setEditProfileFirstName] = useState("");
   const [editProfileLastName, setEditProfileLastName] = useState("");
@@ -1234,6 +1247,123 @@ export function TeamMembersPage() {
     }
   };
 
+  const confirmDeleteMember = (member: Member) => {
+    if (member.user_id === currentUserId) {
+      toast.error("Не можна видалити самого себе");
+      return;
+    }
+    if (!isSuperAdmin && (member.access_role ?? null) === "owner") {
+      toast.error("Admin не може видалити Super Admin");
+      return;
+    }
+    setMemberToDelete(member);
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete || !workspaceId || !canManage) return;
+    if (memberToDelete.user_id === currentUserId) {
+      toast.error("Не можна видалити самого себе");
+      return;
+    }
+    if (!isSuperAdmin && (memberToDelete.access_role ?? null) === "owner") {
+      toast.error("Admin не може видалити Super Admin");
+      return;
+    }
+
+    setMemberDeleteBusy(true);
+    try {
+      const { data: membershipTarget, error: membershipTargetError } = await supabase
+        .schema("tosho")
+        .from("memberships_view")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", memberToDelete.user_id)
+        .maybeSingle<{ id?: string | null }>();
+
+      if (membershipTargetError && !isRecoverableMemberDeleteError(membershipTargetError.message)) {
+        throw new Error(membershipTargetError.message);
+      }
+
+      const membershipId = membershipTarget?.id ?? null;
+      const membershipSchemas = ["tosho", "public"] as const;
+      const deleteAttempts: Array<{
+        tableName: string;
+        scopes: Array<"workspace_user" | "membership_id" | "team_user">;
+      }> = [
+        { tableName: "memberships", scopes: ["workspace_user", "membership_id"] },
+        { tableName: "workspace_members", scopes: ["workspace_user", "membership_id"] },
+        { tableName: "workspace_memberships", scopes: ["workspace_user", "membership_id"] },
+        { tableName: "team_members", scopes: ["membership_id", "team_user"] },
+      ];
+
+      for (const attempt of deleteAttempts) {
+        for (const scope of attempt.scopes) {
+          for (const schemaName of membershipSchemas) {
+            if (scope === "membership_id" && !membershipId) continue;
+
+            const { error } =
+              scope === "workspace_user"
+                ? await supabase
+                    .schema(schemaName)
+                    .from(attempt.tableName)
+                    .delete()
+                    .eq("workspace_id", workspaceId)
+                    .eq("user_id", memberToDelete.user_id)
+                : scope === "membership_id"
+                  ? await supabase
+                      .schema(schemaName)
+                      .from(attempt.tableName)
+                      .delete()
+                      .eq("id", membershipId as string)
+                  : await supabase
+                      .schema(schemaName)
+                      .from(attempt.tableName)
+                      .delete()
+                      .eq("team_id", workspaceId)
+                      .eq("user_id", memberToDelete.user_id);
+
+            if (error && !isRecoverableMemberDeleteError(error.message)) {
+              throw new Error(error.message);
+            }
+          }
+        }
+      }
+
+      const { error: profileDeleteError } = await supabase
+        .schema("tosho")
+        .from("team_member_profiles")
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", memberToDelete.user_id);
+      if (profileDeleteError && !isRecoverableTeamProfileError(profileDeleteError.message)) {
+        throw new Error(profileDeleteError.message);
+      }
+
+      setMembers((prev) => prev.filter((member) => member.user_id !== memberToDelete.user_id));
+      setMemberProfilesByUserId((prev) => {
+        const next = { ...prev };
+        delete next[memberToDelete.user_id];
+        return next;
+      });
+      setMemberMetaByUserId((prev) => {
+        const next = { ...prev };
+        delete next[memberToDelete.user_id];
+        return next;
+      });
+      setMemberPresenceByUserId((prev) => {
+        const next = { ...prev };
+        delete next[memberToDelete.user_id];
+        return next;
+      });
+      setMemberToDelete(null);
+      toast.success("Користувача видалено");
+    } catch (error: unknown) {
+      toast.error("Не вдалося видалити користувача", { description: getErrorMessage(error) });
+    } finally {
+      setMemberDeleteBusy(false);
+    }
+  };
+
   const updateAvailabilityStatus = async (member: Member, status: MemberProfileMeta["availabilityStatus"]) => {
     if (!workspaceId) return;
     try {
@@ -2039,6 +2169,22 @@ export function TeamMembersPage() {
                                     disabled: true,
                                     muted: true,
                                   },
+                              canManage &&
+                              (isSuperAdmin ||
+                                (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
+                                ? {
+                                    label: "Видалити користувача",
+                                    destructive: true,
+                                    onSelect: () => confirmDeleteMember(m),
+                                  }
+                                : {
+                                    label:
+                                      m.user_id === currentUserId
+                                        ? "Не можна видалити себе"
+                                        : "Видалення недоступне",
+                                    disabled: true,
+                                    muted: true,
+                                  },
                             ]}
                           />
                         </TableActionCell>
@@ -2588,6 +2734,39 @@ export function TeamMembersPage() {
               disabled={revokeBusy}
             >
               {revokeBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Так, видалити
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[24px]">
+          <div className="p-6 flex flex-col items-center text-center">
+            <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-foreground text-center">Видалити користувача?</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-center mt-2">
+                {memberToDelete
+                  ? `Користувач ${getMemberDisplayName(memberToDelete)} буде видалений з команди. Дію не можна скасувати.`
+                  : "Користувач буде видалений з команди."}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="p-6 pt-0 flex gap-3">
+            <Button variant="outline" className="flex-1 h-11" onClick={() => setMemberToDelete(null)} disabled={memberDeleteBusy}>
+              Скасувати
+            </Button>
+            <Button
+              variant="destructiveSolid"
+              className="flex-1 h-11"
+              onClick={handleDeleteMember}
+              disabled={memberDeleteBusy}
+            >
+              {memberDeleteBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
               Так, видалити
             </Button>
           </div>
