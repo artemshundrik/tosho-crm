@@ -99,6 +99,7 @@ import {
   Shirt,
   Image,
   Lock,
+  Calculator,
 } from "lucide-react";
 import {
   ATTACHMENTS_ACCEPT,
@@ -4376,224 +4377,221 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
           <div className="space-y-6">
           {/* Calculation (manager) */}
-          <Card className="quote-soft-card p-5">
-            <div className="mb-4 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-              <div className="text-lg font-semibold flex items-center gap-2">
-                💰 Розрахунок
+          <Card className="quote-soft-card p-0 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/60">
+              <div className="flex items-center gap-2">
+                <Calculator className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Тиражі</span>
+                {runs.length > 0 && (
+                  <span className="text-xs text-muted-foreground tabular-nums">({runs.length})</span>
+                )}
               </div>
               {canEditRuns ? (
-                <Button variant="outline" size="sm" onClick={addRun} className="gap-2">
-                  <Plus className="h-4 w-4" />
+                <Button variant="ghost" size="sm" onClick={addRun} className="h-7 gap-1.5 text-xs px-2.5">
+                  <Plus className="h-3.5 w-3.5" />
                   Додати тираж
                 </Button>
               ) : null}
             </div>
 
             {runsLoading ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Завантаження...</p>
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Завантаження...</span>
               </div>
             ) : runsError ? (
-              <div className="text-sm text-destructive py-4">{runsError}</div>
+              <div className="px-5 py-4 text-sm text-destructive">{runsError}</div>
             ) : runs.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/70 p-8 text-center">
-                <Package className="h-12 w-12 text-muted-foreground/30" />
+              <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                </div>
                 <div>
-                  <p className="font-medium mb-1">Немає тиражів</p>
-                  <p className="text-sm text-muted-foreground">Додайте перший тираж для розрахунку</p>
+                  <p className="text-sm font-medium">Немає тиражів</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Додайте тираж для розрахунку вартості</p>
                 </div>
                 {canEditRuns ? (
-                  <Button size="sm" onClick={addRun} className="gap-2">
-                    <Plus className="h-4 w-4" />
+                  <Button size="sm" variant="outline" onClick={addRun} className="mt-1 h-7 gap-1.5 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
                     Додати тираж
                   </Button>
                 ) : null}
               </div>
             ) : (
-              <div className="space-y-6">
+              <>
+                {/* Unified table */}
                 <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent border-b">
-                        <TableHead className="w-12"></TableHead>
-                        <TableHead className="w-28 font-semibold text-xs leading-tight">Кількість</TableHead>
-                        <TableHead className="w-32 font-semibold text-xs leading-tight">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 bg-muted/20">
+                        <th className="w-6 px-2 py-2.5" />
+                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Кількість
+                        </th>
+                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Ціна модель
-                          <div className="text-[11px] font-normal text-muted-foreground">{quote.currency}</div>
-                        </TableHead>
-                        <TableHead className="w-32 font-semibold text-xs leading-tight">
+                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
+                        </th>
+                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Ціна нанесення
-                          <div className="text-[11px] font-normal text-muted-foreground">{quote.currency}</div>
-                        </TableHead>
-                        <TableHead className="w-36 font-semibold text-xs text-right leading-tight">Сума</TableHead>
-                        <TableHead className="w-16"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
+                        </th>
+                        <th className="px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Доставка
+                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">{quote.currency}</span>
+                        </th>
+                        <th className="px-2 py-2.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Сума
+                        </th>
+                        <th className="w-8 px-1 py-2.5" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
                       {runs.map((run, idx) => {
                         const qty = Number(run.quantity) || 0;
                         const modelPrice = Number(run.unit_price_model) || 0;
                         const printPrice = Number(run.unit_price_print) || 0;
                         const logistics = Number(run.logistics_cost) || 0;
                         const total = (modelPrice + printPrice) * qty + logistics;
-                        void total;
                         const disabled = !canEditRuns;
                         const isSelected = !!run.id && run.id === selectedRunId;
                         return (
-                          <TableRow
+                          <tr
                             key={run.id ?? idx}
-                            className={cn(isSelected && "bg-primary/5 ring-1 ring-primary/20")}
+                            onClick={() => setSelectedRunId(run.id ?? null)}
+                            className={cn(
+                              "group cursor-pointer transition-colors",
+                              isSelected ? "bg-primary/[0.04]" : "hover:bg-muted/30"
+                            )}
                           >
-                            <TableCell className="w-12">
-                              <input
-                                type="radio"
-                                name="selected-run"
-                                className="h-4 w-4 accent-primary"
-                                checked={isSelected}
-                                onChange={() => setSelectedRunId(run.id ?? null)}
-                                aria-label="Обрати тираж"
+                            {/* Selection dot */}
+                            <td className="w-6 px-2 py-3">
+                              <div
+                                className={cn(
+                                  "mx-auto h-2 w-2 rounded-full transition-all",
+                                  isSelected
+                                    ? "bg-primary scale-110"
+                                    : "bg-border group-hover:bg-muted-foreground/40"
+                                )}
                               />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            {/* Quantity */}
+                            <td className="px-2 py-2">
                               <Input
                                 type="number"
-                                className="h-9"
+                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                 value={run.quantity ?? ""}
                                 disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.quantity === 0) e.target.select();
-                                }}
+                                onFocus={(e) => { if (run.quantity === 0) e.target.select(); }}
                                 min={1}
                               />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            {/* Model price */}
+                            <td className="px-2 py-2">
                               <Input
                                 type="number"
-                                className="h-9"
+                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                 value={run.unit_price_model ?? ""}
                                 disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.unit_price_model === 0) e.target.select();
-                                }}
+                                onFocus={(e) => { if (run.unit_price_model === 0) e.target.select(); }}
                                 min={0}
                               />
-                            </TableCell>
-                            <TableCell>
+                            </td>
+                            {/* Print price */}
+                            <td className="px-2 py-2">
                               <Input
                                 type="number"
-                                className="h-9"
+                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                 value={run.unit_price_print ?? ""}
                                 disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.unit_price_print === 0) e.target.select();
-                                }}
+                                onFocus={(e) => { if (run.unit_price_print === 0) e.target.select(); }}
                                 min={0}
                               />
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-right font-mono tabular-nums font-semibold">
-                                {formatCurrency((modelPrice + printPrice) * qty, quote.currency)}
-                                <div className="text-[11px] text-muted-foreground font-normal font-sans">
+                            </td>
+                            {/* Logistics */}
+                            <td className="px-2 py-2">
+                              <Input
+                                type="number"
+                                className="h-7 w-20 border-transparent bg-transparent px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                value={run.logistics_cost ?? ""}
+                                disabled={disabled}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
+                                onFocus={(e) => { if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select(); }}
+                                placeholder="—"
+                                min={0}
+                              />
+                            </td>
+                            {/* Total */}
+                            <td className="px-2 py-2 text-right">
+                              <div className="font-mono text-sm font-semibold tabular-nums whitespace-nowrap">
+                                {formatCurrency(total, quote.currency)}
+                              </div>
+                              {isSelected && (
+                                <div className="mt-0.5 text-[11px] text-muted-foreground whitespace-nowrap">
                                   ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
                                   {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
+                              )}
+                            </td>
+                            {/* Delete */}
+                            <td className="px-1 py-2">
                               {!disabled && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:text-destructive"
-                                  onClick={() => removeRun(idx)}
+                                  className="h-6 w-6 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                  onClick={(e) => { e.stopPropagation(); void removeRun(idx); }}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
-                            </TableCell>
-                          </TableRow>
+                            </td>
+                          </tr>
                         );
                       })}
-                    </TableBody>
-                  </Table>
+                    </tbody>
+                  </table>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  У підсумку використовується обраний тираж.
-                </div>
-                {selectedUnitCost !== null && (
-                  <div className="text-sm text-muted-foreground">
-                    Собівартість / од.:{" "}
-                    <span className="font-mono font-semibold text-foreground">
-                      {formatCurrency(selectedUnitCost, quote.currency)}
-                    </span>
-                  </div>
-                )}
-                {canEditRuns && (
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" onClick={saveRuns} disabled={runsSaving || quoteRequirements.length > 0}>
-                      {runsSaving ? "Збереження..." : "Зберегти розрахунок"}
-                    </Button>
-                  </div>
-                )}
 
-                <div className="border-t border-border/60 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-base font-semibold flex items-center gap-2">
-                      🚚 Логістика
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent border-b">
-                          <TableHead className="w-28 font-semibold text-xs">Кількість</TableHead>
-                          <TableHead className="w-40 font-semibold text-xs">Вартість доставки</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {runs.map((run, idx) => {
-                          const qty = Number(run.quantity) || 0;
-                          const disabled = !canEditRuns;
-                          const isSelected = !!run.id && run.id === selectedRunId;
-                          return (
-                            <TableRow key={`log-${run.id ?? idx}`} className={cn(isSelected && "bg-primary/5")}>
-                              <TableCell className="font-mono tabular-nums">{qty}</TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  className="h-9"
-                                  value={run.logistics_cost ?? ""}
-                                  disabled={disabled}
-                                  onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
-                                  min={0}
-                                  placeholder="очікує"
-                                  onFocus={(e) => {
-                                    if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
-                                  }}
-                                />
-                                {(!run.logistics_cost || Number(run.logistics_cost) === 0) && (
-                                  <div className="text-[11px] text-muted-foreground mt-1">очікує</div>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    {canEditRuns && (
-                      <div className="flex justify-end gap-2 mt-4">
-                        <Button size="sm" onClick={saveRuns} disabled={runsSaving || quoteRequirements.length > 0}>
-                          {runsSaving ? "Збереження..." : "Зберегти логістику"}
-                        </Button>
+                {/* Footer */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-5 py-3">
+                  <div className="flex flex-wrap items-center gap-4">
+                    {selectedUnitCost !== null && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Собівартість / од.:</span>
+                        <span className="font-mono text-xs font-semibold text-foreground">
+                          {formatCurrency(selectedUnitCost, quote.currency)}
+                        </span>
                       </div>
                     )}
+                    <span className="text-xs text-muted-foreground/50">Обраний тираж використовується в підсумку</span>
                   </div>
+                  {canEditRuns && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={saveRuns}
+                      disabled={runsSaving || quoteRequirements.length > 0}
+                      className="h-7 gap-1.5 text-xs"
+                    >
+                      {runsSaving ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )}
+                      {runsSaving ? "Збереження..." : "Зберегти"}
+                    </Button>
+                  )}
                 </div>
-              </div>
+              </>
             )}
           </Card>
 
@@ -4659,98 +4657,92 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             )}
           </Card>
 
-          {/* Summary Card - Improved */}
-          <Card className="h-full p-4 bg-gradient-to-br from-card to-muted/5 border-border/60 shadow-sm 2xl:p-5">
-            <div className="text-lg font-semibold mb-4">Підсумок</div>
-            
-            <div className="space-y-3">
+          {/* Summary Card */}
+          <Card className="h-full overflow-hidden border-border/60 bg-gradient-to-br from-card to-muted/5 p-0 shadow-sm">
+            {/* Header */}
+            <div className="border-b border-border/60 px-5 py-3.5">
+              <div className="text-sm font-semibold">Підсумок</div>
+            </div>
+
+            <div className="px-5 py-4">
               {/* Subtotal */}
-              <div className="flex justify-between items-center py-2">
+              <div className="flex items-center justify-between py-2.5 text-sm">
                 <span className="text-muted-foreground">Підсумок</span>
-                <span className="font-mono text-base font-semibold tabular-nums 2xl:text-lg">
+                <span className="font-mono font-semibold tabular-nums">
                   {formatCurrency(totals.subtotal, quote.currency)}
                 </span>
               </div>
-              
+
+              <div className="border-t border-dashed border-border/50" />
+
               {/* Discount */}
-              <div className="flex justify-between items-center py-2 border-t border-dashed border-border/50">
+              <div className="flex items-center justify-between py-2.5 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Знижка</span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center">
                     <Input
                       type="number"
                       value={discount}
                       onChange={(e) => setDiscount(e.target.value)}
-                      className="h-8 w-14 text-right text-sm 2xl:w-16"
+                      className="h-6 w-12 border-border/40 bg-muted/20 px-1.5 text-right text-xs focus:bg-background"
                       placeholder="0"
                       min="0"
                       max="100"
                     />
-                    <span className="text-xs text-muted-foreground">%</span>
+                    <span className="ml-1 text-xs text-muted-foreground">%</span>
                   </div>
                 </div>
-                <span className="font-mono text-base font-semibold text-destructive tabular-nums flex items-center gap-1 2xl:text-lg">
-                  <TrendingDown className="h-4 w-4" />
-                  {formatCurrency(totals.discountAmount, quote.currency)}
+                <span className="font-mono text-sm font-medium tabular-nums text-destructive">
+                  −{formatCurrency(totals.discountAmount, quote.currency)}
                 </span>
               </div>
-              
+
               {/* Tax */}
-              <div className="flex justify-between items-center py-2">
+              <div className="flex items-center justify-between py-2.5 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Податок</span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center">
                     <Input
                       type="number"
                       value={tax}
                       onChange={(e) => setTax(e.target.value)}
-                      className="h-8 w-14 text-right text-sm 2xl:w-16"
+                      className="h-6 w-12 border-border/40 bg-muted/20 px-1.5 text-right text-xs focus:bg-background"
                       placeholder="0"
                       min="0"
                       max="100"
                     />
-                    <span className="text-xs text-muted-foreground">%</span>
+                    <span className="ml-1 text-xs text-muted-foreground">%</span>
                   </div>
                 </div>
-                <span className="font-mono text-base font-semibold text-emerald-600 tabular-nums flex items-center gap-1 2xl:text-lg">
-                  <TrendingUp className="h-4 w-4" />
-                  {formatCurrency(totals.taxAmount, quote.currency)}
+                <span className="font-mono text-sm font-medium tabular-nums text-emerald-600">
+                  +{formatCurrency(totals.taxAmount, quote.currency)}
                 </span>
               </div>
-              
+
               {/* Total */}
-              <div className="flex justify-between items-center py-4 border-t-2 border-border">
-                <span className="font-semibold text-base 2xl:text-lg">Загальна сума</span>
-                <span className="font-mono text-xl font-bold text-primary tabular-nums 2xl:text-2xl">
-                  {formatCurrency(totals.total, quote.currency)}
-                </span>
+              <div className="mt-1 border-t-2 border-border pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Загальна сума</span>
+                  <span className="font-mono text-xl font-bold tabular-nums text-primary">
+                    {formatCurrency(totals.total, quote.currency)}
+                  </span>
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Формула: (Підсумок − Знижка) + Податок
+
+              {/* Meta */}
+              <div className="mt-3 space-y-1.5 border-t border-dashed border-border/40 pt-3">
+                <div className="text-[11px] text-muted-foreground/60">
+                  Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
+                </div>
+                {items.length > 0 && (
+                  <div className="flex justify-between text-[11px] text-muted-foreground/60">
+                    <span>Позицій:</span>
+                    <span className="font-medium text-muted-foreground">{items.length}</span>
+                  </div>
+                )}
               </div>
             </div>
-            
-            {/* Stats */}
-            {items.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-dashed border-border/50">
-                <div className="text-xs text-muted-foreground space-y-1.5">
-                  <div className="flex justify-between">
-                    <span>Позицій:</span>
-                    <span className="font-medium text-foreground">{items.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Середня ціна позиції:</span>
-                    <span className="font-medium text-foreground">
-                      {formatCurrency(totals.subtotal / items.length, quote.currency)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-	          </Card>
+          </Card>
 	          </div>
 	          </div>
         </div>
