@@ -1445,6 +1445,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_model: 0,
             unit_price_print: 0,
             logistics_cost: 0,
+            desired_manager_income: 0,
+            manager_rate: 10,
+            fixed_cost_rate: 30,
+            vat_rate: 20,
             team_id: teamId,
           }));
           let { error: runsError } = await supabase
@@ -1461,6 +1465,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               .from("quote_item_runs")
               .insert(
                 runRows.map(({ team_id: _teamId, ...row }) => row)
+              ));
+          }
+          if (
+            runsError &&
+            /column/i.test(runsError.message ?? "") &&
+            /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(runsError.message ?? "")
+          ) {
+            ({ error: runsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .insert(
+                runRows.map(
+                  ({
+                    team_id: _teamId,
+                    desired_manager_income: _desiredManagerIncome,
+                    manager_rate: _managerRate,
+                    fixed_cost_rate: _fixedCostRate,
+                    vat_rate: _vatRate,
+                    ...row
+                  }) => row
+                )
               ));
           }
           if (runsError) throw runsError;
@@ -2948,6 +2973,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_model: Number(run.unit_price_model ?? 0) || 0,
             unit_price_print: Number(run.unit_price_print ?? 0) || 0,
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+            desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+            manager_rate: Number(run.manager_rate ?? 10) || 10,
+            fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
+            vat_rate: Number(run.vat_rate ?? 20) || 20,
           }))
         );
       }
@@ -3164,6 +3193,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               unit_price_model: 0,
               unit_price_print: 0,
               logistics_cost: 0,
+              desired_manager_income: 0,
+              manager_rate: 10,
+              fixed_cost_rate: 30,
+              vat_rate: 20,
             }))
           );
         }

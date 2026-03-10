@@ -47,7 +47,16 @@ export type QuoteRun = {
   unit_price_model: number;
   unit_price_print: number;
   logistics_cost: number;
+  desired_manager_income: number;
+  manager_rate: number;
+  fixed_cost_rate: number;
+  vat_rate: number;
 };
+
+const QUOTE_RUN_SELECT =
+  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate";
+const QUOTE_RUN_LEGACY_SELECT =
+  "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
 
 export type QuoteStatusRow = {
   id: string;
@@ -717,11 +726,11 @@ export async function getQuoteSummary(quoteId: string) {
 }
 
 export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
-  const runQuery = async (withTeamFilter: boolean) => {
+  const runQuery = async (withTeamFilter: boolean, useFallbackSelect = false) => {
     let query = supabase
       .schema("tosho")
       .from("quote_item_runs")
-      .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost")
+      .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
       .eq("quote_id", quoteId)
       .order("created_at", { ascending: true });
     if (withTeamFilter && teamId) {
@@ -739,8 +748,35 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
   ) {
     ({ data, error } = await runQuery(false));
   }
+  if (
+    error &&
+    /column/i.test(error.message ?? "") &&
+    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+  ) {
+    ({ data, error } = await runQuery(!!teamId, true));
+    if (
+      error &&
+      teamId &&
+      /column/i.test(error.message ?? "") &&
+      /team_id/i.test(error.message ?? "")
+    ) {
+      ({ data, error } = await runQuery(false, true));
+    }
+  }
   handleError(error);
-  return (data as QuoteRun[]) ?? [];
+  return ((data as Array<Partial<QuoteRun>>) ?? []).map((run) => ({
+    id: run.id,
+    quote_id: run.quote_id,
+    quote_item_id: run.quote_item_id ?? null,
+    quantity: Number(run.quantity ?? 0) || 0,
+    unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+    unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+    logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+    desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+    manager_rate: Number(run.manager_rate ?? 10) || 10,
+    fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
+    vat_rate: Number(run.vat_rate ?? 20) || 20,
+  }));
 }
 
 export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
@@ -753,6 +789,10 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
       unit_price_model: run.unit_price_model,
       unit_price_print: run.unit_price_print,
       logistics_cost: run.logistics_cost,
+      desired_manager_income: run.desired_manager_income,
+      manager_rate: run.manager_rate,
+      fixed_cost_rate: run.fixed_cost_rate,
+      vat_rate: run.vat_rate,
     } as Record<string, unknown>;
     if (run.id) {
       base.id = run.id;
@@ -760,13 +800,45 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     return base;
   });
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .schema("tosho")
     .from("quote_item_runs")
     .upsert(payload, { onConflict: "id" })
-    .select("id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost");
+    .select(QUOTE_RUN_SELECT);
+  if (
+    error &&
+    /column/i.test(error.message ?? "") &&
+    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+  ) {
+    const fallbackPayload = payload.map(
+      ({
+        desired_manager_income: _desiredManagerIncome,
+        manager_rate: _managerRate,
+        fixed_cost_rate: _fixedCostRate,
+        vat_rate: _vatRate,
+        ...legacyPayload
+      }) => legacyPayload
+    );
+    ({ data, error } = await supabase
+      .schema("tosho")
+      .from("quote_item_runs")
+      .upsert(fallbackPayload, { onConflict: "id" })
+      .select(QUOTE_RUN_LEGACY_SELECT));
+  }
   handleError(error);
-  return (data as QuoteRun[]) ?? [];
+  return ((data as Array<Partial<QuoteRun>>) ?? []).map((run) => ({
+    id: run.id,
+    quote_id: run.quote_id,
+    quote_item_id: run.quote_item_id ?? null,
+    quantity: Number(run.quantity ?? 0) || 0,
+    unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+    unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+    logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+    desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+    manager_rate: Number(run.manager_rate ?? 10) || 10,
+    fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
+    vat_rate: Number(run.vat_rate ?? 20) || 20,
+  }));
 }
 
 export async function listStatusHistory(quoteId: string, teamId?: string | null) {

@@ -175,6 +175,9 @@ type QuoteDetailsCachePayload = {
 };
 
 const DEFAULT_DEADLINE_TIME = "09:00";
+const DEFAULT_MANAGER_RATE = 10;
+const DEFAULT_FIXED_COST_RATE = 30;
+const DEFAULT_VAT_RATE = 20;
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -516,7 +519,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [qtyValue, setQtyValue] = useState("");
 
   const [discount, setDiscount] = useState("0");
-  const [tax, setTax] = useState("0");
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState("new");
@@ -551,6 +553,54 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return (model + print) * qty + logistics;
   };
 
+  const getRunPricing = (run: QuoteRun | null) => {
+    if (!run) {
+      return {
+        costTotal: 0,
+        costPerUnit: null as number | null,
+        desiredManagerIncome: 0,
+        managerRate: DEFAULT_MANAGER_RATE,
+        fixedCostRate: DEFAULT_FIXED_COST_RATE,
+        vatRate: DEFAULT_VAT_RATE,
+        requiredGrossProfit: 0,
+        fixedCosts: 0,
+        vatAmount: 0,
+        markupTotal: 0,
+        saleTotal: 0,
+        saleUnitPrice: null as number | null,
+      };
+    }
+
+    const quantity = Math.max(0, Number(run.quantity) || 0);
+    const costTotal = getRunTotal(run);
+    const costPerUnit = quantity > 0 ? costTotal / quantity : null;
+    const desiredManagerIncome = Math.max(0, Number(run.desired_manager_income) || 0);
+    const managerRate = Math.max(0, Number(run.manager_rate) || DEFAULT_MANAGER_RATE);
+    const fixedCostRate = Math.max(0, Number(run.fixed_cost_rate) || DEFAULT_FIXED_COST_RATE);
+    const vatRate = Math.max(0, Number(run.vat_rate) || DEFAULT_VAT_RATE);
+    const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
+    const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
+    const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
+    const markupTotal = requiredGrossProfit + fixedCosts + vatAmount;
+    const saleTotal = costTotal + markupTotal;
+    const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
+
+    return {
+      costTotal,
+      costPerUnit,
+      desiredManagerIncome,
+      managerRate,
+      fixedCostRate,
+      vatRate,
+      requiredGrossProfit,
+      fixedCosts,
+      vatAmount,
+      markupTotal,
+      saleTotal,
+      saleUnitPrice,
+    };
+  };
+
   // Runs (tirages)
   const addRun = () => {
     const newId = crypto.randomUUID();
@@ -562,6 +612,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_model: 0,
         unit_price_print: 0,
         logistics_cost: 0,
+        desired_manager_income: 0,
+        manager_rate: DEFAULT_MANAGER_RATE,
+        fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+        vat_rate: DEFAULT_VAT_RATE,
       },
     ]);
     setSelectedRunId(newId);
@@ -576,9 +630,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const updateRunRaw = (
     index: number,
-    field: "quantity" | "unit_price_model" | "unit_price_print" | "logistics_cost",
+    field:
+      | "quantity"
+      | "unit_price_model"
+      | "unit_price_print"
+      | "logistics_cost"
+      | "desired_manager_income"
+      | "manager_rate"
+      | "fixed_cost_rate"
+      | "vat_rate",
     raw: string
   ) => {
+    if (index < 0) return;
     const parsed = raw === "" ? null : Number(raw);
     setRuns((prev) =>
       prev.map((run, i) => (i === index ? { ...run, [field]: parsed } : run))
@@ -602,6 +665,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
+        desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+        manager_rate: Math.max(0, Number(run.manager_rate) || DEFAULT_MANAGER_RATE),
+        fixed_cost_rate: Math.max(0, Number(run.fixed_cost_rate) || DEFAULT_FIXED_COST_RATE),
+        vat_rate: Math.max(0, Number(run.vat_rate) || DEFAULT_VAT_RATE),
       }));
       // delete missing (present before, absent now)
       const originalIds = new Set(
@@ -736,11 +803,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null,
     [runs, selectedRunId]
   );
+  const selectedRunIndex = useMemo(
+    () => runs.findIndex((run) => run === selectedRun),
+    [runs, selectedRun]
+  );
 
   const selectedRunTotal = useMemo(() => {
     if (!selectedRun) return 0;
     return getRunTotal(selectedRun);
   }, [selectedRun]);
+
+  const selectedRunPricing = useMemo(() => getRunPricing(selectedRun), [selectedRun]);
 
   const selectedUnitCost = useMemo(() => {
     if (!selectedRun) return null;
@@ -1248,22 +1321,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [activityEvents]);
 
   const totals = useMemo(() => {
-    const subtotal = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
+    const subtotal = runs.length > 0 ? selectedRunPricing.saleTotal : itemsSubtotal;
     const discountPercent = Number(discount) || 0;
-    const taxPercent = Number(tax) || 0;
-    
     const discountAmount = (subtotal * discountPercent) / 100;
-    const afterDiscount = subtotal - discountAmount;
-    const taxAmount = (afterDiscount * taxPercent) / 100;
-    const total = afterDiscount + taxAmount;
-    
-    return { 
-      subtotal, 
-      discountAmount, 
-      taxAmount, 
-      total: Math.max(0, total) 
+
+    return {
+      subtotal,
+      discountAmount,
+      total: Math.max(0, subtotal - discountAmount),
     };
-  }, [itemsSubtotal, discount, tax, selectedRunTotal, runs.length]);
+  }, [itemsSubtotal, discount, runs.length, selectedRunPricing.saleTotal]);
 
   const selectedType = useMemo(
     () => catalogTypes.find((type) => type.id === itemTypeId) ?? null,
@@ -2155,6 +2222,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_model: 0,
           unit_price_print: 0,
           logistics_cost: 0,
+          desired_manager_income: 0,
+          manager_rate: DEFAULT_MANAGER_RATE,
+          fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+          vat_rate: DEFAULT_VAT_RATE,
         },
       ]);
       setSelectedRunId(newId);
@@ -2964,6 +3035,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_model: Number(run.unit_price_model ?? 0) || 0,
           unit_price_print: Number(run.unit_price_print ?? 0) || 0,
           logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+          desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+          manager_rate: Number(run.manager_rate ?? DEFAULT_MANAGER_RATE) || DEFAULT_MANAGER_RATE,
+          fixed_cost_rate: Number(run.fixed_cost_rate ?? DEFAULT_FIXED_COST_RATE) || DEFAULT_FIXED_COST_RATE,
+          vat_rate: Number(run.vat_rate ?? DEFAULT_VAT_RATE) || DEFAULT_VAT_RATE,
         }));
         await upsertQuoteRuns(newQuoteId, runsPayload);
       }
@@ -3157,6 +3232,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               unit_price_model: 0,
               unit_price_print: 0,
               logistics_cost: 0,
+              desired_manager_income: 0,
+              manager_rate: DEFAULT_MANAGER_RATE,
+              fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+              vat_rate: DEFAULT_VAT_RATE,
             }))
           );
         }
@@ -5975,7 +6054,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
                     <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Фінальний підсумок по вибраному тиражу, знижці, податку і загальній сумі.
+                      Фінальний підсумок по вибраному тиражу: собівартість, бажаний заробіток, націнка та ціна продажу.
                     </div>
                   </div>
                 </div>
@@ -5984,11 +6063,127 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <div className="space-y-3 px-0 py-0">
                 <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-muted-foreground">Підсумок</span>
+                  <span className="text-muted-foreground">Собівартість</span>
                   <span className="font-mono font-semibold tabular-nums">
-                    {formatCurrency(totals.subtotal, quote.currency)}
+                    {formatCurrency(runs.length > 0 ? selectedRunPricing.costTotal : totals.subtotal, quote.currency)}
                   </span>
                 </div>
+
+                {selectedRun ? (
+                  <>
+                    <div className="rounded-xl border border-border/50 bg-muted/[0.08] p-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Бажаний заробіток
+                          </Label>
+                          <Input
+                            type="number"
+                            value={selectedRun.desired_manager_income ?? ""}
+                            onChange={(e) => updateRunRaw(selectedRunIndex, "desired_manager_income", e.target.value)}
+                            onFocus={(e) => {
+                              if ((Number(selectedRun.desired_manager_income) || 0) === 0) {
+                                e.target.select();
+                              }
+                            }}
+                            className="h-8 border-transparent bg-muted/20 px-2 text-sm hover:border-border focus:border-border focus:bg-background"
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Ціна продажу / од.
+                          </Label>
+                          <div className="flex h-8 items-center rounded-md border border-border/50 bg-background px-2 font-mono text-sm font-semibold tabular-nums text-primary">
+                            {selectedRunPricing.saleUnitPrice === null
+                              ? "—"
+                              : formatCurrency(selectedRunPricing.saleUnitPrice, quote.currency)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">% менеджера</Label>
+                          <Input
+                            type="number"
+                            value={selectedRun.manager_rate ?? ""}
+                            onChange={(e) => updateRunRaw(selectedRunIndex, "manager_rate", e.target.value)}
+                            onFocus={(e) => {
+                              if ((Number(selectedRun.manager_rate) || 0) === 0) {
+                                e.target.select();
+                              }
+                            }}
+                            className="h-8 border-transparent bg-muted/20 px-2 text-sm hover:border-border focus:border-border focus:bg-background"
+                            placeholder={String(DEFAULT_MANAGER_RATE)}
+                            min="0"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Сталі витрати %</Label>
+                          <Input
+                            type="number"
+                            value={selectedRun.fixed_cost_rate ?? ""}
+                            onChange={(e) => updateRunRaw(selectedRunIndex, "fixed_cost_rate", e.target.value)}
+                            onFocus={(e) => {
+                              if ((Number(selectedRun.fixed_cost_rate) || 0) === 0) {
+                                e.target.select();
+                              }
+                            }}
+                            className="h-8 border-transparent bg-muted/20 px-2 text-sm hover:border-border focus:border-border focus:bg-background"
+                            placeholder={String(DEFAULT_FIXED_COST_RATE)}
+                            min="0"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">ПДВ %</Label>
+                          <Input
+                            type="number"
+                            value={selectedRun.vat_rate ?? ""}
+                            onChange={(e) => updateRunRaw(selectedRunIndex, "vat_rate", e.target.value)}
+                            onFocus={(e) => {
+                              if ((Number(selectedRun.vat_rate) || 0) === 0) {
+                                e.target.select();
+                              }
+                            }}
+                            className="h-8 border-transparent bg-muted/20 px-2 text-sm hover:border-border focus:border-border focus:bg-background"
+                            placeholder={String(DEFAULT_VAT_RATE)}
+                            min="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">Потрібний валовий прибуток</span>
+                      <span className="font-mono font-medium tabular-nums">
+                        {formatCurrency(selectedRunPricing.requiredGrossProfit, quote.currency)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">Сталі витрати</span>
+                      <span className="font-mono font-medium tabular-nums">
+                        {formatCurrency(selectedRunPricing.fixedCosts, quote.currency)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">ПДВ</span>
+                      <span className="font-mono font-medium tabular-nums text-emerald-600">
+                        +{formatCurrency(selectedRunPricing.vatAmount, quote.currency)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">Націнка</span>
+                      <span className="font-mono font-medium tabular-nums text-primary">
+                        +{formatCurrency(selectedRunPricing.markupTotal, quote.currency)}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="flex items-center justify-between gap-4 py-1 text-sm">
                   <div className="flex items-center gap-2">
@@ -6011,30 +6206,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 py-1 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Податок</span>
-                    <div className="flex items-center">
-                      <Input
-                        type="number"
-                        value={tax}
-                        onChange={(e) => setTax(e.target.value)}
-                        className="h-7 w-14 border-transparent bg-muted/20 px-1.5 text-right text-xs hover:border-border focus:border-border focus:bg-background"
-                        placeholder="0"
-                        min="0"
-                        max="100"
-                      />
-                      <span className="ml-1 text-xs text-muted-foreground">%</span>
-                    </div>
-                  </div>
-                  <span className="font-mono text-sm font-medium tabular-nums text-emerald-600">
-                    +{formatCurrency(totals.taxAmount, quote.currency)}
-                  </span>
-                </div>
-
                 <div className="border-t border-border/50 pt-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Загальна сума</span>
+                    <span className="text-sm font-semibold">{selectedRun ? "Сума продажу" : "Загальна сума"}</span>
                     <span className="font-mono text-2xl font-bold tabular-nums text-primary">
                       {formatCurrency(totals.total, quote.currency)}
                     </span>
