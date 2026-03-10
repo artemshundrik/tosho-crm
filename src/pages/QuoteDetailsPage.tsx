@@ -145,6 +145,8 @@ import {
   type QuoteDeadlineTone,
 } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
+import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import {
   type CatalogKind,
   type CatalogMethod,
@@ -165,6 +167,11 @@ import {
 type QuoteDetailsPageProps = {
   teamId: string;
   quoteId: string;
+};
+
+type QuoteDetailsCachePayload = {
+  quote: QuoteSummaryRow;
+  cachedAt: number;
 };
 
 const DEFAULT_DEADLINE_TIME = "09:00";
@@ -333,17 +340,34 @@ const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
   return value;
 };
 
+function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCachePayload | null {
+  if (typeof window === "undefined" || !teamId || !quoteId) return null;
+  try {
+    const raw = sessionStorage.getItem(`quote-details-cache:${teamId}:${quoteId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QuoteDetailsCachePayload;
+    if (!parsed.quote || typeof parsed.quote !== "object") return null;
+    return {
+      quote: parsed.quote,
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
   const { userId } = useAuth();
+  const initialCache = readQuoteDetailsCache(teamId, quoteId);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
     () => getEntityViewers("quote", quoteId),
     [getEntityViewers, quoteId]
   );
 
-  const [quote, setQuote] = useState<QuoteSummaryRow | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [quote, setQuote] = useState<QuoteSummaryRow | null>(() => initialCache?.quote ?? null);
+  const [loading, setLoading] = useState(() => !initialCache?.quote);
   const [error, setError] = useState<string | null>(null);
 
   const [statusNote, setStatusNote] = useState("");
@@ -1498,9 +1522,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [teamId, editQuoteDialogOpen, editQuoteCustomerSearch]);
 
   const loadQuote = async () => {
-    setLoading(true);
+    if (!quote) setLoading(true);
     setError(null);
-    setQuote(null);
     try {
       const summary = await getQuoteSummary(quoteId);
       if (summary.team_id && summary.team_id !== teamId) {
@@ -1520,6 +1543,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           : String(summary.deadline_reminder_offset_minutes)
       );
       setDeadlineReminderComment(summary.deadline_reminder_comment ?? "");
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            `quote-details-cache:${teamId}:${quoteId}`,
+            JSON.stringify({
+              quote: summary,
+              cachedAt: Date.now(),
+            } satisfies QuoteDetailsCachePayload)
+          );
+        } catch {
+          // ignore cache persistence failures
+        }
+      }
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити прорахунок.");
       if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
@@ -1527,7 +1563,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } else {
         setError(message);
       }
-      setQuote(null);
+      if (!quote) setQuote(null);
     } finally {
       setLoading(false);
     }
@@ -3806,14 +3842,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-sm text-muted-foreground">Завантаження прорахунку...</p>
-        </div>
-      </div>
-    );
+    return <AppPageLoader title="Завантаження" subtitle="Готуємо прорахунок." />;
   }
 
   if (error || !quote) {
@@ -4045,10 +4074,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               )}
 
               {itemsLoading ? (
-                <div className="py-10 text-center">
-                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Завантаження...</p>
-                </div>
+                <AppSectionLoader label="Завантаження..." />
               ) : itemsError ? (
                 <div className="py-4 text-sm text-destructive">{itemsError}</div>
               ) : items.length === 0 ? null : (
@@ -5376,10 +5402,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
 
                     {commentsLoading ? (
-                      <div className="py-6 text-center">
-                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Завантаження...</p>
-                      </div>
+                      <AppSectionLoader label="Завантаження..." className="border-none bg-transparent py-2" />
                     ) : commentsError ? (
                       <div className="text-sm text-destructive">{commentsError}</div>
                     ) : comments.length === 0 ? (

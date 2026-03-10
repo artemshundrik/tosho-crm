@@ -1,3 +1,5 @@
+import { AppPageLoader } from "@/components/app/AppPageLoader";
+
 export function PageSkeleton() {
-  return null;
+  return <AppPageLoader title="Завантаження" subtitle="Готуємо сторінку." />;
 }

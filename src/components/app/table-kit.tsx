@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { Loader2 } from "lucide-react";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
 type TableHeaderCellProps = React.ThHTMLAttributes<HTMLTableCellElement> & {
@@ -162,6 +163,24 @@ export function TableEmptyRow({ colSpan, children }: TableEmptyRowProps) {
     <TableRow>
       <TableCell colSpan={colSpan} className="h-24 text-center text-sm text-muted-foreground">
         {children}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+type TableLoadingRowProps = {
+  colSpan: number;
+  label?: string;
+};
+
+export function TableLoadingRow({ colSpan, label = "Завантаження..." }: TableLoadingRowProps) {
+  return (
+    <TableRow>
+      <TableCell colSpan={colSpan} className="h-24 text-center text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>{label}</span>
+        </div>
       </TableCell>
     </TableRow>
   );

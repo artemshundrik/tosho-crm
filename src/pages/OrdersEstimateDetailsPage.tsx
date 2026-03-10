@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
+import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { QuoteDetailsPage } from "@/pages/QuoteDetailsPage";
 
 export default function OrdersEstimateDetailsPage() {
@@ -11,7 +12,7 @@ export default function OrdersEstimateDetailsPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
+    return <AppPageLoader title="Завантаження" subtitle="Відкриваємо прорахунок." />;
   }
 
   if (!session) {

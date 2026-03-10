@@ -35,6 +35,7 @@ import {
   TableActionCell,
   TableActionHeaderCell,
   TableEmptyRow,
+  TableLoadingRow,
   TableTextHeaderCell,
 } from "@/components/app/table-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
@@ -65,6 +66,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -367,6 +369,7 @@ export function TeamMembersPage() {
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
   const hasCache = Boolean(cached);
+  const [workspaceResolved, setWorkspaceResolved] = useState(Boolean(cached?.workspaceId));
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(cached?.workspaceId ?? null);
   const [workspaceLoading, setWorkspaceLoading] = useState(!hasCache);
@@ -380,11 +383,11 @@ export function TeamMembersPage() {
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
   >(cached?.memberProfilesByUserId ?? {});
-  const [memberProfilesLoading, setMemberProfilesLoading] = useState(false);
+  const [memberProfilesLoading, setMemberProfilesLoading] = useState(!hasCache);
   const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>(
     cached?.memberMetaByUserId ?? {}
   );
-  const [memberMetaLoading, setMemberMetaLoading] = useState(false);
+  const [memberMetaLoading, setMemberMetaLoading] = useState(!hasCache);
   const [memberProfileStorageAvailable, setMemberProfileStorageAvailable] = useState(true);
   const [memberPresenceByUserId, setMemberPresenceByUserId] = useState<Record<string, MemberPresence>>({});
   const [activityRange, setActivityRange] = useState<"day" | "week" | "month">("day");
@@ -487,6 +490,7 @@ export function TeamMembersPage() {
         if (!cancelled) {
           setWorkspaceId(resolvedId);
           setWorkspaceLoading(false);
+          setWorkspaceResolved(true);
         }
       }
     };
@@ -593,6 +597,22 @@ export function TeamMembersPage() {
           setMemberProfilesByUserId({});
           return;
         }
+
+        const warmMap = memberIds.reduce<Record<string, { label: string; avatarUrl: string | null }>>((acc, id) => {
+          const baseMember = members.find((member) => member.user_id === id);
+          const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
+          acc[id] = {
+            label:
+              formatUserShortName({
+                fullName: baseMember?.full_name ?? null,
+                email: baseMember?.email ?? null,
+                fallback: emailFallback,
+              }) || emailFallback,
+            avatarUrl: baseMember?.avatar_url ?? null,
+          };
+          return acc;
+        }, {});
+        setMemberProfilesByUserId((prev) => ({ ...warmMap, ...prev }));
 
         const hasWarmProfiles = memberIds.every((id) => {
           const cachedProfile = memberProfilesByUserId[id];
@@ -1841,11 +1861,14 @@ export function TeamMembersPage() {
   };
 
   const showSkeleton = useMinimumLoading(
-    (workspaceLoading ||
+    (!workspaceResolved ||
+      workspaceLoading ||
       membersLoading ||
+      memberProfilesLoading ||
+      (canManage && memberMetaLoading) ||
       (activeTab === "invites" && invitesLoading) ||
       (activeTab === "activity" && teamActivityLoading)) &&
-      !hasCache
+      (!hasCache || !workspaceResolved)
   );
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
@@ -2027,8 +2050,6 @@ export function TeamMembersPage() {
               <TableBody>
                 {membersError ? (
                   <TableEmptyRow colSpan={7}>Помилка завантаження: {membersError}</TableEmptyRow>
-                ) : memberProfilesLoading || memberMetaLoading ? (
-                  <TableEmptyRow colSpan={7}>Завантаження профілів учасників...</TableEmptyRow>
                 ) : filteredMembers.length === 0 ? (
                   <TableEmptyRow colSpan={7}>Нема учасників.</TableEmptyRow>
                 ) : (
@@ -2371,7 +2392,7 @@ export function TeamMembersPage() {
               </Button>
             </div>
             {teamActivityLoading ? (
-              <div className="text-sm text-muted-foreground">Завантаження активності...</div>
+              <AppSectionLoader label="Завантаження активності..." compact />
             ) : teamActivityItems.length === 0 ? (
               <div className="text-sm text-muted-foreground">Немає дій за обраний період.</div>
             ) : (

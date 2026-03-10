@@ -73,6 +73,8 @@ import {
 } from "@/lib/designTaskTimer";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 
 type DesignTask = {
   id: string;
@@ -212,6 +214,17 @@ type DesignBriefChangeRequest = {
   applied_version_id: string | null;
 };
 
+type DesignTaskPageCachePayload = {
+  task: DesignTask;
+  quoteItem: QuoteItemRow | null;
+  productPreviewUrl: string | null;
+  attachments: AttachmentRow[];
+  designOutputFiles: DesignOutputFile[];
+  designOutputLinks: DesignOutputLink[];
+  designOutputGroups: string[];
+  cachedAt: number;
+};
+
 const statusLabels = DESIGN_STATUS_LABELS;
 
 const statusColors: Record<DesignStatus, string> = {
@@ -332,6 +345,28 @@ const parseBriefVersions = (value: unknown): DesignBriefVersion[] => {
   return rows.sort((a, b) => a.version - b.version);
 };
 
+function readDesignTaskPageCache(teamId: string, taskId: string): DesignTaskPageCachePayload | null {
+  if (typeof window === "undefined" || !teamId || !taskId) return null;
+  try {
+    const raw = sessionStorage.getItem(`design-task-page-cache:${teamId}:${taskId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DesignTaskPageCachePayload;
+    if (!parsed.task || typeof parsed.task !== "object") return null;
+    return {
+      task: parsed.task,
+      quoteItem: parsed.quoteItem ?? null,
+      productPreviewUrl: typeof parsed.productPreviewUrl === "string" ? parsed.productPreviewUrl : null,
+      attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
+      designOutputFiles: Array.isArray(parsed.designOutputFiles) ? parsed.designOutputFiles : [],
+      designOutputLinks: Array.isArray(parsed.designOutputLinks) ? parsed.designOutputLinks : [],
+      designOutputGroups: Array.isArray(parsed.designOutputGroups) ? parsed.designOutputGroups : [],
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] => {
   if (!Array.isArray(value)) return [];
   const rows = value
@@ -450,18 +485,19 @@ export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, permissions } = useAuth();
   const navigate = useNavigate();
+  const initialCache = readDesignTaskPageCache(teamId ?? "", id ?? "");
   const { getEntityViewers } = useWorkspacePresence();
   const designTaskViewers = useMemo(
     () => (id ? getEntityViewers("design_task", id) : []),
     [getEntityViewers, id]
   );
-  const [task, setTask] = useState<DesignTask | null>(null);
-  const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(null);
-  const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
-  const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>([]);
-  const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>([]);
-  const [designOutputGroups, setDesignOutputGroups] = useState<string[]>([]);
+  const [task, setTask] = useState<DesignTask | null>(() => initialCache?.task ?? null);
+  const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(() => initialCache?.quoteItem ?? null);
+  const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(() => initialCache?.productPreviewUrl ?? null);
+  const [attachments, setAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
+  const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>(() => initialCache?.designOutputFiles ?? []);
+  const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>(() => initialCache?.designOutputLinks ?? []);
+  const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
   const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
@@ -515,7 +551,7 @@ export default function DesignTaskPage() {
   >(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingTask, setDeletingTask] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
   const [briefDirty, setBriefDirty] = useState(false);
@@ -812,7 +848,7 @@ export default function DesignTaskPage() {
   useEffect(() => {
     const load = async () => {
       if (!id || !effectiveTeamId) return;
-      setLoading(true);
+      if (!task) setLoading(true);
       setError(null);
       try {
         const { data: row, error: rowError } = await supabase
@@ -1214,7 +1250,7 @@ export default function DesignTaskPage() {
           metaBriefVersions[metaBriefVersions.length - 1] ??
           null;
 
-        setTask({
+        const nextTask = {
           id,
           quoteId,
           title: (row?.title as string) ?? null,
@@ -1256,7 +1292,7 @@ export default function DesignTaskPage() {
           createdAt:
             (typeof row?.created_at === "string" && row.created_at ? row.created_at : null) ??
             (quote?.created_at as string | null),
-        });
+        };
         const designOutputKeys = new Set(
           designFilesWithUrls.map((file) => `${file.storage_bucket}:${file.storage_path}`)
         );
@@ -1264,12 +1300,39 @@ export default function DesignTaskPage() {
           (file) => !designOutputKeys.has(`${file.storage_bucket}:${file.storage_path}`)
         );
 
-        setQuoteItem(item ?? null);
-        setProductPreviewUrl(itemPreviewUrl);
-        setAttachments([...standaloneBriefFilesWithUrls, ...customerOnlyAttachments]);
-        setDesignOutputFiles(designFilesWithUrls);
-        setDesignOutputLinks(parsedDesignLinks);
-        setDesignOutputGroups(parsedOutputGroups);
+        const nextQuoteItem = item ?? null;
+        const nextProductPreviewUrl = itemPreviewUrl;
+        const nextAttachments = [...standaloneBriefFilesWithUrls, ...customerOnlyAttachments];
+        const nextDesignOutputFiles = designFilesWithUrls;
+        const nextDesignOutputLinks = parsedDesignLinks;
+        const nextDesignOutputGroups = parsedOutputGroups;
+
+        setTask(nextTask);
+        setQuoteItem(nextQuoteItem);
+        setProductPreviewUrl(nextProductPreviewUrl);
+        setAttachments(nextAttachments);
+        setDesignOutputFiles(nextDesignOutputFiles);
+        setDesignOutputLinks(nextDesignOutputLinks);
+        setDesignOutputGroups(nextDesignOutputGroups);
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              `design-task-page-cache:${effectiveTeamId}:${id}`,
+              JSON.stringify({
+                task: nextTask,
+                quoteItem: nextQuoteItem,
+                productPreviewUrl: nextProductPreviewUrl,
+                attachments: nextAttachments,
+                designOutputFiles: nextDesignOutputFiles,
+                designOutputLinks: nextDesignOutputLinks,
+                designOutputGroups: nextDesignOutputGroups,
+                cachedAt: Date.now(),
+              } satisfies DesignTaskPageCachePayload)
+            );
+          } catch {
+            // ignore cache persistence failures
+          }
+        }
       } catch (e: unknown) {
         setError(getErrorMessage(e, "Не вдалося завантажити задачу"));
       } finally {
@@ -3822,11 +3885,7 @@ export default function DesignTaskPage() {
   );
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" /> Завантаження...
-      </div>
-    );
+    return <AppPageLoader title="Завантаження" subtitle="Готуємо дизайн-задачу." />;
   }
 
   if (error || !task) {
@@ -5337,10 +5396,7 @@ export default function DesignTaskPage() {
               прорахунок.
             </div>
             {quoteCandidatesLoading ? (
-              <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/5 px-4 py-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Завантаження...
-              </div>
+              <AppSectionLoader label="Завантаження..." compact />
             ) : quoteCandidates.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/50 px-4 py-6 text-sm text-muted-foreground">
                 Немає прорахунків цього замовника для привʼязки.

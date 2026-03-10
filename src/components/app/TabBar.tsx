@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Calculator, Palette, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
+import { preloadRoute } from "@/routes/routePreload";
 
 type TabItem = {
   label: string;
@@ -90,6 +91,9 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
               <Link
                 key={tab.to}
                 to={tab.to}
+                onMouseEnter={() => preloadRoute(tab.to)}
+                onFocus={() => preloadRoute(tab.to)}
+                onTouchStart={() => preloadRoute(tab.to)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",

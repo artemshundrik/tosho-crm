@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -1107,7 +1108,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         <TabsContent value="customers" className="mt-4">
           <div className="overflow-hidden">
             {customersLoading ? (
-              <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
+              <AppSectionLoader label="Завантаження..." />
             ) : customersError ? (
               <div className="p-6 text-sm text-destructive">{customersError}</div>
             ) : filteredRows.length === 0 ? (
@@ -1203,7 +1204,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         <TabsContent value="leads" className="mt-4">
           <div className="overflow-hidden">
             {leadsLoading ? (
-              <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>
+              <AppSectionLoader label="Завантаження..." />
             ) : leadsError ? (
               <div className="p-6 text-sm text-destructive">{leadsError}</div>
             ) : filteredLeads.length === 0 ? (
