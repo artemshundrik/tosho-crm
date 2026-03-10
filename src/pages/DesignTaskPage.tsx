@@ -135,6 +135,7 @@ type DesignOutputFile = {
   storage_path: string;
   uploaded_by: string | null;
   created_at: string;
+  group_label?: string | null;
   signed_url?: string | null;
 };
 
@@ -144,6 +145,7 @@ type DesignOutputLink = {
   url: string;
   created_at: string;
   created_by: string | null;
+  group_label?: string | null;
 };
 
 type QuoteCandidate = {
@@ -160,6 +162,13 @@ type QuoteMentionComment = {
   body: string;
   created_at: string;
   created_by: string;
+};
+
+type GroupedDesignOutputs = {
+  key: string;
+  label: string;
+  files: DesignOutputFile[];
+  links: DesignOutputLink[];
 };
 
 type DesignTaskHistoryEvent = {
@@ -252,6 +261,23 @@ const getFileExtension = (name?: string | null) => {
   const dot = name.lastIndexOf(".");
   if (dot < 0 || dot === name.length - 1) return "FILE";
   return name.slice(dot + 1).toUpperCase();
+};
+
+const normalizeOutputGroupLabel = (value?: string | null) => {
+  const normalized = toNonEmptyString(value);
+  return normalized && normalized !== "__none__" ? normalized : null;
+};
+
+const parseStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => !!entry)
+    : [];
+
+const getSelectedDesignOutputFileIdsFromMetadata = (metadata?: Record<string, unknown>) => {
+  const many = parseStringArray(metadata?.selected_design_output_file_ids);
+  if (many.length > 0) return Array.from(new Set(many));
+  const legacy = toNonEmptyString(metadata?.selected_design_output_file_id);
+  return legacy ? [legacy] : [];
 };
 
 const isImageAttachment = (name?: string | null) => {
@@ -435,6 +461,8 @@ export default function DesignTaskPage() {
   const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
   const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>([]);
   const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>([]);
+  const [designOutputGroups, setDesignOutputGroups] = useState<string[]>([]);
+  const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
   const [memberById, setMemberById] = useState<Record<string, string>>({});
@@ -454,10 +482,18 @@ export default function DesignTaskPage() {
   const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
   const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
   const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
+  const [quoteCommentDraft, setQuoteCommentDraft] = useState("");
+  const [quoteCommentSaving, setQuoteCommentSaving] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addLinkUrl, setAddLinkUrl] = useState("https://");
   const [addLinkLabel, setAddLinkLabel] = useState("");
+  const [addLinkGroupValue, setAddLinkGroupValue] = useState("__none__");
+  const [addLinkGroupDraft, setAddLinkGroupDraft] = useState("");
   const [addLinkError, setAddLinkError] = useState<string | null>(null);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [createGroupDraft, setCreateGroupDraft] = useState("");
+  const [createGroupError, setCreateGroupError] = useState<string | null>(null);
+  const [uploadTargetGroup, setUploadTargetGroup] = useState("__none__");
   const [attachQuoteDialogOpen, setAttachQuoteDialogOpen] = useState(false);
   const [quoteCandidates, setQuoteCandidates] = useState<QuoteCandidate[]>([]);
   const [quoteCandidatesLoading, setQuoteCandidatesLoading] = useState(false);
@@ -496,6 +532,7 @@ export default function DesignTaskPage() {
   const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const outputInputRef = useRef<HTMLInputElement | null>(null);
+  const quoteCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
@@ -1116,6 +1153,7 @@ export default function DesignTaskPage() {
               storage_path: storagePath,
               uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
               created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
+              group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
               signed_url: null,
             } satisfies DesignOutputFile;
           })
@@ -1143,9 +1181,17 @@ export default function DesignTaskPage() {
               url,
               created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               created_by: typeof entry.created_by === "string" ? entry.created_by : null,
+              group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
             } satisfies DesignOutputLink;
           })
           .filter(Boolean) as DesignOutputLink[];
+        const parsedOutputGroups = Array.from(
+          new Set([
+            ...parseStringArray(meta.design_output_groups),
+            ...parsedDesignFiles.map((file) => normalizeOutputGroupLabel(file.group_label)).filter((value): value is string => !!value),
+            ...parsedDesignLinks.map((link) => normalizeOutputGroupLabel(link.group_label)).filter((value): value is string => !!value),
+          ])
+        );
 
         let designTaskNumber: string | null =
           typeof meta.design_task_number === "string" && meta.design_task_number.trim()
@@ -1223,6 +1269,7 @@ export default function DesignTaskPage() {
         setAttachments([...standaloneBriefFilesWithUrls, ...customerOnlyAttachments]);
         setDesignOutputFiles(designFilesWithUrls);
         setDesignOutputLinks(parsedDesignLinks);
+        setDesignOutputGroups(parsedOutputGroups);
       } catch (e: unknown) {
         setError(getErrorMessage(e, "Не вдалося завантажити задачу"));
       } finally {
@@ -1362,6 +1409,79 @@ export default function DesignTaskPage() {
     if (briefDirty) return;
     setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
   }, [task, briefDirty, activeBriefVersion]);
+
+  const insertMentionIntoComment = (memberId: string) => {
+    const suggestion = mentionSuggestions.find((entry) => entry.id === memberId);
+    if (!suggestion) return;
+    setQuoteCommentDraft((prev) => `${prev.trimEnd()}${prev.trim() ? " " : ""}@${suggestion.alias} `);
+    requestAnimationFrame(() => quoteCommentTextareaRef.current?.focus());
+  };
+
+  const handleSubmitQuoteComment = async () => {
+    if (!task?.quoteId || !isUuid(task.quoteId)) return;
+    const body = quoteCommentDraft.trim();
+    if (!body) {
+      toast.error("Введіть коментар.");
+      return;
+    }
+    setQuoteCommentSaving(true);
+    try {
+      const mentionKeys = Array.from(body.matchAll(/(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu))
+        .map((match) => match[2]?.trim().toLowerCase())
+        .filter((value): value is string => !!value);
+      const mentionedUserIds = Array.from(
+        new Set(
+          mentionKeys
+            .map((key) => mentionLookup.get(key))
+            .filter((set): set is Set<string> => !!set && set.size === 1)
+            .flatMap((set) => Array.from(set))
+            .filter((memberId) => memberId !== userId)
+        )
+      );
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Не вдалося визначити сесію користувача.");
+
+      const response = await fetch("/.netlify/functions/quote-comments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: "add",
+          quoteId: task.quoteId,
+          body,
+          mentionedUserIds,
+        }),
+      });
+      const payload = await parseJsonSafe<{ error?: string; comment?: QuoteMentionComment; mentionError?: string }>(response);
+      if (!response.ok) {
+        throw new Error(payload?.error || `HTTP ${response.status}`);
+      }
+
+      const savedComment = payload?.comment;
+      if (savedComment && body.includes("@")) {
+        setQuoteMentionComments((prev) => [savedComment, ...prev].slice(0, 30));
+      } else {
+        void (async () => {
+          if (task?.id) await loadHistory(task.id);
+        })();
+      }
+      setQuoteCommentDraft("");
+      toast.success(
+        mentionedUserIds.length > 0 ? "Коментар і згадки надіслано" : "Коментар збережено"
+      );
+      if (payload?.mentionError) {
+        toast.error(payload.mentionError);
+      }
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося зберегти коментар"));
+    } finally {
+      setQuoteCommentSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!timerSummary.activeStartedAt) return;
@@ -1852,7 +1972,14 @@ export default function DesignTaskPage() {
     }
   }, []);
 
-  const persistDesignOutputs = async (nextFiles: DesignOutputFile[], nextLinks: DesignOutputLink[]) => {
+  const persistDesignOutputs = async (
+    nextFiles: DesignOutputFile[],
+    nextLinks: DesignOutputLink[],
+    options?: {
+      nextGroups?: string[];
+      metadataPatch?: Record<string, unknown>;
+    }
+  ) => {
     if (!task || !effectiveTeamId) return;
     if (!ensureCanEdit()) return;
     const filesForMeta = nextFiles.map((file) => ({
@@ -1864,6 +1991,7 @@ export default function DesignTaskPage() {
       storage_path: file.storage_path,
       uploaded_by: file.uploaded_by,
       created_at: file.created_at,
+      group_label: normalizeOutputGroupLabel(file.group_label),
     }));
     const linksForMeta = nextLinks.map((link) => ({
       id: link.id,
@@ -1871,12 +1999,22 @@ export default function DesignTaskPage() {
       url: link.url,
       created_at: link.created_at,
       created_by: link.created_by,
+      group_label: normalizeOutputGroupLabel(link.group_label),
     }));
+    const nextGroups = Array.from(
+      new Set(
+        (options?.nextGroups ?? designOutputGroups)
+          .map((entry) => normalizeOutputGroupLabel(entry))
+          .filter((entry): entry is string => !!entry)
+      )
+    );
 
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       design_output_files: filesForMeta,
       design_output_links: linksForMeta,
+      design_output_groups: nextGroups,
+      ...(options?.metadataPatch ?? {}),
     };
 
     setOutputSaving(true);
@@ -1888,6 +2026,7 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      setDesignOutputGroups(nextGroups);
     } finally {
       setOutputSaving(false);
     }
@@ -1923,6 +2062,7 @@ export default function DesignTaskPage() {
 
   const clearSelectedDesignOutputMetadata = (metadata: Record<string, unknown>) => ({
     ...metadata,
+    selected_design_output_file_ids: [],
     selected_design_output_file_id: null,
     selected_design_output_file_name: null,
     selected_design_output_storage_bucket: null,
@@ -1934,9 +2074,31 @@ export default function DesignTaskPage() {
     selected_design_output_selected_by_label: null,
   });
 
+  const buildSelectedDesignOutputMetadata = (selectedIds: string[], actorLabel: string) => {
+    const normalizedSelectedIds = Array.from(new Set(selectedIds.map((entry) => entry.trim()).filter(Boolean)));
+    if (normalizedSelectedIds.length === 0) {
+      return clearSelectedDesignOutputMetadata(task?.metadata ?? {});
+    }
+    const primarySelected = designOutputFiles.find((file) => file.id === normalizedSelectedIds[0]) ?? null;
+    return {
+      ...(task?.metadata ?? {}),
+      selected_design_output_file_ids: normalizedSelectedIds,
+      selected_design_output_file_id: primarySelected?.id ?? null,
+      selected_design_output_file_name: primarySelected?.file_name ?? null,
+      selected_design_output_storage_bucket: primarySelected?.storage_bucket ?? null,
+      selected_design_output_storage_path: primarySelected?.storage_path ?? null,
+      selected_design_output_mime_type: primarySelected?.mime_type ?? null,
+      selected_design_output_file_size: primarySelected?.file_size ?? null,
+      selected_design_output_selected_at: new Date().toISOString(),
+      selected_design_output_selected_by: userId ?? null,
+      selected_design_output_selected_by_label: actorLabel,
+    } satisfies Record<string, unknown>;
+  };
+
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
     if (!ensureCanEdit()) return;
+    const targetGroupLabel = normalizeOutputGroupLabel(uploadTargetGroup);
     setOutputUploading(true);
     try {
       const uploaded: DesignOutputFile[] = [];
@@ -1975,12 +2137,17 @@ export default function DesignTaskPage() {
           storage_path: storagePath,
           uploaded_by: userId,
           created_at: new Date().toISOString(),
+          group_label: targetGroupLabel,
           signed_url: signed?.signedUrl ?? null,
         });
       }
 
       const nextFiles = [...uploaded, ...designOutputFiles];
-      await persistDesignOutputs(nextFiles, designOutputLinks);
+      const nextGroups =
+        targetGroupLabel && !designOutputGroups.includes(targetGroupLabel)
+          ? [...designOutputGroups, targetGroupLabel]
+          : designOutputGroups;
+      await persistDesignOutputs(nextFiles, designOutputLinks, { nextGroups });
       setDesignOutputFiles(nextFiles);
       try {
         if (uploaded.length > 0) {
@@ -2003,6 +2170,8 @@ export default function DesignTaskPage() {
   const openAddDesignLinkModal = () => {
     setAddLinkUrl("https://");
     setAddLinkLabel("");
+    setAddLinkGroupValue(uploadTargetGroup);
+    setAddLinkGroupDraft("");
     setAddLinkError(null);
     setAddLinkOpen(true);
   };
@@ -2021,15 +2190,27 @@ export default function DesignTaskPage() {
         setAddLinkError("Дозволені тільки http/https посилання.");
         return;
       }
+      if (addLinkGroupValue === "__new__" && !normalizeOutputGroupLabel(addLinkGroupDraft)) {
+        setAddLinkError("Вкажіть назву нової групи.");
+        return;
+      }
+      const nextGroupLabel = normalizeOutputGroupLabel(
+        addLinkGroupValue === "__new__" ? addLinkGroupDraft : addLinkGroupValue
+      );
+      const nextGroups =
+        nextGroupLabel && !designOutputGroups.includes(nextGroupLabel)
+          ? [...designOutputGroups, nextGroupLabel]
+          : designOutputGroups;
       const nextLink: DesignOutputLink = {
         id: crypto.randomUUID(),
         label: addLinkLabel.trim() || parsed.hostname,
         url: parsed.toString(),
         created_at: new Date().toISOString(),
         created_by: userId ?? null,
+        group_label: nextGroupLabel,
       };
       const nextLinks = [nextLink, ...designOutputLinks];
-      await persistDesignOutputs(designOutputFiles, nextLinks);
+      await persistDesignOutputs(designOutputFiles, nextLinks, { nextGroups });
       setDesignOutputLinks(nextLinks);
       setAddLinkOpen(false);
       setAddLinkError(null);
@@ -2045,17 +2226,13 @@ export default function DesignTaskPage() {
     if (!target) return;
     try {
       const nextFiles = designOutputFiles.filter((file) => file.id !== fileId);
-      await persistDesignOutputs(nextFiles, designOutputLinks);
-      if (selectedDesignOutputFileId === fileId && task && effectiveTeamId) {
-        const nextMetadata = clearSelectedDesignOutputMetadata(task.metadata ?? {});
-        const { error: resetError } = await supabase
-          .from("activity_log")
-          .update({ metadata: nextMetadata })
-          .eq("id", task.id)
-          .eq("team_id", effectiveTeamId);
-        if (resetError) throw resetError;
-        setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
-      }
+      const nextSelectedIds = selectedDesignOutputFileIds.filter((id) => id !== fileId);
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      const nextMetadataPatch =
+        nextSelectedIds.length > 0
+          ? buildSelectedDesignOutputMetadata(nextSelectedIds, actorLabel)
+          : clearSelectedDesignOutputMetadata(task?.metadata ?? {});
+      await persistDesignOutputs(nextFiles, designOutputLinks, { metadataPatch: nextMetadataPatch });
       setDesignOutputFiles(nextFiles);
       if (target.storage_bucket && target.storage_path) {
         await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
@@ -2078,6 +2255,121 @@ export default function DesignTaskPage() {
     }
   };
 
+  const handleCreateDesignOutputGroup = async () => {
+    try {
+      const nextGroup = normalizeOutputGroupLabel(createGroupDraft);
+      if (!nextGroup) {
+        setCreateGroupError("Вкажіть назву групи.");
+        return;
+      }
+      if (designOutputGroups.includes(nextGroup)) {
+        setCreateGroupError("Така група вже існує.");
+        return;
+      }
+      await persistDesignOutputs(designOutputFiles, designOutputLinks, { nextGroups: [...designOutputGroups, nextGroup] });
+      setUploadTargetGroup(nextGroup);
+      setCreateGroupDraft("");
+      setCreateGroupError(null);
+      setCreateGroupOpen(false);
+      toast.success("Групу створено");
+    } catch (e: unknown) {
+      setCreateGroupError(getErrorMessage(e, "Не вдалося створити групу"));
+    }
+  };
+
+  const toggleGroupingSelection = (entityKey: string) => {
+    setGroupingSelectionIds((prev) =>
+      prev.includes(entityKey) ? prev.filter((id) => id !== entityKey) : [...prev, entityKey]
+    );
+  };
+
+  const handleMoveSelectedOutputsToGroup = async () => {
+    if (!ensureCanEdit()) return;
+    if (groupingSelectionIds.length === 0) {
+      toast.error("Спочатку відмітьте файли або посилання для переміщення.");
+      return;
+    }
+    try {
+      const nextGroupLabel = normalizeOutputGroupLabel(uploadTargetGroup);
+      await moveSelectedOutputsToGroup(nextGroupLabel);
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося перемістити матеріали у групу"));
+    }
+  };
+
+  const moveSelectedOutputsToGroup = async (groupLabel: string | null) => {
+    const nextGroupLabel = normalizeOutputGroupLabel(groupLabel);
+    if (groupingSelectionIds.length === 0) {
+      throw new Error("Немає вибраних матеріалів.");
+    }
+    const fileSelectionIds = new Set(
+      groupingSelectionIds
+        .filter((entry) => entry.startsWith("file:"))
+        .map((entry) => entry.slice("file:".length))
+    );
+    const linkSelectionIds = new Set(
+      groupingSelectionIds
+        .filter((entry) => entry.startsWith("link:"))
+        .map((entry) => entry.slice("link:".length))
+    );
+
+    const nextFiles = designOutputFiles.map((file) =>
+      fileSelectionIds.has(file.id) ? { ...file, group_label: nextGroupLabel } : file
+    );
+    const nextLinks = designOutputLinks.map((link) =>
+      linkSelectionIds.has(link.id) ? { ...link, group_label: nextGroupLabel } : link
+    );
+    const nextGroups =
+      nextGroupLabel && !designOutputGroups.includes(nextGroupLabel)
+        ? [...designOutputGroups, nextGroupLabel]
+        : designOutputGroups;
+
+    await persistDesignOutputs(nextFiles, nextLinks, { nextGroups });
+    setDesignOutputFiles(nextFiles);
+    setDesignOutputLinks(nextLinks);
+    setGroupingSelectionIds([]);
+  };
+
+  const handleMoveSelectedOutputsToSpecificGroup = async (groupLabel: string | null) => {
+    if (!ensureCanEdit()) return;
+    if (groupingSelectionIds.length === 0) {
+      toast.error("Спочатку відмітьте файли або посилання для переміщення.");
+      return;
+    }
+    try {
+      await moveSelectedOutputsToGroup(groupLabel);
+      toast.success("Матеріали переміщено у групу");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося перемістити матеріали у групу"));
+    }
+  };
+
+  const handleUngroupSelectedOutputsFromGroup = async (groupKey: string) => {
+    if (!ensureCanEdit()) return;
+    const selectedKeysInGroup = new Set(
+      selectedGroupingItems.filter((item) => item.groupKey === groupKey).map((item) => item.key)
+    );
+    if (selectedKeysInGroup.size === 0) {
+      toast.error("У цій групі немає вибраних матеріалів.");
+      return;
+    }
+    try {
+      const nextFiles = designOutputFiles.map((file) =>
+        selectedKeysInGroup.has(`file:${file.id}`) ? { ...file, group_label: null } : file
+      );
+      const nextLinks = designOutputLinks.map((link) =>
+        selectedKeysInGroup.has(`link:${link.id}`) ? { ...link, group_label: null } : link
+      );
+      await persistDesignOutputs(nextFiles, nextLinks);
+      setDesignOutputFiles(nextFiles);
+      setDesignOutputLinks(nextLinks);
+      setGroupingSelectionIds((prev) => prev.filter((key) => !selectedKeysInGroup.has(key)));
+      toast.success("Матеріали прибрано з групи");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося прибрати матеріали з групи"));
+    }
+  };
+
   const handleSelectDesignOutputFile = async (fileId: string) => {
     if (!task || !effectiveTeamId) return;
     if (!canManageAssignments) {
@@ -2087,26 +2379,19 @@ export default function DesignTaskPage() {
     if (!ensureCanEdit()) return;
     if (outputSaving) return;
 
-    const nextSelectedId = selectedDesignOutputFileId === fileId ? null : fileId;
-    const selectedFile = nextSelectedId
-      ? designOutputFiles.find((file) => file.id === nextSelectedId) ?? null
-      : null;
+    const alreadySelected = selectedDesignOutputFileIdSet.has(fileId);
+    const nextSelectedIds = alreadySelected
+      ? selectedDesignOutputFileIds.filter((id) => id !== fileId)
+      : [...selectedDesignOutputFileIds, fileId];
+    const selectedFiles = designOutputFiles.filter((file) => nextSelectedIds.includes(file.id));
     const actorLabel = userId ? getMemberLabel(userId) : "System";
 
     setOutputSaving(true);
     try {
-      const nextMetadata: Record<string, unknown> = {
-        ...(nextSelectedId ? (task.metadata ?? {}) : clearSelectedDesignOutputMetadata(task.metadata ?? {})),
-        selected_design_output_file_id: nextSelectedId,
-        selected_design_output_file_name: selectedFile?.file_name ?? null,
-        selected_design_output_storage_bucket: selectedFile?.storage_bucket ?? null,
-        selected_design_output_storage_path: selectedFile?.storage_path ?? null,
-        selected_design_output_mime_type: selectedFile?.mime_type ?? null,
-        selected_design_output_file_size: selectedFile?.file_size ?? null,
-        selected_design_output_selected_at: nextSelectedId ? new Date().toISOString() : null,
-        selected_design_output_selected_by: nextSelectedId ? (userId ?? null) : null,
-        selected_design_output_selected_by_label: nextSelectedId ? actorLabel : null,
-      };
+      const nextMetadata =
+        nextSelectedIds.length > 0
+          ? buildSelectedDesignOutputMetadata(nextSelectedIds, actorLabel)
+          : clearSelectedDesignOutputMetadata(task.metadata ?? {});
       const { error: updateError } = await supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
@@ -2115,9 +2400,9 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
-      if (selectedFile) {
+      if (selectedFiles.length > 0) {
         try {
-          await syncDesignFileToQuoteVisualizations(selectedFile);
+          await Promise.all(selectedFiles.map((file) => syncDesignFileToQuoteVisualizations(file)));
         } catch (syncError) {
           console.warn("Failed to sync selected design file to quote visualizations", syncError);
         }
@@ -2129,17 +2414,17 @@ export default function DesignTaskPage() {
         userId,
         actorName: actorLabel,
         action: "design_output_selection",
-        title: nextSelectedId
-          ? `Замовник обрав варіант: ${selectedFile?.file_name ?? "макет"}`
-          : "Скасовано вибір варіанту замовником",
+        title:
+          nextSelectedIds.length > 0
+            ? `Замовник погодив макети: ${selectedFiles.map((file) => file.file_name).slice(0, 3).join(", ")}${selectedFiles.length > 3 ? ` +${selectedFiles.length - 3}` : ""}`
+            : "Скасовано всі погоджені макети замовника",
         metadata: {
           source: "design_output_selection",
-          selected_design_output_file_id: nextSelectedId,
-          selected_design_output_file_name: selectedFile?.file_name ?? null,
+          selected_design_output_file_ids: nextSelectedIds,
         },
       });
       await loadHistory(task.id);
-      toast.success(nextSelectedId ? "Варіант замовника зафіксовано" : "Вибір варіанту скасовано");
+      toast.success(nextSelectedIds.length > 0 ? "Погоджені макети оновлено" : "Погоджені макети очищено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося зберегти вибір варіанту"));
     } finally {
@@ -2208,10 +2493,7 @@ export default function DesignTaskPage() {
     setAttachingQuoteId(quoteCandidate.id);
     try {
       const actorLabel = userId ? getMemberLabel(userId) : "System";
-      const selectedFile =
-        selectedDesignOutputFileId
-          ? designOutputFiles.find((file) => file.id === selectedDesignOutputFileId) ?? null
-          : null;
+      const selectedFiles = designOutputFiles.filter((file) => selectedDesignOutputFileIdSet.has(file.id));
       const nextMetadata: Record<string, unknown> = {
         ...(task.metadata ?? {}),
         quote_id: quoteCandidate.id,
@@ -2228,28 +2510,30 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
-      if (selectedFile) {
-        const { data: existing, error: existingError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .select("id")
-          .eq("quote_id", quoteCandidate.id)
-          .eq("storage_bucket", selectedFile.storage_bucket)
-          .eq("storage_path", selectedFile.storage_path)
-          .maybeSingle();
-        if (existingError) throw existingError;
-        if (!existing?.id) {
-          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-            team_id: effectiveTeamId,
-            quote_id: quoteCandidate.id,
-            file_name: selectedFile.file_name,
-            mime_type: selectedFile.mime_type || null,
-            file_size: selectedFile.file_size,
-            storage_bucket: selectedFile.storage_bucket,
-            storage_path: selectedFile.storage_path,
-            uploaded_by: selectedFile.uploaded_by ?? userId ?? null,
-          });
-          if (insertError) throw insertError;
+      if (selectedFiles.length > 0) {
+        for (const selectedFile of selectedFiles) {
+          const { data: existing, error: existingError } = await supabase
+            .schema("tosho")
+            .from("quote_attachments")
+            .select("id")
+            .eq("quote_id", quoteCandidate.id)
+            .eq("storage_bucket", selectedFile.storage_bucket)
+            .eq("storage_path", selectedFile.storage_path)
+            .maybeSingle();
+          if (existingError) throw existingError;
+          if (!existing?.id) {
+            const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+              team_id: effectiveTeamId,
+              quote_id: quoteCandidate.id,
+              file_name: selectedFile.file_name,
+              mime_type: selectedFile.mime_type || null,
+              file_size: selectedFile.file_size,
+              storage_bucket: selectedFile.storage_bucket,
+              storage_path: selectedFile.storage_path,
+              uploaded_by: selectedFile.uploaded_by ?? userId ?? null,
+            });
+            if (insertError) throw insertError;
+          }
         }
       }
 
@@ -2265,7 +2549,7 @@ export default function DesignTaskPage() {
           source: "design_task_attachment",
           from_quote_id: isUuid(task.quoteId) ? task.quoteId : null,
           to_quote_id: quoteCandidate.id,
-          selected_design_output_file_id: selectedFile?.id ?? null,
+          selected_design_output_file_ids: selectedFiles.map((file) => file.id),
         },
       });
 
@@ -3338,10 +3622,110 @@ export default function DesignTaskPage() {
 
   const isStatusStartable = task?.status === "new" || task?.status === "changes";
   const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId;
-  const selectedDesignOutputFileId = useMemo(() => {
-    const value = task?.metadata?.selected_design_output_file_id;
-    return typeof value === "string" && value.trim() ? value.trim() : null;
-  }, [task?.metadata]);
+  const selectedDesignOutputFileIds = useMemo(
+    () => getSelectedDesignOutputFileIdsFromMetadata(task?.metadata),
+    [task?.metadata]
+  );
+  const selectedDesignOutputFileId = selectedDesignOutputFileIds[0] ?? null;
+  const selectedDesignOutputFileIdSet = useMemo(
+    () => new Set(selectedDesignOutputFileIds),
+    [selectedDesignOutputFileIds]
+  );
+  const groupedDesignOutputs = useMemo(() => {
+    const map = new Map<string, GroupedDesignOutputs>();
+    for (const label of designOutputGroups) {
+      const normalized = normalizeOutputGroupLabel(label);
+      if (!normalized) continue;
+      map.set(normalized, { key: normalized, label: normalized, files: [], links: [] });
+    }
+
+    for (const file of designOutputFiles) {
+      const groupLabel = normalizeOutputGroupLabel(file.group_label) ?? "__ungrouped__";
+      const group =
+        map.get(groupLabel) ??
+        {
+          key: groupLabel,
+          label: groupLabel === "__ungrouped__" ? "Без групи" : groupLabel,
+          files: [],
+          links: [],
+        };
+      group.files.push(file);
+      map.set(groupLabel, group);
+    }
+
+    for (const link of designOutputLinks) {
+      const groupLabel = normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__";
+      const group =
+        map.get(groupLabel) ??
+        {
+          key: groupLabel,
+          label: groupLabel === "__ungrouped__" ? "Без групи" : groupLabel,
+          files: [],
+          links: [],
+        };
+      group.links.push(link);
+      map.set(groupLabel, group);
+    }
+
+    const groups = Array.from(map.values()).filter((group) => group.files.length > 0 || group.links.length > 0);
+    return groups.sort((a, b) => {
+      if (a.key === "__ungrouped__") return 1;
+      if (b.key === "__ungrouped__") return -1;
+      const aIndex = designOutputGroups.findIndex((entry) => entry === a.label);
+      const bIndex = designOutputGroups.findIndex((entry) => entry === b.label);
+      if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
+      if (aIndex >= 0) return -1;
+      if (bIndex >= 0) return 1;
+      return a.label.localeCompare(b.label, "uk");
+    });
+  }, [designOutputFiles, designOutputGroups, designOutputLinks]);
+  const selectedGroupingItems = useMemo(() => {
+    const selectedKeys = new Set(groupingSelectionIds);
+    return [
+      ...designOutputFiles
+        .filter((file) => selectedKeys.has(`file:${file.id}`))
+        .map((file) => ({
+          key: `file:${file.id}`,
+          groupKey: normalizeOutputGroupLabel(file.group_label) ?? "__ungrouped__",
+        })),
+      ...designOutputLinks
+        .filter((link) => selectedKeys.has(`link:${link.id}`))
+        .map((link) => ({
+          key: `link:${link.id}`,
+          groupKey: normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__",
+        })),
+    ];
+  }, [designOutputFiles, designOutputLinks, groupingSelectionIds]);
+  const mentionSuggestions = useMemo(
+    () =>
+      Object.entries(memberById).map(([memberId, label]) => {
+        const aliasBase = label.trim().replace(/\s+/g, ".").replace(/[^\p{L}\p{N}._-]+/gu, "");
+        const alias = aliasBase || memberId.slice(0, 8);
+        return { id: memberId, label, alias: alias.toLowerCase() };
+      }),
+    [memberById]
+  );
+  const mentionLookup = useMemo(() => {
+    const lookup = new Map<string, Set<string>>();
+    for (const suggestion of mentionSuggestions) {
+      const keys = [
+        suggestion.id,
+        suggestion.alias,
+        suggestion.label,
+        suggestion.label.replace(/\s+/g, ""),
+        suggestion.label.replace(/\s+/g, "."),
+        suggestion.label.replace(/\s+/g, "_"),
+      ];
+      for (const key of keys) {
+        const normalized = key.trim().toLowerCase();
+        if (!normalized) continue;
+        const current = lookup.get(normalized) ?? new Set<string>();
+        current.add(suggestion.id);
+        lookup.set(normalized, current);
+      }
+    }
+    return lookup;
+  }, [mentionSuggestions]);
   useEffect(() => {
     if (!attachQuoteDialogOpen || !task || isUuid(task.quoteId)) return;
     void loadQuoteCandidates();
@@ -3918,6 +4302,19 @@ export default function DesignTaskPage() {
               </Badge>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
+                <SelectTrigger className="min-w-[220px]">
+                  <SelectValue placeholder="Група для завантаження" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Без групи</SelectItem>
+                  {designOutputGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <input
                 ref={outputInputRef}
                 type="file"
@@ -3938,6 +4335,29 @@ export default function DesignTaskPage() {
               </Button>
               <Button
                 size="sm"
+                variant="outline"
+                className="gap-2"
+                disabled={outputSaving || groupingSelectionIds.length === 0}
+                onClick={() => void handleMoveSelectedOutputsToGroup()}
+              >
+                Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-2"
+                disabled={outputSaving}
+                onClick={() => {
+                  setCreateGroupDraft("");
+                  setCreateGroupError(null);
+                  setCreateGroupOpen(true);
+                }}
+              >
+                <Check className="h-4 w-4" />
+                Створити групу
+              </Button>
+              <Button
+                size="sm"
                 variant="ghost"
                 className="gap-2"
                 disabled={outputSaving}
@@ -3947,6 +4367,9 @@ export default function DesignTaskPage() {
                 Додати посилання
               </Button>
             </div>
+            <div className="text-xs text-muted-foreground">
+              Оберіть зверху групу, відмітьте потрібні матеріали чекбоксом `До групи`, потім натисніть `Перемістити вибране`.
+            </div>
 
             {designOutputFiles.length === 0 && designOutputLinks.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-3 py-3 text-sm text-muted-foreground">
@@ -3954,147 +4377,208 @@ export default function DesignTaskPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {designOutputFiles.map((file) => {
-                  const isImage = isImageAttachment(file.file_name);
-                  const ext = getFileExtension(file.file_name);
-                  const fileUrl = resolveAttachmentUrl(file);
-                  return (
-                    <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex items-start gap-2.5">
-                          {isImage && fileUrl ? (
-                            <KanbanImageZoomPreview
-                              imageUrl={fileUrl}
-                              alt={file.file_name}
-                              className="h-11 w-11 rounded-md border border-border/60 shrink-0"
-                            />
-                          ) : (
-                            <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                              {ext}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium" title={file.file_name}>
-                              {file.file_name}
-                            </div>
-                            {selectedDesignOutputFileId === file.id ? (
-                              <Badge
-                                variant="outline"
-                                className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
-                              >
-                                Обрано замовником
-                              </Badge>
-                            ) : null}
-                            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
-                              <span>{formatFileSize(file.file_size)}</span>
-                              <span>·</span>
-                              <span>{formatDate(file.created_at, true)}</span>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1">
-                                <AvatarBase
-                                  src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
-                                  name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
-                                  fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
-                                  size={14}
-                                  className="shrink-0 border-border/70"
-                                />
-                                <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
-                              </span>
+                {groupedDesignOutputs.map((group) => (
+                  <div key={group.key} className="rounded-xl border border-border/60 bg-card/60 p-3 space-y-2">
+                    {(() => {
+                      const selectedCountInGroup = selectedGroupingItems.filter((item) => item.groupKey === group.key).length;
+                      const hasSelection = groupingSelectionIds.length > 0;
+                      const allSelectedAlreadyInGroup =
+                        hasSelection && selectedCountInGroup === groupingSelectionIds.length;
+                      const canUngroup = group.key !== "__ungrouped__" && selectedCountInGroup > 0;
+                      return (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-foreground">{group.label}</div>
+                        <Badge variant="outline" className="text-[10px]">
+                          {group.files.length + group.links.length} матеріалів
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {canUngroup ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={outputSaving}
+                            onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key)}
+                          >
+                            Забрати з групи
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={outputSaving || groupingSelectionIds.length === 0 || allSelectedAlreadyInGroup}
+                          onClick={() => void handleMoveSelectedOutputsToSpecificGroup(group.key === "__ungrouped__" ? null : group.label)}
+                        >
+                          Перемістити сюди
+                        </Button>
+                      </div>
+                    </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
+                      {group.files.map((file) => {
+                        const isImage = isImageAttachment(file.file_name);
+                        const ext = getFileExtension(file.file_name);
+                        const fileUrl = resolveAttachmentUrl(file);
+                        return (
+                          <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex items-start gap-2.5">
+                                {isImage && fileUrl ? (
+                                  <KanbanImageZoomPreview
+                                    imageUrl={fileUrl}
+                                    alt={file.file_name}
+                                    className="h-11 w-11 rounded-md border border-border/60 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
+                                    {ext}
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium" title={file.file_name}>
+                                    {file.file_name}
+                                  </div>
+                                  {selectedDesignOutputFileIdSet.has(file.id) ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
+                                    >
+                                      Погоджено замовником
+                                    </Badge>
+                                  ) : null}
+                                  <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
+                                    <span>{formatFileSize(file.file_size)}</span>
+                                    <span>·</span>
+                                    <span>{formatDate(file.created_at, true)}</span>
+                                    <span>·</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <AvatarBase
+                                        src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
+                                        name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
+                                        fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
+                                        size={14}
+                                        className="shrink-0 border-border/70"
+                                      />
+                                      <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                  <Checkbox
+                                    checked={groupingSelectionIds.includes(`file:${file.id}`)}
+                                    disabled={outputSaving}
+                                    onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
+                                    aria-label={`Вибрати для групи: ${file.file_name}`}
+                                  />
+                                  <span>До групи</span>
+                                </label>
+                                <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                  <Checkbox
+                                    checked={selectedDesignOutputFileIdSet.has(file.id)}
+                                    disabled={outputSaving || !canManageAssignments}
+                                    onCheckedChange={() => void handleSelectDesignOutputFile(file.id)}
+                                    aria-label={`Вибір замовника: ${file.file_name}`}
+                                  />
+                                  <span>Вибір замовника</span>
+                                </label>
+                                {fileUrl ? (
+                                  <>
+                                    <Button size="icon" variant="ghost" asChild>
+                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" aria-label="Переглянути файл">
+                                        <Eye className="h-4 w-4" />
+                                      </a>
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      aria-label="Завантажити файл"
+                                      onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button size="icon" variant="ghost" disabled>
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" disabled>
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  disabled={outputSaving}
+                                  onClick={() => void handleRemoveDesignFile(file.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                            <Checkbox
-                              checked={selectedDesignOutputFileId === file.id}
-                              disabled={outputSaving || !canManageAssignments}
-                              onCheckedChange={() => void handleSelectDesignOutputFile(file.id)}
-                              aria-label={`Вибір замовника: ${file.file_name}`}
-                            />
-                            <span>Вибір замовника</span>
-                          </label>
-                          {fileUrl ? (
-                            <>
+                        );
+                      })}
+                      {group.links.map((link) => (
+                        <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 flex-1 text-sm font-medium text-primary hover:underline truncate"
+                              title={link.url}
+                            >
+                              {link.label}
+                            </a>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                <Checkbox
+                                  checked={groupingSelectionIds.includes(`link:${link.id}`)}
+                                  disabled={outputSaving}
+                                  onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
+                                  aria-label={`Вибрати для групи: ${link.label}`}
+                                />
+                                <span>До групи</span>
+                              </label>
                               <Button size="icon" variant="ghost" asChild>
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" aria-label="Переглянути файл">
-                                  <Eye className="h-4 w-4" />
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
+                                  <ExternalLink className="h-4 w-4" />
                                 </a>
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                aria-label="Завантажити файл"
-                                onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                                className="text-destructive hover:text-destructive"
+                                disabled={outputSaving}
+                                onClick={() => void handleRemoveDesignLink(link.id)}
                               >
-                                <Download className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="icon" variant="ghost" disabled>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" disabled>
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive"
-                            disabled={outputSaving}
-                            onClick={() => void handleRemoveDesignFile(file.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
+                            <span>{formatDate(link.created_at, true)}</span>
+                            <span>·</span>
+                            <span className="inline-flex items-center gap-1">
+                              <AvatarBase
+                                src={link.created_by ? getMemberAvatar(link.created_by) : null}
+                                name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
+                                fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
+                                size={14}
+                                className="shrink-0 border-border/70"
+                              />
+                              <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {designOutputLinks.map((link) => (
-                  <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-w-0 flex-1 text-sm font-medium text-primary hover:underline truncate"
-                        title={link.url}
-                      >
-                        {link.label}
-                      </a>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button size="icon" variant="ghost" asChild>
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          disabled={outputSaving}
-                          onClick={() => void handleRemoveDesignLink(link.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
-                      <span>{formatDate(link.created_at, true)}</span>
-                      <span>·</span>
-                      <span className="inline-flex items-center gap-1">
-                        <AvatarBase
-                          src={link.created_by ? getMemberAvatar(link.created_by) : null}
-                          name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
-                          fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
-                          size={14}
-                          className="shrink-0 border-border/70"
-                        />
-                        <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
-                      </span>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -4596,6 +5080,38 @@ export default function DesignTaskPage() {
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Коментарі та згадки</div>
             {isLinkedQuote ? (
               <>
+                <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
+                  <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
+                  {managerMembers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {managerMembers.slice(0, 6).map((member) => (
+                        <Button
+                          key={member.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={() => insertMentionIntoComment(member.id)}
+                        >
+                          @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <Textarea
+                    ref={quoteCommentTextareaRef}
+                    value={quoteCommentDraft}
+                    onChange={(event) => setQuoteCommentDraft(event.target.value)}
+                    placeholder="Наприклад: @tania макети погоджені, можна запускати у виробництво."
+                    className="min-h-[110px]"
+                  />
+                  <div className="flex justify-end">
+                    <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
+                      {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Надіслати коментар
+                    </Button>
+                  </div>
+                </div>
                 {quoteMentionsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -4704,6 +5220,34 @@ export default function DesignTaskPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
+              <Label>Група</Label>
+              <Select value={addLinkGroupValue} onValueChange={setAddLinkGroupValue}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Без групи</SelectItem>
+                  {designOutputGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">Нова група…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {addLinkGroupValue === "__new__" ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="design-link-group">Назва нової групи</Label>
+                <Input
+                  id="design-link-group"
+                  value={addLinkGroupDraft}
+                  onChange={(event) => setAddLinkGroupDraft(event.target.value)}
+                  placeholder="Напр. Наліпки"
+                />
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
               <Label htmlFor="design-link-url">URL</Label>
               <Input
                 id="design-link-url"
@@ -4742,6 +5286,41 @@ export default function DesignTaskPage() {
             <Button onClick={() => void handleSubmitDesignLink()} disabled={outputSaving}>
               {outputSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Додати
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createGroupOpen}
+        onOpenChange={(open) => {
+          setCreateGroupOpen(open);
+          if (!open) setCreateGroupError(null);
+        }}
+      >
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Створити групу макетів</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="design-output-group-name">Назва групи</Label>
+              <Input
+                id="design-output-group-name"
+                value={createGroupDraft}
+                onChange={(event) => setCreateGroupDraft(event.target.value)}
+                placeholder="Напр. Самокопіюючі бланки"
+              />
+            </div>
+            {createGroupError ? <div className="text-sm text-destructive">{createGroupError}</div> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateGroupOpen(false)}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void handleCreateDesignOutputGroup()} disabled={outputSaving}>
+              {outputSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Створити
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3698,7 +3698,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
               <div className="space-y-3">
                 {quoteLockedByOther ? (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
                     <span className="font-medium">Режим лише перегляду.</span>{" "}
                     Запис редагує {quoteLock.holderName ?? "інший користувач"}.
                   </div>
@@ -3712,7 +3712,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 )}
 
                 {quoteRequirementsHint ? (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
                     <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
                     {quoteRequirementsHint}
                   </div>
