@@ -23,11 +23,22 @@ const ACCESS_ROLE_NAMES: Record<string, string> = {
 
 const JOB_ROLE_NAMES: Record<string, string> = {
   manager: "Менеджер",
+  printer: "Друкар",
+  head_of_logistics: "Начальник відділу логістики",
+  head_of_production: "Начальник з виробництва",
   designer: "Дизайнер",
   logistics: "Логіст",
+  packer: "Пакувальник",
+  pm: "PM",
+  sales_manager: "Менеджер з продажу",
+  top_manager: "Топ-менеджер",
+  junior_sales_manager: "Молодший менеджер з продажу",
+  office_manager: "Офіс-менеджер",
   accountant: "Бухгалтер",
+  chief_accountant: "Головний бухгалтер",
+  marketer: "Маркетолог",
+  smm: "СММ",
   seo: "SEO",
-  member: "Member",
 };
 
 type UserMenuProps = {

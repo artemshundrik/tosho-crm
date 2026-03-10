@@ -2,13 +2,23 @@
 -- Normalizes role storage so role updates do not depend on schema-specific fallbacks.
 -- Run in Supabase SQL Editor.
 
-begin;
-
--- 1) Ensure SEO exists in job role enum (if enum exists).
+-- 1) Ensure all supported job roles exist in the enum (if enum exists).
 do $$
 begin
   if to_regtype('public.crm_job_role') is not null then
     begin
+      execute 'alter type public.crm_job_role add value if not exists ''printer''';
+      execute 'alter type public.crm_job_role add value if not exists ''head_of_logistics''';
+      execute 'alter type public.crm_job_role add value if not exists ''head_of_production''';
+      execute 'alter type public.crm_job_role add value if not exists ''packer''';
+      execute 'alter type public.crm_job_role add value if not exists ''pm''';
+      execute 'alter type public.crm_job_role add value if not exists ''sales_manager''';
+      execute 'alter type public.crm_job_role add value if not exists ''top_manager''';
+      execute 'alter type public.crm_job_role add value if not exists ''junior_sales_manager''';
+      execute 'alter type public.crm_job_role add value if not exists ''office_manager''';
+      execute 'alter type public.crm_job_role add value if not exists ''chief_accountant''';
+      execute 'alter type public.crm_job_role add value if not exists ''marketer''';
+      execute 'alter type public.crm_job_role add value if not exists ''smm''';
       execute 'alter type public.crm_job_role add value if not exists ''seo''';
     exception
       when duplicate_object then null;
@@ -16,12 +26,28 @@ begin
   end if;
   if to_regtype('tosho.crm_job_role') is not null then
     begin
+      execute 'alter type tosho.crm_job_role add value if not exists ''printer''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''head_of_logistics''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''head_of_production''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''packer''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''pm''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''sales_manager''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''top_manager''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''junior_sales_manager''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''office_manager''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''chief_accountant''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''marketer''';
+      execute 'alter type tosho.crm_job_role add value if not exists ''smm''';
       execute 'alter type tosho.crm_job_role add value if not exists ''seo''';
     exception
       when duplicate_object then null;
     end;
   end if;
 end $$;
+
+commit;
+
+begin;
 
 -- 2) Add normalized access/job role columns to team_members (public/tosho if present),
 --    and backfill values from legacy role.
@@ -113,9 +139,21 @@ begin
           update %I.%I
           set job_role = case lower(role::text)
             when 'manager' then 'manager'
+            when 'printer' then 'printer'
+            when 'head_of_logistics' then 'head_of_logistics'
+            when 'head_of_production' then 'head_of_production'
             when 'designer' then 'designer'
             when 'logistics' then 'logistics'
+            when 'packer' then 'packer'
+            when 'pm' then 'pm'
+            when 'sales_manager' then 'sales_manager'
+            when 'top_manager' then 'top_manager'
+            when 'junior_sales_manager' then 'junior_sales_manager'
+            when 'office_manager' then 'office_manager'
             when 'accountant' then 'accountant'
+            when 'chief_accountant' then 'chief_accountant'
+            when 'marketer' then 'marketer'
+            when 'smm' then 'smm'
             when 'seo' then 'seo'
             else null
           end
@@ -126,14 +164,26 @@ begin
           update %I.%I
           set job_role = case lower(role::text)
             when 'manager' then 'manager'::%s
+            when 'printer' then 'printer'::%s
+            when 'head_of_logistics' then 'head_of_logistics'::%s
+            when 'head_of_production' then 'head_of_production'::%s
             when 'designer' then 'designer'::%s
             when 'logistics' then 'logistics'::%s
+            when 'packer' then 'packer'::%s
+            when 'pm' then 'pm'::%s
+            when 'sales_manager' then 'sales_manager'::%s
+            when 'top_manager' then 'top_manager'::%s
+            when 'junior_sales_manager' then 'junior_sales_manager'::%s
+            when 'office_manager' then 'office_manager'::%s
             when 'accountant' then 'accountant'::%s
+            when 'chief_accountant' then 'chief_accountant'::%s
+            when 'marketer' then 'marketer'::%s
+            when 'smm' then 'smm'::%s
             when 'seo' then 'seo'::%s
             else null::%s
           end
           where job_role is null
-        $sql$, target.schema_name, target.table_name, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type);
+        $sql$, target.schema_name, target.table_name, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type, job_role_type);
       end if;
     end if;
 
@@ -155,7 +205,7 @@ begin
         target.schema_name, target.table_name
       );
       execute format(
-        'alter table %I.%I add constraint team_members_job_role_check check (job_role in (''manager'', ''designer'', ''logistics'', ''accountant'', ''seo'') or job_role is null)',
+        'alter table %I.%I add constraint team_members_job_role_check check (job_role in (''manager'', ''printer'', ''head_of_logistics'', ''head_of_production'', ''designer'', ''logistics'', ''packer'', ''pm'', ''sales_manager'', ''top_manager'', ''junior_sales_manager'', ''office_manager'', ''accountant'', ''chief_accountant'', ''marketer'', ''smm'', ''seo'') or job_role is null)',
         target.schema_name, target.table_name
       );
     end if;

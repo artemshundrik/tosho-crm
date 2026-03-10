@@ -143,32 +143,57 @@ type JobRoleOption = {
 const ACCESS_ROLE_LABELS: Record<string, string> = {
   owner: "Super Admin",
   admin: "Admin",
+  member: "Member",
 };
 
 const JOB_ROLE_LABELS: Record<string, string> = {
   manager: "Менеджер",
+  printer: "Друкар",
+  head_of_logistics: "Начальник відділу логістики",
+  head_of_production: "Начальник з виробництва",
   designer: "Дизайнер",
   logistics: "Логіст",
+  packer: "Пакувальник",
+  pm: "PM",
+  sales_manager: "Менеджер з продажу",
+  top_manager: "Топ-менеджер",
+  junior_sales_manager: "Молодший менеджер з продажу",
+  office_manager: "Офіс-менеджер",
   accountant: "Бухгалтер",
+  chief_accountant: "Головний бухгалтер",
+  marketer: "Маркетолог",
+  smm: "СММ",
   seo: "SEO",
 };
 
 const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
+  { value: "member", label: "Member" },
   { value: "admin", label: "Admin" },
   { value: "owner", label: "Super Admin" },
 ];
 
 const MEMBER_ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
-  { value: "member", label: "Member" },
   ...ACCESS_ROLE_OPTIONS,
 ];
 
 const JOB_ROLE_OPTIONS: JobRoleOption[] = [
-  { value: "member", label: "Member" },
+  { value: "none", label: "Без ролі" },
   { value: "manager", label: "Менеджер" },
+  { value: "printer", label: "Друкар" },
+  { value: "head_of_logistics", label: "Начальник відділу логістики" },
+  { value: "head_of_production", label: "Начальник з виробництва" },
+  { value: "packer", label: "Пакувальник" },
   { value: "designer", label: "Дизайнер" },
   { value: "logistics", label: "Логіст" },
+  { value: "pm", label: "PM" },
+  { value: "sales_manager", label: "Менеджер з продажу" },
+  { value: "top_manager", label: "Топ-менеджер" },
+  { value: "junior_sales_manager", label: "Молодший менеджер з продажу" },
+  { value: "office_manager", label: "Офіс-менеджер" },
   { value: "accountant", label: "Бухгалтер" },
+  { value: "chief_accountant", label: "Головний бухгалтер" },
+  { value: "marketer", label: "Маркетолог" },
+  { value: "smm", label: "СММ" },
   { value: "seo", label: "SEO" },
 ];
 
@@ -215,7 +240,11 @@ function getAccessRoleLabel(role: string | null) {
 }
 
 function getJobRoleLabel(role: string | null) {
-  return JOB_ROLE_LABELS[role ?? ""] ?? "Member";
+  return JOB_ROLE_LABELS[role ?? ""] ?? "Без ролі";
+}
+
+function normalizeJobRoleInput(role: string | null) {
+  return !role || role === "none" ? null : role;
 }
 
 function getAccessBadgeClass(role: string | null) {
@@ -370,8 +399,8 @@ export function TeamMembersPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteAccessRole, setInviteAccessRole] = useState("admin");
-  const [inviteJobRole, setInviteJobRole] = useState("member");
+  const [inviteAccessRole, setInviteAccessRole] = useState("member");
+  const [inviteJobRole, setInviteJobRole] = useState("none");
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
 
@@ -379,7 +408,7 @@ export function TeamMembersPage() {
   const [revokeBusy, setRevokeBusy] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [editAccessRole, setEditAccessRole] = useState("member");
-  const [editJobRole, setEditJobRole] = useState("member");
+  const [editJobRole, setEditJobRole] = useState("none");
   const [editBusy, setEditBusy] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [memberDeleteBusy, setMemberDeleteBusy] = useState(false);
@@ -1444,7 +1473,7 @@ export function TeamMembersPage() {
   const openEditRolesDialog = (member: Member) => {
     setEditMember(member);
     setEditAccessRole(member.access_role ?? "member");
-    setEditJobRole(member.job_role ?? "member");
+    setEditJobRole(member.job_role ?? "none");
   };
 
   const saveMemberRoles = async () => {
@@ -1460,9 +1489,9 @@ export function TeamMembersPage() {
     const nextAccessRole = editAccessRole;
     const nextJobRole = editJobRole;
     const normalizedAccessRole = nextAccessRole === "member" ? null : nextAccessRole;
-    const normalizedJobRole = nextJobRole === "member" ? null : nextJobRole;
+    const normalizedJobRole = normalizeJobRoleInput(nextJobRole);
     const accessRoleChanged = (editMember.access_role ?? "member") !== nextAccessRole;
-    const jobRoleChanged = (editMember.job_role ?? "member") !== nextJobRole;
+    const jobRoleChanged = (editMember.job_role ?? "none") !== nextJobRole;
     const roleDidChange =
       accessRoleChanged || jobRoleChanged;
     if (!roleDidChange) {
@@ -1753,7 +1782,7 @@ export function TeamMembersPage() {
         body: JSON.stringify({
           email: inviteEmail,
           accessRole: inviteAccessRole,
-          jobRole: inviteJobRole === "member" ? null : inviteJobRole,
+          jobRole: normalizeJobRoleInput(inviteJobRole),
           expiresInDays: 7,
         }),
       });
@@ -1860,8 +1889,8 @@ export function TeamMembersPage() {
               setInviteOpen(true);
               setGeneratedLink(null);
               setInviteEmail("");
-              setInviteAccessRole("admin");
-              setInviteJobRole("member");
+              setInviteAccessRole("member");
+              setInviteJobRole("none");
               setParams({ tab: "invites" });
             }}
           >
