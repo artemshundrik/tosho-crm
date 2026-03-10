@@ -47,6 +47,8 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
+import { NewQuoteDialog } from "@/components/quotes";
+import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import {
@@ -55,6 +57,8 @@ import {
   getQuoteRuns,
   upsertQuoteRuns,
   deleteQuote,
+  listCustomersBySearch,
+  listLeadsBySearch,
   listTeamMembers,
   listStatusHistory,
   setStatus,
@@ -74,6 +78,7 @@ import {
   Eye,
   FileDown,
   FileText,
+  Pencil,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -347,6 +352,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [deleteQuoteDialogOpen, setDeleteQuoteDialogOpen] = useState(false);
   const [deleteQuoteBusy, setDeleteQuoteBusy] = useState(false);
   const [duplicateQuoteBusy, setDuplicateQuoteBusy] = useState(false);
+  const [editQuoteDialogOpen, setEditQuoteDialogOpen] = useState(false);
+  const [editQuoteSaving, setEditQuoteSaving] = useState(false);
+  const [editQuoteError, setEditQuoteError] = useState<string | null>(null);
+  const [editQuoteInitialValues, setEditQuoteInitialValues] = useState<Partial<NewQuoteFormData> | null>(null);
+  const [editQuoteCustomers, setEditQuoteCustomers] = useState<
+    Array<{
+      id: string;
+      name?: string | null;
+      legal_name?: string | null;
+      logo_url?: string | null;
+      entityType?: "customer" | "lead";
+    }>
+  >([]);
+  const [editQuoteCustomersLoading, setEditQuoteCustomersLoading] = useState(false);
+  const [editQuoteCustomerSearch, setEditQuoteCustomerSearch] = useState("");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
@@ -428,6 +448,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [itemTypeId, setItemTypeId] = useState("");
   const [itemKindId, setItemKindId] = useState("");
   const [itemModelId, setItemModelId] = useState("");
+
+  const toPrintApplications = (item: QuoteItem | null): NewQuoteFormData["printApplications"] => {
+    if (!item?.methods || item.methods.length === 0) return [];
+    return item.methods.map((method, index) => ({
+      id: `${Date.now()}-${index}`,
+      method: method.methodId ?? "",
+      position: method.printPositionId ?? "",
+      width:
+        method.printWidthMm === null || method.printWidthMm === undefined ? "" : String(method.printWidthMm),
+      height:
+        method.printHeightMm === null || method.printHeightMm === undefined ? "" : String(method.printHeightMm),
+    }));
+  };
   const [itemMethods, setItemMethods] = useState<ItemMethod[]>([]);
   const [itemAttachment, setItemAttachment] = useState<QuoteItem["attachment"] | null>(null);
   const [itemAttachmentUploading, setItemAttachmentUploading] = useState(false);
@@ -1428,6 +1461,42 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [teamId]);
 
+  useEffect(() => {
+    if (!teamId || !editQuoteDialogOpen) return;
+    let active = true;
+    const loadCustomers = async () => {
+      setEditQuoteCustomersLoading(true);
+      try {
+        const [customerRows, leadRows] = await Promise.all([
+          listCustomersBySearch(teamId, editQuoteCustomerSearch),
+          listLeadsBySearch(teamId, editQuoteCustomerSearch),
+        ]);
+        if (!active) return;
+        setEditQuoteCustomers([
+          ...customerRows.map((customer) => ({
+            ...customer,
+            entityType: "customer" as const,
+          })),
+          ...leadRows.map((lead) => ({
+            id: lead.id,
+            name: lead.company_name ?? lead.legal_name ?? null,
+            legal_name: lead.legal_name ?? null,
+            logo_url: lead.logo_url ?? null,
+            entityType: "lead" as const,
+          })),
+        ]);
+      } catch {
+        if (active) setEditQuoteCustomers([]);
+      } finally {
+        if (active) setEditQuoteCustomersLoading(false);
+      }
+    };
+    void loadCustomers();
+    return () => {
+      active = false;
+    };
+  }, [teamId, editQuoteDialogOpen, editQuoteCustomerSearch]);
+
   const loadQuote = async () => {
     setLoading(true);
     setError(null);
@@ -1711,7 +1780,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return `TS-${monthCode}-${String((count ?? 0) + 1).padStart(4, "0")}`;
   };
 
-  const createDesignTask = async () => {
+  const createDesignTask = async (override?: {
+    assigneeUserId?: string | null;
+    modelName?: string | null;
+    methodsCount?: number;
+    designBrief?: string | null;
+  }) => {
     if (!teamId) return;
     setDesignTaskSaving(true);
     setDesignTaskError(null);
@@ -1722,10 +1796,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         (userId ? memberById.get(userId) : null) ||
         authData.user?.email ||
         "System";
-      const modelName = items[0]?.title ?? "Позиція";
-      const methodsCount = items[0]?.methods?.length ?? 0;
+      const modelName = override?.modelName ?? items[0]?.title ?? "Позиція";
+      const methodsCount = override?.methodsCount ?? items[0]?.methods?.length ?? 0;
       const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
-      const assigneeUserId = designAssigneeId ?? null;
+      const assigneeUserId = override?.assigneeUserId ?? designAssigneeId ?? null;
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
@@ -1753,7 +1827,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             has_files: attachments.length > 0,
             design_deadline: designDeadline,
             deadline: designDeadline,
-            design_brief: designBriefPreview || quote?.design_brief || quote?.comment || null,
+            design_brief:
+              override?.designBrief ??
+              designBriefPreview ??
+              quote?.design_brief ??
+              quote?.comment ??
+              null,
             model: modelName,
           },
         })
@@ -2766,6 +2845,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const created = await createQuote({
         teamId: effectiveTeamId,
         customerId: quote.customer_id ?? null,
+        customerName: quote.customer_name ?? null,
+        customerLogoUrl: quote.customer_logo_url ?? null,
         title: quote.title ?? null,
         quoteType: quote.quote_type ?? null,
         printType: quote.print_type ?? null,
@@ -2883,6 +2964,184 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       toast.error(getErrorMessage(e, "Не вдалося продублювати прорахунок."));
     } finally {
       setDuplicateQuoteBusy(false);
+    }
+  };
+
+  const openEditQuote = () => {
+    if (!quote) return;
+    const primaryItem = items[0] ?? null;
+    const primaryRuns =
+      runs.length > 0
+        ? runs
+        : primaryItem && Number(primaryItem.qty ?? 0) > 0
+          ? [
+              {
+                quantity: Number(primaryItem.qty ?? 0),
+              },
+            ]
+          : [];
+
+    setEditQuoteCustomerSearch(!quote.customer_id ? quote.customer_name ?? "" : "");
+    setEditQuoteInitialValues({
+      customerId: quote.customer_id ?? "",
+      customerType: quote.customer_id ? "customer" : "lead",
+      status: normalizeStatus(quote.status),
+      comment: quote.design_brief ?? quote.comment ?? "",
+      managerId: quote.assigned_to ?? "",
+      deadline:
+        quote.deadline_at && !Number.isNaN(new Date(quote.deadline_at).getTime())
+          ? new Date(quote.deadline_at)
+          : undefined,
+      deadlineNote: quote.deadline_note ?? "",
+      deadlineReminderOffsetMinutes: quote.deadline_reminder_offset_minutes ?? 0,
+      deadlineReminderComment: quote.deadline_reminder_comment ?? "",
+      currency: quote.currency ?? "UAH",
+      quoteType: quote.quote_type ?? "merch",
+      deliveryType: quote.delivery_type ?? quote.print_type ?? "",
+      deliveryDetails: {
+        region: String((quote.delivery_details as Record<string, unknown> | null)?.region ?? ""),
+        city: String((quote.delivery_details as Record<string, unknown> | null)?.city ?? ""),
+        address: String((quote.delivery_details as Record<string, unknown> | null)?.address ?? ""),
+        street: String((quote.delivery_details as Record<string, unknown> | null)?.street ?? ""),
+        npDeliveryType: String((quote.delivery_details as Record<string, unknown> | null)?.npDeliveryType ?? ""),
+        payer: String((quote.delivery_details as Record<string, unknown> | null)?.payer ?? ""),
+      },
+      categoryId: primaryItem?.catalogTypeId ?? "",
+      kindId: primaryItem?.catalogKindId ?? "",
+      modelId: primaryItem?.catalogModelId ?? "",
+      quantity:
+        Number(primaryRuns[0]?.quantity ?? primaryItem?.qty ?? 0) > 0
+          ? Number(primaryRuns[0]?.quantity ?? primaryItem?.qty ?? 0)
+          : undefined,
+      runs: primaryRuns
+        .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+        .filter((run) => run.quantity > 0),
+      quantityUnit: normalizeUnitLabel(primaryItem?.unit ?? "шт."),
+      printApplications: toPrintApplications(primaryItem),
+      createDesignTask: false,
+      files: [],
+    });
+    setEditQuoteError(null);
+    setEditQuoteDialogOpen(true);
+  };
+
+  const handleEditQuoteSubmit = async (data: NewQuoteFormData) => {
+    if (!quote) return;
+    setEditQuoteSaving(true);
+    setEditQuoteError(null);
+    try {
+      const selectedParty = editQuoteCustomers.find(
+        (item) => item.id === data.customerId && (item.entityType ?? "customer") === (data.customerType ?? "customer")
+      );
+      const customerIdForQuote = data.customerType === "lead" ? null : data.customerId?.trim() || null;
+      const customerName =
+        (selectedParty?.name || selectedParty?.legal_name || quote.customer_name || "").trim() || null;
+      const customerLogoUrl = selectedParty?.logo_url ?? quote.customer_logo_url ?? null;
+      const title = data.customerType === "lead" ? customerName : quote.title ?? null;
+
+      await updateQuote({
+        quoteId,
+        teamId,
+        customerId: customerIdForQuote,
+        customerName,
+        customerLogoUrl,
+        title,
+        status: data.status,
+        comment: data.comment?.trim() || null,
+        designBrief: data.comment?.trim() || null,
+        assignedTo: data.managerId?.trim() ? data.managerId : null,
+        deadlineAt: data.deadline
+          ? `${data.deadline.getFullYear()}-${String(data.deadline.getMonth() + 1).padStart(2, "0")}-${String(
+              data.deadline.getDate()
+            ).padStart(2, "0")}T${String(data.deadline.getHours()).padStart(2, "0")}:${String(
+              data.deadline.getMinutes()
+            ).padStart(2, "0")}:00`
+          : null,
+        deadlineNote: data.deadlineNote?.trim() || null,
+        deadlineReminderOffsetMinutes: data.deadlineReminderOffsetMinutes ?? null,
+        deadlineReminderComment: data.deadlineReminderComment?.trim() || null,
+        quoteType: data.quoteType?.trim() ? data.quoteType : null,
+        deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
+        deliveryDetails: data.deliveryDetails ?? null,
+      });
+
+      const primaryItem = items[0] ?? null;
+      const normalizedRuns = (data.runs ?? []).filter((run) => Number(run.quantity) > 0);
+      const primaryRunQuantity = normalizedRuns[0]?.quantity ?? Number(data.quantity ?? 0);
+      const type = catalogTypes.find((entry) => entry.id === data.categoryId);
+      const kind = type?.kinds.find((entry) => entry.id === data.kindId);
+      const model = kind?.models.find((entry) => entry.id === data.modelId);
+      const methodsPayload = data.printApplications.length > 0
+        ? data.printApplications.map((app) => ({
+            method_id: app.method || null,
+            count: 1,
+            print_position_id: app.position || null,
+            print_width_mm: app.width ? Number(app.width) : null,
+            print_height_mm: app.height ? Number(app.height) : null,
+          }))
+        : null;
+      const primaryPrint = methodsPayload?.[0] ?? null;
+
+      if (primaryItem?.id && data.modelId && Number.isFinite(primaryRunQuantity) && primaryRunQuantity > 0) {
+        const { error: itemError } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .update({
+            name: model?.name ?? primaryItem.title ?? "Позиція",
+            qty: primaryRunQuantity,
+            unit: normalizeUnitLabel(data.quantityUnit || primaryItem.unit || "шт."),
+            unit_price: model?.price ?? primaryItem.price ?? 0,
+            line_total: primaryRunQuantity * (model?.price ?? primaryItem.price ?? 0),
+            catalog_type_id: data.categoryId ?? null,
+            catalog_kind_id: data.kindId ?? null,
+            catalog_model_id: data.modelId ?? null,
+            print_position_id: primaryPrint?.print_position_id ?? null,
+            print_width_mm: primaryPrint?.print_width_mm ?? null,
+            print_height_mm: primaryPrint?.print_height_mm ?? null,
+            methods: methodsPayload,
+          })
+          .eq("id", primaryItem.id);
+        if (itemError) throw itemError;
+
+        const { error: deleteRunsError } = await supabase
+          .schema("tosho")
+          .from("quote_item_runs")
+          .delete()
+          .eq("quote_id", quoteId);
+        if (deleteRunsError) throw deleteRunsError;
+
+        if (normalizedRuns.length > 0) {
+          await upsertQuoteRuns(
+            quoteId,
+            normalizedRuns.map((run) => ({
+              id: crypto.randomUUID(),
+              quote_id: quoteId,
+              quote_item_id: primaryItem.id,
+              quantity: run.quantity,
+              unit_price_model: 0,
+              unit_price_print: 0,
+              logistics_cost: 0,
+            }))
+          );
+        }
+      }
+
+      if (data.createDesignTask && !designTask) {
+        await createDesignTask({
+          assigneeUserId: data.designAssigneeId ?? null,
+          modelName: model?.name ?? primaryItem?.title ?? "Позиція",
+          methodsCount: methodsPayload?.length ?? 0,
+          designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
+        });
+      }
+
+      await Promise.all([loadQuote(), loadItems(), loadRuns()]);
+      setEditQuoteDialogOpen(false);
+      toast.success("Прорахунок оновлено");
+    } catch (error: unknown) {
+      setEditQuoteError(getErrorMessage(error, "Не вдалося оновити прорахунок."));
+    } finally {
+      setEditQuoteSaving(false);
     }
   };
 
@@ -3664,6 +3923,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={!quote}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      openEditQuote();
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Редагувати
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={duplicateQuoteBusy || !quote?.id}
                     onSelect={(event) => {
@@ -6432,6 +6701,32 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NewQuoteDialog
+        open={editQuoteDialogOpen}
+        onOpenChange={(open) => {
+          setEditQuoteDialogOpen(open);
+          if (!open) {
+            setEditQuoteError(null);
+            setEditQuoteInitialValues(null);
+            setEditQuoteCustomerSearch("");
+          }
+        }}
+        onSubmit={handleEditQuoteSubmit}
+        mode="edit"
+        submitting={editQuoteSaving}
+        submitError={editQuoteError}
+        quoteLabel={quote?.number ? `#${quote.number}` : quoteId}
+        customerLabel={quote?.customer_name ?? null}
+        initialValues={editQuoteInitialValues ?? undefined}
+        teamId={teamId}
+        customers={editQuoteCustomers}
+        customersLoading={editQuoteCustomersLoading}
+        onCustomerSearch={setEditQuoteCustomerSearch}
+        teamMembers={teamMembers}
+        catalogTypes={catalogTypes}
+        currentUserId={userId ?? undefined}
+      />
     </div>
   );
 }

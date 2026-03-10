@@ -537,7 +537,7 @@ export async function getQuoteSummary(quoteId: string) {
     const { data, error } = await supabase
       .schema("tosho")
       .from("v_quotes_list")
-      .select("id,team_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .select("id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
       .eq("id", quoteId)
       .single();
     handleError(error);
@@ -1175,6 +1175,10 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
 export async function updateQuote(params: {
   quoteId: string;
   teamId: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerLogoUrl?: string | null;
+  title?: string | null;
   comment?: string | null;
   designBrief?: string | null;
   assignedTo?: string | null;
@@ -1190,6 +1194,10 @@ export async function updateQuote(params: {
   deliveryDetails?: Record<string, unknown> | null;
 }) {
   const payload: Record<string, unknown> = {};
+  if (params.customerId !== undefined) payload.customer_id = params.customerId;
+  if (params.customerName !== undefined) payload.customer_name = params.customerName;
+  if (params.customerLogoUrl !== undefined) payload.customer_logo_url = params.customerLogoUrl;
+  if (params.title !== undefined) payload.title = params.title;
   if (params.comment !== undefined) payload.comment = params.comment;
   if (params.designBrief !== undefined) payload.design_brief = params.designBrief;
   if (params.assignedTo !== undefined) payload.assigned_to = params.assignedTo;
@@ -1215,7 +1223,7 @@ export async function updateQuote(params: {
       .update(nextPayload)
       .eq("id", params.quoteId)
       .eq("team_id", params.teamId)
-      .select("id,status,comment,design_brief,quote_type,delivery_type,delivery_details,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment,updated_at")
+      .select("id,customer_id,customer_name,customer_logo_url,title,status,comment,design_brief,quote_type,delivery_type,delivery_details,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment,updated_at")
       .single();
     handleError(error);
     return data;
@@ -1242,6 +1250,14 @@ export async function updateQuote(params: {
     }
     if (message.includes("column") && message.includes("design_brief")) {
       delete fallbackPayload.design_brief;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("customer_name")) {
+      delete fallbackPayload.customer_name;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("customer_logo_url")) {
+      delete fallbackPayload.customer_logo_url;
       changed = true;
     }
     if (message.includes("column") && message.includes("customer_deadline_at")) {

@@ -39,7 +39,6 @@ import {
   type ConfiguratorProductOption,
 } from "@/components/quotes/PrintPackageConfigurator";
 import {
-  Building2,
   ChevronDown,
   User,
   CalendarIcon,
@@ -837,7 +836,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Handle submit
   const handleSubmit = async () => {
     // Validation
-    if (!isEditMode && !customerId) {
+    if (!customerId) {
       alert("Оберіть замовника або ліда");
       setCustomerPopoverOpen(true);
       return;
@@ -1062,6 +1061,19 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     (customer) => customer.id === customerId && customer.entityType === customerType
   );
 
+  React.useEffect(() => {
+    if (!open || !isEditMode) return;
+    if (customerId || !customerLabel?.trim()) return;
+    const matched = customerOptions.find(
+      (option) =>
+        option.entityType === customerType &&
+        option.label.trim().toLowerCase() === customerLabel.trim().toLowerCase()
+    );
+    if (!matched) return;
+    setCustomerId(matched.id);
+    setCustomerType(matched.entityType);
+  }, [open, isEditMode, customerId, customerLabel, customerOptions, customerType]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden p-0">
@@ -1124,37 +1136,31 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </Popover>
 
           {/* Customer */}
-          {isEditMode ? (
-            <Chip size="md" icon={<Building2 />} active>
-              {customerLabel || "Клієнт"}
-            </Chip>
-          ) : (
-            <CustomerLeadPicker
-              open={customerPopoverOpen}
-              onOpenChange={setCustomerPopoverOpen}
-              selectedLabel={selectedCustomer?.label ?? ""}
-              selectedType={customerType}
-              searchValue={customerSearch}
-              onSearchChange={(value) => {
-                setCustomerSearch(value);
-                onCustomerSearch?.(value);
-              }}
-              options={customerOptions}
-              loading={customersLoading}
-              onSelect={(customer) => {
-                setCustomerId(customer.id);
-                setCustomerType(customer.entityType);
-              }}
-              onCreateCustomer={onCreateCustomer}
-              onCreateLead={onCreateLead}
-              onClear={() => {
-                setCustomerId("");
-                setCustomerType("customer");
-                setCustomerSearch("");
-              }}
-              popoverClassName="w-72 p-2"
-            />
-          )}
+          <CustomerLeadPicker
+            open={customerPopoverOpen}
+            onOpenChange={setCustomerPopoverOpen}
+            selectedLabel={selectedCustomer?.label ?? customerLabel ?? ""}
+            selectedType={customerType}
+            searchValue={customerSearch}
+            onSearchChange={(value) => {
+              setCustomerSearch(value);
+              onCustomerSearch?.(value);
+            }}
+            options={customerOptions}
+            loading={customersLoading}
+            onSelect={(customer) => {
+              setCustomerId(customer.id);
+              setCustomerType(customer.entityType);
+            }}
+            onCreateCustomer={onCreateCustomer}
+            onCreateLead={onCreateLead}
+            onClear={() => {
+              setCustomerId("");
+              setCustomerType("customer");
+              setCustomerSearch("");
+            }}
+            popoverClassName="w-72 p-2"
+          />
 
           {/* Manager */}
           <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
@@ -1623,8 +1629,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 </div>
               </div>
 
-              {!isEditMode ? (
-                isPrintPackageMode ? (
+              {isPrintPackageMode ? (
                   <div className="mt-4 space-y-4">
                     <PrintPackageConfigurator
                       config={printPackageConfig}
@@ -1681,7 +1686,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                               setKindId("");
                               setModelId("");
                             }}
-                            options={filteredCatalogTypes.map((type) => ({
+                            options={(filteredCatalogTypes.length > 0 ? filteredCatalogTypes : catalogTypes).map((type) => ({
                               value: type.id,
                               label: type.name,
                             }))}
@@ -1752,17 +1757,13 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     ) : null}
                   </div>
                 )
-              ) : (
-                <div className="mt-4 rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                  Категорія/вид/модель і кількість редагуються в деталях прорахунку.
-                </div>
-              )}
+              }
             </div>
           </div>
         </div>
 
         {/* Print applications section */}
-        {!isEditMode && !isPrintPackageMode ? (
+        {!isPrintPackageMode ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Нанесення</SectionHeader>
           <div className="rounded-[24px] border border-border/40 bg-background/30 p-4 md:p-5">
@@ -1879,7 +1880,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         ) : null}
 
         {/* Design section */}
-        {!isEditMode && (isPrintPackageMode || printMode !== "no_print") ? (
+        {(isPrintPackageMode || printMode !== "no_print") ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
           <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">

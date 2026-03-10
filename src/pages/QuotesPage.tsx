@@ -33,8 +33,10 @@ import {
   createQuoteSet,
   deleteQuote,
   getQuoteSummary,
+  getQuoteRuns,
   listTeamMembers,
   setStatus as setQuoteStatus,
+  upsertQuoteRuns,
   updateQuote,
   type QuoteListRow,
   type QuoteSetListRow,
@@ -294,6 +296,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editPrimaryItemId, setEditPrimaryItemId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -358,6 +361,37 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const [contentView, setContentView] = useState<"quotes" | "sets" | "all">("quotes");
   const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">("flat");
+
+  const toPrintApplications = (rawMethods: unknown): NewQuoteFormData["printApplications"] => {
+    if (!Array.isArray(rawMethods)) return [];
+    return rawMethods
+      .map((method, index) => {
+        if (!method || typeof method !== "object") return null;
+        const entry = method as Record<string, unknown>;
+        const methodId =
+          typeof (entry.method_id ?? entry.methodId ?? entry.id) === "string"
+            ? String(entry.method_id ?? entry.methodId ?? entry.id)
+            : "";
+        if (!methodId) return null;
+        return {
+          id: `${Date.now()}-${index}`,
+          method: methodId,
+          position:
+            typeof (entry.print_position_id ?? entry.printPositionId) === "string"
+              ? String(entry.print_position_id ?? entry.printPositionId)
+              : "",
+          width:
+            entry.print_width_mm === null || entry.print_width_mm === undefined || entry.print_width_mm === ""
+              ? ""
+              : String(entry.print_width_mm),
+          height:
+            entry.print_height_mm === null || entry.print_height_mm === undefined || entry.print_height_mm === ""
+              ? ""
+              : String(entry.print_height_mm),
+        };
+      })
+      .filter(Boolean) as NewQuoteFormData["printApplications"];
+  };
   const [quoteSetSearch, setQuoteSetSearch] = useState("");
   const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">("all");
   const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
@@ -665,17 +699,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [teamId]);
 
   useEffect(() => {
-    if (!createOpen) return;
-    if (!customerSearch.trim()) {
-      setCustomers([]);
-      setCustomersLoading(false);
-      return;
-    }
+    if (!createOpen && !editDialogOpen) return;
     const id = window.setTimeout(async () => {
       setCustomersLoading(true);
       try {
-        const data = await listCustomersBySearch(teamId, customerSearch);
-        setCustomers(data);
+        const [customerRows, leadRows] = await Promise.all([
+          listCustomersBySearch(teamId, customerSearch),
+          listLeadsBySearch(teamId, customerSearch).catch(() => [] as LeadSearchRow[]),
+        ]);
+        const leadOptions: QuotePartyOption[] = leadRows.map((lead) => ({
+          id: lead.id,
+          name: lead.company_name ?? lead.legal_name ?? null,
+          legal_name: lead.legal_name ?? null,
+          logo_url: lead.logo_url ?? null,
+          entityType: "lead",
+        }));
+        const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
+          ...customer,
+          entityType: "customer",
+        }));
+        setCustomers([...customerOptions, ...leadOptions]);
       } catch {
         setCustomers([]);
       } finally {
@@ -683,10 +726,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [customerSearch, createOpen, teamId]);
+  }, [customerSearch, createOpen, editDialogOpen, teamId]);
 
   useEffect(() => {
-    if (!createOpen || !teamId) return;
+    if ((!createOpen && !editDialogOpen) || !teamId) return;
     let cancelled = false;
 
     const loadCatalog = async () => {
@@ -825,7 +868,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [createOpen, teamId]);
+  }, [createOpen, editDialogOpen, teamId]);
 
   const loadQuotes = async () => {
     const requestId = ++quotesLoadRequestIdRef.current;
@@ -1964,6 +2007,82 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  const ensureDesignTaskForQuote = async (params: {
+    quoteId: string;
+    quoteType?: string;
+    modelName: string;
+    methodsCount: number;
+    designBrief: string | null;
+    designDeadline: string | null;
+    assigneeUserId: string | null;
+    hasFiles: boolean;
+  }) => {
+    const { data: existingTask, error: existingTaskError } = await supabase
+      .from("activity_log")
+      .select("id")
+      .eq("team_id", teamId)
+      .eq("action", "design_task")
+      .eq("entity_id", params.quoteId)
+      .limit(1)
+      .maybeSingle();
+    if (existingTaskError) throw existingTaskError;
+    if (existingTask?.id) return existingTask.id;
+
+    const actorName =
+      currentUserId && memberById.get(currentUserId)
+        ? (memberById.get(currentUserId) as string)
+        : "System";
+    const createdAtIso = new Date().toISOString();
+    const createdAtDate = new Date(createdAtIso);
+    const createdAtMonth = String(createdAtDate.getMonth() + 1).padStart(2, "0");
+    const createdAtYear = String(createdAtDate.getFullYear()).slice(-2);
+    const monthCode = `${createdAtMonth}${createdAtYear}`;
+    const monthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth(), 1).toISOString();
+    const nextMonthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth() + 1, 1).toISOString();
+    const { count: taskCount, error: taskCountError } = await supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId)
+      .eq("action", "design_task")
+      .gte("created_at", monthStartIso)
+      .lt("created_at", nextMonthStartIso);
+    if (taskCountError) throw taskCountError;
+    const designTaskNumber = `TS-${monthCode}-${String((taskCount ?? 0) + 1).padStart(4, "0")}`;
+    const assignedAt = params.assigneeUserId ? new Date().toISOString() : null;
+
+    const { data: designTaskRow, error: designTaskError } = await supabase
+      .from("activity_log")
+      .insert({
+        team_id: teamId,
+        user_id: currentUserId ?? null,
+        actor_name: actorName,
+        action: "design_task",
+        entity_type: "design_task",
+        entity_id: params.quoteId,
+        title: `Дизайн: ${params.modelName}`,
+        metadata: {
+          source: "design_task_created",
+          status: "new",
+          design_task_number: designTaskNumber,
+          quote_id: params.quoteId,
+          design_task_id: null,
+          assignee_user_id: params.assigneeUserId,
+          assigned_at: assignedAt,
+          quote_type: params.quoteType ?? null,
+          methods_count: params.methodsCount,
+          has_files: params.hasFiles,
+          design_deadline: params.designDeadline,
+          deadline: params.designDeadline,
+          design_brief: params.designBrief,
+          model: params.modelName,
+        },
+      })
+      .select("id")
+      .single();
+    if (designTaskError) throw designTaskError;
+    return (designTaskRow as { id?: string } | null)?.id ?? null;
+  };
+
   const handleCreate = async () => {
     setCreateError(null);
     if (!validateStep1() || !validateStep2() || !validateStep3()) return;
@@ -2744,8 +2863,101 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   const handleDuplicate = async (quoteId: string) => {
-    // TODO: Implement duplicate functionality
-    console.log("Duplicate quote:", quoteId);
+    try {
+      const sourceQuote = await getQuoteSummary(quoteId);
+      if (!sourceQuote?.id) {
+        throw new Error("Не вдалося завантажити прорахунок для дублювання.");
+      }
+
+      const created = await createQuote({
+        teamId,
+        customerId: sourceQuote.customer_id ?? null,
+        customerName: sourceQuote.customer_name ?? null,
+        customerLogoUrl: sourceQuote.customer_logo_url ?? null,
+        title: sourceQuote.title ?? null,
+        quoteType: sourceQuote.quote_type ?? null,
+        printType: sourceQuote.print_type ?? null,
+        deliveryType: sourceQuote.delivery_type ?? null,
+        deliveryDetails: sourceQuote.delivery_details ?? null,
+        comment: sourceQuote.comment ?? null,
+        designBrief: sourceQuote.design_brief ?? null,
+        currency: sourceQuote.currency ?? "UAH",
+        assignedTo: sourceQuote.assigned_to ?? null,
+        deadlineAt: sourceQuote.deadline_at ?? null,
+        customerDeadlineAt: sourceQuote.customer_deadline_at ?? null,
+        designDeadlineAt: sourceQuote.design_deadline_at ?? null,
+        deadlineNote: sourceQuote.deadline_note ?? null,
+        deadlineReminderOffsetMinutes: sourceQuote.deadline_reminder_offset_minutes ?? null,
+        deadlineReminderComment: sourceQuote.deadline_reminder_comment ?? null,
+      });
+
+      const sourceItems = await listQuoteItemsForQuotes({ teamId, quoteIds: [quoteId] });
+      const itemIdMap = new Map<string, string>();
+      const itemRows = sourceItems.map((item, index) => {
+        const nextId = crypto.randomUUID();
+        itemIdMap.set(item.id, nextId);
+        return {
+          id: nextId,
+          team_id: teamId,
+          quote_id: created.id,
+          position: Number(item.position ?? index + 1) || index + 1,
+          name: item.name ?? "Позиція",
+          description: item.description ?? null,
+          metadata: item.metadata ?? null,
+          qty: Number(item.qty ?? 1) || 1,
+          unit: normalizeUnitLabel(item.unit ?? "шт."),
+          unit_price: Number(item.unit_price ?? 0) || 0,
+          line_total: Number(item.line_total ?? 0) || 0,
+          methods: item.methods ?? null,
+          attachment: item.attachment ?? null,
+          catalog_type_id: item.catalog_type_id ?? null,
+          catalog_kind_id: item.catalog_kind_id ?? null,
+          catalog_model_id: item.catalog_model_id ?? null,
+          print_position_id: item.print_position_id ?? null,
+          print_width_mm: item.print_width_mm ?? null,
+          print_height_mm: item.print_height_mm ?? null,
+        };
+      });
+
+      if (itemRows.length > 0) {
+        let { error: insertItemsError } = await supabase.schema("tosho").from("quote_items").insert(itemRows);
+        if (
+          insertItemsError &&
+          /column/i.test(insertItemsError.message ?? "") &&
+          /metadata/i.test(insertItemsError.message ?? "")
+        ) {
+          ({ error: insertItemsError } = await supabase
+            .schema("tosho")
+            .from("quote_items")
+            .insert(
+              itemRows.map(({ metadata, ...item }) => item)
+            ));
+        }
+        if (insertItemsError) throw insertItemsError;
+      }
+
+      const sourceRuns = await getQuoteRuns(quoteId, teamId);
+      if (sourceRuns.length > 0) {
+        await upsertQuoteRuns(
+          created.id,
+          sourceRuns.map((run) => ({
+            id: crypto.randomUUID(),
+            quote_id: created.id,
+            quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
+            quantity: Number(run.quantity ?? 0) || 0,
+            unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+            unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+            logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+          }))
+        );
+      }
+
+      toast.success("Прорахунок продубльовано");
+      await loadQuotes();
+      navigate(`/orders/estimates/${created.id}`);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Не вдалося дублювати прорахунок."));
+    }
   };
 
   const requestDelete = (quoteId: string) => {
@@ -2756,11 +2968,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const openEdit = async (row: QuoteListRow) => {
     setEditLoading(true);
     setEditTarget(row);
+    setEditPrimaryItemId(null);
+    setCustomerSearch(!row.customer_id ? row.customer_name ?? "" : "");
     const initialDeadline =
       row.deadline_at && !Number.isNaN(new Date(row.deadline_at).getTime())
         ? new Date(row.deadline_at)
         : undefined;
     setEditInitialValues({
+      customerId: row.customer_id ?? "",
+      customerType: row.customer_id ? "customer" : "lead",
       status: normalizeStatus(row.status),
       comment: row.design_brief ?? row.comment ?? "",
       managerId: row.assigned_to ?? "",
@@ -2776,13 +2992,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setEditError(null);
     setEditDialogOpen(true);
     try {
-      const fresh = await getQuoteSummary(row.id);
+      const [fresh, itemRows, runRows] = await Promise.all([
+        getQuoteSummary(row.id),
+        listQuoteItemsForQuotes({ teamId, quoteIds: [row.id] }),
+        getQuoteRuns(row.id, teamId),
+      ]);
       setEditTarget((prev) => ({ ...(prev ?? row), ...fresh }));
+      const primaryItem = itemRows.find((item) => item.quote_id === row.id) ?? null;
+      const primaryItemMetadata =
+        primaryItem?.metadata && typeof primaryItem.metadata === "object"
+          ? (primaryItem.metadata as QuoteItemMetadata)
+          : null;
+      const itemRuns = runRows.filter((run) => run.quote_item_id === (primaryItem?.id ?? null));
+      const fallbackRuns =
+        itemRuns.length > 0
+          ? itemRuns
+          : primaryItem && Number(primaryItem.qty ?? 0) > 0
+            ? [
+                {
+                  quantity: Number(primaryItem.qty ?? 0),
+                },
+              ]
+            : [];
+      setEditPrimaryItemId(primaryItem?.id ?? null);
       const freshDeadline =
         fresh.deadline_at && !Number.isNaN(new Date(fresh.deadline_at).getTime())
           ? new Date(fresh.deadline_at)
           : undefined;
       setEditInitialValues({
+        customerId: fresh.customer_id ?? row.customer_id ?? "",
+        customerType: (fresh.customer_id ?? row.customer_id) ? "customer" : "lead",
         status: normalizeStatus(fresh.status),
         comment: fresh.design_brief ?? fresh.comment ?? row.design_brief ?? row.comment ?? "",
         managerId: fresh.assigned_to ?? "",
@@ -2797,6 +3036,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ...emptyDeliveryDetails(),
           ...((fresh.delivery_details as Record<string, string> | null) ?? {}),
         },
+        categoryId: primaryItem?.catalog_type_id ?? "",
+        kindId: primaryItem?.catalog_kind_id ?? "",
+        modelId: primaryItem?.catalog_model_id ?? "",
+        productConfiguratorPreset: primaryItemMetadata?.configuratorPreset ?? null,
+        printPackageConfig: primaryItemMetadata?.printPackage ?? undefined,
+        quantity:
+          Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0) > 0
+            ? Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0)
+            : undefined,
+        runs: fallbackRuns
+          .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+          .filter((run) => run.quantity > 0),
+        quantityUnit: normalizeUnitLabel(primaryItem?.unit ?? "шт."),
+        printApplications: toPrintApplications(primaryItem?.methods ?? null),
+        createDesignTask: false,
       });
     } catch (e: unknown) {
       setEditError(getErrorMessage(e, "Не вдалося завантажити актуальні дані прорахунку."));
@@ -2820,9 +3074,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setEditSaving(true);
     setEditError(null);
     try {
+      const selectedParty = customers.find(
+        (item) => item.id === data.customerId && (item.entityType ?? "customer") === (data.customerType ?? "customer")
+      );
+      const customerIdForQuote = data.customerType === "lead" ? null : data.customerId?.trim() || null;
+      const customerName =
+        (selectedParty?.name || selectedParty?.legal_name || editTarget.customer_name || "").trim() || null;
+      const customerLogoUrl = selectedParty?.logo_url ?? editTarget.customer_logo_url ?? null;
+      const title =
+        data.customerType === "lead"
+          ? customerName
+          : editTarget.title ?? null;
+
       await updateQuote({
         quoteId: editTarget.id,
         teamId,
+        customerId: customerIdForQuote,
+        customerName,
+        customerLogoUrl,
+        title,
         status: data.status,
         comment: data.comment?.trim() || null,
         designBrief: data.comment?.trim() || null,
@@ -2835,11 +3105,96 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,
       });
+      const normalizedRuns = (data.runs ?? []).filter((run) => Number(run.quantity) > 0);
+      const primaryRunQuantity = normalizedRuns[0]?.quantity ?? Number(data.quantity ?? 0);
+      const type = catalogTypes.find((entry) => entry.id === data.categoryId);
+      const kind = type?.kinds.find((entry) => entry.id === data.kindId);
+      const model = kind?.models.find((entry) => entry.id === data.modelId);
+      const methodsPayload = data.printApplications.length > 0
+        ? data.printApplications.map((app) => ({
+            method_id: app.method || null,
+            count: 1,
+            print_position_id: app.position || null,
+            print_width_mm: app.width ? Number(app.width) : null,
+            print_height_mm: app.height ? Number(app.height) : null,
+          }))
+        : null;
+      const primaryPrint = methodsPayload?.[0] ?? null;
+
+      if (editPrimaryItemId && data.modelId && Number.isFinite(primaryRunQuantity) && primaryRunQuantity > 0) {
+        const nextUnit = normalizeUnitLabel(data.quantityUnit || "шт.");
+        const nextUnitPrice = model?.price ?? 0;
+        const updateItemPayload = {
+          name: model?.name ?? "Позиція",
+          qty: primaryRunQuantity,
+          unit: nextUnit,
+          unit_price: nextUnitPrice,
+          line_total: primaryRunQuantity * nextUnitPrice,
+          catalog_type_id: data.categoryId ?? null,
+          catalog_kind_id: data.kindId ?? null,
+          catalog_model_id: data.modelId ?? null,
+          print_position_id: primaryPrint?.print_position_id ?? null,
+          print_width_mm: primaryPrint?.print_width_mm ?? null,
+          print_height_mm: primaryPrint?.print_height_mm ?? null,
+          methods: methodsPayload,
+        };
+        const { error: itemError } = await supabase
+          .schema("tosho")
+          .from("quote_items")
+          .update(updateItemPayload)
+          .eq("id", editPrimaryItemId)
+          .eq("quote_id", editTarget.id);
+        if (itemError) throw itemError;
+
+        const { error: deleteRunsError } = await supabase
+          .schema("tosho")
+          .from("quote_item_runs")
+          .delete()
+          .eq("quote_id", editTarget.id);
+        if (deleteRunsError) throw deleteRunsError;
+
+        if (normalizedRuns.length > 0) {
+          await upsertQuoteRuns(
+            editTarget.id,
+            normalizedRuns.map((run) => ({
+              id: crypto.randomUUID(),
+              quote_id: editTarget.id,
+              quote_item_id: editPrimaryItemId,
+              quantity: run.quantity,
+              unit_price_model: 0,
+              unit_price_print: 0,
+              logistics_cost: 0,
+            }))
+          );
+        }
+      }
+
+      if (data.createDesignTask) {
+        await ensureDesignTaskForQuote({
+          quoteId: editTarget.id,
+          quoteType: data.quoteType?.trim() ? data.quoteType : undefined,
+          modelName: model?.name ?? "Позиція",
+          methodsCount: methodsPayload?.length ?? 0,
+          designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
+          designDeadline: formatDeadlineValue(data.deadline),
+          assigneeUserId: data.designAssigneeId ?? null,
+          hasFiles: data.files.length > 0,
+        });
+      }
+
+      if (data.files.length > 0) {
+        await uploadFilesForQuote(editTarget.id, data.files);
+      }
+
       setRows((prev) =>
         prev.map((row) =>
           row.id === editTarget.id
             ? {
                 ...row,
+                customer_id: customerIdForQuote,
+                customer_name: customerName,
+                customer_logo_url: customerLogoUrl,
+                title,
                 status: data.status,
                 comment: data.comment?.trim() || null,
                 design_brief: data.comment?.trim() || null,
@@ -2857,6 +3212,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       );
       setEditDialogOpen(false);
       setEditInitialValues(null);
+      setEditPrimaryItemId(null);
+      await loadQuotes();
       toast.success("Прорахунок оновлено");
     } catch (e: unknown) {
       setEditError(getErrorMessage(e, "Не вдалося оновити прорахунок."));
@@ -5301,6 +5658,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             setEditInitialValues(null);
             setEditError(null);
             setEditLoading(false);
+            setEditPrimaryItemId(null);
+            setCustomerSearch("");
           }
         }}
         onSubmit={handleEditSubmit}
