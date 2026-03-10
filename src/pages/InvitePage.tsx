@@ -112,6 +112,12 @@ export default function InvitePage() {
         if (passwordError) throw passwordError;
       }
 
+      const { data: refreshedSessionData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
+      if (!refreshedSessionData.session?.access_token) {
+        throw new Error("Не вдалося оновити сесію перед прийняттям інвайту.");
+      }
+
       const { error } = await supabase
         .schema("tosho")
         .rpc("accept_workspace_invite", { p_token: token });
