@@ -161,6 +161,13 @@ type DeliveryDetails = {
   payer: string;
 };
 
+const normalizePartyLabel = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[«»"'`]/g, "");
+
 /**
  * Section header component
  */
@@ -582,6 +589,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   );
   const availablePrintMethods = selectedKind?.methods ?? [];
   const availablePrintPositions = selectedKind?.printPositions ?? [];
+  const fallbackPrintPositions = React.useMemo(() => {
+    const fromSelectedType = (selectedType?.kinds ?? []).flatMap((kind) => kind.printPositions ?? []);
+    const fromCatalog = catalogTypes.flatMap((type) => type.kinds.flatMap((kind) => kind.printPositions ?? []));
+    const source = fromSelectedType.length > 0 ? fromSelectedType : fromCatalog;
+    const unique = new Map<string, { id: string; label: string; sort_order?: number | null }>();
+    source.forEach((position) => {
+      if (!position?.id || unique.has(position.id)) return;
+      unique.set(position.id, position);
+    });
+    return Array.from(unique.values());
+  }, [catalogTypes, selectedType]);
+  const resolvedPrintPositions = availablePrintPositions.length > 0 ? availablePrintPositions : fallbackPrintPositions;
   const productSelectionReady = Boolean(categoryId && kindId && modelId);
   const hasRoleInfo = React.useMemo(
     () => teamMembers.some((member) => !!member.jobRole),
@@ -774,7 +793,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       {
         id: `${Date.now()}-${Math.random()}`,
         method: availablePrintMethods[0]?.id ?? "",
-        position: availablePrintPositions[0]?.id ?? "",
+        position: resolvedPrintPositions[0]?.id ?? "",
         width: "",
         height: "",
       },
@@ -836,7 +855,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Handle submit
   const handleSubmit = async () => {
     // Validation
-    if (!customerId) {
+    const hasResolvedLeadInEditMode =
+      isEditMode && customerType === "lead" && Boolean(customerLabel?.trim());
+    if (!customerId && !hasResolvedLeadInEditMode) {
       alert("Оберіть замовника або ліда");
       setCustomerPopoverOpen(true);
       return;
@@ -1067,7 +1088,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     const matched = customerOptions.find(
       (option) =>
         option.entityType === customerType &&
-        option.label.trim().toLowerCase() === customerLabel.trim().toLowerCase()
+        normalizePartyLabel(option.label) === normalizePartyLabel(customerLabel)
     );
     if (!matched) return;
     setCustomerId(matched.id);
@@ -1788,7 +1809,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <InfoPill icon={<Palette className="h-3.5 w-3.5" />} label="Режим" value={printMode === "with_print" ? "З нанесенням" : "Без нанесення"} />
               <InfoPill icon={<Package className="h-3.5 w-3.5" />} label="Конфігурацій" value={`${printApplications.length}`} />
-              <InfoPill icon={<Ruler className="h-3.5 w-3.5" />} label="Позиції" value={availablePrintPositions.length > 0 ? `${availablePrintPositions.length} доступно` : "Не налаштовано"} />
+              <InfoPill
+                icon={<Ruler className="h-3.5 w-3.5" />}
+                label="Позиції"
+                value={resolvedPrintPositions.length > 0 ? `${resolvedPrintPositions.length} доступно` : "Не налаштовано"}
+              />
             </div>
 
             <div className="mt-4 space-y-3">
@@ -1833,7 +1858,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     <ChipDropdown
                       value={app.position}
                       onChange={(value) => handleUpdatePrintApplication(app.id, "position", value)}
-                      options={availablePrintPositions.map((pos) => ({
+                      options={resolvedPrintPositions.map((pos) => ({
                         value: pos.id,
                         label: pos.label,
                       }))}
