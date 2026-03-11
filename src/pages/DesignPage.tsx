@@ -21,6 +21,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
+  getDesignStatusActionLabel,
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
@@ -61,6 +62,7 @@ type DesignTask = {
   title: string | null;
   status: DesignStatus;
   assigneeUserId?: string | null;
+  quoteManagerUserId?: string | null;
   assignedAt?: string | null;
   metadata?: Record<string, unknown>;
   methodsCount?: number;
@@ -100,6 +102,8 @@ type DesignContentView = "all" | "linked" | "standalone";
 
 const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
+const ALL_MANAGERS_FILTER = "__all__";
+const NO_MANAGER_FILTER = "__none__";
 
 type DesignPageCachePayload = {
   tasks: DesignTask[];
@@ -393,7 +397,9 @@ export default function DesignPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DesignStatus | "all">("all");
   const [designerFilter, setDesignerFilter] = useState<string>(ALL_DESIGNERS_FILTER);
+  const [managerFilter, setManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(false);
+  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
@@ -445,6 +451,13 @@ export default function DesignPage() {
         isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
       })
     );
+  const canMarkTaskReady = (task: DesignTask) =>
+    canChangeDesignStatus({
+      currentStatus: task.status,
+      nextStatus: "pm_review",
+      canManageAssignments: canManageDesignStatuses,
+      isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+    });
 
   const getTaskTimerSummary = (taskId: string): DesignTaskTimerSummary => {
     return (
@@ -757,6 +770,18 @@ export default function DesignPage() {
     setDefaultDesignerFilterApplied(true);
   }, [defaultDesignerFilterApplied, designerFilter, loading, permissions.isDesigner, tasks, userId]);
 
+  useEffect(() => {
+    if (defaultManagerFilterApplied) return;
+    if (managerFilter !== ALL_MANAGERS_FILTER) return;
+    if (!permissions.isManagerJob || !userId) return;
+    if (loading && tasks.length === 0) return;
+    const hasOwnManagedTasks = tasks.some((task) => task.quoteManagerUserId === userId);
+    if (hasOwnManagedTasks) {
+      setManagerFilter(userId);
+    }
+    setDefaultManagerFilterApplied(true);
+  }, [defaultManagerFilterApplied, loading, managerFilter, permissions.isManagerJob, tasks, userId]);
+
   const loadTasks = async () => {
     if (!effectiveTeamId) return;
     if (tasks.length > 0) {
@@ -796,6 +821,10 @@ export default function DesignPage() {
                 ? metadata.assignee_user_id
                 : null,
             assignedAt: typeof metadata.assigned_at === "string" ? metadata.assigned_at : null,
+            quoteManagerUserId:
+              typeof metadata.manager_user_id === "string" && metadata.manager_user_id.trim()
+                ? metadata.manager_user_id.trim()
+                : null,
             metadata,
             quoteNumber:
               typeof metadata.quote_number === "string" && metadata.quote_number.trim()
@@ -836,7 +865,13 @@ export default function DesignPage() {
       const quoteIds = Array.from(
         new Set(parsedRaw.map((t) => t.quoteId).filter((quoteId): quoteId is string => !!quoteId && isUuid(quoteId)))
       );
-      let quoteMap = new Map<string, { number: string | null; customerName: string | null; customerLogoUrl: string | null; partyType: "customer" | "lead" }>();
+      let quoteMap = new Map<string, {
+        number: string | null;
+        customerName: string | null;
+        customerLogoUrl: string | null;
+        partyType: "customer" | "lead";
+        managerUserId: string | null;
+      }>();
       const productNameByQuoteId = new Map<string, string | null>();
       const productImageByQuoteId = new Map<string, string | null>();
       const productQtyByQuoteId = new Map<string, string | null>();
@@ -844,7 +879,7 @@ export default function DesignPage() {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
           .from("quotes")
-          .select("id, number, customer_id, customer_name, customer_logo_url, title")
+          .select("id, number, customer_id, customer_name, customer_logo_url, title, assigned_to")
           .in("id", quoteIds);
         if (quoteError) throw quoteError;
 
@@ -882,6 +917,8 @@ export default function DesignPage() {
                   typeof q.customer_logo_url === "string" ? q.customer_logo_url : null
                 ) ?? normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null),
               partyType: q.customer_id ? "customer" : "lead",
+              managerUserId:
+                typeof q.assigned_to === "string" && q.assigned_to.trim() ? q.assigned_to.trim() : null,
             },
           ])
         );
@@ -987,6 +1024,7 @@ export default function DesignPage() {
           normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null) ??
           null,
         partyType: t.partyType ?? quoteMap.get(t.quoteId)?.partyType ?? null,
+        quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
         productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
@@ -1081,6 +1119,50 @@ export default function DesignPage() {
     );
   };
 
+  const managerFilterOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; label: string; avatarUrl?: string | null }>();
+
+    managerMembers.forEach((member) => {
+      byId.set(member.id, member);
+    });
+
+    tasks.forEach((task) => {
+      const managerId = task.quoteManagerUserId?.trim();
+      if (!managerId || byId.has(managerId)) return;
+      const label =
+        managerId === userId && currentUserDisplayName
+          ? currentUserDisplayName
+          : (memberById[managerId] ?? managerId);
+      byId.set(managerId, {
+        id: managerId,
+        label,
+        avatarUrl: getMemberAvatar(managerId),
+      });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
+  }, [currentUserDisplayName, managerMembers, memberById, tasks, userId]);
+
+  const renderManagerFilterValue = (value: string) => {
+    if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
+    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
+    const label = value === userId && currentUserDisplayName ? currentUserDisplayName : (memberById[value] ?? "Користувач");
+    const avatarUrl = getMemberAvatar(value);
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <AvatarBase
+          src={avatarUrl}
+          name={label}
+          fallback={getInitials(label)}
+          size={18}
+          className="shrink-0 border-border/60"
+          fallbackClassName="text-[9px] font-semibold"
+        />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  };
+
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     return tasks.filter((task) => {
@@ -1092,6 +1174,11 @@ export default function DesignPage() {
 
       if (designerFilter === NO_DESIGNER_FILTER && task.assigneeUserId) return false;
       if (designerFilter !== ALL_DESIGNERS_FILTER && designerFilter !== NO_DESIGNER_FILTER && task.assigneeUserId !== designerFilter) {
+        return false;
+      }
+
+      if (managerFilter === NO_MANAGER_FILTER && task.quoteManagerUserId) return false;
+      if (managerFilter !== ALL_MANAGERS_FILTER && managerFilter !== NO_MANAGER_FILTER && task.quoteManagerUserId !== managerFilter) {
         return false;
       }
 
@@ -1110,14 +1197,19 @@ export default function DesignPage() {
 
       return haystack.includes(query);
     });
-  }, [contentView, designerFilter, search, statusFilter, tasks]);
+  }, [contentView, designerFilter, managerFilter, search, statusFilter, tasks]);
 
-  const hasActiveFilters = search.trim().length > 0 || statusFilter !== "all" || designerFilter !== ALL_DESIGNERS_FILTER;
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== "all" ||
+    designerFilter !== ALL_DESIGNERS_FILTER ||
+    managerFilter !== ALL_MANAGERS_FILTER;
 
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
     setDesignerFilter(ALL_DESIGNERS_FILTER);
+    setManagerFilter(ALL_MANAGERS_FILTER);
   };
 
   useEffect(() => {
@@ -2183,9 +2275,9 @@ export default function DesignPage() {
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-              <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
+                <DropdownMenuSeparator />
               {canSelfAssign &&
               userId &&
               task.assigneeUserId &&
@@ -2198,6 +2290,11 @@ export default function DesignPage() {
                 <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>Взяти в роботу</DropdownMenuItem>
               ) : null}
               <DropdownMenuItem onClick={() => requestReestimate(task)}>Оновити естімейт</DropdownMenuItem>
+              {canMarkTaskReady(task) ? (
+                <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
+                  Позначити як дизайн готовий
+                </DropdownMenuItem>
+              ) : null}
               {canManageAssignments ? (
                 <>
                   <DropdownMenuSeparator />
@@ -2221,11 +2318,13 @@ export default function DesignPage() {
                 </>
               ) : null}
               <DropdownMenuSeparator />
-              {getAllowedStatusTransitions(task).map((target) => (
+              {getAllowedStatusTransitions(task)
+                .filter((target) => target.id !== "pm_review")
+                .map((target) => (
                 <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
-                  {target.label}
+                  {getDesignStatusActionLabel(task.status, target.id)}
                 </DropdownMenuItem>
-              ))}
+                ))}
               {canManageAssignments ? (
                 <>
                   <DropdownMenuSeparator />
@@ -2472,7 +2571,22 @@ export default function DesignPage() {
               </SelectContent>
             </Select>
 
-            <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+            <Select value={managerFilter} onValueChange={setManagerFilter}>
+              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[220px]")}>
+                <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
+                <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
+                {managerFilterOptions.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {renderManagerFilterValue(member.id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -2498,6 +2612,8 @@ export default function DesignPage() {
       hasActiveFilters,
       linkedTasksCount,
       loading,
+      managerFilter,
+      managerFilterOptions,
       refreshing,
       search,
       standaloneTasksCount,
@@ -2909,15 +3025,22 @@ export default function DesignPage() {
                                 <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
                                   Редагувати
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => requestReestimate(task)}>
-                                  Оновити естімейт
+                              <DropdownMenuItem onClick={() => requestReestimate(task)}>
+                                Оновити естімейт
+                              </DropdownMenuItem>
+                              {canMarkTaskReady(task) ? (
+                                <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
+                                  Позначити як дизайн готовий
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                {getAllowedStatusTransitions(task).map((target) => (
+                              ) : null}
+                              <DropdownMenuSeparator />
+                                {getAllowedStatusTransitions(task)
+                                  .filter((target) => target.id !== "pm_review")
+                                  .map((target) => (
                                   <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
-                                    Статус: {target.label}
+                                    {getDesignStatusActionLabel(task.status, target.id)}
                                   </DropdownMenuItem>
-                                ))}
+                                  ))}
                                 {canManageAssignments ? (
                                   <>
                                     <DropdownMenuSeparator />

@@ -3907,7 +3907,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </div>
                 ) : null}
-                <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+                <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             ) : (
               <>
@@ -3940,7 +3940,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
                   </Button>
                 </div>
-                <ActiveHereCard entries={workspacePresence.activeHereEntries} />
+                <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             )}
           </div>

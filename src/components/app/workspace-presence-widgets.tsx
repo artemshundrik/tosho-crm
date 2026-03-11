@@ -188,9 +188,24 @@ type ActiveHereCardProps = {
   entries: WorkspacePresenceEntry[];
   className?: string;
   title?: string;
+  variant?: "default" | "minimal";
 };
 
-export function ActiveHereCard({ entries, className, title = "Активні тут" }: ActiveHereCardProps) {
+export function ActiveHereCard({
+  entries,
+  className,
+  title = "Активні тут",
+  variant = "default",
+}: ActiveHereCardProps) {
+  if (variant === "minimal") {
+    return (
+      <div className={cn("inline-flex items-center gap-2 text-muted-foreground", className)}>
+        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        {entries.length === 0 ? <span className="text-xs text-muted-foreground">0</span> : <PresenceAvatarStack entries={entries} max={4} size={20} />}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(

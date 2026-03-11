@@ -62,6 +62,7 @@ import {
   DESIGN_ALL_STATUSES,
   DESIGN_STATUS_LABELS,
   DESIGN_STATUS_QUICK_ACTIONS,
+  getDesignStatusActionLabel,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
 import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
@@ -1888,6 +1889,7 @@ export default function DesignTaskPage() {
     () => (task ? (statusQuickActions[task.status] ?? []).filter((action) => allowedStatusTransitions.includes(action.next)) : []),
     [allowedStatusTransitions, task]
   );
+  const canMarkReadyNow = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
     if (!sourceTask) return null;
     const raw = (sourceTask.metadata ?? {}).estimate_minutes;
@@ -4887,15 +4889,20 @@ export default function DesignTaskPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {allowedStatusTransitions.map((status) => (
+                  {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => (
                     <DropdownMenuItem
                       key={status}
                       disabled={!!statusSaving}
                       onClick={() => void updateTaskStatus(status)}
                     >
-                      {statusLabels[status]}
+                      {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
                     </DropdownMenuItem>
                   ))}
+                  {canMarkReadyNow ? (
+                    <DropdownMenuItem disabled={!!statusSaving} onClick={() => void updateTaskStatus("pm_review")}>
+                      Позначити як дизайн готовий
+                    </DropdownMenuItem>
+                  ) : null}
                   {canManageAssignments ? (
                     <>
                       <DropdownMenuSeparator />
@@ -5006,6 +5013,18 @@ export default function DesignTaskPage() {
                 >
                   {statusSaving === "in_progress" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {task.status === "changes" ? "Почати правки (В роботі)" : "Почати роботу (В роботі)"}
+                </Button>
+              ) : null}
+              {canMarkReadyNow ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-2 w-full justify-start"
+                  disabled={!!statusSaving}
+                  onClick={() => void updateTaskStatus("pm_review")}
+                >
+                  {statusSaving === "pm_review" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Позначити як дизайн готовий
                 </Button>
               ) : null}
             </div>

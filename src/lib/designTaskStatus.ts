@@ -41,6 +41,12 @@ export const DESIGN_STATUS_QUICK_ACTIONS: Partial<Record<DesignStatus, Array<{ n
   ],
 };
 
+export const getDesignStatusActionLabel = (currentStatus: DesignStatus, nextStatus: DesignStatus) => {
+  const quickAction = (DESIGN_STATUS_QUICK_ACTIONS[currentStatus] ?? []).find((action) => action.next === nextStatus);
+  if (quickAction) return quickAction.label;
+  return `Перевести в статус «${DESIGN_STATUS_LABELS[nextStatus]}»`;
+};
+
 type DesignStatusPermissionInput = {
   currentStatus: DesignStatus;
   canManageAssignments: boolean;

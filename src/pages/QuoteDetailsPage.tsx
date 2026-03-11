@@ -362,7 +362,7 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, accessRole, jobRole } = useAuth();
   const initialCache = readQuoteDetailsCache(teamId, quoteId);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
@@ -547,53 +547,65 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const canViewAllManagerRates =
+    accessRole === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+  const effectiveManagerId = canViewAllManagerRates
+    ? quote?.assigned_to?.trim() || userId || null
+    : userId || null;
 
-    const loadCurrentManagerRate = async () => {
-      if (!userId) {
+  const loadCurrentManagerRate = useCallback(async () => {
+    if (!effectiveManagerId) {
+      setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+      return;
+    }
+
+    try {
+      const workspaceId = await resolveWorkspaceId(effectiveManagerId);
+      if (!workspaceId) {
         setCurrentManagerRate(DEFAULT_MANAGER_RATE);
         return;
       }
 
-      try {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (!workspaceId) {
-          if (!cancelled) setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-          return;
-        }
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("team_member_manager_rates")
+        .select("manager_rate")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", effectiveManagerId)
+        .maybeSingle<{ manager_rate?: number | null }>();
 
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("team_member_manager_rates")
-          .select("manager_rate")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", userId)
-          .maybeSingle<{ manager_rate?: number | null }>();
-
-        if (error) {
-          if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-            throw error;
-          }
-          if (!cancelled) setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-          return;
+      if (error) {
+        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
+          throw error;
         }
-
-        if (!cancelled) {
-          setCurrentManagerRate(Math.max(0, Number(data?.manager_rate) || DEFAULT_MANAGER_RATE));
-        }
-      } catch (error) {
-        console.error("Failed to load current manager rate", error);
-        if (!cancelled) setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+        setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+        return;
       }
+
+      setCurrentManagerRate(Math.max(0, Number(data?.manager_rate) || DEFAULT_MANAGER_RATE));
+    } catch (error) {
+      console.error("Failed to load current manager rate", error);
+      setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+    }
+  }, [effectiveManagerId]);
+
+  useEffect(() => {
+    void loadCurrentManagerRate();
+  }, [loadCurrentManagerRate]);
+
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      void loadCurrentManagerRate();
     };
 
-    void loadCurrentManagerRate();
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleWindowFocus);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleWindowFocus);
     };
-  }, [userId]);
+  }, [loadCurrentManagerRate]);
 
   const getRunTotal = (run: QuoteRun) => {
     const qty = Number(run.quantity) || 0;
