@@ -131,6 +131,55 @@ function getQuoteMonthCode(date = new Date()) {
   return `${month}${year}`;
 }
 
+function hasMeaningfulMemberIdentity(row: {
+  full_name?: string | null;
+  email?: string | null;
+}) {
+  return Boolean(row.full_name?.trim() || row.email?.trim());
+}
+
+async function hydrateMemberLabelsFromProfiles(
+  members: TeamMemberRow[]
+): Promise<TeamMemberRow[]> {
+  const genericIds = members
+    .filter((member) => member.label === "Користувач" || member.label === "Невідомий користувач")
+    .map((member) => member.id);
+
+  if (genericIds.length === 0) return members;
+
+  const { data, error } = await supabase
+    .from("team_member_profiles")
+    .select("user_id,first_name,last_name,full_name")
+    .in("user_id", genericIds);
+
+  if (error) return members;
+
+  const profileLabelById = new Map(
+    (((data as Array<{
+      user_id?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+      full_name?: string | null;
+    }> | null) ?? [])
+      .map((row) => {
+        const userId = row.user_id ?? "";
+        const label = formatUserShortName({
+          firstName: row.first_name ?? null,
+          lastName: row.last_name ?? null,
+          fullName: row.full_name ?? null,
+          fallback: "",
+        });
+        return [userId, label] as const;
+      })
+      .filter(([userId, label]) => Boolean(userId && label)))
+  );
+
+  return members.map((member) => ({
+    ...member,
+    label: profileLabelById.get(member.id) ?? member.label,
+  }));
+}
+
 function formatQuoteNumber(monthCode: string, sequence: number) {
   return `TS-${monthCode}-${String(sequence).padStart(4, "0")}`;
 }
@@ -1033,8 +1082,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         .schema("tosho")
         .from("memberships_view")
         .select(columns)
-        .eq("workspace_id", workspaceId)
-        .in("user_id", ids);
+        .eq("workspace_id", workspaceId);
       membershipRows =
         (result.data as unknown as Array<{
           user_id: string;
@@ -1091,15 +1139,40 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       ])
     );
 
-    return baseMembers.map((member) => ({
-      ...member,
-      label:
-        (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
-          ? labelById.get(member.id)
-          : null) ?? member.label,
-      jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
-      avatarUrl: member.avatarUrl ?? avatarById.get(member.id) ?? null,
-    }));
+    const mergedMembers = new Map(
+      baseMembers.map((member) => [
+        member.id,
+        {
+          ...member,
+          label:
+            (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
+              ? labelById.get(member.id)
+              : null) ?? member.label,
+          jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
+          avatarUrl: member.avatarUrl ?? avatarById.get(member.id) ?? null,
+        },
+      ])
+    );
+
+    for (const row of membershipRows ?? []) {
+      if (!row.user_id) continue;
+      const existing = mergedMembers.get(row.user_id);
+      if (!existing && !hasMeaningfulMemberIdentity(row)) continue;
+      const label =
+        formatLabel({ user_id: row.user_id, full_name: row.full_name ?? null, email: row.email ?? null }) ||
+        existing?.label ||
+        row.user_id;
+      mergedMembers.set(row.user_id, {
+        id: row.user_id,
+        label,
+        avatarUrl: existing?.avatarUrl ?? row.avatar_url ?? null,
+        jobRole: existing?.jobRole ?? row.job_role ?? null,
+      });
+    }
+
+    return await hydrateMemberLabelsFromProfiles(
+      Array.from(mergedMembers.values()).sort((a, b) => a.label.localeCompare(b.label, "uk"))
+    );
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     if (message.includes("does not exist") || message.includes("relation")) {
@@ -1139,7 +1212,6 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         return baseMembers;
       }
 
-      const ids = baseMembers.map((m) => m.id);
       const columnsToTryMemberships = [
         "user_id, job_role, full_name, email",
         "user_id, job_role, full_name",
@@ -1156,8 +1228,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
           .schema("tosho")
           .from("memberships_view")
           .select(columns)
-          .eq("workspace_id", workspaceId)
-          .in("user_id", ids);
+          .eq("workspace_id", workspaceId);
         membershipRows =
           (result.data as unknown as Array<{
             user_id: string;
@@ -1189,14 +1260,39 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         ])
       );
 
-      return baseMembers.map((member) => ({
-        ...member,
-        label:
-          (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
-            ? labelById.get(member.id)
-            : null) ?? member.label,
-        jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
-      }));
+      const mergedMembers = new Map(
+        baseMembers.map((member) => [
+          member.id,
+          {
+            ...member,
+            label:
+              (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
+                ? labelById.get(member.id)
+                : null) ?? member.label,
+            jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
+          },
+        ])
+      );
+
+      for (const row of membershipRows ?? []) {
+        if (!row.user_id) continue;
+        const existing = mergedMembers.get(row.user_id);
+        if (!existing && !hasMeaningfulMemberIdentity(row)) continue;
+        const label =
+          formatLabel({ user_id: row.user_id, full_name: row.full_name ?? null, email: row.email ?? null }) ||
+          existing?.label ||
+          row.user_id;
+        mergedMembers.set(row.user_id, {
+          id: row.user_id,
+          label,
+          avatarUrl: existing?.avatarUrl ?? null,
+          jobRole: existing?.jobRole ?? row.job_role ?? null,
+        });
+      }
+
+      return await hydrateMemberLabelsFromProfiles(
+        Array.from(mergedMembers.values()).sort((a, b) => a.label.localeCompare(b.label, "uk"))
+      );
     }
     throw error;
   }

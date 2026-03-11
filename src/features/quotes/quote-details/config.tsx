@@ -52,10 +52,19 @@ export const renderTextWithMentions = (text: string) => {
   const parts = text.split(MENTION_TOKEN_REGEX);
   return parts.map((part, index) => {
     if (!part) return null;
-    if (!part.startsWith("@")) return <span key={`text-${index}`}>{part}</span>;
+
+    const lines = part.split("\n");
+    const content = lines.map((line, lineIndex) => (
+      <span key={`line-${index}-${lineIndex}`}>
+        {line}
+        {lineIndex < lines.length - 1 ? <br /> : null}
+      </span>
+    ));
+
+    if (!part.startsWith("@")) return <span key={`text-${index}`}>{content}</span>;
     return (
       <span key={`mention-${index}`} className="font-semibold text-primary">
-        {part}
+        {content}
       </span>
     );
   });

@@ -77,6 +77,13 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import {
+  buildMentionAlias,
+  extractMentionKeys,
+  isMentionTerminator,
+  normalizeMentionKey,
+  toEmailLocalPart,
+} from "@/features/quotes/quote-details/config";
 
 type DesignTask = {
   id: string;
@@ -173,6 +180,24 @@ type DesignTaskComment = {
   body: string;
   created_at: string;
   created_by: string;
+};
+
+type MentionContext = {
+  start: number;
+  end: number;
+  query: string;
+};
+
+type MentionSuggestion = {
+  id: string;
+  label: string;
+  alias: string;
+  avatarUrl: string | null;
+};
+
+type MentionDropdownState = {
+  side: "top" | "bottom";
+  maxHeight: number;
 };
 
 type FilePreviewState = {
@@ -275,6 +300,16 @@ const getInitials = (name?: string | null) => {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+};
+
+const hasMeaningfulMemberIdentity = (row: {
+  full_name?: string | null;
+  email?: string | null;
+}) => Boolean(row.full_name?.trim() || row.email?.trim());
+
+const isGenericMentionLabel = (label?: string | null) => {
+  const normalized = (label ?? "").trim().toLowerCase();
+  return normalized === "користувач" || normalized === "невідомий користувач";
 };
 
 const formatFileSize = (bytes?: number | null) => {
@@ -634,6 +669,12 @@ export default function DesignTaskPage() {
   const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
   const [quoteCommentDraft, setQuoteCommentDraft] = useState("");
   const [quoteCommentSaving, setQuoteCommentSaving] = useState(false);
+  const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [mentionDropdown, setMentionDropdown] = useState<MentionDropdownState>({
+    side: "bottom",
+    maxHeight: 224,
+  });
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [addLinkUrl, setAddLinkUrl] = useState("https://");
   const [addLinkLabel, setAddLinkLabel] = useState("");
@@ -826,10 +867,9 @@ export default function DesignTaskPage() {
           }
         }
 
-        if (rows.length === 0) {
-          const workspaceId = await resolveWorkspaceId(userId);
-          if (!workspaceId) return;
-
+        const workspaceId = await resolveWorkspaceId(userId);
+        let membershipRows: MembershipRow[] = [];
+        if (workspaceId) {
           const membershipColumns = [
             "user_id,full_name,email,avatar_url,access_role,job_role",
             "user_id,full_name,email,avatar_url,job_role",
@@ -847,7 +887,7 @@ export default function DesignTaskPage() {
               .select(columns)
               .eq("workspace_id", workspaceId);
             if (!membersError) {
-              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              membershipRows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
               loaded = true;
               break;
             }
@@ -856,7 +896,33 @@ export default function DesignTaskPage() {
               throw membersError;
             }
           }
-          if (!loaded) throw new Error("Не вдалося завантажити учасників");
+          if (!loaded && rows.length === 0) throw new Error("Не вдалося завантажити учасників");
+        } else if (rows.length === 0) {
+          return;
+        }
+
+        if (membershipRows.length > 0) {
+          const mergedRows = new Map<string, MembershipRow>();
+          for (const row of rows) {
+            if (!row.user_id) continue;
+            mergedRows.set(row.user_id, row);
+          }
+          for (const row of membershipRows) {
+            if (!row.user_id) continue;
+            const existing = mergedRows.get(row.user_id);
+            if (!existing && !hasMeaningfulMemberIdentity(row)) continue;
+            mergedRows.set(row.user_id, {
+              ...(existing ?? row),
+              ...row,
+              user_id: row.user_id,
+              full_name: row.full_name ?? existing?.full_name ?? null,
+              email: row.email ?? existing?.email ?? null,
+              avatar_url: row.avatar_url ?? existing?.avatar_url ?? null,
+              access_role: row.access_role ?? existing?.access_role ?? null,
+              job_role: row.job_role ?? existing?.job_role ?? null,
+            });
+          }
+          rows = Array.from(mergedRows.values());
         }
 
         const labels: Record<string, string> = {};
@@ -1593,8 +1659,130 @@ export default function DesignTaskPage() {
     const suggestion = mentionSuggestions.find((entry) => entry.id === memberId);
     if (!suggestion) return;
     setQuoteCommentDraft((prev) => `${prev.trimEnd()}${prev.trim() ? " " : ""}@${suggestion.alias} `);
+    setMentionContext(null);
+    setMentionActiveIndex(0);
     requestAnimationFrame(() => quoteCommentTextareaRef.current?.focus());
   };
+
+  const measureMentionDropdown = () => {
+    const textarea = quoteCommentTextareaRef.current;
+    if (!textarea || typeof window === "undefined") return;
+
+    const rect = textarea.getBoundingClientRect();
+    const viewportPadding = 16;
+    const gap = 8;
+    const maxDropdownHeight = 224;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding - gap;
+    const spaceAbove = rect.top - viewportPadding - gap;
+    const side =
+      spaceBelow >= maxDropdownHeight || spaceBelow >= spaceAbove ? "bottom" : "top";
+    const availableSpace = side === "bottom" ? spaceBelow : spaceAbove;
+
+    setMentionDropdown({
+      side,
+      maxHeight: Math.max(96, Math.min(maxDropdownHeight, Math.floor(Math.max(availableSpace, 96)))),
+    });
+  };
+
+  const resolveMentionContext = (text: string, cursor: number): MentionContext | null => {
+    if (!text || cursor <= 0) return null;
+
+    const start = text.lastIndexOf("@", Math.max(0, cursor - 1));
+    if (start < 0) return null;
+
+    const prevChar = start > 0 ? text[start - 1] : "";
+    if (start > 0 && !/[\s(]/u.test(prevChar)) return null;
+
+    const query = text.slice(start + 1, cursor);
+    if (query.includes("@")) return null;
+    if ([...query].some((char) => isMentionTerminator(char))) return null;
+
+    let end = cursor;
+    while (end < text.length && !isMentionTerminator(text[end])) {
+      end += 1;
+    }
+
+    return { start, end, query };
+  };
+
+  const syncMentionContext = (text: string, cursor: number) => {
+    const nextContext = resolveMentionContext(text, cursor);
+    setMentionContext(nextContext);
+    if (nextContext) {
+      measureMentionDropdown();
+    }
+    setMentionActiveIndex(0);
+  };
+
+  const applyMentionSuggestion = (suggestion: MentionSuggestion) => {
+    if (!mentionContext) return;
+
+    const before = quoteCommentDraft.slice(0, mentionContext.start);
+    const after = quoteCommentDraft.slice(mentionContext.end);
+    const mentionToken = `@${suggestion.alias}`;
+    const needsSpaceAfter = after.length > 0 && !/^[\s,;:!?()[\]{}<>]/u.test(after);
+    const insertText = `${mentionToken}${needsSpaceAfter ? " " : ""}`;
+    const nextValue = `${before}${insertText}${after}`;
+    const caretPosition = before.length + insertText.length;
+
+    setQuoteCommentDraft(nextValue);
+    setMentionContext(null);
+    setMentionActiveIndex(0);
+
+    requestAnimationFrame(() => {
+      const input = quoteCommentTextareaRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caretPosition, caretPosition);
+    });
+  };
+
+  const handleQuoteCommentKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!mentionContext) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionContext(null);
+      setMentionActiveIndex(0);
+      return;
+    }
+
+    if (filteredMentionSuggestions.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMentionActiveIndex((prev) => (prev + 1) % filteredMentionSuggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMentionActiveIndex((prev) =>
+        prev === 0 ? filteredMentionSuggestions.length - 1 : prev - 1
+      );
+      return;
+    }
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      const selected =
+        filteredMentionSuggestions[Math.max(0, mentionActiveIndex)] ?? filteredMentionSuggestions[0];
+      if (selected) {
+        applyMentionSuggestion(selected);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!mentionContext) return;
+    const handleViewportChange = () => measureMentionDropdown();
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [mentionContext]);
 
   const handleSubmitQuoteComment = async () => {
     if (!task?.id) return;
@@ -1605,9 +1793,7 @@ export default function DesignTaskPage() {
     }
     setQuoteCommentSaving(true);
     try {
-      const mentionKeys = Array.from(body.matchAll(/(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu))
-        .map((match) => match[2]?.trim().toLowerCase())
-        .filter((value): value is string => !!value);
+      const mentionKeys = extractMentionKeys(body);
       const mentionedUserIds = Array.from(
         new Set(
           mentionKeys
@@ -4080,36 +4266,68 @@ export default function DesignTaskPage() {
         })),
     ];
   }, [designOutputFiles, designOutputLinks, groupingSelectionIds]);
-  const mentionSuggestions = useMemo(
+  const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
-      Object.entries(memberById).map(([memberId, label]) => {
-        const aliasBase = label.trim().replace(/\s+/g, ".").replace(/[^\p{L}\p{N}._-]+/gu, "");
-        const alias = aliasBase || memberId.slice(0, 8);
-        return { id: memberId, label, alias: alias.toLowerCase() };
-      }),
-    [memberById]
+      Object.entries(memberById)
+        .map(([memberId, label]) => ({
+          id: memberId,
+          label,
+          alias: buildMentionAlias(label, memberId).toLowerCase(),
+          avatarUrl: memberAvatarById[memberId] ?? null,
+        }))
+        .sort((a, b) => {
+          const aGeneric = isGenericMentionLabel(a.label);
+          const bGeneric = isGenericMentionLabel(b.label);
+          if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
+          return a.label.localeCompare(b.label, "uk");
+        }),
+    [memberAvatarById, memberById]
   );
   const mentionLookup = useMemo(() => {
     const lookup = new Map<string, Set<string>>();
+    const addKey = (raw: string | null | undefined, memberId: string) => {
+      const normalized = normalizeMentionKey(raw);
+      if (!normalized) return;
+      const current = lookup.get(normalized) ?? new Set<string>();
+      current.add(memberId);
+      lookup.set(normalized, current);
+    };
+
     for (const suggestion of mentionSuggestions) {
-      const keys = [
-        suggestion.id,
-        suggestion.alias,
-        suggestion.label,
-        suggestion.label.replace(/\s+/g, ""),
-        suggestion.label.replace(/\s+/g, "."),
-        suggestion.label.replace(/\s+/g, "_"),
-      ];
-      for (const key of keys) {
-        const normalized = key.trim().toLowerCase();
-        if (!normalized) continue;
-        const current = lookup.get(normalized) ?? new Set<string>();
-        current.add(suggestion.id);
-        lookup.set(normalized, current);
+      addKey(suggestion.id, suggestion.id);
+      addKey(suggestion.alias, suggestion.id);
+      addKey(suggestion.label, suggestion.id);
+      addKey(suggestion.label.replace(/\s+/g, ""), suggestion.id);
+      addKey(suggestion.label.replace(/\s+/g, "."), suggestion.id);
+      addKey(suggestion.label.replace(/\s+/g, "_"), suggestion.id);
+      addKey(toEmailLocalPart(suggestion.label), suggestion.id);
+
+      for (const part of suggestion.label.split(/\s+/).filter((token) => token.length >= 2)) {
+        addKey(part, suggestion.id);
       }
     }
     return lookup;
   }, [mentionSuggestions]);
+  const filteredMentionSuggestions = useMemo(() => {
+    if (!mentionContext) return [];
+    const query = normalizeMentionKey(mentionContext.query);
+    return mentionSuggestions
+      .filter((member) => {
+        if (!query) return true;
+        return (
+          normalizeMentionKey(member.alias).includes(query) ||
+          normalizeMentionKey(member.label).includes(query)
+        );
+      })
+      .slice(0, 8);
+  }, [mentionContext, mentionSuggestions]);
+  useEffect(() => {
+    if (filteredMentionSuggestions.length === 0) {
+      setMentionActiveIndex(0);
+      return;
+    }
+    setMentionActiveIndex((prev) => Math.max(0, Math.min(prev, filteredMentionSuggestions.length - 1)));
+  }, [filteredMentionSuggestions.length]);
   useEffect(() => {
     if (!attachQuoteDialogOpen || !task || isUuid(task.quoteId)) return;
     void loadQuoteCandidates();
@@ -4568,7 +4786,7 @@ export default function DesignTaskPage() {
                     <div className="text-xs text-muted-foreground">Останні правки ({briefChangeRequests.length})</div>
                     <div className="space-y-1.5">
                       {briefChangeRequests.slice(0, 3).map((request) => (
-                        <div key={request.id} className="text-sm">
+                        <div key={request.id} className="text-sm whitespace-pre-wrap break-words">
                           <span className="text-muted-foreground">
                             {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
                           </span>{" "}
@@ -4629,7 +4847,7 @@ export default function DesignTaskPage() {
                             {version.change_request_id ? " • з правки" : ""}
                           </div>
                           {version.change_request_id && briefChangeRequestById.get(version.change_request_id)?.request_text ? (
-                            <div className="text-sm">
+                            <div className="text-sm whitespace-pre-wrap break-words">
                               Правка: {briefChangeRequestById.get(version.change_request_id)?.request_text}
                             </div>
                           ) : null}
@@ -5571,13 +5789,67 @@ export default function DesignTaskPage() {
                       ))}
                     </div>
                   ) : null}
-                  <Textarea
-                    ref={quoteCommentTextareaRef}
-                    value={quoteCommentDraft}
-                    onChange={(event) => setQuoteCommentDraft(event.target.value)}
-                    placeholder="Наприклад: @tania макети погоджені, можна запускати у виробництво."
-                    className="min-h-[110px]"
-                  />
+                  <div className="relative">
+                    <Textarea
+                      ref={quoteCommentTextareaRef}
+                      value={quoteCommentDraft}
+                      onChange={(event) => {
+                        const cursor = event.target.selectionStart ?? event.target.value.length;
+                        setQuoteCommentDraft(event.target.value);
+                        syncMentionContext(event.target.value, cursor);
+                      }}
+                      onSelect={(event) => {
+                        const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                        syncMentionContext(event.currentTarget.value, cursor);
+                      }}
+                      onKeyDown={handleQuoteCommentKeyDown}
+                      placeholder="Наприклад: @tania макети погоджені, можна запускати у виробництво."
+                      className="min-h-[110px]"
+                    />
+                    {mentionContext ? (
+                      <div
+                        className={cn(
+                          "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                          mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+                        )}
+                      >
+                        {filteredMentionSuggestions.length > 0 ? (
+                          <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
+                            {filteredMentionSuggestions.map((member, index) => (
+                              <button
+                                key={member.id}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                                  index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                                )}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  applyMentionSuggestion(member);
+                                }}
+                              >
+                                <AvatarBase
+                                  src={member.avatarUrl}
+                                  name={member.label}
+                                  fallback={getInitials(member.label)}
+                                  size={24}
+                                  className="text-[10px] font-semibold"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">{member.label}</div>
+                                  <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex justify-end">
                     <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
                       {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -5640,13 +5912,67 @@ export default function DesignTaskPage() {
                       ))}
                     </div>
                   ) : null}
-                  <Textarea
-                    ref={quoteCommentTextareaRef}
-                    value={quoteCommentDraft}
-                    onChange={(event) => setQuoteCommentDraft(event.target.value)}
-                    placeholder="Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
-                    className="min-h-[110px]"
-                  />
+                  <div className="relative">
+                    <Textarea
+                      ref={quoteCommentTextareaRef}
+                      value={quoteCommentDraft}
+                      onChange={(event) => {
+                        const cursor = event.target.selectionStart ?? event.target.value.length;
+                        setQuoteCommentDraft(event.target.value);
+                        syncMentionContext(event.target.value, cursor);
+                      }}
+                      onSelect={(event) => {
+                        const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                        syncMentionContext(event.currentTarget.value, cursor);
+                      }}
+                      onKeyDown={handleQuoteCommentKeyDown}
+                      placeholder="Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
+                      className="min-h-[110px]"
+                    />
+                    {mentionContext ? (
+                      <div
+                        className={cn(
+                          "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                          mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+                        )}
+                      >
+                        {filteredMentionSuggestions.length > 0 ? (
+                          <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
+                            {filteredMentionSuggestions.map((member, index) => (
+                              <button
+                                key={member.id}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                                  index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                                )}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  applyMentionSuggestion(member);
+                                }}
+                              >
+                                <AvatarBase
+                                  src={member.avatarUrl}
+                                  name={member.label}
+                                  fallback={getInitials(member.label)}
+                                  size={24}
+                                  className="text-[10px] font-semibold"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm font-medium">{member.label}</div>
+                                  <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex justify-end">
                     <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
                       {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

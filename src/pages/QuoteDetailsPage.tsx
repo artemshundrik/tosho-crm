@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import {
   formatPrintPackageSummary,
   getPrintPackageDetailFields,
@@ -52,6 +53,7 @@ import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
+import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import {
   createQuote,
   getQuoteSummary,
@@ -60,7 +62,6 @@ import {
   deleteQuote,
   listCustomersBySearch,
   listLeadsBySearch,
-  listTeamMembers,
   listStatusHistory,
   setStatus,
   updateQuote,
@@ -179,6 +180,7 @@ const DEFAULT_DEADLINE_TIME = "09:00";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -187,6 +189,11 @@ const DEADLINE_REMINDER_OPTIONS = [
   { value: "180", label: "За 3 години" },
   { value: "1440", label: "За 1 день" },
 ] as const;
+
+const isGenericMentionLabel = (label?: string | null) => {
+  const normalized = (label ?? "").trim().toLowerCase();
+  return normalized === "користувач" || normalized === "невідомий користувач";
+};
 
 type ItemMethod = {
   id: string;
@@ -228,6 +235,14 @@ type QuoteComment = {
   created_at: string;
   created_by?: string | null;
 };
+type MembershipRow = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url?: string | null;
+  access_role?: string | null;
+  job_role?: string | null;
+};
 type InsertedCommentRow = {
   id: string;
   body: string;
@@ -244,6 +259,10 @@ type MentionSuggestion = {
   label: string;
   alias: string;
   avatarUrl: string | null;
+};
+type MentionDropdownState = {
+  side: "top" | "bottom";
+  maxHeight: number;
 };
 type QuoteAttachment = {
   id: string;
@@ -423,6 +442,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentSaving, setCommentSaving] = useState(false);
   const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [mentionDropdown, setMentionDropdown] = useState<MentionDropdownState>({
+    side: "bottom",
+    maxHeight: 224,
+  });
   const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [briefText, setBriefText] = useState("");
   const [briefDirty, setBriefDirty] = useState(false);
@@ -450,6 +473,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
   const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [mentionLabelOverrides, setMentionLabelOverrides] = useState<Record<string, string>>({});
   const [designTask, setDesignTask] = useState<{
     id: string;
     assigneeUserId: string | null;
@@ -1085,16 +1109,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteLockedByOther = quoteLock.lockedByOther;
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
-      teamMembers.map((member) => {
-        const label = (member.label ?? "").trim() || "Користувач";
-        return {
-          id: member.id,
-          label,
-          alias: buildMentionAlias(label, member.id),
-          avatarUrl: member.avatarUrl ?? null,
-        };
-      }),
-    [teamMembers]
+      teamMembers
+        .map((member) => {
+          const label = (mentionLabelOverrides[member.id] ?? member.label ?? "").trim() || "Користувач";
+          return {
+            id: member.id,
+            label,
+            alias: buildMentionAlias(label, member.id),
+            avatarUrl: member.avatarUrl ?? null,
+          };
+        })
+        .sort((a, b) => {
+          const aGeneric = isGenericMentionLabel(a.label);
+          const bGeneric = isGenericMentionLabel(b.label);
+          if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
+          return a.label.localeCompare(b.label, "uk");
+        }),
+    [mentionLabelOverrides, teamMembers]
   );
   const mentionLookup = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -1595,12 +1626,103 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [teamId]);
 
   useEffect(() => {
-    if (!teamId) return;
+    if (!teamId || !userId) return;
     let active = true;
     const loadMembers = async () => {
       try {
-        const data = await listTeamMembers(teamId);
-        if (active) setTeamMembers(data);
+        let rows: MembershipRow[] = [];
+
+        const teamViewColumns = [
+          "user_id,full_name,email,avatar_url,access_role,job_role",
+          "user_id,full_name,email,avatar_url,job_role",
+          "user_id,full_name,email,avatar_url",
+          "user_id,full_name,email,job_role",
+          "user_id,full_name,email",
+          "user_id,full_name,avatar_url",
+          "user_id,email,avatar_url",
+          "user_id,full_name,job_role",
+          "user_id,full_name",
+          "user_id,email",
+          "user_id",
+        ];
+        for (const columns of teamViewColumns) {
+          const { data, error } = await supabase
+            .from("team_members_view")
+            .select(columns)
+            .eq("team_id", teamId);
+          if (!error) {
+            rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+            break;
+          }
+          const message = (error.message ?? "").toLowerCase();
+          if (!message.includes("column") || !message.includes("does not exist")) {
+            throw error;
+          }
+        }
+
+        if (rows.length === 0) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (!workspaceId) {
+            if (active) setTeamMembers([]);
+            return;
+          }
+          const membershipColumns = [
+            "user_id,full_name,email,avatar_url,access_role,job_role",
+            "user_id,full_name,email,avatar_url,job_role",
+            "user_id,full_name,email,avatar_url",
+            "user_id,full_name,email,access_role,job_role",
+            "user_id,full_name,email,job_role",
+            "user_id,full_name,email",
+            "user_id",
+          ];
+          for (const columns of membershipColumns) {
+            const { data, error } = await supabase
+              .schema("tosho")
+              .from("memberships_view")
+              .select(columns)
+              .eq("workspace_id", workspaceId);
+            if (!error) {
+              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
+              break;
+            }
+            const message = (error.message ?? "").toLowerCase();
+            if (!message.includes("column") || !message.includes("does not exist")) {
+              throw error;
+            }
+          }
+        }
+
+        const avatarById: Record<string, string | null> = {};
+        const nextMembers = rows.map((row) => {
+          avatarById[row.user_id] = row.avatar_url ?? null;
+          return {
+            id: row.user_id,
+            label:
+              formatUserShortName({
+                fullName: row.full_name ?? null,
+                email: row.email ?? null,
+                fallback: row.user_id,
+              }) || row.user_id,
+            avatarUrl: row.avatar_url ?? null,
+            jobRole: row.job_role ?? null,
+          } satisfies TeamMemberRow;
+        });
+
+        const resolvedAvatarEntries = await Promise.all(
+          Object.entries(avatarById).map(async ([id, rawUrl]) => [
+            id,
+            await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET),
+          ] as const)
+        );
+        const resolvedAvatarById = Object.fromEntries(resolvedAvatarEntries);
+
+        if (!active) return;
+        setTeamMembers(
+          nextMembers.map((member) => ({
+            ...member,
+            avatarUrl: resolvedAvatarById[member.id] ?? member.avatarUrl ?? null,
+          }))
+        );
       } catch {
         if (active) setTeamMembers([]);
       }
@@ -1609,7 +1731,117 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => {
       active = false;
     };
-  }, [teamId]);
+  }, [teamId, userId]);
+
+  useEffect(() => {
+    if (teamMembers.length === 0) return;
+
+    let active = true;
+    const loadMentionLabelOverrides = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (accessToken) {
+          const response = await fetch("/.netlify/functions/create-workspace-invite", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ mode: "list_workspace_member_profiles" }),
+          });
+
+          if (response.ok) {
+            const payload = (await response.json().catch(() => null)) as
+              | {
+                  profilesByUserId?: Record<
+                    string,
+                    {
+                      firstName?: string;
+                      lastName?: string;
+                      fullName?: string;
+                    }
+                  >;
+                }
+              | null;
+
+            const nextOverrides: Record<string, string> = {};
+            for (const [memberId, profile] of Object.entries(payload?.profilesByUserId ?? {})) {
+              const label = formatUserShortName({
+                firstName: profile.firstName ?? null,
+                lastName: profile.lastName ?? null,
+                fullName: profile.fullName ?? null,
+                fallback: "",
+              });
+              if (label) {
+                nextOverrides[memberId] = label;
+              }
+            }
+            if (!active) return;
+            setMentionLabelOverrides(nextOverrides);
+            return;
+          }
+        }
+
+        const genericMemberIds = teamMembers
+          .filter((member) => isGenericMentionLabel(member.label))
+          .map((member) => member.id);
+        if (genericMemberIds.length === 0) return;
+
+        const [profilesResult, authResult] = await Promise.all([
+          supabase
+            .from("team_member_profiles")
+            .select("user_id,first_name,last_name,full_name")
+            .in("user_id", genericMemberIds),
+          supabase.auth.getUser(),
+        ]);
+
+        const nextOverrides: Record<string, string> = {};
+        const profileRows =
+          ((profilesResult.data as Array<{
+            user_id?: string | null;
+            first_name?: string | null;
+            last_name?: string | null;
+            full_name?: string | null;
+          }> | null) ?? []);
+
+        for (const row of profileRows) {
+          const userId = row.user_id?.trim();
+          if (!userId) continue;
+          const label = formatUserShortName({
+            firstName: row.first_name ?? null,
+            lastName: row.last_name ?? null,
+            fullName: row.full_name ?? null,
+            fallback: "",
+          });
+          if (label) {
+            nextOverrides[userId] = label;
+          }
+        }
+
+        const currentUser = authResult.data.user ?? null;
+        if (currentUser?.id && genericMemberIds.includes(currentUser.id)) {
+          const currentUserName = buildUserNameFromMetadata(
+            currentUser.user_metadata as Record<string, unknown> | undefined,
+            currentUser.email
+          ).displayName;
+          if (currentUserName) {
+            nextOverrides[currentUser.id] = currentUserName;
+          }
+        }
+
+        if (!active) return;
+        setMentionLabelOverrides(nextOverrides);
+      } catch {
+        if (active) setMentionLabelOverrides({});
+      }
+    };
+
+    void loadMentionLabelOverrides();
+    return () => {
+      active = false;
+    };
+  }, [teamMembers]);
 
   useEffect(() => {
     if (!teamId || !editQuoteDialogOpen) return;
@@ -3735,6 +3967,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void saveComment(commentText.trim());
   };
 
+  const measureMentionDropdown = () => {
+    const textarea = commentTextareaRef.current;
+    if (!textarea || typeof window === "undefined") return;
+
+    const rect = textarea.getBoundingClientRect();
+    const viewportPadding = 16;
+    const gap = 8;
+    const maxDropdownHeight = 224;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding - gap;
+    const spaceAbove = rect.top - viewportPadding - gap;
+    const side =
+      spaceBelow >= maxDropdownHeight || spaceBelow >= spaceAbove ? "bottom" : "top";
+    const availableSpace = side === "bottom" ? spaceBelow : spaceAbove;
+
+    setMentionDropdown({
+      side,
+      maxHeight: Math.max(96, Math.min(maxDropdownHeight, Math.floor(Math.max(availableSpace, 96)))),
+    });
+  };
+
   const resolveMentionContext = (text: string, cursor: number): MentionContext | null => {
     if (!text || cursor <= 0) return null;
 
@@ -3745,7 +3997,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (start > 0 && !/[\s(]/u.test(prevChar)) return null;
 
     const query = text.slice(start + 1, cursor);
-    if (!query || query.includes("@")) return null;
+    if (query.includes("@")) return null;
     if ([...query].some((char) => isMentionTerminator(char))) return null;
 
     let end = cursor;
@@ -3759,6 +4011,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const syncMentionContext = (text: string, cursor: number) => {
     const nextContext = resolveMentionContext(text, cursor);
     setMentionContext(nextContext);
+    if (nextContext) {
+      measureMentionDropdown();
+    }
     if (
       !nextContext ||
       !mentionContext ||
@@ -3795,7 +4050,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const handleCommentTextKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!mentionContext || filteredMentionSuggestions.length === 0) return;
+    if (!mentionContext) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionContext(null);
+      setMentionActiveIndex(0);
+      return;
+    }
+
+    if (filteredMentionSuggestions.length === 0) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -3819,15 +4083,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (selected) {
         applyMentionSuggestion(selected);
       }
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setMentionContext(null);
-      setMentionActiveIndex(0);
     }
   };
+
+  useEffect(() => {
+    if (!mentionContext) return;
+    const handleViewportChange = () => measureMentionDropdown();
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [mentionContext]);
 
   const saveComment = async (body: string) => {
     setCommentSaving(true);
@@ -5490,9 +5758,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         />
 
                         {mentionContext ? (
-                          <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                          <div
+                            className={cn(
+                              "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                              mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+                            )}
+                          >
                             {filteredMentionSuggestions.length > 0 ? (
-                              <div className="max-h-56 overflow-y-auto py-1">
+                              <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
                                 {filteredMentionSuggestions.map((member, index) => (
                                   <button
                                     key={member.id}
@@ -5524,7 +5797,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
                             ) : (
                               <div className="px-3 py-2 text-xs text-muted-foreground">
-                                Немає збігів для @{mentionContext.query}
+                                {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
                               </div>
                             )}
                           </div>
@@ -5597,7 +5870,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     })}
                                   </div>
                                 </div>
-                                <div className="mt-2 text-sm leading-relaxed text-foreground">
+                                <div className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
                                   {renderTextWithMentions(comment.body ?? "")}
                                 </div>
                               </div>
