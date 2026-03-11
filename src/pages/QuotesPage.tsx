@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
-import { buildUserNameFromMetadata } from "@/lib/userName";
+import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { formatPrintPackageSummary, type QuoteItemMetadata } from "@/lib/printPackage";
 import {
   listQuotes,
@@ -127,6 +127,14 @@ type QuotesPageProps = {
 
 const ALL_MANAGERS_FILTER = "__all__";
 const NO_MANAGER_FILTER = "__none__";
+const normalizeManagerKey = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[._-]+/g, " ");
+const isUuid = (value?: string | null) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value ?? "").trim());
 
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
@@ -286,6 +294,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
+  const [managerProfileLabelsById, setManagerProfileLabelsById] = useState<Record<string, string>>({});
+  const [presenceDbLabelById, setPresenceDbLabelById] = useState<Record<string, string>>({});
+  const [presenceDbAvatarById, setPresenceDbAvatarById] = useState<Record<string, string | null>>({});
+  const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
+  const [workspaceMemberAvatarById, setWorkspaceMemberAvatarById] = useState<Record<string, string | null>>({});
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
   const [rowStatusError, setRowStatusError] = useState<string | null>(null);
   const [rowDeleteBusy, setRowDeleteBusy] = useState<string | null>(null);
@@ -446,10 +459,56 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     });
   }, []);
 
-  const memberById = useMemo(
-    () => new Map(teamMembers.map((member) => [member.id, member.label])),
-    [teamMembers]
+  const presenceLabelById = useMemo(
+    () =>
+      Object.fromEntries(
+        workspacePresence.entries
+          .filter((entry) => entry.userId && entry.displayName?.trim())
+          .map((entry) => [entry.userId, entry.displayName.trim()])
+      ),
+    [workspacePresence.entries]
   );
+  const presenceAvatarById = useMemo(
+    () =>
+      Object.fromEntries(
+        workspacePresence.entries
+          .filter((entry) => entry.userId)
+          .map((entry) => [entry.userId, entry.avatarUrl ?? null])
+      ),
+    [workspacePresence.entries]
+  );
+
+  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  const memberByNormalizedLabel = useMemo(() => {
+    const counts = new Map<string, number>();
+    teamMembers.forEach((member) => {
+      const key = normalizeManagerKey(member.label);
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    const map = new Map<string, TeamMemberRow>();
+    teamMembers.forEach((member) => {
+      const key = normalizeManagerKey(member.label);
+      if (!key) return;
+      if ((counts.get(key) ?? 0) === 1) map.set(key, member);
+    });
+    return map;
+  }, [teamMembers]);
+  const memberByUniqueFirstToken = useMemo(() => {
+    const counts = new Map<string, number>();
+    teamMembers.forEach((member) => {
+      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      if (!token) return;
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    });
+    const map = new Map<string, TeamMemberRow>();
+    teamMembers.forEach((member) => {
+      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      if (!token) return;
+      if ((counts.get(token) ?? 0) === 1) map.set(token, member);
+    });
+    return map;
+  }, [teamMembers]);
   const isManagerUser = useMemo(() => {
     const access = (accessRole ?? "").trim().toLowerCase();
     const job = (jobRole ?? "").trim().toLowerCase();
@@ -457,9 +516,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [accessRole, jobRole]);
   useEffect(() => {
     if (!currentUserId) return;
-    const label = memberById.get(currentUserId)?.trim();
+    const presenceLabel = presenceLabelById[currentUserId]?.trim();
+    if (presenceLabel) {
+      setCurrentUserManagerLabel(presenceLabel);
+      return;
+    }
+    const label = memberById.get(currentUserId)?.label?.trim();
     if (label) setCurrentUserManagerLabel(label);
-  }, [currentUserId, memberById]);
+  }, [currentUserId, memberById, presenceLabelById]);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
@@ -476,16 +540,82 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     managerFilter,
     rows,
   ]);
-  const memberAvatarById = useMemo(
-    () => new Map(teamMembers.map((member) => [member.id, member.avatarUrl ?? null])),
-    [teamMembers]
+  const resolveManagerMember = useCallback(
+    (assignedTo?: string | null) => {
+      const normalizedValue = (assignedTo ?? "").trim();
+      if (!normalizedValue) return null;
+      const persistedPresenceLabel = presenceDbLabelById[normalizedValue]?.trim();
+      if (persistedPresenceLabel) {
+        return {
+          id: normalizedValue,
+          label: persistedPresenceLabel,
+          avatarUrl: presenceDbAvatarById[normalizedValue] ?? null,
+          jobRole: null,
+        } satisfies TeamMemberRow;
+      }
+      const presenceLabel = presenceLabelById[normalizedValue]?.trim();
+      if (presenceLabel) {
+        return {
+          id: normalizedValue,
+          label: presenceLabel,
+          avatarUrl: presenceAvatarById[normalizedValue] ?? null,
+          jobRole: null,
+        } satisfies TeamMemberRow;
+      }
+      const workspaceLabel = workspaceMemberLabelById[normalizedValue]?.trim();
+      if (workspaceLabel) {
+        return {
+          id: normalizedValue,
+          label: workspaceLabel,
+          avatarUrl: workspaceMemberAvatarById[normalizedValue] ?? null,
+          jobRole: null,
+        } satisfies TeamMemberRow;
+      }
+      const byId = memberById.get(normalizedValue);
+      if (byId) return byId;
+      const normalizedLabel = normalizeManagerKey(normalizedValue);
+      const byExactLabel = memberByNormalizedLabel.get(normalizedLabel);
+      if (byExactLabel) return byExactLabel;
+      const token = normalizedLabel.split(" ")[0] ?? "";
+      if (token) {
+        const byToken = memberByUniqueFirstToken.get(token);
+        if (byToken) return byToken;
+      }
+      const profileLabel = managerProfileLabelsById[normalizedValue]?.trim();
+      if (profileLabel) {
+        return {
+          id: normalizedValue,
+          label: profileLabel,
+          avatarUrl: null,
+          jobRole: null,
+        } satisfies TeamMemberRow;
+      }
+      return null;
+    },
+    [
+      managerProfileLabelsById,
+      memberById,
+      memberByNormalizedLabel,
+      memberByUniqueFirstToken,
+      presenceDbAvatarById,
+      presenceDbLabelById,
+      presenceAvatarById,
+      presenceLabelById,
+      workspaceMemberAvatarById,
+      workspaceMemberLabelById,
+    ]
   );
-  const getManagerLabel = (assignedTo?: string | null) => {
-    if (!assignedTo) return "Не вказано";
-    const label = memberById.get(assignedTo);
-    if (label) return label;
-    return teamMembersLoaded ? "Користувач" : "Не вказано";
-  };
+  const getManagerLabel = useCallback(
+    (assignedTo?: string | null) => {
+      if (!assignedTo) return "Не вказано";
+      const member = resolveManagerMember(assignedTo);
+      if (member?.label?.trim()) return member.label.trim();
+      const fallback = assignedTo.trim();
+      if (!fallback) return teamMembersLoaded ? "Користувач" : "Не вказано";
+      return formatUserShortName({ fullName: fallback, fallback });
+    },
+    [resolveManagerMember, teamMembersLoaded]
+  );
   const getPartyLabel = (row: Pick<QuoteListRow, "customer_id">) =>
     row.customer_id ? "Клієнт" : "Лід";
   const managerFilterOptions = useMemo(() => {
@@ -493,13 +623,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     rows.forEach((row) => {
       const assigned = row.assigned_to?.trim();
       if (!assigned) return;
-      const label = memberById.get(assigned) ?? (teamMembersLoaded ? "Користувач" : "Не вказано");
+      const label = getManagerLabel(assigned);
       options.set(assigned, label);
     });
     return Array.from(options.entries())
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
-  }, [memberById, rows, teamMembersLoaded]);
+  }, [getManagerLabel, rows]);
   const filteredRowsByManager = useMemo(() => {
     if (managerFilter === ALL_MANAGERS_FILTER) return rows;
     if (managerFilter === NO_MANAGER_FILTER) {
@@ -560,8 +690,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const renderManagerFilterValue = (value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
     if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
-    const label = memberById.get(value) ?? (teamMembersLoaded ? "Користувач" : "Не вказано");
-    const avatarUrl = memberAvatarById.get(value) ?? null;
+    const member = resolveManagerMember(value);
+    const label = member?.label?.trim() || getManagerLabel(value);
+    const avatarUrl = member?.avatarUrl ?? null;
     return (
       <span className="flex items-center gap-2 min-w-0">
         <AvatarBase
@@ -697,6 +828,235 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       active = false;
     };
   }, [teamId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadWorkspaceMembers = async () => {
+      if (!currentUserId) {
+        if (active) {
+          setWorkspaceMemberLabelById({});
+          setWorkspaceMemberAvatarById({});
+        }
+        return;
+      }
+      try {
+        const workspaceId = await resolveWorkspaceId(currentUserId);
+        if (!workspaceId) {
+          if (active) {
+            setWorkspaceMemberLabelById({});
+            setWorkspaceMemberAvatarById({});
+          }
+          return;
+        }
+
+        const membershipColumns = [
+          "user_id,full_name,email,avatar_url",
+          "user_id,full_name,email",
+          "user_id",
+        ];
+        let rows: Array<{
+          user_id: string;
+          full_name?: string | null;
+          email?: string | null;
+          avatar_url?: string | null;
+        }> = [];
+
+        for (const columns of membershipColumns) {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("memberships_view")
+            .select(columns)
+            .eq("workspace_id", workspaceId);
+          if (!error) {
+            rows = (((data as unknown) as typeof rows | null) ?? []).filter((row) => !!row.user_id);
+            break;
+          }
+          const message = (error.message ?? "").toLowerCase();
+          if (!message.includes("column") || !message.includes("does not exist")) {
+            throw error;
+          }
+        }
+
+        const nextLabels: Record<string, string> = {};
+        const nextAvatars: Record<string, string | null> = {};
+        rows.forEach((row) => {
+          nextLabels[row.user_id] =
+            formatUserShortName({
+              fullName: row.full_name ?? null,
+              email: row.email ?? null,
+              fallback: row.user_id,
+            }) || row.user_id;
+          nextAvatars[row.user_id] = row.avatar_url ?? null;
+        });
+
+        const profileIds = rows.map((row) => row.user_id).filter(Boolean);
+        if (profileIds.length > 0) {
+          const { data: profileRows, error: profileError } = await supabase
+            .from("team_member_profiles")
+            .select("user_id,first_name,last_name,full_name")
+            .in("user_id", profileIds);
+          if (!profileError) {
+            (((profileRows as Array<{
+              user_id?: string | null;
+              first_name?: string | null;
+              last_name?: string | null;
+              full_name?: string | null;
+            }> | null) ?? [])).forEach((row) => {
+              const userId = row.user_id?.trim() ?? "";
+              if (!userId) return;
+              const profileLabel = formatUserShortName({
+                firstName: row.first_name ?? null,
+                lastName: row.last_name ?? null,
+                fullName: row.full_name ?? null,
+                fallback: "",
+              }).trim();
+              if (profileLabel) {
+                nextLabels[userId] = profileLabel;
+              }
+            });
+          }
+        }
+
+        if (active) {
+          setWorkspaceMemberLabelById(nextLabels);
+          setWorkspaceMemberAvatarById(nextAvatars);
+        }
+      } catch {
+        if (active) {
+          setWorkspaceMemberLabelById({});
+          setWorkspaceMemberAvatarById({});
+        }
+      }
+    };
+
+    void loadWorkspaceMembers();
+    return () => {
+      active = false;
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    let active = true;
+    const managerIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.assigned_to?.trim() ?? "")
+          .filter((value) => isUuid(value))
+      )
+    );
+    if (!teamId || managerIds.length === 0) {
+      setPresenceDbLabelById({});
+      setPresenceDbAvatarById({});
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadPresenceLabels = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("user_presence")
+          .select("user_id,display_name,avatar_url,last_seen_at")
+          .eq("team_id", teamId)
+          .in("user_id", managerIds);
+        if (error) throw error;
+
+        const latestById = new Map<
+          string,
+          { displayName: string; avatarUrl: string | null; lastSeenAt: number }
+        >();
+        (((data as Array<{
+          user_id?: string | null;
+          display_name?: string | null;
+          avatar_url?: string | null;
+          last_seen_at?: string | null;
+        }> | null) ?? [])).forEach((row) => {
+          const userId = row.user_id?.trim() ?? "";
+          const displayName = row.display_name?.trim() ?? "";
+          if (!userId || !displayName) return;
+          const lastSeenAt = new Date(row.last_seen_at ?? 0).getTime();
+          const current = latestById.get(userId);
+          if (!current || lastSeenAt > current.lastSeenAt) {
+            latestById.set(userId, {
+              displayName,
+              avatarUrl: row.avatar_url ?? null,
+              lastSeenAt,
+            });
+          }
+        });
+
+        if (!active) return;
+        setPresenceDbLabelById(
+          Object.fromEntries(Array.from(latestById.entries()).map(([id, value]) => [id, value.displayName]))
+        );
+        setPresenceDbAvatarById(
+          Object.fromEntries(Array.from(latestById.entries()).map(([id, value]) => [id, value.avatarUrl]))
+        );
+      } catch {
+        if (!active) return;
+        setPresenceDbLabelById({});
+        setPresenceDbAvatarById({});
+      }
+    };
+
+    void loadPresenceLabels();
+    return () => {
+      active = false;
+    };
+  }, [rows, teamId]);
+
+  useEffect(() => {
+    let active = true;
+    const managerIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.assigned_to?.trim() ?? "")
+          .filter((value) => isUuid(value))
+      )
+    );
+    if (managerIds.length === 0) {
+      setManagerProfileLabelsById({});
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadManagerProfiles = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("team_member_profiles")
+          .select("user_id,first_name,last_name,full_name")
+          .in("user_id", managerIds);
+        if (error) throw error;
+        const next: Record<string, string> = {};
+        (((data as Array<{
+          user_id?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          full_name?: string | null;
+        }> | null) ?? [])).forEach((row) => {
+          const userId = row.user_id?.trim() ?? "";
+          if (!userId) return;
+          const label = formatUserShortName({
+            firstName: row.first_name ?? null,
+            lastName: row.last_name ?? null,
+            fullName: row.full_name ?? null,
+            fallback: "",
+          }).trim();
+          if (!label) return;
+          next[userId] = label;
+        });
+        if (active) setManagerProfileLabelsById(next);
+      } catch {
+        if (active) setManagerProfileLabelsById({});
+      }
+    };
+
+    void loadManagerProfiles();
+    return () => {
+      active = false;
+    };
+  }, [rows]);
 
   useEffect(() => {
     if (!createOpen && !editDialogOpen) return;
@@ -1500,7 +1860,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (shouldCreateDesignTask && teamId) {
         const actorName =
           currentUserId && memberById.get(currentUserId)
-            ? (memberById.get(currentUserId) as string)
+            ? (memberById.get(currentUserId)?.label as string)
             : "System";
         const createdAtIso = new Date().toISOString();
         const createdAtDate = new Date(createdAtIso);
@@ -2055,7 +2415,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
     const actorName =
       currentUserId && memberById.get(currentUserId)
-        ? (memberById.get(currentUserId) as string)
+        ? (memberById.get(currentUserId)?.label as string)
         : "System";
     const createdAtIso = new Date().toISOString();
     const createdAtDate = new Date(createdAtIso);
@@ -4511,18 +4871,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <div className="flex items-center gap-2 min-w-0">
-                            <AvatarBase
-                              src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
-                              name={getManagerLabel(row.assigned_to)}
-                              fallback={
-                                row.assigned_to ? getInitials(getManagerLabel(row.assigned_to)) : "Не вказано"
-                              }
-                              size={28}
-                              className="text-[10px] font-semibold"
-                            />
-                            <span className="truncate">
-                              {getManagerLabel(row.assigned_to)}
-                            </span>
+                            {(() => {
+                              const manager = resolveManagerMember(row.assigned_to);
+                              const managerLabel = getManagerLabel(row.assigned_to);
+                              return (
+                                <>
+                                  <AvatarBase
+                                    src={manager?.avatarUrl ?? null}
+                                    name={managerLabel}
+                                    fallback={
+                                      row.assigned_to ? getInitials(managerLabel) : "Не вказано"
+                                    }
+                                    size={28}
+                                    className="text-[10px] font-semibold"
+                                  />
+                                  <span className="truncate">
+                                    {managerLabel}
+                                  </span>
+                                </>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -4754,6 +5122,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             const Icon = quoteTypeIcon(row.quote_type);
                             const membership = quoteMembershipByQuoteId.get(row.id);
                             const productPreview = kanbanProductByQuoteId[row.id];
+                            const manager = resolveManagerMember(row.assigned_to);
                             const managerLabel = getManagerLabel(row.assigned_to);
                             return (
                               <div key={row.id}>
@@ -4865,7 +5234,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
                                     <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
                                       <AvatarBase
-                                        src={row.assigned_to ? memberAvatarById.get(row.assigned_to) ?? null : null}
+                                        src={manager?.avatarUrl ?? null}
                                         name={managerLabel}
                                         fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
                                         size={26}

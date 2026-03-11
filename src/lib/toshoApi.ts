@@ -138,11 +138,16 @@ function hasMeaningfulMemberIdentity(row: {
   return Boolean(row.full_name?.trim() || row.email?.trim());
 }
 
+function isGenericMemberLabel(label?: string | null) {
+  const normalized = (label ?? "").trim();
+  return normalized === "Користувач" || normalized.startsWith("Користувач ") || normalized === "Невідомий користувач";
+}
+
 async function hydrateMemberLabelsFromProfiles(
   members: TeamMemberRow[]
 ): Promise<TeamMemberRow[]> {
   const genericIds = members
-    .filter((member) => member.label === "Користувач" || member.label === "Невідомий користувач")
+    .filter((member) => isGenericMemberLabel(member.label))
     .map((member) => member.id);
 
   if (genericIds.length === 0) return members;
@@ -1051,9 +1056,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
     // Hydrate missing fields from memberships_view (canonical source for workspace membership data).
     const hasMissingJobRole = baseMembers.some((m) => !m.jobRole);
     const hasMissingAvatar = baseMembers.some((m) => !m.avatarUrl);
-    const hasGenericLabel = baseMembers.some(
-      (m) => m.label.startsWith("Користувач ") || m.label === "Невідомий користувач"
-    );
+    const hasGenericLabel = baseMembers.some((m) => isGenericMemberLabel(m.label));
     if ((!hasMissingJobRole && !hasMissingAvatar && !hasGenericLabel) || !workspaceId || baseMembers.length === 0) {
       return baseMembers;
     }
@@ -1144,10 +1147,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
         member.id,
         {
           ...member,
-          label:
-            (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
-              ? labelById.get(member.id)
-              : null) ?? member.label,
+          label: (isGenericMemberLabel(member.label) ? labelById.get(member.id) : null) ?? member.label,
           jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
           avatarUrl: member.avatarUrl ?? avatarById.get(member.id) ?? null,
         },
@@ -1205,9 +1205,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
       baseMembers.sort((a, b) => a.label.localeCompare(b.label, "uk"));
 
       const hasAnyJobRole = baseMembers.some((m) => Boolean(m.jobRole));
-      const hasGenericLabel = baseMembers.some(
-        (m) => m.label.startsWith("Користувач ") || m.label === "Невідомий користувач"
-      );
+      const hasGenericLabel = baseMembers.some((m) => isGenericMemberLabel(m.label));
       if ((hasAnyJobRole && !hasGenericLabel) || !workspaceId || baseMembers.length === 0) {
         return baseMembers;
       }
@@ -1265,10 +1263,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
           member.id,
           {
             ...member,
-            label:
-              (member.label.startsWith("Користувач ") || member.label === "Невідомий користувач"
-                ? labelById.get(member.id)
-                : null) ?? member.label,
+            label: (isGenericMemberLabel(member.label) ? labelById.get(member.id) : null) ?? member.label,
             jobRole: jobRoleById.get(member.id) ?? member.jobRole ?? null,
           },
         ])
