@@ -682,7 +682,9 @@ export default function DesignTaskPage() {
   const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const outputInputRef = useRef<HTMLInputElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const quoteCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
 
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
@@ -2428,6 +2430,124 @@ export default function DesignTaskPage() {
     } finally {
       setOutputUploading(false);
       if (outputInputRef.current) outputInputRef.current.value = "";
+    }
+  };
+
+  const handleUploadTaskAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || attachmentUploading) return;
+    if (!ensureCanEdit()) return;
+
+    setAttachmentUploading(true);
+    try {
+      const uploadedAttachments: AttachmentRow[] = [];
+
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/[^\w.-]+/g, "_");
+        const baseName = `${Date.now()}-${safeName}`;
+        const storagePath = isUuid(task.quoteId)
+          ? `teams/${effectiveTeamId}/quote-attachments/${task.quoteId}/${baseName}`
+          : `teams/${effectiveTeamId}/design-brief-files/${task.id}/${baseName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(DESIGN_OUTPUT_BUCKET)
+          .upload(storagePath, file, { upsert: true, contentType: file.type });
+        if (uploadError) throw uploadError;
+
+        const { data: signed } = await supabase.storage
+          .from(DESIGN_OUTPUT_BUCKET)
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+
+        const nextAttachment: AttachmentRow = {
+          id: crypto.randomUUID(),
+          file_name: file.name,
+          file_size: file.size,
+          created_at: new Date().toISOString(),
+          storage_bucket: DESIGN_OUTPUT_BUCKET,
+          storage_path: storagePath,
+          uploaded_by: userId,
+          signed_url: signed?.signedUrl ?? null,
+        };
+
+        if (isUuid(task.quoteId)) {
+          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+            team_id: effectiveTeamId,
+            quote_id: task.quoteId,
+            file_name: nextAttachment.file_name,
+            mime_type: file.type || null,
+            file_size: nextAttachment.file_size,
+            storage_bucket: nextAttachment.storage_bucket,
+            storage_path: nextAttachment.storage_path,
+            uploaded_by: userId,
+          });
+          if (insertError) throw insertError;
+        }
+
+        uploadedAttachments.push(nextAttachment);
+      }
+
+      if (!isUuid(task.quoteId)) {
+        const standaloneBriefFiles = uploadedAttachments.map((file) => ({
+          id: file.id,
+          file_name: file.file_name,
+          file_size: file.file_size,
+          created_at: file.created_at,
+          storage_bucket: file.storage_bucket,
+          storage_path: file.storage_path,
+          uploaded_by: file.uploaded_by,
+        }));
+        const nextMetadata: Record<string, unknown> = {
+          ...(task.metadata ?? {}),
+          standalone_brief_files: [
+            ...standaloneBriefFiles,
+            ...((Array.isArray(task.metadata?.standalone_brief_files) ? task.metadata?.standalone_brief_files : []) as unknown[]),
+          ],
+        };
+
+        const { error: updateError } = await supabase
+          .from("activity_log")
+          .update({ metadata: nextMetadata })
+          .eq("id", task.id)
+          .eq("team_id", effectiveTeamId);
+        if (updateError) throw updateError;
+
+        setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      }
+
+      setAttachments((prev) => [...uploadedAttachments, ...prev]);
+
+      try {
+        const actorLabel = userId ? getMemberLabel(userId) : "System";
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_attachment",
+          title: `Додано файлів до задачі: ${uploadedAttachments.length}`,
+          metadata: {
+            source: "design_task_attachment",
+            uploaded_files: uploadedAttachments.map((file) => ({
+              id: file.id,
+              file_name: file.file_name,
+              storage_bucket: file.storage_bucket,
+              storage_path: file.storage_path,
+            })),
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log task attachment upload", logError);
+      }
+
+      toast.success(`Додано файлів: ${uploadedAttachments.length}`);
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося додати файли");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setAttachmentUploading(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     }
   };
 
@@ -5172,8 +5292,30 @@ export default function DesignTaskPage() {
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-2">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => void handleUploadTaskAttachments(event.target.files)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                  disabled={attachmentUploading}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  {attachmentUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Додати файл
+                </Button>
+              </div>
             </div>
             {attachments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
