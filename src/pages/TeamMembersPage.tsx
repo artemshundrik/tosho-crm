@@ -69,6 +69,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const DEFAULT_MANAGER_RATE = 10;
 
 // --- TYPES ---
 type Member = {
@@ -87,6 +88,7 @@ type MemberProfileMeta = {
   fullName: string;
   birthDate: string;
   phone: string;
+  managerRate: number;
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
   startDate: string;
   probationEndDate: string;
@@ -230,6 +232,7 @@ const DEFAULT_MEMBER_META: MemberProfileMeta = {
   fullName: "",
   birthDate: "",
   phone: "",
+  managerRate: DEFAULT_MANAGER_RATE,
   availabilityStatus: "available",
   startDate: "",
   probationEndDate: "",
@@ -420,6 +423,7 @@ export function TeamMembersPage() {
   const [editProfileLastName, setEditProfileLastName] = useState("");
   const [editProfileBirthDate, setEditProfileBirthDate] = useState("");
   const [editProfilePhone, setEditProfilePhone] = useState("");
+  const [editProfileManagerRate, setEditProfileManagerRate] = useState(String(DEFAULT_MANAGER_RATE));
   const [editProfileAvailabilityStatus, setEditProfileAvailabilityStatus] =
     useState<MemberProfileMeta["availabilityStatus"]>("available");
   const [editProfileStartDate, setEditProfileStartDate] = useState("");
@@ -443,7 +447,10 @@ export function TeamMembersPage() {
   );
   const isSuperAdmin = currentMembership?.access_role === "owner";
   const isAdmin = currentMembership?.access_role === "admin";
+  const isSeo = (currentMembership?.job_role ?? "").toLowerCase() === "seo";
   const canManage = isSuperAdmin || isAdmin;
+  const canManageManagerRates = isSuperAdmin || isSeo;
+  const canOpenProfileCard = canManage || canManageManagerRates;
 
   useEffect(() => {
     let cancelled = false;
@@ -721,9 +728,9 @@ export function TeamMembersPage() {
   }, [workspaceId, members]);
 
   useEffect(() => {
-    if (!workspaceId || !canManage || members.length === 0) {
+    if (!workspaceId || !canOpenProfileCard || members.length === 0) {
       setMemberMetaLoading(false);
-      if (!canManage) setMemberMetaByUserId({});
+      if (!canOpenProfileCard) setMemberMetaByUserId({});
       return;
     }
 
@@ -768,6 +775,7 @@ export function TeamMembersPage() {
               fullName: row.full_name?.trim() || "",
               birthDate: row.birth_date?.trim() || "",
               phone: row.phone?.trim() || "",
+              managerRate: DEFAULT_MANAGER_RATE,
               availabilityStatus:
                 row.availability_status === "vacation" ||
                 row.availability_status === "sick_leave" ||
@@ -820,16 +828,17 @@ export function TeamMembersPage() {
             const fallback = payload?.profilesByUserId ?? {};
             for (const [userId, profile] of Object.entries(fallback)) {
               const existing = profilesByUserId[userId] ?? DEFAULT_MEMBER_META;
-              profilesByUserId[userId] = {
-                ...existing,
-                firstName: existing.firstName || (profile.firstName ?? "").trim(),
-                lastName: existing.lastName || (profile.lastName ?? "").trim(),
-                fullName: existing.fullName || (profile.fullName ?? "").trim(),
-                birthDate: existing.birthDate || (profile.birthDate ?? "").trim(),
-                phone: existing.phone || (profile.phone ?? "").trim(),
-                availabilityStatus:
-                  existing.availabilityStatus !== "available"
-                    ? existing.availabilityStatus
+            profilesByUserId[userId] = {
+              ...existing,
+              firstName: existing.firstName || (profile.firstName ?? "").trim(),
+              lastName: existing.lastName || (profile.lastName ?? "").trim(),
+              fullName: existing.fullName || (profile.fullName ?? "").trim(),
+              birthDate: existing.birthDate || (profile.birthDate ?? "").trim(),
+              phone: existing.phone || (profile.phone ?? "").trim(),
+              managerRate: existing.managerRate || DEFAULT_MANAGER_RATE,
+              availabilityStatus:
+                existing.availabilityStatus !== "available"
+                  ? existing.availabilityStatus
                     : profile.availabilityStatus === "vacation" ||
                         profile.availabilityStatus === "sick_leave" ||
                         profile.availabilityStatus === "offline"
@@ -862,6 +871,28 @@ export function TeamMembersPage() {
           };
         }
 
+        if (canManageManagerRates) {
+          const { data: ratesData, error: ratesError } = await supabase
+            .schema("tosho")
+            .from("team_member_manager_rates")
+            .select("user_id,manager_rate")
+            .eq("workspace_id", workspaceId);
+
+          if (ratesError) {
+            if (!/does not exist|relation|schema cache|could not find the table/i.test(ratesError.message ?? "")) {
+              throw ratesError;
+            }
+          } else {
+            for (const row of ((ratesData ?? []) as Array<{ user_id: string; manager_rate?: number | null }>)) {
+              const existing = profilesByUserId[row.user_id] ?? DEFAULT_MEMBER_META;
+              profilesByUserId[row.user_id] = {
+                ...existing,
+                managerRate: Math.max(0, Number(row.manager_rate) || DEFAULT_MANAGER_RATE),
+              };
+            }
+          }
+        }
+
         if (!cancelled) {
           if (!error) setMemberProfileStorageAvailable(true);
           setMemberMetaByUserId(profilesByUserId);
@@ -882,7 +913,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, canManage, members.length, workspaceFunctionAvailable]);
+  }, [workspaceId, canOpenProfileCard, canManageManagerRates, members.length, workspaceFunctionAvailable]);
 
   useEffect(() => {
     if (!workspaceId || members.length === 0) {
@@ -1160,6 +1191,7 @@ export function TeamMembersPage() {
     setEditProfileLastName(meta?.lastName ?? "");
     setEditProfileBirthDate(meta?.birthDate ?? "");
     setEditProfilePhone(meta?.phone ?? "");
+    setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
     setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
     setEditProfileStartDate(meta?.startDate ?? "");
     setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
@@ -1168,7 +1200,7 @@ export function TeamMembersPage() {
   };
 
   const saveMemberProfile = async () => {
-    if (!editProfileMember || !workspaceId || !canManage) return;
+    if (!editProfileMember || !workspaceId || !canOpenProfileCard) return;
 
     setEditProfileBusy(true);
     try {
@@ -1177,71 +1209,93 @@ export function TeamMembersPage() {
       const fullName = `${firstName} ${lastName}`.trim();
       const birthDate = editProfileBirthDate.trim();
       const phone = editProfilePhone.trim();
+      const managerRate = Math.max(0, Number(editProfileManagerRate) || 0);
       const availabilityStatus = editProfileAvailabilityStatus;
       const startDate = editProfileStartDate.trim();
       const probationEndDate = editProfileProbationEndDate.trim();
       const managerUserId = editProfileManagerUserId.trim();
       const moduleAccess = editProfileModuleAccess;
 
-      const { error } = await supabase
-        .schema("tosho")
-        .from("team_member_profiles")
-        .upsert(
-          {
-            workspace_id: workspaceId,
-            user_id: editProfileMember.user_id,
-            first_name: firstName || null,
-            last_name: lastName || null,
-            full_name: fullName || null,
-            birth_date: birthDate || null,
-            phone: phone || null,
-            availability_status: availabilityStatus,
-            start_date: startDate || null,
-            probation_end_date: probationEndDate || null,
-            manager_user_id: managerUserId || null,
-            module_access: moduleAccess,
-            updated_by: currentUserId ?? null,
-          },
-          { onConflict: "workspace_id,user_id" }
-        );
+      if (canManage) {
+        const { error } = await supabase
+          .schema("tosho")
+          .from("team_member_profiles")
+          .upsert(
+            {
+              workspace_id: workspaceId,
+              user_id: editProfileMember.user_id,
+              first_name: firstName || null,
+              last_name: lastName || null,
+              full_name: fullName || null,
+              birth_date: birthDate || null,
+              phone: phone || null,
+              availability_status: availabilityStatus,
+              start_date: startDate || null,
+              probation_end_date: probationEndDate || null,
+              manager_user_id: managerUserId || null,
+              module_access: moduleAccess,
+              updated_by: currentUserId ?? null,
+            },
+            { onConflict: "workspace_id,user_id" }
+          );
 
-      if (error) {
-        if (!isRecoverableTeamProfileError(error.message ?? "")) {
-          throw error;
-        }
-        setMemberProfileStorageAvailable(false);
+        if (error) {
+          if (!isRecoverableTeamProfileError(error.message ?? "")) {
+            throw error;
+          }
+          setMemberProfileStorageAvailable(false);
 
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
-        const response = await fetch("/.netlify/functions/create-workspace-invite", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            mode: "update_member_profile",
-            userId: editProfileMember.user_id,
-            firstName,
-            lastName,
-            birthDate,
-            phone,
-            availabilityStatus,
-            startDate,
-            probationEndDate,
-            managerUserId,
-            moduleAccess,
-          }),
-        });
-        if (response.status === 404) {
-          setWorkspaceFunctionAvailable(false);
-          throw new Error(localProfileFallbackHint);
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+          const response = await fetch("/.netlify/functions/create-workspace-invite", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              mode: "update_member_profile",
+              userId: editProfileMember.user_id,
+              firstName,
+              lastName,
+              birthDate,
+              phone,
+              availabilityStatus,
+              startDate,
+              probationEndDate,
+              managerUserId,
+              moduleAccess,
+            }),
+          });
+          if (response.status === 404) {
+            setWorkspaceFunctionAvailable(false);
+            throw new Error(localProfileFallbackHint);
+          }
+          setWorkspaceFunctionAvailable(true);
+          const payload = await parseJsonSafe<{ error?: string }>(response);
+          if (!response.ok) {
+            throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`);
+          }
         }
-        setWorkspaceFunctionAvailable(true);
-        const payload = await parseJsonSafe<{ error?: string }>(response);
-        if (!response.ok) {
-          throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`);
+      }
+
+      if (canManageManagerRates) {
+        const { error: managerRateError } = await supabase
+          .schema("tosho")
+          .from("team_member_manager_rates")
+          .upsert(
+            {
+              workspace_id: workspaceId,
+              user_id: editProfileMember.user_id,
+              manager_rate: managerRate,
+              updated_by: currentUserId ?? null,
+            },
+            { onConflict: "workspace_id,user_id" }
+          );
+
+        if (managerRateError && !/does not exist|relation|schema cache|could not find the table/i.test(managerRateError.message ?? "")) {
+          throw managerRateError;
         }
       }
 
@@ -1253,6 +1307,7 @@ export function TeamMembersPage() {
           fullName,
           birthDate,
           phone,
+          managerRate,
           availabilityStatus,
           startDate,
           probationEndDate,
@@ -1271,7 +1326,7 @@ export function TeamMembersPage() {
         )
       );
 
-      toast.success("Профіль учасника оновлено");
+      toast.success(canManage ? "Профіль учасника оновлено" : "Відсоток менеджера оновлено");
       setEditProfileMember(null);
     } catch (error: unknown) {
       toast.error("Не вдалося оновити профіль", { description: getErrorMessage(error) });
@@ -2161,10 +2216,10 @@ export function TeamMembersPage() {
                             items={[
                               { type: "label", label: "Дії" },
                               { type: "separator" },
-                              canManage
-                                ? memberProfileStorageAvailable
+                              canOpenProfileCard
+                                ? (canManage ? memberProfileStorageAvailable : true)
                                   ? {
-                                    label: "Редагувати профіль",
+                                    label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
                                     onSelect: () => openEditProfileDialog(m),
                                   }
                                   : {
@@ -2545,7 +2600,9 @@ export function TeamMembersPage() {
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Картка учасника</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
-                Редагування профілю учасника команди. Пароль змінюється тільки в його профілі.
+                {canManage
+                  ? "Редагування профілю учасника команди. Пароль змінюється тільки в його профілі."
+                  : "SEO може керувати тільки відсотком менеджера. Інші поля доступні лише для перегляду."}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -2562,6 +2619,7 @@ export function TeamMembersPage() {
                   onChange={(event) => setEditProfileFirstName(event.target.value)}
                   className="h-11"
                   placeholder="Імʼя"
+                  disabled={!canManage}
                 />
               </div>
               <div className="space-y-2">
@@ -2571,6 +2629,7 @@ export function TeamMembersPage() {
                   onChange={(event) => setEditProfileLastName(event.target.value)}
                   className="h-11"
                   placeholder="Прізвище"
+                  disabled={!canManage}
                 />
               </div>
             </div>
@@ -2582,6 +2641,7 @@ export function TeamMembersPage() {
                   value={editProfileBirthDate}
                   onChange={(event) => setEditProfileBirthDate(event.target.value)}
                   className="h-11"
+                  disabled={!canManage}
                 />
               </div>
               <div className="space-y-2">
@@ -2591,15 +2651,30 @@ export function TeamMembersPage() {
                   onChange={(event) => setEditProfilePhone(event.target.value)}
                   className="h-11"
                   placeholder="+380..."
+                  disabled={!canManage}
                 />
               </div>
             </div>
+            {canManageManagerRates ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">% менеджера</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editProfileManagerRate}
+                  onChange={(event) => setEditProfileManagerRate(event.target.value)}
+                  className="h-11"
+                  placeholder={String(DEFAULT_MANAGER_RATE)}
+                />
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
                 <Select
                   value={editProfileAvailabilityStatus}
                   onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
+                  disabled={!canManage}
                 >
                   <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
                     {getAvailabilityLabel(editProfileAvailabilityStatus)}
@@ -2618,6 +2693,7 @@ export function TeamMembersPage() {
                 <Select
                   value={editProfileManagerUserId || "__none__"}
                   onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
+                  disabled={!canManage}
                 >
                   <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
                   <SelectContent>
@@ -2641,6 +2717,7 @@ export function TeamMembersPage() {
                   value={editProfileStartDate}
                   onChange={(event) => setEditProfileStartDate(event.target.value)}
                   className="h-11"
+                  disabled={!canManage}
                 />
               </div>
               <div className="space-y-2">
@@ -2650,6 +2727,7 @@ export function TeamMembersPage() {
                   value={editProfileProbationEndDate}
                   onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
                   className="h-11"
+                  disabled={!canManage}
                 />
               </div>
             </div>
@@ -2663,6 +2741,7 @@ export function TeamMembersPage() {
                   >
                     <Checkbox
                       checked={editProfileModuleAccess[key]}
+                      disabled={!canManage}
                       onCheckedChange={(checked) =>
                         setEditProfileModuleAccess((prev) => ({
                           ...prev,
@@ -2685,7 +2764,7 @@ export function TeamMembersPage() {
                 Скасувати
               </Button>
               <Button className="flex-1 h-11" onClick={saveMemberProfile} disabled={editProfileBusy}>
-                {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти профіль"}
+                {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : canManage ? "Зберегти профіль" : "Зберегти %"}
               </Button>
             </div>
           </div>
