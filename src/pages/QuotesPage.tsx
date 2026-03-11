@@ -297,6 +297,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [managerProfileLabelsById, setManagerProfileLabelsById] = useState<Record<string, string>>({});
   const [presenceDbLabelById, setPresenceDbLabelById] = useState<Record<string, string>>({});
   const [presenceDbAvatarById, setPresenceDbAvatarById] = useState<Record<string, string | null>>({});
+  const [teamViewAvatarById, setTeamViewAvatarById] = useState<Record<string, string | null>>({});
   const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
   const [workspaceMemberAvatarById, setWorkspaceMemberAvatarById] = useState<Record<string, string | null>>({});
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
@@ -540,6 +541,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     managerFilter,
     rows,
   ]);
+  const getManagerAvatar = useCallback(
+    (assignedTo?: string | null) => {
+      const normalizedValue = (assignedTo ?? "").trim();
+      if (!normalizedValue) return null;
+      return (
+        presenceDbAvatarById[normalizedValue] ??
+        presenceAvatarById[normalizedValue] ??
+        workspaceMemberAvatarById[normalizedValue] ??
+        memberById.get(normalizedValue)?.avatarUrl ??
+        teamViewAvatarById[normalizedValue] ??
+        null
+      );
+    },
+    [
+      memberById,
+      presenceAvatarById,
+      presenceDbAvatarById,
+      teamViewAvatarById,
+      workspaceMemberAvatarById,
+    ]
+  );
   const resolveManagerMember = useCallback(
     (assignedTo?: string | null) => {
       const normalizedValue = (assignedTo ?? "").trim();
@@ -549,7 +571,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return {
           id: normalizedValue,
           label: persistedPresenceLabel,
-          avatarUrl: presenceDbAvatarById[normalizedValue] ?? null,
+          avatarUrl: getManagerAvatar(normalizedValue),
           jobRole: null,
         } satisfies TeamMemberRow;
       }
@@ -558,7 +580,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return {
           id: normalizedValue,
           label: presenceLabel,
-          avatarUrl: presenceAvatarById[normalizedValue] ?? null,
+          avatarUrl: getManagerAvatar(normalizedValue),
           jobRole: null,
         } satisfies TeamMemberRow;
       }
@@ -567,12 +589,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return {
           id: normalizedValue,
           label: workspaceLabel,
-          avatarUrl: workspaceMemberAvatarById[normalizedValue] ?? null,
+          avatarUrl: getManagerAvatar(normalizedValue),
           jobRole: null,
         } satisfies TeamMemberRow;
       }
       const byId = memberById.get(normalizedValue);
-      if (byId) return byId;
+      if (byId) return { ...byId, avatarUrl: getManagerAvatar(normalizedValue) };
       const normalizedLabel = normalizeManagerKey(normalizedValue);
       const byExactLabel = memberByNormalizedLabel.get(normalizedLabel);
       if (byExactLabel) return byExactLabel;
@@ -586,13 +608,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return {
           id: normalizedValue,
           label: profileLabel,
-          avatarUrl: null,
+          avatarUrl: getManagerAvatar(normalizedValue),
           jobRole: null,
         } satisfies TeamMemberRow;
       }
       return null;
     },
     [
+      getManagerAvatar,
       managerProfileLabelsById,
       memberById,
       memberByNormalizedLabel,
@@ -1000,6 +1023,47 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     };
 
     void loadPresenceLabels();
+    return () => {
+      active = false;
+    };
+  }, [rows, teamId]);
+
+  useEffect(() => {
+    let active = true;
+    const managerIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.assigned_to?.trim() ?? "")
+          .filter((value) => isUuid(value))
+      )
+    );
+    if (!teamId || managerIds.length === 0) {
+      setTeamViewAvatarById({});
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadTeamAvatars = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("team_members_view")
+          .select("user_id,avatar_url")
+          .eq("team_id", teamId)
+          .in("user_id", managerIds);
+        if (error) throw error;
+        const next = Object.fromEntries(
+          (((data as Array<{ user_id?: string | null; avatar_url?: string | null }> | null) ?? [])
+            .filter((row) => !!row.user_id)
+            .map((row) => [row.user_id as string, row.avatar_url ?? null])) as Array<[string, string | null]>
+        );
+        if (active) setTeamViewAvatarById(next);
+      } catch {
+        if (active) setTeamViewAvatarById({});
+      }
+    };
+
+    void loadTeamAvatars();
     return () => {
       active = false;
     };
