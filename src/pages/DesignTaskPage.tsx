@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -166,6 +167,19 @@ type QuoteMentionComment = {
   created_by: string;
 };
 
+type DesignTaskComment = {
+  id: string;
+  body: string;
+  created_at: string;
+  created_by: string;
+};
+
+type FilePreviewState = {
+  name: string;
+  url: string;
+  kind: "image" | "pdf";
+};
+
 type GroupedDesignOutputs = {
   key: string;
   label: string;
@@ -296,6 +310,104 @@ const getSelectedDesignOutputFileIdsFromMetadata = (metadata?: Record<string, un
 const isImageAttachment = (name?: string | null) => {
   if (!name) return false;
   return /\.(png|jpg|jpeg|gif|webp|svg|bmp|avif)$/i.test(name);
+};
+
+const isPdfAttachment = (name?: string | null) => {
+  if (!name) return false;
+  return /\.pdf$/i.test(name);
+};
+
+const buildPdfPreviewUrl = (src: string) =>
+  `${src}#page=1&zoom=page-fit&view=FitV&navpanes=0&scrollbar=0&pagemode=none`;
+
+const FileHoverPreview = ({
+  src,
+  title,
+  className,
+}: {
+  src: string;
+  title: string;
+  className?: string;
+}) => {
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [previewBounds, setPreviewBounds] = useState({
+    top: 0,
+    left: 0,
+    width: 360,
+    height: 224,
+  });
+
+  const previewHeight = 224;
+  const previewWidth = 360;
+  const previewGap = 10;
+  const viewportPadding = 12;
+
+  const updatePlacement = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor || typeof window === "undefined") return;
+
+    const rect = anchor.getBoundingClientRect();
+    const availableRight = Math.max(0, window.innerWidth - rect.right - viewportPadding - previewGap);
+    const availableLeft = Math.max(0, rect.left - viewportPadding - previewGap);
+    const shouldOpenLeft = availableRight < previewWidth && availableLeft > availableRight;
+    const clampedWidth = Math.min(previewWidth, Math.max(200, shouldOpenLeft ? availableLeft : availableRight || previewWidth));
+
+    let top = rect.top + rect.height / 2 - previewHeight / 2;
+    top = Math.max(viewportPadding, Math.min(top, window.innerHeight - previewHeight - viewportPadding));
+
+    let left = shouldOpenLeft ? rect.left - previewGap - clampedWidth : rect.right + previewGap;
+    left = Math.max(viewportPadding, Math.min(left, window.innerWidth - clampedWidth - viewportPadding));
+
+    setPreviewBounds({
+      top,
+      left,
+      width: clampedWidth,
+      height: previewHeight,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleViewportChange = () => updatePlacement();
+    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("resize", handleViewportChange);
+    return () => {
+      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("resize", handleViewportChange);
+    };
+  }, [isOpen, updatePlacement]);
+
+  return (
+    <div
+      ref={anchorRef}
+      onMouseEnter={() => {
+        updatePlacement();
+        setIsOpen(true);
+      }}
+      onMouseLeave={() => setIsOpen(false)}
+      className={cn("h-11 w-11 overflow-hidden rounded-md border border-border/60 bg-muted/20 shrink-0", className)}
+    >
+      <iframe src={buildPdfPreviewUrl(src)} title={title} className="h-full w-full pointer-events-none" />
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              className="pointer-events-none fixed z-[90] hidden overflow-hidden rounded-[14px] border border-border/70 bg-card shadow-[0_18px_40px_-14px_rgba(15,23,42,0.45)] md:block"
+              style={{
+                top: `${previewBounds.top}px`,
+                left: `${previewBounds.left}px`,
+                width: `${previewBounds.width}px`,
+                height: `${previewBounds.height}px`,
+              }}
+            >
+              <iframe src={buildPdfPreviewUrl(src)} title="" className="h-full w-full pointer-events-none bg-background" />
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
+  );
 };
 
 const DESIGN_OUTPUT_BUCKET =
@@ -512,6 +624,7 @@ export default function DesignTaskPage() {
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
+  const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -1481,7 +1594,7 @@ export default function DesignTaskPage() {
   };
 
   const handleSubmitQuoteComment = async () => {
-    if (!task?.quoteId || !isUuid(task.quoteId)) return;
+    if (!task?.id) return;
     const body = quoteCommentDraft.trim();
     if (!body) {
       toast.error("Введіть коментар.");
@@ -1504,41 +1617,68 @@ export default function DesignTaskPage() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) throw new Error("Не вдалося визначити сесію користувача.");
+      if (isUuid(task.quoteId)) {
+        if (!token) throw new Error("Не вдалося визначити сесію користувача.");
 
-      const response = await fetch("/.netlify/functions/quote-comments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          mode: "add",
-          quoteId: task.quoteId,
-          body,
-          mentionedUserIds,
-        }),
-      });
-      const payload = await parseJsonSafe<{ error?: string; comment?: QuoteMentionComment; mentionError?: string }>(response);
-      if (!response.ok) {
-        throw new Error(payload?.error || `HTTP ${response.status}`);
-      }
+        const response = await fetch("/.netlify/functions/quote-comments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            mode: "add",
+            quoteId: task.quoteId,
+            body,
+            mentionedUserIds,
+          }),
+        });
+        const payload = await parseJsonSafe<{ error?: string; comment?: QuoteMentionComment; mentionError?: string }>(response);
+        if (!response.ok) {
+          throw new Error(payload?.error || `HTTP ${response.status}`);
+        }
 
-      const savedComment = payload?.comment;
-      if (savedComment && body.includes("@")) {
-        setQuoteMentionComments((prev) => [savedComment, ...prev].slice(0, 30));
+        const savedComment = payload?.comment;
+        if (savedComment && body.includes("@")) {
+          setQuoteMentionComments((prev) => [savedComment, ...prev].slice(0, 30));
+        } else {
+          void (async () => {
+            if (task?.id) await loadHistory(task.id);
+          })();
+        }
+        if (payload?.mentionError) {
+          toast.error(payload.mentionError);
+        }
       } else {
-        void (async () => {
-          if (task?.id) await loadHistory(task.id);
-        })();
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: null,
+          userId,
+          action: "comment",
+          title: body.length > 80 ? `${body.slice(0, 77)}...` : body,
+          href: `/design/${task.id}`,
+          metadata: {
+            source: "design_task_comment",
+            comment_body: body,
+            mentioned_user_ids: mentionedUserIds,
+          },
+        });
+        if (mentionedUserIds.length > 0) {
+          await notifyUsers({
+            userIds: mentionedUserIds,
+            title: `Згадка у дизайн-задачі ${getTaskDisplayNumber(task)}`,
+            body: body.length > 160 ? `${body.slice(0, 157)}...` : body,
+            href: `/design/${task.id}`,
+            type: "info",
+          });
+        }
+        await loadHistory(task.id);
       }
       setQuoteCommentDraft("");
       toast.success(
         mentionedUserIds.length > 0 ? "Коментар і згадки надіслано" : "Коментар збережено"
       );
-      if (payload?.mentionError) {
-        toast.error(payload.mentionError);
-      }
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося зберегти коментар"));
     } finally {
@@ -1930,6 +2070,23 @@ export default function DesignTaskPage() {
         };
       }
 
+      if (source === "design_task_comment") {
+        const body =
+          typeof metadata.comment_body === "string" && metadata.comment_body.trim()
+            ? metadata.comment_body.trim()
+            : row.title?.trim() || "";
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: "Коментар",
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          description: body || undefined,
+          icon: Check,
+          accentClass: "quote-activity-accent-comment",
+        };
+      }
+
       if (source === "design_task_estimate") {
         const raw = metadata.estimate_minutes;
         const estimateMinutes =
@@ -2005,6 +2162,28 @@ export default function DesignTaskPage() {
     return groups;
   }, [historyEvents]);
 
+  const standaloneComments = useMemo<DesignTaskComment[]>(
+    () =>
+      historyRows
+        .map((row) => {
+          const metadata = parseActivityMetadata(row.metadata);
+          const source = typeof metadata.source === "string" ? metadata.source : "";
+          if (source !== "design_task_comment") return null;
+          const body =
+            typeof metadata.comment_body === "string" && metadata.comment_body.trim()
+              ? metadata.comment_body
+              : row.title?.trim() || "";
+          return {
+            id: row.id,
+            body,
+            created_at: row.created_at,
+            created_by: row.user_id ?? "",
+          } satisfies DesignTaskComment;
+        })
+        .filter(Boolean) as DesignTaskComment[],
+    [historyRows]
+  );
+
   const resolveAttachmentUrl = (file: {
     signed_url?: string | null;
     storage_bucket?: string | null;
@@ -2034,6 +2213,26 @@ export default function DesignTaskPage() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!filePreview || typeof document === "undefined") return;
+    const scrollY = window.scrollY;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [filePreview]);
 
   const persistDesignOutputs = async (
     nextFiles: DesignOutputFile[],
@@ -4478,6 +4677,7 @@ export default function DesignTaskPage() {
                     <div className="space-y-2">
                       {group.files.map((file) => {
                         const isImage = isImageAttachment(file.file_name);
+                        const isPdf = isPdfAttachment(file.file_name);
                         const ext = getFileExtension(file.file_name);
                         const fileUrl = resolveAttachmentUrl(file);
                         return (
@@ -4485,11 +4685,37 @@ export default function DesignTaskPage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex items-start gap-2.5">
                                 {isImage && fileUrl ? (
-                                  <KanbanImageZoomPreview
-                                    imageUrl={fileUrl}
-                                    alt={file.file_name}
-                                    className="h-11 w-11 rounded-md border border-border/60 shrink-0"
-                                  />
+                                  <button
+                                    type="button"
+                                    className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                    onClick={() =>
+                                      setFilePreview({
+                                        name: file.file_name,
+                                        url: fileUrl,
+                                        kind: "image",
+                                      })
+                                    }
+                                  >
+                                    <KanbanImageZoomPreview
+                                      imageUrl={fileUrl}
+                                      alt={file.file_name}
+                                      className="h-11 w-11 rounded-md border border-border/60 shrink-0"
+                                    />
+                                  </button>
+                                ) : isPdf && fileUrl ? (
+                                  <button
+                                    type="button"
+                                    className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                    onClick={() =>
+                                      setFilePreview({
+                                        name: file.file_name,
+                                        url: fileUrl,
+                                        kind: "pdf",
+                                      })
+                                    }
+                                  >
+                                    <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
+                                  </button>
                                 ) : (
                                   <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
                                     {ext}
@@ -4938,6 +5164,7 @@ export default function DesignTaskPage() {
               <div className="space-y-2.5">
                 {attachments.map((file) => {
                   const isImage = isImageAttachment(file.file_name);
+                  const isPdf = isPdfAttachment(file.file_name);
                   const extension = getFileExtension(file.file_name);
                   const fileUrl = resolveAttachmentUrl(file);
                   return (
@@ -4945,11 +5172,37 @@ export default function DesignTaskPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex items-start gap-2.5">
                           {isImage && fileUrl ? (
-                            <KanbanImageZoomPreview
-                              imageUrl={fileUrl}
-                              alt={file.file_name ?? "preview"}
-                              className="h-11 w-11 rounded-md border border-border/60 shrink-0"
-                            />
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                              onClick={() =>
+                                setFilePreview({
+                                  name: file.file_name ?? "preview",
+                                  url: fileUrl,
+                                  kind: "image",
+                                })
+                              }
+                            >
+                              <KanbanImageZoomPreview
+                                imageUrl={fileUrl}
+                                alt={file.file_name ?? "preview"}
+                                className="h-11 w-11 rounded-md border border-border/60 shrink-0"
+                              />
+                            </button>
+                          ) : isPdf && fileUrl ? (
+                            <button
+                              type="button"
+                              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                              onClick={() =>
+                                setFilePreview({
+                                  name: file.file_name ?? "PDF preview",
+                                  url: fileUrl,
+                                  kind: "pdf",
+                                })
+                              }
+                            >
+                              <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
+                            </button>
                           ) : (
                             <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
                               {extension}
@@ -5207,9 +5460,63 @@ export default function DesignTaskPage() {
                 </Button>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Для standalone задачі обговорення ведіть у ТЗ цієї задачі та в історії змін.
-              </p>
+              <>
+                <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
+                  <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
+                  {managerMembers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {managerMembers.slice(0, 6).map((member) => (
+                        <Button
+                          key={member.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={() => insertMentionIntoComment(member.id)}
+                        >
+                          @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <Textarea
+                    ref={quoteCommentTextareaRef}
+                    value={quoteCommentDraft}
+                    onChange={(event) => setQuoteCommentDraft(event.target.value)}
+                    placeholder="Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
+                    className="min-h-[110px]"
+                  />
+                  <div className="flex justify-end">
+                    <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
+                      {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Надіслати коментар
+                    </Button>
+                  </div>
+                </div>
+                {standaloneComments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {standaloneComments.slice(0, 10).map((comment) => (
+                      <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+                        <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                          <AvatarBase
+                            src={getMemberAvatar(comment.created_by)}
+                            name={getMemberLabel(comment.created_by)}
+                            fallback={getInitials(getMemberLabel(comment.created_by))}
+                            size={14}
+                            className="shrink-0 border-border/70"
+                          />
+                          <span>{getMemberLabel(comment.created_by)}</span>
+                          <span>·</span>
+                          <span>{formatDate(comment.created_at, true)}</span>
+                        </div>
+                        <div className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </aside>
@@ -5346,6 +5653,54 @@ export default function DesignTaskPage() {
               {outputSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Додати
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(filePreview)}
+        onOpenChange={(open) => {
+          if (!open) setFilePreview(null);
+        }}
+      >
+        <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[min(1100px,92vw)]">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">{filePreview?.name ?? "Перегляд файлу"}</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto overscroll-contain rounded-xl bg-muted/15 p-2">
+            {filePreview?.kind === "image" ? (
+              <img
+                src={filePreview.url}
+                alt={filePreview.name}
+                className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+              />
+            ) : filePreview?.kind === "pdf" ? (
+              <div className="overflow-hidden overscroll-contain rounded-lg border border-border/50 bg-background">
+                <iframe
+                  src={buildPdfPreviewUrl(filePreview.url)}
+                  title={filePreview.name}
+                  className="pointer-events-none h-[72vh] w-full bg-background"
+                />
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            {filePreview?.url ? (
+              <>
+                <Button type="button" variant="outline" asChild>
+                  <a href={filePreview.url} target="_blank" rel="noopener noreferrer">
+                    Відкрити окремо
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void downloadFileToDevice(filePreview.url, filePreview.name)}
+                >
+                  Завантажити
+                </Button>
+              </>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>

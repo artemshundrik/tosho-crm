@@ -443,6 +443,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [attachmentsUploadError, setAttachmentsUploadError] = useState<string | null>(null);
   const [attachmentsDeletingId, setAttachmentsDeletingId] = useState<string | null>(null);
   const [attachmentsDeleteError, setAttachmentsDeleteError] = useState<string | null>(null);
+  const [visualizationPreview, setVisualizationPreview] = useState<QuoteAttachment | null>(null);
   const [attachmentsDragActive, setAttachmentsDragActive] = useState(false);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
@@ -5194,7 +5195,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName);
                         return (
                           <div key={file.id} className="group rounded-xl border border-border/40 p-3 transition-colors hover:bg-muted/10">
-                            <div className="flex h-40 items-center justify-center overflow-hidden rounded-lg bg-muted/20">
+                            <button
+                              type="button"
+                              className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:hover:scale-100"
+                              onClick={() => {
+                                if (previewImage && file.url) {
+                                  setVisualizationPreview(file);
+                                }
+                              }}
+                              disabled={!previewImage || !file.url}
+                              aria-label={previewImage && file.url ? `Переглянути ${file.name}` : file.name}
+                            >
                               {previewImage && file.url ? (
                                 <KanbanImageZoomPreview
                                   imageUrl={file.url ?? ""}
@@ -5204,7 +5215,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               ) : (
                                 <div className="text-xs text-muted-foreground">{extension}</div>
                               )}
-                            </div>
+                            </button>
                             <div className="mt-3 truncate text-sm font-medium text-foreground" title={file.name}>
                               {file.name}
                             </div>
@@ -6326,6 +6337,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           <Button variant="outline" onClick={() => setAttachDesignTaskDialogOpen(false)}>
             Закрити
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={Boolean(visualizationPreview)}
+      onOpenChange={(open) => {
+        if (!open) setVisualizationPreview(null);
+      }}
+    >
+      <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[min(1100px,92vw)]">
+        <DialogHeader>
+          <DialogTitle className="truncate pr-8">{visualizationPreview?.name ?? "Візуалізація"}</DialogTitle>
+        </DialogHeader>
+        <div className="overflow-auto rounded-xl bg-muted/15 p-2">
+          {visualizationPreview?.url ? (
+            <img
+              src={visualizationPreview.url}
+              alt={visualizationPreview.name}
+              className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+            />
+          ) : null}
+        </div>
+        <DialogFooter>
+          {visualizationPreview?.url ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void downloadFileToDevice(visualizationPreview.url!, visualizationPreview.name)}
+            >
+              Завантажити
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
