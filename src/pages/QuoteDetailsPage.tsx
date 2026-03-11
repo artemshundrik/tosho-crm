@@ -958,6 +958,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const parseDeadlineDate = (value?: string | null) => {
     if (!value) return null;
+    const dateTimeMatch = value.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+    );
+    if (dateTimeMatch) {
+      const [, y, m, d, hh, mm, ss] = dateTimeMatch;
+      return new Date(
+        Number(y),
+        Number(m) - 1,
+        Number(d),
+        Number(hh),
+        Number(mm),
+        Number(ss ?? "0")
+      );
+    }
     const local = toLocalDate(value);
     if (local) return local;
     const date = new Date(value);
@@ -980,6 +994,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     })}`;
   };
 
+  const formatDeadlineDateOnlyLabel = (value?: string | null) => {
+    const date = parseDeadlineDate(value);
+    if (!date) return "Без дедлайну";
+    return date.toLocaleDateString("uk-UA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
   const formatShortDeadlineLabel = (value?: string | null) => {
     const date = parseDeadlineDate(value);
     if (!date) return "Не вказано";
@@ -993,6 +1017,37 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       hour: "2-digit",
       minute: "2-digit",
     })}`;
+  };
+
+  const buildDeadlineBadgePreview = (value?: string | null) => {
+    if (!value) {
+      return {
+        tone: "none" as QuoteDeadlineTone,
+        label: "Без дедлайну",
+        title: "Без дедлайну",
+      };
+    }
+    const badge = getDeadlineBadge(value);
+    const parsed = parseDeadlineDate(value);
+    const hasTime = /T\d{2}:\d{2}/.test(value);
+    const timeLabel = parsed && hasTime
+      ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+      : null;
+    return {
+      tone: badge.tone,
+      label: timeLabel ? `${badge.label} · ${timeLabel}` : badge.label,
+      title: formatDeadlineLabel(value),
+    };
+  };
+
+  const resolveDeadlinePreviewValue = (
+    date?: string | null,
+    time?: string | null,
+    fallback?: string | null
+  ) => {
+    const normalizedDate = (date ?? "").trim();
+    if (!normalizedDate) return fallback ?? null;
+    return combineDeadlineValue(normalizedDate, time);
   };
 
   const formatDeliveryLabel = (value?: string | null) => {
@@ -3059,7 +3114,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           Number.isFinite(nextReminderOffset ?? NaN) ? nextReminderOffset : null,
         deadline_reminder_comment: nextReminderComment || null,
       };
-      await updateQuote({
+      const updatedQuote = await updateQuote({
         quoteId: quote.id,
         teamId,
         deadlineAt: payload.deadline_at,
@@ -3067,6 +3122,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         deadlineReminderOffsetMinutes: payload.deadline_reminder_offset_minutes,
         deadlineReminderComment: payload.deadline_reminder_comment,
       });
+      setQuote((prev) =>
+        prev
+          ? {
+              ...prev,
+              deadline_at: (updatedQuote as Partial<QuoteSummaryRow> | null)?.deadline_at ?? payload.deadline_at,
+              deadline_note: (updatedQuote as Partial<QuoteSummaryRow> | null)?.deadline_note ?? payload.deadline_note,
+              deadline_reminder_offset_minutes:
+                (updatedQuote as Partial<QuoteSummaryRow> | null)?.deadline_reminder_offset_minutes ??
+                payload.deadline_reminder_offset_minutes,
+              deadline_reminder_comment:
+                (updatedQuote as Partial<QuoteSummaryRow> | null)?.deadline_reminder_comment ??
+                payload.deadline_reminder_comment,
+            }
+          : prev
+      );
+      setDeadlineDate(toDateInputValue(payload.deadline_at));
+      setDeadlineTime(toTimeInputValue(payload.deadline_at));
+      setDeadlineNote(payload.deadline_note ?? "");
+      setDeadlineReminderOffset(
+        payload.deadline_reminder_offset_minutes === null || payload.deadline_reminder_offset_minutes === undefined
+          ? "0"
+          : String(payload.deadline_reminder_offset_minutes)
+      );
+      setDeadlineReminderComment(payload.deadline_reminder_comment ?? "");
       if (deadlineChanged) {
         await logActivity({
           teamId,
@@ -3086,7 +3165,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         });
         await loadActivityLog();
       }
-      await loadQuote();
     } catch (e: unknown) {
       setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
     } finally {
@@ -3118,12 +3196,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDeadlineSaving(true);
     setDeadlineError(null);
     try {
-      await updateQuote({
+      const updatedQuote = await updateQuote({
         quoteId: quote.id,
         teamId,
         customerDeadlineAt: field === "customer_deadline_at" ? nextValue : undefined,
         designDeadlineAt: field === "design_deadline_at" ? nextValue : undefined,
       });
+      setQuote((prev) =>
+        prev
+          ? {
+              ...prev,
+              customer_deadline_at:
+                field === "customer_deadline_at"
+                  ? ((updatedQuote as Partial<QuoteSummaryRow> | null)?.customer_deadline_at ?? nextValue)
+                  : prev.customer_deadline_at,
+              design_deadline_at:
+                field === "design_deadline_at"
+                  ? ((updatedQuote as Partial<QuoteSummaryRow> | null)?.design_deadline_at ?? nextValue)
+                  : prev.design_deadline_at,
+            }
+          : prev
+      );
+      if (field === "customer_deadline_at") {
+        setCustomerDeadlineDate(toDateInputValue(nextValue));
+        setCustomerDeadlineTime(toTimeInputValue(nextValue));
+      } else {
+        setDesignDeadlineDate(toDateInputValue(nextValue));
+        setDesignDeadlineTime(toTimeInputValue(nextValue));
+      }
       await logActivity({
         teamId,
         action: options.action,
@@ -3138,7 +3238,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         },
       });
       await loadActivityLog();
-      await loadQuote();
     } catch (e: unknown) {
       setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
     } finally {
@@ -5030,20 +5129,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
                       </div>
                       <div>
-                        {customerDeadlineDate ? (
+                        {resolveDeadlinePreviewValue(
+                          customerDeadlineDate,
+                          customerDeadlineTime,
+                          quote?.customer_deadline_at ?? null
+                        ) ? (
                           (() => {
-                            const value = combineDeadlineValue(customerDeadlineDate, customerDeadlineTime);
-                            const badge = getDeadlineBadge(value);
-                            const parsed = parseDeadlineDate(value);
-                            const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
-                            const timeLabel = parsed && hasTime
-                              ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-                              : null;
+                            const preview = buildDeadlineBadgePreview(
+                              resolveDeadlinePreviewValue(
+                                customerDeadlineDate,
+                                customerDeadlineTime,
+                                quote.customer_deadline_at
+                              )
+                            );
                             return (
                               <QuoteDeadlineBadge
-                                tone={badge.tone}
-                                label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                                title={formatDeadlineLabel(value)}
+                                tone={preview.tone}
+                                label={preview.label}
+                                title={preview.title}
                                 compact
                               />
                             );
@@ -5071,18 +5174,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </div>
                       <div>
                         {(() => {
-                          const value = combineDeadlineValue(deadlineDate, deadlineTime);
-                          const badge = getDeadlineBadge(value);
-                          const parsed = parseDeadlineDate(value);
-                          const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
-                          const timeLabel = parsed && hasTime
-                            ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-                            : null;
+                          const preview = buildDeadlineBadgePreview(
+                            resolveDeadlinePreviewValue(deadlineDate, deadlineTime, quote?.deadline_at ?? null)
+                          );
                           return (
                             <QuoteDeadlineBadge
-                              tone={badge.tone}
-                              label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                              title={formatDeadlineLabel(value)}
+                              tone={preview.tone}
+                              label={preview.label}
+                              title={preview.title}
                               compact
                             />
                           );
@@ -5104,20 +5203,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
                       </div>
                       <div>
-                        {designDeadlineDate ? (
+                        {resolveDeadlinePreviewValue(
+                          designDeadlineDate,
+                          designDeadlineTime,
+                          quote?.design_deadline_at ?? null
+                        ) ? (
                           (() => {
-                            const value = combineDeadlineValue(designDeadlineDate, designDeadlineTime);
-                            const badge = getDeadlineBadge(value);
-                            const parsed = parseDeadlineDate(value);
-                            const hasTime = /T\d{2}:\d{2}/.test(value ?? "");
-                            const timeLabel = parsed && hasTime
-                              ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-                              : null;
+                            const preview = buildDeadlineBadgePreview(
+                              resolveDeadlinePreviewValue(
+                                designDeadlineDate,
+                                designDeadlineTime,
+                                quote.design_deadline_at
+                              )
+                            );
                             return (
                               <QuoteDeadlineBadge
-                                tone={badge.tone}
-                                label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                                title={formatDeadlineLabel(value)}
+                                tone={preview.tone}
+                                label={preview.label}
+                                title={preview.title}
                                 compact
                               />
                             );
@@ -5133,59 +5236,50 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                   <div className="p-0">
                     <TabsContent value="customer" className="mt-0">
-                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px]">
+                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
                         <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="h-9 justify-start gap-2 border-border/50 font-normal"
+                              className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                               onClick={() => setCustomerDeadlinePopoverOpen(true)}
                             >
                               {customerDeadlineDate
-                                ? formatDeadlineLabel(combineDeadlineValue(customerDeadlineDate, customerDeadlineTime))
-                                : "Оберіть дату"}
+                                ? formatDeadlineDateOnlyLabel(customerDeadlineDate)
+                                : "Оберіть день"}
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
                             <CalendarPicker
                               mode="single"
                               selected={toLocalDate(customerDeadlineDate)}
-                              onSelect={async (date) => {
+                              onSelect={(date) => {
                                 const nextDate = formatDateInput(date ?? null);
                                 setCustomerDeadlineDate(nextDate);
                                 setCustomerDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("customer_deadline_at", {
-                                  date: customerDeadlineDate,
-                                  time: customerDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн Замовника",
-                                  action: "змінив дедлайн замовника",
-                                });
                               }}
                               initialFocus
                             />
                             <DateQuickActions
-                              onSelect={async (date) => {
+                              onSelect={(date) => {
                                 const nextDate = formatDateInput(date ?? null);
                                 setCustomerDeadlineDate(nextDate);
                                 setCustomerDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("customer_deadline_at", {
-                                  date: customerDeadlineDate,
-                                  time: customerDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн Замовника",
-                                  action: "змінив дедлайн замовника",
-                                });
                               }}
                             />
                           </PopoverContent>
                         </Popover>
                         <Input
                           type="time"
-                          className="h-9 border-border/40 bg-muted/[0.03]"
+                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
                           value={customerDeadlineTime}
                           onChange={(e) => setCustomerDeadlineTime(e.target.value)}
-                          onBlur={() =>
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-9 w-10 border-border/40 bg-muted/[0.03]"
+                          onClick={() =>
                             void handleSaveSecondaryDeadline("customer_deadline_at", {
                               date: customerDeadlineDate,
                               time: customerDeadlineTime,
@@ -5193,53 +5287,54 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               action: "змінив дедлайн замовника",
                             })
                           }
-                        />
+                          disabled={deadlineSaving || !customerDeadlineDate}
+                          aria-label="Зберегти дедлайн замовника"
+                        >
+                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </TabsContent>
 
                     <TabsContent value="internal" className="mt-0">
-                      <div className="max-w-[720px] space-y-2">
-                        <div className="grid gap-2 sm:grid-cols-[minmax(0,220px)_104px_40px]">
+                      <div className="max-w-[560px] space-y-2">
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
                           <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
-                                className="h-9 justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                                 onClick={() => setDeadlinePopoverOpen(true)}
                               >
                                 {deadlineDate
-                                  ? formatDeadlineLabel(combineDeadlineValue(deadlineDate, deadlineTime))
-                                  : "Оберіть дату"}
+                                  ? formatDeadlineDateOnlyLabel(deadlineDate)
+                                  : "Оберіть день"}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
                               <CalendarPicker
                                 mode="single"
                                 selected={toLocalDate(deadlineDate)}
-                                onSelect={async (date) => {
+                                onSelect={(date) => {
                                   const nextDate = formatDateInput(date ?? null);
                                   setDeadlineDate(nextDate);
                                   setDeadlinePopoverOpen(false);
-                                  await handleSaveDeadline({ date: nextDate });
                                 }}
                                 initialFocus
                               />
                               <DateQuickActions
-                                onSelect={async (date) => {
+                                onSelect={(date) => {
                                   const nextDate = formatDateInput(date ?? null);
                                   setDeadlineDate(nextDate);
                                   setDeadlinePopoverOpen(false);
-                                  await handleSaveDeadline({ date: nextDate });
                                 }}
                               />
                             </PopoverContent>
                           </Popover>
                           <Input
                             type="time"
-                            className="h-9 border-border/40 bg-muted/[0.03]"
+                            className="h-9 w-full border-border/40 bg-muted/[0.03]"
                             value={deadlineTime}
                             onChange={(e) => setDeadlineTime(e.target.value)}
-                            onBlur={() => void handleSaveDeadline()}
                           />
                           <Button
                             size="icon"
@@ -5276,7 +5371,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             placeholder="Текст нагадування"
                             value={deadlineReminderComment}
                             onChange={(e) => setDeadlineReminderComment(e.target.value)}
-                            onBlur={() => void handleSaveDeadline()}
                             maxLength={200}
                           />
                         </div>
@@ -5285,66 +5379,56 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           placeholder="Коментар до внутрішнього дедлайну"
                           value={deadlineNote}
                           onChange={(e) => setDeadlineNote(e.target.value)}
-                          onBlur={() => void handleSaveDeadline()}
                           maxLength={200}
                         />
                       </div>
                     </TabsContent>
 
                     <TabsContent value="design" className="mt-0">
-                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px]">
+                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
                         <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="h-9 justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                              className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
                               onClick={() => setDesignDeadlinePopoverOpen(true)}
                             >
                               {designDeadlineDate
-                                ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
-                                : "Оберіть дату"}
+                                ? formatDeadlineDateOnlyLabel(designDeadlineDate)
+                                : "Оберіть день"}
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
                             <CalendarPicker
                               mode="single"
                               selected={toLocalDate(designDeadlineDate)}
-                              onSelect={async (date) => {
+                              onSelect={(date) => {
                                 const nextDate = formatDateInput(date ?? null);
                                 setDesignDeadlineDate(nextDate);
                                 setDesignDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("design_deadline_at", {
-                                  date: designDeadlineDate,
-                                  time: designDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн дизайну",
-                                  action: "змінив дедлайн дизайну",
-                                });
                               }}
                               initialFocus
                             />
                             <DateQuickActions
-                              onSelect={async (date) => {
+                              onSelect={(date) => {
                                 const nextDate = formatDateInput(date ?? null);
                                 setDesignDeadlineDate(nextDate);
                                 setDesignDeadlinePopoverOpen(false);
-                                await handleSaveSecondaryDeadline("design_deadline_at", {
-                                  date: designDeadlineDate,
-                                  time: designDeadlineTime,
-                                  nextDate,
-                                  title: "Дедлайн дизайну",
-                                  action: "змінив дедлайн дизайну",
-                                });
                               }}
                             />
                           </PopoverContent>
                         </Popover>
                         <Input
                           type="time"
-                          className="h-9 border-border/40 bg-muted/[0.03]"
+                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
                           value={designDeadlineTime}
                           onChange={(e) => setDesignDeadlineTime(e.target.value)}
-                          onBlur={() =>
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-9 w-10 border-border/40 bg-muted/[0.03]"
+                          onClick={() =>
                             void handleSaveSecondaryDeadline("design_deadline_at", {
                               date: designDeadlineDate,
                               time: designDeadlineTime,
@@ -5352,7 +5436,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               action: "змінив дедлайн дизайну",
                             })
                           }
-                        />
+                          disabled={deadlineSaving || !designDeadlineDate}
+                          aria-label="Зберегти дедлайн дизайну"
+                        >
+                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </TabsContent>
                   </div>
@@ -6287,11 +6375,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн замовника</dt>
                     <dd className="min-w-0 max-w-[52%] text-right">
-                      {quote.deadline_at ? (
+                      {quote.customer_deadline_at ? (
                         (() => {
-                          const badge = getDeadlineBadge(quote.deadline_at);
-                          const parsed = parseDeadlineDate(quote.deadline_at);
-                          const hasTime = /T\d{2}:\d{2}/.test(quote.deadline_at ?? "");
+                          const badge = getDeadlineBadge(quote.customer_deadline_at);
+                          const parsed = parseDeadlineDate(quote.customer_deadline_at);
+                          const hasTime = /T\d{2}:\d{2}/.test(quote.customer_deadline_at ?? "");
                           const timeLabel = parsed && hasTime
                             ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
                             : null;
@@ -6299,7 +6387,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <QuoteDeadlineBadge
                               tone={badge.tone}
                               label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                              title={formatDeadlineLabel(quote.deadline_at)}
+                              title={formatDeadlineLabel(quote.customer_deadline_at)}
                               compact
                               className="justify-end"
                             />
@@ -6344,18 +6432,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Внутрішній дедлайн</dt>
                     <dd className="min-w-0 max-w-[52%] text-right">
                       {(() => {
-                        const deadlineValue = combineDeadlineValue(deadlineDate, deadlineTime);
-                        const badge = getDeadlineBadge(deadlineValue);
-                        const parsed = parseDeadlineDate(deadlineValue);
-                        const hasTime = /T\d{2}:\d{2}/.test(deadlineValue ?? "");
-                        const timeLabel = parsed && hasTime
-                          ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-                          : null;
+                        const preview = buildDeadlineBadgePreview(quote?.deadline_at ?? null);
                         return (
                           <QuoteDeadlineBadge
-                            tone={badge.tone}
-                            label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                            title={formatDeadlineLabel(deadlineValue)}
+                            tone={preview.tone}
+                            label={preview.label}
+                            title={preview.title}
                             compact
                             className="justify-end"
                           />
@@ -6370,8 +6452,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн дизайну</dt>
                     <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
-                      {designDeadlineDate
-                        ? formatDeadlineLabel(combineDeadlineValue(designDeadlineDate, designDeadlineTime))
+                      {quote?.design_deadline_at
+                        ? formatDeadlineLabel(quote.design_deadline_at)
                         : "Не вказано"}
                     </dd>
                   </div>
