@@ -1777,7 +1777,9 @@ export default function DesignTaskPage() {
     const d = new Date(task.designDeadline);
     if (Number.isNaN(d.getTime())) return { label: "Без дедлайну", className: "text-muted-foreground" };
     const today = new Date();
-    const diff = Math.round((d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24));
+    const startOfDeadline = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diff = Math.round((startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
     const hasTime = /t\d{2}:\d{2}/i.test(task.designDeadline ?? "");
     const timeSuffix = hasTime
       ? ` ${d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
@@ -4388,14 +4390,6 @@ export default function DesignTaskPage() {
                   captionLayout="dropdown-buttons"
                   fromYear={new Date().getFullYear() - 3}
                   toYear={new Date().getFullYear() + 5}
-                  className="p-3"
-                  classNames={{
-                    head_cell: "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
-                    row: "flex w-full mt-1",
-                    day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
-                    day_selected:
-                      "rounded-full !bg-primary !text-primary-foreground hover:!bg-primary hover:!text-primary-foreground focus:!bg-primary focus:!text-primary-foreground font-semibold",
-                  }}
                   initialFocus
                 />
                 <div className="space-y-2 border-t border-border/50 px-2 py-3">
@@ -5274,14 +5268,6 @@ export default function DesignTaskPage() {
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
                     toYear={new Date().getFullYear() + 5}
-                    className="p-3"
-                    classNames={{
-                      head_cell: "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
-                      row: "flex w-full mt-1",
-                      day: "h-9 w-9 p-0 text-sm font-medium aria-selected:opacity-100",
-                      day_selected:
-                        "rounded-full !bg-primary !text-primary-foreground hover:!bg-primary hover:!text-primary-foreground focus:!bg-primary focus:!text-primary-foreground font-semibold",
-                    }}
                     initialFocus
                   />
                   <div className="space-y-2 border-t border-border/50 px-2 py-3">

@@ -457,7 +457,10 @@ export default function DesignPage() {
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
-  const [createDeadlineTime, setCreateDeadlineTime] = useState("12:00");
+  const createDeadlineTime = useMemo(() => {
+    if (!createDeadline) return "12:00";
+    return `${String(createDeadline.getHours()).padStart(2, "0")}:${String(createDeadline.getMinutes()).padStart(2, "0")}`;
+  }, [createDeadline]);
   const [createManagerUserId, setCreateManagerUserId] = useState<string>("none");
   const [createManagerPopoverOpen, setCreateManagerPopoverOpen] = useState(false);
   const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string>("none");
@@ -510,6 +513,23 @@ export default function DesignPage() {
     const raw = session?.user?.user_metadata?.avatar_url;
     return typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }, [session?.user?.user_metadata]);
+  const updateCreateDeadlineDate = (date?: Date) => {
+    if (!date) {
+      setCreateDeadline(undefined);
+      return;
+    }
+    const [hours, minutes] = createDeadlineTime.split(":").map((part) => Number(part) || 0);
+    const next = new Date(date);
+    next.setHours(hours, minutes, 0, 0);
+    setCreateDeadline(next);
+  };
+  const updateCreateDeadlineTime = (value: string) => {
+    if (!createDeadline) return;
+    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
+    const next = new Date(createDeadline);
+    next.setHours(hours, minutes, 0, 0);
+    setCreateDeadline(next);
+  };
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -1987,7 +2007,6 @@ export default function DesignPage() {
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDeadline(undefined);
-      setCreateDeadlineTime("12:00");
       setCreateDeadlinePopoverOpen(false);
       setCreateManagerUserId(userId ?? "none");
       setCreateManagerPopoverOpen(false);
@@ -3143,7 +3162,7 @@ export default function DesignPage() {
                     mode="single"
                     selected={createDeadline}
                     onSelect={(date) => {
-                      setCreateDeadline(date);
+                      updateCreateDeadlineDate(date ?? undefined);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
@@ -3153,9 +3172,10 @@ export default function DesignPage() {
                   <div className="space-y-2 border-t border-border/50 px-2 py-3">
                     <Input
                       value={createDeadlineTime}
-                      onChange={(event) => setCreateDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
+                      onChange={(event) => updateCreateDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
                       onBlur={() => {
-                        setCreateDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
+                        if (isValidDeadlineTime(createDeadlineTime)) return;
+                        updateCreateDeadlineTime("12:00");
                       }}
                       placeholder="HH:MM"
                       className="h-9 text-sm"
@@ -3168,7 +3188,7 @@ export default function DesignPage() {
                           size="xs"
                           variant={createDeadlineTime === time ? "secondary" : "outline"}
                           className="w-full justify-center"
-                          onClick={() => setCreateDeadlineTime(time)}
+                          onClick={() => updateCreateDeadlineTime(time)}
                         >
                           {time}
                         </Button>
@@ -3177,7 +3197,7 @@ export default function DesignPage() {
                   </div>
                   <DateQuickActions
                     onSelect={(date) => {
-                      setCreateDeadline(date ?? undefined);
+                      updateCreateDeadlineDate(date ?? undefined);
                       setCreateDeadlinePopoverOpen(false);
                     }}
                   />
