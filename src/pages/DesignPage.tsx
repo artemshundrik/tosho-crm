@@ -457,6 +457,8 @@ export default function DesignPage() {
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
+  const [createDeadlineDraftDate, setCreateDeadlineDraftDate] = useState<Date | undefined>();
+  const [createDeadlineDraftTime, setCreateDeadlineDraftTime] = useState("12:00");
   const createDeadlineTime = useMemo(() => {
     if (!createDeadline) return "12:00";
     return `${String(createDeadline.getHours()).padStart(2, "0")}:${String(createDeadline.getMinutes()).padStart(2, "0")}`;
@@ -513,22 +515,19 @@ export default function DesignPage() {
     const raw = session?.user?.user_metadata?.avatar_url;
     return typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }, [session?.user?.user_metadata]);
-  const updateCreateDeadlineDate = (date?: Date) => {
-    if (!date) {
+  const applyCreateDeadlineDraft = () => {
+    const normalizedTime = isValidDeadlineTime(createDeadlineDraftTime.trim()) ? createDeadlineDraftTime.trim() : "12:00";
+    setCreateDeadlineDraftTime(normalizedTime);
+    if (!createDeadlineDraftDate) {
       setCreateDeadline(undefined);
+      setCreateDeadlinePopoverOpen(false);
       return;
     }
-    const [hours, minutes] = createDeadlineTime.split(":").map((part) => Number(part) || 0);
-    const next = new Date(date);
+    const next = new Date(createDeadlineDraftDate);
+    const [hours, minutes] = normalizedTime.split(":").map((part) => Number(part) || 0);
     next.setHours(hours, minutes, 0, 0);
     setCreateDeadline(next);
-  };
-  const updateCreateDeadlineTime = (value: string) => {
-    if (!createDeadline) return;
-    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
-    const next = new Date(createDeadline);
-    next.setHours(hours, minutes, 0, 0);
-    setCreateDeadline(next);
+    setCreateDeadlinePopoverOpen(false);
   };
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
@@ -3149,7 +3148,16 @@ export default function DesignPage() {
                 }}
               />
 
-              <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
+              <Popover
+                open={createDeadlinePopoverOpen}
+                onOpenChange={(open) => {
+                  setCreateDeadlinePopoverOpen(open);
+                  if (open) {
+                    setCreateDeadlineDraftDate(createDeadline ? new Date(createDeadline) : undefined);
+                    setCreateDeadlineDraftTime(createDeadlineTime);
+                  }
+                }}
+              >
                 <PopoverTrigger asChild>
                   <Chip size="md" icon={<CalendarIcon className="h-4 w-4" />} active={!!createDeadline}>
                     {createDeadline
@@ -3160,9 +3168,9 @@ export default function DesignPage() {
                 <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={createDeadline}
+                    selected={createDeadlineDraftDate}
                     onSelect={(date) => {
-                      updateCreateDeadlineDate(date ?? undefined);
+                      setCreateDeadlineDraftDate(date ?? undefined);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
@@ -3171,11 +3179,10 @@ export default function DesignPage() {
                   />
                   <div className="space-y-2 border-t border-border/50 px-2 py-3">
                     <Input
-                      value={createDeadlineTime}
-                      onChange={(event) => updateCreateDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
+                      value={createDeadlineDraftTime}
+                      onChange={(event) => setCreateDeadlineDraftTime(normalizeDeadlineTimeInput(event.target.value))}
                       onBlur={() => {
-                        if (isValidDeadlineTime(createDeadlineTime)) return;
-                        updateCreateDeadlineTime("12:00");
+                        setCreateDeadlineDraftTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
                       }}
                       placeholder="HH:MM"
                       className="h-9 text-sm"
@@ -3186,9 +3193,9 @@ export default function DesignPage() {
                           key={time}
                           type="button"
                           size="xs"
-                          variant={createDeadlineTime === time ? "secondary" : "outline"}
+                          variant={createDeadlineDraftTime === time ? "secondary" : "outline"}
                           className="w-full justify-center"
-                          onClick={() => updateCreateDeadlineTime(time)}
+                          onClick={() => setCreateDeadlineDraftTime(time)}
                         >
                           {time}
                         </Button>
@@ -3197,10 +3204,22 @@ export default function DesignPage() {
                   </div>
                   <DateQuickActions
                     onSelect={(date) => {
-                      updateCreateDeadlineDate(date ?? undefined);
-                      setCreateDeadlinePopoverOpen(false);
+                      setCreateDeadlineDraftDate(date ?? undefined);
                     }}
                   />
+                  <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setCreateDeadlinePopoverOpen(false)}
+                    >
+                      Скасувати
+                    </Button>
+                    <Button type="button" size="sm" onClick={applyCreateDeadlineDraft}>
+                      Зберегти
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
 
