@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 import {
   disablePush,
   ensurePushSubscription,
@@ -70,6 +71,41 @@ export function usePushNotifications(userId: string | null | undefined) {
     }
   }, [userId]);
 
+  const sendTest = useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      toast.error("Немає активної сесії для тесту push");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/.netlify/functions/test-push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        delivered?: number;
+        pushDelivered?: number;
+        pushFailed?: number;
+      };
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      toast.success(
+        `Тест відправлено: in-app ${data.delivered ?? 0}, push ${data.pushDelivered ?? 0}, failed ${data.pushFailed ?? 0}`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не вдалося відправити тестовий push");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   return {
     supported: isPushSupported(),
     configured: hasPushConfig(),
@@ -78,7 +114,7 @@ export function usePushNotifications(userId: string | null | undefined) {
     permission,
     enable,
     disable,
+    sendTest,
     refresh,
   };
 }
-

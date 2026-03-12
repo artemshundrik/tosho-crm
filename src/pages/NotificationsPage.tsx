@@ -167,14 +167,21 @@ export default function NotificationsPage() {
         </div>
         <div className="flex items-center gap-3">
           {push.supported && push.configured ? (
-            <Button
-              variant={push.enabled ? "secondary" : "outline"}
-              className="h-10 px-4"
-              onClick={push.enabled ? push.disable : push.enable}
-              disabled={push.busy}
-            >
-              {push.enabled ? "Push увімкнено" : "Увімкнути push"}
-            </Button>
+            <>
+              <Button
+                variant={push.enabled ? "secondary" : "outline"}
+                className="h-10 px-4"
+                onClick={push.enabled ? push.disable : push.enable}
+                disabled={push.busy}
+              >
+                {push.enabled ? "Push увімкнено" : "Увімкнути push"}
+              </Button>
+              {push.enabled ? (
+                <Button variant="outline" className="h-10 px-4" onClick={push.sendTest} disabled={push.busy}>
+                  Тест push
+                </Button>
+              ) : null}
+            </>
           ) : null}
           <div className="text-sm font-semibold text-foreground">
             {filtered.length}
@@ -191,7 +198,7 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
-  ), [filter, filtered.length, push.busy, push.configured, push.enabled, push.supported, unreadCount, push.disable, push.enable]);
+  ), [filter, filtered.length, push.busy, push.configured, push.enabled, push.supported, unreadCount, push.disable, push.enable, push.sendTest]);
 
   usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
 
