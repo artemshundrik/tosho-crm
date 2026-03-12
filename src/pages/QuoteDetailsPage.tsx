@@ -4495,7 +4495,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       </header>
 
-      <div className="flex w-full gap-8 px-4 pb-10 pt-2 md:px-5 lg:px-6">
+      <div className="flex w-full flex-col gap-6 px-4 pb-10 pt-2 md:px-5 lg:px-6 2xl:flex-row 2xl:gap-8">
         <main className="min-w-0 flex-1">
           <div className="space-y-6">
             {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
@@ -4901,7 +4901,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ) : (
                 <>
                   <div className="space-y-2">
-                    <div className="hidden items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
+                    <div className="hidden items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground 2xl:grid 2xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
                       <div>Тираж</div>
                       <div>Кількість</div>
                       <div>{`Ціна модель (${quote.currency})`}</div>
@@ -4930,7 +4930,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               : "border-border/40 hover:bg-muted/10"
                           )}
                         >
-                          <div className="grid items-center gap-3 xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
+                          <div className="grid items-center gap-3 2xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
                             <div className="flex min-w-0 items-center gap-3">
                               <div
                                 className={cn(
@@ -4952,7 +4952,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
                             </div>
                             <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">Кількість</div>
+                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">Кількість</div>
                               <Input
                                 type="number"
                                 className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
@@ -4968,7 +4968,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </div>
 
                             <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
                                 Ціна модель <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
                               </div>
                               <Input
@@ -4986,7 +4986,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </div>
 
                             <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
                                 Ціна нанесення <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
                               </div>
                               <Input
@@ -5004,7 +5004,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </div>
 
                             <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground xl:hidden">
+                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
                                 Доставка <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
                               </div>
                               <Input
@@ -6260,8 +6260,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
         </main>
 
-        <aside className="hidden w-[min(32vw,380px)] min-w-[320px] shrink-0 xl:block">
-          <div className="sticky top-[4.5rem] space-y-4">
+        <aside className="hidden w-full min-w-0 xl:block 2xl:w-[min(32vw,380px)] 2xl:min-w-[320px] 2xl:shrink-0">
+          <div className="space-y-4 2xl:sticky 2xl:top-[4.5rem]">
             <details open className="group pb-2">
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -6310,7 +6310,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <User className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Менеджер</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
                       <div className="flex items-center justify-end gap-2">
                         <AvatarBase
                           src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
@@ -6348,7 +6348,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       })()}
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Тип прорахунку</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right">
+                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
                       <div className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
                         {(() => {
                           const Icon = quoteTypeIcon(quote.quote_type);
@@ -6364,7 +6364,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Truck className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Доставка</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
                       {formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}
                     </dd>
                   </div>
@@ -6374,7 +6374,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн замовника</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right">
+                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
                       {quote.customer_deadline_at ? (
                         (() => {
                           const badge = getDeadlineBadge(quote.customer_deadline_at);
@@ -6404,7 +6404,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Нагадування</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
                       {formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null) ?? "Без нагадування"}
                     </dd>
                   </div>
@@ -6414,7 +6414,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Створено</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
                       {quote.created_at
                         ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
                             day: "numeric",
@@ -6430,7 +6430,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Внутрішній дедлайн</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right">
+                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
                       {(() => {
                         const preview = buildDeadlineBadgePreview(quote?.deadline_at ?? null);
                         return (
@@ -6451,7 +6451,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Palette className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн дизайну</dt>
-                    <dd className="min-w-0 max-w-[52%] text-right text-sm font-semibold text-foreground">
+                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
                       {quote?.design_deadline_at
                         ? formatDeadlineLabel(quote.design_deadline_at)
                         : "Не вказано"}

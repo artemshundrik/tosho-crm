@@ -5093,7 +5093,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[320px] h-[calc(100dvh-13.5rem)] shrink-0 flex flex-col"
+                        "basis-[300px] shrink-0 flex flex-col lg:basis-[320px] h-[calc(100dvh-15.5rem)] 2xl:h-[calc(100dvh-14.25rem)]"
                       )}
                       header={
                         <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">

@@ -41,12 +41,12 @@ export function KanbanBoard({ className, rowClassName, children }: KanbanBoardPr
     <div
       ref={boardRef}
       className={cn(
-        "overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-5 md:px-5 md:pt-5 md:pb-6 [scrollbar-gutter:stable_both-edges]",
+        "overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-6 md:px-5 md:pt-5 md:pb-7 [scrollbar-gutter:stable_both-edges]",
         className
       )}
       onWheel={handleWheel}
     >
-      <div className={cn("flex w-max gap-4 pb-1", rowClassName)}>{children}</div>
+      <div className={cn("flex w-max gap-4 pb-2", rowClassName)}>{children}</div>
     </div>
   );
 }
