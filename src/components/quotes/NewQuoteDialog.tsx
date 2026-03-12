@@ -346,6 +346,7 @@ export type Customer = {
   id: string;
   name?: string | null;
   legal_name?: string | null;
+  logo_url?: string | null;
   entityType?: "customer" | "lead";
 };
 
@@ -1074,6 +1075,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       customers.map((customer) => ({
         id: customer.id,
         label: customer.name || customer.legal_name || "Без назви",
+        logoUrl: customer.logo_url ?? null,
         entityType: customer.entityType ?? "customer",
       })),
     [customers]
@@ -1162,6 +1164,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             onOpenChange={setCustomerPopoverOpen}
             selectedLabel={selectedCustomer?.label ?? customerLabel ?? ""}
             selectedType={customerType}
+            selectedLogoUrl={selectedCustomer?.logoUrl ?? null}
             searchValue={customerSearch}
             onSearchChange={(value) => {
               setCustomerSearch(value);

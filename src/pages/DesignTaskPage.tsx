@@ -51,6 +51,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { normalizeCustomerLogoUrl as normalizeLogoUrl } from "@/lib/customerLogo";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -600,17 +601,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-function isBrokenSupabaseRestUrl(value?: string | null): boolean {
-  if (!value) return false;
-  return /\/rest\/v1\//i.test(value);
-}
-
-const normalizeLogoUrl = (value?: string | null) => {
-  const normalized = value?.trim() ?? "";
-  if (!normalized) return null;
-  return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
-};
-
 const normalizePartyMatch = (value?: string | null) =>
   (value ?? "")
     .trim()
@@ -965,11 +955,7 @@ export default function DesignTaskPage() {
           (typeof meta.customer_name === "string" && meta.customer_name.trim() ? meta.customer_name.trim() : null) ??
           (typeof quote?.customer_name === "string" && quote.customer_name.trim() ? quote.customer_name.trim() : null) ??
           (typeof quote?.title === "string" && quote.title.trim() ? quote.title.trim() : null);
-        let customerLogoUrl: string | null =
-          normalizeLogoUrl(
-            typeof meta.customer_logo_url === "string" ? meta.customer_logo_url : null
-          ) ??
-          normalizeLogoUrl(quote?.customer_logo_url ?? null);
+        let customerLogoUrl: string | null = null;
         const metadataCustomerId =
           typeof meta.customer_id === "string" && meta.customer_id.trim() ? meta.customer_id.trim() : null;
         const metadataCustomerTypeRaw =
@@ -1003,7 +989,7 @@ export default function DesignTaskPage() {
 
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
           customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
-          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(cust?.logo_url ?? null);
+          customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
         } else if (metadataCustomerId && metadataCustomerType === "customer") {
           let customerQuery = await supabase
             .schema("tosho")
@@ -1025,7 +1011,7 @@ export default function DesignTaskPage() {
           }
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
           customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
-          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(cust?.logo_url ?? null);
+          customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
         } else if (metadataCustomerId && metadataCustomerType === "lead") {
           let leadQuery = await supabase
             .schema("tosho")
@@ -1049,10 +1035,44 @@ export default function DesignTaskPage() {
           }
           const leadRow = leadQuery.data as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
           customerName = customerName ?? leadRow?.company_name ?? leadRow?.legal_name ?? null;
-          customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(leadRow?.logo_url ?? null);
+          customerLogoUrl = normalizeLogoUrl(leadRow?.logo_url ?? null) ?? customerLogoUrl;
         } else {
           const leadLookupName = (customerName ?? quote?.title ?? "").trim();
           if (leadLookupName) {
+            const loadCustomerExact = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
+              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
+              const [byName, byLegal] = await Promise.all([
+                supabase
+                  .schema("tosho")
+                  .from("customers")
+                  .select(columns)
+                  .eq("team_id", effectiveTeamId)
+                  .ilike("name", leadLookupName)
+                  .limit(1)
+                  .maybeSingle(),
+                supabase
+                  .schema("tosho")
+                  .from("customers")
+                  .select(columns)
+                  .eq("team_id", effectiveTeamId)
+                  .ilike("legal_name", leadLookupName)
+                  .limit(1)
+                  .maybeSingle(),
+              ]);
+              return (byName.data as Record<string, unknown> | null) ?? (byLegal.data as Record<string, unknown> | null) ?? null;
+            };
+            const loadCustomerByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
+              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
+              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
+              const { data: customerRows } = await supabase
+                .schema("tosho")
+                .from("customers")
+                .select(columns)
+                .eq("team_id", effectiveTeamId)
+                .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
+                .limit(1);
+              return ((customerRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
+            };
             const loadLeadExact = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
               const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
               const [byCompany, byLegal] = await Promise.all([
@@ -1087,45 +1107,45 @@ export default function DesignTaskPage() {
                 .limit(1);
               return ((leadRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
             };
-            const loadCustomerByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
-              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
-              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
-              const { data: customerRows } = await supabase
-                .schema("tosho")
-                .from("customers")
-                .select(columns)
-                .eq("team_id", effectiveTeamId)
-                .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
-                .limit(1);
-              return ((customerRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
-            };
 
-            let lead = await loadLeadExact(true);
-            if (!lead) {
-              lead = await loadLeadExact(false);
+            let customerFallback = await loadCustomerExact(true);
+            if (!customerFallback) {
+              customerFallback = await loadCustomerExact(false);
             }
-            if (!lead) {
-              lead = await loadLeadByContains(true);
+            if (!customerFallback) {
+              customerFallback = await loadCustomerByContains(true);
             }
-            if (!lead) {
-              lead = await loadLeadByContains(false);
+            if (!customerFallback) {
+              customerFallback = await loadCustomerByContains(false);
             }
-            if (lead) {
-              const leadRow = lead as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null };
-              customerName = customerName ?? leadRow.company_name ?? leadRow.legal_name ?? null;
-              customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(leadRow.logo_url ?? null);
+            if (customerFallback) {
+              const customerRow = customerFallback as { name?: string | null; legal_name?: string | null; logo_url?: string | null };
+              customerName = customerName ?? customerRow.name ?? customerRow.legal_name ?? null;
+              customerLogoUrl = normalizeLogoUrl(customerRow.logo_url ?? null) ?? customerLogoUrl;
             } else {
-              let customerFallback = await loadCustomerByContains(true);
-              if (!customerFallback) {
-                customerFallback = await loadCustomerByContains(false);
+              let lead = await loadLeadExact(true);
+              if (!lead) {
+                lead = await loadLeadExact(false);
               }
-              if (customerFallback) {
-                const customerRow = customerFallback as { name?: string | null; legal_name?: string | null; logo_url?: string | null };
-                customerName = customerName ?? customerRow.name ?? customerRow.legal_name ?? null;
-                customerLogoUrl = customerLogoUrl ?? normalizeLogoUrl(customerRow.logo_url ?? null);
+              if (!lead) {
+                lead = await loadLeadByContains(true);
+              }
+              if (!lead) {
+                lead = await loadLeadByContains(false);
+              }
+              if (lead) {
+                const leadRow = lead as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null };
+                customerName = customerName ?? leadRow.company_name ?? leadRow.legal_name ?? null;
+                customerLogoUrl = normalizeLogoUrl(leadRow.logo_url ?? null) ?? customerLogoUrl;
               }
             }
           }
+        }
+
+        if (!customerLogoUrl) {
+          customerLogoUrl =
+            normalizeLogoUrl(typeof meta.customer_logo_url === "string" ? meta.customer_logo_url : null) ??
+            normalizeLogoUrl(quote?.customer_logo_url ?? null);
         }
 
         // first quote item (only for quote-linked tasks)

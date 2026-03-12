@@ -60,6 +60,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { 
   Search, 
   X, 
@@ -265,11 +266,6 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
   } catch {
     return [];
   }
-}
-
-function isBrokenSupabaseRestUrl(value?: string | null): boolean {
-  if (!value) return false;
-  return /\/rest\/v1\//i.test(value);
 }
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
@@ -1011,8 +1007,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setError(null);
     try {
       const data = await listQuotes({ teamId, search, status });
-      const normalizeLogo = (url?: string | null) =>
-        url && !isBrokenSupabaseRestUrl(url) ? url : null;
 
       const missingCustomerIds = Array.from(
         new Set(
@@ -1053,8 +1047,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return {
           ...row,
           customer_name: row.customer_name ?? customerMeta?.name ?? customerMeta?.legal_name ?? prev?.customer_name ?? null,
-          customer_logo_url: normalizeLogo(
-            row.customer_logo_url ?? customerMeta?.logo_url ?? prev?.customer_logo_url ?? null
+          customer_logo_url: normalizeCustomerLogoUrl(
+            customerMeta?.logo_url ?? row.customer_logo_url ?? prev?.customer_logo_url ?? null
           ),
         };
       });

@@ -52,6 +52,11 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import {
+  listCustomerLeadLogoDirectory,
+  normalizeCustomerLogoUrl as normalizeLogoUrl,
+  type CustomerLeadLogoDirectoryEntry,
+} from "@/lib/customerLogo";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -108,6 +113,11 @@ const NO_MANAGER_FILTER = "__none__";
 
 type DesignPageCachePayload = {
   tasks: DesignTask[];
+  cachedAt: number;
+};
+
+type DesignCustomerLogoCachePayload = {
+  entries: CustomerLeadLogoDirectoryEntry[];
   cachedAt: number;
 };
 
@@ -257,17 +267,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const getTaskPartyLabel = () => "Клієнт";
 
-function isBrokenSupabaseRestUrl(value?: string | null): boolean {
-  if (!value) return false;
-  return /\/rest\/v1\//i.test(value);
-}
-
-const normalizeLogoUrl = (value?: string | null) => {
-  const normalized = value?.trim() ?? "";
-  if (!normalized) return null;
-  return isBrokenSupabaseRestUrl(normalized) ? null : normalized;
-};
-
 const isTaskAttachedFromStandalone = (task: DesignTask) => {
   const source = typeof task.metadata?.source === "string" ? task.metadata.source.trim() : "";
   const attachedQuoteAt =
@@ -297,6 +296,85 @@ function readDesignPageCache(teamId: string): DesignPageCachePayload | null {
   } catch {
     return null;
   }
+}
+
+function readDesignCustomerLogoCache(teamId: string): DesignCustomerLogoCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`design-customer-logo-cache:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DesignCustomerLogoCachePayload;
+    if (!Array.isArray(parsed.entries)) return null;
+    return {
+      entries: parsed.entries,
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveTaskCustomerLogo(
+  task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
+  entries: Array<{
+    label: string;
+    entityType: "customer" | "lead";
+    logoUrl?: string | null;
+  }>
+) {
+  if (entries.length === 0) return normalizeLogoUrl(task.customerLogoUrl ?? null);
+  const logoByPartyAndLabel = new Map<string, string>();
+  const logoByPartyAndCompactLabel = new Map<string, string>();
+  const logoByLabel = new Map<string, string>();
+  const logoByCompactLabel = new Map<string, string>();
+  entries.forEach((row) => {
+    const normalizedLabel = normalizePartyLabel(row.label);
+    const normalizedCompactLabel = compactPartyLabel(row.label);
+    const key = `${row.entityType}:${normalizedLabel}`;
+    const compactKey = `${row.entityType}:${normalizedCompactLabel}`;
+    const logoUrl = normalizeLogoUrl(row.logoUrl ?? null);
+    if (!logoUrl) return;
+    logoByPartyAndLabel.set(key, logoUrl);
+    logoByPartyAndCompactLabel.set(compactKey, logoUrl);
+    if (!logoByLabel.has(normalizedLabel)) {
+      logoByLabel.set(normalizedLabel, logoUrl);
+    }
+    if (!logoByCompactLabel.has(normalizedCompactLabel)) {
+      logoByCompactLabel.set(normalizedCompactLabel, logoUrl);
+    }
+  });
+
+  const label = normalizePartyLabel(task.customerName ?? "");
+  const compactLabel = compactPartyLabel(task.customerName ?? "");
+  const partyType = task.partyType ?? "customer";
+  return (
+    (label
+      ? logoByPartyAndLabel.get(`${partyType}:${label}`) ??
+        logoByPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
+        logoByLabel.get(label) ??
+        logoByCompactLabel.get(compactLabel) ??
+        null
+      : null) ?? normalizeLogoUrl(task.customerLogoUrl ?? null)
+  );
+}
+
+function applyCustomerLogosToTasks(
+  tasks: DesignTask[],
+  entries: Array<{
+    label: string;
+    entityType: "customer" | "lead";
+    logoUrl?: string | null;
+  }>
+) {
+  let changed = false;
+  const next = tasks.map((task) => {
+    const resolvedLogo = resolveTaskCustomerLogo(task, entries);
+    const currentLogo = normalizeLogoUrl(task.customerLogoUrl ?? null);
+    if (resolvedLogo === currentLogo) return task;
+    changed = true;
+    return { ...task, customerLogoUrl: resolvedLogo };
+  });
+  return changed ? next : tasks;
 }
 
 const getDeadlineBadge = (value?: string | null) => {
@@ -348,7 +426,15 @@ export default function DesignPage() {
   const { teamId, userId, permissions, session } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
-  const initialCache = readDesignPageCache(effectiveTeamId ?? "");
+  const initialLogoCache = readDesignCustomerLogoCache(effectiveTeamId ?? "");
+  const initialCacheRaw = readDesignPageCache(effectiveTeamId ?? "");
+  const initialCache =
+    initialCacheRaw && initialLogoCache?.entries?.length
+      ? {
+          ...initialCacheRaw,
+          tasks: applyCustomerLogosToTasks(initialCacheRaw.tasks, initialLogoCache.entries),
+        }
+      : initialCacheRaw;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
   const [refreshing, setRefreshing] = useState(false);
@@ -542,45 +628,22 @@ export default function DesignPage() {
       if (!effectiveTeamId) return;
       setCustomersLoading(true);
       try {
-        const [customersRes, leadsRes] = await Promise.all([
-          supabase
-            .schema("tosho")
-            .from("customers")
-            .select("id,name,legal_name,logo_url")
-            .eq("team_id", effectiveTeamId)
-            .order("name", { ascending: true }),
-          supabase
-            .schema("tosho")
-            .from("leads")
-            .select("id,company_name,legal_name,logo_url")
-            .eq("team_id", effectiveTeamId)
-            .order("company_name", { ascending: true }),
-        ]);
-
-        if (customersRes.error) throw customersRes.error;
-        const customerOptions: CustomerOption[] =
-          ((customersRes.data as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }> | null) ?? [])
-            .map((row) => ({
-              id: row.id,
-              label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
-              entityType: "customer" as const,
-              logoUrl: normalizeLogoUrl(row.logo_url ?? null),
-            }));
-
-        let leadOptions: CustomerOption[] = [];
-        if (!leadsRes.error) {
-          leadOptions =
-            ((leadsRes.data as Array<{ id: string; company_name?: string | null; legal_name?: string | null; logo_url?: string | null }> | null) ?? [])
-              .map((row) => ({
-                id: row.id,
-                label: row.company_name?.trim() || row.legal_name?.trim() || "Лід без назви",
-                entityType: "lead" as const,
-                logoUrl: normalizeLogoUrl(row.logo_url ?? null),
-              }));
+        const directory = await listCustomerLeadLogoDirectory(effectiveTeamId);
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(
+            `design-customer-logo-cache:${effectiveTeamId}`,
+            JSON.stringify({
+              entries: directory,
+              cachedAt: Date.now(),
+            } satisfies DesignCustomerLogoCachePayload)
+          );
         }
-
-        const options = [...customerOptions, ...leadOptions]
-          .sort((a, b) => a.label.localeCompare(b.label, "uk"));
+        const options: CustomerOption[] = directory.map((row) => ({
+          id: row.id,
+          label: row.label,
+          entityType: row.entityType,
+          logoUrl: row.logoUrl,
+        }));
         setCustomers(options);
       } catch {
         setCustomers([]);
@@ -592,49 +655,20 @@ export default function DesignPage() {
   }, [effectiveTeamId]);
 
   useEffect(() => {
-    if (customers.length === 0) return;
-    const logoByPartyAndLabel = new Map<string, string>();
-    const logoByPartyAndCompactLabel = new Map<string, string>();
-    const logoByLabel = new Map<string, string>();
-    const logoByCompactLabel = new Map<string, string>();
-    customers.forEach((row) => {
-      const normalizedLabel = normalizePartyLabel(row.label);
-      const normalizedCompactLabel = compactPartyLabel(row.label);
-      const key = `${row.entityType}:${normalizedLabel}`;
-      const compactKey = `${row.entityType}:${normalizedCompactLabel}`;
-      const logoUrl = normalizeLogoUrl(row.logoUrl ?? null);
-      if (!logoUrl) return;
-      logoByPartyAndLabel.set(key, logoUrl);
-      logoByPartyAndCompactLabel.set(compactKey, logoUrl);
-      if (!logoByLabel.has(normalizedLabel)) {
-        logoByLabel.set(normalizedLabel, logoUrl);
-      }
-      if (!logoByCompactLabel.has(normalizedCompactLabel)) {
-        logoByCompactLabel.set(normalizedCompactLabel, logoUrl);
-      }
-    });
-
-    setTasks((prev) => {
-      let changed = false;
-      const next = prev.map((task) => {
-        if (task.customerLogoUrl) return task;
-        const label = normalizePartyLabel(task.customerName ?? "");
-        const compactLabel = compactPartyLabel(task.customerName ?? "");
-        const partyType = task.partyType ?? "customer";
-        const fallbackLogo = label
-          ? logoByPartyAndLabel.get(`${partyType}:${label}`) ??
-            logoByPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
-            logoByLabel.get(label) ??
-            logoByCompactLabel.get(compactLabel) ??
-            null
-          : null;
-        if (!fallbackLogo) return task;
-        changed = true;
-        return { ...task, customerLogoUrl: fallbackLogo };
-      });
-      return changed ? next : prev;
-    });
-  }, [customers, tasks]);
+    if (customers.length === 0 || tasks.length === 0) return;
+    const next = applyCustomerLogosToTasks(tasks, customers);
+    if (next === tasks) return;
+    setTasks(next);
+    if (typeof window !== "undefined" && effectiveTeamId) {
+      sessionStorage.setItem(
+        `design-page-cache:${effectiveTeamId}`,
+        JSON.stringify({
+          tasks: next,
+          cachedAt: Date.now(),
+        } satisfies DesignPageCachePayload)
+      );
+    }
+  }, [customers, effectiveTeamId, tasks]);
 
   useEffect(() => {
     if (defaultDesignerFilterApplied) return;
@@ -791,9 +825,8 @@ export default function DesignPage() {
                 customerMap.get(q.customer_id as string)?.name ??
                 (typeof q.title === "string" && q.title.trim() ? q.title.trim() : null),
               customerLogoUrl:
-                normalizeLogoUrl(
-                  typeof q.customer_logo_url === "string" ? q.customer_logo_url : null
-                ) ?? normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null),
+                normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null) ??
+                normalizeLogoUrl(typeof q.customer_logo_url === "string" ? q.customer_logo_url : null),
               partyType: q.customer_id ? "customer" : "lead",
               managerUserId:
                 typeof q.assigned_to === "string" && q.assigned_to.trim() ? q.assigned_to.trim() : null,
@@ -892,14 +925,14 @@ export default function DesignPage() {
         }))
       );
 
-      const parsed: DesignTask[] = parsedRaw.map((t) => ({
+      const parsedBase: DesignTask[] = parsedRaw.map((t) => ({
         ...t,
         designTaskNumber: t.designTaskNumber ?? derivedNumbers.get(t.id) ?? null,
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
         customerName: t.customerName ?? quoteMap.get(t.quoteId)?.customerName ?? null,
         customerLogoUrl:
-          normalizeLogoUrl(t.customerLogoUrl) ??
           normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null) ??
+          normalizeLogoUrl(t.customerLogoUrl) ??
           null,
         partyType: t.partyType ?? quoteMap.get(t.quoteId)?.partyType ?? null,
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
@@ -907,6 +940,10 @@ export default function DesignPage() {
         productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
       }));
+      const parsed = applyCustomerLogosToTasks(
+        parsedBase,
+        customers.length > 0 ? customers : (initialLogoCache?.entries ?? [])
+      );
 
       setTasks(parsed);
       if (typeof window !== "undefined" && effectiveTeamId) {
@@ -3066,6 +3103,7 @@ export default function DesignPage() {
                 }}
                 selectedLabel={createCustomer}
                 selectedType={createCustomerType}
+                selectedLogoUrl={createCustomerLogoUrl}
                 searchValue={createCustomerSearch}
                 onSearchChange={setCreateCustomerSearch}
                 options={customers}

@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 
 type ListQuotesParams = {
   teamId: string;
@@ -381,7 +382,9 @@ export async function listQuotes(params: ListQuotesParams) {
         customer?.legal_name ??
         leadFallback?.name ??
         ((row.title ?? "").trim() || null),
-      customer_logo_url: row.customer_logo_url ?? customer?.logo_url ?? leadFallback?.logo_url ?? null,
+      customer_logo_url: normalizeCustomerLogoUrl(
+        customer?.logo_url ?? leadFallback?.logo_url ?? row.customer_logo_url ?? null
+      ),
       design_brief: row.design_brief ?? null,
     };
   });
@@ -650,12 +653,31 @@ export async function getQuoteSummary(quoteId: string) {
       summary.customer_name ??
       (briefRow as { customer_name?: string | null } | null)?.customer_name ??
       null;
-    const currentCustomerLogo =
+    let currentCustomerLogo = normalizeCustomerLogoUrl(
       summary.customer_logo_url ??
       (briefRow as { customer_logo_url?: string | null } | null)?.customer_logo_url ??
-      null;
+      null
+    );
+    let resolvedCustomerName = currentCustomerName;
+    if (summary.customer_id) {
+      try {
+        const { data: customerRow, error: customerError } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .select("name,legal_name,logo_url")
+          .eq("id", summary.customer_id)
+          .maybeSingle();
+        if (!customerError) {
+          const customer = customerRow as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+          resolvedCustomerName = customer?.name?.trim() || customer?.legal_name?.trim() || resolvedCustomerName;
+          currentCustomerLogo = normalizeCustomerLogoUrl(customer?.logo_url ?? null) ?? currentCustomerLogo;
+        }
+      } catch {
+        // Keep summary usable even if the customer lookup fails.
+      }
+    }
     let leadFallback: { name: string; logo_url?: string | null } | null = null;
-    const leadLookupName = (currentCustomerName ?? summary.title ?? "").trim();
+    const leadLookupName = (resolvedCustomerName ?? summary.title ?? "").trim();
     if (
       !summary.customer_id &&
       leadLookupName &&
@@ -707,11 +729,12 @@ export async function getQuoteSummary(quoteId: string) {
         (briefRow as { deadline_reminder_offset_minutes?: number | null } | null)?.deadline_reminder_offset_minutes ?? null,
       deadline_reminder_comment:
         (briefRow as { deadline_reminder_comment?: string | null } | null)?.deadline_reminder_comment ?? null,
-      customer_name: currentCustomerName ?? leadFallback?.name ?? ((summary.title ?? "").trim() || null),
-      customer_logo_url:
+      customer_name: resolvedCustomerName ?? leadFallback?.name ?? ((summary.title ?? "").trim() || null),
+      customer_logo_url: normalizeCustomerLogoUrl(
         currentCustomerLogo ??
         leadFallback?.logo_url ??
-        null,
+        null
+      ),
     } as QuoteSummaryRow;
   } catch (error: unknown) {
     const message = getErrorMessage(error).toLowerCase();
@@ -756,7 +779,7 @@ export async function getQuoteSummary(quoteId: string) {
       created_at: (fallback.created_at as string | null | undefined) ?? null,
       updated_at: (fallback.updated_at as string | null | undefined) ?? null,
       customer_name: (fallback.customer_name as string | null | undefined) ?? null,
-      customer_logo_url: (fallback.customer_logo_url as string | null | undefined) ?? null,
+      customer_logo_url: normalizeCustomerLogoUrl((fallback.customer_logo_url as string | null | undefined) ?? null),
       assigned_to: (fallback.assigned_to as string | null | undefined) ?? null,
       processing_minutes:
         typeof fallback.processing_minutes === "number"

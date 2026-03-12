@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Building2, Check } from "lucide-react";
+import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ export type CustomerLeadPickerProps = {
   onOpenChange: (open: boolean) => void;
   selectedLabel: string;
   selectedType?: "customer" | "lead";
+  selectedLogoUrl?: string | null;
   searchValue: string;
   onSearchChange: (value: string) => void;
   options: CustomerLeadOption[];
@@ -37,6 +39,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   onOpenChange,
   selectedLabel,
   selectedType = "customer",
+  selectedLogoUrl,
   searchValue,
   onSearchChange,
   options,
@@ -54,6 +57,13 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const [showTopFade, setShowTopFade] = React.useState(false);
   const [showBottomFade, setShowBottomFade] = React.useState(false);
+  const selectedOption = React.useMemo(
+    () =>
+      options.find((option) => option.label === selectedLabel.trim() && option.entityType === selectedType) ?? null,
+    [options, selectedLabel, selectedType]
+  );
+  const chipLogoUrl = selectedLogoUrl ?? selectedOption?.logoUrl ?? null;
+  const chipLabelText = selectedLabel.trim();
   const visibleOptions = React.useMemo(() => {
     if (!search) return options.slice(0, maxVisible);
     return options.filter((option) => option.label.toLowerCase().includes(search)).slice(0, maxVisible);
@@ -87,9 +97,26 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <Chip size="md" icon={<Building2 className="h-4 w-4" />} active={!!selectedLabel.trim()}>
-          {selectedLabel.trim()
-            ? `${selectedType === "lead" ? "Лід: " : ""}${selectedLabel.trim()}`
+        <Chip
+          size="md"
+          icon={
+            chipLabelText ? (
+              <EntityAvatar
+                src={chipLogoUrl}
+                name={chipLabelText}
+                size={22}
+                className="border-border/50"
+                fallbackClassName="text-[9px] font-semibold"
+              />
+            ) : (
+              <Building2 className="h-4 w-4" />
+            )
+          }
+          active={!!chipLabelText}
+          className={cn(chipLabelText ? "max-w-[22rem] gap-2 pr-4" : undefined)}
+        >
+          {chipLabelText
+            ? `${selectedType === "lead" ? "Лід: " : ""}${chipLabelText}`
             : chipLabel}
         </Chip>
       </PopoverTrigger>
@@ -119,17 +146,25 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-9 w-full justify-start gap-2 text-sm"
+                      className="h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm"
                       onClick={() => {
                         onSelect(option);
                         onOpenChange(false);
                       }}
                       title={option.label}
                     >
-                      <span className="inline-flex items-center gap-2 truncate">
+                      <EntityAvatar
+                        src={option.logoUrl ?? null}
+                        name={option.label}
+                        size={36}
+                        className="shrink-0 border-border/50"
+                        fallbackClassName="text-[10px] font-semibold"
+                      />
+                      <span className="min-w-0 flex-1 leading-tight">
+                        <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
                         <span
                           className={cn(
-                            "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-wide",
+                            "mt-0.5 inline-flex h-4.5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-wide",
                             option.entityType === "lead"
                               ? "border-amber-300 bg-amber-100 text-amber-950"
                               : "border-emerald-300 bg-emerald-100 text-emerald-950"
@@ -137,7 +172,6 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                         >
                           {option.entityType === "lead" ? "Лід" : "Клієнт"}
                         </span>
-                        <span className="truncate">{option.label}</span>
                       </span>
                       <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", isSelected ? "opacity-100" : "opacity-0")} />
                     </Button>
