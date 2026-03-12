@@ -40,6 +40,7 @@ import { getAgencyLogo } from "@/lib/agencyAssets";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
@@ -598,6 +599,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const push = usePushNotifications(userId);
   const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
   const [eurUahRate, setEurUahRate] = useState<number | null>(null);
@@ -921,6 +923,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           const row = payload.new as NotificationRow;
           const item = mapNotificationRow(row);
           setNotifications((prev) => [item, ...prev].slice(0, 20));
+          if (location.pathname.startsWith("/notifications")) {
+            return;
+          }
           const toastTitle = item.title?.trim() || "Нове сповіщення";
           const toastDescription = item.description?.trim() || undefined;
           toast(toastTitle, { description: toastDescription });
@@ -930,7 +935,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [location.pathname, userId]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1361,6 +1366,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       <div className="mt-1 text-xs text-muted-foreground">
                         {unreadCount > 0 ? `Непрочитані: ${unreadCount}` : "Все прочитано"}
                       </div>
+                      {push.supported && push.configured ? (
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            variant={push.enabled ? "secondary" : "outline"}
+                            size="xs"
+                            onClick={push.enabled ? push.disable : push.enable}
+                            disabled={push.busy}
+                          >
+                            {push.enabled ? "Push увімкнено" : "Увімкнути push"}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="h-px bg-border/70" />
                     <div className="max-h-[320px] overflow-auto">

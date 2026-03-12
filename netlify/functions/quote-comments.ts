@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { deliverNotifications } from "./_notificationDelivery";
 
 type RequestBody = {
   mode?: "list" | "add" | "notify_mentions";
@@ -234,12 +235,8 @@ export const handler = async (event: HttpEvent) => {
       type: "info",
     }));
 
-    const { error } = await adminClient.from("notifications").insert(rows);
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return { delivered: rows.length };
+    const result = await deliverNotifications(adminClient, rows);
+    return { delivered: result.delivered };
   };
 
   if (payload.mode === "notify_mentions") {

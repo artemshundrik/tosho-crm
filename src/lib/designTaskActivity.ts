@@ -78,21 +78,20 @@ export async function notifyUsers(params: NotifyUsersParams) {
     type: params.type ?? "info",
   };
 
-  const { error } = await supabase.from("notifications").insert(
-    uniqueUserIds.map((userId) => ({
-      user_id: userId,
-      title: payload.title,
-      body: payload.body,
-      href: payload.href,
-      type: payload.type,
-    }))
-  );
-  if (!error) return;
-
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) {
-    throw error;
+    const { error } = await supabase.from("notifications").insert(
+      uniqueUserIds.map((userId) => ({
+        user_id: userId,
+        title: payload.title,
+        body: payload.body,
+        href: payload.href,
+        type: payload.type,
+      }))
+    );
+    if (error) throw error;
+    return;
   }
 
   const response = await fetch("/.netlify/functions/notify-users", {

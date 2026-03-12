@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -11,6 +11,7 @@ import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type FilterMode = "all" | "unread";
 
@@ -35,6 +36,8 @@ function renderNotificationDescription(text: string): ReactNode {
 
 export default function NotificationsPage() {
   const { userId } = useAuth();
+  const push = usePushNotifications(userId);
+  const location = useLocation();
   const navigate = useNavigate();
   const { cached, setCache } = usePageCache<NotificationsPageCache>("notifications");
   const hasCache = Boolean(cached);
@@ -92,7 +95,14 @@ export default function NotificationsPage() {
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => {
+        (payload) => {
+          if (payload.eventType === "INSERT" && location.pathname.startsWith("/notifications")) {
+            const row = payload.new as NotificationRow;
+            const item = mapNotificationRow(row);
+            toast(item.title || "Нове сповіщення", {
+              description: item.description?.trim() || undefined,
+            });
+          }
           void loadNotifications(false);
         }
       )
@@ -100,7 +110,7 @@ export default function NotificationsPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadNotifications, userId]);
+  }, [loadNotifications, location.pathname, userId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -156,6 +166,16 @@ export default function NotificationsPage() {
           </Button>
         </div>
         <div className="flex items-center gap-3">
+          {push.supported && push.configured ? (
+            <Button
+              variant={push.enabled ? "secondary" : "outline"}
+              className="h-10 px-4"
+              onClick={push.enabled ? push.disable : push.enable}
+              disabled={push.busy}
+            >
+              {push.enabled ? "Push увімкнено" : "Увімкнути push"}
+            </Button>
+          ) : null}
           <div className="text-sm font-semibold text-foreground">
             {filtered.length}
             <span className="ml-1 text-muted-foreground">знайдено</span>
@@ -171,7 +191,7 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
-  ), [filter, filtered.length, unreadCount]);
+  ), [filter, filtered.length, push.busy, push.configured, push.enabled, push.supported, unreadCount, push.disable, push.enable]);
 
   usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
 

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { deliverNotifications } from "./_notificationDelivery";
 
 type RequestBody = {
   userIds?: string[];
@@ -96,10 +97,12 @@ export const handler = async (event: HttpEvent) => {
     type: payload.type ?? "info",
   }));
 
-  const { error } = await adminClient.from("notifications").insert(rows);
-  if (error) {
-    return jsonResponse(500, { error: error.message });
+  try {
+    const result = await deliverNotifications(adminClient, rows);
+    return jsonResponse(200, { success: true, ...result });
+  } catch (error) {
+    return jsonResponse(500, {
+      error: error instanceof Error ? error.message : "Failed to deliver notifications",
+    });
   }
-
-  return jsonResponse(200, { success: true, delivered: rows.length });
 };

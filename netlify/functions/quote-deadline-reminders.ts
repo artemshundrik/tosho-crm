@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { deliverNotifications } from "./_notificationDelivery";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -197,8 +198,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (pendingRows.length > 0) {
-      const { error } = await adminClient.from("notifications").insert(pendingRows);
-      if (error) throw error;
+      await deliverNotifications(adminClient, pendingRows);
     }
 
     return jsonResponse(200, {
