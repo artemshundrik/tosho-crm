@@ -771,7 +771,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           supabase
             .schema("tosho")
             .from("customers")
-            .select("id,name,manager,reminder_at,reminder_comment")
+            .select("id,name,manager,manager_user_id,reminder_at,reminder_comment")
             .eq("team_id", teamId)
             .not("reminder_at", "is", null)
             .lte("reminder_at", nowIso)
@@ -781,7 +781,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           supabase
             .schema("tosho")
             .from("leads")
-            .select("id,company_name,manager,reminder_at,reminder_comment")
+            .select("id,company_name,manager,manager_user_id,reminder_at,reminder_comment")
             .eq("team_id", teamId)
             .not("reminder_at", "is", null)
             .lte("reminder_at", nowIso)
@@ -836,10 +836,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           id: string;
           name?: string | null;
           manager?: string | null;
+          manager_user_id?: string | null;
           reminder_at?: string | null;
           reminder_comment?: string | null;
         }>) {
           if (!row.reminder_at) continue;
+          if (row.manager_user_id && row.manager_user_id !== userId) continue;
           const manager = normalizeIdentity(row.manager);
           if (manager && !reminderAssigneeKeys.has(manager)) continue;
           pushReminder("customer", row.id, row.name?.trim() || "Замовник", row.reminder_at, row.reminder_comment ?? "");
@@ -849,10 +851,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           id: string;
           company_name?: string | null;
           manager?: string | null;
+          manager_user_id?: string | null;
           reminder_at?: string | null;
           reminder_comment?: string | null;
         }>) {
           if (!row.reminder_at) continue;
+          if (row.manager_user_id && row.manager_user_id !== userId) continue;
           const manager = normalizeIdentity(row.manager);
           if (manager && !reminderAssigneeKeys.has(manager)) continue;
           pushReminder("lead", row.id, row.company_name?.trim() || "Лід", row.reminder_at, row.reminder_comment ?? "");

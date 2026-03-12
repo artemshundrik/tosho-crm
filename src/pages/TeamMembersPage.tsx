@@ -67,6 +67,11 @@ import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import {
+  listWorkspaceMemberDirectory,
+  upsertWorkspaceMemberProfile,
+  type WorkspaceMemberDirectoryRow,
+} from "@/lib/workspaceMemberDirectory";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
@@ -357,14 +362,6 @@ function isRecoverableTeamProfileError(message: string) {
   );
 }
 
-function isMissingMembershipProfileColumnsError(message: string) {
-  const normalized = message.toLowerCase();
-  return (
-    (normalized.includes("memberships_view.avatar_url") && normalized.includes("does not exist")) ||
-    (normalized.includes("memberships_view.full_name") && normalized.includes("does not exist"))
-  );
-}
-
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
@@ -386,6 +383,7 @@ export function TeamMembersPage() {
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
   >(cached?.memberProfilesByUserId ?? {});
+  const [directoryRows, setDirectoryRows] = useState<WorkspaceMemberDirectoryRow[]>([]);
   const [memberProfilesLoading, setMemberProfilesLoading] = useState(!hasCache);
   const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>(
     cached?.memberMetaByUserId ?? {}
@@ -520,53 +518,27 @@ export function TeamMembersPage() {
       setMembersError(null);
 
       try {
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("user_id,email,full_name,avatar_url,access_role,job_role,created_at")
-          .eq("workspace_id", workspaceId)
-          .order("created_at", { ascending: true });
+        const directory = await listWorkspaceMemberDirectory(workspaceId);
 
         if (cancelled) return;
 
-        if (!error) {
-          setMembers((data as Member[]) ?? []);
-          return;
-        }
-
-        if (!isMissingMembershipProfileColumnsError(error.message)) {
-          setMembersError(error.message);
-          setMembers([]);
-          return;
-        }
-
-        const { data: legacyData, error: legacyError } = await supabase
-          .schema("tosho")
-          .from("memberships_view")
-          .select("user_id,email,access_role,job_role,created_at")
-          .eq("workspace_id", workspaceId)
-          .order("created_at", { ascending: true });
-
-        if (cancelled) return;
-
-        if (legacyError) {
-          setMembersError(legacyError.message);
-          setMembers([]);
-          return;
-        }
-
-        const rows = (legacyData as Omit<Member, "full_name" | "avatar_url">[] | null) ?? [];
+        setDirectoryRows(directory);
         setMembers(
-          rows.map((row) => ({
-            ...row,
-            full_name: null,
-            avatar_url: null,
+          directory.map((row) => ({
+            user_id: row.userId,
+            email: row.email,
+            full_name: row.fullName || null,
+            avatar_url: row.avatarUrl,
+            access_role: row.accessRole,
+            job_role: row.jobRole,
+            created_at: "",
           }))
         );
       } catch (error: unknown) {
         if (!cancelled) {
           setMembersError(getErrorMessage(error));
           setMembers([]);
+          setDirectoryRows([]);
         }
       } finally {
         if (!cancelled) setMembersLoading(false);
@@ -582,7 +554,7 @@ export function TeamMembersPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId || members.length === 0) {
+    if (!workspaceId || directoryRows.length === 0) {
       setMemberProfilesByUserId({});
       setMemberProfilesLoading(false);
       return;
@@ -592,13 +564,7 @@ export function TeamMembersPage() {
 
     const loadMemberProfiles = async () => {
       try {
-        const memberIds = Array.from(
-          new Set(
-            members
-              .map((member) => member.user_id)
-              .filter((id): id is string => Boolean(id))
-          )
-        );
+        const memberIds = Array.from(new Set(directoryRows.map((member) => member.userId).filter(Boolean)));
 
         if (memberIds.length === 0) {
           setMemberProfilesByUserId({});
@@ -606,16 +572,11 @@ export function TeamMembersPage() {
         }
 
         const warmMap = memberIds.reduce<Record<string, { label: string; avatarUrl: string | null }>>((acc, id) => {
-          const baseMember = members.find((member) => member.user_id === id);
+          const baseMember = directoryRows.find((member) => member.userId === id);
           const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
           acc[id] = {
-            label:
-              formatUserShortName({
-                fullName: baseMember?.full_name ?? null,
-                email: baseMember?.email ?? null,
-                fallback: emailFallback,
-              }) || emailFallback,
-            avatarUrl: baseMember?.avatar_url ?? null,
+            label: baseMember?.displayName || emailFallback,
+            avatarUrl: baseMember?.avatarUrl ?? null,
           };
           return acc;
         }, {});
@@ -627,40 +588,13 @@ export function TeamMembersPage() {
         });
         setMemberProfilesLoading(!hasWarmProfiles);
 
-        let rows:
-          | Array<{ user_id: string; full_name?: string | null; avatar_url?: string | null; email?: string | null }>
-          | null = null;
-        let queryError: { message?: string } | null = null;
-
-        ({ data: rows, error: queryError } = await supabase
-          .from("team_members_view")
-          .select("user_id, full_name, avatar_url, email")
-          .in("user_id", memberIds));
-
-        if (queryError && /column/i.test(queryError.message || "") && /email/i.test(queryError.message || "")) {
-          ({ data: rows, error: queryError } = await supabase
-            .from("team_members_view")
-            .select("user_id, full_name, avatar_url")
-            .in("user_id", memberIds));
-        }
-
-        if (queryError) throw new Error(queryError.message || "Не вдалося завантажити профілі учасників");
-
-        if (cancelled) return;
-
         const nextMap = memberIds.reduce<Record<string, { label: string; avatarUrl: string | null }>>((acc, id) => {
-          const dbRow = (rows ?? []).find((row) => row.user_id === id);
-          const baseMember = members.find((member) => member.user_id === id);
+          const baseMember = directoryRows.find((member) => member.userId === id);
           const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
 
           acc[id] = {
-            label:
-              formatUserShortName({
-                fullName: dbRow?.full_name ?? baseMember?.full_name ?? null,
-                email: dbRow?.email ?? baseMember?.email ?? null,
-                fallback: emailFallback,
-              }) || emailFallback,
-            avatarUrl: dbRow?.avatar_url ?? baseMember?.avatar_url ?? null,
+            label: baseMember?.displayName || emailFallback,
+            avatarUrl: baseMember?.avatarUrl ?? null,
           };
           return acc;
         }, {});
@@ -713,7 +647,7 @@ export function TeamMembersPage() {
         } catch {
           // ignore fallback load errors
         }
-        setMemberProfilesByUserId({});
+      setMemberProfilesByUserId({});
       } finally {
         if (!cancelled) setMemberProfilesLoading(false);
       }
@@ -725,10 +659,10 @@ export function TeamMembersPage() {
       cancelled = true;
     };
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, members]);
+  }, [workspaceId, directoryRows, members]);
 
   useEffect(() => {
-    if (!workspaceId || !canOpenProfileCard || members.length === 0) {
+    if (!workspaceId || !canOpenProfileCard || directoryRows.length === 0) {
       setMemberMetaLoading(false);
       if (!canOpenProfileCard) setMemberMetaByUserId({});
       return;
@@ -739,122 +673,22 @@ export function TeamMembersPage() {
     const loadMemberMeta = async () => {
       setMemberMetaLoading(true);
       try {
-        let profilesByUserId: Record<string, MemberProfileMeta> = {};
-        const { data, error } = await supabase
-          .schema("tosho")
-          .from("team_member_profiles")
-          .select("user_id,first_name,last_name,full_name,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access")
-          .eq("workspace_id", workspaceId);
-        if (error) {
-          if (
-            /does not exist|relation|could not find the table/i.test(error.message ?? "")
-          ) {
-            if (!cancelled) {
-              setMemberProfileStorageAvailable(false);
-            }
-          } else {
-            throw error;
-          }
-        } else {
-          profilesByUserId = ((data ?? []) as Array<{
-            user_id: string;
-            first_name?: string | null;
-            last_name?: string | null;
-            full_name?: string | null;
-            birth_date?: string | null;
-            phone?: string | null;
-            availability_status?: string | null;
-            start_date?: string | null;
-            probation_end_date?: string | null;
-            manager_user_id?: string | null;
-            module_access?: unknown;
-          }>).reduce<Record<string, MemberProfileMeta>>((acc, row) => {
-            acc[row.user_id] = {
-              firstName: row.first_name?.trim() || "",
-              lastName: row.last_name?.trim() || "",
-              fullName: row.full_name?.trim() || "",
-              birthDate: row.birth_date?.trim() || "",
-              phone: row.phone?.trim() || "",
-              managerRate: DEFAULT_MANAGER_RATE,
-              availabilityStatus:
-                row.availability_status === "vacation" ||
-                row.availability_status === "sick_leave" ||
-                row.availability_status === "offline"
-                  ? row.availability_status
-                  : "available",
-              startDate: row.start_date?.trim() || "",
-              probationEndDate: row.probation_end_date?.trim() || "",
-              managerUserId: row.manager_user_id?.trim() || "",
-              moduleAccess: normalizeModuleAccess(row.module_access),
-            };
-            return acc;
-          }, {});
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (workspaceFunctionAvailable !== false && accessToken) {
-          const response = await fetch("/.netlify/functions/create-workspace-invite", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ mode: "list_workspace_member_profiles" }),
-          });
-          if (response.status === 404) {
-            setWorkspaceFunctionAvailable(false);
-          } else {
-            setWorkspaceFunctionAvailable(true);
-          }
-          const payload = await parseJsonSafe<{
-            profilesByUserId?: Record<
-              string,
-              {
-                firstName?: string;
-                lastName?: string;
-                fullName?: string;
-                birthDate?: string;
-                phone?: string;
-                availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline";
-                startDate?: string;
-                probationEndDate?: string;
-                managerUserId?: string;
-                moduleAccess?: Partial<MemberProfileMeta["moduleAccess"]>;
-              }
-            >;
-          }>(response);
-          if (response.ok) {
-            const fallback = payload?.profilesByUserId ?? {};
-            for (const [userId, profile] of Object.entries(fallback)) {
-              const existing = profilesByUserId[userId] ?? DEFAULT_MEMBER_META;
-            profilesByUserId[userId] = {
-              ...existing,
-              firstName: existing.firstName || (profile.firstName ?? "").trim(),
-              lastName: existing.lastName || (profile.lastName ?? "").trim(),
-              fullName: existing.fullName || (profile.fullName ?? "").trim(),
-              birthDate: existing.birthDate || (profile.birthDate ?? "").trim(),
-              phone: existing.phone || (profile.phone ?? "").trim(),
-              managerRate: existing.managerRate || DEFAULT_MANAGER_RATE,
-              availabilityStatus:
-                existing.availabilityStatus !== "available"
-                  ? existing.availabilityStatus
-                    : profile.availabilityStatus === "vacation" ||
-                        profile.availabilityStatus === "sick_leave" ||
-                        profile.availabilityStatus === "offline"
-                      ? profile.availabilityStatus
-                      : "available",
-                startDate: existing.startDate || (profile.startDate ?? "").trim(),
-                probationEndDate: existing.probationEndDate || (profile.probationEndDate ?? "").trim(),
-                managerUserId: existing.managerUserId || (profile.managerUserId ?? "").trim(),
-                moduleAccess: {
-                  ...existing.moduleAccess,
-                  ...(profile.moduleAccess ?? {}),
-                },
-              };
-            }
-          }
-        }
+        const profilesByUserId = directoryRows.reduce<Record<string, MemberProfileMeta>>((acc, row) => {
+          acc[row.userId] = {
+            firstName: row.firstName,
+            lastName: row.lastName,
+            fullName: row.fullName,
+            birthDate: row.birthDate,
+            phone: row.phone,
+            managerRate: DEFAULT_MANAGER_RATE,
+            availabilityStatus: row.availabilityStatus,
+            startDate: row.startDate,
+            probationEndDate: row.probationEndDate,
+            managerUserId: row.managerUserId,
+            moduleAccess: normalizeModuleAccess(row.moduleAccess),
+          };
+          return acc;
+        }, {});
 
         const { data: currentUserData } = await supabase.auth.getUser();
         const selfUser = currentUserData.user;
@@ -894,7 +728,7 @@ export function TeamMembersPage() {
         }
 
         if (!cancelled) {
-          if (!error) setMemberProfileStorageAvailable(true);
+          setMemberProfileStorageAvailable(true);
           setMemberMetaByUserId(profilesByUserId);
         }
       } catch (error: unknown) {
@@ -913,7 +747,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, canOpenProfileCard, canManageManagerRates, members.length, workspaceFunctionAvailable]);
+  }, [workspaceId, canOpenProfileCard, canManageManagerRates, directoryRows]);
 
   useEffect(() => {
     if (!workspaceId || members.length === 0) {
@@ -1217,30 +1051,27 @@ export function TeamMembersPage() {
       const moduleAccess = editProfileModuleAccess;
 
       if (canManage) {
-        const { error } = await supabase
-          .schema("tosho")
-          .from("team_member_profiles")
-          .upsert(
-            {
-              workspace_id: workspaceId,
-              user_id: editProfileMember.user_id,
-              first_name: firstName || null,
-              last_name: lastName || null,
-              full_name: fullName || null,
-              birth_date: birthDate || null,
-              phone: phone || null,
-              availability_status: availabilityStatus,
-              start_date: startDate || null,
-              probation_end_date: probationEndDate || null,
-              manager_user_id: managerUserId || null,
-              module_access: moduleAccess,
-              updated_by: currentUserId ?? null,
-            },
-            { onConflict: "workspace_id,user_id" }
-          );
-
-        if (error) {
-          if (!isRecoverableTeamProfileError(error.message ?? "")) {
+        try {
+          const currentDirectoryRow = directoryRows.find((row) => row.userId === editProfileMember.user_id);
+          await upsertWorkspaceMemberProfile({
+            workspaceId,
+            userId: editProfileMember.user_id,
+            firstName,
+            lastName,
+            fullName,
+            avatarUrl: currentDirectoryRow?.avatarUrl ?? null,
+            avatarPath: currentDirectoryRow?.avatarPath ?? null,
+            birthDate,
+            phone,
+            availabilityStatus,
+            startDate,
+            probationEndDate,
+            managerUserId,
+            moduleAccess,
+            updatedBy: currentUserId ?? null,
+          });
+        } catch (error: unknown) {
+          if (!isRecoverableTeamProfileError(getErrorMessage(error))) {
             throw error;
           }
           setMemberProfileStorageAvailable(false);
@@ -1472,29 +1303,27 @@ export function TeamMembersPage() {
     if (!workspaceId) return;
     try {
       const currentMeta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
-      const upsertPayload = {
-        workspace_id: workspaceId,
-        user_id: member.user_id,
-        first_name: currentMeta.firstName || null,
-        last_name: currentMeta.lastName || null,
-        full_name: currentMeta.fullName || null,
-        birth_date: currentMeta.birthDate || null,
-        phone: currentMeta.phone || null,
-        availability_status: status,
-        start_date: currentMeta.startDate || null,
-        probation_end_date: currentMeta.probationEndDate || null,
-        manager_user_id: currentMeta.managerUserId || null,
-        module_access: currentMeta.moduleAccess,
-        updated_by: currentUserId ?? null,
-      };
-
-      const { error: profileUpsertError } = await supabase
-        .schema("tosho")
-        .from("team_member_profiles")
-        .upsert(upsertPayload, { onConflict: "workspace_id,user_id" });
-
-      if (profileUpsertError) {
-        if (!isRecoverableTeamProfileError(profileUpsertError.message ?? "")) {
+      try {
+        const currentDirectoryRow = directoryRows.find((row) => row.userId === member.user_id);
+        await upsertWorkspaceMemberProfile({
+          workspaceId,
+          userId: member.user_id,
+          firstName: currentMeta.firstName,
+          lastName: currentMeta.lastName,
+          fullName: currentMeta.fullName,
+          avatarUrl: currentDirectoryRow?.avatarUrl ?? null,
+          avatarPath: currentDirectoryRow?.avatarPath ?? null,
+          birthDate: currentMeta.birthDate,
+          phone: currentMeta.phone,
+          availabilityStatus: status,
+          startDate: currentMeta.startDate,
+          probationEndDate: currentMeta.probationEndDate,
+          managerUserId: currentMeta.managerUserId,
+          moduleAccess: currentMeta.moduleAccess,
+          updatedBy: currentUserId ?? null,
+        });
+      } catch (profileUpsertError: unknown) {
+        if (!isRecoverableTeamProfileError(getErrorMessage(profileUpsertError))) {
           throw profileUpsertError;
         }
         setMemberProfileStorageAvailable(false);

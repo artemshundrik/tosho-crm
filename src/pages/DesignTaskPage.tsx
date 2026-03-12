@@ -50,6 +50,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { formatUserShortName } from "@/lib/userName";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -835,189 +836,46 @@ export default function DesignTaskPage() {
     const loadMembers = async () => {
       if (!userId) return;
       try {
-        let rows: MembershipRow[] = [];
-
-        if (effectiveTeamId) {
-          const teamViewColumns = [
-            "user_id,full_name,email,avatar_url,access_role,job_role",
-            "user_id,full_name,email,avatar_url,job_role",
-            "user_id,full_name,email,avatar_url",
-            "user_id,full_name,email,job_role",
-            "user_id,full_name,email",
-            "user_id,full_name,avatar_url",
-            "user_id,email,avatar_url",
-            "user_id,full_name,job_role",
-            "user_id,full_name",
-            "user_id,email",
-            "user_id",
-          ];
-          for (const columns of teamViewColumns) {
-            const { data: teamViewData, error: teamViewError } = await supabase
-              .from("team_members_view")
-              .select(columns)
-              .eq("team_id", effectiveTeamId);
-            if (!teamViewError) {
-              rows = ((teamViewData as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-              break;
-            }
-            const message = (teamViewError.message ?? "").toLowerCase();
-            if (!message.includes("column") || !message.includes("does not exist")) {
-              throw teamViewError;
-            }
-          }
-        }
-
         const workspaceId = await resolveWorkspaceId(userId);
-        let membershipRows: MembershipRow[] = [];
-        if (workspaceId) {
-          const membershipColumns = [
-            "user_id,full_name,email,avatar_url,access_role,job_role",
-            "user_id,full_name,email,avatar_url,job_role",
-            "user_id,full_name,email,avatar_url",
-            "user_id,full_name,email,access_role,job_role",
-            "user_id,full_name,email,job_role",
-            "user_id,full_name,email",
-            "user_id",
-          ];
-          let loaded = false;
-          for (const columns of membershipColumns) {
-            const { data, error: membersError } = await supabase
-              .schema("tosho")
-              .from("memberships_view")
-              .select(columns)
-              .eq("workspace_id", workspaceId);
-            if (!membersError) {
-              membershipRows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-              loaded = true;
-              break;
-            }
-            const message = (membersError.message ?? "").toLowerCase();
-            if (!message.includes("column") || !message.includes("does not exist")) {
-              throw membersError;
-            }
-          }
-          if (!loaded && rows.length === 0) throw new Error("Не вдалося завантажити учасників");
-        } else if (rows.length === 0) {
+        if (!workspaceId) {
           return;
         }
-
-        if (membershipRows.length > 0) {
-          const mergedRows = new Map<string, MembershipRow>();
-          for (const row of rows) {
-            if (!row.user_id) continue;
-            mergedRows.set(row.user_id, row);
-          }
-          for (const row of membershipRows) {
-            if (!row.user_id) continue;
-            const existing = mergedRows.get(row.user_id);
-            if (!existing && !hasMeaningfulMemberIdentity(row)) continue;
-            mergedRows.set(row.user_id, {
-              ...(existing ?? row),
-              ...row,
-              user_id: row.user_id,
-              full_name: row.full_name ?? existing?.full_name ?? null,
-              email: row.email ?? existing?.email ?? null,
-              avatar_url: row.avatar_url ?? existing?.avatar_url ?? null,
-              access_role: row.access_role ?? existing?.access_role ?? null,
-              job_role: row.job_role ?? existing?.job_role ?? null,
-            });
-          }
-          rows = Array.from(mergedRows.values());
-        }
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
 
         const labels: Record<string, string> = {};
         const avatars: Record<string, string | null> = {};
         rows.forEach((row) => {
-          labels[row.user_id] =
-            formatUserShortName({
-              fullName: row.full_name ?? null,
-              email: row.email ?? null,
-              fallback: row.user_id,
-            }) || row.user_id;
-          avatars[row.user_id] = row.avatar_url ?? null;
+          labels[row.userId] = row.label;
+          avatars[row.userId] = row.avatarDisplayUrl;
         });
 
-        const missingAvatarIds = rows
-          .map((row) => row.user_id)
-          .filter((id) => !avatars[id]);
-        if (effectiveTeamId && missingAvatarIds.length > 0) {
-          const { data: avatarRows, error: avatarError } = await supabase
-            .from("team_members_view")
-            .select("user_id,avatar_url")
-            .eq("team_id", effectiveTeamId)
-            .in("user_id", missingAvatarIds);
-          if (!avatarError) {
-            ((avatarRows as Array<{ user_id: string; avatar_url?: string | null }> | null) ?? []).forEach((row) => {
-              if (!row.user_id) return;
-              if (!avatars[row.user_id] && row.avatar_url) {
-                avatars[row.user_id] = row.avatar_url;
-              }
-            });
-          }
-        }
-
         setMemberById(labels);
-        const resolvedAvatarEntries = await Promise.all(
-          Object.entries(avatars).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
-        );
-        setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
+        setMemberAvatarById(avatars);
 
-        let roleById = new Map<string, string | null>();
-        const memberIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
-        if (memberIds.length > 0) {
-          const workspaceId = await resolveWorkspaceId(userId);
-          if (workspaceId) {
-            const membershipColumns = [
-              "user_id,job_role",
-              "user_id,full_name,email,job_role",
-              "user_id,access_role,job_role",
-              "user_id",
-            ];
-            for (const columns of membershipColumns) {
-              const { data: roleRows, error: roleError } = await supabase
-                .schema("tosho")
-                .from("memberships_view")
-                .select(columns)
-                .eq("workspace_id", workspaceId)
-                .in("user_id", memberIds);
-              if (!roleError) {
-                roleById = new Map(
-                  (((roleRows as Array<{ user_id?: string | null; job_role?: string | null }> | null) ?? [])
-                    .map((row) => [row.user_id ?? "", row.job_role ?? null])) as Array<[string, string | null]>
-                );
-                break;
-              }
-              const message = (roleError.message ?? "").toLowerCase();
-              if (!message.includes("column") || !message.includes("does not exist")) {
-                throw roleError;
-              }
-            }
-          }
-        }
         const resolvedRoleById: Record<string, string> = {};
         rows.forEach((row) => {
-          const role = roleById.get(row.user_id) ?? row.job_role;
+          const role = row.jobRole;
           if (typeof role === "string" && role.trim()) {
-            resolvedRoleById[row.user_id] = role.trim();
+            resolvedRoleById[row.userId] = role.trim();
           }
         });
         setMemberRoleById(resolvedRoleById);
 
         setDesignerMembers(
           rows
-            .filter((row) => isDesignerRole(roleById.get(row.user_id) ?? row.job_role))
-            .map((row) => ({ id: row.user_id, label: labels[row.user_id] ?? row.user_id }))
+            .filter((row) => isDesignerRole(row.jobRole))
+            .map((row) => ({ id: row.userId, label: labels[row.userId] ?? row.userId }))
         );
-        let managerRows = rows.filter((row) => isManagerRole(row.access_role, roleById.get(row.user_id) ?? row.job_role));
+        let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
         if (managerRows.length === 0 && userId) {
-          const me = rows.find((row) => row.user_id === userId);
+          const me = rows.find((row) => row.userId === userId);
           if (me) managerRows = [me];
         }
         if (managerRows.length === 0) managerRows = rows;
         setManagerMembers(
           managerRows.map((row) => ({
-            id: row.user_id,
-            label: labels[row.user_id] ?? row.user_id,
+            id: row.userId,
+            label: labels[row.userId] ?? row.userId,
           }))
         );
       } catch {
@@ -4269,6 +4127,7 @@ export default function DesignTaskPage() {
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       Object.entries(memberById)
+        .filter(([memberId]) => memberId !== userId)
         .map(([memberId, label]) => ({
           id: memberId,
           label,
@@ -4281,7 +4140,7 @@ export default function DesignTaskPage() {
           if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
           return a.label.localeCompare(b.label, "uk");
         }),
-    [memberAvatarById, memberById]
+    [memberAvatarById, memberById, userId]
   );
   const mentionLookup = useMemo(() => {
     const lookup = new Map<string, Set<string>>();
@@ -4319,7 +4178,7 @@ export default function DesignTaskPage() {
           normalizeMentionKey(member.label).includes(query)
         );
       })
-      .slice(0, 8);
+      .slice(0, 12);
   }, [mentionContext, mentionSuggestions]);
   useEffect(() => {
     if (filteredMentionSuggestions.length === 0) {

@@ -54,6 +54,7 @@ import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import {
   createQuote,
   getQuoteSummary,
@@ -1165,6 +1166,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       teamMembers
+        .filter((member) => member.id !== userId)
         .map((member) => {
           const label = (mentionLabelOverrides[member.id] ?? member.label ?? "").trim() || "Користувач";
           return {
@@ -1180,7 +1182,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
           return a.label.localeCompare(b.label, "uk");
         }),
-    [mentionLabelOverrides, teamMembers]
+    [mentionLabelOverrides, teamMembers, userId]
   );
   const mentionLookup = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -1223,7 +1225,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           normalizeMentionKey(member.label).includes(query)
         );
       })
-      .slice(0, 8);
+      .slice(0, 12);
   }, [mentionContext, mentionSuggestions]);
 
   useEffect(() => {
@@ -1685,99 +1687,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     let active = true;
     const loadMembers = async () => {
       try {
-        let rows: MembershipRow[] = [];
-
-        const teamViewColumns = [
-          "user_id,full_name,email,avatar_url,access_role,job_role",
-          "user_id,full_name,email,avatar_url,job_role",
-          "user_id,full_name,email,avatar_url",
-          "user_id,full_name,email,job_role",
-          "user_id,full_name,email",
-          "user_id,full_name,avatar_url",
-          "user_id,email,avatar_url",
-          "user_id,full_name,job_role",
-          "user_id,full_name",
-          "user_id,email",
-          "user_id",
-        ];
-        for (const columns of teamViewColumns) {
-          const { data, error } = await supabase
-            .from("team_members_view")
-            .select(columns)
-            .eq("team_id", teamId);
-          if (!error) {
-            rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-            break;
-          }
-          const message = (error.message ?? "").toLowerCase();
-          if (!message.includes("column") || !message.includes("does not exist")) {
-            throw error;
-          }
+        const workspaceId = await resolveWorkspaceId(userId);
+        if (!workspaceId) {
+          if (active) setTeamMembers([]);
+          return;
         }
-
-        if (rows.length === 0) {
-          const workspaceId = await resolveWorkspaceId(userId);
-          if (!workspaceId) {
-            if (active) setTeamMembers([]);
-            return;
-          }
-          const membershipColumns = [
-            "user_id,full_name,email,avatar_url,access_role,job_role",
-            "user_id,full_name,email,avatar_url,job_role",
-            "user_id,full_name,email,avatar_url",
-            "user_id,full_name,email,access_role,job_role",
-            "user_id,full_name,email,job_role",
-            "user_id,full_name,email",
-            "user_id",
-          ];
-          for (const columns of membershipColumns) {
-            const { data, error } = await supabase
-              .schema("tosho")
-              .from("memberships_view")
-              .select(columns)
-              .eq("workspace_id", workspaceId);
-            if (!error) {
-              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-              break;
-            }
-            const message = (error.message ?? "").toLowerCase();
-            if (!message.includes("column") || !message.includes("does not exist")) {
-              throw error;
-            }
-          }
-        }
-
-        const avatarById: Record<string, string | null> = {};
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
         const nextMembers = rows.map((row) => {
-          avatarById[row.user_id] = row.avatar_url ?? null;
           return {
-            id: row.user_id,
-            label:
-              formatUserShortName({
-                fullName: row.full_name ?? null,
-                email: row.email ?? null,
-                fallback: row.user_id,
-              }) || row.user_id,
-            avatarUrl: row.avatar_url ?? null,
-            jobRole: row.job_role ?? null,
+            id: row.userId,
+            label: row.label,
+            avatarUrl: row.avatarDisplayUrl,
+            jobRole: row.jobRole ?? null,
           } satisfies TeamMemberRow;
         });
 
-        const resolvedAvatarEntries = await Promise.all(
-          Object.entries(avatarById).map(async ([id, rawUrl]) => [
-            id,
-            await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET),
-          ] as const)
-        );
-        const resolvedAvatarById = Object.fromEntries(resolvedAvatarEntries);
-
         if (!active) return;
-        setTeamMembers(
-          nextMembers.map((member) => ({
-            ...member,
-            avatarUrl: resolvedAvatarById[member.id] ?? member.avatarUrl ?? null,
-          }))
-        );
+        setTeamMembers(nextMembers);
       } catch {
         if (active) setTeamMembers([]);
       }

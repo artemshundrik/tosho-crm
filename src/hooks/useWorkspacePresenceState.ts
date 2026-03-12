@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { getCurrentWorkspaceMemberDirectoryEntry, listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { resolveWorkspaceId } from "@/lib/workspace";
 
 type PresenceEntityContext = {
   entityType: "quote" | "design_task" | null;
@@ -119,22 +121,82 @@ export function useWorkspacePresenceState({
   const [dbUnavailable, setDbUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selfAvatarOverride, setSelfAvatarOverride] = useState<string | null>(null);
+  const [selfDirectoryDisplayName, setSelfDirectoryDisplayName] = useState<string | null>(null);
+  const [selfDirectoryAvatarUrl, setSelfDirectoryAvatarUrl] = useState<string | null>(null);
+  const [directoryEntriesByUserId, setDirectoryEntriesByUserId] = useState<
+    Record<string, { displayName: string; avatarUrl: string | null }>
+  >({});
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const entityContext = useMemo(() => parseEntityFromPath(pathname), [pathname]);
 
   const selfDisplayName = useMemo(
     () =>
+      selfDirectoryDisplayName ||
       buildUserNameFromMetadata(
         session?.user?.user_metadata as Record<string, unknown> | undefined,
         session?.user?.email
       ).displayName || emailLocalPart(session?.user?.email) || "Користувач",
-    [session?.user?.email, session?.user?.user_metadata]
+    [selfDirectoryDisplayName, session?.user?.email, session?.user?.user_metadata]
   );
 
   const selfAvatarUrl = useMemo(() => {
     if (selfAvatarOverride) return selfAvatarOverride;
+    if (selfDirectoryAvatarUrl) return selfDirectoryAvatarUrl;
     return (session?.user?.user_metadata?.avatar_url as string | undefined) ?? null;
-  }, [selfAvatarOverride, session?.user?.user_metadata]);
+  }, [selfAvatarOverride, selfDirectoryAvatarUrl, session?.user?.user_metadata]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSelfDirectoryEntry = async () => {
+      if (!userId) return;
+      try {
+        const entry = await getCurrentWorkspaceMemberDirectoryEntry();
+        if (!active) return;
+        setSelfDirectoryDisplayName(entry?.displayName ?? null);
+        setSelfDirectoryAvatarUrl(entry?.avatarUrl ?? null);
+      } catch {
+        if (!active) return;
+        setSelfDirectoryDisplayName(null);
+        setSelfDirectoryAvatarUrl(null);
+      }
+    };
+    void loadSelfDirectoryEntry();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDirectoryEntries = async () => {
+      if (!teamId && !userId) {
+        setDirectoryEntriesByUserId({});
+        return;
+      }
+      try {
+        const workspaceId = userId ? await resolveWorkspaceId(userId) : teamId;
+        if (!workspaceId) {
+          if (!active) return;
+          setDirectoryEntriesByUserId({});
+          return;
+        }
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
+        if (!active) return;
+        setDirectoryEntriesByUserId(
+          Object.fromEntries(
+            rows.map((row) => [row.userId, { displayName: row.label, avatarUrl: row.avatarDisplayUrl }])
+          )
+        );
+      } catch {
+        if (!active) return;
+        setDirectoryEntriesByUserId({});
+      }
+    };
+    void loadDirectoryEntries();
+    return () => {
+      active = false;
+    };
+  }, [teamId, userId]);
 
   const buildTrackPayload = useCallback(
     (): PresenceRealtimeMeta => ({
@@ -397,6 +459,7 @@ export function useWorkspacePresenceState({
     const list = Array.from(allUserIds).map((uid) => {
       const dbRow = dbRowsByUserId[uid];
       const realtime = realtimeByUserId[uid];
+      const directoryEntry = directoryEntriesByUserId[uid];
       const lastSeenAt = realtime?.last_seen_at ?? dbRow?.last_seen_at ?? null;
       const ageMs = lastSeenAt ? now - new Date(lastSeenAt).getTime() : Number.POSITIVE_INFINITY;
       const online = Boolean(realtime) || ageMs <= ONLINE_WINDOW_MS;
@@ -404,8 +467,11 @@ export function useWorkspacePresenceState({
       const fallbackName = uid === userId ? selfDisplayName : `Користувач ${uid.slice(0, 8)}`;
       return {
         userId: uid,
-        displayName: (realtime?.display_name ?? dbRow?.display_name ?? fallbackName)?.trim() || fallbackName,
-        avatarUrl: realtime?.avatar_url ?? dbRow?.avatar_url ?? (uid === userId ? selfAvatarUrl : null),
+        displayName:
+          (directoryEntry?.displayName ?? realtime?.display_name ?? dbRow?.display_name ?? fallbackName)?.trim() ||
+          fallbackName,
+        avatarUrl:
+          directoryEntry?.avatarUrl ?? realtime?.avatar_url ?? dbRow?.avatar_url ?? (uid === userId ? selfAvatarUrl : null),
         currentPath: realtime?.current_path ?? dbRow?.current_path ?? null,
         currentLabel: realtime?.current_label ?? dbRow?.current_label ?? null,
         entityType: realtime?.entity_type ?? dbRow?.entity_type ?? null,
@@ -426,7 +492,7 @@ export function useWorkspacePresenceState({
         const bTime = new Date(b.lastSeenAt ?? 0).getTime();
         return bTime - aTime;
       });
-  }, [dbRowsByUserId, realtimeByUserId, selfAvatarUrl, selfDisplayName, userId]);
+  }, [dbRowsByUserId, directoryEntriesByUserId, realtimeByUserId, selfAvatarUrl, selfDisplayName, userId]);
 
   const onlineEntries = useMemo(() => entries.filter((entry) => entry.online), [entries]);
 

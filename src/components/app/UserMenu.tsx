@@ -9,9 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
-import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
+import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -85,23 +85,13 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
         );
         const initials = getInitialsFromName(resolvedName.displayName, user.email);
 
-        const workspaceId = await resolveWorkspaceId(user.id);
-
         let rawRole = "viewer";
         let accessRoleLabel = ACCESS_ROLE_NAMES.member;
         let jobRoleLabel: string | null = null;
-        if (workspaceId) {
-          const { data: membership } = await supabase
-            .schema("tosho")
-            .from("memberships_view")
-            .select("access_role,job_role")
-            .eq("workspace_id", workspaceId)
-            .eq("user_id", user.id)
-            .maybeSingle();
-
-          const membershipData = (membership as { access_role?: string | null; job_role?: string | null } | null) ?? null;
-          const accessRole = membershipData?.access_role ?? "member";
-          const jobRole = membershipData?.job_role ?? null;
+        const directoryEntry = await getCurrentWorkspaceMemberDirectoryEntry();
+        if (directoryEntry) {
+          const accessRole = directoryEntry.accessRole ?? "member";
+          const jobRole = directoryEntry.jobRole ?? null;
 
           accessRoleLabel = ACCESS_ROLE_NAMES[accessRole] ?? "Member";
           if (jobRole && jobRole !== "member") {
@@ -113,14 +103,14 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           else rawRole = "viewer";
         }
 
-        const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
+        const rawAvatarUrl = directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null;
         const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
 
         const nextData: UserState = {
-          name: resolvedName.displayName,
+          name: directoryEntry?.displayName || resolvedName.displayName,
           accessRole: accessRoleLabel,
           jobRole: jobRoleLabel,
-          initials: initials,
+          initials: directoryEntry?.initials || initials,
           avatarUrl,
           roleKey: rawRole
         };

@@ -34,7 +34,6 @@ import {
   deleteQuote,
   getQuoteSummary,
   getQuoteRuns,
-  listTeamMembers,
   setStatus as setQuoteStatus,
   upsertQuoteRuns,
   updateQuote,
@@ -60,6 +59,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { 
   Search, 
   X, 
@@ -127,12 +127,6 @@ type QuotesPageProps = {
 
 const ALL_MANAGERS_FILTER = "__all__";
 const NO_MANAGER_FILTER = "__none__";
-const normalizeManagerKey = (value?: string | null) =>
-  (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[._-]+/g, " ");
 const isUuid = (value?: string | null) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value ?? "").trim());
 
@@ -294,10 +288,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
-  const [managerProfileLabelsById, setManagerProfileLabelsById] = useState<Record<string, string>>({});
-  const [presenceDbLabelById, setPresenceDbLabelById] = useState<Record<string, string>>({});
-  const [presenceDbAvatarById, setPresenceDbAvatarById] = useState<Record<string, string | null>>({});
-  const [teamViewAvatarById, setTeamViewAvatarById] = useState<Record<string, string | null>>({});
   const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
   const [workspaceMemberAvatarById, setWorkspaceMemberAvatarById] = useState<Record<string, string | null>>({});
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
@@ -480,36 +470,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
 
   const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
-  const memberByNormalizedLabel = useMemo(() => {
-    const counts = new Map<string, number>();
-    teamMembers.forEach((member) => {
-      const key = normalizeManagerKey(member.label);
-      if (!key) return;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    const map = new Map<string, TeamMemberRow>();
-    teamMembers.forEach((member) => {
-      const key = normalizeManagerKey(member.label);
-      if (!key) return;
-      if ((counts.get(key) ?? 0) === 1) map.set(key, member);
-    });
-    return map;
-  }, [teamMembers]);
-  const memberByUniqueFirstToken = useMemo(() => {
-    const counts = new Map<string, number>();
-    teamMembers.forEach((member) => {
-      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
-      if (!token) return;
-      counts.set(token, (counts.get(token) ?? 0) + 1);
-    });
-    const map = new Map<string, TeamMemberRow>();
-    teamMembers.forEach((member) => {
-      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
-      if (!token) return;
-      if ((counts.get(token) ?? 0) === 1) map.set(token, member);
-    });
-    return map;
-  }, [teamMembers]);
   const isManagerUser = useMemo(() => {
     const access = (accessRole ?? "").trim().toLowerCase();
     const job = (jobRole ?? "").trim().toLowerCase();
@@ -517,14 +477,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [accessRole, jobRole]);
   useEffect(() => {
     if (!currentUserId) return;
-    const presenceLabel = presenceLabelById[currentUserId]?.trim();
-    if (presenceLabel) {
-      setCurrentUserManagerLabel(presenceLabel);
+    const workspaceLabel = workspaceMemberLabelById[currentUserId]?.trim();
+    if (workspaceLabel) {
+      setCurrentUserManagerLabel(workspaceLabel);
       return;
     }
     const label = memberById.get(currentUserId)?.label?.trim();
-    if (label) setCurrentUserManagerLabel(label);
-  }, [currentUserId, memberById, presenceLabelById]);
+    if (label) {
+      setCurrentUserManagerLabel(label);
+      return;
+    }
+    const presenceLabel = presenceLabelById[currentUserId]?.trim();
+    if (presenceLabel) {
+      setCurrentUserManagerLabel(presenceLabel);
+    }
+  }, [currentUserId, memberById, presenceLabelById, workspaceMemberLabelById]);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
@@ -546,44 +513,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const normalizedValue = (assignedTo ?? "").trim();
       if (!normalizedValue) return null;
       return (
-        presenceDbAvatarById[normalizedValue] ??
-        presenceAvatarById[normalizedValue] ??
         workspaceMemberAvatarById[normalizedValue] ??
         memberById.get(normalizedValue)?.avatarUrl ??
-        teamViewAvatarById[normalizedValue] ??
+        presenceAvatarById[normalizedValue] ??
         null
       );
     },
-    [
-      memberById,
-      presenceAvatarById,
-      presenceDbAvatarById,
-      teamViewAvatarById,
-      workspaceMemberAvatarById,
-    ]
+    [memberById, presenceAvatarById, workspaceMemberAvatarById]
   );
   const resolveManagerMember = useCallback(
     (assignedTo?: string | null) => {
       const normalizedValue = (assignedTo ?? "").trim();
       if (!normalizedValue) return null;
-      const persistedPresenceLabel = presenceDbLabelById[normalizedValue]?.trim();
-      if (persistedPresenceLabel) {
-        return {
-          id: normalizedValue,
-          label: persistedPresenceLabel,
-          avatarUrl: getManagerAvatar(normalizedValue),
-          jobRole: null,
-        } satisfies TeamMemberRow;
-      }
-      const presenceLabel = presenceLabelById[normalizedValue]?.trim();
-      if (presenceLabel) {
-        return {
-          id: normalizedValue,
-          label: presenceLabel,
-          avatarUrl: getManagerAvatar(normalizedValue),
-          jobRole: null,
-        } satisfies TeamMemberRow;
-      }
       const workspaceLabel = workspaceMemberLabelById[normalizedValue]?.trim();
       if (workspaceLabel) {
         return {
@@ -595,19 +536,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
       const byId = memberById.get(normalizedValue);
       if (byId) return { ...byId, avatarUrl: getManagerAvatar(normalizedValue) };
-      const normalizedLabel = normalizeManagerKey(normalizedValue);
-      const byExactLabel = memberByNormalizedLabel.get(normalizedLabel);
-      if (byExactLabel) return byExactLabel;
-      const token = normalizedLabel.split(" ")[0] ?? "";
-      if (token) {
-        const byToken = memberByUniqueFirstToken.get(token);
-        if (byToken) return byToken;
-      }
-      const profileLabel = managerProfileLabelsById[normalizedValue]?.trim();
-      if (profileLabel) {
+      const presenceLabel = presenceLabelById[normalizedValue]?.trim();
+      if (presenceLabel) {
         return {
           id: normalizedValue,
-          label: profileLabel,
+          label: presenceLabel,
           avatarUrl: getManagerAvatar(normalizedValue),
           jobRole: null,
         } satisfies TeamMemberRow;
@@ -616,12 +549,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     },
     [
       getManagerAvatar,
-      managerProfileLabelsById,
       memberById,
-      memberByNormalizedLabel,
-      memberByUniqueFirstToken,
-      presenceDbAvatarById,
-      presenceDbLabelById,
       presenceAvatarById,
       presenceLabelById,
       workspaceMemberAvatarById,
@@ -830,7 +758,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const loadMembers = async () => {
       if (active) setTeamMembersLoaded(false);
       try {
-        const data = await listTeamMembers(teamId);
+        const workspaceId = currentUserId ? await resolveWorkspaceId(currentUserId) : null;
+        const rows = workspaceId ? await listWorkspaceMembersForDisplay(workspaceId) : [];
+        const data = rows.map((row) => ({
+          id: row.userId,
+          label: row.label,
+          avatarUrl: row.avatarDisplayUrl,
+          jobRole: row.jobRole,
+        }));
         if (active) {
           setTeamMembers(data);
           setTeamMembersLoaded(true);
@@ -846,11 +781,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       }
     };
-    if (teamId) void loadMembers();
+    if (teamId && currentUserId) void loadMembers();
     return () => {
       active = false;
     };
-  }, [teamId]);
+  }, [currentUserId, teamId]);
 
   useEffect(() => {
     let active = true;
@@ -871,74 +806,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
           return;
         }
-
-        const membershipColumns = [
-          "user_id,full_name,email,avatar_url",
-          "user_id,full_name,email",
-          "user_id",
-        ];
-        let rows: Array<{
-          user_id: string;
-          full_name?: string | null;
-          email?: string | null;
-          avatar_url?: string | null;
-        }> = [];
-
-        for (const columns of membershipColumns) {
-          const { data, error } = await supabase
-            .schema("tosho")
-            .from("memberships_view")
-            .select(columns)
-            .eq("workspace_id", workspaceId);
-          if (!error) {
-            rows = (((data as unknown) as typeof rows | null) ?? []).filter((row) => !!row.user_id);
-            break;
-          }
-          const message = (error.message ?? "").toLowerCase();
-          if (!message.includes("column") || !message.includes("does not exist")) {
-            throw error;
-          }
-        }
-
-        const nextLabels: Record<string, string> = {};
-        const nextAvatars: Record<string, string | null> = {};
-        rows.forEach((row) => {
-          nextLabels[row.user_id] =
-            formatUserShortName({
-              fullName: row.full_name ?? null,
-              email: row.email ?? null,
-              fallback: row.user_id,
-            }) || row.user_id;
-          nextAvatars[row.user_id] = row.avatar_url ?? null;
-        });
-
-        const profileIds = rows.map((row) => row.user_id).filter(Boolean);
-        if (profileIds.length > 0) {
-          const { data: profileRows, error: profileError } = await supabase
-            .from("team_member_profiles")
-            .select("user_id,first_name,last_name,full_name")
-            .in("user_id", profileIds);
-          if (!profileError) {
-            (((profileRows as Array<{
-              user_id?: string | null;
-              first_name?: string | null;
-              last_name?: string | null;
-              full_name?: string | null;
-            }> | null) ?? [])).forEach((row) => {
-              const userId = row.user_id?.trim() ?? "";
-              if (!userId) return;
-              const profileLabel = formatUserShortName({
-                firstName: row.first_name ?? null,
-                lastName: row.last_name ?? null,
-                fullName: row.full_name ?? null,
-                fallback: "",
-              }).trim();
-              if (profileLabel) {
-                nextLabels[userId] = profileLabel;
-              }
-            });
-          }
-        }
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
+        const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
+        const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
 
         if (active) {
           setWorkspaceMemberLabelById(nextLabels);
@@ -957,170 +827,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       active = false;
     };
   }, [currentUserId]);
-
-  useEffect(() => {
-    let active = true;
-    const managerIds = Array.from(
-      new Set(
-        rows
-          .map((row) => row.assigned_to?.trim() ?? "")
-          .filter((value) => isUuid(value))
-      )
-    );
-    if (!teamId || managerIds.length === 0) {
-      setPresenceDbLabelById({});
-      setPresenceDbAvatarById({});
-      return () => {
-        active = false;
-      };
-    }
-
-    const loadPresenceLabels = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("user_presence")
-          .select("user_id,display_name,avatar_url,last_seen_at")
-          .eq("team_id", teamId)
-          .in("user_id", managerIds);
-        if (error) throw error;
-
-        const latestById = new Map<
-          string,
-          { displayName: string; avatarUrl: string | null; lastSeenAt: number }
-        >();
-        (((data as Array<{
-          user_id?: string | null;
-          display_name?: string | null;
-          avatar_url?: string | null;
-          last_seen_at?: string | null;
-        }> | null) ?? [])).forEach((row) => {
-          const userId = row.user_id?.trim() ?? "";
-          const displayName = row.display_name?.trim() ?? "";
-          if (!userId || !displayName) return;
-          const lastSeenAt = new Date(row.last_seen_at ?? 0).getTime();
-          const current = latestById.get(userId);
-          if (!current || lastSeenAt > current.lastSeenAt) {
-            latestById.set(userId, {
-              displayName,
-              avatarUrl: row.avatar_url ?? null,
-              lastSeenAt,
-            });
-          }
-        });
-
-        if (!active) return;
-        setPresenceDbLabelById(
-          Object.fromEntries(Array.from(latestById.entries()).map(([id, value]) => [id, value.displayName]))
-        );
-        setPresenceDbAvatarById(
-          Object.fromEntries(Array.from(latestById.entries()).map(([id, value]) => [id, value.avatarUrl]))
-        );
-      } catch {
-        if (!active) return;
-        setPresenceDbLabelById({});
-        setPresenceDbAvatarById({});
-      }
-    };
-
-    void loadPresenceLabels();
-    return () => {
-      active = false;
-    };
-  }, [rows, teamId]);
-
-  useEffect(() => {
-    let active = true;
-    const managerIds = Array.from(
-      new Set(
-        rows
-          .map((row) => row.assigned_to?.trim() ?? "")
-          .filter((value) => isUuid(value))
-      )
-    );
-    if (!teamId || managerIds.length === 0) {
-      setTeamViewAvatarById({});
-      return () => {
-        active = false;
-      };
-    }
-
-    const loadTeamAvatars = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("team_members_view")
-          .select("user_id,avatar_url")
-          .eq("team_id", teamId)
-          .in("user_id", managerIds);
-        if (error) throw error;
-        const next = Object.fromEntries(
-          (((data as Array<{ user_id?: string | null; avatar_url?: string | null }> | null) ?? [])
-            .filter((row) => !!row.user_id)
-            .map((row) => [row.user_id as string, row.avatar_url ?? null])) as Array<[string, string | null]>
-        );
-        if (active) setTeamViewAvatarById(next);
-      } catch {
-        if (active) setTeamViewAvatarById({});
-      }
-    };
-
-    void loadTeamAvatars();
-    return () => {
-      active = false;
-    };
-  }, [rows, teamId]);
-
-  useEffect(() => {
-    let active = true;
-    const managerIds = Array.from(
-      new Set(
-        rows
-          .map((row) => row.assigned_to?.trim() ?? "")
-          .filter((value) => isUuid(value))
-      )
-    );
-    if (managerIds.length === 0) {
-      setManagerProfileLabelsById({});
-      return () => {
-        active = false;
-      };
-    }
-
-    const loadManagerProfiles = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("team_member_profiles")
-          .select("user_id,first_name,last_name,full_name")
-          .in("user_id", managerIds);
-        if (error) throw error;
-        const next: Record<string, string> = {};
-        (((data as Array<{
-          user_id?: string | null;
-          first_name?: string | null;
-          last_name?: string | null;
-          full_name?: string | null;
-        }> | null) ?? [])).forEach((row) => {
-          const userId = row.user_id?.trim() ?? "";
-          if (!userId) return;
-          const label = formatUserShortName({
-            firstName: row.first_name ?? null,
-            lastName: row.last_name ?? null,
-            fullName: row.full_name ?? null,
-            fallback: "",
-          }).trim();
-          if (!label) return;
-          next[userId] = label;
-        });
-        if (active) setManagerProfileLabelsById(next);
-      } catch {
-        if (active) setManagerProfileLabelsById({});
-      }
-    };
-
-    void loadManagerProfiles();
-    return () => {
-      active = false;
-    };
-  }, [rows]);
 
   useEffect(() => {
     if (!createOpen && !editDialogOpen) return;

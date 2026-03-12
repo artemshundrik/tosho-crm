@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { CustomerDialog, LeadDialog } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
-import { listCustomerQuotes, listTeamMembers, type TeamMemberRow } from "@/lib/toshoApi";
+import { listCustomerQuotes } from "@/lib/toshoApi";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
+import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -155,8 +157,30 @@ const normalizeManagerKey = (value?: string | null) =>
 type CustomersPageCachePayload = {
   rows: CustomerRow[];
   leads: LeadRow[];
-  teamMembers: TeamMemberRow[];
+  teamMembers: WorkspaceMemberDisplayRow[];
   cachedAt: number;
+};
+
+const toManagerKey = (value?: string | null) => normalizeManagerKey(value);
+
+const buildManagerAliases = (member: WorkspaceMemberDisplayRow) => {
+  const aliases = new Set<string>();
+  const firstName = member.firstName.trim();
+  const lastName = member.lastName.trim();
+  const fullName = member.fullName.trim();
+  const label = member.label.trim();
+  const emailAlias = member.email?.split("@")[0]?.trim() ?? "";
+
+  [label, fullName, `${firstName} ${lastName}`.trim(), `${lastName} ${firstName}`.trim(), firstName, emailAlias]
+    .filter(Boolean)
+    .forEach((value) => aliases.add(toManagerKey(value)));
+
+  if (firstName && lastName) {
+    aliases.add(toManagerKey(`${firstName} ${lastName[0]}.`));
+    aliases.add(toManagerKey(`${lastName} ${firstName[0]}.`));
+  }
+
+  return Array.from(aliases).filter(Boolean);
 };
 
 function readCustomersPageCache(teamId: string): CustomersPageCachePayload | null {
@@ -165,10 +189,18 @@ function readCustomersPageCache(teamId: string): CustomersPageCachePayload | nul
     const raw = sessionStorage.getItem(`customers-page-cache:${teamId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CustomersPageCachePayload;
+    const cachedTeamMembers = Array.isArray(parsed.teamMembers)
+      ? parsed.teamMembers.filter(
+          (row): row is WorkspaceMemberDisplayRow =>
+            typeof row?.userId === "string" &&
+            typeof row?.label === "string" &&
+            typeof row?.workspaceId === "string"
+        )
+      : [];
     return {
       rows: Array.isArray(parsed.rows) ? parsed.rows : [],
       leads: Array.isArray(parsed.leads) ? parsed.leads : [],
-      teamMembers: Array.isArray(parsed.teamMembers) ? parsed.teamMembers : [],
+      teamMembers: cachedTeamMembers,
       cachedAt: Number(parsed.cachedAt ?? Date.now()),
     };
   } catch {
@@ -194,7 +226,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadsLoading, setLeadsLoading] = useState(() => !initialCache);
   const [leadsRefreshing, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialCache?.teamMembers ?? []);
+  const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>(() => initialCache?.teamMembers ?? []);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -272,56 +304,72 @@ function CustomersPage({ teamId }: { teamId: string }) {
     );
     return resolved.displayName;
   }, [session]);
-  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.userId, member])), [teamMembers]);
   const memberByLabel = useMemo(
     () => new Map(teamMembers.map((member) => [member.label, member])),
     [teamMembers]
   );
-  const memberByNormalizedLabel = useMemo(() => {
+  const managerDialogMembers = useMemo(
+    () =>
+      teamMembers.map((member) => ({
+        id: member.userId,
+        label: member.label,
+        avatarUrl: member.avatarDisplayUrl,
+      })),
+    [teamMembers]
+  );
+  const memberByAlias = useMemo(() => {
     const counts = new Map<string, number>();
     teamMembers.forEach((member) => {
-      const key = normalizeManagerKey(member.label);
-      if (!key) return;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      buildManagerAliases(member).forEach((key) => {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
     });
-    const map = new Map<string, TeamMemberRow>();
+    const map = new Map<string, WorkspaceMemberDisplayRow>();
     teamMembers.forEach((member) => {
-      const key = normalizeManagerKey(member.label);
-      if (!key) return;
-      if ((counts.get(key) ?? 0) === 1) map.set(key, member);
+      buildManagerAliases(member).forEach((key) => {
+        if ((counts.get(key) ?? 0) === 1) map.set(key, member);
+      });
     });
     return map;
   }, [teamMembers]);
   const memberByUniqueFirstToken = useMemo(() => {
     const counts = new Map<string, number>();
     teamMembers.forEach((member) => {
-      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      const token = toManagerKey(member.firstName || member.label).split(" ")[0] ?? "";
       if (!token) return;
       counts.set(token, (counts.get(token) ?? 0) + 1);
     });
-    const map = new Map<string, TeamMemberRow>();
+    const map = new Map<string, WorkspaceMemberDisplayRow>();
     teamMembers.forEach((member) => {
-      const token = normalizeManagerKey(member.label).split(" ")[0] ?? "";
+      const token = toManagerKey(member.firstName || member.label).split(" ")[0] ?? "";
       if (!token) return;
       if ((counts.get(token) ?? 0) === 1) map.set(token, member);
     });
     return map;
   }, [teamMembers]);
+  const resolveManagerMember = useCallback(
+    (managerUserId?: string | null, manager?: string | null) => {
+      const byId = managerUserId ? memberById.get(managerUserId) : undefined;
+      if (byId) return byId;
+      const normalized = toManagerKey(manager);
+      if (!normalized) return undefined;
+      const byAlias = memberByAlias.get(normalized);
+      if (byAlias) return byAlias;
+      const token = normalized.split(" ")[0] ?? "";
+      return token ? memberByUniqueFirstToken.get(token) : undefined;
+    },
+    [memberByAlias, memberById, memberByUniqueFirstToken]
+  );
   const resolveManagerLabel = useCallback(
     (managerUserId?: string | null, manager?: string | null) => {
-      const byId = managerUserId ? memberById.get(managerUserId)?.label?.trim() : "";
-      if (byId) return byId;
+      const resolvedMember = resolveManagerMember(managerUserId, manager);
+      if (resolvedMember?.label?.trim()) return resolvedMember.label.trim();
       const fallback = manager?.trim() ?? "";
       if (!fallback) return "";
-      const normalized = normalizeManagerKey(fallback);
-      const byExactLabel = memberByNormalizedLabel.get(normalized)?.label?.trim();
-      if (byExactLabel) return byExactLabel;
-      const token = normalized.split(" ")[0] ?? "";
-      const byToken = token ? memberByUniqueFirstToken.get(token)?.label?.trim() : "";
-      if (byToken) return byToken;
       return formatUserShortName({ fullName: fallback, fallback });
     },
-    [memberById, memberByNormalizedLabel, memberByUniqueFirstToken]
+    [resolveManagerMember]
   );
 
   const customerManagerOptions = useMemo(() => {
@@ -415,13 +463,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const managerLabel = resolveManagerLabel(managerUserId, manager);
     if (!managerLabel) return "Не вказано";
     const member =
-      (managerUserId ? memberById.get(managerUserId) : undefined) ??
-      memberByLabel.get(managerLabel) ??
-      memberByNormalizedLabel.get(normalizeManagerKey(managerLabel));
+      resolveManagerMember(managerUserId, manager) ??
+      memberByLabel.get(managerLabel);
     return (
       <div className="flex items-center gap-2 min-w-0">
         <AvatarBase
-          src={member?.avatarUrl ?? null}
+          src={member?.avatarDisplayUrl ?? null}
           name={managerLabel}
           fallback={managerLabel.slice(0, 2).toUpperCase()}
           size={20}
@@ -440,7 +487,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return (
       <span className="flex items-center gap-2 min-w-0">
         <AvatarBase
-          src={member?.avatarUrl ?? null}
+          src={member?.avatarDisplayUrl ?? null}
           name={value}
           fallback={value.slice(0, 2).toUpperCase()}
           size={18}
@@ -665,8 +712,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const loadTeamMembers = async () => {
     try {
-      const members = await listTeamMembers(teamId);
-      setTeamMembers(members);
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (!workspaceId) {
+        setTeamMembers([]);
+        return;
+      }
+      const rows = await listWorkspaceMembersForDisplay(workspaceId);
+      setTeamMembers(rows);
     } catch {
       setTeamMembers([]);
     }
@@ -690,7 +742,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     void loadLeads();
     void loadTeamMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId]);
+  }, [teamId, userId]);
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
@@ -1318,7 +1370,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         setForm={setForm}
         ownershipOptions={OWNERSHIP_OPTIONS}
         vatOptions={VAT_OPTIONS}
-        teamMembers={teamMembers}
+        teamMembers={managerDialogMembers}
         saving={saving}
         error={formError}
         title={editingId ? "Редагувати замовника" : "Новий замовник"}
@@ -1344,7 +1396,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         }}
         form={leadForm}
         setForm={setLeadForm}
-        teamMembers={teamMembers}
+        teamMembers={managerDialogMembers}
         saving={leadSaving}
         error={leadFormError}
         title={leadEditingId ? "Редагувати ліда" : "Новий лід"}

@@ -1,4 +1,4 @@
--- Link customers/leads manager to concrete team member id.
+-- Link customers/leads manager to canonical workspace member ids and labels.
 -- Safe to run multiple times.
 
 begin;
@@ -15,109 +15,127 @@ create index if not exists customers_team_manager_user_idx
 create index if not exists leads_team_manager_user_idx
   on tosho.leads (team_id, manager_user_id);
 
-with normalized_members as (
+with member_directory as (
   select
-    mv.workspace_id,
-    mv.user_id,
-    nullif(trim(coalesce(mv.full_name, mv.email, '')), '') as manager_label
-  from tosho.memberships_view mv
-  where mv.workspace_id is not null
+    md.workspace_id,
+    md.user_id,
+    nullif(trim(md.email), '') as email,
+    nullif(trim(md.first_name), '') as first_name,
+    nullif(trim(md.last_name), '') as last_name,
+    nullif(trim(md.full_name), '') as full_name,
+    coalesce(
+      nullif(trim(concat_ws(' ', md.first_name, case when nullif(trim(md.last_name), '') is not null then left(trim(md.last_name), 1) || '.' end)), ''),
+      nullif(trim(md.full_name), ''),
+      nullif(trim(split_part(md.email, '@', 1)), ''),
+      'Користувач'
+    ) as canonical_label
+  from tosho.workspace_member_directory md
+  where md.workspace_id is not null
+    and md.user_id is not null
 ),
-unique_member_labels as (
+member_aliases as (
+  select
+    md.workspace_id,
+    md.user_id,
+    md.canonical_label,
+    lower(regexp_replace(trim(alias.label), '\s+', ' ', 'g')) as manager_key
+  from member_directory md
+  cross join lateral (
+    values
+      (md.canonical_label),
+      (md.full_name),
+      (concat_ws(' ', md.first_name, md.last_name)),
+      (concat_ws(' ', md.last_name, md.first_name)),
+      (case when md.first_name is not null and md.last_name is not null then md.first_name || ' ' || left(md.last_name, 1) || '.' end),
+      (case when md.first_name is not null and md.last_name is not null then md.last_name || ' ' || left(md.first_name, 1) || '.' end),
+      (md.first_name),
+      (split_part(md.email, '@', 1))
+  ) as alias(label)
+  where nullif(trim(alias.label), '') is not null
+),
+unique_member_aliases as (
   select
     workspace_id,
-    lower(manager_label) as manager_key,
-    min(user_id::text)::uuid as user_id
-  from normalized_members
-  where manager_label is not null
-  group by workspace_id, lower(manager_label)
-  having count(*) = 1
+    manager_key,
+    min(user_id::text)::uuid as user_id,
+    min(canonical_label) as canonical_label
+  from member_aliases
+  group by workspace_id, manager_key
+  having count(distinct user_id) = 1
 )
 update tosho.customers c
-set manager_user_id = uml.user_id
-from unique_member_labels uml
-where c.team_id = uml.workspace_id
-  and c.manager_user_id is null
+set
+  manager_user_id = uma.user_id,
+  manager = uma.canonical_label
+from unique_member_aliases uma
+where c.team_id = uma.workspace_id
   and nullif(trim(c.manager), '') is not null
-  and lower(trim(c.manager)) = uml.manager_key;
+  and lower(regexp_replace(trim(c.manager), '\s+', ' ', 'g')) = uma.manager_key
+  and (
+    c.manager_user_id is distinct from uma.user_id
+    or coalesce(nullif(trim(c.manager), ''), '') is distinct from uma.canonical_label
+  );
 
-with normalized_members as (
+with member_directory as (
   select
-    mv.workspace_id,
-    mv.user_id,
-    nullif(trim(coalesce(mv.full_name, mv.email, '')), '') as manager_label
-  from tosho.memberships_view mv
-  where mv.workspace_id is not null
+    md.workspace_id,
+    md.user_id,
+    nullif(trim(md.email), '') as email,
+    nullif(trim(md.first_name), '') as first_name,
+    nullif(trim(md.last_name), '') as last_name,
+    nullif(trim(md.full_name), '') as full_name,
+    coalesce(
+      nullif(trim(concat_ws(' ', md.first_name, case when nullif(trim(md.last_name), '') is not null then left(trim(md.last_name), 1) || '.' end)), ''),
+      nullif(trim(md.full_name), ''),
+      nullif(trim(split_part(md.email, '@', 1)), ''),
+      'Користувач'
+    ) as canonical_label
+  from tosho.workspace_member_directory md
+  where md.workspace_id is not null
+    and md.user_id is not null
 ),
-unique_first_tokens as (
+member_aliases as (
+  select
+    md.workspace_id,
+    md.user_id,
+    md.canonical_label,
+    lower(regexp_replace(trim(alias.label), '\s+', ' ', 'g')) as manager_key
+  from member_directory md
+  cross join lateral (
+    values
+      (md.canonical_label),
+      (md.full_name),
+      (concat_ws(' ', md.first_name, md.last_name)),
+      (concat_ws(' ', md.last_name, md.first_name)),
+      (case when md.first_name is not null and md.last_name is not null then md.first_name || ' ' || left(md.last_name, 1) || '.' end),
+      (case when md.first_name is not null and md.last_name is not null then md.last_name || ' ' || left(md.first_name, 1) || '.' end),
+      (md.first_name),
+      (split_part(md.email, '@', 1))
+  ) as alias(label)
+  where nullif(trim(alias.label), '') is not null
+),
+unique_member_aliases as (
   select
     workspace_id,
-    split_part(lower(manager_label), ' ', 1) as manager_token,
-    min(user_id::text)::uuid as user_id
-  from normalized_members
-  where manager_label is not null
-  group by workspace_id, split_part(lower(manager_label), ' ', 1)
-  having count(*) = 1
-)
-update tosho.customers c
-set manager_user_id = uft.user_id
-from unique_first_tokens uft
-where c.team_id = uft.workspace_id
-  and c.manager_user_id is null
-  and nullif(trim(c.manager), '') is not null
-  and split_part(lower(trim(c.manager)), ' ', 1) = uft.manager_token;
-
-with normalized_members as (
-  select
-    mv.workspace_id,
-    mv.user_id,
-    nullif(trim(coalesce(mv.full_name, mv.email, '')), '') as manager_label
-  from tosho.memberships_view mv
-  where mv.workspace_id is not null
-),
-unique_member_labels as (
-  select
-    workspace_id,
-    lower(manager_label) as manager_key,
-    min(user_id::text)::uuid as user_id
-  from normalized_members
-  where manager_label is not null
-  group by workspace_id, lower(manager_label)
-  having count(*) = 1
+    manager_key,
+    min(user_id::text)::uuid as user_id,
+    min(canonical_label) as canonical_label
+  from member_aliases
+  group by workspace_id, manager_key
+  having count(distinct user_id) = 1
 )
 update tosho.leads l
-set manager_user_id = uml.user_id
-from unique_member_labels uml
-where l.team_id = uml.workspace_id
-  and l.manager_user_id is null
+set
+  manager_user_id = uma.user_id,
+  manager = uma.canonical_label
+from unique_member_aliases uma
+where l.team_id = uma.workspace_id
   and nullif(trim(l.manager), '') is not null
-  and lower(trim(l.manager)) = uml.manager_key;
-
-with normalized_members as (
-  select
-    mv.workspace_id,
-    mv.user_id,
-    nullif(trim(coalesce(mv.full_name, mv.email, '')), '') as manager_label
-  from tosho.memberships_view mv
-  where mv.workspace_id is not null
-),
-unique_first_tokens as (
-  select
-    workspace_id,
-    split_part(lower(manager_label), ' ', 1) as manager_token,
-    min(user_id::text)::uuid as user_id
-  from normalized_members
-  where manager_label is not null
-  group by workspace_id, split_part(lower(manager_label), ' ', 1)
-  having count(*) = 1
-)
-update tosho.leads l
-set manager_user_id = uft.user_id
-from unique_first_tokens uft
-where l.team_id = uft.workspace_id
-  and l.manager_user_id is null
-  and nullif(trim(l.manager), '') is not null
-  and split_part(lower(trim(l.manager)), ' ', 1) = uft.manager_token;
+  and lower(regexp_replace(trim(l.manager), '\s+', ' ', 'g')) = uma.manager_key
+  and (
+    l.manager_user_id is distinct from uma.user_id
+    or coalesce(nullif(trim(l.manager), ''), '') is distinct from uma.canonical_label
+  );
 
 commit;
 

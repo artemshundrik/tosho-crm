@@ -14,6 +14,7 @@ import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName, toFullName } from "@/lib/userName";
+import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile } from "@/lib/workspaceMemberDirectory";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -78,6 +79,7 @@ export function ProfilePage() {
   const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
   const [initials, setInitials] = useState(cached?.initials ?? "");
   const [phone, setPhone] = useState("");
+  const [avatarStoragePath, setAvatarStoragePath] = useState<string | null>(null);
 
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
     if (!userId) return;
@@ -134,52 +136,28 @@ export function ProfilePage() {
         setDisplayName(resolvedName.displayName);
         setBirthDate(metaBirthDate);
         setPhone(metaPhone);
-        const rawAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
-        const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
-        setAvatarUrl(displayAvatarUrl);
-
-        const i = getInitialsFromName(resolvedName.displayName, user.email);
-        setInitials(i);
-
         const resolvedWorkspaceId = await resolveWorkspaceId(user.id);
         let resolvedAccessRole = "member";
         let resolvedJobRole: string | null = null;
+        let resolvedAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
+        let resolvedAvatarPath: string | null = null;
+        let resolvedProfileName = resolvedName;
+        let resolvedBirthDate = metaBirthDate;
+        let resolvedPhone = metaPhone;
 
         if (resolvedWorkspaceId) {
-          const { data: teamProfile } = await supabase
-            .schema("tosho")
-            .from("team_member_profiles")
-            .select("first_name,last_name,full_name,birth_date,phone")
-            .eq("workspace_id", resolvedWorkspaceId)
-            .eq("user_id", user.id)
-            .maybeSingle<{
-              first_name?: string | null;
-              last_name?: string | null;
-              full_name?: string | null;
-              birth_date?: string | null;
-              phone?: string | null;
-            }>();
-
-          if (teamProfile) {
-            const dbFirst = teamProfile.first_name?.trim() || "";
-            const dbLast = teamProfile.last_name?.trim() || "";
-            const dbFull = teamProfile.full_name?.trim() || "";
-            const dbBirthDate = teamProfile.birth_date?.trim() || "";
-            const dbPhone = teamProfile.phone?.trim() || "";
-            const resolvedFromDb = buildUserNameFromMetadata(
-              {
-                first_name: dbFirst || undefined,
-                last_name: dbLast || undefined,
-                full_name: dbFull || undefined,
-              },
-              user.email
-            );
-            setFirstName(resolvedFromDb.firstName);
-            setLastName(resolvedFromDb.lastName);
-            setFullName(resolvedFromDb.fullName);
-            setDisplayName(resolvedFromDb.displayName);
-            setBirthDate(dbBirthDate || metaBirthDate);
-            setPhone(dbPhone || metaPhone);
+          const directoryEntry = await getCurrentWorkspaceMemberDirectoryEntry();
+          if (directoryEntry) {
+            resolvedProfileName = {
+              firstName: directoryEntry.firstName,
+              lastName: directoryEntry.lastName,
+              fullName: directoryEntry.fullName,
+              displayName: directoryEntry.displayName,
+            };
+            resolvedBirthDate = directoryEntry.birthDate || metaBirthDate;
+            resolvedPhone = directoryEntry.phone || metaPhone;
+            resolvedAvatarUrl = directoryEntry.avatarUrl || resolvedAvatarUrl;
+            resolvedAvatarPath = directoryEntry.avatarPath || null;
           }
 
           const { data: membership } = await supabase
@@ -195,16 +173,29 @@ export function ProfilePage() {
           resolvedJobRole = (membership?.job_role as string) || null;
         }
 
+        const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, resolvedAvatarUrl, AVATAR_BUCKET);
+        setAvatarUrl(displayAvatarUrl);
+        setAvatarStoragePath(resolvedAvatarPath);
+        setFirstName(resolvedProfileName.firstName);
+        setLastName(resolvedProfileName.lastName);
+        setFullName(resolvedProfileName.fullName);
+        setDisplayName(resolvedProfileName.displayName);
+        setBirthDate(resolvedBirthDate);
+        setPhone(resolvedPhone);
+
+        const i = getInitialsFromName(resolvedProfileName.displayName, user.email);
+        setInitials(i);
+
         setAccessRole(resolvedAccessRole);
         setJobRole(resolvedJobRole);
 
         setCache({
           userId: user.id,
-          firstName: resolvedName.firstName,
-          lastName: resolvedName.lastName,
-          fullName: resolvedName.fullName,
-          displayName: resolvedName.displayName,
-          birthDate: metaBirthDate,
+          firstName: resolvedProfileName.firstName,
+          lastName: resolvedProfileName.lastName,
+          fullName: resolvedProfileName.fullName,
+          displayName: resolvedProfileName.displayName,
+          birthDate: resolvedBirthDate,
           email: user.email || "",
           accessRole: resolvedAccessRole,
           jobRole: resolvedJobRole,
@@ -291,8 +282,7 @@ export function ProfilePage() {
     if (!userId) return;
     setAvatarUploading(true);
     try {
-      const fileName = `avatar-${Date.now()}.png`;
-      const uploadedPath = `avatars/${userId}/${fileName}`;
+      const uploadedPath = `avatars/${userId}/current.png`;
       const { error: uploadError } = await supabase.storage
         .from(AVATAR_BUCKET)
         .upload(uploadedPath, blob, { upsert: true, contentType: blob.type || "image/png" });
@@ -302,6 +292,22 @@ export function ProfilePage() {
       const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(uploadedPath);
       const publicUrl = data.publicUrl;
 
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (workspaceId) {
+        await upsertWorkspaceMemberProfile({
+          workspaceId,
+          userId,
+          firstName,
+          lastName,
+          fullName: toFullName(firstName.trim(), lastName.trim()) || fullName.trim(),
+          avatarUrl: publicUrl,
+          avatarPath: uploadedPath,
+          birthDate,
+          phone,
+          updatedBy: userId,
+        });
+      }
+
       const { error: updateError } = await supabase.auth.updateUser({
         data: { avatar_url: publicUrl },
       });
@@ -310,6 +316,7 @@ export function ProfilePage() {
       await supabase.auth.refreshSession();
       const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, publicUrl, AVATAR_BUCKET);
       setAvatarUrl(displayAvatarUrl);
+      setAvatarStoragePath(uploadedPath);
       setAvatarDraftUrl(null);
       commitCache({ avatarUrl: displayAvatarUrl });
       window.dispatchEvent(
@@ -347,6 +354,23 @@ export function ProfilePage() {
         { first_name: nextFirstName, last_name: nextLastName, full_name: nextFullName },
         email
       ).displayName;
+      if (userId) {
+        const workspaceId = await resolveWorkspaceId(userId);
+        if (workspaceId) {
+          await upsertWorkspaceMemberProfile({
+            workspaceId,
+            userId,
+            firstName: nextFirstName,
+            lastName: nextLastName,
+            fullName: nextFullName,
+            avatarUrl,
+            avatarPath: avatarStoragePath,
+            birthDate,
+            phone,
+            updatedBy: userId,
+          });
+        }
+      }
       const { error } = await supabase.auth.updateUser({
         data: {
           first_name: nextFirstName || null,
@@ -363,31 +387,6 @@ export function ProfilePage() {
       setInitials(i);
       setFullName(nextFullName);
       setDisplayName(nextDisplayName);
-
-      if (userId) {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (workspaceId) {
-          const { error: profileError } = await supabase
-            .schema("tosho")
-            .from("team_member_profiles")
-            .upsert(
-              {
-                workspace_id: workspaceId,
-                user_id: userId,
-                first_name: nextFirstName || null,
-                last_name: nextLastName || null,
-                full_name: nextFullName || null,
-                birth_date: birthDate || null,
-                phone: phone || null,
-                updated_by: userId,
-              },
-              { onConflict: "workspace_id,user_id" }
-            );
-          if (profileError) {
-            console.warn("Failed to upsert team member profile", profileError);
-          }
-        }
-      }
 
       toast.success("Профіль оновлено!", {
         description: "Твоє нове ім'я збережено в системі.",

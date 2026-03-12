@@ -51,6 +51,7 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -483,171 +484,48 @@ export default function DesignPage() {
       if (!userId) return;
       setMembersLoading(true);
       try {
-        let rows: MembershipRow[] = [];
-
-        if (effectiveTeamId) {
-          const teamViewColumns = [
-            "user_id,full_name,email,avatar_url,access_role,job_role",
-            "user_id,full_name,email,avatar_url,job_role",
-            "user_id,full_name,email,avatar_url",
-            "user_id,full_name,email,job_role",
-            "user_id,full_name,email",
-            "user_id,full_name,avatar_url",
-            "user_id,email,avatar_url",
-            "user_id,full_name,job_role",
-            "user_id,full_name",
-            "user_id,email",
-            "user_id",
-          ];
-          for (const columns of teamViewColumns) {
-            const { data: teamViewData, error: teamViewError } = await supabase
-              .from("team_members_view")
-              .select(columns)
-              .eq("team_id", effectiveTeamId);
-            if (!teamViewError) {
-              rows = ((teamViewData as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-              break;
-            }
-            const message = (teamViewError.message ?? "").toLowerCase();
-            if (!message.includes("column") || !message.includes("does not exist")) {
-              throw teamViewError;
-            }
-          }
+        const workspaceId = await resolveWorkspaceId(userId);
+        if (!workspaceId) {
+          setMemberById({});
+          setMemberAvatarById({});
+          setManagerMembers([]);
+          setDesignerMembers([]);
+          return;
         }
-
-        if (rows.length === 0) {
-          const workspaceId = await resolveWorkspaceId(userId);
-          if (!workspaceId) {
-            setMemberById({});
-            setMemberAvatarById({});
-            setManagerMembers([]);
-            setDesignerMembers([]);
-            return;
-          }
-
-          const membershipColumns = [
-            "user_id,full_name,email,avatar_url,access_role,job_role",
-            "user_id,full_name,email,avatar_url,job_role",
-            "user_id,full_name,email,avatar_url",
-            "user_id,full_name,email,access_role,job_role",
-            "user_id,full_name,email,job_role",
-            "user_id,full_name,email",
-            "user_id",
-          ];
-          let loaded = false;
-          for (const columns of membershipColumns) {
-            const { data, error: membersError } = await supabase
-              .schema("tosho")
-              .from("memberships_view")
-              .select(columns)
-              .eq("workspace_id", workspaceId);
-            if (!membersError) {
-              rows = ((data as unknown as MembershipRow[] | null) ?? []).filter((row) => !!row.user_id);
-              loaded = true;
-              break;
-            }
-            const message = (membersError.message ?? "").toLowerCase();
-            if (!message.includes("column") || !message.includes("does not exist")) {
-              throw membersError;
-            }
-          }
-          if (!loaded) throw new Error("Не вдалося завантажити учасників");
-        }
+        const rows = await listWorkspaceMembersForDisplay(workspaceId);
 
         const labelById: Record<string, string> = {};
         const avatarById: Record<string, string | null> = {};
         rows.forEach((row) => {
-          const label =
-            formatUserShortName({
-              fullName: row.full_name ?? null,
-              email: row.email ?? null,
-              fallback: row.user_id,
-            }) || row.user_id;
-          labelById[row.user_id] = label;
-          avatarById[row.user_id] = row.avatar_url ?? null;
+          labelById[row.userId] = row.label;
+          avatarById[row.userId] = row.avatarDisplayUrl;
         });
 
-        const missingAvatarIds = rows
-          .map((row) => row.user_id)
-          .filter((id) => !avatarById[id]);
-        if (effectiveTeamId && missingAvatarIds.length > 0) {
-          const { data: avatarRows, error: avatarError } = await supabase
-            .from("team_members_view")
-            .select("user_id,avatar_url")
-            .eq("team_id", effectiveTeamId)
-            .in("user_id", missingAvatarIds);
-          if (!avatarError) {
-            ((avatarRows as Array<{ user_id: string; avatar_url?: string | null }> | null) ?? []).forEach((row) => {
-              if (!row.user_id) return;
-              if (!avatarById[row.user_id] && row.avatar_url) {
-                avatarById[row.user_id] = row.avatar_url;
-              }
-            });
-          }
-        }
-
         setMemberById(labelById);
-        const resolvedAvatarEntries = await Promise.all(
-          Object.entries(avatarById).map(async ([id, rawUrl]) => [id, await resolveAvatarDisplayUrl(supabase, rawUrl, AVATAR_BUCKET)] as const)
-        );
-        setMemberAvatarById(Object.fromEntries(resolvedAvatarEntries));
-        let designerRows = rows.filter((row) => isDesignerRole(row.job_role));
-
-        // Fallback: when team_members_view doesn't expose job_role, hydrate roles from memberships_view.
-        if (designerRows.length === 0 && rows.length > 0) {
-          const workspaceId = await resolveWorkspaceId(userId);
-          if (workspaceId) {
-            const memberIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
-            const membershipColumns = [
-              "user_id,job_role",
-              "user_id,full_name,email,job_role",
-              "user_id,access_role,job_role",
-              "user_id",
-            ];
-            for (const columns of membershipColumns) {
-              const { data: roleRows, error: roleError } = await supabase
-                .schema("tosho")
-                .from("memberships_view")
-                .select(columns)
-                .eq("workspace_id", workspaceId)
-                .in("user_id", memberIds);
-              if (!roleError) {
-                const roleById = new Map(
-                  (((roleRows as Array<{ user_id?: string | null; job_role?: string | null }> | null) ?? [])
-                    .map((row) => [row.user_id ?? "", row.job_role ?? null])) as Array<[string, string | null]>
-                );
-                designerRows = rows.filter((row) => isDesignerRole(roleById.get(row.user_id) ?? row.job_role));
-                break;
-              }
-              const message = (roleError.message ?? "").toLowerCase();
-              if (!message.includes("column") || !message.includes("does not exist")) {
-                throw roleError;
-              }
-            }
-          }
-        }
+        setMemberAvatarById(avatarById);
+        const designerRows = rows.filter((row) => isDesignerRole(row.jobRole));
 
         // If no one is marked as designer, still allow assignment to any team member.
         const assigneeRows = designerRows.length > 0 ? designerRows : rows;
         setDesignerMembers(
           assigneeRows.map((row) => ({
-            id: row.user_id,
-            label: labelById[row.user_id] ?? row.user_id,
-            avatarUrl: avatarById[row.user_id] ?? null,
+            id: row.userId,
+            label: labelById[row.userId] ?? row.userId,
+            avatarUrl: avatarById[row.userId] ?? null,
           }))
         );
 
-        let managerRows = rows.filter((row) => isManagerRole(row.access_role, row.job_role));
+        let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
         if (managerRows.length === 0 && userId) {
-          const me = rows.find((row) => row.user_id === userId);
+          const me = rows.find((row) => row.userId === userId);
           if (me) managerRows = [me];
         }
         if (managerRows.length === 0) managerRows = rows;
         setManagerMembers(
           managerRows.map((row) => ({
-            id: row.user_id,
-            label: labelById[row.user_id] ?? row.user_id,
-            avatarUrl: avatarById[row.user_id] ?? null,
+            id: row.userId,
+            label: labelById[row.userId] ?? row.userId,
+            avatarUrl: avatarById[row.userId] ?? null,
           }))
         );
       } catch (e: unknown) {
