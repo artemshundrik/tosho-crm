@@ -687,6 +687,7 @@ export default function DesignTaskPage() {
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
   const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [deadlineDraftDate, setDeadlineDraftDate] = useState<Date | undefined>();
   const [deadlineTime, setDeadlineTime] = useState("12:00");
   const [estimatePendingAction, setEstimatePendingAction] = useState<
     | { mode: "assign"; nextAssigneeUserId: string | null }
@@ -1763,6 +1764,7 @@ export default function DesignTaskPage() {
 
   useEffect(() => {
     if (!headerDeadlinePopoverOpen && !deadlinePopoverOpen) return;
+    setDeadlineDraftDate(toLocalDate(task?.designDeadline));
     const match = (task?.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
     if (!match) {
       setDeadlineTime("12:00");
@@ -3328,6 +3330,12 @@ export default function DesignTaskPage() {
     }
   };
 
+  const applyDeadlineDraft = () => {
+    const normalizedTime = isValidDeadlineTime(deadlineTime.trim()) ? deadlineTime.trim() : "12:00";
+    setDeadlineTime(normalizedTime);
+    void updateTaskDeadline(deadlineDraftDate ?? null, normalizedTime);
+  };
+
   const saveDesignBrief = async () => {
     if (!task || !effectiveTeamId || briefSaving) return;
     if (!ensureCanEdit()) return;
@@ -4382,10 +4390,9 @@ export default function DesignTaskPage() {
               <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={toLocalDate(task.designDeadline)}
+                  selected={deadlineDraftDate}
                   onSelect={(date) => {
-                    if (!date) return;
-                    void updateTaskDeadline(date, deadlineTime);
+                    setDeadlineDraftDate(date ?? undefined);
                   }}
                   captionLayout="dropdown-buttons"
                   fromYear={new Date().getFullYear() - 3}
@@ -4420,9 +4427,28 @@ export default function DesignTaskPage() {
                 <DateQuickActions
                   fullWidth
                   onSelect={(date) => {
-                    void updateTaskDeadline(date ?? null, deadlineTime);
+                    setDeadlineDraftDate(date ?? undefined);
                   }}
                 />
+                <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setHeaderDeadlinePopoverOpen(false)}
+                    disabled={deadlineSaving}
+                  >
+                    Скасувати
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={applyDeadlineDraft}
+                    disabled={deadlineSaving}
+                  >
+                    Зберегти
+                  </Button>
+                </div>
               </PopoverContent>
             </Popover>
             <Badge
@@ -5260,10 +5286,9 @@ export default function DesignTaskPage() {
                 <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={toLocalDate(task.designDeadline)}
+                    selected={deadlineDraftDate}
                     onSelect={(date) => {
-                      if (!date) return;
-                      void updateTaskDeadline(date, deadlineTime);
+                      setDeadlineDraftDate(date ?? undefined);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
@@ -5298,9 +5323,28 @@ export default function DesignTaskPage() {
                   <DateQuickActions
                     fullWidth
                     onSelect={(date) => {
-                      void updateTaskDeadline(date ?? null, deadlineTime);
+                      setDeadlineDraftDate(date ?? undefined);
                     }}
                   />
+                  <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeadlinePopoverOpen(false)}
+                      disabled={deadlineSaving}
+                    >
+                      Скасувати
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={applyDeadlineDraft}
+                      disabled={deadlineSaving}
+                    >
+                      Зберегти
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
               {task.designDeadline ? (
