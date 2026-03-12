@@ -3,6 +3,8 @@ create table if not exists public.push_subscriptions (
   user_id uuid not null references auth.users(id) on delete cascade,
   p256dh text not null,
   auth text not null,
+  origin text null,
+  scope text null,
   user_agent text null,
   last_seen_at timestamptz not null default timezone('utc', now()),
   disabled_at timestamptz null,
@@ -10,8 +12,29 @@ create table if not exists public.push_subscriptions (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.push_subscriptions add column if not exists origin text null;
+alter table public.push_subscriptions add column if not exists scope text null;
+
 create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions(user_id);
 create index if not exists push_subscriptions_active_idx on public.push_subscriptions(user_id) where disabled_at is null;
+create index if not exists push_subscriptions_origin_idx on public.push_subscriptions(origin) where disabled_at is null;
+
+with ranked as (
+  select
+    endpoint,
+    row_number() over (
+      partition by user_id, coalesce(origin, ''), coalesce(scope, ''), p256dh, auth
+      order by last_seen_at desc nulls last, updated_at desc nulls last, created_at desc nulls last
+    ) as rn
+  from public.push_subscriptions
+  where disabled_at is null
+)
+update public.push_subscriptions as ps
+set disabled_at = timezone('utc', now())
+from ranked
+where ps.endpoint = ranked.endpoint
+  and ranked.rn > 1
+  and ps.disabled_at is null;
 
 create or replace function public.set_push_subscriptions_updated_at()
 returns trigger
@@ -53,4 +76,3 @@ using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 notify pgrst, 'reload schema';
-

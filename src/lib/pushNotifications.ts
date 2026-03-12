@@ -8,6 +8,8 @@ type PushSubscriptionRow = {
   user_id: string;
   p256dh: string;
   auth: string;
+  origin?: string | null;
+  scope?: string | null;
   user_agent: string | null;
   last_seen_at: string;
   disabled_at: string | null;
@@ -38,7 +40,7 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
-async function upsertSubscription(userId: string, subscription: PushSubscription) {
+async function upsertSubscription(userId: string, subscription: PushSubscription, registration: ServiceWorkerRegistration) {
   const json = subscription.toJSON();
   const endpoint = typeof json.endpoint === "string" ? json.endpoint : "";
   const p256dh = json.keys?.p256dh ?? "";
@@ -52,6 +54,8 @@ async function upsertSubscription(userId: string, subscription: PushSubscription
     user_id: userId,
     p256dh,
     auth,
+    origin: typeof window !== "undefined" ? window.location.origin : null,
+    scope: registration.scope ?? null,
     user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
     last_seen_at: new Date().toISOString(),
     disabled_at: null,
@@ -88,7 +92,7 @@ export async function ensurePushSubscription(userId: string) {
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
   }
-  await upsertSubscription(userId, subscription);
+  await upsertSubscription(userId, subscription, registration);
   return { enabled: true as const, subscription };
 }
 

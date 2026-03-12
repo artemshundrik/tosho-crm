@@ -27,6 +27,8 @@ type PushSubscriptionRow = {
   user_id: string;
   p256dh: string;
   auth: string;
+  origin?: string | null;
+  scope?: string | null;
   disabled_at?: string | null;
 };
 
@@ -51,7 +53,7 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
   const userIds = Array.from(new Set(rows.map((row) => row.user_id)));
   const { data: subscriptions, error: subscriptionsError } = await adminClient
     .from("push_subscriptions")
-    .select("endpoint,user_id,p256dh,auth,disabled_at")
+    .select("endpoint,user_id,p256dh,auth,origin,scope,disabled_at")
     .in("user_id", userIds)
     .is("disabled_at", null);
 
@@ -71,7 +73,15 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
 
   for (const row of rows) {
     const userSubscriptions = subscriptionsByUserId.get(row.user_id) ?? [];
-    for (const subscription of userSubscriptions) {
+    const dedupedSubscriptions = Array.from(
+      new Map(
+        userSubscriptions.map((subscription) => [
+          `${subscription.user_id}::${subscription.origin ?? ""}::${subscription.scope ?? ""}::${subscription.p256dh}::${subscription.auth}`,
+          subscription,
+        ])
+      ).values()
+    );
+    for (const subscription of dedupedSubscriptions) {
       try {
         await webpush.sendNotification(
           {
@@ -110,4 +120,3 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
 
   return { delivered: rows.length, pushDelivered, pushFailed };
 }
-
