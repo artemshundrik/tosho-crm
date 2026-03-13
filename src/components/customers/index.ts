@@ -9,6 +9,7 @@ export {
   upsertByIdAndEntityType,
 } from "./customerLeadAdapters";
 export type {
+  CustomerContact,
   CustomerDialogProps,
   CustomerFormState,
   OwnershipOption,

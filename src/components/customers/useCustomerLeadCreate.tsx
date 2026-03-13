@@ -52,6 +52,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   website: "",
   iban: "",
   logoUrl: "",
+  contacts: [{ name: "", position: "", phone: "", email: "", birthday: "" }],
   contactName: "",
   contactPosition: "",
   contactPhone: "",

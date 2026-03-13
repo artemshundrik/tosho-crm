@@ -27,6 +27,8 @@ import {
   Check,
   Image as ImageIcon,
   Percent,
+  PlusCircle,
+  Trash2,
   User,
   UserPlus,
 } from "lucide-react";
@@ -53,6 +55,7 @@ export type CustomerFormState = {
   website: string;
   iban: string;
   logoUrl: string;
+  contacts: CustomerContact[];
   contactName: string;
   contactPosition: string;
   contactPhone: string;
@@ -67,6 +70,14 @@ export type CustomerFormState = {
   eventDate: string;
   eventComment: string;
   notes: string;
+};
+
+export type CustomerContact = {
+  name: string;
+  position: string;
+  phone: string;
+  email: string;
+  birthday: string;
 };
 
 export type CustomerLinkedItem = {
@@ -165,26 +176,21 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   orders = [],
   linkedLoading = false,
 }) => {
+  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const currentOwnership = ownershipOptions.find(
     (option) => option.value === form.ownershipType
   );
   const currentVat = vatOptions.find((option) => option.value === form.vatRate);
-  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [vatOpen, setVatOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
-  const [birthdayOpen, setBirthdayOpen] = React.useState(false);
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
     "basic"
   );
 
-  const birthdayValue = React.useMemo(
-    () => (form.contactBirthday ? new Date(`${form.contactBirthday}T00:00:00`) : undefined),
-    [form.contactBirthday]
-  );
   const reminderDateValue = React.useMemo(
     () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
     [form.reminderDate]
@@ -204,7 +210,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
       setVatOpen(false);
       setLogoOpen(false);
       setManagerOpen(false);
-      setBirthdayOpen(false);
       setReminderDateOpen(false);
       setEventDateOpen(false);
     }
@@ -218,6 +223,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
   const handleReminderTimeBlur = () => {
     setForm((prev) => ({ ...prev, reminderTime: normalizeTime(prev.reminderTime) }));
+  };
+
+  const updateContact = (index: number, patch: Partial<CustomerContact>) => {
+    setForm((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((contact, i) => (i === index ? { ...contact, ...patch } : contact)),
+    }));
+  };
+
+  const addContact = () => {
+    setForm((prev) => ({
+      ...prev,
+      contacts: [...prev.contacts, { name: "", position: "", phone: "", email: "", birthday: "" }],
+    }));
+  };
+
+  const removeContact = (index: number) => {
+    setForm((prev) => {
+      if (prev.contacts.length <= 1) return prev;
+      return { ...prev, contacts: prev.contacts.filter((_, i) => i !== index) };
+    });
   };
 
   return (
@@ -483,104 +509,92 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
               <SectionHeader>Контакти</SectionHeader>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Контактна особа</Label>
-                    <Input
-                      value={form.contactName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, contactName: e.target.value }))}
-                      placeholder="Імʼя та прізвище"
-                      className="h-9"
-                    />
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    Додайте кілька контактів: імʼя, номер, посада, email.
                   </div>
-                  <div className="grid gap-2">
-                    <Label>Посада</Label>
-                    <Select
-                      value={form.contactPosition}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, contactPosition: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть посаду" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {POSITION_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addContact}>
+                    <PlusCircle className="mr-1 h-4 w-4" />
+                    Додати контакт
+                  </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Номер телефону</Label>
-                    <Input
-                      value={form.contactPhone}
-                      onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
-                      placeholder="+380..."
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={form.contactEmail}
-                      onChange={(e) => setForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
-                      placeholder="name@company.com"
-                      className="h-9"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>День народження</Label>
-                    <Popover open={birthdayOpen} onOpenChange={setBirthdayOpen}>
-                      <PopoverTrigger asChild>
+                {form.contacts.map((contact, index) => (
+                  <div key={`customer-contact-${index}`} className="space-y-3 rounded-lg border border-border/50 p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-medium text-muted-foreground">Контакт {index + 1}</div>
+                      {form.contacts.length > 1 ? (
                         <Button
                           type="button"
-                          variant="outline"
-                          className={cn(
-                            "h-9 w-full justify-start px-3 text-sm font-normal",
-                            !form.contactBirthday && "text-muted-foreground"
-                          )}
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => removeContact(index)}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {form.contactBirthday && birthdayValue
-                            ? format(birthdayValue, "d MMM yyyy", { locale: uk })
-                            : "Оберіть дату"}
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={birthdayValue}
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              contactBirthday: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setBirthdayOpen(false);
-                          }}
-                          captionLayout="dropdown-buttons"
-                          fromYear={currentYear - 100}
-                          toYear={currentYear}
-                          initialFocus
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Імʼя контакту</Label>
+                        <Input
+                          value={contact.name}
+                          onChange={(e) => updateContact(index, { name: e.target.value })}
+                          placeholder="Імʼя та прізвище"
+                          className="h-9"
                         />
-                        <DateQuickActions
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              contactBirthday: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setBirthdayOpen(false);
-                          }}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Посада</Label>
+                        <Select
+                          value={contact.position}
+                          onValueChange={(value) => updateContact(index, { position: value })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Оберіть посаду" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {POSITION_OPTIONS.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Номер телефону</Label>
+                        <Input
+                          value={contact.phone}
+                          onChange={(e) => updateContact(index, { phone: e.target.value })}
+                          placeholder="+380..."
+                          className="h-9"
                         />
-                      </PopoverContent>
-                    </Popover>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={contact.email}
+                          onChange={(e) => updateContact(index, { email: e.target.value })}
+                          placeholder="name@company.com"
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>День народження</Label>
+                      <Input
+                        type="date"
+                        value={contact.birthday}
+                        onChange={(e) => updateContact(index, { birthday: e.target.value })}
+                        className="h-9"
+                      />
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </TabsContent>
 

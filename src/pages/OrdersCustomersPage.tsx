@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { CustomerDialog, LeadDialog } from "@/components/customers";
+import { CustomerDialog, LeadDialog, type CustomerContact } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { listCustomerQuotes } from "@/lib/toshoApi";
@@ -53,6 +53,7 @@ type CustomerRow = {
   contact_phone?: string | null;
   contact_email?: string | null;
   contact_birthday?: string | null;
+  contacts?: CustomerContact[] | null;
   signatory_name?: string | null;
   signatory_position?: string | null;
   reminder_at?: string | null;
@@ -117,6 +118,42 @@ const VAT_OPTIONS: VatOption[] = [
   { value: "14", label: "14%", rate: 14 },
   { value: "20", label: "20%", rate: 20 },
 ];
+
+const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
+  name: "",
+  position: "",
+  phone: "",
+  email: "",
+  birthday: "",
+};
+
+const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerContact[] => {
+  const raw = Array.isArray(row?.contacts) ? row?.contacts : [];
+  const normalized = raw
+    .map((entry) => {
+      const contact = typeof entry === "object" && entry ? (entry as Partial<CustomerContact>) : null;
+      return {
+        name: contact?.name?.trim() ?? "",
+        position: contact?.position?.trim() ?? "",
+        phone: contact?.phone?.trim() ?? "",
+        email: contact?.email?.trim() ?? "",
+        birthday: contact?.birthday?.trim() ?? "",
+      };
+    })
+    .filter((contact) => Object.values(contact).some(Boolean));
+
+  if (normalized.length > 0) return normalized;
+
+  const legacy = {
+    name: row?.contact_name?.trim?.() ?? "",
+    position: row?.contact_position?.trim?.() ?? "",
+    phone: row?.contact_phone?.trim?.() ?? "",
+    email: row?.contact_email?.trim?.() ?? "",
+    birthday: row?.contact_birthday?.trim?.() ?? "",
+  };
+
+  return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
+};
 
 const formatOwnership = (value?: string | null) => {
   if (!value) return "Не вказано";
@@ -247,6 +284,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     website: "",
     iban: "",
     logoUrl: "",
+    contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
     contactName: "",
     contactPosition: "",
     contactPhone: "",
@@ -396,7 +434,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
       const manager = resolveManagerLabel(row.manager_user_id, row.manager).toLowerCase();
-      return !q || name.includes(q) || legal.includes(q) || manager.includes(q);
+      const contacts = parseCustomerContacts(row);
+      const contactBlob = contacts
+        .map((contact) => [contact.name, contact.position, contact.phone, contact.email].filter(Boolean).join(" "))
+        .join(" ")
+        .toLowerCase();
+      return !q || name.includes(q) || legal.includes(q) || manager.includes(q) || contactBlob.includes(q);
     });
 
     if (customerManagerFilter === NO_MANAGER_FILTER) {
@@ -511,6 +554,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: "",
       iban: "",
       logoUrl: "",
+      contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
       contactName: "",
       contactPosition: "",
       contactPhone: "",
@@ -565,6 +609,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   const openEdit = (row: CustomerRow) => {
+    const contacts = parseCustomerContacts(row);
+    const primaryContact = contacts[0] ?? EMPTY_CUSTOMER_CONTACT;
     setEditingId(row.id);
     setForm({
       name: row.name ?? "",
@@ -578,11 +624,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: row.website ?? "",
       iban: row.iban ?? "",
       logoUrl: row.logo_url ?? "",
-      contactName: row.contact_name ?? "",
-      contactPosition: row.contact_position ?? "",
-      contactPhone: row.contact_phone ?? "",
-      contactEmail: row.contact_email ?? "",
-      contactBirthday: row.contact_birthday ?? "",
+      contacts,
+      contactName: primaryContact.name,
+      contactPosition: primaryContact.position,
+      contactPhone: primaryContact.phone,
+      contactEmail: primaryContact.email,
+      contactBirthday: primaryContact.birthday,
       signatoryName: row.signatory_name ?? "",
       signatoryPosition: row.signatory_position ?? "",
       reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
@@ -776,6 +823,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const selectedManagerLabel = form.managerId
       ? memberById.get(form.managerId)?.label ?? managerValue
       : managerValue;
+    const contacts = form.contacts
+      .map((contact) => ({
+        name: contact.name.trim(),
+        position: contact.position.trim(),
+        phone: contact.phone.trim(),
+        email: contact.email.trim(),
+        birthday: contact.birthday.trim(),
+      }))
+      .filter((contact) => Object.values(contact).some(Boolean));
+    const primaryContact = contacts[0] ?? null;
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: form.name.trim(),
@@ -790,11 +847,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: form.website.trim() || null,
       iban: form.iban.trim() || null,
       logo_url: form.logoUrl.trim() || null,
-      contact_name: form.contactName.trim() || null,
-      contact_position: form.contactPosition || null,
-      contact_phone: form.contactPhone.trim() || null,
-      contact_email: form.contactEmail.trim() || null,
-      contact_birthday: form.contactBirthday || null,
+      contacts: contacts.length > 0 ? contacts : null,
+      contact_name: primaryContact?.name || null,
+      contact_position: primaryContact?.position || null,
+      contact_phone: primaryContact?.phone || null,
+      contact_email: primaryContact?.email || null,
+      contact_birthday: primaryContact?.birthday || null,
       signatory_name: form.signatoryName.trim() || null,
       signatory_position: form.signatoryPosition.trim() || null,
       reminder_at:
@@ -823,6 +881,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.website;
       delete clone.iban;
       delete clone.logo_url;
+      delete clone.contacts;
       delete clone.contact_name;
       delete clone.contact_position;
       delete clone.contact_phone;
