@@ -4354,6 +4354,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              {!designTask && !designTaskLoading ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  disabled={designTaskSaving}
+                  onClick={() => void createDesignTask()}
+                >
+                  <Palette className="h-4 w-4" />
+                  {designTaskSaving ? "Створення..." : "Створити дизайн-задачу"}
+                </Button>
+              ) : null}
               <Button
                 variant="primary"
                 size="sm"

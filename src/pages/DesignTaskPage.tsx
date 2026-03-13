@@ -4817,7 +4817,7 @@ export default function DesignTaskPage() {
                 type="file"
                 className="hidden"
                 multiple
-                accept=".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx"
+                accept="*/*"
                 onChange={(event) => void handleUploadDesignOutputs(event.target.files)}
               />
               <Button

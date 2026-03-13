@@ -52,6 +52,7 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
   listCustomerLeadLogoDirectory,
   normalizeCustomerLogoUrl as normalizeLogoUrl,
@@ -473,6 +474,8 @@ export default function DesignPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [createCustomerOptions, setCreateCustomerOptions] = useState<CustomerOption[]>([]);
+  const [createCustomerOptionsLoading, setCreateCustomerOptionsLoading] = useState(false);
   const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
   const [estimateInput, setEstimateInput] = useState("2");
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
@@ -672,6 +675,58 @@ export default function DesignPage() {
     };
     void loadCustomers();
   }, [effectiveTeamId]);
+
+  useEffect(() => {
+    if (!createDialogOpen) return;
+    if (!effectiveTeamId) {
+      setCreateCustomerOptions([]);
+      return;
+    }
+
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setCreateCustomerOptionsLoading(true);
+      try {
+        const [customerRows, leadRows] = await Promise.all([
+          listCustomersBySearch(effectiveTeamId, createCustomerSearch),
+          listLeadsBySearch(effectiveTeamId, createCustomerSearch).catch(() => [] as LeadSearchRow[]),
+        ]);
+
+        if (!active) return;
+
+        const customerOptions: CustomerOption[] = customerRows.map((customer) => ({
+          id: customer.id,
+          label: customer.name?.trim() || customer.legal_name?.trim() || "Клієнт без назви",
+          entityType: "customer",
+          logoUrl: normalizeLogoUrl(customer.logo_url ?? null),
+        }));
+
+        const leadOptions: CustomerOption[] = leadRows.map((lead) => ({
+          id: lead.id,
+          label:
+            lead.company_name?.trim() ||
+            lead.legal_name?.trim() ||
+            [lead.first_name?.trim(), lead.last_name?.trim()].filter(Boolean).join(" ") ||
+            "Лід без назви",
+          entityType: "lead",
+          logoUrl: normalizeLogoUrl(lead.logo_url ?? null),
+        }));
+
+        setCreateCustomerOptions(
+          [...customerOptions, ...leadOptions].sort((a, b) => a.label.localeCompare(b.label, "uk"))
+        );
+      } catch {
+        if (active) setCreateCustomerOptions([]);
+      } finally {
+        if (active) setCreateCustomerOptionsLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [createCustomerSearch, createDialogOpen, effectiveTeamId]);
 
   useEffect(() => {
     if (customers.length === 0 || tasks.length === 0) return;
@@ -1380,10 +1435,13 @@ export default function DesignPage() {
 
   const handleCreatedParty = (created: CreatedCustomerLead) => {
     const label = getCreatedCustomerLeadLabel(created);
+    const next = toCustomerLeadOption(created);
     setCustomers((prev) => {
-      const next = toCustomerLeadOption(created);
       return upsertByIdAndEntityType(prev, next).sort((a, b) => a.label.localeCompare(b.label, "uk"));
     });
+    setCreateCustomerOptions((prev) =>
+      upsertByIdAndEntityType(prev, next).sort((a, b) => a.label.localeCompare(b.label, "uk"))
+    );
     setCreateCustomer(label);
     setCreateCustomerId(created.id);
     setCreateCustomerLogoUrl(normalizeLogoUrl(created.logoUrl));
@@ -3124,8 +3182,8 @@ export default function DesignPage() {
                 selectedLogoUrl={createCustomerLogoUrl}
                 searchValue={createCustomerSearch}
                 onSearchChange={setCreateCustomerSearch}
-                options={customers}
-                loading={customersLoading}
+                options={createCustomerOptions}
+                loading={createCustomerOptionsLoading}
                 onSelect={(customer) => {
                   setCreateCustomer(customer.label);
                   setCreateCustomerId(customer.id);
