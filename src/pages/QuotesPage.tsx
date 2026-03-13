@@ -14,7 +14,12 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
-import { formatPrintPackageSummary, type QuoteItemMetadata } from "@/lib/printPackage";
+import {
+  formatPrintProductSummary,
+  getPrintProductConfig,
+  getProductKindFromPreset,
+  type QuoteItemMetadata,
+} from "@/lib/printPackage";
 import {
   listQuotes,
   listQuoteSets,
@@ -140,7 +145,7 @@ type CatalogModel = {
   id: string;
   name: string;
   price?: number;
-  metadata?: { configuratorPreset?: "print_package" | null };
+  metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 type CatalogKind = {
@@ -1407,7 +1412,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!teamId) {
         throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       }
-      const isPrintPackageQuote = data.productConfiguratorPreset === "print_package";
+      const isPrintPackageQuote = data.productConfiguratorPreset !== null && data.productConfiguratorPreset !== undefined;
       const normalizedRuns = (data.runs ?? []).filter((run) => Number(run.quantity) > 0);
       const primaryRunQuantity = normalizedRuns[0]?.quantity ?? Number(data.quantity ?? 0);
       const qtyValue = Number(primaryRunQuantity ?? 0);
@@ -1469,24 +1474,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const packageConfig = data.printPackageConfig;
       const packageItemDescription =
         packageConfig && isPrintPackageQuote
-          ? formatPrintPackageSummary(packageConfig).join(" • ")
+          ? formatPrintProductSummary(packageConfig).join(" • ")
           : null;
       const packageItemMetadata: QuoteItemMetadata | null =
-        isPrintPackageQuote && packageConfig
+        isPrintPackageQuote && packageConfig && data.productConfiguratorPreset
           ? {
-              configuratorPreset: "print_package",
-              printPackage: packageConfig,
+              configuratorPreset: data.productConfiguratorPreset,
+              printProduct: {
+                ...packageConfig,
+                productKind:
+                  packageConfig.productKind || getProductKindFromPreset(data.productConfiguratorPreset),
+              },
             }
           : null;
       const packageItemName =
         isPrintPackageQuote && packageConfig
-          ? `Пакет${
-              packageConfig.packageType === "ready"
-                ? " готовий"
-                : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
-                  ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
-                  : ""
-            }`
+          ? packageConfig.productKind === "notebook"
+            ? `Блокнот${packageConfig.notebookFormat === "other" ? "" : ` ${packageConfig.notebookFormat.toUpperCase()}`}`
+            : packageConfig.productKind === "note_blocks"
+              ? `Блоки для записів${
+                  packageConfig.noteBlockFormat && packageConfig.noteBlockFormat !== "other"
+                    ? ` ${packageConfig.noteBlockFormat}`
+                    : ""
+                }`
+              : `Пакет${
+                  packageConfig.packageType === "ready"
+                    ? " готовий"
+                    : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
+                      ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
+                      : ""
+                }`
           : null;
 
       // 2. Create quote item
@@ -3193,7 +3210,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         kindId: primaryItem?.catalog_kind_id ?? "",
         modelId: primaryItem?.catalog_model_id ?? "",
         productConfiguratorPreset: primaryItemMetadata?.configuratorPreset ?? null,
-        printPackageConfig: primaryItemMetadata?.printPackage ?? undefined,
+        printPackageConfig: getPrintProductConfig(primaryItemMetadata) ?? undefined,
         quantity:
           Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0) > 0
             ? Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0)

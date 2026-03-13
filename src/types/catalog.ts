@@ -38,7 +38,7 @@ export type CatalogModel = {
 };
 
 export type CatalogModelMetadata = {
-  configuratorPreset?: "print_package" | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
 };
 
 /**

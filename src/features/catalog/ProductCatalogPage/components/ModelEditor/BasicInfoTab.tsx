@@ -175,7 +175,10 @@ export function BasicInfoTab({
               onValueChange={(value) =>
                 onMetadataChange({
                   ...draftMetadata,
-                  configuratorPreset: value === "none" ? null : (value as "print_package"),
+                  configuratorPreset:
+                    value === "none"
+                      ? null
+                      : (value as "print_package" | "print_notebook" | "print_note_blocks"),
                 })
               }
             >
@@ -185,6 +188,8 @@ export function BasicInfoTab({
               <SelectContent>
                 <SelectItem value="none">Без додаткового конфігуратора</SelectItem>
                 <SelectItem value="print_package">Паперовий пакет</SelectItem>
+                <SelectItem value="print_notebook">Блокнот</SelectItem>
+                <SelectItem value="print_note_blocks">Блоки для записів</SelectItem>
               </SelectContent>
             </Select>
           </div>

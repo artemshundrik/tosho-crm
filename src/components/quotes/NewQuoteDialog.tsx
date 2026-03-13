@@ -30,9 +30,16 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
-import { createEmptyPrintPackageConfig, type PrintPackageConfig } from "@/lib/printPackage";
 import {
-  PrintPackageConfigurator,
+  createEmptyPrintPackageConfig,
+  getConfiguratorProductLabel,
+  getProductKindFromPreset,
+  validatePrintProductConfig,
+  type PrintConfiguratorPreset,
+  type PrintPackageConfig,
+} from "@/lib/printPackage";
+import {
+  PrintProductConfigurator,
   PRINT_PACKAGE_DENSITIES,
   PRINT_PACKAGE_HANDLES,
   PRINT_PACKAGE_PRINT_TYPES,
@@ -405,7 +412,7 @@ export type NewQuoteFormData = {
   categoryId?: string;
   kindId?: string;
   modelId?: string;
-  productConfiguratorPreset?: "print_package" | null;
+  productConfiguratorPreset?: PrintConfiguratorPreset | null;
   printPackageConfig?: PrintPackageConfig;
   quantity?: number;
   runs?: Array<{ quantity: number }>;
@@ -530,7 +537,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     [selectedKind, modelId]
   );
   const activeConfiguratorPreset = selectedModel?.metadata?.configuratorPreset ?? null;
-  const isPrintPackageMode = activeConfiguratorPreset === "print_package";
+  const isPrintPackageMode = activeConfiguratorPreset !== null;
   const configuratorProductOptions = React.useMemo<ConfiguratorProductOption[]>(() => {
     return catalogTypes.flatMap((type) =>
       type.quote_type && type.quote_type !== quoteType
@@ -538,7 +545,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         : type.kinds.flatMap((kind) =>
             kind.models.flatMap((model) => {
               const preset = model.metadata?.configuratorPreset ?? null;
-              if (preset !== "print_package") return [];
+              if (!preset) return [];
               return [
                 {
                   typeId: type.id,
@@ -548,7 +555,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   modelId: model.id,
                   modelName: model.name,
                   preset,
-                  productLabel: "Пакет",
+                  productLabel: getConfiguratorProductLabel(preset),
                 },
               ];
             })
@@ -664,7 +671,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       ...(initialValues?.printPackageConfig ?? {}),
       productKind:
         (initialValues?.quoteType ?? "merch") === "print"
-          ? initialValues?.printPackageConfig?.productKind ?? "package"
+          ? initialValues?.printPackageConfig?.productKind ??
+            (initialValues?.productConfiguratorPreset
+              ? getProductKindFromPreset(initialValues.productConfiguratorPreset)
+              : "package")
           : initialValues?.printPackageConfig?.productKind ?? "",
     });
     setQuantity(initialValues?.quantity);
@@ -716,7 +726,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setPrintPackageConfig((prev) => ({
       ...createEmptyPrintPackageConfig(),
       ...prev,
-      productKind: defaultOption.productLabel.toLowerCase(),
+      productKind: getProductKindFromPreset(defaultOption.preset),
     }));
   }, [
     categoryId,
@@ -728,7 +738,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   ]);
 
   React.useEffect(() => {
-    if (!isPrintPackageMode) return;
+    if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
     const activeHandleValid = availablePackageHandles.some((option) => option.value === printPackageConfig.handleType);
     const activeDensityValid = availablePackageDensities.some((option) => option.value === printPackageConfig.density);
     const shouldHideEyelets =
@@ -764,7 +774,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   ]);
 
   React.useEffect(() => {
-    if (!isPrintPackageMode) return;
+    if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
     const activePrintTypeValid = availablePackagePrintTypes.some((option) => option.value === printPackageConfig.printType);
     if (activePrintTypeValid) return;
     setPrintPackageConfig((prev) => ({
@@ -773,7 +783,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       pantoneCount: "",
       stickerSize: "",
     }));
-  }, [availablePackagePrintTypes, isPrintPackageMode, printPackageConfig.printType]);
+  }, [availablePackagePrintTypes, isPrintPackageMode, printPackageConfig.printType, printPackageConfig.productKind]);
 
   React.useEffect(() => {
     if (isPrintPackageMode) return;
@@ -928,70 +938,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
     if (!isEditMode && isPrintPackageMode) {
       const qtyValue = primaryQuantity;
-      const numericFieldsValid = (value: string) => {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) && parsed > 0;
-      };
-
-      if (!printPackageConfig.packageType) {
-        alert("Оберіть тип пакету");
-        return;
-      }
-      if (printPackageConfig.packageType === "custom") {
-        if (!numericFieldsValid(printPackageConfig.widthMm) || !numericFieldsValid(printPackageConfig.heightMm) || !numericFieldsValid(printPackageConfig.lengthMm)) {
-          alert("Для індивідуального пакету вкажіть коректні ширину, висоту і довжину");
-          return;
-        }
-      }
-      if (printPackageConfig.packageType === "ready" && !printPackageConfig.supplierLink.trim()) {
-        alert("Для готового пакету додайте посилання на пакет постачальника");
-        return;
-      }
-      if (!printPackageConfig.orientation) {
-        alert("Оберіть орієнтацію пакету");
-        return;
-      }
-      if (!printPackageConfig.paperType) {
-        alert("Оберіть вид паперу");
-        return;
-      }
-      if (printPackageConfig.paperType === "kraft" && !printPackageConfig.kraftColor) {
-        alert("Оберіть колір крафту");
-        return;
-      }
-      if (!printPackageConfig.density) {
-        alert("Оберіть щільність");
-        return;
-      }
-      if (!printPackageConfig.handleType) {
-        alert("Оберіть тип ручок");
-        return;
-      }
-      if (printPackageConfig.packageType === "custom" && printPackageConfig.paperType !== "kraft" && !printPackageConfig.eyelets) {
-        alert("Оберіть, чи потрібні люверси");
-        return;
-      }
-      if (!printPackageConfig.printSides) {
-        alert("Оберіть кількість нанесень");
-        return;
-      }
-      if (!printPackageConfig.printType) {
-        alert("Оберіть тип нанесення");
-        return;
-      }
-      if (
-        (printPackageConfig.printType === "pantone" || printPackageConfig.printType === "cmyk_pantone") &&
-        (!numericFieldsValid(printPackageConfig.pantoneCount) || !Number.isInteger(Number(printPackageConfig.pantoneCount)))
-      ) {
-        alert("Вкажіть коректну кількість пантонів");
-        return;
-      }
-      if (printPackageConfig.printType === "sticker" && !printPackageConfig.stickerSize.trim()) {
-        alert("Вкажіть розмір наліпки/стікера");
-        return;
-      }
-      if (printPackageConfig.packageType === "custom" && !printPackageConfig.lamination) {
-        alert("Оберіть, чи потрібна ламінація");
+      const configError = validatePrintProductConfig(printPackageConfig);
+      if (configError) {
+        alert(configError);
         return;
       }
       if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
@@ -1053,7 +1002,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       kindId,
       modelId,
       productConfiguratorPreset: activeConfiguratorPreset,
-      printPackageConfig: isPrintPackageMode ? printPackageConfig : undefined,
+      printPackageConfig:
+        isPrintPackageMode
+          ? {
+              ...printPackageConfig,
+              productKind:
+                printPackageConfig.productKind ||
+                (activeConfiguratorPreset ? getProductKindFromPreset(activeConfiguratorPreset) : ""),
+            }
+          : undefined,
       quantity: primaryQuantity || undefined,
       runs: normalizedRuns,
       quantityUnit: normalizeUnitLabel(quantityUnit),
@@ -1655,7 +1612,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
               {isPrintPackageMode ? (
                   <div className="mt-4 space-y-4">
-                    <PrintPackageConfigurator
+                    <PrintProductConfigurator
                       config={printPackageConfig}
                       onConfigChange={setPrintPackageConfig}
                       selectedConfiguratorProduct={selectedConfiguratorProduct}
@@ -1673,7 +1630,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         setPrintPackageConfig((prev) => ({
                           ...createEmptyPrintPackageConfig(),
                           ...prev,
-                          productKind: nextOption.productLabel.toLowerCase(),
+                          productKind: getProductKindFromPreset(nextOption.preset),
                         }));
                       }}
                     />

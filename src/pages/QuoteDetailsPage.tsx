@@ -34,8 +34,9 @@ import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import {
-  formatPrintPackageSummary,
-  getPrintPackageDetailFields,
+  formatPrintProductSummary,
+  getPrintProductConfig,
+  getPrintProductDetailSections,
   isPrintPackageMetadata,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
@@ -4558,36 +4559,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     const productPreview = catalogImage
                       ? { type: "image" as const, url: catalogImage }
                       : null;
-                    const packageSummary =
-                      item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
-                        ? formatPrintPackageSummary(item.metadata.printPackage)
-                        : [];
-                    const packageDetailFields =
-                      item.metadata?.configuratorPreset === "print_package" && item.metadata.printPackage
-                        ? getPrintPackageDetailFields(item.metadata.printPackage)
-                        : [];
-                    const packageSections = packageDetailFields.length
-                      ? [
-                          {
-                            title: "Конструкція",
-                            fields: packageDetailFields.filter((field) =>
-                              ["Тип", "Орієнтація", "Розмір", "Люверси", "Постачальник"].includes(field.label)
-                            ),
-                          },
-                          {
-                            title: "Матеріал",
-                            fields: packageDetailFields.filter((field) =>
-                              ["Матеріал", "Щільність", "Ручки"].includes(field.label)
-                            ),
-                          },
-                          {
-                            title: "Друк та оздоблення",
-                            fields: packageDetailFields.filter((field) =>
-                              ["Нанесення", "Тип нанесення", "Ламінація", "Додаткове оздоблення", "Тиснення"].includes(field.label)
-                            ),
-                          },
-                        ].filter((section) => section.fields.length > 0)
-                      : [];
+                    const printProductConfig = getPrintProductConfig(item.metadata);
+                    const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
+                    const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
                     const shouldShowDescription =
                       item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
                     const isMerchQuote = (quote?.quote_type ?? "") === "merch";
