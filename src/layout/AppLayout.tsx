@@ -795,7 +795,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             .select("href")
             .eq("user_id", userId)
             .not("href", "is", null)
-            .like("href", "/orders/customers?reminder=%")
+            .like("href", "/orders/customers%")
             .gte("created_at", fromIso)
             .limit(500),
         ]);
@@ -824,7 +824,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           const description = comment?.trim()
             ? `${comment.trim()}\nЗаплановано на ${formatDateTimeUA(reminderAt)}`
             : `Заплановано на ${formatDateTimeUA(reminderAt)}`;
-          const href = `/orders/customers?reminder=${encodeURIComponent(key)}`;
+          const params = new URLSearchParams({
+            reminder: key,
+            tab: kind === "lead" ? "leads" : "customers",
+            [kind === "lead" ? "leadId" : "customerId"]: id,
+          });
+          const href = `/orders/customers?${params.toString()}`;
           toInsert.push({
             user_id: userId,
             title,

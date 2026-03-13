@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -246,6 +247,7 @@ function readCustomersPageCache(teamId: string): CustomersPageCachePayload | nul
 }
 
 function CustomersPage({ teamId }: { teamId: string }) {
+  const [searchParams] = useSearchParams();
   const { session, userId, accessRole, jobRole } = useAuth();
   const initialCache = readCustomersPageCache(teamId);
   const [activeTab, setActiveTab] = useState<"customers" | "leads">("customers");
@@ -334,6 +336,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   });
   const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
   const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
+  const [handledDeepLink, setHandledDeepLink] = useState<string | null>(null);
 
   const defaultManagerName = useMemo(() => {
     const resolved = buildUserNameFromMetadata(
@@ -808,6 +811,35 @@ function CustomersPage({ teamId }: { teamId: string }) {
     isManagerUser,
     leadManagerOptions,
   ]);
+
+  useEffect(() => {
+    const customerId = searchParams.get("customerId")?.trim() ?? "";
+    const leadId = searchParams.get("leadId")?.trim() ?? "";
+    const tab = searchParams.get("tab")?.trim() ?? "";
+    const linkKey = searchParams.toString();
+    if (!customerId && !leadId) {
+      if (handledDeepLink !== null) setHandledDeepLink(null);
+      return;
+    }
+    if (handledDeepLink === linkKey) return;
+
+    if (leadId) {
+      const lead = leads.find((row) => row.id === leadId);
+      if (!lead) return;
+      setActiveTab("leads");
+      openEditLead(lead);
+      setHandledDeepLink(linkKey);
+      return;
+    }
+
+    if (customerId) {
+      const customer = rows.find((row) => row.id === customerId);
+      if (!customer) return;
+      if (tab === "customers" || !tab) setActiveTab("customers");
+      openEdit(customer);
+      setHandledDeepLink(linkKey);
+    }
+  }, [handledDeepLink, leads, rows, searchParams]);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
