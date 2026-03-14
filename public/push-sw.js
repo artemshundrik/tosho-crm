@@ -17,8 +17,8 @@ self.addEventListener("push", (event) => {
       body,
       tag,
       data: { href },
-      badge: "/vite.svg",
-      icon: "/vite.svg",
+      badge: "/favicon.svg",
+      icon: "/favicon.svg",
     })
   );
 });
@@ -38,4 +38,3 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
-
