@@ -1137,8 +1137,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             "left-0"
           )}
         >
-          <div className="flex h-14 items-center justify-between px-4 md:px-5 lg:px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex h-14 items-center gap-3 px-4 md:px-5 lg:px-6">
+            <div className="flex items-center gap-3 shrink-0">
               {/* Mobile menu */}
               <div className="md:hidden">
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -1224,17 +1224,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </div>
 
               {/* Breadcrumb */}
-              <div className="hidden md:flex h-7 items-center gap-1.5 text-[12px] leading-none font-medium text-muted-foreground">
+              <div className="hidden md:flex h-7 items-center gap-1 text-[12px] leading-none font-medium text-muted-foreground">
                 <Link
                   to={ROUTES.overview}
-                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] px-1.5 leading-none hover:bg-muted/60 hover:text-foreground transition-colors"
+                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] px-1.5 leading-none hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
                 >
                   ToSho CRM
                 </Link>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/80" />
+                <span className="text-muted-foreground/40 select-none">/</span>
                 <Link
                   to={header.breadcrumbTo}
-                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] bg-muted/50 px-2 leading-none text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] bg-muted/50 px-2 leading-none text-foreground/90 hover:bg-muted hover:text-foreground transition-colors duration-150"
                 >
                   {header.breadcrumbLabel}
                 </Link>
@@ -1247,8 +1247,23 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </div>
             </div>
 
+            {/* CENTER SEARCH */}
+            <div className="hidden md:flex flex-1 items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setCmdkOpen(true)}
+                className="inline-flex items-center gap-2 h-8 w-full max-w-[260px] rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-3 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border transition-colors duration-150 cursor-pointer"
+              >
+                <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <span className="flex-1 text-left">Пошук...</span>
+                <kbd className="inline-flex h-5 select-none items-center rounded-[4px] border border-border bg-background/80 px-1.5 font-mono text-[10px] font-medium opacity-70">
+                  ⌘K
+                </kbd>
+              </button>
+            </div>
+
             {/* RIGHT ACTIONS */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 shrink-0">
               <AppDropdown
                 align="end"
                 sideOffset={10}
@@ -1258,7 +1273,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 trigger={
                   <button
                     type="button"
-                    className="hidden lg:inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-border/70 bg-card/50 px-2.5 text-xs transition-colors hover:bg-card/80"
+                    className="hidden lg:inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-2.5 text-xs transition-colors duration-150 hover:bg-muted/60 hover:border-border cursor-pointer"
                     aria-label="Курси валют"
                     title="USD/UAH · EUR/UAH"
                   >
