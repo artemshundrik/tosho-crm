@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -2695,7 +2695,7 @@ export default function DesignPage() {
                       Немає задач
                     </div>
                   ) : (
-                    items.map((task) => renderTaskCard(task, { draggable: true }))
+                    items.map((task) => <Fragment key={task.id}>{renderTaskCard(task, { draggable: true })}</Fragment>)
                   )}
                 </KanbanColumn>
               );
@@ -2903,7 +2903,7 @@ export default function DesignPage() {
                 <Badge variant="secondary">{timelineData.noDeadlineTasks.length}</Badge>
               </div>
               <div className="p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {timelineData.noDeadlineTasks.map((task) => renderTaskCard(task))}
+                {timelineData.noDeadlineTasks.map((task) => <Fragment key={task.id}>{renderTaskCard(task)}</Fragment>)}
               </div>
             </div>
           ) : null}
@@ -3089,6 +3089,9 @@ export default function DesignPage() {
         <DialogContent className="max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Вкажіть естімейт задачі</DialogTitle>
+            <DialogDescription>
+              Вкажіть тривалість задачі, щоб її можна було коректно призначати і рухати по статусах.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="design-estimate-value">Естімейт</Label>
@@ -3171,6 +3174,9 @@ export default function DesignPage() {
         <DialogContent className="max-w-[640px] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Нова дизайн-задача (без прорахунку)</DialogTitle>
+            <DialogDescription>
+              Заповніть основні поля задачі, виберіть дедлайн, відповідальних та додайте матеріали для дизайнера.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto pr-1 max-h-[calc(85vh-170px)]">
             <div className="space-y-2">

@@ -39,11 +39,11 @@
     
     /* --- SHAPE RULES --- */
     --radius: 0.5rem;
-    --radius-lg: 12px;
-    --radius-md: 12px;
+    --radius-lg: 10px;
+    --radius-md: 10px;
     --radius-section: 12px;
     --radius-inner: 12px;
-    --btn-radius: 12px;
+    --btn-radius: 10px;
 
     /* --- SKELETON LOADING (UPDATED - LIGHT) --- */
     --skeleton-min-duration: 80ms;
@@ -251,11 +251,11 @@
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
-    --radius-lg: 12px;
-    --radius-md: 12px;
+    --radius-lg: 10px;
+    --radius-md: 10px;
     --radius-section: 12px;
     --radius-inner: 12px;
-    --btn-radius: 12px;
+    --btn-radius: 10px;
 
     --shadow-surface: none;
     --shadow-floating: none;
