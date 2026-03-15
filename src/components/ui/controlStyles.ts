@@ -10,9 +10,9 @@ export const CONTROL_BASE = cx(
   "h-9 rounded-[var(--radius-md)] bg-background",
   "border border-input",
   "text-foreground placeholder:text-muted-foreground",
-  "transition-colors",
-  "hover:bg-muted/20 hover:border-foreground/20",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40",
+  "transition-colors duration-150",
+  "hover:bg-muted/25 hover:border-foreground/30",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/60",
   "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted/20",
   "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
   "hover:[&>svg]:text-foreground"

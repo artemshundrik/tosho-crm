@@ -6,15 +6,15 @@ import { cn } from "@/lib/utils";
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center whitespace-nowrap",
-    "select-none",
-    "transition-all duration-200 ease-out",
+    "select-none cursor-pointer",
+    "transition-all duration-150 ease-out",
     // Typography base (без font-weight — вага тільки у variant)
     "text-[16px] leading-[24.8px] tracking-[0.2px]",
     // Icons
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     "[&_svg]:-mt-[0.5px]",
     // Focus/disabled
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50",
     // Shape / spacing
     "rounded-[var(--btn-radius)]",
@@ -81,7 +81,7 @@ const buttonVariants = cva(
         ].join(" "),
 
         // ✅ Ghost/link: medium
-        ghost: "!font-medium bg-transparent text-foreground hover:bg-accent active:scale-[0.99]",
+        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.99]",
         link: "!font-medium bg-transparent text-primary underline-offset-4 hover:underline",
 
         // ✅ Menu trigger / list item
@@ -105,8 +105,8 @@ const buttonVariants = cva(
         // ✅ Segmented tabs (uses aria-pressed for active state)
         segmented: [
           "!font-medium bg-transparent text-muted-foreground",
-          "hover:text-foreground",
-          "aria-[pressed=true]:bg-card aria-[pressed=true]:text-foreground aria-[pressed=true]:shadow-sm",
+          "hover:text-foreground hover:bg-muted/40",
+          "aria-[pressed=true]:bg-card aria-[pressed=true]:text-foreground aria-[pressed=true]:border aria-[pressed=true]:border-border/80",
         ].join(" "),
 
         // ✅ Filter chip / pill toggle

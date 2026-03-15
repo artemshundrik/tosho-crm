@@ -4,28 +4,28 @@
 @layer base {
   :root {
     /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
-    --background: 220 4% 97%; /* Світло-сірий фон сторінки */
+    --background: 220 5% 97%; /* Світло-сірий фон сторінки */
     --foreground: 240 10% 3.9%; /* Майже чорний текст */
-    
+
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    
-    --secondary: 220 4% 96%;
-    --secondary-foreground: 222 47% 11%;
-    
-    --muted: 220 4% 96%;
-    --muted-foreground: 220 4% 40%;
 
-    --accent: 220 4% 96%;
+    --secondary: 220 6% 94%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 6% 95%;
+    --muted-foreground: 220 9% 36%; /* ~5.5:1 на білому — WCAG AA з запасом */
+
+    --accent: 220 6% 94%;
     --accent-foreground: 222 47% 11%;
-    
-    --destructive: 0 84.2% 60.2%;
+
+    --destructive: 0 80% 50%; /* WCAG AA: білий текст ~4.8:1 */
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 6% 88%;
-    --input: 220 6% 88%;
+    --border: 220 9% 85%; /* чіткіші межі */
+    --input: 220 9% 85%;
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
@@ -71,20 +71,20 @@
     --neutral-foreground: 220 8% 45%;
 
     --info-soft: 214 95% 93%;
-    --info-soft-border: 214 90% 86%;
-    --info-foreground: 221 83% 45%;
+    --info-soft-border: 214 85% 84%;
+    --info-foreground: 221 83% 42%; /* трохи темніший — кращий контраст */
 
-    --success-soft: 142 72% 93%;
-    --success-soft-border: 142 60% 83%;
-    --success-foreground: 142 55% 30%;
+    --success-soft: 142 68% 92%;
+    --success-soft-border: 142 55% 80%;
+    --success-foreground: 142 58% 27%; /* темніший зелений */
 
-    --warning-soft: 45 90% 92%;
-    --warning-soft-border: 45 85% 80%;
-    --warning-foreground: 45 90% 35%;
+    --warning-soft: 45 88% 91%;
+    --warning-soft-border: 45 80% 76%;
+    --warning-foreground: 38 92% 30%; /* темніше amber → краща читабельність */
 
-    --danger-soft: 0 84% 95%;
-    --danger-soft-border: 0 74% 86%;
-    --danger-foreground: 0 72% 40%;
+    --danger-soft: 0 80% 95%;
+    --danger-soft-border: 0 70% 84%;
+    --danger-foreground: 0 75% 38%; /* трохи темніший червоний */
 
     /* --- ENTITY AVATAR TOKENS (LIGHT) --- */
     --entity-avatar-1-bg: 214 95% 93%;
@@ -228,26 +228,26 @@
     /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
     --background: 228 8% 10%; /* Нейтральний темний фон */
     --foreground: 210 40% 98%; /* Білий текст */
-    
-    --card: 228 8% 12%;
-    --card-foreground: 210 40% 98%;
-    --popover: 228 8% 12%;
-    --popover-foreground: 210 40% 98%;
-    
-    --secondary: 228 8% 16%;
-    --secondary-foreground: 210 40% 98%;
-    
-    --muted: 228 7% 15%;
-    --muted-foreground: 220 8% 66%;
 
-    --accent: 228 7% 15%;
+    --card: 228 8% 13%; /* +1% від фону — чіткіше розмежування */
+    --card-foreground: 210 40% 98%;
+    --popover: 228 8% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --secondary: 228 8% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 228 8% 16%;
+    --muted-foreground: 220 10% 68%; /* трохи яскравіший — краща читабельність */
+
+    --accent: 228 8% 16%;
     --accent-foreground: 210 40% 98%;
-    
-    --destructive: 0 62.8% 30.6%;
+
+    --destructive: 0 72% 42%; /* яскравіший у темному — помітніший */
     --destructive-foreground: 210 40% 98%;
-    
-    --border: 228 8% 20%;
-    --input: 228 8% 20%;
+
+    --border: 228 9% 22%; /* +2% — видиміші межі в темному */
+    --input: 228 9% 22%;
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
@@ -446,6 +446,9 @@
   }
   body {
     color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   body[data-scroll-locked] {
     margin-right: 0 !important;
@@ -458,8 +461,8 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
   }
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
   *::-webkit-scrollbar-track {
     background: transparent;
@@ -609,10 +612,10 @@
     box-shadow: var(--canvas-shadow);
   }
   .quote-soft-card {
-    @apply border-border/70 bg-card/70 shadow-sm;
+    @apply border-border/80 bg-card/80 shadow-sm;
   }
   .quote-muted-card {
-    @apply border border-border/60 bg-muted/10 shadow-sm;
+    @apply border border-border/70 bg-muted/20 shadow-sm;
   }
 
   .quote-kind-badge-kp {
