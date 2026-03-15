@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
+import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { Badge } from "@/components/ui/badge";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -147,12 +148,13 @@ export default function NotificationsPage() {
   const notificationsHeaderActions = useMemo(() => (
     <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+        <div className={SEGMENTED_GROUP}>
           <Button
             variant="segmented"
             size="xs"
             aria-pressed={filter === "all"}
             onClick={() => setFilter("all")}
+            className={SEGMENTED_TRIGGER}
           >
             Всі
           </Button>
@@ -161,6 +163,7 @@ export default function NotificationsPage() {
             size="xs"
             aria-pressed={filter === "unread"}
             onClick={() => setFilter("unread")}
+            className={SEGMENTED_TRIGGER}
           >
             Непрочитані
           </Button>
@@ -170,14 +173,14 @@ export default function NotificationsPage() {
             <>
               <Button
                 variant={push.enabled ? "secondary" : "outline"}
-                className="h-10 px-4"
+                className={TOOLBAR_ACTION_BUTTON}
                 onClick={push.enabled ? push.disable : push.enable}
                 disabled={push.busy}
               >
                 {push.enabled ? "Push увімкнено" : "Увімкнути push"}
               </Button>
               {push.enabled ? (
-                <Button variant="outline" className="h-10 px-4" onClick={push.sendTest} disabled={push.busy}>
+                <Button variant="outline" className={TOOLBAR_ACTION_BUTTON} onClick={push.sendTest} disabled={push.busy}>
                   Тест push
                 </Button>
               ) : null}
@@ -187,12 +190,12 @@ export default function NotificationsPage() {
             {filtered.length}
             <span className="ml-1 text-muted-foreground">знайдено</span>
           </div>
-          <Button
-            variant="secondary"
-            className="h-10 px-4"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
-          >
+            <Button
+              variant="secondary"
+              className={TOOLBAR_ACTION_BUTTON}
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+            >
             Позначити всі
           </Button>
         </div>

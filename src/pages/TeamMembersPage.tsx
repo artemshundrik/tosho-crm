@@ -60,7 +60,13 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import {
+  CONTROL_BASE,
+  SEGMENTED_GROUP,
+  SEGMENTED_GROUP_SM,
+  SEGMENTED_TRIGGER,
+  SEGMENTED_TRIGGER_SM,
+} from "@/components/ui/controlStyles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
@@ -1880,13 +1886,14 @@ export function TeamMembersPage() {
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
         <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+            <div className={SEGMENTED_GROUP}>
               <Button
                 type="button"
                 variant="segmented"
                 size="xs"
                 aria-pressed={activeTab === "members"}
                 onClick={() => handleTabChange("members")}
+                className={SEGMENTED_TRIGGER}
               >
                 Учасники ({members.length})
               </Button>
@@ -1897,6 +1904,7 @@ export function TeamMembersPage() {
                   size="xs"
                   aria-pressed={activeTab === "invites"}
                   onClick={() => handleTabChange("invites")}
+                  className={SEGMENTED_TRIGGER}
                 >
                   Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                 </Button>
@@ -1908,6 +1916,7 @@ export function TeamMembersPage() {
                   size="xs"
                   aria-pressed={activeTab === "activity"}
                   onClick={() => handleTabChange("activity")}
+                  className={SEGMENTED_TRIGGER}
                 >
                   Активність
                 </Button>
@@ -2274,13 +2283,14 @@ export function TeamMembersPage() {
 
         {activeTab === "activity" && canManage ? (
           <div className="p-5">
-            <div className="mb-4 inline-flex h-9 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+            <div className={cn("mb-4", SEGMENTED_GROUP_SM)}>
               <Button
                 type="button"
                 variant="segmented"
                 size="xs"
                 aria-pressed={activityRange === "day"}
                 onClick={() => setActivityRange("day")}
+                className={SEGMENTED_TRIGGER_SM}
               >
                 24 години
               </Button>
@@ -2290,6 +2300,7 @@ export function TeamMembersPage() {
                 size="xs"
                 aria-pressed={activityRange === "week"}
                 onClick={() => setActivityRange("week")}
+                className={SEGMENTED_TRIGGER_SM}
               >
                 7 днів
               </Button>
@@ -2299,6 +2310,7 @@ export function TeamMembersPage() {
                 size="xs"
                 aria-pressed={activityRange === "month"}
                 onClick={() => setActivityRange("month")}
+                className={SEGMENTED_TRIGGER_SM}
               >
                 30 днів
               </Button>

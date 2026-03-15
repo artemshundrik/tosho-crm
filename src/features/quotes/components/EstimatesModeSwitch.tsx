@@ -1,5 +1,6 @@
 import { LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 
 type EstimatesModeSwitchProps = {
   viewMode: "table" | "kanban";
@@ -8,13 +9,13 @@ type EstimatesModeSwitchProps = {
 
 export function EstimatesModeSwitch({ viewMode, onChange }: EstimatesModeSwitchProps) {
   return (
-    <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] p-1 bg-muted border border-border">
+    <div className={SEGMENTED_GROUP}>
       <Button
         variant="segmented"
         size="xs"
         aria-pressed={viewMode === "table"}
         onClick={() => onChange("table")}
-        className="gap-1.5"
+        className={SEGMENTED_TRIGGER}
       >
         <List className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Список</span>
@@ -24,7 +25,7 @@ export function EstimatesModeSwitch({ viewMode, onChange }: EstimatesModeSwitchP
         size="xs"
         aria-pressed={viewMode === "kanban"}
         onClick={() => onChange("kanban")}
-        className="gap-1.5"
+        className={SEGMENTED_TRIGGER}
       >
         <LayoutGrid className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Kanban</span>

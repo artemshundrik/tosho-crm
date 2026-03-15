@@ -14,6 +14,7 @@ import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -455,11 +456,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
         <div className="space-y-3">
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-            <TabsList className="h-8 w-fit rounded-md bg-muted/40 p-0.5">
-              <TabsTrigger value="basic" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Основне</TabsTrigger>
-              <TabsTrigger value="requisites" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Реквізити</TabsTrigger>
-              <TabsTrigger value="communication" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Комунікація</TabsTrigger>
-              <TabsTrigger value="history" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Історія</TabsTrigger>
+            <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
+              <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
+              <TabsTrigger value="requisites" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Реквізити</TabsTrigger>
+              <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
+              <TabsTrigger value="history" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Історія</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-3 mt-3">
@@ -787,9 +788,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="history" className="space-y-3 mt-3">
               <SectionHeader>Історія</SectionHeader>
               <Tabs defaultValue="calculations" className="w-full">
-                <TabsList className="h-8 w-fit rounded-md bg-muted/40 p-0.5">
-                  <TabsTrigger value="calculations" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Прорахунки</TabsTrigger>
-                  <TabsTrigger value="orders" className="h-7 px-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Замовлення</TabsTrigger>
+                <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
+                  <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Прорахунки</TabsTrigger>
+                  <TabsTrigger value="orders" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Замовлення</TabsTrigger>
                 </TabsList>
                 <TabsContent value="calculations" className="mt-3">
                   {linkedLoading ? (

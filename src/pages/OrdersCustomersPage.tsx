@@ -4,6 +4,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  SEGMENTED_GROUP,
+  SEGMENTED_TRIGGER,
+  TOOLBAR_ACTION_BUTTON,
+  TOOLBAR_CONTROL,
+} from "@/components/ui/controlStyles";
+import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -1162,13 +1169,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const customersHeaderActions = useMemo(() => (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+        <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
           <Button
             variant="segmented"
             size="xs"
             aria-pressed={activeTab === "customers"}
             onClick={() => setActiveTab("customers")}
-            className="gap-2"
+            className={cn(SEGMENTED_TRIGGER, "gap-2")}
           >
             <Building2 className="h-4 w-4" />
             Замовники
@@ -1179,14 +1186,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
             size="xs"
             aria-pressed={activeTab === "leads"}
             onClick={() => setActiveTab("leads")}
-            className="gap-2"
+            className={cn(SEGMENTED_TRIGGER, "gap-2")}
           >
             <Users className="h-4 w-4" />
             Ліди
             <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{leads.length}</span>
           </Button>
         </div>
-        <Button onClick={activeTab === "customers" ? openCreate : openCreateLead} className="h-10 gap-2">
+        <Button
+          onClick={activeTab === "customers" ? openCreate : openCreateLead}
+          className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+        >
           <PlusCircle className="h-4 w-4" />
           {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
         </Button>
@@ -1199,7 +1209,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
-            className="pl-9"
+            className={cn(TOOLBAR_CONTROL, "pl-9")}
           />
         </div>
         <Select
@@ -1209,7 +1219,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             else setLeadManagerFilter(value);
           }}
         >
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
             <div className="min-w-0 flex items-center">
               {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
             </div>

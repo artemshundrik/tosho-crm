@@ -9,6 +9,7 @@ import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
+import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
@@ -196,16 +197,16 @@ export default function ActivityPage() {
           <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
             <TabsList
               className={cn(
-                "inline-flex h-10 items-center rounded-[var(--radius-inner)] p-1",
-                "bg-muted/70 border border-border shadow-inner"
+                SEGMENTED_GROUP,
+                "shadow-inner"
               )}
             >
               <TabsTrigger
                 value="all"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
@@ -214,9 +215,9 @@ export default function ActivityPage() {
               <TabsTrigger
                 value="quotes"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
@@ -225,9 +226,9 @@ export default function ActivityPage() {
               <TabsTrigger
                 value="design"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
@@ -236,9 +237,9 @@ export default function ActivityPage() {
               <TabsTrigger
                 value="finance"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
@@ -247,9 +248,9 @@ export default function ActivityPage() {
               <TabsTrigger
                 value="team"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >
@@ -258,9 +259,9 @@ export default function ActivityPage() {
               <TabsTrigger
                 value="other"
                 className={cn(
-                  "h-8 rounded-[var(--radius-md)] px-4 text-sm transition-colors",
+                  SEGMENTED_TRIGGER,
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-md",
+                  "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
                 )}
               >

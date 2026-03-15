@@ -104,9 +104,9 @@ const buttonVariants = cva(
 
         // ✅ Segmented tabs (uses aria-pressed for active state)
         segmented: [
-          "!font-medium bg-transparent text-muted-foreground",
-          "hover:text-foreground hover:bg-muted/40",
-          "aria-[pressed=true]:bg-card aria-[pressed=true]:text-foreground aria-[pressed=true]:border aria-[pressed=true]:border-border/80",
+          "!font-medium border border-transparent bg-transparent text-muted-foreground shadow-none",
+          "hover:bg-background/40 hover:text-foreground",
+          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-card aria-[pressed=true]:text-foreground aria-[pressed=true]:shadow-sm",
         ].join(" "),
 
         // ✅ Filter chip / pill toggle
@@ -165,7 +165,7 @@ const buttonVariants = cva(
       size: {
         xxs: "h-7 px-2 text-[11px] leading-none",
         xs: "h-8 px-3 text-[13px] leading-[18px]",
-        sm: "h-9 px-3.5 text-sm",
+        sm: "h-10 px-3.5 text-sm",
         md: "h-10 px-4 text-[15px]",
         lg: "h-11 px-5 text-[15px]",
         compact: "h-8 px-3 text-[13px] leading-[18px]",

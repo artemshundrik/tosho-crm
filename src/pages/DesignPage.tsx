@@ -37,7 +37,12 @@ import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
-import { CONTROL_BASE } from "@/components/ui/controlStyles";
+import {
+  SEGMENTED_GROUP,
+  SEGMENTED_TRIGGER,
+  TOOLBAR_ACTION_BUTTON,
+  TOOLBAR_CONTROL,
+} from "@/components/ui/controlStyles";
 import {
   CustomerLeadPicker,
   type CreatedCustomerLead,
@@ -2363,7 +2368,7 @@ export default function DesignPage() {
           </div>
         </div>
         {isLinkedQuote && task.productName ? (
-          <div className="mt-3 rounded-[14px] border border-border/60 bg-background/35 px-3 py-2.5">
+          <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
             <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               <Package className="h-3.5 w-3.5" />
               Товар
@@ -2431,12 +2436,13 @@ export default function DesignPage() {
     () => (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+          <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
               aria-pressed={contentView === "all"}
               onClick={() => setContentView("all")}
+              className={SEGMENTED_TRIGGER}
             >
               Всі
               <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{allTasksCount}</span>
@@ -2446,6 +2452,7 @@ export default function DesignPage() {
               size="xs"
               aria-pressed={contentView === "linked"}
               onClick={() => setContentView("linked")}
+              className={SEGMENTED_TRIGGER}
             >
               З прорах.
               <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{linkedTasksCount}</span>
@@ -2455,19 +2462,20 @@ export default function DesignPage() {
               size="xs"
               aria-pressed={contentView === "standalone"}
               onClick={() => setContentView("standalone")}
+              className={SEGMENTED_TRIGGER}
             >
               Окремі
               <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{standaloneTasksCount}</span>
             </Button>
           </div>
           <div className="flex items-center gap-2 self-end lg:self-auto">
-            <div className="inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+            <div className={SEGMENTED_GROUP}>
               <Button
                 variant="segmented"
                 size="xs"
                 aria-pressed={viewMode === "kanban"}
                 onClick={() => setViewMode("kanban")}
-                className="gap-1.5"
+                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 <span className="hidden xl:inline">Kanban</span>
@@ -2477,7 +2485,7 @@ export default function DesignPage() {
                 size="xs"
                 aria-pressed={viewMode === "timeline"}
                 onClick={() => setViewMode("timeline")}
-                className="gap-1.5"
+                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
               >
                 <CalendarRange className="h-3.5 w-3.5" />
                 <span className="hidden xl:inline">Timeline</span>
@@ -2487,13 +2495,17 @@ export default function DesignPage() {
                 size="xs"
                 aria-pressed={viewMode === "assignee"}
                 onClick={() => setViewMode("assignee")}
-                className="gap-1.5"
+                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
               >
                 <Users className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">Дизайнери</span>
               </Button>
             </div>
-            <Button size="sm" className="h-10 gap-2" onClick={() => setCreateDialogOpen(true)}>
+            <Button
+              size="sm"
+              className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+              onClick={() => setCreateDialogOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               Нова дизайн-задача
             </Button>
@@ -2513,7 +2525,7 @@ export default function DesignPage() {
                     ? "Пошук по окремих задачах..."
                     : "Пошук по всіх дизайн-задачах..."
               }
-              className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
+              className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
             />
             {search ? (
               <Button
@@ -2534,7 +2546,7 @@ export default function DesignPage() {
 
           <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1">
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}>
-              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[180px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")}>
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>
               <SelectContent>
@@ -2548,7 +2560,7 @@ export default function DesignPage() {
             </Select>
 
             <Select value={designerFilter} onValueChange={setDesignerFilter}>
-              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[220px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
                 <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
               </SelectTrigger>
               <SelectContent>
@@ -2563,7 +2575,7 @@ export default function DesignPage() {
             </Select>
 
             <Select value={managerFilter} onValueChange={setManagerFilter}>
-              <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[220px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
                 <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
               </SelectTrigger>
               <SelectContent>

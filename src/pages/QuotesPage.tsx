@@ -118,6 +118,12 @@ import {
 import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
 import {
   CONTROL_BASE,
+  SEGMENTED_GROUP,
+  SEGMENTED_GROUP_SM,
+  SEGMENTED_TRIGGER,
+  SEGMENTED_TRIGGER_SM,
+  TOOLBAR_ACTION_BUTTON,
+  TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
@@ -3941,12 +3947,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const estimatesHeaderActions = useMemo(() => (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex h-10 w-full items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1 lg:w-auto">
+          <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
               aria-pressed={contentView === "quotes"}
               onClick={() => setContentView("quotes")}
+              className={cn(SEGMENTED_TRIGGER, "px-5")}
             >
               Прорахунки
             </Button>
@@ -3955,13 +3962,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               size="xs"
               aria-pressed={contentView === "sets"}
               onClick={() => setContentView("sets")}
+              className={cn(SEGMENTED_TRIGGER, "px-5")}
             >
               КП та набори
             </Button>
           </div>
           <div className="flex items-center gap-2 self-end lg:self-auto">
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-            <Button onClick={openCreate} size="sm" className="h-10 gap-2">
+            <Button onClick={openCreate} size="sm" className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
@@ -3977,7 +3985,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
               }
               placeholder={contentView === "sets" ? "Пошук по КП та наборах..." : "Пошук за назвою..."}
-              className={cn(CONTROL_BASE, "h-10 pl-9 pr-9")}
+              className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
             />
             {(contentView === "sets" ? quoteSetSearch : search) ? (
               <Button
@@ -4000,7 +4008,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             {contentView !== "sets" ? (
               <>
                 <Select value={status} onValueChange={setStatusFilter}>
-                  <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[170px]")}>
+                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[170px]")}>
                     <SelectValue placeholder="Статус" />
                   </SelectTrigger>
                   <SelectContent>
@@ -4013,7 +4021,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </SelectContent>
                 </Select>
                 <Select value={managerFilter} onValueChange={setManagerFilter}>
-                  <SelectTrigger className={cn(CONTROL_BASE, "h-9 w-[210px]")}>
+                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[210px]")}>
                     <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
                   </SelectTrigger>
                   <SelectContent>
@@ -4029,12 +4037,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </SelectContent>
                 </Select>
                 {viewMode === "table" ? (
-                  <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+                  <div className={SEGMENTED_GROUP_SM}>
                     <Button
                       variant="segmented"
                       size="xs"
                       aria-pressed={quoteListMode === "flat"}
                       onClick={() => setQuoteListMode("flat")}
+                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
                     >
                       Список
                     </Button>
@@ -4043,6 +4052,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       size="xs"
                       aria-pressed={quoteListMode === "grouped"}
                       onClick={() => setQuoteListMode("grouped")}
+                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
                     >
                       Групи
                     </Button>
@@ -4052,12 +4062,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </>
             ) : (
               <>
-                <div className="inline-flex h-9 items-center rounded-[var(--radius-lg)] border border-border bg-muted p-1">
+                <div className={SEGMENTED_GROUP_SM}>
                   <Button
                     variant="segmented"
                     size="xs"
                     aria-pressed={quoteSetKindFilter === "all"}
                     onClick={() => setQuoteSetKindFilter("all")}
+                    className={SEGMENTED_TRIGGER_SM}
                   >
                     Всі
                     <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{filteredQuoteSets.length}</span>
@@ -4067,6 +4078,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     size="xs"
                     aria-pressed={quoteSetKindFilter === "kp"}
                     onClick={() => setQuoteSetKindFilter("kp")}
+                    className={SEGMENTED_TRIGGER_SM}
                   >
                     КП
                     <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetKpCount}</span>
@@ -4076,6 +4088,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     size="xs"
                     aria-pressed={quoteSetKindFilter === "set"}
                     onClick={() => setQuoteSetKindFilter("set")}
+                    className={SEGMENTED_TRIGGER_SM}
                   >
                     Набори
                     <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
@@ -4937,7 +4950,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
-                                      <div className="inline-flex h-6 items-center gap-1 rounded-[9px] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                                      <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
                                         {Icon ? <Icon className="h-3 w-3" /> : null}
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
@@ -4985,7 +4998,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   </div>
 
                                   {productPreview ? (
-                                    <div className="mt-3 rounded-[14px] border border-border/60 bg-background/35 px-3 py-2.5">
+                                    <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
                                       <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                         <Package className="h-3.5 w-3.5" />
                                         Товар
