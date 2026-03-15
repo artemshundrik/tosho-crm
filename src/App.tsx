@@ -703,7 +703,6 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
-      {/* Finance (viewer read-only ок) */}
       <Route
         path="/finance"
         element={

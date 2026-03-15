@@ -37,18 +37,15 @@ const DialogContent = React.forwardRef<
   <DialogPortal>
     <DialogOverlay />
 
-    <DialogPrimitive.Content
+      <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // ✅ ЯКІР ЗВЕРХУ: більше не по центру
-        "fixed left-1/2 top-24 z-50 translate-x-[-50%]",
-        // адаптивна ширина
-        "w-[min(720px,calc(100vw-32px))]",
-        // ✅ max-height щоб не роздувало на довгих списках
-        "max-h-[calc(100vh-16rem)]",
+        "fixed left-1/2 top-4 z-50 translate-x-[-50%] sm:top-24",
+        "w-[min(720px,calc(100vw-20px))]",
+        "max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100vh-16rem)]",
         // контейнер — bg-card (білий у light, піднятий у dark), ring замість shadow (shadow заблокований)
         "rounded-[var(--radius-inner)] border border-border/90 bg-card ring-1 ring-black/8 dark:ring-white/6 outline-none",
-        "flex flex-col gap-4 overflow-hidden p-6",
+        "flex flex-col gap-3 overflow-hidden p-4 sm:gap-4 sm:p-6",
         // ✅ м’яка анімація: fade + slide зверху, без zoom
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2",

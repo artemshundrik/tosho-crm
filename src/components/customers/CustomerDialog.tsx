@@ -466,7 +466,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="basic" className="space-y-3 mt-3">
               <SectionHeader>Компанія</SectionHeader>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Назва компанії *</Label>
                     <Input
@@ -486,7 +486,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>ЄДРПОУ / ІПН</Label>
                     <Input
@@ -535,7 +535,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         </Button>
                       ) : null}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
                         <Label>Імʼя контакту</Label>
                         <Input
@@ -564,7 +564,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         </Select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
                         <Label>Номер телефону</Label>
                         <Input
@@ -602,7 +602,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="requisites" className="space-y-3 mt-3">
               <SectionHeader>Реквізити</SectionHeader>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>IBAN</Label>
                     <Input
@@ -636,7 +636,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
             <TabsContent value="communication" className="space-y-3 mt-3">
               <SectionHeader>Нагадування</SectionHeader>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Дата</Label>
                   <Popover open={reminderDateOpen} onOpenChange={setReminderDateOpen}>
@@ -706,7 +706,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
 
               <SectionHeader>Подія</SectionHeader>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Назва події</Label>
                   <Input

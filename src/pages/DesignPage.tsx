@@ -2468,8 +2468,8 @@ export default function DesignPage() {
               <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{standaloneTasksCount}</span>
             </Button>
           </div>
-          <div className="flex items-center gap-2 self-end lg:self-auto">
-            <div className={SEGMENTED_GROUP}>
+          <div className="flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto">
+            <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
               <Button
                 variant="segmented"
                 size="xs"
@@ -2503,7 +2503,7 @@ export default function DesignPage() {
             </div>
             <Button
               size="sm"
-              className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+              className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
               onClick={() => setCreateDialogOpen(true)}
             >
               <Plus className="h-4 w-4" />
@@ -2544,9 +2544,9 @@ export default function DesignPage() {
             ) : null}
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-1">
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>
               <SelectContent>
@@ -2560,7 +2560,7 @@ export default function DesignPage() {
             </Select>
 
             <Select value={designerFilter} onValueChange={setDesignerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
                 <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
               </SelectTrigger>
               <SelectContent>
@@ -2575,7 +2575,7 @@ export default function DesignPage() {
             </Select>
 
             <Select value={managerFilter} onValueChange={setManagerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
                 <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
               </SelectTrigger>
               <SelectContent>
@@ -2640,67 +2640,97 @@ export default function DesignPage() {
 
       {viewMode === "kanban" ? (
         <EstimatesKanbanCanvas>
-          <KanbanBoard rowClassName="min-w-[1100px]">
+          <div className="space-y-3 md:hidden">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
+              const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
               return (
-                <KanbanColumn
-                  key={col.id}
-                  className={cn(
-                    "kanban-column-surface basis-[320px] h-[calc(100dvh-13.5rem)] transition-colors",
-                    `kanban-column-status-${col.id}`,
-                    draggingId && "border-primary/35",
-                    dropTargetStatus === col.id && "border-primary bg-primary/5"
-                  )}
-                  header={
-                    <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {(() => {
-                          const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
-                          return <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />;
-                        })()}
-                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
-                          {col.label}
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
-                        {items.length}
+                <section key={col.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60">
+                  <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
+                      <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                        {col.label}
                       </span>
                     </div>
-                  }
-                  bodyClassName="px-2.5 pb-1.5 pt-2.5 space-y-2"
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                  }}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                  }}
-                  onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                      setDropTargetStatus((current) => (current === col.id ? null : current));
-                    }
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setDropTargetStatus(null);
-                    dropTaskToStatus(col.id);
-                    stopDraggingTask();
-                  }}
-                >
-                  {items.length === 0 ? (
-                    <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
-                      Немає задач
-                    </div>
-                  ) : (
-                    items.map((task) => <Fragment key={task.id}>{renderTaskCard(task, { draggable: true })}</Fragment>)
-                  )}
-                </KanbanColumn>
+                    <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">{items.length}</span>
+                  </div>
+                  <div className="space-y-2 p-2.5">
+                    {items.length === 0 ? (
+                      <div className="rounded-[var(--radius-md)] border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                        Немає задач
+                      </div>
+                    ) : (
+                      items.map((task) => <Fragment key={task.id}>{renderTaskCard(task)}</Fragment>)
+                    )}
+                  </div>
+                </section>
               );
             })}
-          </KanbanBoard>
+          </div>
+          <div className="hidden md:block">
+            <KanbanBoard rowClassName="min-w-[1100px]">
+              {DESIGN_COLUMNS.map((col) => {
+                const items = grouped[col.id] ?? [];
+                return (
+                  <KanbanColumn
+                    key={col.id}
+                    className={cn(
+                      "kanban-column-surface basis-[320px] h-[calc(100dvh-13.5rem)] transition-colors",
+                      `kanban-column-status-${col.id}`,
+                      draggingId && "border-primary/35",
+                      dropTargetStatus === col.id && "border-primary bg-primary/5"
+                    )}
+                    header={
+                      <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {(() => {
+                            const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
+                            return <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />;
+                          })()}
+                          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                            {col.label}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                          {items.length}
+                        </span>
+                      </div>
+                    }
+                    bodyClassName="px-2.5 pb-1.5 pt-2.5 space-y-2"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                    }}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                        setDropTargetStatus((current) => (current === col.id ? null : current));
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDropTargetStatus(null);
+                      dropTaskToStatus(col.id);
+                      stopDraggingTask();
+                    }}
+                  >
+                    {items.length === 0 ? (
+                      <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+                        Немає задач
+                      </div>
+                    ) : (
+                      items.map((task) => <Fragment key={task.id}>{renderTaskCard(task, { draggable: true })}</Fragment>)
+                    )}
+                  </KanbanColumn>
+                );
+              })}
+            </KanbanBoard>
+          </div>
         </EstimatesKanbanCanvas>
       ) : null}
 
@@ -2738,7 +2768,41 @@ export default function DesignPage() {
               Немає задач із дедлайном для Timeline.
             </div>
           ) : (
-            <div className="rounded-lg border border-border/60 bg-card/60 overflow-auto">
+            <>
+            <div className="space-y-3 md:hidden">
+              {timelineData.rows.map((row) => {
+                const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
+                const deadlineLabel = row.end.toLocaleDateString("uk-UA", {
+                  day: "2-digit",
+                  month: "short",
+                });
+                return (
+                  <div
+                    key={row.task.id}
+                    className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60 p-4"
+                    onClick={() => openTask(row.task.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{getTaskDisplayNumber(row.task)}</div>
+                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                          {row.task.customerName ?? "Не вказано"}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
+                        {statusLabel}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <div>Дедлайн: {deadlineLabel}</div>
+                      <div>Естімейт: {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</div>
+                      <div>Витрачено: {formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block rounded-lg border border-border/60 bg-card/60 overflow-auto">
               <div
                 className="grid min-w-[980px]"
                 style={{ gridTemplateColumns: `320px repeat(${timelineAxis.columnCount}, minmax(44px, 1fr))` }}
@@ -2894,6 +2958,7 @@ export default function DesignPage() {
                 })}
               </div>
             </div>
+            </>
           )}
 
           {timelineData.noDeadlineTasks.length > 0 ? (
@@ -2944,7 +3009,32 @@ export default function DesignPage() {
                   </div>
                   <Badge variant="secondary">{group.tasks.length}</Badge>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="space-y-2 p-3 md:hidden">
+                  {group.tasks.map((task) => {
+                    const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
+                    const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
+                    const hasValidDeadline = !!deadlineDate && !Number.isNaN(deadlineDate.getTime());
+                    return (
+                      <div key={task.id} className="rounded-[var(--radius-md)] border border-border/50 bg-background/60 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{getTaskDisplayNumber(task)}</div>
+                            <div className="truncate text-xs text-muted-foreground">{task.customerName ?? "Не вказано"}</div>
+                          </div>
+                          <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}>
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                          <div>Дедлайн: {hasValidDeadline ? deadlineDate.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }) : "Без дедлайну"}</div>
+                          <div>Естімейт: {formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
+                          <div>Час: {formatElapsedSeconds(getTaskTrackedSeconds(task.id))}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <div className="min-w-[760px]">
                     <div className="grid grid-cols-[1.2fr_1.1fr_0.9fr_0.9fr_0.7fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
                       <div>Задача</div>

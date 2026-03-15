@@ -1195,15 +1195,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </div>
         <Button
           onClick={activeTab === "customers" ? openCreate : openCreateLead}
-          className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+          className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
         >
           <PlusCircle className="h-4 w-4" />
           {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[240px] max-w-[420px]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative w-full sm:max-w-[420px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -1219,7 +1219,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             else setLeadManagerFilter(value);
           }}
         >
-          <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[220px]")}>
+          <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
             <div className="min-w-0 flex items-center">
               {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
             </div>
@@ -1234,7 +1234,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             ))}
           </SelectContent>
         </Select>
-        <div className="ml-auto text-sm font-semibold text-foreground">
+        <div className="text-sm font-semibold text-foreground sm:ml-auto">
           {activeTab === "customers" ? filteredRows.length : filteredLeads.length}
           <span className="ml-1 text-muted-foreground">знайдено</span>
         </div>
@@ -1267,89 +1267,162 @@ function CustomersPage({ teamId }: { teamId: string }) {
             ) : filteredRows.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Немає замовників. Додайте першого.</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/20 hover:bg-muted/20">
-                    <TableHead className="pl-6">Компанія</TableHead>
-                    <TableHead>Тип</TableHead>
-                    <TableHead>ПДВ</TableHead>
-                    <TableHead>ЄДРПОУ / ІПН</TableHead>
-                    <TableHead>Сайт</TableHead>
-                    <TableHead>IBAN</TableHead>
-                    <TableHead>Менеджер</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {filteredRows.map((row) => (
-                    <TableRow
+                    <div
                       key={row.id}
-                      className="hover:bg-muted/10 cursor-pointer"
+                      className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
                       onClick={() => openEdit(row)}
                     >
-                      <TableCell className="pl-6">
-                        <div className="flex items-center gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <EntityAvatar
                             src={row.logo_url ?? null}
                             name={row.name ?? row.legal_name ?? "Компанія"}
                             fallback={getInitials(row.name ?? row.legal_name)}
-                            size={36}
+                            size={40}
                           />
-                          <div>
-                            <div className="font-medium">{row.name ?? "Не вказано"}</div>
-                            {row.legal_name && (
-                              <div className="text-xs text-muted-foreground">{row.legal_name}</div>
-                            )}
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{row.name ?? "Не вказано"}</div>
+                            {row.legal_name ? (
+                              <div className="text-xs text-muted-foreground truncate">{row.legal_name}</div>
+                            ) : null}
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
-                      <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
-                      <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
-                      <TableCell className="truncate max-w-[200px]">
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => openDelete(row)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Видалити
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                        <div><span className="text-muted-foreground">Тип:</span> {formatOwnership(row.ownership_type)}</div>
+                        <div><span className="text-muted-foreground">ПДВ:</span> {formatVat(row.vat_rate ?? null)}</div>
+                        <div><span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> {row.tax_id ?? "Не вказано"}</div>
+                        <div><span className="text-muted-foreground">IBAN:</span> {row.iban ?? "Не вказано"}</div>
+                        <div className="sm:col-span-2">
+                          <span className="text-muted-foreground">Менеджер:</span>{" "}
+                          {resolveManagerLabel(row.manager_user_id, row.manager) || "Не вказано"}
+                        </div>
                         {row.website ? (
-                          <a
-                            href={row.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary underline underline-offset-2"
+                          <div className="sm:col-span-2">
+                            <a
+                              href={row.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline underline-offset-2"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {row.website}
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableHead className="pl-6">Компанія</TableHead>
+                        <TableHead>Тип</TableHead>
+                        <TableHead>ПДВ</TableHead>
+                        <TableHead>ЄДРПОУ / ІПН</TableHead>
+                        <TableHead>Сайт</TableHead>
+                        <TableHead>IBAN</TableHead>
+                        <TableHead>Менеджер</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          className="hover:bg-muted/10 cursor-pointer"
+                          onClick={() => openEdit(row)}
+                        >
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-3">
+                              <EntityAvatar
+                                src={row.logo_url ?? null}
+                                name={row.name ?? row.legal_name ?? "Компанія"}
+                                fallback={getInitials(row.name ?? row.legal_name)}
+                                size={36}
+                              />
+                              <div>
+                                <div className="font-medium">{row.name ?? "Не вказано"}</div>
+                                {row.legal_name && (
+                                  <div className="text-xs text-muted-foreground">{row.legal_name}</div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
+                          <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
+                          <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
+                          <TableCell className="truncate max-w-[200px]">
+                            {row.website ? (
+                              <a
+                                href={row.website}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline underline-offset-2"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {row.website}
+                              </a>
+                            ) : (
+                              "Не вказано"
+                            )}
+                          </TableCell>
+                          <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
+                          <TableCell>{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
+                          <TableCell
+                            className="text-right pr-4"
                             onClick={(event) => event.stopPropagation()}
                           >
-                            {row.website}
-                          </a>
-                        ) : (
-                          "Не вказано"
-                        )}
-                      </TableCell>
-                      <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
-                      <TableCell>{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
-                      <TableCell
-                        className="text-right pr-4"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => openDelete(row)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Видалити
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => openDelete(row)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Видалити
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </div>
         </TabsContent>
@@ -1363,93 +1436,163 @@ function CustomersPage({ teamId }: { teamId: string }) {
             ) : filteredLeads.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Немає лідів. Додайте першого.</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/20 hover:bg-muted/20">
-                    <TableHead className="pl-6">Компанія</TableHead>
-                    <TableHead>Контакт</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Телефони</TableHead>
-                    <TableHead>Джерело</TableHead>
-                    <TableHead>Сайт</TableHead>
-                    <TableHead>Менеджер</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-3 md:hidden">
                   {filteredLeads.map((lead) => (
-                    <TableRow
+                    <div
                       key={lead.id}
-                      className="hover:bg-muted/10 cursor-pointer"
+                      className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
                       onClick={() => openEditLead(lead)}
                     >
-                      <TableCell className="pl-6">
-                        <div className="flex items-center gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <EntityAvatar
                             src={lead.logo_url ?? null}
                             name={lead.company_name ?? lead.legal_name ?? "Лід"}
                             fallback={getInitials(lead.company_name ?? lead.legal_name)}
-                            size={36}
+                            size={40}
                           />
-                          <div>
-                            <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{lead.company_name ?? "Не вказано"}</div>
                             {lead.legal_name ? (
-                              <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{lead.legal_name}</div>
                             ) : null}
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}
-                      </TableCell>
-                      <TableCell className="truncate max-w-[220px]">{lead.email ?? "Не вказано"}</TableCell>
-                      <TableCell className="truncate max-w-[220px]">
-                        {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
-                      </TableCell>
-                      <TableCell>{lead.source ?? "Не вказано"}</TableCell>
-                      <TableCell className="truncate max-w-[200px]">
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditLead(lead)}>Редагувати</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => openDeleteLead(lead)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Видалити
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+                        <div><span className="text-muted-foreground">Контакт:</span> {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}</div>
+                        <div><span className="text-muted-foreground">Email:</span> {lead.email ?? "Не вказано"}</div>
+                        <div><span className="text-muted-foreground">Телефони:</span> {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}</div>
+                        <div><span className="text-muted-foreground">Джерело:</span> {lead.source ?? "Не вказано"}</div>
+                        <div><span className="text-muted-foreground">Менеджер:</span> {resolveManagerLabel(lead.manager_user_id, lead.manager) || "Не вказано"}</div>
                         {lead.website ? (
-                          <a
-                            href={lead.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary underline underline-offset-2"
+                          <div>
+                            <a
+                              href={lead.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline underline-offset-2"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {lead.website}
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableHead className="pl-6">Компанія</TableHead>
+                        <TableHead>Контакт</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Телефони</TableHead>
+                        <TableHead>Джерело</TableHead>
+                        <TableHead>Сайт</TableHead>
+                        <TableHead>Менеджер</TableHead>
+                        <TableHead className="w-12"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredLeads.map((lead) => (
+                        <TableRow
+                          key={lead.id}
+                          className="hover:bg-muted/10 cursor-pointer"
+                          onClick={() => openEditLead(lead)}
+                        >
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-3">
+                              <EntityAvatar
+                                src={lead.logo_url ?? null}
+                                name={lead.company_name ?? lead.legal_name ?? "Лід"}
+                                fallback={getInitials(lead.company_name ?? lead.legal_name)}
+                                size={36}
+                              />
+                              <div>
+                                <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
+                                {lead.legal_name ? (
+                                  <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}
+                          </TableCell>
+                          <TableCell className="truncate max-w-[220px]">{lead.email ?? "Не вказано"}</TableCell>
+                          <TableCell className="truncate max-w-[220px]">
+                            {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
+                          </TableCell>
+                          <TableCell>{lead.source ?? "Не вказано"}</TableCell>
+                          <TableCell className="truncate max-w-[200px]">
+                            {lead.website ? (
+                              <a
+                                href={lead.website}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline underline-offset-2"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {lead.website}
+                              </a>
+                            ) : (
+                              "Не вказано"
+                            )}
+                          </TableCell>
+                          <TableCell>{renderManagerCell(lead.manager_user_id, lead.manager)}</TableCell>
+                          <TableCell
+                            className="text-right pr-4"
                             onClick={(event) => event.stopPropagation()}
                           >
-                            {lead.website}
-                          </a>
-                        ) : (
-                          "Не вказано"
-                        )}
-                      </TableCell>
-                      <TableCell>{renderManagerCell(lead.manager_user_id, lead.manager)}</TableCell>
-                      <TableCell
-                        className="text-right pr-4"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditLead(lead)}>Редагувати</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => openDeleteLead(lead)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Видалити
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditLead(lead)}>Редагувати</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => openDeleteLead(lead)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Видалити
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </div>
         </TabsContent>

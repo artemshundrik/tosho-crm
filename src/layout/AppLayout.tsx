@@ -106,7 +106,6 @@ const ROUTES = {
   ordersProduction: "/orders/production",
   ordersReadyToShip: "/orders/ready-to-ship",
   catalogProducts: "/catalog/products",
-
   financeInvoices: "/finance/invoices",
   financeExpenseInvoices: "/finance/expense-invoices",
   financeActs: "/finance/acts",
@@ -312,7 +311,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Турніри",
       breadcrumbTo: ROUTES.tournaments,
     };
-
   if (pathname.startsWith("/finance/transactions/new"))
     return {
       title: "Новий платіж",
@@ -320,7 +318,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
-
   if (pathname.startsWith("/finance/invoices/new"))
     return {
       title: "Новий рахунок",
@@ -328,7 +325,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
-
   if (pathname.startsWith("/finance/pools/new"))
     return {
       title: "Новий збір",
@@ -336,7 +332,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
-
   if (pathname.startsWith("/finance/pools/"))
     return {
       title: "Збір",
@@ -344,7 +339,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
-
   if (pathname.includes("finance"))
     return {
       title: "Фінанси",
@@ -352,6 +346,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
+
   if (pathname.startsWith(ROUTES.notifications))
     return {
       title: "Сповіщення",

@@ -3967,9 +3967,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               КП та набори
             </Button>
           </div>
-          <div className="flex items-center gap-2 self-end lg:self-auto">
+          <div className="flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto">
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-            <Button onClick={openCreate} size="sm" className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}>
+            <Button onClick={openCreate} size="sm" className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
@@ -4004,11 +4004,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : null}
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-1">
             {contentView !== "sets" ? (
               <>
                 <Select value={status} onValueChange={setStatusFilter}>
-                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[170px]")}>
+                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[170px]")}>
                     <SelectValue placeholder="Статус" />
                   </SelectTrigger>
                   <SelectContent>
@@ -4021,7 +4021,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </SelectContent>
                 </Select>
                 <Select value={managerFilter} onValueChange={setManagerFilter}>
-                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[210px]")}>
+                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
                     <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
                   </SelectTrigger>
                   <SelectContent>
@@ -4037,7 +4037,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </SelectContent>
                 </Select>
                 {viewMode === "table" ? (
-                  <div className={SEGMENTED_GROUP_SM}>
+                  <div className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
                     <Button
                       variant="segmented"
                       size="xs"
@@ -4062,7 +4062,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </>
             ) : (
               <>
-                <div className={SEGMENTED_GROUP_SM}>
+                <div className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
                   <Button
                     variant="segmented"
                     size="xs"
@@ -4290,7 +4290,87 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-4 md:hidden">
+            {filteredQuoteSets.map((set) => (
+              <div
+                key={set.id}
+                className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                onClick={() => openQuoteSetDetails(set)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div
+                      className={cn(
+                        "mt-1 h-10 w-1.5 rounded-full",
+                        (set.kind ?? "set") === "kp" ? "quote-kind-stripe-kp" : "quote-kind-stripe-set"
+                      )}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <QuoteKindBadge kind={set.kind} />
+                      </div>
+                      <div className="mt-1 truncate font-medium">{set.name}</div>
+                      <div className="mt-1 truncate text-sm text-muted-foreground">
+                        {set.customer_name ?? "Не вказано"}
+                      </div>
+                    </div>
+                  </div>
+                  <div onClick={(event) => event.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-70 hover:opacity-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            void handleDeleteQuoteSet(set);
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Видалити
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="font-semibold">{set.item_count} поз.</Badge>
+                  {set.created_at ? (
+                    <span>
+                      {new Date(set.created_at).toLocaleDateString("uk-UA", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}
+                    </span>
+                  ) : null}
+                </div>
+                {set.preview_quote_numbers && set.preview_quote_numbers.length > 0 ? (
+                  <div className="mt-3 text-[11px] text-muted-foreground">
+                    {set.preview_quote_numbers.join(" · ")}
+                    {set.item_count > set.preview_quote_numbers.length ? " · ..." : ""}
+                  </div>
+                ) : null}
+                {set.duplicate_count && set.duplicate_count > 0 ? (
+                  <div className="mt-2">
+                    <Badge
+                      variant="outline"
+                      className="h-5 px-1.5 text-[10px] quote-warning-badge"
+                      title="Є ще КП/набір з таким самим складом прорахунків"
+                    >
+                      Той самий склад
+                    </Badge>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <Table className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="bg-transparent border-b border-border/40">
@@ -4400,6 +4480,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </EstimatesTableCanvas>
       )}
@@ -4498,7 +4579,143 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               ) : null}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-3 md:hidden">
+              {filteredAndSortedRows.map((row) => {
+                const membership = quoteMembershipByQuoteId.get(row.id);
+                const normalizedStatus = normalizeStatus(row.status);
+                const StatusIcon = statusIcons[normalizedStatus] ?? Clock;
+                const deadlineBadge = getDeadlineBadge(row.deadline_at ?? null);
+                const manager = resolveManagerMember(row.assigned_to);
+                const managerLabel = getManagerLabel(row.assigned_to);
+                return (
+                  <div
+                    key={row.id}
+                    className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                    onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-mono font-semibold">{row.number ?? "Не вказано"}</div>
+                          <Badge className={cn("border", statusClasses[normalizedStatus] ?? statusClasses.new)} variant="outline">
+                            <StatusIcon className="mr-1 h-3.5 w-3.5" />
+                            {formatStatusLabel(normalizedStatus)}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          {row.created_at
+                            ? (() => {
+                                const labels = getDateLabels(row.created_at);
+                                return labels === "Не вказано" ? labels : labels.primary;
+                              })()
+                            : "Не вказано"}
+                        </div>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Відкрити
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(row)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Редагувати
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Дублювати
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleOpenQuickAddToSet(row)}>
+                              <Layers className="mr-2 h-4 w-4" />
+                              Додати в КП/набір
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => requestDelete(row.id)}
+                              className="text-destructive focus:text-destructive"
+                              disabled={rowDeleteBusy === row.id}
+                            >
+                              {rowDeleteBusy === row.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-2 h-4 w-4" />
+                              )}
+                              Видалити
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-3 min-w-0">
+                      <EntityAvatar
+                        src={row.customer_logo_url ?? null}
+                        name={row.customer_name ?? "Клієнт / Лід"}
+                        fallback={getInitials(row.customer_name)}
+                        size={40}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{row.customer_name ?? "Не вказано"}</div>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                          <AvatarBase
+                            src={manager?.avatarUrl ?? null}
+                            name={managerLabel}
+                            fallback={row.assigned_to ? getInitials(managerLabel) : "НВ"}
+                            size={20}
+                            className="text-[9px] font-semibold"
+                          />
+                          <span className="truncate">{managerLabel}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {membership ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {membership.kp_count > 0 ? (
+                          <Badge
+                            variant="outline"
+                            title={membership.kp_names.join(", ")}
+                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                          >
+                            <FileText className="h-3 w-3" />
+                            КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                          </Badge>
+                        ) : null}
+                        {membership.set_count > 0 ? (
+                          <Badge
+                            variant="outline"
+                            title={membership.set_names.join(", ")}
+                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                          >
+                            <Layers className="h-3 w-3" />
+                            Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <QuoteDeadlineBadge tone={deadlineBadge.tone} label={deadlineBadge.label} />
+                      <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                        {(() => {
+                          const TypeIcon = quoteTypeIcon(row.quote_type);
+                          return TypeIcon ? <TypeIcon className="h-3.5 w-3.5" /> : null;
+                        })()}
+                        {quoteTypeLabel(row.quote_type)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <Table className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="bg-transparent hover:bg-transparent border-b border-border/40">
@@ -4784,6 +5001,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </EstimatesTableCanvas>
       ) : (

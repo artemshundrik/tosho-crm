@@ -4800,7 +4800,7 @@ export default function DesignTaskPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
-                <SelectTrigger className="min-w-[220px]">
+                <SelectTrigger className="w-full sm:min-w-[220px] sm:w-auto">
                   <SelectValue placeholder="Група для завантаження" />
                 </SelectTrigger>
                 <SelectContent>
@@ -5934,7 +5934,7 @@ export default function DesignTaskPage() {
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="task-estimate-value">Естімейт</Label>
-            <div className="grid grid-cols-[1fr_150px] gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_150px]">
               <Input
                 id="task-estimate-value"
                 type="number"

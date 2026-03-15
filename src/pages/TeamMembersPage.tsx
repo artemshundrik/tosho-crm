@@ -237,6 +237,14 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   catalog: "Каталог",
 };
 
+const VISIBLE_MODULE_ACCESS_KEYS: Array<Exclude<keyof MemberProfileMeta["moduleAccess"], "finance">> = [
+  "overview",
+  "orders",
+  "design",
+  "logistics",
+  "catalog",
+];
+
 const DEFAULT_MEMBER_META: MemberProfileMeta = {
   firstName: "",
   lastName: "",
@@ -1938,7 +1946,152 @@ export function TeamMembersPage() {
         </div>
 
         {activeTab === "members" ? (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 md:hidden">
+            {membersError ? (
+              <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
+            ) : filteredMembers.length === 0 ? (
+              <Card className="border-border/60 p-4 text-sm text-muted-foreground">Нема учасників.</Card>
+            ) : (
+              filteredMembers.map((m) => {
+                const profile = memberProfilesByUserId[m.user_id];
+                const meta = memberMetaByUserId[m.user_id];
+                const availability = meta?.availabilityStatus ?? "available";
+                const presence = memberPresenceByUserId[m.user_id];
+                const displayName = getMemberDisplayName(m);
+                const initials = getInitialsFromName(displayName, m.email ?? null);
+                return (
+                  <Card key={m.user_id} className="border-border/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="relative shrink-0">
+                          <AvatarBase
+                            src={profile?.avatarUrl ?? m.avatar_url ?? null}
+                            name={displayName}
+                            fallback={initials}
+                            size={44}
+                            shape="circle"
+                            className="border-border bg-muted/50"
+                            fallbackClassName="text-xs font-bold"
+                          />
+                          <span
+                            className={cn(
+                              "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background",
+                              presence?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                            )}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">{displayName}</div>
+                          <div className="mt-1 truncate text-xs text-muted-foreground">{m.email || "Не вказано"}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{meta?.phone || "Телефон не вказано"}</div>
+                        </div>
+                      </div>
+                      <AppDropdown
+                        align="end"
+                        contentClassName="w-48"
+                        trigger={
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        }
+                        items={[
+                          { type: "label", label: "Дії" },
+                          { type: "separator" },
+                          canOpenProfileCard
+                            ? (canManage ? memberProfileStorageAvailable : true)
+                              ? {
+                                  label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
+                                  onSelect: () => openEditProfileDialog(m),
+                                }
+                              : {
+                                  label: "Профіль (read-only)",
+                                  disabled: true,
+                                  muted: true,
+                                }
+                            : {
+                                label: "Тільки перегляд",
+                                disabled: true,
+                                muted: true,
+                              },
+                          canManage &&
+                          (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
+                            ? {
+                                label: "Змінити доступи",
+                                onSelect: () => openEditRolesDialog(m),
+                              }
+                            : {
+                                label:
+                                  !isSuperAdmin && m.user_id === currentUserId
+                                    ? "Admin не може змінити себе"
+                                    : "Тільки перегляд",
+                                disabled: true,
+                                muted: true,
+                              },
+                          canManage
+                            ? {
+                                label: "Надіслати reset паролю",
+                                onSelect: () => void sendPasswordReset(m),
+                              }
+                            : {
+                                label: "Reset паролю недоступний",
+                                disabled: true,
+                                muted: true,
+                              },
+                          canManage
+                            ? {
+                                label:
+                                  availability === "offline"
+                                    ? "Повернути в роботу"
+                                    : "Позначити як неактивного",
+                                onSelect: () =>
+                                  void updateAvailabilityStatus(
+                                    m,
+                                    availability === "offline" ? "available" : "offline"
+                                  ),
+                              }
+                            : {
+                                label: "Зміна статусу недоступна",
+                                disabled: true,
+                                muted: true,
+                              },
+                          canManage &&
+                          (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
+                            ? {
+                                label: "Видалити користувача",
+                                destructive: true,
+                                onSelect: () => confirmDeleteMember(m),
+                              }
+                            : {
+                                label: m.user_id === currentUserId ? "Не можна видалити себе" : "Видалення недоступне",
+                                disabled: true,
+                                muted: true,
+                              },
+                        ]}
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getAccessBadgeClass(m.access_role))}>
+                        {getAccessRoleLabel(m.access_role)}
+                      </Badge>
+                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getJobBadgeClass(m.job_role))}>
+                        {getJobRoleLabel(m.job_role)}
+                      </Badge>
+                      <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", getAvailabilityBadgeClass(availability))}>
+                        {getAvailabilityLabel(availability)}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground">
+                      <div>Народження: {formatBirthDate(meta?.birthDate)}</div>
+                      <div>Приєднався: {formatDate(m.created_at)}</div>
+                      <div>{presence?.online ? "Зараз онлайн" : formatRelativeTime(presence?.lastSeenAt)}</div>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
@@ -2166,10 +2319,78 @@ export function TeamMembersPage() {
               </TableBody>
             </Table>
           </div>
+          </>
         ) : null}
 
         {activeTab === "invites" && canManage ? (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 md:hidden">
+            {invitesError ? (
+              <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {invitesError}</Card>
+            ) : invites.length === 0 ? (
+              <Card className="border-border/60 p-4 text-sm text-muted-foreground">Немає активних запрошень.</Card>
+            ) : (
+              invites.map((inv) => {
+                const expired = isExpired(inv.expires_at);
+                const used = !!inv.accepted_at;
+                return (
+                  <Card key={inv.id} className="border-border/60 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-muted">
+                        <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {inv.email || "Публічне посилання"}
+                        </div>
+                        <div className="mt-1 truncate font-mono text-xs text-muted-foreground">...{inv.token.slice(-8)}</div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", getAccessBadgeClass(inv.access_role))}>
+                            {getAccessRoleLabel(inv.access_role)}
+                          </Badge>
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", getJobBadgeClass(inv.job_role))}>
+                            {getJobRoleLabel(inv.job_role)}
+                          </Badge>
+                          {used ? (
+                            <Badge variant="secondary" className="bg-muted text-muted-foreground hover:bg-muted">
+                              Використано
+                            </Badge>
+                          ) : expired ? (
+                            <Badge variant="destructive" className="bg-danger-soft text-danger-foreground border-danger-soft-border hover:bg-danger-soft">
+                              Прострочено
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="bg-success-soft text-success-foreground border-success-soft-border hover:bg-success-soft shadow-none">
+                              Активне
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-3 text-xs text-muted-foreground">Створено: {formatDate(inv.created_at)}</div>
+                        <div className="mt-3 flex gap-2">
+                          {!expired && !used ? (
+                            <Button
+                              size="iconXs"
+                              variant="control"
+                              onClick={() => {
+                                navigator.clipboard.writeText(getInviteLink(inv.token));
+                                toast.success("Посилання скопійовано");
+                              }}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          ) : null}
+                          <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
@@ -2279,6 +2500,7 @@ export function TeamMembersPage() {
               </TableBody>
             </Table>
           </div>
+          </>
         ) : null}
 
         {activeTab === "activity" && canManage ? (
@@ -2320,7 +2542,22 @@ export function TeamMembersPage() {
             ) : teamActivityItems.length === 0 ? (
               <div className="text-sm text-muted-foreground">Немає дій за обраний період.</div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-3 md:hidden">
+                {teamActivityItems.map((item, index) => {
+                  const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
+                  const profile = member ? memberProfilesByUserId[member.user_id] : null;
+                  const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
+                  return (
+                    <Card key={`${item.userId}-${item.createdAt}-${index}`} className="border-border/60 p-4">
+                      <div className="text-sm font-medium text-foreground">{displayName}</div>
+                      <div className="mt-2 text-sm text-foreground">{item.title}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
+                    </Card>
+                  );
+                })}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <Table variant="list" size="md">
                   <TableHeader className="bg-muted/30">
                     <TableRow className="hover:bg-transparent border-border/50">
@@ -2353,6 +2590,7 @@ export function TeamMembersPage() {
                   </TableBody>
                 </Table>
               </div>
+              </>
             )}
           </div>
         ) : null}
@@ -2603,7 +2841,7 @@ export function TeamMembersPage() {
             <div className="space-y-3">
               <Label className="text-sm font-medium text-foreground">Доступ до модулів</Label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {(Object.keys(MODULE_ACCESS_LABELS) as Array<keyof MemberProfileMeta["moduleAccess"]>).map((key) => (
+                {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
                   <label
                     key={key}
                     className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
@@ -2623,7 +2861,7 @@ export function TeamMembersPage() {
                 ))}
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button
                 variant="outline"
                 className="flex-1 h-11"
@@ -2690,7 +2928,7 @@ export function TeamMembersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button
                 variant="outline"
                 className="flex-1 h-11"
@@ -2708,7 +2946,7 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[24px]">
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[var(--radius-inner)]">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -2721,7 +2959,7 @@ export function TeamMembersPage() {
             </DialogHeader>
           </div>
 
-          <div className="p-6 pt-0 flex gap-3">
+          <div className="flex flex-col gap-3 p-6 pt-0 sm:flex-row">
             <Button variant="outline" className="flex-1 h-11" onClick={() => setRevokeId(null)}>
               Скасувати
             </Button>
@@ -2739,7 +2977,7 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[24px]">
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[var(--radius-inner)]">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -2754,7 +2992,7 @@ export function TeamMembersPage() {
             </DialogHeader>
           </div>
 
-          <div className="p-6 pt-0 flex gap-3">
+          <div className="flex flex-col gap-3 p-6 pt-0 sm:flex-row">
             <Button variant="outline" className="flex-1 h-11" onClick={() => setMemberToDelete(null)} disabled={memberDeleteBusy}>
               Скасувати
             </Button>
