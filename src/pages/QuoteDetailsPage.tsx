@@ -5026,10 +5026,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <div className="space-y-4">
                 <Tabs defaultValue="internal" className="w-full">
-                  <TabsList className="mb-5 grid auto-rows-fr h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 md:grid-cols-3">
+                  <TabsList className="mb-5 grid h-auto w-full grid-cols-1 auto-rows-fr gap-2 border-0 bg-transparent p-0 shadow-none md:grid-cols-3">
                     <TabsTrigger
                       value="customer"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
@@ -5073,7 +5073,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="internal"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
@@ -5103,7 +5103,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="design"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04]"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
@@ -5388,23 +5388,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </summary>
 
               <Tabs defaultValue="brief" className="w-full">
-                <TabsList className="mb-5 h-auto justify-start rounded-none border-b border-border/30 bg-transparent p-0">
+                <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="brief"
-                    className="rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     ТЗ
                   </TabsTrigger>
                   <TabsTrigger
                     value="visuals"
-                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Візуалізації
                     <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="task"
-                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Задача
                   </TabsTrigger>
@@ -5712,10 +5712,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </summary>
 
               <Tabs defaultValue="comments" className="w-full">
-                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-b border-border/30 bg-transparent p-0">
+                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="comments"
-                    className="rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Коментарі
                     {comments.length > 0 ? (
@@ -5724,13 +5724,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </TabsTrigger>
                   <TabsTrigger
                     value="files"
-                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Вкладення
                   </TabsTrigger>
                   <TabsTrigger
                     value="activity"
-                    className="ml-6 rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Активність
                   </TabsTrigger>

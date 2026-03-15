@@ -1056,9 +1056,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden p-0">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden !p-0 sm:!p-0">
         <div className="flex max-h-[85vh] flex-col">
-          <DialogHeader className="px-6 pt-6 pb-3">
+          <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle className="text-base font-medium flex items-center gap-2">
               <Plus className="h-4 w-4" />
               {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
@@ -1069,7 +1069,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 : "Заповніть параметри замовлення, щоб створити прорахунок."}
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto px-6 pb-4">
+          <div className="min-w-0 overflow-x-hidden overflow-y-auto px-6 pb-6">
 
             {isEditMode ? (
               <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">

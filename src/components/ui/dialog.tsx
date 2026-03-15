@@ -37,12 +37,11 @@ const DialogContent = React.forwardRef<
   <DialogPortal>
     <DialogOverlay />
 
-      <DialogPrimitive.Content
+    <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-4 z-50 translate-x-[-50%] sm:top-24",
-        "w-[min(720px,calc(100vw-20px))]",
-        "max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100vh-16rem)]",
+        "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%]",
+        "max-h-[calc(100dvh-1.5rem)]",
         // контейнер — bg-card (білий у light, піднятий у dark), ring замість shadow (shadow заблокований)
         "rounded-[var(--radius-inner)] border border-border/90 bg-card ring-1 ring-black/8 dark:ring-white/6 outline-none",
         "flex flex-col gap-3 overflow-hidden p-4 sm:gap-4 sm:p-6",
