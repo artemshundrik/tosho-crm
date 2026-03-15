@@ -1833,34 +1833,47 @@ export function TeamMembersPage() {
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border border-border/60 bg-card/70 p-4">
+        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-primary/50 overflow-hidden">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Усього в команді</div>
-            <Shield className="h-4 w-4 text-muted-foreground" />
+            <div className="text-xs font-medium text-muted-foreground">Усього в команді</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+            </div>
           </div>
-          <div className="mt-2 text-2xl font-semibold text-foreground">{members.length}</div>
+          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{members.length}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">учасників</div>
         </Card>
-        <Card className="border border-border/60 bg-card/70 p-4">
+        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-emerald-500/60 overflow-hidden">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Онлайн зараз</div>
-            <Activity className="h-4 w-4 text-success-foreground" />
+            <div className="text-xs font-medium text-muted-foreground">Онлайн зараз</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10">
+              <Activity className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            </div>
           </div>
-          <div className="mt-2 text-2xl font-semibold text-foreground">{onlineNowCount}</div>
+          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{onlineNowCount}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {onlineNowCount > 0 ? `з ${members.length} активних` : "нікого онлайн"}
+          </div>
         </Card>
-        <Card className="border border-border/60 bg-card/70 p-4">
+        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-sky-500/60 overflow-hidden">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Активні запрошення</div>
-            <UserCheck className="h-4 w-4 text-info-foreground" />
+            <div className="text-xs font-medium text-muted-foreground">Активні запрошення</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-500/10">
+              <UserCheck className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+            </div>
           </div>
-          <div className="mt-2 text-2xl font-semibold text-foreground">{activeInvitesCount}</div>
+          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{activeInvitesCount}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">очікують реєстрації</div>
         </Card>
-        <Card className="border border-border/60 bg-card/70 p-4">
+        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-amber-500/60 overflow-hidden">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Не в роботі</div>
-            <UserX className="h-4 w-4 text-warning-foreground" />
+            <div className="text-xs font-medium text-muted-foreground">Не в роботі</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/10">
+              <UserX className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            </div>
           </div>
-          <div className="mt-2 text-2xl font-semibold text-foreground">{unavailableCount}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Без посади: {withoutJobRoleCount}</div>
+          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{unavailableCount}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Без посади: {withoutJobRoleCount}</div>
         </Card>
       </div>
 
@@ -1948,15 +1961,23 @@ export function TeamMembersPage() {
                       <TableRow key={m.user_id} className="hover:bg-muted/40 transition-colors group">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
-                            <AvatarBase
-                              src={profile?.avatarUrl ?? m.avatar_url ?? null}
-                              name={displayName}
-                              fallback={initials}
-                              size={48}
-                              shape="circle"
-                              className="border-border bg-muted/50"
-                              fallbackClassName="text-xs font-bold"
-                            />
+                            <div className="relative shrink-0">
+                              <AvatarBase
+                                src={profile?.avatarUrl ?? m.avatar_url ?? null}
+                                name={displayName}
+                                fallback={initials}
+                                size={48}
+                                shape="circle"
+                                className="border-border bg-muted/50"
+                                fallbackClassName="text-xs font-bold"
+                              />
+                              <span
+                                className={cn(
+                                  "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background",
+                                  presence?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                )}
+                              />
+                            </div>
                             <div className="flex flex-col">
                               <span className="text-sm font-semibold text-foreground">
                                 {displayName}
@@ -1991,24 +2012,21 @@ export function TeamMembersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <Badge
-                              variant="outline"
-                              className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit", getAvailabilityBadgeClass(availability))}
-                            >
-                              {getAvailabilityLabel(availability)}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {presence?.online ? "Онлайн" : `Був: ${formatRelativeTime(presence?.lastSeenAt)}`}
-                            </span>
+                          <div className="flex flex-col gap-1.5">
                             {canManage ? (
                               <AppDropdown
                                 align="start"
                                 contentClassName="w-44"
                                 trigger={
-                                  <Button variant="ghost" size="xs" className="w-fit px-1 text-xs text-muted-foreground hover:text-foreground">
-                                    Змінити статус
-                                  </Button>
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit cursor-pointer transition-opacity hover:opacity-80",
+                                      getAvailabilityBadgeClass(availability)
+                                    )}
+                                  >
+                                    {getAvailabilityLabel(availability)}
+                                  </Badge>
                                 }
                                 items={AVAILABILITY_OPTIONS.map((option) => ({
                                   label:
@@ -2018,7 +2036,17 @@ export function TeamMembersPage() {
                                   onSelect: () => void updateAvailabilityStatus(m, option.value),
                                 }))}
                               />
-                            ) : null}
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit", getAvailabilityBadgeClass(availability))}
+                              >
+                                {getAvailabilityLabel(availability)}
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground/70">
+                              {presence?.online ? "зараз онлайн" : formatRelativeTime(presence?.lastSeenAt)}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
