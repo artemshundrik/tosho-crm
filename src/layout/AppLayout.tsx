@@ -20,6 +20,7 @@ import {
   Sun,
   Truck,
   Users,
+  X,
   CircleDot,
   PanelLeftClose,
   PanelLeftOpen,
@@ -52,7 +53,7 @@ import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { toast } from "sonner";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
 import { TabBar } from "@/components/app/TabBar";
 
@@ -1146,6 +1147,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
                   <SheetContent
                     side="left"
+                    hideClose
                     className={cn(
                       "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 shadow-2xl backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
@@ -1154,19 +1156,30 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   >
                     <div className="flex h-full min-w-0 flex-col overflow-hidden">
                       <div className="shrink-0 border-b border-border/70 bg-background/55">
-                        <SheetHeader className="px-4 pb-2 pt-4 pr-14">
+                        <SheetHeader className="px-4 pb-2 pt-4">
                           <div className="flex items-center justify-between gap-3">
                             <SheetTitle>ToSho CRM</SheetTitle>
-                            <Button
-                              variant="control"
-                              size="iconMd"
-                              className="mr-8 shrink-0"
-                              onClick={toggleTheme}
-                              aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
-                              title={theme === "dark" ? "Світла тема" : "Темна тема"}
-                            >
-                              {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-                            </Button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Button
+                                variant="control"
+                                size="iconMd"
+                                onClick={toggleTheme}
+                                aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
+                                title={theme === "dark" ? "Світла тема" : "Темна тема"}
+                              >
+                                {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+                              </Button>
+                              <SheetClose asChild>
+                                <Button
+                                  variant="control"
+                                  size="iconMd"
+                                  aria-label="Закрити меню"
+                                  title="Закрити меню"
+                                >
+                                  <X className="h-4.5 w-4.5" />
+                                </Button>
+                              </SheetClose>
+                            </div>
                           </div>
                         </SheetHeader>
 
