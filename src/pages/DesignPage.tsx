@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -507,6 +507,8 @@ export default function DesignPage() {
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
+  const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
+  const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
@@ -1214,6 +1216,47 @@ export default function DesignPage() {
     }, 1000);
     return () => window.clearInterval(interval);
   }, [timerSummaryByTaskId]);
+
+  useEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (typeof window === "undefined") return;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (!viewport) return;
+
+    let frameId = 0;
+    const measure = () => {
+      frameId = 0;
+      const rect = viewport.getBoundingClientRect();
+      const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
+      setDesktopKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+    const scheduleMeasure = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    window.addEventListener("resize", scheduleMeasure);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            scheduleMeasure();
+          })
+        : null;
+
+    resizeObserver?.observe(viewport);
+    if (viewport.parentElement) {
+      resizeObserver?.observe(viewport.parentElement);
+    }
+
+    return () => {
+      window.removeEventListener("resize", scheduleMeasure);
+      if (frameId) window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+    };
+  }, [viewMode, filteredTasks.length]);
 
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
@@ -2668,15 +2711,23 @@ export default function DesignPage() {
               );
             })}
           </div>
-          <div className="hidden md:block">
-            <KanbanBoard rowClassName="min-w-[1100px]">
+          <div
+            ref={desktopKanbanViewportRef}
+            className="hidden min-h-0 overflow-hidden md:block"
+            style={
+              desktopKanbanViewportHeight
+                ? { height: `${desktopKanbanViewportHeight}px` }
+                : undefined
+            }
+          >
+            <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="min-w-[1100px] h-full items-stretch">
               {DESIGN_COLUMNS.map((col) => {
                 const items = grouped[col.id] ?? [];
                 return (
                   <KanbanColumn
                     key={col.id}
                     className={cn(
-                      "kanban-column-surface basis-[320px] h-[calc(100dvh-13.5rem)] transition-colors",
+                      "kanban-column-surface basis-[320px] h-full transition-colors",
                       `kanban-column-status-${col.id}`,
                       draggingId && "border-primary/35",
                       dropTargetStatus === col.id && "border-primary bg-primary/5"

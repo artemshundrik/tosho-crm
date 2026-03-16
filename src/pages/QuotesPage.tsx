@@ -340,6 +340,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return saved === "kanban" ? "kanban" : "table";
   });
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
+  const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const [dragPlaceholder, setDragPlaceholder] = useState<{
     columnId: string;
@@ -2949,6 +2951,47 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [viewMode]);
 
   useEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (typeof window === "undefined") return;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (!viewport) return;
+
+    let frameId = 0;
+    const measure = () => {
+      frameId = 0;
+      const rect = viewport.getBoundingClientRect();
+      const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
+      setDesktopKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+    const scheduleMeasure = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    window.addEventListener("resize", scheduleMeasure);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            scheduleMeasure();
+          })
+        : null;
+
+    resizeObserver?.observe(viewport);
+    if (viewport.parentElement) {
+      resizeObserver?.observe(viewport.parentElement);
+    }
+
+    return () => {
+      window.removeEventListener("resize", scheduleMeasure);
+      if (frameId) window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+    };
+  }, [filteredAndSortedRows.length, viewMode]);
+
+  useEffect(() => {
     if (quoteListMode === "grouped" && selectedIds.size > 0) {
       setSelectedIds(new Set());
     }
@@ -5000,7 +5043,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
-            <KanbanBoard>
+            <div
+              ref={desktopKanbanViewportRef}
+              className="min-h-0 overflow-hidden"
+              style={
+                desktopKanbanViewportHeight
+                  ? { height: `${desktopKanbanViewportHeight}px` }
+                  : undefined
+              }
+            >
+            <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="h-full items-stretch">
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
@@ -5010,7 +5062,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[300px] shrink-0 flex flex-col lg:basis-[320px] h-[calc(100dvh-15.5rem)] 2xl:h-[calc(100dvh-14.25rem)]"
+                        "basis-[300px] shrink-0 flex flex-col lg:basis-[320px] h-full"
                       )}
                       header={
                         <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
@@ -5247,6 +5299,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   );
                 })}
             </KanbanBoard>
+            </div>
           )}
         </EstimatesKanbanCanvas>
       ))}
