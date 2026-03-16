@@ -578,6 +578,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const effectiveManagerId = canViewAllManagerRates
     ? quote?.assigned_to?.trim() || userId || null
     : userId || null;
+  const quoteManagerUserId = quote?.assigned_to?.trim() || null;
+  const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
+  const canDeleteDesignerBriefAttachment = useCallback(
+    (attachment: QuoteAttachment) =>
+      canManagerDeleteOwnDesignerBriefFiles &&
+      Boolean(userId) &&
+      (attachment.uploadedBy ?? null) === userId,
+    [canManagerDeleteOwnDesignerBriefFiles, userId]
+  );
 
   const loadCurrentManagerRate = useCallback(async () => {
     if (!effectiveManagerId) {
@@ -2816,6 +2825,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const requestDeleteAttachment = (attachment: QuoteAttachment) => {
     if (attachmentsDeletingId) return;
+    if (!canDeleteDesignerBriefAttachment(attachment)) return;
     setDeleteAttachmentTarget(attachment);
     setDeleteAttachmentOpen(true);
   };
@@ -2823,6 +2833,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const confirmDeleteAttachment = async () => {
     if (!deleteAttachmentTarget || attachmentsDeletingId) return;
     const attachment = deleteAttachmentTarget;
+    if (!canDeleteDesignerBriefAttachment(attachment)) {
+      setAttachmentsDeleteError("Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.");
+      setDeleteAttachmentOpen(false);
+      setDeleteAttachmentTarget(null);
+      toast.error("Недостатньо прав", {
+        description: "Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.",
+      });
+      return;
+    }
     setAttachmentsDeletingId(attachment.id);
     setAttachmentsDeleteError(null);
     try {
@@ -6068,19 +6087,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       >
                                         <Download className="h-4 w-4" />
                                       </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shrink-0 text-destructive opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                                        onClick={() => requestDeleteAttachment(file)}
-                                        disabled={attachmentsDeletingId === file.id}
-                                      >
-                                        {attachmentsDeletingId === file.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="h-4 w-4" />
-                                        )}
-                                      </Button>
+                                      {canDeleteDesignerBriefAttachment(file) ? (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="shrink-0 text-destructive opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                          onClick={() => requestDeleteAttachment(file)}
+                                          disabled={attachmentsDeletingId === file.id}
+                                        >
+                                          {attachmentsDeletingId === file.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Trash2 className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      ) : null}
                                     </div>
                                   </div>
                                 );
