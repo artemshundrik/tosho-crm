@@ -179,9 +179,9 @@
     --tabbar-label-active: var(--primary);
     --tabbar-backdrop-blur: 22px;
     --tabbar-backdrop-saturate: 1.2;
-    --tabbar-radius: 18px;
+    --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 16px;
+    --tabbar-inset-x: 22px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;
@@ -384,9 +384,9 @@
     --tabbar-label-active: var(--primary);
     --tabbar-backdrop-blur: 22px;
     --tabbar-backdrop-saturate: 1.2;
-    --tabbar-radius: 18px;
+    --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 16px;
+    --tabbar-inset-x: 22px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;
