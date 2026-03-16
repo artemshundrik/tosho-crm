@@ -1134,7 +1134,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           )}
         >
           <div className="flex h-14 items-center gap-3 px-4 md:px-5 lg:px-6">
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -1146,74 +1146,95 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
                   <SheetContent
                     side="left"
-                    className="h-full w-full max-w-none overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] sm:w-[310px] sm:max-w-[310px] min-h-[100dvh] will-change-transform data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
+                    className={cn(
+                      "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 shadow-2xl backdrop-blur-xl",
+                      "pb-[env(safe-area-inset-bottom)] will-change-transform",
+                      "data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
+                    )}
                   >
-                    <SheetHeader className="p-4 pb-2">
-                    <SheetTitle>ToSho CRM</SheetTitle>
-                    </SheetHeader>
+                    <div className="flex h-full min-w-0 flex-col overflow-hidden">
+                      <div className="shrink-0 border-b border-border/70 bg-background/55">
+                        <SheetHeader className="px-4 pb-2 pt-4 pr-14">
+                          <div className="flex items-center justify-between gap-3">
+                            <SheetTitle>ToSho CRM</SheetTitle>
+                            <Button
+                              variant="control"
+                              size="iconMd"
+                              className="mr-8 shrink-0"
+                              onClick={toggleTheme}
+                              aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
+                              title={theme === "dark" ? "Світла тема" : "Темна тема"}
+                            >
+                              {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+                            </Button>
+                          </div>
+                        </SheetHeader>
 
-                    <div className="px-4 pb-3">
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          readOnly
-                          value=""
-                          placeholder="Пошук…"
-                          className={cn(
-                            "h-10 rounded-[var(--radius-lg)] pl-10 pr-16 bg-background/60",
-                            "border border-input",
-                            "cursor-pointer",
-                            "focus-visible:ring-2 focus-visible:ring-primary/30"
-                          )}
-                          onClick={() => setCmdkOpen(true)}
-                        />
-                        <div className="absolute right-2 inset-y-0 flex items-center">
-                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
-                            <span className="text-[11px]">⌘</span>K
-                          </kbd>
+                        <div className="px-4 pb-3">
+                          <div className="relative">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              readOnly
+                              value=""
+                              placeholder="Пошук…"
+                              className={cn(
+                                "h-10 rounded-[var(--radius-lg)] border border-input bg-background/75 pl-10 pr-16",
+                                "cursor-pointer",
+                                "focus-visible:ring-2 focus-visible:ring-primary/30"
+                              )}
+                              onClick={() => setCmdkOpen(true)}
+                            />
+                            <div className="absolute inset-y-0 right-2 flex items-center">
+                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
+                                <span className="text-[11px]">⌘</span>K
+                              </kbd>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="border-t border-border px-4 py-4 pb-8">
-                      <SidebarGroup
-                        label="Головне"
-                        links={visibleSidebarLinks.filter((l) => l.group === "overview")}
-                        currentPath={location.pathname}
-                        onNavigate={() => setMobileMenuOpen(false)}
-                        notificationsUnreadCount={unreadCount}
-                        hideLabel
-                      />
-                      <SidebarGroup
-                        label="Замовлення"
-                        links={visibleSidebarLinks.filter((l) => l.group === "orders")}
-                        currentPath={location.pathname}
-                        onNavigate={() => setMobileMenuOpen(false)}
-                        notificationsUnreadCount={unreadCount}
-                      />
-                      <SidebarGroup
-                        label="Фінанси"
-                        links={visibleSidebarLinks.filter((l) => l.group === "finance")}
-                        currentPath={location.pathname}
-                        onNavigate={() => setMobileMenuOpen(false)}
-                        notificationsUnreadCount={unreadCount}
-                      />
-                      <SidebarGroup
-                        label="Операції"
-                        links={visibleSidebarLinks.filter((l) => l.group === "operations")}
-                        currentPath={location.pathname}
-                        onNavigate={() => setMobileMenuOpen(false)}
-                        notificationsUnreadCount={unreadCount}
-                      />
-                      <SidebarGroup
-                        label="Акаунт"
-                        links={visibleSidebarLinks.filter((l) => l.group === "account")}
-                        currentPath={location.pathname}
-                        onNavigate={() => setMobileMenuOpen(false)}
-                        notificationsUnreadCount={unreadCount}
-                      />
-                      <div className="mt-6 pt-2 border-t border-border">
-                        <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
+                      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8">
+                        <div className="space-y-5">
+                          <SidebarGroup
+                            label="Головне"
+                            links={visibleSidebarLinks.filter((l) => l.group === "overview")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                            hideLabel
+                          />
+                          <SidebarGroup
+                            label="Замовлення"
+                            links={visibleSidebarLinks.filter((l) => l.group === "orders")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                          />
+                          <SidebarGroup
+                            label="Фінанси"
+                            links={visibleSidebarLinks.filter((l) => l.group === "finance")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                          />
+                          <SidebarGroup
+                            label="Операції"
+                            links={visibleSidebarLinks.filter((l) => l.group === "operations")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                          />
+                          <SidebarGroup
+                            label="Акаунт"
+                            links={visibleSidebarLinks.filter((l) => l.group === "account")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                          />
+                        </div>
+                        <div className="mt-6 border-t border-border/70 pt-4">
+                          <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
+                        </div>
                       </div>
                     </div>
                   </SheetContent>
@@ -1238,9 +1259,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </div>
 
               {/* Mobile title */}
-              <div className="md:hidden">
-                <div className="text-sm font-semibold leading-none">{header.title}</div>
-                <div className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{header.subtitle}</div>
+              <div className="min-w-0 flex-1 md:hidden">
+                <div className="truncate text-[1.25rem] font-semibold leading-tight tracking-tight text-foreground">
+                  {header.title}
+                </div>
               </div>
             </div>
 
@@ -1260,7 +1282,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             </div>
 
             {/* RIGHT ACTIONS */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2">
               <AppDropdown
                 align="end"
                 sideOffset={10}
@@ -1327,12 +1349,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 }
               />
 
-              <OnlineNowDropdown entries={workspacePresence.onlineEntries} loading={workspacePresence.loading} />
+              <OnlineNowDropdown
+                entries={workspacePresence.onlineEntries}
+                loading={workspacePresence.loading}
+                compact
+              />
 
               {/* Theme toggle */}
               <Button
                 variant="control"
                 size="iconMd"
+                className="hidden md:inline-flex"
                 onClick={toggleTheme}
                 aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
                 title={theme === "dark" ? "Світла тема" : "Темна тема"}
@@ -1523,14 +1550,22 @@ function SidebarGroup({
   hideLabel?: boolean;
 }) {
   if (links.length === 0) return null;
+  const isMobileDrawer = !collapsed && Boolean(onNavigate);
 
   return (
-    <div className={hideLabel ? "space-y-1" : "space-y-2"}>
+    <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-2")}>
       {!collapsed && !hideLabel ? (
-        <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</h4>
+        <h4
+          className={cn(
+            "px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70",
+            isMobileDrawer ? "px-3 text-[11px] tracking-[0.18em] text-muted-foreground/75" : undefined
+          )}
+        >
+          {label}
+        </h4>
       ) : null}
 
-      <div className="space-y-1">
+      <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-1")}>
         {links.map((link) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
@@ -1544,15 +1579,23 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex h-10 w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-normal",
+                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-normal",
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                collapsed && "mx-auto w-10 justify-center gap-0 rounded-[12px] px-0 py-0",
+                collapsed
+                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-[12px] px-0 py-0"
+                  : isMobileDrawer
+                    ? "min-h-11 rounded-[18px] px-3.5 py-2.5"
+                    : "h-10",
                 active
                   ? collapsed
                     ? "bg-primary/15 text-foreground"
-                    : "bg-primary/10 text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    : isMobileDrawer
+                      ? "bg-primary/12 text-foreground shadow-[inset_0_0_0_1px_rgba(59,130,246,0.16)]"
+                      : "bg-primary/10 text-foreground"
+                  : isMobileDrawer
+                    ? "text-muted-foreground hover:bg-background/75 hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               )}
             >
               <span
@@ -1561,24 +1604,35 @@ function SidebarGroup({
                   collapsed
                     ? "hidden"
                     : active
-                    ? "bg-primary opacity-100"
+                    ? isMobileDrawer
+                      ? "h-7 bg-primary opacity-100"
+                      : "bg-primary opacity-100"
                     : "bg-primary opacity-0 group-hover:opacity-40"
                 )}
               />
 
               <Icon
                 className={cn(
-                  "h-4 w-4 transition-colors",
+                  "h-4 w-4 shrink-0 transition-colors",
                   active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
 
-              {!collapsed ? <span className="truncate">{link.label}</span> : null}
+              {!collapsed ? (
+                <span className={cn("truncate", isMobileDrawer ? "text-[14px] font-medium" : undefined)}>
+                  {link.label}
+                </span>
+              ) : null}
               {showNotificationsBadge ? (
                 collapsed ? (
                   <span className="absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                 ) : (
-                  <span className="ml-2 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                  <span
+                    className={cn(
+                      "ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground",
+                      isMobileDrawer ? "h-6 px-1.5" : "h-5"
+                    )}
+                  >
                     {notificationsUnreadCount > 99 ? "99+" : notificationsUnreadCount}
                   </span>
                 )

@@ -46,12 +46,13 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
 type OnlineNowDropdownProps = {
   entries: WorkspacePresenceEntry[];
   loading?: boolean;
+  compact?: boolean;
 };
 
 const ONLINE_LIST_VISIBLE_ROWS = 6;
 const ONLINE_LIST_ROW_HEIGHT_PX = 60;
 
-export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) {
+export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineNowDropdownProps) {
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const [showTopFade, setShowTopFade] = React.useState(false);
   const [showBottomFade, setShowBottomFade] = React.useState(false);
@@ -111,12 +112,12 @@ export function OnlineNowDropdown({ entries, loading }: OnlineNowDropdownProps) 
           type="button"
           variant="control"
           size="iconMd"
-          className="w-auto gap-2 px-2.5"
+          className={cn("w-auto", compact ? "gap-1.5 px-2" : "gap-2 px-2.5")}
           title="Хто онлайн"
           aria-label="Хто онлайн"
         >
-          <Users className="h-4.5 w-4.5" />
-          <PresenceAvatarStack entries={entries} max={3} size={20} />
+          {!compact ? <Users className="h-4.5 w-4.5" /> : null}
+          <PresenceAvatarStack entries={entries} max={compact ? 2 : 3} size={compact ? 18 : 20} />
         </Button>
       }
       content={
