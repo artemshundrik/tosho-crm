@@ -65,7 +65,7 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
       >
         <nav
           aria-label="Primary"
-          className="mx-auto flex items-center justify-between gap-[var(--tabbar-gap)] pointer-events-auto"
+          className="mx-auto flex max-w-[420px] items-center justify-between gap-[var(--tabbar-gap)] pointer-events-auto"
           style={{
             height: "var(--tabbar-height)",
             borderRadius: "var(--tabbar-radius)",
@@ -74,7 +74,7 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
             boxShadow: "var(--tabbar-shadow)",
             backdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
             WebkitBackdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
-            padding: "0 10px",
+            padding: "0 8px",
           }}
         >
           {TAB_ITEMS.map((tab) => {

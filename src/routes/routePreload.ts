@@ -30,5 +30,8 @@ export function preloadRoute(pathname: string) {
   const match = routeImporters.find(([pattern]) => pattern.test(pathname));
   if (!match) return;
   prefetched.add(pathname);
-  void match[1]();
+  void match[1]().catch((error) => {
+    prefetched.delete(pathname);
+    console.warn("Route preload failed", pathname, error);
+  });
 }

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  disableRealtimeForSession,
+  enableRealtimeForSession,
+  isRealtimeDisabledForSession,
+  supabase,
+} from "@/lib/supabaseClient";
 import { buildUserNameFromMetadata } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry, listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -120,6 +125,7 @@ export function useWorkspacePresenceState({
   const [realtimeByUserId, setRealtimeByUserId] = useState<Record<string, PresenceRealtimeMeta>>({});
   const [dbUnavailable, setDbUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
   const [selfAvatarOverride, setSelfAvatarOverride] = useState<string | null>(null);
   const [selfDirectoryDisplayName, setSelfDirectoryDisplayName] = useState<string | null>(null);
   const [selfDirectoryAvatarUrl, setSelfDirectoryAvatarUrl] = useState<string | null>(null);
@@ -370,6 +376,16 @@ export function useWorkspacePresenceState({
     };
 
     void loadDbRows();
+    const intervalId = window.setInterval(() => {
+      void loadDbRows();
+    }, realtimeDisabled ? 30_000 : 90_000);
+
+    if (realtimeDisabled) {
+      return () => {
+        cancelled = true;
+        window.clearInterval(intervalId);
+      };
+    }
 
     const channel = supabase
       .channel(`user-presence-db:${teamId}`)
@@ -396,16 +412,31 @@ export function useWorkspacePresenceState({
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          enableRealtimeForSession();
+          setRealtimeDisabled(false);
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          disableRealtimeForSession();
+          setRealtimeDisabled(true);
+        }
+      });
 
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
-  }, [dbUnavailable, teamId, userId]);
+  }, [dbUnavailable, realtimeDisabled, teamId, userId]);
 
   useEffect(() => {
     if (!teamId || !userId) {
+      setRealtimeByUserId({});
+      return;
+    }
+    if (realtimeDisabled) {
       setRealtimeByUserId({});
       return;
     }
@@ -421,7 +452,15 @@ export function useWorkspacePresenceState({
 
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
+        enableRealtimeForSession();
+        setRealtimeDisabled(false);
         await channel.track(buildTrackPayload());
+        return;
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        disableRealtimeForSession();
+        setRealtimeDisabled(true);
+        setRealtimeByUserId({});
       }
     });
 
@@ -431,7 +470,7 @@ export function useWorkspacePresenceState({
       presenceChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [teamId, userId]);
+  }, [buildTrackPayload, realtimeDisabled, teamId, userId]);
 
   useEffect(() => {
     const channel = presenceChannelRef.current;

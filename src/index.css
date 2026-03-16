@@ -181,7 +181,7 @@
     --tabbar-backdrop-saturate: 1.2;
     --tabbar-radius: 18px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 12px;
+    --tabbar-inset-x: 16px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;
@@ -386,7 +386,7 @@
     --tabbar-backdrop-saturate: 1.2;
     --tabbar-radius: 18px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 12px;
+    --tabbar-inset-x: 16px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
     --tabbar-active-scale: 1.06;

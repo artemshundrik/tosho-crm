@@ -8,6 +8,7 @@ type AnyPostgrestClient = PostgrestClient<any, any, any>;
 
 let cachedSupabase: AnySupabaseClient | null = null;
 let cachedDb: AnyPostgrestClient | null = null;
+const REALTIME_DISABLED_KEY = "tosho_realtime_disabled";
 
 function requireEnv(name: "VITE_SUPABASE_URL" | "VITE_SUPABASE_ANON_KEY"): string {
   const v = import.meta.env[name] as string | undefined;
@@ -69,4 +70,31 @@ export const db: AnyPostgrestClient = new Proxy({} as AnyPostgrestClient, {
 
 export async function supabaseHealthCheck() {
   return db.from("_healthcheck").select("*").limit(1);
+}
+
+export function isRealtimeDisabledForSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(REALTIME_DISABLED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function disableRealtimeForSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(REALTIME_DISABLED_KEY, "1");
+  } catch {
+    // ignore storage access issues
+  }
+}
+
+export function enableRealtimeForSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(REALTIME_DISABLED_KEY);
+  } catch {
+    // ignore storage access issues
+  }
 }

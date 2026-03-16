@@ -3,7 +3,7 @@ import { DialogProps } from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
 
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -28,7 +28,11 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
       {/* ✅ ховаємо стандартний Close (правий X), щоб він не конфліктував з clear */}
-      <DialogContent hideClose className="overflow-hidden p-0">
+      <DialogContent
+        hideClose
+        className="w-[calc(100vw-2rem)] max-w-[980px] max-h-[88vh] overflow-hidden border border-border/60 bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground"
+      >
+        <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>
         <Command
           className={cn(
             "[&_[cmdk-group-heading]]:px-4",

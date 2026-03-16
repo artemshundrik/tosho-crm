@@ -243,7 +243,9 @@ export async function listQuotes(params: ListQuotesParams) {
         .order("created_at", { ascending: false });
 
       if (q.length > 0) {
-        query = query.or(`number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%`);
+        query = query.or(
+          `number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%,customer_name.ilike.%${q}%,design_brief.ilike.%${q}%`
+        );
       }
 
       if (status && status !== "all") {

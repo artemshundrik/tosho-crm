@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import {
   CommandDialog,
   CommandEmpty,
@@ -26,6 +27,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabaseClient";
+import { listCustomersBySearch, listLeadsBySearch, listQuotes } from "@/lib/toshoApi";
 
 type RouteItem = {
   key: string;
@@ -47,6 +50,15 @@ type RecentItem = {
   label: string;
   to: string;
   ts: number;
+};
+
+type SearchResultItem = {
+  key: string;
+  label: string;
+  description: string;
+  value: string;
+  to: string;
+  icon: React.ElementType;
 };
 
 const RECENTS_KEY = "fayna_cmdk_recents_v1";
@@ -118,8 +130,11 @@ export type CommandPaletteProps = {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { teamId } = useAuth();
 
   const [query, setQuery] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
 
   const routes: RouteItem[] = useMemo(
     () => [
@@ -275,6 +290,141 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   const recents = useMemo(() => loadRecents(), [open]);
 
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (!open || !teamId || trimmedQuery.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const [quotes, customers, leads, designTaskResponse] = await Promise.all([
+          listQuotes({ teamId, search: trimmedQuery }),
+          listCustomersBySearch(teamId, trimmedQuery),
+          listLeadsBySearch(teamId, trimmedQuery),
+          supabase
+            .from("activity_log")
+            .select("id,title,entity_id,metadata,created_at")
+            .eq("team_id", teamId)
+            .eq("action", "design_task")
+            .order("created_at", { ascending: false })
+            .limit(80),
+        ]);
+
+        const normalizedQuery = normalizeText(trimmedQuery);
+        const nextResults: SearchResultItem[] = [];
+
+        quotes.slice(0, 6).forEach((quote) => {
+          const quoteLabel = quote.number?.trim() || "Прорахунок";
+          const description = [quote.customer_name?.trim(), quote.title?.trim(), quote.status?.trim()]
+            .filter(Boolean)
+            .join(" · ");
+          nextResults.push({
+            key: `quote-${quote.id}`,
+            label: quoteLabel,
+            description: description || "Прорахунок",
+            value: normalizeText([quoteLabel, description, quote.id].filter(Boolean).join(" ")),
+            to: `/orders/estimates/${quote.id}`,
+            icon: Calculator,
+          });
+        });
+
+        customers.slice(0, 4).forEach((customer) => {
+          const label = customer.name?.trim() || customer.legal_name?.trim() || "Замовник";
+          const description = customer.legal_name?.trim() && customer.legal_name?.trim() !== label
+            ? customer.legal_name.trim()
+            : "Замовник";
+          nextResults.push({
+            key: `customer-${customer.id}`,
+            label,
+            description,
+            value: normalizeText([label, description, customer.id].join(" ")),
+            to: "/orders/customers",
+            icon: Building2,
+          });
+        });
+
+        leads.slice(0, 4).forEach((lead) => {
+          const label =
+            lead.company_name?.trim() ||
+            lead.legal_name?.trim() ||
+            [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() ||
+            "Лід";
+          const description = lead.legal_name?.trim() && lead.legal_name?.trim() !== label
+            ? lead.legal_name.trim()
+            : "Лід";
+          nextResults.push({
+            key: `lead-${lead.id}`,
+            label,
+            description,
+            value: normalizeText([label, description, lead.id].join(" ")),
+            to: "/orders/customers",
+            icon: User,
+          });
+        });
+
+        const designTaskRows = ((designTaskResponse.data ?? []) as Array<{
+          id?: string | null;
+          title?: string | null;
+          entity_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+        }>).filter((row) => {
+          const metadata = row.metadata ?? {};
+          const taskNumber =
+            typeof metadata.design_task_number === "string" ? metadata.design_task_number.trim() : "";
+          const model =
+            typeof metadata.model === "string" ? metadata.model.trim() : "";
+          const haystack = normalizeText([row.title ?? "", taskNumber, model].join(" "));
+          return haystack.includes(normalizedQuery);
+        });
+
+        designTaskRows.slice(0, 6).forEach((task) => {
+          const taskId = task.id ?? task.entity_id ?? "";
+          if (!taskId) return;
+          const metadata = task.metadata ?? {};
+          const taskNumber =
+            typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
+              ? metadata.design_task_number.trim()
+              : "Дизайн-задача";
+          const model =
+            typeof metadata.model === "string" && metadata.model.trim()
+              ? metadata.model.trim()
+              : task.title?.trim() || "Дизайн";
+          nextResults.push({
+            key: `design-${taskId}`,
+            label: taskNumber,
+            description: model,
+            value: normalizeText([taskNumber, model, task.title ?? ""].join(" ")),
+            to: `/design/${taskId}`,
+            icon: Palette,
+          });
+        });
+
+        if (!cancelled) {
+          setSearchResults(nextResults.slice(0, 14));
+        }
+      } catch (error) {
+        console.warn("Failed to load global search results", error);
+        if (!cancelled) {
+          setSearchResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchLoading(false);
+        }
+      }
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [open, query, teamId]);
+
   function go(to: string) {
     onOpenChange(false);
     navigate(to);
@@ -321,7 +471,31 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       />
 
       <CommandList className="py-1">
-        <CommandEmpty>Нічого не знайдено.</CommandEmpty>
+        <CommandEmpty>{searchLoading ? "Шукаю..." : "Нічого не знайдено."}</CommandEmpty>
+
+        {searchResults.length > 0 && (
+          <>
+            <CommandGroup heading="Результати">
+              {searchResults.map((result) => {
+                const Icon = result.icon;
+                return (
+                  <CommandItem
+                    key={result.key}
+                    value={result.value}
+                    onSelect={() => go(result.to)}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate">{result.label}</div>
+                      <div className="truncate text-xs text-muted-foreground">{result.description}</div>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
 
         {recents.length > 0 && (
           <>

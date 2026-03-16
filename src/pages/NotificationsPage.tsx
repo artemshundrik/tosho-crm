@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  disableRealtimeForSession,
+  enableRealtimeForSession,
+  isRealtimeDisabledForSession,
+  supabase,
+} from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
@@ -46,6 +51,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(cached?.notifications ?? []);
   const [loading, setLoading] = useState(!hasCache);
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
 
   useEffect(() => {
     if (hasCache && loading) {
@@ -86,6 +92,15 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!userId) return;
+    const intervalId = window.setInterval(() => {
+      void loadNotifications(false);
+    }, realtimeDisabled ? 30_000 : 90_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadNotifications, realtimeDisabled, userId]);
+
+  useEffect(() => {
+    if (realtimeDisabled) return;
+    if (!userId) return;
     const channel = supabase
       .channel(`notifications-page:${userId}`)
       .on(
@@ -107,11 +122,22 @@ export default function NotificationsPage() {
           void loadNotifications(false);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          enableRealtimeForSession();
+          setRealtimeDisabled(false);
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          disableRealtimeForSession();
+          setRealtimeDisabled(true);
+          void loadNotifications(false);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadNotifications, location.pathname, userId]);
+  }, [loadNotifications, location.pathname, realtimeDisabled, userId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

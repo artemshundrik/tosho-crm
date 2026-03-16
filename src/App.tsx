@@ -28,59 +28,76 @@ function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const InvitePage = lazy(() => import("./pages/InvitePage"));
-const TeamMembersPage = lazy(() =>
+function lazyWithRetry<T extends { default: React.ComponentType<any> }>(
+  importer: () => Promise<T>
+) {
+  return lazy(async () => {
+    try {
+      return await importer();
+    } catch (error) {
+      if (isChunkLikeError(error) && reloadOnceForChunkError()) {
+        return await new Promise<T>(() => {
+          // Keep suspense pending while the hard reload is in progress.
+        });
+      }
+      throw error;
+    }
+  });
+}
+
+const InvitePage = lazyWithRetry(() => import("./pages/InvitePage"));
+const TeamMembersPage = lazyWithRetry(() =>
   import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
 );
-const AdminPage = lazy(() =>
+const AdminPage = lazyWithRetry(() =>
   import("./pages/AdminPage").then((module) => ({ default: module.AdminPage }))
 );
-const ProfilePage = lazy(() =>
+const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
-const OrdersEstimatesPage = lazy(() => import("./pages/OrdersEstimatesPage"));
-const OrdersCustomersPage = lazy(() => import("./pages/OrdersCustomersPage"));
-const OrdersEstimateDetailsPage = lazy(() => import("./pages/OrdersEstimateDetailsPage"));
-const ProductCatalogPage = lazy(() => import("./features/catalog/ProductCatalogPage"));
-const OrdersProductionPage = lazy(() => import("./pages/OrdersProductionPage"));
-const OrdersReadyToShipPage = lazy(() => import("./pages/OrdersReadyToShipPage"));
-const FinanceInvoicesPage = lazy(() => import("./pages/FinanceInvoicesPage"));
-const FinanceExpenseInvoicesPage = lazy(() => import("./pages/FinanceExpenseInvoicesPage"));
-const FinanceActsPage = lazy(() => import("./pages/FinanceActsPage"));
-const LogisticsPage = lazy(() => import("./pages/LogisticsPage"));
-const DesignPage = lazy(() => import("./pages/DesignPage"));
-const DesignTaskPage = lazy(() => import("./pages/DesignTaskPage"));
-const ContractorsPage = lazy(() => import("./pages/ContractorsPage"));
-const OverviewPage = lazy(() =>
+const OrdersEstimatesPage = lazyWithRetry(() => import("./pages/OrdersEstimatesPage"));
+const OrdersCustomersPage = lazyWithRetry(() => import("./pages/OrdersCustomersPage"));
+const OrdersEstimateDetailsPage = lazyWithRetry(() => import("./pages/OrdersEstimateDetailsPage"));
+const ProductCatalogPage = lazyWithRetry(() => import("./features/catalog/ProductCatalogPage"));
+const OrdersProductionPage = lazyWithRetry(() => import("./pages/OrdersProductionPage"));
+const OrdersReadyToShipPage = lazyWithRetry(() => import("./pages/OrdersReadyToShipPage"));
+const FinanceInvoicesPage = lazyWithRetry(() => import("./pages/FinanceInvoicesPage"));
+const FinanceExpenseInvoicesPage = lazyWithRetry(() => import("./pages/FinanceExpenseInvoicesPage"));
+const FinanceActsPage = lazyWithRetry(() => import("./pages/FinanceActsPage"));
+const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
+const DesignPage = lazyWithRetry(() => import("./pages/DesignPage"));
+const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
+const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
+const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
-const FinancePage = lazy(() =>
+const FinancePage = lazyWithRetry(() =>
   import("./pages/FinancePage").then((module) => ({ default: module.FinancePage }))
 );
-const FinanceTransactionCreatePage = lazy(() =>
+const FinanceTransactionCreatePage = lazyWithRetry(() =>
   import("./pages/FinanceTransactionCreatePage").then((module) => ({
     default: module.FinanceTransactionCreatePage,
   }))
 );
-const FinanceInvoiceCreatePage = lazy(() =>
+const FinanceInvoiceCreatePage = lazyWithRetry(() =>
   import("./pages/FinanceInvoiceCreatePage").then((module) => ({
     default: module.FinanceInvoiceCreatePage,
   }))
 );
-const FinancePoolCreatePage = lazy(() =>
+const FinancePoolCreatePage = lazyWithRetry(() =>
   import("./pages/FinancePoolCreatePage").then((module) => ({
     default: module.FinancePoolCreatePage,
   }))
 );
-const FinancePoolDetailsPage = lazy(() =>
+const FinancePoolDetailsPage = lazyWithRetry(() =>
   import("./pages/FinancePoolDetailsPage").then((module) => ({
     default: module.FinancePoolDetailsPage,
   }))
 );
-const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
-const UpdatePasswordPage = lazy(() => import("./pages/UpdatePasswordPage"));
-const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
-const ActivityPage = lazy(() => import("./pages/ActivityPage"));
+const ResetPasswordPage = lazyWithRetry(() => import("./pages/ResetPasswordPage"));
+const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPage"));
+const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
+const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 
 function RouteSuspense({
   children,
@@ -800,6 +817,13 @@ function AppRoutes() {
 
 export default function App() {
   useEffect(() => {
+    try {
+      window.sessionStorage.removeItem(CHUNK_RELOAD_GUARD_KEY);
+      window.sessionStorage.removeItem(DOM_RECOVERY_RELOAD_GUARD_KEY);
+    } catch {
+      // ignore sessionStorage access issues
+    }
+
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       if (!isChunkLikeError(event.reason)) return;
       event.preventDefault();

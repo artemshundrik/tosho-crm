@@ -36,7 +36,12 @@ import { preloadRoute } from "@/routes/routePreload";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-import { supabase } from "@/lib/supabaseClient";
+import {
+  disableRealtimeForSession,
+  enableRealtimeForSession,
+  isRealtimeDisabledForSession,
+  supabase,
+} from "@/lib/supabaseClient";
 import { getAgencyLogo } from "@/lib/agencyAssets";
 import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
@@ -595,6 +600,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
   const push = usePushNotifications(userId);
   const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
@@ -752,6 +758,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [loadNotifications]);
 
   useEffect(() => {
+    if (!userId) return;
+    const intervalId = window.setInterval(() => {
+      void loadNotifications();
+    }, realtimeDisabled ? 30_000 : 90_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadNotifications, realtimeDisabled, userId]);
+
+  useEffect(() => {
     if (!userId || !teamId || reminderAssigneeKeys.size === 0) return;
 
     let disposed = false;
@@ -899,6 +913,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [loadActivityUnread]);
 
   useEffect(() => {
+    if (!teamId || !userId) return;
+    const intervalId = window.setInterval(() => {
+      void loadActivityUnread();
+    }, realtimeDisabled ? 30_000 : 90_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadActivityUnread, realtimeDisabled, teamId, userId]);
+
+  useEffect(() => {
     const handler = () => {
       loadActivityUnread();
     };
@@ -909,6 +931,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [loadActivityUnread]);
 
   useEffect(() => {
+    if (realtimeDisabled) return;
     if (!userId) return;
     const channel = supabase
       .channel(`notifications:${userId}`)
@@ -932,13 +955,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           toast(toastTitle, { description: toastDescription });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          enableRealtimeForSession();
+          setRealtimeDisabled(false);
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          disableRealtimeForSession();
+          setRealtimeDisabled(true);
+          void loadNotifications();
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [location.pathname, userId]);
+  }, [loadNotifications, location.pathname, realtimeDisabled, userId]);
 
   useEffect(() => {
+    if (realtimeDisabled) return;
     if (!teamId) return;
     const channel = supabase
       .channel(`activity:${teamId}`)
@@ -958,11 +993,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           setActivityUnreadCount((prev) => prev + 1);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          enableRealtimeForSession();
+          setRealtimeDisabled(false);
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          disableRealtimeForSession();
+          setRealtimeDisabled(true);
+          void loadActivityUnread();
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [teamId, location.pathname]);
+  }, [loadActivityUnread, location.pathname, realtimeDisabled, teamId]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const unreadNotifications = notifications.filter((n) => !n.read);
@@ -1134,7 +1180,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             "left-0"
           )}
         >
-          <div className="flex h-14 items-center gap-3 px-4 md:px-5 lg:px-6">
+          <div className="flex h-14 items-center gap-3 px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)_minmax(0,1fr)] md:items-center md:gap-4 md:px-5 lg:px-6">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
@@ -1280,22 +1326,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             </div>
 
             {/* CENTER SEARCH */}
-            <div className="hidden md:flex flex-1 items-center justify-center">
+            <div className="hidden md:flex min-w-0 items-center justify-center">
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
-                className="inline-flex items-center gap-2 h-8 w-full max-w-[260px] rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-3 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border transition-colors duration-150 cursor-pointer"
+                className="inline-flex h-9 w-full items-center gap-2 rounded-[var(--radius-lg)] border border-border/70 bg-background/75 px-3.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border hover:bg-muted/35 hover:text-foreground cursor-pointer"
               >
-                <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <Search className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="flex-1 text-left">Пошук...</span>
-                <kbd className="inline-flex h-5 select-none items-center rounded-[4px] border border-border bg-background/80 px-1.5 font-mono text-[10px] font-medium opacity-70">
+                <kbd className="inline-flex h-6 select-none items-center rounded-[6px] border border-border bg-muted/60 px-2 font-mono text-[10px] font-medium opacity-80">
                   ⌘K
                 </kbd>
               </button>
             </div>
 
             {/* RIGHT ACTIONS */}
-            <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
               <AppDropdown
                 align="end"
                 sideOffset={10}
