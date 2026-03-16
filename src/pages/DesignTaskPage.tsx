@@ -718,6 +718,7 @@ export default function DesignTaskPage() {
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const quoteCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentDeletingId, setAttachmentDeletingId] = useState<string | null>(null);
 
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
@@ -750,6 +751,17 @@ export default function DesignTaskPage() {
     if (!id) return null;
     return memberAvatarById[id] ?? null;
   };
+
+  const canDeleteTaskBriefAttachment = useCallback(
+    (attachment: AttachmentRow) => {
+      const managerUserId =
+        typeof task?.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
+          ? (task.metadata.manager_user_id as string)
+          : task?.quoteManagerUserId ?? null;
+      return Boolean(managerUserId && userId && managerUserId === userId && attachment.uploaded_by === userId);
+    },
+    [task, userId]
+  );
 
   const getTaskDisplayNumber = (value: DesignTask | null) => {
     if (!value) return "";
@@ -2616,6 +2628,72 @@ export default function DesignTaskPage() {
     } finally {
       setAttachmentUploading(false);
       if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveTaskAttachment = async (attachmentId: string) => {
+    if (!task || !effectiveTeamId || attachmentDeletingId) return;
+    if (!ensureCanEdit()) return;
+
+    const target = attachments.find((file) => file.id === attachmentId);
+    if (!target) return;
+    if (!canDeleteTaskBriefAttachment(target)) {
+      toast.error("Недостатньо прав", {
+        description: "Видаляти ці файли може лише менеджер задачі, який їх завантажив.",
+      });
+      return;
+    }
+
+    setAttachmentDeletingId(attachmentId);
+    try {
+      if (target.storage_bucket && target.storage_path) {
+        const { error: storageError } = await supabase.storage
+          .from(target.storage_bucket)
+          .remove([target.storage_path]);
+        if (storageError) throw storageError;
+      }
+
+      if (isUuid(task.quoteId)) {
+        const { error: deleteError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .delete()
+          .eq("quote_id", task.quoteId)
+          .eq("storage_bucket", target.storage_bucket)
+          .eq("storage_path", target.storage_path);
+        if (deleteError) throw deleteError;
+      } else {
+        const currentFiles = Array.isArray(task.metadata?.standalone_brief_files)
+          ? (task.metadata.standalone_brief_files as Array<Record<string, unknown>>)
+          : [];
+        const nextFiles = currentFiles.filter(
+          (file) =>
+            !(
+              typeof file.storage_bucket === "string" &&
+              typeof file.storage_path === "string" &&
+              file.storage_bucket === target.storage_bucket &&
+              file.storage_path === target.storage_path
+            )
+        );
+        const nextMetadata: Record<string, unknown> = {
+          ...(task.metadata ?? {}),
+          standalone_brief_files: nextFiles,
+        };
+        const { error: updateError } = await supabase
+          .from("activity_log")
+          .update({ metadata: nextMetadata })
+          .eq("id", task.id)
+          .eq("team_id", effectiveTeamId);
+        if (updateError) throw updateError;
+        setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      }
+
+      setAttachments((prev) => prev.filter((file) => file.id !== attachmentId));
+      toast.success("Файл видалено");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
+    } finally {
+      setAttachmentDeletingId(null);
     }
   };
 
@@ -5549,6 +5627,22 @@ export default function DesignTaskPage() {
                               </Button>
                             </>
                           )}
+                          {canDeleteTaskBriefAttachment(file) ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              aria-label="Видалити файл"
+                              disabled={attachmentDeletingId === file.id}
+                              onClick={() => void handleRemoveTaskAttachment(file.id)}
+                            >
+                              {attachmentDeletingId === file.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
