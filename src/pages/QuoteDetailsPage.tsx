@@ -4562,6 +4562,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
                     const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
+                    const isNoteBlocksProduct = printProductConfig?.productKind === "note_blocks";
+                    const packageSizeHint =
+                      printProductConfig?.productKind === "package" &&
+                      printProductConfig.packageType === "custom" &&
+                      printProductConfig.widthMm &&
+                      printProductConfig.heightMm &&
+                      printProductConfig.lengthMm
+                        ? "Ш × В × Г"
+                        : null;
                     const shouldShowDescription =
                       item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
                     const isMerchQuote = (quote?.quote_type ?? "") === "merch";
@@ -4658,7 +4667,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <div className="truncate text-base font-semibold text-foreground">{item.title}</div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="truncate text-base font-semibold text-foreground">{item.title}</div>
+                                  {packageSizeHint ? (
+                                    <span className="rounded-md border border-border/50 bg-muted/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                      {packageSizeHint}
+                                    </span>
+                                  ) : null}
+                                </div>
                                 {metaLine ? (
                                   <div className="mt-1 text-sm text-muted-foreground">{metaLine}</div>
                                 ) : null}
@@ -4697,16 +4713,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 {renderedSections.map((section) => (
                                   <div
                                     key={section.title}
-                                    className="min-w-0 space-y-3"
+                                    className={cn(
+                                      "min-w-0 space-y-3",
+                                      isNoteBlocksProduct && section.fields.length > 3 ? "lg:col-span-3" : undefined
+                                    )}
                                   >
                                     <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                       {section.title}
                                     </div>
-                                    <div className="space-y-3">
+                                    <div
+                                      className={cn(
+                                        isNoteBlocksProduct
+                                          ? "grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3"
+                                          : "space-y-3"
+                                      )}
+                                    >
                                       {section.fields.map((field) => (
                                         <div
                                           key={`${section.title}:${field.label}`}
-                                          className="space-y-1"
+                                          className={cn(
+                                            "space-y-1",
+                                            isNoteBlocksProduct
+                                              ? "flex min-h-[88px] flex-col justify-between rounded-xl border border-border/50 bg-muted/[0.08] p-4"
+                                              : undefined
+                                          )}
                                         >
                                           <span className="text-xs font-medium text-muted-foreground">
                                             {field.label}

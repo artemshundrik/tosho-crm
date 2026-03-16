@@ -120,6 +120,13 @@ const PACKAGE_EMBOSSING_LABELS: Record<string, string> = {
   foil_2: "фольга з двох сторін",
 };
 
+const PACKAGE_LAMINATION_LABELS: Record<string, string> = {
+  matte: "матова",
+  gloss: "глянцева",
+  no: "без ламінації",
+  yes: "є, тип не вказано",
+};
+
 const NOTEBOOK_FORMAT_LABELS: Record<string, string> = {
   a4: "A4",
   a5: "A5",
@@ -235,6 +242,11 @@ const getLabel = (map: Record<string, string>, value: string, custom?: string) =
 const getPantoneSuffix = (count: string) => {
   const value = count.trim();
   return value ? ` (${value} Pantone)` : "";
+};
+
+const getPackageLaminationLabel = (value: string) => {
+  if (!value) return null;
+  return PACKAGE_LAMINATION_LABELS[value] ?? value;
 };
 
 export const createEmptyPrintPackageConfig = (): PrintProductConfig => ({
@@ -429,7 +441,7 @@ export function formatPrintProductSummary(config: PrintProductConfig): string[] 
     `Тип: ${config.packageType === "ready" ? "готовий" : "індивідуальний"}`,
     orientationLabel ? `Орієнтація: ${orientationLabel}` : null,
     config.packageType === "custom" && config.widthMm && config.heightMm && config.lengthMm
-      ? `Розмір: ${config.widthMm} × ${config.heightMm} × ${config.lengthMm} мм`
+      ? `Розмір (Ш × В × Г): ${config.widthMm} × ${config.heightMm} × ${config.lengthMm} мм`
       : null,
     paperTypeLabel ? `Матеріал: ${paperTypeLabel}` : null,
     config.density ? `Щільність: ${config.density}г` : null,
@@ -445,7 +457,9 @@ export function formatPrintProductSummary(config: PrintProductConfig): string[] 
               : ""
         }`
       : null,
-    config.lamination ? `Ламінація: ${config.lamination === "yes" ? "так" : "ні"}` : null,
+    getPackageLaminationLabel(config.lamination)
+      ? `Ламінація: ${getPackageLaminationLabel(config.lamination)}`
+      : null,
     extraFinishingLabel && config.extraFinishing !== "none" ? `Додаткове оздоблення: ${extraFinishingLabel}` : null,
     embossingLabel && config.embossing !== "none" ? `Тиснення: ${embossingLabel}` : null,
     config.supplierLink.trim() ? `Постачальник: ${config.supplierLink.trim()}` : null,
@@ -499,9 +513,9 @@ export function getPrintProductDetailSections(config: PrintProductConfig): Print
   }
   return [
     {
-      title: "Конструкція",
-      fields: fields.filter((field) =>
-        ["Тип", "Орієнтація", "Розмір", "Люверси", "Постачальник"].includes(field.label)
+        title: "Конструкція",
+        fields: fields.filter((field) =>
+        ["Тип", "Орієнтація", "Розмір (Ш × В × Г)", "Люверси", "Постачальник"].includes(field.label)
       ),
     },
     {
@@ -589,7 +603,7 @@ export function validatePrintProductConfig(config: PrintProductConfig): string |
     return "Вкажіть коректну кількість пантонів";
   }
   if (config.printType === "sticker" && !config.stickerSize.trim()) return "Вкажіть розмір наліпки/стікера";
-  if (config.packageType === "custom" && !config.lamination) return "Оберіть, чи потрібна ламінація";
+  if (config.packageType === "custom" && !config.lamination) return "Оберіть тип ламінації або варіант без ламінації";
   return null;
 }
 

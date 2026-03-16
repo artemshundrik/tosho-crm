@@ -1,4 +1,5 @@
 import * as React from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -570,6 +571,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       ) ?? null,
     [categoryId, configuratorProductOptions, kindId, modelId]
   );
+  const activeProductKind = React.useMemo(
+    () => (activeConfiguratorPreset ? getProductKindFromPreset(activeConfiguratorPreset) : ""),
+    [activeConfiguratorPreset]
+  );
   const availablePackageDensities = React.useMemo(
     () =>
       PRINT_PACKAGE_DENSITIES.filter((option) => {
@@ -774,6 +779,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   ]);
 
   React.useEffect(() => {
+    if (!isPrintPackageMode || !activeProductKind) return;
+    if (printPackageConfig.productKind === activeProductKind) return;
+    setPrintPackageConfig((prev) => ({
+      ...prev,
+      productKind: activeProductKind,
+    }));
+  }, [activeProductKind, isPrintPackageMode, printPackageConfig.productKind]);
+
+  React.useEffect(() => {
     if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
     const activePrintTypeValid = availablePackagePrintTypes.some((option) => option.value === printPackageConfig.printType);
     if (activePrintTypeValid) return;
@@ -865,16 +879,22 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   // Handle submit
   const handleSubmit = async () => {
+    const showValidationError = (message: string) => {
+      toast.error("Перевірте форму", {
+        description: message,
+      });
+    };
+
     // Validation
     const hasResolvedLeadInEditMode =
       isEditMode && customerType === "lead" && Boolean(customerLabel?.trim());
     if (!customerId && !hasResolvedLeadInEditMode) {
-      alert("Оберіть замовника або ліда");
+      showValidationError("Оберіть замовника або ліда");
       setCustomerPopoverOpen(true);
       return;
     }
     if (!isEditMode && !deadline) {
-      alert("Вкажіть дедлайн прорахунку з датою та часом");
+      showValidationError("Вкажіть дедлайн прорахунку з датою та часом");
       setDeadlinePopoverOpen(true);
       return;
     }
@@ -888,45 +908,45 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
     if (deliveryType === "nova_poshta") {
       if (!hasRegion) {
-        alert("Для Нової пошти заповніть область");
+        showValidationError("Для Нової пошти заповніть область");
         return;
       }
       if (!hasCity) {
-        alert("Для Нової пошти заповніть місто");
+        showValidationError("Для Нової пошти заповніть місто");
         return;
       }
       if (!hasNpDeliveryType) {
-        alert("Для Нової пошти оберіть тип доставки");
+        showValidationError("Для Нової пошти оберіть тип доставки");
         return;
       }
       if (deliveryDetails.npDeliveryType === "address" && !hasStreet) {
-        alert("Для адресної доставки заповніть вулицю");
+        showValidationError("Для адресної доставки заповніть вулицю");
         return;
       }
     }
 
     if (deliveryType === "taxi") {
       if (!hasCity) {
-        alert("Для таксі / Uklon заповніть місто");
+        showValidationError("Для таксі / Uklon заповніть місто");
         return;
       }
       if (!hasAddress) {
-        alert("Для таксі / Uklon заповніть адресу");
+        showValidationError("Для таксі / Uklon заповніть адресу");
         return;
       }
     }
 
     if (deliveryType === "cargo") {
       if (!hasRegion) {
-        alert("Для вантажного перевезення заповніть область");
+        showValidationError("Для вантажного перевезення заповніть область");
         return;
       }
       if (!hasCity) {
-        alert("Для вантажного перевезення заповніть місто");
+        showValidationError("Для вантажного перевезення заповніть місто");
         return;
       }
       if (!hasAddress) {
-        alert("Для вантажного перевезення заповніть адресу");
+        showValidationError("Для вантажного перевезення заповніть адресу");
         return;
       }
     }
@@ -935,22 +955,29 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       .map((run) => ({ quantity: Number(run.quantity) || 0 }))
       .filter((run) => run.quantity > 0);
     const primaryQuantity = normalizedRuns[0]?.quantity ?? Number(quantity ?? 0);
+    const normalizedPrintProductConfig =
+      isPrintPackageMode && activeProductKind
+        ? {
+            ...printPackageConfig,
+            productKind: printPackageConfig.productKind || activeProductKind,
+          }
+        : printPackageConfig;
 
     if (!isEditMode && isPrintPackageMode) {
       const qtyValue = primaryQuantity;
-      const configError = validatePrintProductConfig(printPackageConfig);
+      const configError = validatePrintProductConfig(normalizedPrintProductConfig);
       if (configError) {
-        alert(configError);
+        showValidationError(configError);
         return;
       }
       if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
-        alert("Вкажіть коректну кількість");
+        showValidationError("Вкажіть коректну кількість");
         return;
       }
     }
 
     if (!isEditMode && normalizedRuns.length === 0) {
-      alert("Додайте хоча б один коректний тираж");
+      showValidationError("Додайте хоча б один коректний тираж");
       return;
     }
 
@@ -1005,10 +1032,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       printPackageConfig:
         isPrintPackageMode
           ? {
-              ...printPackageConfig,
-              productKind:
-                printPackageConfig.productKind ||
-                (activeConfiguratorPreset ? getProductKindFromPreset(activeConfiguratorPreset) : ""),
+              ...normalizedPrintProductConfig,
             }
           : undefined,
       quantity: primaryQuantity || undefined,

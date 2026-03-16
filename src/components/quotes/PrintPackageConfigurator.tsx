@@ -79,6 +79,12 @@ export const YES_NO_OPTIONS: SimpleOption[] = [
   { value: "no", label: "Ні" },
 ];
 
+export const PRINT_PACKAGE_LAMINATION_OPTIONS: SimpleOption[] = [
+  { value: "matte", label: "Матова" },
+  { value: "gloss", label: "Глянцева" },
+  { value: "no", label: "Без ламінації" },
+];
+
 export const PRINT_PACKAGE_PRINT_SIDES: SimpleOption[] = [
   { value: "one_side", label: "З одної сторони" },
   { value: "two_sides", label: "З двох сторін" },
@@ -1027,7 +1033,12 @@ export function PrintProductConfigurator({
 
               {config.printType === "sticker" ? (
                 <ConfigField label="Розмір стікера">
-                  <Input value={config.stickerSize} onChange={(e) => onConfigChange((prev) => ({ ...prev, stickerSize: e.target.value }))} placeholder="80 × 120 мм" className="h-11 bg-background/70" />
+                  <Input
+                    value={config.stickerSize}
+                    onChange={(e) => onConfigChange((prev) => ({ ...prev, stickerSize: e.target.value }))}
+                    placeholder="80 × 120 мм"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
                 </ConfigField>
               ) : null}
 
@@ -1036,8 +1047,8 @@ export function PrintProductConfigurator({
                   <ChipPicker
                     value={config.lamination}
                     onChange={(value) => onConfigChange((prev) => ({ ...prev, lamination: value }))}
-                    options={YES_NO_OPTIONS}
-                    placeholder="Оберіть варіант"
+                    options={PRINT_PACKAGE_LAMINATION_OPTIONS}
+                    placeholder="Оберіть ламінацію"
                     icon={<BadgeCheck />}
                   />
                 </ConfigField>

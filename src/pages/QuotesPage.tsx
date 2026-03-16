@@ -1543,9 +1543,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           qty: primaryRunQuantity,
           unit_price: isPrintPackageQuote ? 0 : model?.price ?? 0,
           line_total: primaryRunQuantity * (isPrintPackageQuote ? 0 : model?.price ?? 0),
-          catalog_type_id: isPrintPackageQuote ? null : data.categoryId,
-          catalog_kind_id: isPrintPackageQuote ? null : data.kindId,
-          catalog_model_id: isPrintPackageQuote ? null : data.modelId,
+          // Keep the catalog linkage for configurator-based print products so image/name lookups still work.
+          catalog_type_id: data.categoryId || null,
+          catalog_kind_id: data.kindId || null,
+          catalog_model_id: data.modelId || null,
           print_position_id: primaryPrint?.print_position_id ?? null,
           print_width_mm: primaryPrint?.print_width_mm ?? null,
           print_height_mm: primaryPrint?.print_height_mm ?? null,
@@ -1774,8 +1775,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           description: attachmentWarning,
         });
       } else {
-        toast.success("Прорахунок створено!", {
-          description: `#${created.id.slice(0, 8)}`,
+        const successDescription =
+          [quoteCustomerName, packageItemName ?? model?.name]
+            .filter((value): value is string => Boolean(value?.trim()))
+            .join(" · ") || "Відкриваю картку прорахунку.";
+        toast.success("Прорахунок створено", {
+          description: successDescription,
         });
       }
     } catch (e: unknown) {
