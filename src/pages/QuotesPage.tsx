@@ -11,8 +11,7 @@ import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { notifyUsers } from "@/lib/designTaskActivity";
-import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
+import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import {
   formatPrintProductSummary,
@@ -1705,48 +1704,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         if (createdDesignTaskId) {
           try {
-            const workspaceId = currentUserId ? await resolveWorkspaceId(currentUserId) : null;
-            if (workspaceId) {
-              const { data: membersData, error: membersError } = await supabase
-                .schema("tosho")
-                .from("memberships_view")
-                .select("user_id,job_role")
-                .eq("workspace_id", workspaceId);
-              if (membersError) throw membersError;
-
-              const designerUserIds = Array.from(
-                new Set(
-                  ((membersData as Array<{ user_id: string; job_role: string | null }> | null) ?? [])
-                    .filter((row) => {
-                      const normalized = (row.job_role ?? "").trim().toLowerCase();
-                      return normalized === "designer" || normalized === "дизайнер";
-                    })
-                    .map((row) => row.user_id)
-                    .filter((userId) => !!userId && userId !== currentUserId)
-                )
-              );
-
-              const quoteLabel = `#${created.id.slice(0, 8)}`;
-              if (assigneeUserId) {
-                if (assigneeUserId !== currentUserId) {
-                  await notifyUsers({
-                    userIds: [assigneeUserId],
-                    title: "Вас призначено на дизайн-задачу",
-                    body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
-                    href: `/design/${createdDesignTaskId}`,
-                    type: "info",
-                  });
-                }
-              } else if (designerUserIds.length > 0) {
-                await notifyUsers({
-                  userIds: designerUserIds,
-                  title: "Нова дизайн-задача",
-                  body: `${actorName} створив(ла) дизайн-задачу по прорахунку ${quoteLabel}.`,
-                  href: `/design/${createdDesignTaskId}`,
-                  type: "info",
-                });
-              }
-            }
+            await notifyDesignTaskStakeholdersOnCreate({
+              quoteId: created.id,
+              designTaskId: createdDesignTaskId,
+              assigneeUserId,
+              actorUserId: currentUserId,
+              actorName,
+            });
           } catch (notifyError) {
             console.warn("Failed to notify designers about new design task", notifyError);
           }

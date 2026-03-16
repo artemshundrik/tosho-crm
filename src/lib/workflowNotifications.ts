@@ -7,6 +7,8 @@ const isUuid = (value?: string | null) =>
 
 type QuoteRecipient = {
   teamId: string | null;
+  createdBy: string | null;
+  assignedTo: string | null;
   userId: string | null;
   quoteNumber: string | null;
 };
@@ -52,6 +54,16 @@ function pickManagerUserIds(rows: TeamMemberRoleRow[]) {
     .filter((value): value is string => !!value);
 }
 
+function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => {
+      const job = normalizeRole(row.job_role);
+      return job === "designer" || job === "дизайнер";
+    })
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
 async function resolveDesignTaskManagerUserId(designTaskId?: string | null): Promise<string | null> {
   if (!isUuid(designTaskId)) return null;
   const { data, error } = await supabase
@@ -69,7 +81,9 @@ async function resolveDesignTaskManagerUserId(designTaskId?: string | null): Pro
 }
 
 async function resolveQuoteInitiator(quoteId: string): Promise<QuoteRecipient> {
-  if (!isUuid(quoteId)) return { teamId: null, userId: null, quoteNumber: null };
+  if (!isUuid(quoteId)) {
+    return { teamId: null, createdBy: null, assignedTo: null, userId: null, quoteNumber: null };
+  }
   let teamId: string | null = null;
   let createdBy: string | null = null;
   let assignedTo: string | null = null;
@@ -111,38 +125,57 @@ async function resolveQuoteInitiator(quoteId: string): Promise<QuoteRecipient> {
     quoteNumber = row?.number ?? null;
   }
 
-  return { teamId, userId: createdBy ?? assignedTo, quoteNumber };
+  return { teamId, createdBy, assignedTo, userId: createdBy ?? assignedTo, quoteNumber };
 }
 
-const QUOTE_STATUS_ALERTS: Record<string, { title: string; body: (quoteRef: string) => string; type: "info" | "success" }> = {
-  estimated: {
-    title: "Прорахунок готовий",
-    body: (quoteRef) => `${quoteRef} переведено у статус «Пораховано».`,
-    type: "success",
-  },
-  awaiting_approval: {
-    title: "Прорахунок передано на погодження",
-    body: (quoteRef) => `${quoteRef} передано на погодження.`,
-    type: "info",
-  },
-  approved: {
-    title: "Прорахунок затверджено",
-    body: (quoteRef) => `${quoteRef} затверджено.`,
-    type: "success",
-  },
-};
+function getQuoteStatusAlert(fromStatus: string, toStatus: string) {
+  if (fromStatus === "new" && toStatus === "estimating") {
+    return {
+      title: "Прорахунок взято в роботу",
+      body: (quoteRef: string) => `${quoteRef} переведено у статус «На прорахунку».`,
+      type: "info" as const,
+    };
+  }
+
+  const alerts: Record<string, { title: string; body: (quoteRef: string) => string; type: "info" | "success" }> = {
+    estimated: {
+      title: "Прорахунок готовий",
+      body: (quoteRef) => `${quoteRef} переведено у статус «Пораховано».`,
+      type: "success",
+    },
+    awaiting_approval: {
+      title: "Прорахунок передано на погодження",
+      body: (quoteRef) => `${quoteRef} передано на погодження.`,
+      type: "info",
+    },
+    approved: {
+      title: "Прорахунок затверджено",
+      body: (quoteRef) => `${quoteRef} затверджено.`,
+      type: "success",
+    },
+  };
+
+  return alerts[toStatus] ?? null;
+}
 
 export async function notifyQuoteInitiatorOnStatusChange(params: {
   quoteId: string;
+  fromStatus?: string | null;
   toStatus: string;
   actorUserId?: string | null;
 }) {
-  const alert = QUOTE_STATUS_ALERTS[params.toStatus];
+  const fromStatus = (params.fromStatus ?? "").trim().toLowerCase();
+  const alert = getQuoteStatusAlert(fromStatus, params.toStatus);
   if (!alert) return;
 
-  const { teamId, userId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
+  const { teamId, createdBy, assignedTo, userId, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const recipients = new Set<string>();
-  if (userId) recipients.add(userId);
+  if (fromStatus === "new" && params.toStatus === "estimating") {
+    if (createdBy) recipients.add(createdBy);
+    if (assignedTo) recipients.add(assignedTo);
+  } else if (userId) {
+    recipients.add(userId);
+  }
   if (params.toStatus === "approved") {
     const members = await resolveTeamMembers(teamId);
     for (const ceoUserId of pickCeoUserIds(members)) recipients.add(ceoUserId);
@@ -158,6 +191,71 @@ export async function notifyQuoteInitiatorOnStatusChange(params: {
     href: `/orders/estimates/${params.quoteId}`,
     type: alert.type,
   });
+}
+
+export async function notifyDesignTaskStakeholdersOnCreate(params: {
+  quoteId: string;
+  designTaskId: string;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  assigneeUserId?: string | null;
+}) {
+  const { teamId, createdBy, assignedTo, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
+  const members = await resolveTeamMembers(teamId);
+  const actorName = params.actorName ?? "System";
+  const quoteRef = quoteNumber ? `#${quoteNumber}` : "цього прорахунку";
+
+  const assigneeRecipients = new Set<string>();
+  const designerPoolRecipients = new Set<string>();
+  const stakeholderRecipients = new Set<string>();
+
+  if (params.assigneeUserId) {
+    assigneeRecipients.add(params.assigneeUserId);
+  } else {
+    for (const designerUserId of pickDesignerUserIds(members)) designerPoolRecipients.add(designerUserId);
+  }
+
+  if (assignedTo) stakeholderRecipients.add(assignedTo);
+  if (createdBy) stakeholderRecipients.add(createdBy);
+
+  if (params.actorUserId) {
+    assigneeRecipients.delete(params.actorUserId);
+    designerPoolRecipients.delete(params.actorUserId);
+    stakeholderRecipients.delete(params.actorUserId);
+  }
+
+  for (const userId of assigneeRecipients) stakeholderRecipients.delete(userId);
+  for (const userId of designerPoolRecipients) stakeholderRecipients.delete(userId);
+
+  if (assigneeRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(assigneeRecipients),
+      title: "Вас призначено на дизайн-задачу",
+      body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteRef}.`,
+      href: `/design/${params.designTaskId}`,
+      type: "info",
+    });
+  }
+
+  if (designerPoolRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(designerPoolRecipients),
+      title: "Нова дизайн-задача без виконавця",
+      body: `${actorName} створив(ла) дизайн-задачу по прорахунку ${quoteRef}. Потрібно взяти її в роботу.`,
+      href: `/design/${params.designTaskId}`,
+      type: "info",
+    });
+  }
+
+  if (stakeholderRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(stakeholderRecipients),
+      title: "Створено дизайн-задачу",
+      body: `${actorName} створив(ла) дизайн-задачу по прорахунку ${quoteRef}.`,
+      href: `/design/${params.designTaskId}`,
+      type: "info",
+    });
+  }
 }
 
 const DESIGN_STATUS_ALERTS: Record<string, { title: string; body: (quoteRef: string) => string; type: "info" | "success" | "warning" }> = {

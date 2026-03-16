@@ -45,7 +45,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
-import { notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
+import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -2227,19 +2227,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       });
       setDesignAssigneeId(nextAssignee ?? null);
 
-      if (assigneeUserId && assigneeUserId !== userId) {
-        const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
-        try {
-          await notifyUsers({
-            userIds: [assigneeUserId],
-            title: "Вас призначено на дизайн-задачу",
-            body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
-            href: `/design/${(data as { id: string }).id}`,
-            type: "info",
-          });
-        } catch (notifyError) {
-          console.warn("Failed to notify designer about new task", notifyError);
-        }
+      try {
+        await notifyDesignTaskStakeholdersOnCreate({
+          quoteId,
+          designTaskId: (data as { id: string }).id,
+          assigneeUserId,
+          actorUserId: userId,
+          actorName,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify stakeholders about new task", notifyError);
       }
       toast.success("Дизайн-задачу створено");
     } catch (e: unknown) {
@@ -3188,6 +3185,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       try {
         await notifyQuoteInitiatorOnStatusChange({
           quoteId,
+          fromStatus: previousStatus,
           toStatus: nextStatus,
           actorUserId: userId ?? null,
         });
