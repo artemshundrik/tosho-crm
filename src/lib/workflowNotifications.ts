@@ -301,11 +301,22 @@ export async function notifyQuoteInitiatorOnDesignStatusChange(params: {
 
   if (userId) recipients.add(userId);
 
-  // Коли дизайнер/PM передає задачу менеджеру (на погодження), дублюємо всім менеджерам + обраному менеджеру задачі.
-  if (params.toStatus === "pm_review" || params.toStatus === "client_review") {
-    for (const managerUserId of pickManagerUserIds(members)) recipients.add(managerUserId);
+  // Коли дизайнер позначає "Дизайн готовий", сповіщення має отримати саме менеджер,
+  // який призначений у задачі, а не весь пул менеджерів.
+  if (params.toStatus === "pm_review") {
+    const taskManagerUserId = await resolveDesignTaskManagerUserId(params.designTaskId);
+    if (taskManagerUserId) {
+      recipients.add(taskManagerUserId);
+    } else if (userId) {
+      recipients.add(userId);
+    }
+  }
+
+  // Коли задача переходить далі на погодження, лишаємо менеджера задачі й ініціатора прорахунку.
+  if (params.toStatus === "client_review") {
     const taskManagerUserId = await resolveDesignTaskManagerUserId(params.designTaskId);
     if (taskManagerUserId) recipients.add(taskManagerUserId);
+    if (userId) recipients.add(userId);
   }
 
   // CEO (owner) отримує ключові сигнали по дизайну.
