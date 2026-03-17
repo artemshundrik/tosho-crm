@@ -1648,6 +1648,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         data.createDesignTask &&
         (data.printApplications.length > 0 || data.files.length > 0 || isPrintPackageQuote);
       let createdDesignTaskId: string | null = null;
+      let createdDesignTaskNumber: string | null = null;
       if (shouldCreateDesignTask && teamId) {
         const actorName =
           currentUserId && memberById.get(currentUserId)
@@ -1669,6 +1670,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           .lt("created_at", nextMonthStartIso);
         if (taskCountError) throw taskCountError;
         const designTaskNumber = `TS-${monthCode}-${String((taskCount ?? 0) + 1).padStart(4, "0")}`;
+        createdDesignTaskNumber = designTaskNumber;
         const modelName = packageItemName ?? model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
         const assigneeUserId = data.designAssigneeId ?? null;
@@ -1734,24 +1736,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       }
 
-      // 4. Success - close form and navigate
+      // 4. Success - close form and refresh list
       setCreateOpen(false);
 
       await loadQuotes();
-      navigate(`/orders/estimates/${created.id}`);
 
       // Show toast
       if (attachmentWarning) {
         toast.error("Файли не завантажено повністю", {
           description: attachmentWarning,
+          action: {
+            label: "Відкрити",
+            onClick: () => navigate(`/orders/estimates/${created.id}`),
+          },
         });
       } else {
         const successDescription =
-          [quoteCustomerName, packageItemName ?? model?.name]
+          [
+            quoteCustomerName,
+            packageItemName ?? model?.name,
+            createdDesignTaskNumber ? `дизайн: ${createdDesignTaskNumber}` : null,
+          ]
             .filter((value): value is string => Boolean(value?.trim()))
-            .join(" · ") || "Відкриваю картку прорахунку.";
+            .join(" · ") || "Прорахунок збережено.";
         toast.success("Прорахунок створено", {
           description: successDescription,
+          action: {
+            label: "Відкрити",
+            onClick: () => navigate(`/orders/estimates/${created.id}`),
+          },
         });
       }
     } catch (e: unknown) {

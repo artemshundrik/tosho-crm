@@ -125,6 +125,7 @@ const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const NO_MANAGER_FILTER = "__none__";
+const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
 const DESIGN_COMPLETED_PERIOD_OPTIONS: Array<{ value: DesignCompletedPeriod; label: string }> = [
   { value: "7d", label: "7 днів" },
   { value: "30d", label: "30 днів" },
@@ -572,6 +573,7 @@ export default function DesignPage() {
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(false);
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
+  const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(ALL_ASSIGNEE_SPOTLIGHT);
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
@@ -1264,6 +1266,12 @@ export default function DesignPage() {
     );
   };
 
+  const renderAssigneeSpotlightValue = (value: string) => {
+    if (value === ALL_ASSIGNEE_SPOTLIGHT) return <span>Вся команда</span>;
+    if (value === NO_DESIGNER_FILTER) return <span>Без виконавця</span>;
+    return renderDesignerFilterValue(value);
+  };
+
   const managerFilterOptions = useMemo(() => {
     const byId = new Map<string, { id: string; label: string; avatarUrl?: string | null }>();
 
@@ -1308,6 +1316,8 @@ export default function DesignPage() {
     );
   };
 
+  const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
+
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     return tasks.filter((task) => {
@@ -1317,8 +1327,12 @@ export default function DesignPage() {
 
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
 
-      if (designerFilter === NO_DESIGNER_FILTER && task.assigneeUserId) return false;
-      if (designerFilter !== ALL_DESIGNERS_FILTER && designerFilter !== NO_DESIGNER_FILTER && task.assigneeUserId !== designerFilter) {
+      if (effectiveDesignerFilter === NO_DESIGNER_FILTER && task.assigneeUserId) return false;
+      if (
+        effectiveDesignerFilter !== ALL_DESIGNERS_FILTER &&
+        effectiveDesignerFilter !== NO_DESIGNER_FILTER &&
+        task.assigneeUserId !== effectiveDesignerFilter
+      ) {
         return false;
       }
 
@@ -1343,12 +1357,12 @@ export default function DesignPage() {
 
       return haystack.includes(query);
     });
-  }, [contentView, designerFilter, managerFilter, search, statusFilter, tasks]);
+  }, [contentView, effectiveDesignerFilter, managerFilter, search, statusFilter, tasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
     statusFilter !== "all" ||
-    designerFilter !== ALL_DESIGNERS_FILTER ||
+    effectiveDesignerFilter !== ALL_DESIGNERS_FILTER ||
     managerFilter !== ALL_MANAGERS_FILTER;
 
   const clearFilters = () => {
@@ -1578,15 +1592,89 @@ export default function DesignPage() {
   }, [filteredTasks]);
 
   const timelineAxis = useMemo(() => {
-    const bucketSize = timelineZoom === "day" ? 1 : timelineZoom === "week" ? 7 : 30;
-    const columnCount = Math.max(1, Math.ceil((timelineData.days.length || 1) / bucketSize));
-    const columns = Array.from({ length: columnCount }, (_, idx) => {
-      const startIndex = idx * bucketSize;
-      const start = timelineData.days[startIndex] ?? timelineData.days[timelineData.days.length - 1] ?? new Date();
-      const end = timelineData.days[Math.min(startIndex + bucketSize - 1, timelineData.days.length - 1)] ?? start;
-      return { start, end };
-    });
-    return { bucketSize, columnCount, columns };
+    const baseDays = timelineData.days;
+    if (baseDays.length === 0) {
+      return {
+        columns: [] as Array<{ start: Date; end: Date; dayCount: number }>,
+        visibleStart: null as Date | null,
+        visibleEnd: null as Date | null,
+        totalDays: 0,
+        todayOffset: -1,
+      };
+    }
+
+    const normalizeDate = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    const addDays = (base: Date, days: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
+    const daysDiff = (from: Date, to: Date) =>
+      Math.round(
+        (Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) /
+          (1000 * 60 * 60 * 24)
+      );
+    const startOfWeek = (value: Date) => {
+      const normalized = normalizeDate(value);
+      const day = normalized.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      return addDays(normalized, diff);
+    };
+    const endOfWeek = (value: Date) => addDays(startOfWeek(value), 6);
+    const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth(), 1);
+    const endOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth() + 1, 0);
+
+    const visibleStart = normalizeDate(baseDays[0]);
+    const visibleEnd = normalizeDate(baseDays[baseDays.length - 1]);
+    const today = normalizeDate(new Date());
+
+    if (timelineZoom === "day") {
+      const columns = baseDays.map((day) => {
+        const start = normalizeDate(day);
+        return { start, end: start, dayCount: 1 };
+      });
+      return {
+        columns,
+        visibleStart,
+        visibleEnd,
+        totalDays: columns.length,
+        todayOffset: Math.max(0, Math.min(columns.length - 1, daysDiff(visibleStart, today))),
+      };
+    }
+
+    if (timelineZoom === "week") {
+      const first = startOfWeek(visibleStart);
+      const last = endOfWeek(visibleEnd);
+      const columns: Array<{ start: Date; end: Date; dayCount: number }> = [];
+      let cursor = first;
+      while (cursor.getTime() <= last.getTime()) {
+        const start = cursor;
+        const end = endOfWeek(start);
+        columns.push({ start, end, dayCount: daysDiff(start, end) + 1 });
+        cursor = addDays(end, 1);
+      }
+      return {
+        columns,
+        visibleStart: first,
+        visibleEnd: last,
+        totalDays: daysDiff(first, last) + 1,
+        todayOffset: Math.max(0, Math.min(daysDiff(first, last), daysDiff(first, today))),
+      };
+    }
+
+    const first = startOfMonth(visibleStart);
+    const last = endOfMonth(visibleEnd);
+    const columns: Array<{ start: Date; end: Date; dayCount: number }> = [];
+    let cursor = first;
+    while (cursor.getTime() <= last.getTime()) {
+      const start = cursor;
+      const end = endOfMonth(start);
+      columns.push({ start, end, dayCount: daysDiff(start, end) + 1 });
+      cursor = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    }
+    return {
+      columns,
+      visibleStart: first,
+      visibleEnd: last,
+      totalDays: daysDiff(first, last) + 1,
+      todayOffset: Math.max(0, Math.min(daysDiff(first, last), daysDiff(first, today))),
+    };
   }, [timelineData.days, timelineZoom]);
 
   const assigneeGrouped = useMemo(() => {
@@ -1693,6 +1781,24 @@ export default function DesignPage() {
       unassignedCount,
     };
   }, [assigneeGrouped, timerNowMs, timerSummaryByTaskId]);
+
+  const assigneeVisibleGroups = useMemo(() => {
+    if (assigneeSpotlight === ALL_ASSIGNEE_SPOTLIGHT) return assigneeGrouped;
+    if (assigneeSpotlight === NO_DESIGNER_FILTER) return assigneeGrouped.filter((group) => !group.id);
+    return assigneeGrouped.filter((group) => group.id === assigneeSpotlight);
+  }, [assigneeGrouped, assigneeSpotlight]);
+
+  useEffect(() => {
+    if (assigneeSpotlight === ALL_ASSIGNEE_SPOTLIGHT) return;
+    if (assigneeSpotlight === NO_DESIGNER_FILTER) {
+      if (assigneeGrouped.some((group) => !group.id)) return;
+      setAssigneeSpotlight(ALL_ASSIGNEE_SPOTLIGHT);
+      return;
+    }
+    if (!assigneeGrouped.some((group) => group.id === assigneeSpotlight)) {
+      setAssigneeSpotlight(ALL_ASSIGNEE_SPOTLIGHT);
+    }
+  }, [assigneeGrouped, assigneeSpotlight]);
 
   const selectedAssignee = useMemo(
     () => designerMembers.find((member) => member.id === createAssigneeUserId) ?? null,
@@ -2333,6 +2439,9 @@ export default function DesignPage() {
         }
       }
 
+      const createdTaskHref = `/design/${createdTask.id}`;
+      const createdTaskLabel = createdTask.designTaskNumber ?? "Без номера";
+
       setCreateDialogOpen(false);
       setCreateTitle("");
       setCreateBrief("");
@@ -2350,7 +2459,13 @@ export default function DesignPage() {
       setCreateAssigneePopoverOpen(false);
       setCreateFilesDragActive(false);
       setCreateFiles([]);
-      toast.success("Дизайн-задачу створено");
+      toast.success("Дизайн-задачу створено", {
+        description: `Задача ${createdTaskLabel}${createdTask.assigneeUserId ? ` · ${getMemberLabel(createdTask.assigneeUserId)}` : ""}`,
+        action: {
+          label: "Відкрити",
+          onClick: () => navigate(createdTaskHref),
+        },
+      });
     } catch (e: unknown) {
       setCreateError(getErrorMessage(e, "Не вдалося створити дизайн-задачу"));
     } finally {
@@ -2842,20 +2957,22 @@ export default function DesignPage() {
               </SelectContent>
             </Select>
 
-            <Select value={designerFilter} onValueChange={setDesignerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-                <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_DESIGNERS_FILTER}>{renderDesignerFilterValue(ALL_DESIGNERS_FILTER)}</SelectItem>
-                <SelectItem value={NO_DESIGNER_FILTER}>{renderDesignerFilterValue(NO_DESIGNER_FILTER)}</SelectItem>
-                {designerFilterOptions.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {renderDesignerFilterValue(member.id)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {viewMode !== "assignee" ? (
+              <Select value={designerFilter} onValueChange={setDesignerFilter}>
+                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
+                  <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_DESIGNERS_FILTER}>{renderDesignerFilterValue(ALL_DESIGNERS_FILTER)}</SelectItem>
+                  <SelectItem value={NO_DESIGNER_FILTER}>{renderDesignerFilterValue(NO_DESIGNER_FILTER)}</SelectItem>
+                  {designerFilterOptions.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {renderDesignerFilterValue(member.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
 
             <Select value={managerFilter} onValueChange={setManagerFilter}>
               <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
@@ -3051,13 +3168,13 @@ export default function DesignPage() {
                 </div>
                 <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-background/80 p-1">
                   <Button size="sm" variant={timelineZoom === "day" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("day")}>
-                    День
+                    Дні
                   </Button>
                   <Button size="sm" variant={timelineZoom === "week" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("week")}>
-                    Тиждень
+                    Тижні
                   </Button>
                   <Button size="sm" variant={timelineZoom === "month" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("month")}>
-                    Місяць
+                    Місяці
                   </Button>
                 </div>
               </div>
@@ -3237,7 +3354,11 @@ export default function DesignPage() {
               <div className="hidden overflow-hidden rounded-[var(--radius-section)] border border-border/60 bg-card/70 shadow-sm md:block">
                 <div
                   className="grid min-w-[1120px]"
-                  style={{ gridTemplateColumns: `360px repeat(${timelineAxis.columnCount}, minmax(56px, 1fr))` }}
+                  style={{
+                    gridTemplateColumns: `360px ${timelineAxis.columns
+                      .map((column) => `minmax(${Math.max(56, column.dayCount * 14)}px, ${column.dayCount}fr)`)
+                      .join(" ")}`,
+                  }}
                 >
                   <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-4 py-3">
                     <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Черга задач</div>
@@ -3249,15 +3370,19 @@ export default function DesignPage() {
                       className="border-b border-r border-border/40 bg-background/65 px-1 py-3 text-center text-[11px] text-muted-foreground"
                     >
                       <div className="font-medium text-foreground">
-                        {column.start.toLocaleDateString("uk-UA", {
-                          day: "2-digit",
-                          month: timelineZoom === "day" ? undefined : "short",
-                        })}
+                        {timelineZoom === "month"
+                          ? column.start.toLocaleDateString("uk-UA", { month: "short" })
+                          : column.start.toLocaleDateString("uk-UA", {
+                              day: "2-digit",
+                              month: timelineZoom === "day" ? undefined : "short",
+                            })}
                       </div>
                       <div className="mt-0.5">
                         {timelineZoom === "day"
                           ? column.start.toLocaleDateString("uk-UA", { month: "short" })
-                          : column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
+                          : timelineZoom === "week"
+                            ? column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })
+                            : column.start.toLocaleDateString("uk-UA", { month: "long", year: "numeric" })}
                       </div>
                     </div>
                   ))}
@@ -3265,13 +3390,20 @@ export default function DesignPage() {
                   {timelineData.rows.map((row) => {
                     const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
                     const isAttachedFromStandalone = isTaskAttachedFromStandalone(row.task) && isUuid(row.task.quoteId);
-                    const offsetUnits = row.offset / timelineAxis.bucketSize;
-                    const spanUnits = Math.max(timelineZoom === "day" ? 1 : 0.75, row.span / timelineAxis.bucketSize);
-                    const barLeft = `calc(${offsetUnits} * (100% / ${timelineAxis.columnCount}))`;
-                    const barWidth = `calc(${spanUnits} * (100% / ${timelineAxis.columnCount}))`;
+                    const axisStart = timelineAxis.visibleStart ?? row.start;
+                    const daysDiff = (from: Date, to: Date) =>
+                      Math.round(
+                        (Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) /
+                          (1000 * 60 * 60 * 24)
+                      );
+                    const offsetDays = Math.max(0, daysDiff(axisStart, row.start));
+                    const spanDays = Math.max(1, daysDiff(row.start, row.end) + 1);
+                    const totalDays = Math.max(1, timelineAxis.totalDays);
+                    const barLeft = `calc(${offsetDays} * (100% / ${totalDays}))`;
+                    const barWidth = `calc(${spanDays} * (100% / ${totalDays}))`;
                     const trackedSeconds = getTaskTrackedSeconds(row.task.id);
                     const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
-                    const progressWidth = `calc(${spanUnits * progressRatio} * (100% / ${timelineAxis.columnCount}))`;
+                    const progressWidth = `calc(${spanDays * progressRatio} * (100% / ${totalDays}))`;
                     const barTitle = [
                       `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${getTaskDisplayNumber(row.task)}`,
                       `Статус: ${statusLabel}`,
@@ -3339,11 +3471,11 @@ export default function DesignPage() {
                         </button>
                         <div
                           className="relative border-b border-border/40 bg-[linear-gradient(to_right,transparent_0%,transparent_calc(100%_-_1px),rgba(148,163,184,0.16)_calc(100%_-_1px),rgba(148,163,184,0.16)_100%)]"
-                          style={{ gridColumn: `2 / span ${timelineAxis.columnCount}` }}
+                          style={{ gridColumn: `2 / span ${timelineAxis.columns.length}` }}
                         >
                           <div
                             className="absolute inset-y-0 border-l-2 border-danger-foreground/80 pointer-events-none"
-                            style={{ left: `calc(${timelineData.todayOffset / timelineAxis.bucketSize} * (100% / ${timelineAxis.columnCount}))` }}
+                            style={{ left: `calc(${Math.max(0, timelineAxis.todayOffset)} * (100% / ${Math.max(1, timelineAxis.totalDays)}))` }}
                           />
                           <div className="absolute inset-y-2 left-0 right-0">
                             <div className="relative h-full">
@@ -3486,10 +3618,33 @@ export default function DesignPage() {
             </div>
           </div>
 
-          {assigneeGrouped.length === 0 ? (
+          <div className="flex flex-col gap-3 rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Фокус по дизайнеру</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Для менеджера правильний режим такий: спочатку дивитись всю команду, а потім звужуватися на конкретного дизайнера тут, всередині вкладки.
+              </div>
+            </div>
+            <Select value={assigneeSpotlight} onValueChange={setAssigneeSpotlight}>
+              <SelectTrigger className="w-full lg:w-[260px]">
+                <div className="flex min-w-0 items-center">{renderAssigneeSpotlightValue(assigneeSpotlight)}</div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ASSIGNEE_SPOTLIGHT}>{renderAssigneeSpotlightValue(ALL_ASSIGNEE_SPOTLIGHT)}</SelectItem>
+                <SelectItem value={NO_DESIGNER_FILTER}>{renderAssigneeSpotlightValue(NO_DESIGNER_FILTER)}</SelectItem>
+                {designerFilterOptions.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {renderAssigneeSpotlightValue(member.id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {assigneeVisibleGroups.length === 0 ? (
             <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">Немає задач</div>
           ) : (
-            assigneeGrouped.map((group) => {
+            assigneeVisibleGroups.map((group) => {
               const workloadLevel = getWorkloadLevel(group.tasks.length, group.estimateMinutesTotal);
               const statusBreakdown = DESIGN_COLUMNS.map((column) => ({
                 ...column,

@@ -2261,7 +2261,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } catch (notifyError) {
         console.warn("Failed to notify stakeholders about new task", notifyError);
       }
-      toast.success("Дизайн-задачу створено");
+      const createdTaskId = (data as { id: string }).id;
+      toast.success("Дизайн-задачу створено", {
+        description: `Задача ${designTaskNumber}${nextAssignee ? ` · ${getMemberLabel(nextAssignee)}` : ""}`,
+        action: {
+          label: "Відкрити",
+          onClick: () => navigate(`/design/${createdTaskId}`),
+        },
+      });
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося створити дизайн-задачу.");
       setDesignTaskError(message);
