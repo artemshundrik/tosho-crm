@@ -169,6 +169,13 @@ type DesignOutputLink = {
   group_label?: string | null;
 };
 
+type StorageBackedFile = {
+  file_name?: string | null;
+  signed_url?: string | null;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+};
+
 type QuoteCandidate = {
   id: string;
   number: string | null;
@@ -366,6 +373,19 @@ const isPdfAttachment = (name?: string | null) => {
 const buildPdfPreviewUrl = (src: string) =>
   `${src}#page=1&zoom=page-fit&view=FitV&navpanes=0&scrollbar=0&pagemode=none`;
 
+const isUsableStorageUrl = (value?: string | null) => {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.pathname.includes("/storage/v1/object/sign/")) {
+      return parsed.searchParams.has("token");
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const FileHoverPreview = ({
   src,
   title,
@@ -514,8 +534,8 @@ function readDesignTaskPageCache(teamId: string, taskId: string): DesignTaskPage
       task: parsed.task,
       quoteItem: parsed.quoteItem ?? null,
       productPreviewUrl: typeof parsed.productPreviewUrl === "string" ? parsed.productPreviewUrl : null,
-      attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
-      designOutputFiles: Array.isArray(parsed.designOutputFiles) ? parsed.designOutputFiles : [],
+      attachments: [],
+      designOutputFiles: [],
       designOutputLinks: Array.isArray(parsed.designOutputLinks) ? parsed.designOutputLinks : [],
       designOutputGroups: Array.isArray(parsed.designOutputGroups) ? parsed.designOutputGroups : [],
       cachedAt: Number(parsed.cachedAt ?? Date.now()),
@@ -645,6 +665,7 @@ export default function DesignTaskPage() {
   const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>(() => initialCache?.designOutputFiles ?? []);
   const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>(() => initialCache?.designOutputLinks ?? []);
   const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
+  const [fileAccessUrlByKey, setFileAccessUrlByKey] = useState<Record<string, string>>({});
   const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
@@ -708,6 +729,7 @@ export default function DesignTaskPage() {
   >(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingTask, setDeletingTask] = useState(false);
+  const objectUrlRegistryRef = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
@@ -1212,7 +1234,7 @@ export default function DesignTaskPage() {
               const { data: signed } = await supabase.storage
                 .from(file.storage_bucket)
                 .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
-              signedUrl = signed?.signedUrl ?? null;
+              signedUrl = isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null;
             }
             return { ...file, signed_url: signedUrl };
           })
@@ -1248,7 +1270,7 @@ export default function DesignTaskPage() {
               const { data: signed } = await supabase.storage
                 .from(file.storage_bucket)
                 .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
-              signedUrl = signed?.signedUrl ?? null;
+              signedUrl = isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null;
             }
             return { ...file, signed_url: signedUrl };
           })
@@ -1283,7 +1305,7 @@ export default function DesignTaskPage() {
             const { data: signed } = await supabase.storage
               .from(file.storage_bucket)
               .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
-            return { ...file, signed_url: signed?.signedUrl ?? null };
+            return { ...file, signed_url: isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null };
           })
         );
 
@@ -1387,7 +1409,7 @@ export default function DesignTaskPage() {
         const nextQuoteItem = item ?? null;
         const nextProductPreviewUrl = itemPreviewUrl;
         const nextAttachments = [...standaloneBriefFilesWithUrls, ...customerOnlyAttachments];
-        const nextDesignOutputFiles = designFilesWithUrls;
+        const nextDesignOutputFiles = designFilesWithUrls.filter((file) => !!file.signed_url);
         const nextDesignOutputLinks = parsedDesignLinks;
         const nextDesignOutputGroups = parsedOutputGroups;
 
@@ -1406,8 +1428,8 @@ export default function DesignTaskPage() {
                 task: nextTask,
                 quoteItem: nextQuoteItem,
                 productPreviewUrl: nextProductPreviewUrl,
-                attachments: nextAttachments,
-                designOutputFiles: nextDesignOutputFiles,
+                attachments: [],
+                designOutputFiles: [],
                 designOutputLinks: nextDesignOutputLinks,
                 designOutputGroups: nextDesignOutputGroups,
                 cachedAt: Date.now(),
@@ -2279,15 +2301,41 @@ export default function DesignTaskPage() {
     [historyRows]
   );
 
-  const resolveAttachmentUrl = (file: {
-    signed_url?: string | null;
-    storage_bucket?: string | null;
-    storage_path?: string | null;
-  }) =>
-    file.signed_url ??
-    (file.storage_bucket && file.storage_path
-      ? supabase.storage.from(file.storage_bucket).getPublicUrl(file.storage_path).data.publicUrl
-      : null);
+  const getStorageFileKey = useCallback((file: Pick<StorageBackedFile, "storage_bucket" | "storage_path">) => {
+    if (!file.storage_bucket || !file.storage_path) return null;
+    return `${file.storage_bucket}:${file.storage_path}`;
+  }, []);
+
+  const resolveAttachmentUrl = useCallback((file: StorageBackedFile) => {
+    const key = getStorageFileKey(file);
+    if (key && fileAccessUrlByKey[key]) return fileAccessUrlByKey[key];
+    return null;
+  }, [fileAccessUrlByKey, getStorageFileKey]);
+
+  const ensureFileAccessUrl = useCallback(async (file: StorageBackedFile, options?: { forceRefresh?: boolean }) => {
+    const key = getStorageFileKey(file);
+    if (!key || !file.storage_bucket || !file.storage_path) return null;
+    if (!options?.forceRefresh && fileAccessUrlByKey[key]) return fileAccessUrlByKey[key];
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(file.storage_bucket)
+      .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
+    const signedUrl = isUsableStorageUrl(signedData?.signedUrl) ? (signedData?.signedUrl ?? null) : null;
+    if (signedUrl && !signedError) {
+      setFileAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
+      return signedUrl;
+    }
+
+    const { data: blobData, error: downloadError } = await supabase.storage
+      .from(file.storage_bucket)
+      .download(file.storage_path);
+    if (downloadError || !blobData) return null;
+
+    const objectUrl = URL.createObjectURL(blobData);
+    objectUrlRegistryRef.current.add(objectUrl);
+    setFileAccessUrlByKey((prev) => ({ ...prev, [key]: objectUrl }));
+    return objectUrl;
+  }, [fileAccessUrlByKey, getStorageFileKey]);
 
   const downloadFileToDevice = useCallback(async (url: string, filename?: string | null) => {
     try {
@@ -2308,6 +2356,59 @@ export default function DesignTaskPage() {
       });
     }
   }, []);
+
+  const openStorageFilePreview = useCallback(async (file: StorageBackedFile, kind: FilePreviewState["kind"]) => {
+    const url = await ensureFileAccessUrl(file, { forceRefresh: true });
+    if (!url) {
+      toast.error("Не вдалося відкрити файл");
+      return;
+    }
+    setFilePreview({
+      name: file.file_name ?? "Файл",
+      url,
+      kind,
+    });
+  }, [ensureFileAccessUrl]);
+
+  const openStorageFileInNewTab = useCallback(async (file: StorageBackedFile) => {
+    const url = await ensureFileAccessUrl(file, { forceRefresh: true });
+    if (!url) {
+      toast.error("Не вдалося відкрити файл");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [ensureFileAccessUrl]);
+
+  const downloadStorageBackedFile = useCallback(async (file: StorageBackedFile) => {
+    const url = await ensureFileAccessUrl(file, { forceRefresh: true });
+    if (!url) {
+      toast.error("Не вдалося завантажити файл");
+      return;
+    }
+    await downloadFileToDevice(url, file.file_name);
+  }, [downloadFileToDevice, ensureFileAccessUrl]);
+
+  useEffect(() => {
+    return () => {
+      objectUrlRegistryRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlRegistryRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const filesToWarm = [...attachments, ...designOutputFiles].filter(
+      (file) =>
+        !!file.storage_bucket &&
+        !!file.storage_path &&
+        (isImageAttachment(file.file_name) || isPdfAttachment(file.file_name))
+    );
+    if (filesToWarm.length === 0) return;
+    void Promise.all(
+      filesToWarm.map(async (file) => {
+        await ensureFileAccessUrl(file);
+      })
+    );
+  }, [attachments, designOutputFiles, ensureFileAccessUrl]);
 
   useEffect(() => {
     if (!filePreview || typeof document === "undefined") return;
@@ -2495,7 +2596,7 @@ export default function DesignTaskPage() {
           uploaded_by: userId,
           created_at: new Date().toISOString(),
           group_label: targetGroupLabel,
-          signed_url: signed?.signedUrl ?? null,
+          signed_url: isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null,
         });
       }
 
@@ -2556,7 +2657,7 @@ export default function DesignTaskPage() {
           storage_bucket: DESIGN_OUTPUT_BUCKET,
           storage_path: storagePath,
           uploaded_by: userId,
-          signed_url: signed?.signedUrl ?? null,
+          signed_url: isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null,
         };
 
         if (isUuid(task.quoteId)) {
@@ -2766,15 +2867,87 @@ export default function DesignTaskPage() {
     const target = designOutputFiles.find((file) => file.id === fileId);
     if (!target) return;
     try {
-      const nextFiles = designOutputFiles.filter((file) => file.id !== fileId);
+      const nextFiles = designOutputFiles.filter((file) => {
+        if (file.id === fileId) return false;
+        if (
+          target.storage_bucket &&
+          target.storage_path &&
+          file.storage_bucket === target.storage_bucket &&
+          file.storage_path === target.storage_path
+        ) {
+          return false;
+        }
+        return true;
+      });
+      const { data: latestRow, error: latestRowError } = await supabase
+        .from("activity_log")
+        .select("metadata")
+        .eq("id", task?.id)
+        .eq("team_id", effectiveTeamId)
+        .maybeSingle();
+      if (latestRowError) throw latestRowError;
+
+      const latestMetadata = ((latestRow?.metadata as Record<string, unknown> | null) ?? task?.metadata ?? {}) as Record<string, unknown>;
+      const latestRawFiles = Array.isArray(latestMetadata.design_output_files)
+        ? (latestMetadata.design_output_files as Array<Record<string, unknown>>)
+        : [];
+      const nextFilesForMeta = latestRawFiles.filter((file) => {
+        const rowId = typeof file.id === "string" ? file.id : null;
+        const storageBucket = typeof file.storage_bucket === "string" ? file.storage_bucket : null;
+        const storagePath = typeof file.storage_path === "string" ? file.storage_path : null;
+        if (rowId === fileId) return false;
+        if (
+          target.storage_bucket &&
+          target.storage_path &&
+          storageBucket === target.storage_bucket &&
+          storagePath === target.storage_path
+        ) {
+          return false;
+        }
+        return true;
+      });
       const nextSelectedIds = selectedDesignOutputFileIds.filter((id) => id !== fileId);
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       const nextMetadataPatch =
         nextSelectedIds.length > 0
           ? buildSelectedDesignOutputMetadata(nextSelectedIds, actorLabel)
-          : clearSelectedDesignOutputMetadata(task?.metadata ?? {});
-      await persistDesignOutputs(nextFiles, designOutputLinks, { metadataPatch: nextMetadataPatch });
+          : clearSelectedDesignOutputMetadata(latestMetadata);
+      const nextMetadata: Record<string, unknown> = {
+        ...latestMetadata,
+        design_output_files: nextFilesForMeta,
+        design_output_links: designOutputLinks.map((link) => ({
+          id: link.id,
+          label: link.label,
+          url: link.url,
+          created_at: link.created_at,
+          created_by: link.created_by,
+          group_label: normalizeOutputGroupLabel(link.group_label),
+        })),
+        design_output_groups: Array.from(
+          new Set(
+            designOutputGroups
+              .map((entry) => normalizeOutputGroupLabel(entry))
+              .filter((entry): entry is string => !!entry)
+          )
+        ),
+        ...nextMetadataPatch,
+      };
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task?.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
       setDesignOutputFiles(nextFiles);
+      setFileAccessUrlByKey((prev) => {
+        if (!target.storage_bucket || !target.storage_path) return prev;
+        const key = `${target.storage_bucket}:${target.storage_path}`;
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
       if (target.storage_bucket && target.storage_path) {
         await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
       }
@@ -5125,13 +5298,7 @@ export default function DesignTaskPage() {
                                   <button
                                     type="button"
                                     className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                    onClick={() =>
-                                      setFilePreview({
-                                        name: file.file_name,
-                                        url: fileUrl,
-                                        kind: "image",
-                                      })
-                                    }
+                                    onClick={() => void openStorageFilePreview(file, "image")}
                                   >
                                     <KanbanImageZoomPreview
                                       imageUrl={fileUrl}
@@ -5143,13 +5310,7 @@ export default function DesignTaskPage() {
                                   <button
                                     type="button"
                                     className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                    onClick={() =>
-                                      setFilePreview({
-                                        name: file.file_name,
-                                        url: fileUrl,
-                                        kind: "pdf",
-                                      })
-                                    }
+                                    onClick={() => void openStorageFilePreview(file, "pdf")}
                                   >
                                     <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
                                   </button>
@@ -5207,18 +5368,21 @@ export default function DesignTaskPage() {
                                   />
                                   <span>Вибір замовника</span>
                                 </label>
-                                {fileUrl ? (
+                                {fileUrl || (file.storage_bucket && file.storage_path) ? (
                                   <>
-                                    <Button size="icon" variant="ghost" asChild>
-                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" aria-label="Переглянути файл">
-                                        <Eye className="h-4 w-4" />
-                                      </a>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      aria-label="Переглянути файл"
+                                      onClick={() => void openStorageFileInNewTab(file)}
+                                    >
+                                      <Eye className="h-4 w-4" />
                                     </Button>
                                     <Button
                                       size="icon"
                                       variant="ghost"
                                       aria-label="Завантажити файл"
-                                      onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                                      onClick={() => void downloadStorageBackedFile(file)}
                                     >
                                       <Download className="h-4 w-4" />
                                     </Button>
@@ -5661,13 +5825,7 @@ export default function DesignTaskPage() {
                             <button
                               type="button"
                               className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                              onClick={() =>
-                                setFilePreview({
-                                  name: file.file_name ?? "preview",
-                                  url: fileUrl,
-                                  kind: "image",
-                                })
-                              }
+                              onClick={() => void openStorageFilePreview(file, "image")}
                             >
                               <KanbanImageZoomPreview
                                 imageUrl={fileUrl}
@@ -5679,13 +5837,7 @@ export default function DesignTaskPage() {
                             <button
                               type="button"
                               className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                              onClick={() =>
-                                setFilePreview({
-                                  name: file.file_name ?? "PDF preview",
-                                  url: fileUrl,
-                                  kind: "pdf",
-                                })
-                              }
+                              onClick={() => void openStorageFilePreview(file, "pdf")}
                             >
                               <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
                             </button>
@@ -5721,18 +5873,21 @@ export default function DesignTaskPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {fileUrl ? (
+                          {fileUrl || (file.storage_bucket && file.storage_path) ? (
                             <>
-                              <Button size="icon" variant="ghost" asChild>
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" aria-label="Переглянути файл">
-                                  <Eye className="h-4 w-4" />
-                                </a>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label="Переглянути файл"
+                                onClick={() => void openStorageFileInNewTab(file)}
+                              >
+                                <Eye className="h-4 w-4" />
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 aria-label="Завантажити файл"
-                                onClick={() => void downloadFileToDevice(fileUrl, file.file_name)}
+                                onClick={() => void downloadStorageBackedFile(file)}
                               >
                                 <Download className="h-4 w-4" />
                               </Button>

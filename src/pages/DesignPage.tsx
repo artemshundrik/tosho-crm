@@ -73,7 +73,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { CalendarRange, LayoutGrid, Search, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarRange, Clock3, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -266,6 +266,43 @@ const formatEstimateMinutes = (minutes?: number | null) => {
   if (mins) parts.push(`${mins} хв`);
   return parts.length > 0 ? parts.join(" ") : "0 хв";
 };
+
+const formatHoursLoad = (minutes?: number | null) => {
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return "0 год";
+  const hours = minutes / 60;
+  return `${hours.toLocaleString("uk-UA", {
+    minimumFractionDigits: hours >= 10 || Number.isInteger(hours) ? 0 : 1,
+    maximumFractionDigits: 1,
+  })} год`;
+};
+
+const getWorkloadLevel = (taskCount: number, estimateMinutes: number) => {
+  if (estimateMinutes >= 2400 || taskCount >= 8) return "overloaded" as const;
+  if (estimateMinutes >= 1200 || taskCount >= 5) return "busy" as const;
+  if (estimateMinutes >= 360 || taskCount >= 2) return "balanced" as const;
+  return "calm" as const;
+};
+
+const WORKLOAD_LABEL_BY_LEVEL = {
+  calm: "Спокійно",
+  balanced: "Норма",
+  busy: "Щільно",
+  overloaded: "Перевантаження",
+} as const;
+
+const WORKLOAD_BADGE_CLASS_BY_LEVEL = {
+  calm: "border-border/60 bg-background/80 text-muted-foreground",
+  balanced: "border-info-soft-border bg-info-soft text-info-foreground",
+  busy: "border-warning-soft-border bg-warning-soft text-warning-foreground",
+  overloaded: "border-danger-soft-border bg-danger-soft text-danger-foreground",
+} as const;
+
+const WORKLOAD_PROGRESS_CLASS_BY_LEVEL = {
+  calm: "bg-foreground/15",
+  balanced: "bg-info-foreground/75",
+  busy: "bg-warning-foreground/80",
+  overloaded: "bg-danger-foreground/80",
+} as const;
 
 const getInitials = (name?: string | null) => {
   if (!name) return "•";
@@ -1589,6 +1626,56 @@ export default function DesignPage() {
     });
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completedByAssignee, designerMembers, filteredTasks, memberById]);
+
+  const timelineSummary = useMemo(() => {
+    const today = new Date();
+    const rows = timelineData.rows;
+    const overdue = rows.filter((row) => row.isOverdue).length;
+    const startRisk = rows.filter((row) => row.isStartRisk).length;
+    const noEstimate = rows.filter((row) => !row.hasEstimate).length;
+    const dueToday = rows.filter((row) => {
+      const end = row.end;
+      return (
+        end.getFullYear() === today.getFullYear() &&
+        end.getMonth() === today.getMonth() &&
+        end.getDate() === today.getDate()
+      );
+    }).length;
+    const dueThisWeek = rows.filter((row) => {
+      const diff = row.end.getTime() - today.getTime();
+      const diffDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 7;
+    }).length;
+
+    return {
+      scheduled: rows.length,
+      overdue,
+      startRisk,
+      noEstimate,
+      dueToday,
+      dueThisWeek,
+      noDeadline: timelineData.noDeadlineTasks.length,
+    };
+  }, [timelineData.noDeadlineTasks.length, timelineData.rows]);
+
+  const assigneeOverview = useMemo(() => {
+    const activeGroups = assigneeGrouped.filter((group) => group.id);
+    const totalEstimateMinutes = assigneeGrouped.reduce((sum, group) => sum + group.estimateMinutesTotal, 0);
+    const totalTrackedSeconds = assigneeGrouped.reduce(
+      (sum, group) => sum + group.tasks.reduce((taskSum, task) => taskSum + getTaskTrackedSeconds(task.id), 0),
+      0
+    );
+    const busyCount = activeGroups.filter((group) => getWorkloadLevel(group.tasks.length, group.estimateMinutesTotal) !== "calm").length;
+    const unassignedCount = assigneeGrouped.find((group) => !group.id)?.tasks.length ?? 0;
+
+    return {
+      activeDesigners: activeGroups.length,
+      totalEstimateMinutes,
+      totalTrackedSeconds,
+      busyCount,
+      unassignedCount,
+    };
+  }, [assigneeGrouped, timerNowMs, timerSummaryByTaskId]);
 
   const selectedAssignee = useMemo(
     () => designerMembers.find((member) => member.id === createAssigneeUserId) ?? null,
@@ -2923,238 +3010,372 @@ export default function DesignPage() {
 
       {viewMode === "timeline" ? (
         <div className="space-y-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    Production Timeline
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold tracking-tight text-foreground">План-графік дизайну по дедлайнах і ризиках</h3>
+                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                      Один екран для черги, дедлайнів і вузьких місць. Акцент на задачах, які треба розрулювати сьогодні, а не просто на списку дат.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-background/80 p-1">
+                  <Button size="sm" variant={timelineZoom === "day" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("day")}>
+                    День
+                  </Button>
+                  <Button size="sm" variant={timelineZoom === "week" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("week")}>
+                    Тиждень
+                  </Button>
+                  <Button size="sm" variant={timelineZoom === "month" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("month")}>
+                    Місяць
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">В графіку</div>
+                      <div className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{timelineSummary.scheduled}</div>
+                    </div>
+                    <Layers3 className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {timelineSummary.noDeadline > 0 ? `${timelineSummary.noDeadline} задач без дедлайну винесено окремо` : "Усі задачі мають дедлайн"}
+                  </div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-danger-soft-border bg-danger-soft/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-danger-foreground/80">Ризик зриву</div>
+                      <div className="mt-2 text-2xl font-semibold tabular-nums text-danger-foreground">{timelineSummary.overdue}</div>
+                    </div>
+                    <AlertTriangle className="h-4 w-4 text-danger-foreground" />
+                  </div>
+                  <div className="mt-2 text-xs text-danger-foreground/80">{timelineSummary.startRisk} задач мають вузький запас часу на старт</div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Фокус сьогодні</div>
+                      <div className="mt-2 text-2xl font-semibold tabular-nums text-warning-foreground">{timelineSummary.dueToday}</div>
+                    </div>
+                    <Target className="h-4 w-4 text-warning-foreground" />
+                  </div>
+                  <div className="mt-2 text-xs text-warning-foreground/90">{timelineSummary.dueThisWeek} задач треба закрити протягом 7 днів</div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-info-soft-border bg-info-soft/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Без естімейту</div>
+                      <div className="mt-2 text-2xl font-semibold tabular-nums text-info-foreground">{timelineSummary.noEstimate}</div>
+                    </div>
+                    <Clock3 className="h-4 w-4 text-info-foreground" />
+                  </div>
+                  <div className="mt-2 text-xs text-info-foreground/90">Планування неповне, ці задачі гірше прогнозуються</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Орієнтири</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">Що означає графік</div>
+                </div>
+                <Gauge className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-danger-foreground" />
+                  Вертикальна лінія показує сьогоднішній день.
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-warning-soft-border bg-warning-soft/50 px-3 py-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-warning-foreground" />
+                  Жовтий контур сигналізує, що часу до дедлайну мало для старту.
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-danger-soft-border bg-danger-soft/50 px-3 py-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-danger-foreground" />
+                  Червоний контур означає, що задача вже прострочена.
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
+                  <span className="h-2.5 w-2.5 rounded-full border border-border/70 bg-transparent" />
+                  Пунктирна смуга означає відсутній естімейт.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full design-status-dot-cancelled" />
+                <span className="h-2 w-2 rounded-full bg-danger-foreground" />
                 Лінія сьогодні
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full design-status-dot-client-review" />
+              <span className="inline-flex items-center gap-1 rounded-full border border-warning-soft-border bg-warning-soft/40 px-2 py-1">
+                <span className="h-2 w-2 rounded-full bg-warning-foreground" />
                 Ризик старту
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full design-status-dot-cancelled" />
+              <span className="inline-flex items-center gap-1 rounded-full border border-danger-soft-border bg-danger-soft/40 px-2 py-1">
+                <span className="h-2 w-2 rounded-full bg-danger-foreground" />
                 Прострочено
               </span>
             </div>
-            <div className="flex items-center gap-1 rounded-md border border-border/60 bg-card/70 p-1">
-              <Button size="sm" variant={timelineZoom === "day" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("day")}>
-                День
-              </Button>
-              <Button size="sm" variant={timelineZoom === "week" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("week")}>
-                Тиждень
-              </Button>
-              <Button size="sm" variant={timelineZoom === "month" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("month")}>
-                Місяць
-              </Button>
+            <div className="text-xs text-muted-foreground">
+              Масштаб: <span className="font-semibold text-foreground">{timelineZoom === "day" ? "по днях" : timelineZoom === "week" ? "по тижнях" : "по місяцях"}</span>
             </div>
           </div>
+
           {timelineData.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-              Немає задач із дедлайном для Timeline.
-            </div>
+            <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">Немає задач із дедлайном для Timeline.</div>
           ) : (
             <>
-            <div className="space-y-3 md:hidden">
-              {timelineData.rows.map((row) => {
-                const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
-                const deadlineLabel = row.end.toLocaleDateString("uk-UA", {
-                  day: "2-digit",
-                  month: "short",
-                });
-                return (
-                  <div
-                    key={row.task.id}
-                    className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60 p-4"
-                    onClick={() => openTask(row.task.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{getTaskDisplayNumber(row.task)}</div>
-                        <div className="mt-1 truncate text-xs text-muted-foreground">
-                          {row.task.customerName ?? "Не вказано"}
-                        </div>
-                      </div>
-                      <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
-                        {statusLabel}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      <div>Дедлайн: {deadlineLabel}</div>
-                      <div>Естімейт: {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</div>
-                      <div>Витрачено: {formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="hidden md:block rounded-lg border border-border/60 bg-card/60 overflow-auto">
-              <div
-                className="grid min-w-[980px]"
-                style={{ gridTemplateColumns: `320px repeat(${timelineAxis.columnCount}, minmax(44px, 1fr))` }}
-              >
-                <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Задача
-                </div>
-                {timelineAxis.columns.map((column, index) => (
-                  <div
-                    key={`timeline-head-${column.start.toISOString()}-${index}`}
-                    className="border-b border-r border-border/40 px-1 py-2 text-center text-[11px] text-muted-foreground bg-card/80"
-                  >
-                    {timelineZoom === "day" ? (
-                      <>
-                        <div className="font-medium text-foreground">
-                          {column.start.toLocaleDateString("uk-UA", { day: "2-digit" })}
-                        </div>
-                        <div>{column.start.toLocaleDateString("uk-UA", { month: "short" })}</div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="font-medium text-foreground">
-                          {column.start.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
-                        </div>
-                        <div>{column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</div>
-                      </>
-                    )}
-                  </div>
-                ))}
-
+              <div className="grid gap-3 md:hidden">
                 {timelineData.rows.map((row) => {
                   const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
-                  const isAttachedFromStandalone = isTaskAttachedFromStandalone(row.task) && isUuid(row.task.quoteId);
-                  const offsetUnits = row.offset / timelineAxis.bucketSize;
-                  const spanUnits = Math.max(timelineZoom === "day" ? 1 : 0.6, row.span / timelineAxis.bucketSize);
-                  const barLeft = `calc(${offsetUnits} * (100% / ${timelineAxis.columnCount}))`;
-                  const barWidth = `calc(${spanUnits} * (100% / ${timelineAxis.columnCount}))`;
-                  const progressRatio = TIMELINE_PROGRESS_BY_STATUS[row.task.status] ?? 0;
-                  const progressWidth = `calc(${spanUnits * progressRatio} * (100% / ${timelineAxis.columnCount}))`;
-                  const barTitle = [
-                    `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${
-                      getTaskDisplayNumber(row.task)
-                    }`,
-                    `Статус: ${statusLabel}`,
-                    `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
-                    `Витрачено: ${formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}`,
-                    `Дедлайн: ${row.end.toLocaleDateString("uk-UA")}`,
-                  ].join(" • ");
+                  const trackedSeconds = getTaskTrackedSeconds(row.task.id);
+                  const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
                   return (
-                    <div key={row.task.id} className="contents">
-                      <button
-                        className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-3 py-2 text-left hover:bg-muted/20"
-                        onClick={() => openTask(row.task.id)}
-                        onAuxClick={(event) => {
-                          if (event.button !== 1) return;
-                          event.preventDefault();
-                          openTask(row.task.id, true);
-                        }}
-                        onMouseDown={(event) => {
-                          if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+                    <button
+                      key={row.task.id}
+                      className="rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 text-left shadow-sm transition-colors hover:bg-card"
+                      onClick={() => openTask(row.task.id)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(row.task)}</div>
+                          <div className="mt-1 truncate text-xs text-muted-foreground">{row.task.customerName ?? "Не вказано"}</div>
+                        </div>
+                        <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="secondary" className="text-[11px]">
+                          До {row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
+                        </Badge>
+                        <Badge variant="outline" className="text-[11px]">
+                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[11px]",
+                            row.isOverdue
+                              ? "border-danger-soft-border bg-danger-soft text-danger-foreground"
+                              : row.isStartRisk
+                                ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
+                                : "border-border/60"
+                          )}
+                        >
+                          {row.isOverdue ? "Прострочено" : row.isStartRisk ? "Ризик старту" : "В нормі"}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Прогрес по часу</span>
+                          <span>{formatElapsedSeconds(trackedSeconds)}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted/70">
+                          <div
+                            className={cn(
+                              "h-2 rounded-full transition-all",
+                              row.isOverdue ? "bg-danger-foreground" : row.isStartRisk ? "bg-warning-foreground" : "bg-primary/70"
+                            )}
+                            style={{ width: `${Math.max(8, Math.round(progressRatio * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          <AvatarBase
+                            src={getMemberAvatar(row.task.assigneeUserId)}
+                            name={getMemberLabel(row.task.assigneeUserId)}
+                            fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
+                            size={16}
+                            className="border-border/70"
+                          />
+                          {getMemberLabel(row.task.assigneeUserId)}
+                        </span>
+                        <span>{row.task.productName ?? "Без товару"}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-hidden rounded-[var(--radius-section)] border border-border/60 bg-card/70 shadow-sm md:block">
+                <div
+                  className="grid min-w-[1120px]"
+                  style={{ gridTemplateColumns: `360px repeat(${timelineAxis.columnCount}, minmax(56px, 1fr))` }}
+                >
+                  <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-4 py-3">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Черга задач</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">Дедлайн, виконавець, естімейт, прогрес</div>
+                  </div>
+                  {timelineAxis.columns.map((column, index) => (
+                    <div
+                      key={`timeline-head-${column.start.toISOString()}-${index}`}
+                      className="border-b border-r border-border/40 bg-background/65 px-1 py-3 text-center text-[11px] text-muted-foreground"
+                    >
+                      <div className="font-medium text-foreground">
+                        {column.start.toLocaleDateString("uk-UA", {
+                          day: "2-digit",
+                          month: timelineZoom === "day" ? undefined : "short",
+                        })}
+                      </div>
+                      <div className="mt-0.5">
+                        {timelineZoom === "day"
+                          ? column.start.toLocaleDateString("uk-UA", { month: "short" })
+                          : column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {timelineData.rows.map((row) => {
+                    const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
+                    const isAttachedFromStandalone = isTaskAttachedFromStandalone(row.task) && isUuid(row.task.quoteId);
+                    const offsetUnits = row.offset / timelineAxis.bucketSize;
+                    const spanUnits = Math.max(timelineZoom === "day" ? 1 : 0.75, row.span / timelineAxis.bucketSize);
+                    const barLeft = `calc(${offsetUnits} * (100% / ${timelineAxis.columnCount}))`;
+                    const barWidth = `calc(${spanUnits} * (100% / ${timelineAxis.columnCount}))`;
+                    const trackedSeconds = getTaskTrackedSeconds(row.task.id);
+                    const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
+                    const progressWidth = `calc(${spanUnits * progressRatio} * (100% / ${timelineAxis.columnCount}))`;
+                    const barTitle = [
+                      `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${getTaskDisplayNumber(row.task)}`,
+                      `Статус: ${statusLabel}`,
+                      `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
+                      `Витрачено: ${formatElapsedSeconds(trackedSeconds)}`,
+                      `Дедлайн: ${row.end.toLocaleDateString("uk-UA")}`,
+                    ].join(" • ");
+                    return (
+                      <div key={row.task.id} className="contents">
+                        <button
+                          className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-4 py-3 text-left transition-colors hover:bg-muted/20"
+                          onClick={() => openTask(row.task.id)}
+                          onAuxClick={(event) => {
+                            if (event.button !== 1) return;
                             event.preventDefault();
                             openTask(row.task.id, true);
-                          }
-                        }}
-                      >
-                        <div className="truncate text-sm font-medium">
-                          {getTaskDisplayNumber(row.task)}
-                        </div>
-                        {isAttachedFromStandalone ? (
-                          <div className="mt-1 text-[11px] text-primary">Привʼязано з окремої дизайн-задачі</div>
-                        ) : null}
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
-                          <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
-                          {isUuid(row.task.quoteId) ? (
-                            <>
+                          }}
+                          onMouseDown={(event) => {
+                            if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+                              event.preventDefault();
+                              openTask(row.task.id, true);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(row.task)}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
+                                {isAttachedFromStandalone ? <span className="text-primary">Привʼязано</span> : null}
+                                {row.task.productName ? (
+                                  <>
+                                    <span>·</span>
+                                    <span className="truncate">{row.task.productName}</span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
+                              {statusLabel}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <AvatarBase
+                                src={getMemberAvatar(row.task.assigneeUserId)}
+                                name={getMemberLabel(row.task.assigneeUserId)}
+                                fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
+                                size={18}
+                                className="shrink-0 border-border/70"
+                              />
+                              <span className="truncate">{getMemberLabel(row.task.assigneeUserId)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock3 className="h-3.5 w-3.5 shrink-0" />
+                              <span>{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
                               <span>·</span>
-                              <span className="truncate">Товар: {row.task.productName ?? "Не вказано"}</span>
-                            </>
-                          ) : null}
-                          <span>·</span>
-                          <span>{statusLabel}</span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1 min-w-0">
-                            <AvatarBase
-                              src={getMemberAvatar(row.task.assigneeUserId)}
-                              name={getMemberLabel(row.task.assigneeUserId)}
-                              fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
-                              size={14}
-                              className="shrink-0 border-border/70"
-                            />
-                            <span className="truncate">{getMemberLabel(row.task.assigneeUserId)}</span>
-                          </span>
-                          <span>·</span>
-                          <span>{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
-                          <span>·</span>
-                          <span>{formatElapsedSeconds(getTaskTrackedSeconds(row.task.id))}</span>
-                        </div>
-                      </button>
-                      <div
-                        className="relative border-b border-border/40"
-                        style={{ gridColumn: `2 / span ${timelineAxis.columnCount}` }}
-                      >
+                              <span>{formatElapsedSeconds(trackedSeconds)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                              <span>До {row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</span>
+                            </div>
+                          </div>
+                        </button>
                         <div
-                          className="absolute inset-y-0 border-l border-danger-soft-border pointer-events-none"
-                          style={{ left: `calc(${timelineData.todayOffset / timelineAxis.bucketSize} * (100% / ${timelineAxis.columnCount}))` }}
-                        />
-                        <div className="absolute inset-y-2 left-0 right-0">
-                          <div className="relative h-full">
-                            <div
-                              className={cn(
-                                "absolute top-1/2 -translate-y-1/2 h-6 rounded-md border",
-                                row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "bg-transparent border-border/70 border-dashed",
-                                row.isStartRisk && "ring-2 ring-warning-soft-border",
-                                row.isOverdue && "ring-2 ring-danger-soft-border"
-                              )}
-                              title={barTitle}
-                              style={{
-                                left: barLeft,
-                                width: barWidth,
-                              }}
-                            />
-                            {row.hasEstimate ? (
+                          className="relative border-b border-border/40 bg-[linear-gradient(to_right,transparent_0%,transparent_calc(100%_-_1px),rgba(148,163,184,0.16)_calc(100%_-_1px),rgba(148,163,184,0.16)_100%)]"
+                          style={{ gridColumn: `2 / span ${timelineAxis.columnCount}` }}
+                        >
+                          <div
+                            className="absolute inset-y-0 border-l-2 border-danger-foreground/80 pointer-events-none"
+                            style={{ left: `calc(${timelineData.todayOffset / timelineAxis.bucketSize} * (100% / ${timelineAxis.columnCount}))` }}
+                          />
+                          <div className="absolute inset-y-2 left-0 right-0">
+                            <div className="relative h-full">
                               <div
-                                className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md bg-foreground/20"
+                                className={cn(
+                                  "absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl border shadow-sm",
+                                  row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "border-dashed border-border/70 bg-background/70",
+                                  row.isStartRisk && "ring-2 ring-warning-soft-border",
+                                  row.isOverdue && "ring-2 ring-danger-soft-border"
+                                )}
+                                title={barTitle}
                                 style={{
                                   left: barLeft,
-                                  width: progressWidth,
+                                  width: barWidth,
                                 }}
                               />
-                            ) : null}
-                            <div
-                              className="absolute top-1/2 -translate-y-1/2 px-2 text-[10px] font-medium text-foreground/95 truncate pointer-events-none"
-                              style={{
-                                left: barLeft,
-                                width: barWidth,
-                              }}
-                            >
-                              {row.hasEstimate
-                                ? `${formatEstimateMinutes(row.estimateMinutes)} · до ${row.end.toLocaleDateString("uk-UA", {
-                                    day: "2-digit",
-                                    month: "short",
-                                  })}`
-                                : `Без естімейту · до ${row.end.toLocaleDateString("uk-UA", {
-                                    day: "2-digit",
-                                    month: "short",
-                                  })}`}
+                              {row.hasEstimate ? (
+                                <div
+                                  className="absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl bg-foreground/15"
+                                  style={{
+                                    left: barLeft,
+                                    width: progressWidth,
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="absolute top-1/2 flex h-11 -translate-y-1/2 items-center justify-between gap-3 px-3 text-[11px] font-medium text-foreground/95 pointer-events-none"
+                                style={{
+                                  left: barLeft,
+                                  width: barWidth,
+                                }}
+                              >
+                                <span className="truncate">{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
+                                <span className="shrink-0 opacity-75">{row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
             </>
           )}
 
           {timelineData.noDeadlineTasks.length > 0 ? (
-            <div className="rounded-lg border border-border/60 bg-card/60">
-              <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
-                <div className="text-sm font-semibold">Без дедлайну</div>
+            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-border/50 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Backlog</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">Задачі без дедлайну</div>
+                </div>
                 <Badge variant="secondary">{timelineData.noDeadlineTasks.length}</Badge>
               </div>
-              <div className="p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {timelineData.noDeadlineTasks.map((task) => <Fragment key={task.id}>{renderTaskCard(task)}</Fragment>)}
               </div>
             </div>
@@ -3164,227 +3385,396 @@ export default function DesignPage() {
 
       {viewMode === "assignee" ? (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
-            <div className="text-sm font-medium text-foreground">Виконані роботи за період</div>
-            <div className="flex flex-wrap items-center gap-1">
-              {DESIGN_COMPLETED_PERIOD_OPTIONS.map((option) => (
-                <Button
-                  key={option.value}
-                  size="sm"
-                  variant={completedPeriod === option.value ? "secondary" : "ghost"}
-                  onClick={() => setCompletedPeriod(option.value)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-          {assigneeGrouped.length === 0 ? (
-            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
-              Немає задач
-            </div>
-          ) : (
-            assigneeGrouped.map((group) => (
-              <div key={group.id ?? "unassigned"} className="rounded-lg border border-border/60 bg-card/60">
-                <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="inline-flex items-center gap-1.5 min-w-0">
-                      {group.id ? (
-                        <AvatarBase
-                          src={group.id ? getMemberAvatar(group.id) : null}
-                          name={group.label}
-                          fallback={getInitials(group.label)}
-                          size={16}
-                          className="shrink-0 border-border/70"
-                        />
-                      ) : null}
-                      <div className="text-sm font-semibold truncate">{group.label}</div>
-                    </div>
-                    <Badge variant="outline" className="text-[11px]">
-                      {formatEstimateMinutes(group.estimateMinutesTotal)}
-                    </Badge>
-                    {group.tasksWithoutEstimate > 0 ? (
-                      <Badge variant="outline" className="text-[11px] border-warning-soft-border bg-warning-soft text-warning-foreground">
-                        Без естімейту: {group.tasksWithoutEstimate}
-                      </Badge>
-                    ) : null}
-                    {group.id ? (
-                      <>
-                        <Badge variant="outline" className="text-[11px] border-success-soft-border bg-success-soft text-success-foreground">
-                          Виконано: {completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)}
-                        </Badge>
-                        {Object.entries(completedByAssignee[group.id]?.byType ?? {}).map(([type, count]) => (
-                          <Badge key={type} variant="outline" className="text-[11px]">
-                            {DESIGN_TASK_TYPE_LABELS[type as DesignTaskType]}: {count}
-                          </Badge>
-                        ))}
-                      </>
-                    ) : null}
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
+            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    <Users className="h-3.5 w-3.5" />
+                    Designer Capacity
                   </div>
-                  <Badge variant="secondary">{group.tasks.length}</Badge>
+                  <div>
+                    <h3 className="text-lg font-semibold tracking-tight text-foreground">Навантаження, вихід і черга по дизайнерах</h3>
+                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                      Замість сухої таблиці тут видно, хто перевантажений, у кого є запас, і які задачі треба рухати першими.
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2 p-3 md:hidden">
-                  {group.tasks.map((task) => {
-                    const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
-                    const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
-                    const hasValidDeadline = !!deadlineDate && !Number.isNaN(deadlineDate.getTime());
-                    return (
-                      <div key={task.id} className="rounded-[var(--radius-md)] border border-border/50 bg-background/60 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate font-medium">{getTaskDisplayNumber(task)}</div>
-                            <div className="truncate text-xs text-muted-foreground">{task.customerName ?? "Не вказано"}</div>
-                          </div>
-                          <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}>
-                            {statusLabel}
-                          </Badge>
-                        </div>
-                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                          <div>Тип: {task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : "Не вказано"}</div>
-                          <div>Дедлайн: {hasValidDeadline ? deadlineDate.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }) : "Без дедлайну"}</div>
-                          <div>Естімейт: {formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
-                          <div>Час: {formatElapsedSeconds(getTaskTrackedSeconds(task.id))}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="hidden md:block overflow-x-auto">
-                  <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[1.2fr_1.1fr_1fr_0.9fr_0.7fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <div>Задача</div>
-                      <div>Клієнт</div>
-                      <div>Статус / Тип</div>
-                      <div>Дедлайн</div>
-                      <div>Естімейт / Час</div>
-                      <div className="text-right">Дії</div>
-                    </div>
-                    {group.tasks.map((task) => {
-                      const isLinkedQuote = isUuid(task.quoteId);
-                      const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
-                      const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
-                      const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
-                      const hasValidDeadline = !!deadlineDate && !Number.isNaN(deadlineDate.getTime());
-                      return (
-                        <div
-                          key={task.id}
-                          className="grid grid-cols-[1.2fr_1.1fr_1fr_0.9fr_0.7fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
-                        >
-                          <button
-                            className="text-left min-w-0"
-                            onClick={() => openTask(task.id)}
-                            onAuxClick={(event) => {
-                              if (event.button !== 1) return;
-                              event.preventDefault();
-                              openTask(task.id, true);
-                            }}
-                            onMouseDown={(event) => {
-                              if ((event.metaKey || event.ctrlKey) && event.button === 0) {
-                                event.preventDefault();
-                                openTask(task.id, true);
-                              }
-                            }}
-                            title={task.title ?? getTaskDisplayNumber(task)}
-                          >
-                            <div className="font-medium truncate">
-                              {getTaskDisplayNumber(task)}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {isLinkedQuote
-                                ? isAttachedFromStandalone
-                                  ? `Привʼязано · Товар: ${task.productName ?? "Не вказано"}`
-                                  : `Товар: ${task.productName ?? "Не вказано"}`
-                                : "Standalone"}
-                            </div>
-                          </button>
-                          <div className="truncate">{task.customerName ?? "Не вказано"}</div>
-                          <div className="space-y-1">
-                            <Badge
-                              variant="outline"
-                              className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}
-                            >
-                              {statusLabel}
-                            </Badge>
-                            {task.designTaskType ? (
-                              <div className="truncate text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                                {(() => {
-                                  const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
-                                  return <TypeIcon className="h-3.5 w-3.5 shrink-0" />;
-                                })()}
-                                <span className="truncate">{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="text-muted-foreground">
-                            {hasValidDeadline ? (
-                              deadlineDate.toLocaleDateString("uk-UA", { day: "numeric", month: "short" })
-                            ) : (
-                              <span className="inline-flex items-center rounded-full border border-border/50 px-2 py-0.5 text-[11px]">
-                                Без дедлайну
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-muted-foreground">
-                            <div>{formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
-                            <div className="text-[11px] text-foreground/80">{formatElapsedSeconds(getTaskTrackedSeconds(task.id))}</div>
-                          </div>
-                          <div className="flex justify-end">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="icon" variant="ghost" className="h-8 w-8">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
-                                  Відкрити
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>
-                                  Редагувати
-                                </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => requestReestimate(task)}>
-                                Оновити естімейт
-                              </DropdownMenuItem>
-                              {canMarkTaskReady(task) ? (
-                                <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
-                                  Позначити як дизайн готовий
-                                </DropdownMenuItem>
-                              ) : null}
-                              <DropdownMenuSeparator />
-                                {getAllowedStatusTransitions(task)
-                                  .filter((target) => target.id !== "pm_review")
-                                  .map((target) => (
-                                  <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
-                                    {getDesignStatusActionLabel(task.status, target.id)}
-                                  </DropdownMenuItem>
-                                  ))}
-                                {canManageAssignments ? (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      disabled={deletingTaskId === task.id}
-                                      onClick={() => requestDeleteTask(task)}
-                                    >
-                                      {deletingTaskId === task.id ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                      )}
-                                      Видалити
-                                    </DropdownMenuItem>
-                                  </>
-                                ) : null}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div className="rounded-xl border border-border/60 bg-background/80 p-1">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {DESIGN_COMPLETED_PERIOD_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        size="sm"
+                        variant={completedPeriod === option.value ? "secondary" : "ghost"}
+                        onClick={() => setCompletedPeriod(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
                   </div>
                 </div>
               </div>
-            ))
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Активні дизайнери</div>
+                  <div className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{assigneeOverview.activeDesigners}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">Тільки учасники з дизайнерською роллю</div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-info-soft-border bg-info-soft/60 p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Планове навантаження</div>
+                  <div className="mt-2 text-2xl font-semibold tabular-nums text-info-foreground">{formatHoursLoad(assigneeOverview.totalEstimateMinutes)}</div>
+                  <div className="mt-2 text-xs text-info-foreground/80">Сумарний estimate по поточній вибірці</div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Щільне навантаження</div>
+                  <div className="mt-2 text-2xl font-semibold tabular-nums text-warning-foreground">{assigneeOverview.busyCount}</div>
+                  <div className="mt-2 text-xs text-warning-foreground/80">Дизайнерів у стані `busy` або `overloaded`</div>
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-danger-soft-border bg-danger-soft/60 p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-danger-foreground/85">Без виконавця</div>
+                  <div className="mt-2 text-2xl font-semibold tabular-nums text-danger-foreground">{assigneeOverview.unassignedCount}</div>
+                  <div className="mt-2 text-xs text-danger-foreground/80">Задачі, які не закріплені за дизайнером</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Delivery Pulse</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">Виконані роботи за період</div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="mt-4 rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
+                <div className="text-xs text-muted-foreground">Витрачений час</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{formatElapsedSeconds(assigneeOverview.totalTrackedSeconds)}</div>
+              </div>
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 px-3 py-2">
+                  Період перемикає тільки блок виконаних робіт і не змінює активну чергу.
+                </div>
+                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 px-3 py-2">
+                  Найризиковіші задачі піднімаються вгорі кожної черги: прострочені, без естімейту, з ближчим дедлайном.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {assigneeGrouped.length === 0 ? (
+            <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">Немає задач</div>
+          ) : (
+            assigneeGrouped.map((group) => {
+              const workloadLevel = getWorkloadLevel(group.tasks.length, group.estimateMinutesTotal);
+              const statusBreakdown = DESIGN_COLUMNS.map((column) => ({
+                ...column,
+                count: group.tasks.filter((task) => task.status === column.id).length,
+              })).filter((item) => item.count > 0);
+              const trackedSecondsTotal = group.tasks.reduce((sum, task) => sum + getTaskTrackedSeconds(task.id), 0);
+              const completionRatio = group.estimateMinutesTotal > 0
+                ? Math.min(1, trackedSecondsTotal / Math.max(1, group.estimateMinutesTotal * 60))
+                : 0;
+              const queue = [...group.tasks].sort((a, b) => {
+                const aBadge = a.designDeadline ? getDeadlineBadge(a.designDeadline) : { tone: "none" as const };
+                const bBadge = b.designDeadline ? getDeadlineBadge(b.designDeadline) : { tone: "none" as const };
+                const score = (tone: "none" | "overdue" | "today" | "soon" | "future") => {
+                  if (tone === "overdue") return 0;
+                  if (tone === "today") return 1;
+                  if (tone === "soon") return 2;
+                  if (tone === "future") return 3;
+                  return 4;
+                };
+                const byTone = score(aBadge.tone) - score(bBadge.tone);
+                if (byTone !== 0) return byTone;
+                if (!a.designDeadline && b.designDeadline) return 1;
+                if (a.designDeadline && !b.designDeadline) return -1;
+                const aTime = a.designDeadline ? new Date(a.designDeadline).getTime() : Number.MAX_SAFE_INTEGER;
+                const bTime = b.designDeadline ? new Date(b.designDeadline).getTime() : Number.MAX_SAFE_INTEGER;
+                return aTime - bTime;
+              });
+
+              return (
+                <div key={group.id ?? "unassigned"} className="overflow-hidden rounded-[var(--radius-section)] border border-border/60 bg-card/70 shadow-sm">
+                  <div className="border-b border-border/50 bg-background/45 px-4 py-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {group.id ? (
+                            <AvatarBase
+                              src={group.id ? getMemberAvatar(group.id) : null}
+                              name={group.label}
+                              fallback={getInitials(group.label)}
+                              size={24}
+                              className="shrink-0 border-border/70"
+                            />
+                          ) : (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground">
+                              <User className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-semibold text-foreground">{group.label}</div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {group.id ? "Персональна черга дизайнера" : "Черга задач, які треба розподілити"}
+                            </div>
+                          </div>
+                          <Badge variant="outline" className={cn("text-[11px]", WORKLOAD_BADGE_CLASS_BY_LEVEL[workloadLevel])}>
+                            {WORKLOAD_LABEL_BY_LEVEL[workloadLevel]}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Черга</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">{group.tasks.length}</div>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Estimate</div>
+                            <div className="mt-1 text-lg font-semibold text-foreground">{formatHoursLoad(group.estimateMinutesTotal)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Факт</div>
+                            <div className="mt-1 text-lg font-semibold text-foreground">{formatElapsedSeconds(trackedSecondsTotal)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Закрито</div>
+                            <div className="mt-1 text-lg font-semibold text-foreground">
+                              {group.id ? (completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)) : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="w-full max-w-[360px] rounded-[var(--radius-inner)] border border-border/60 bg-card/80 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Завантаження</div>
+                          <div className="text-xs text-muted-foreground">{Math.round(completionRatio * 100)}%</div>
+                        </div>
+                        <div className="mt-2 h-2.5 rounded-full bg-muted/70">
+                          <div
+                            className={cn("h-2.5 rounded-full transition-all", WORKLOAD_PROGRESS_CLASS_BY_LEVEL[workloadLevel])}
+                            style={{ width: `${Math.max(6, Math.round(completionRatio * 100))}%` }}
+                          />
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {group.tasksWithoutEstimate > 0 ? (
+                            <Badge variant="outline" className="text-[11px] border-warning-soft-border bg-warning-soft text-warning-foreground">
+                              Без естімейту: {group.tasksWithoutEstimate}
+                            </Badge>
+                          ) : null}
+                          {statusBreakdown.slice(0, 4).map((status) => (
+                            <Badge key={status.id} variant="outline" className="text-[11px]">
+                              {status.label}: {status.count}
+                            </Badge>
+                          ))}
+                          {group.id
+                            ? Object.entries(completedByAssignee[group.id]?.byType ?? {}).slice(0, 3).map(([type, count]) => (
+                                <Badge key={type} variant="outline" className="text-[11px] border-success-soft-border bg-success-soft/60 text-success-foreground">
+                                  {DESIGN_TASK_TYPE_LABELS[type as DesignTaskType]}: {count}
+                                </Badge>
+                              ))
+                            : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.95fr)]">
+                    <div className="space-y-3">
+                      {queue.length === 0 ? (
+                        <div className="rounded-[var(--radius-inner)] border border-dashed border-border/60 p-4 text-center text-sm text-muted-foreground">
+                          Немає задач у цій черзі
+                        </div>
+                      ) : (
+                        queue.map((task) => {
+                          const isLinkedQuote = isUuid(task.quoteId);
+                          const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
+                          const statusLabel = DESIGN_COLUMNS.find((col) => col.id === task.status)?.label ?? task.status;
+                          const deadlineBadge = task.designDeadline ? getDeadlineBadge(task.designDeadline) : { label: "Без дедлайну", tone: "none" as const };
+                          const estimateMinutes = getTaskEstimateMinutes(task);
+                          const trackedSeconds = getTaskTrackedSeconds(task.id);
+                          const itemProgressRatio = estimateMinutes ? Math.min(1, trackedSeconds / Math.max(1, estimateMinutes * 60)) : 0;
+                          return (
+                            <div key={task.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <button
+                                  className="min-w-0 text-left"
+                                  onClick={() => openTask(task.id)}
+                                  onAuxClick={(event) => {
+                                    if (event.button !== 1) return;
+                                    event.preventDefault();
+                                    openTask(task.id, true);
+                                  }}
+                                  onMouseDown={(event) => {
+                                    if ((event.metaKey || event.ctrlKey) && event.button === 0) {
+                                      event.preventDefault();
+                                      openTask(task.id, true);
+                                    }
+                                  }}
+                                  title={task.title ?? getTaskDisplayNumber(task)}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(task)}</div>
+                                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                                      {task.customerName ?? "Не вказано"}
+                                      {task.productName ? ` · ${task.productName}` : ""}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}>
+                                        {statusLabel}
+                                      </Badge>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[11px]",
+                                          deadlineBadge.tone === "overdue"
+                                            ? "border-danger-soft-border bg-danger-soft text-danger-foreground"
+                                            : deadlineBadge.tone === "today" || deadlineBadge.tone === "soon"
+                                              ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
+                                              : "border-border/60"
+                                        )}
+                                      >
+                                        {deadlineBadge.label}
+                                      </Badge>
+                                      {task.designTaskType ? (
+                                        <Badge variant="outline" className="text-[11px]">
+                                          {DESIGN_TASK_TYPE_LABELS[task.designTaskType]}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </button>
+                                <div className="flex shrink-0 items-start gap-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>Відкрити</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>Редагувати</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => requestReestimate(task)}>Оновити естімейт</DropdownMenuItem>
+                                      {canMarkTaskReady(task) ? (
+                                        <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
+                                          Позначити як дизайн готовий
+                                        </DropdownMenuItem>
+                                      ) : null}
+                                      <DropdownMenuSeparator />
+                                      {getAllowedStatusTransitions(task)
+                                        .filter((target) => target.id !== "pm_review")
+                                        .map((target) => (
+                                          <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
+                                            {getDesignStatusActionLabel(task.status, target.id)}
+                                          </DropdownMenuItem>
+                                        ))}
+                                      {canManageAssignments ? (
+                                        <>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            disabled={deletingTaskId === task.id}
+                                            onClick={() => requestDeleteTask(task)}
+                                          >
+                                            {deletingTaskId === task.id ? (
+                                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                              <Trash2 className="mr-2 h-4 w-4" />
+                                            )}
+                                            Видалити
+                                          </DropdownMenuItem>
+                                        </>
+                                      ) : null}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                                <div className="rounded-lg border border-border/50 bg-card/80 px-2.5 py-2">
+                                  Джерело
+                                  <div className="mt-1 text-sm text-foreground">
+                                    {isLinkedQuote ? (isAttachedFromStandalone ? "Привʼязано з окремої" : "Із прорахунку") : "Standalone"}
+                                  </div>
+                                </div>
+                                <div className="rounded-lg border border-border/50 bg-card/80 px-2.5 py-2">
+                                  Дедлайн
+                                  <div className="mt-1 text-sm text-foreground">{task.designDeadline ? formatDeadlineShort(task.designDeadline) ?? "Без дедлайну" : "Без дедлайну"}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/50 bg-card/80 px-2.5 py-2">
+                                  Estimate
+                                  <div className="mt-1 text-sm text-foreground">{formatEstimateMinutes(estimateMinutes)}</div>
+                                </div>
+                                <div className="rounded-lg border border-border/50 bg-card/80 px-2.5 py-2">
+                                  Витрачено
+                                  <div className="mt-1 text-sm text-foreground">{formatElapsedSeconds(trackedSeconds)}</div>
+                                </div>
+                              </div>
+
+                              <div className="mt-3">
+                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                  <span>Прогрес виконання</span>
+                                  <span>{Math.round(itemProgressRatio * 100)}%</span>
+                                </div>
+                                <div className="mt-1.5 h-2 rounded-full bg-muted/70">
+                                  <div className="h-2 rounded-full bg-primary/70 transition-all" style={{ width: `${Math.max(8, Math.round(itemProgressRatio * 100))}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
+                        <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Статуси в черзі</div>
+                        <div className="mt-3 space-y-2">
+                          {statusBreakdown.length > 0 ? (
+                            statusBreakdown.map((status) => {
+                              const width = Math.max(8, Math.round((status.count / Math.max(1, group.tasks.length)) * 100));
+                              return (
+                                <div key={status.id}>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-foreground">{status.label}</span>
+                                    <span className="tabular-nums text-muted-foreground">{status.count}</span>
+                                  </div>
+                                  <div className="mt-1 h-2 rounded-full bg-muted/70">
+                                    <div className="h-2 rounded-full bg-primary/60" style={{ width: `${width}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-sm text-muted-foreground">Поки без активних статусів.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
+                        <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Фокус дій</div>
+                        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                          <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
+                            {group.tasksWithoutEstimate > 0
+                              ? `${group.tasksWithoutEstimate} задач без естімейту потребують уточнення перед плануванням.`
+                              : "Усі задачі мають estimate і придатні до планування."}
+                          </div>
+                          <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
+                            {group.id
+                              ? `За період закрито ${completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)} задач.`
+                              : "Цей блок показує чергу, яку треба розподілити між дизайнерами."}
+                          </div>
+                          <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
+                            {queue[0]?.designDeadline
+                              ? `Найближчий дедлайн: ${formatDeadlineShort(queue[0].designDeadline) ?? queue[0].designDeadline}.`
+                              : "Немає задач із зафіксованим дедлайном на верхівці черги."}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       ) : null}
