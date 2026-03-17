@@ -30,7 +30,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
       {/* ✅ ховаємо стандартний Close (правий X), щоб він не конфліктував з clear */}
       <DialogContent
         hideClose
-        className="w-[calc(100vw-2rem)] max-w-[980px] max-h-[88vh] overflow-hidden border border-border/60 bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground"
+        className="!top-4 !translate-y-0 sm:!top-8 w-[calc(100vw-2rem)] max-w-[980px] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden border border-border/60 bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground"
       >
         <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>
         <Command
