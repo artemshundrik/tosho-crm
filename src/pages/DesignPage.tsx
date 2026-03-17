@@ -73,7 +73,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, ArrowRight, CalendarRange, Clock3, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarRange, Clock3, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -315,12 +315,23 @@ const getInitials = (name?: string | null) => {
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "object" && error !== null) {
-    const record = error as Record<string, unknown>;
-    if (typeof record.message === "string" && record.message) return record.message;
+  const resolveRawMessage = () => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === "object" && error !== null) {
+      const record = error as Record<string, unknown>;
+      if (typeof record.message === "string" && record.message) return record.message;
+    }
+    return fallback;
+  };
+  const message = resolveRawMessage();
+  const normalized = message.toLowerCase();
+  if (normalized.includes("quota has been exceeded") || normalized.includes("quota exceeded")) {
+    return "Тимчасово перевищено ліміт запитів. Спробуйте оновити сторінку трохи пізніше.";
   }
-  return fallback;
+  if (normalized.includes("rate limit")) {
+    return "Забагато запитів за короткий час. Спробуйте ще раз трохи пізніше.";
+  }
+  return message;
 };
 
 const getTaskPartyLabel = () => "Клієнт";
@@ -711,7 +722,7 @@ export default function DesignPage() {
           }))
         );
       } catch (e: unknown) {
-        setError(getErrorMessage(e, "Не вдалося завантажити учасників команди"));
+        console.warn("Failed to load workspace members for design page", e);
       } finally {
         setMembersLoading(false);
       }
@@ -1119,7 +1130,13 @@ export default function DesignPage() {
         setTimerSummaryByTaskId({});
       }
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Не вдалося завантажити задачі дизайну"));
+      const message = getErrorMessage(e, "Не вдалося завантажити задачі дизайну");
+      if (tasks.length > 0) {
+        console.warn("Failed to refresh design tasks", e);
+        toast.error(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -2860,8 +2877,15 @@ export default function DesignPage() {
 
           <div className="ml-auto flex items-center gap-2">
             {hasActiveFilters ? (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0 text-muted-foreground">
-                Скинути фільтри
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearFilters}
+                className="h-8 w-8 shrink-0 text-muted-foreground"
+                title="Скинути фільтри"
+                aria-label="Скинути фільтри"
+              >
+                <FilterX className="h-4 w-4" />
               </Button>
             ) : null}
             <div className="text-sm font-semibold text-foreground">

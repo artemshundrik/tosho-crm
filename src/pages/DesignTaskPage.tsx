@@ -2866,6 +2866,7 @@ export default function DesignTaskPage() {
     if (!ensureCanEdit()) return;
     const target = designOutputFiles.find((file) => file.id === fileId);
     if (!target) return;
+    const taskQuoteId = task?.quoteId ?? null;
     try {
       const nextFiles = designOutputFiles.filter((file) => {
         if (file.id === fileId) return false;
@@ -2948,6 +2949,16 @@ export default function DesignTaskPage() {
         delete next[key];
         return next;
       });
+      if (taskQuoteId && isUuid(taskQuoteId) && target.storage_bucket && target.storage_path) {
+        const { error: quoteAttachmentDeleteError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .delete()
+          .eq("quote_id", taskQuoteId)
+          .eq("storage_bucket", target.storage_bucket)
+          .eq("storage_path", target.storage_path);
+        if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
+      }
       if (target.storage_bucket && target.storage_path) {
         await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
       }

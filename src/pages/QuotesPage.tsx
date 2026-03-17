@@ -69,6 +69,7 @@ import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { 
   Search, 
   X, 
+  FilterX,
   Layers,
   MoreVertical,
   Copy,
@@ -4123,8 +4124,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
           <div className="ml-auto flex items-center gap-2">
             {hasActiveFilters ? (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0 text-muted-foreground">
-                Скинути фільтри
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearFilters}
+                className="h-8 w-8 shrink-0 text-muted-foreground"
+                title="Скинути фільтри"
+                aria-label="Скинути фільтри"
+              >
+                <FilterX className="h-4 w-4" />
               </Button>
             ) : null}
             <div className="text-sm font-semibold text-foreground">
