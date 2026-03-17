@@ -27,11 +27,11 @@ function Calendar({
     <DayPicker
       locale={locale}
       showOutsideDays={showOutsideDays}
-      className={cn("p-3 w-full", className)}
+      className={cn("w-full p-2", className)}
       classNames={{
         months: "flex flex-col w-full",
-        month: "space-y-4 w-full",
-        caption: "flex items-center justify-between w-full pt-1",
+        month: "space-y-3 w-full",
+        caption: "flex items-center justify-between w-full pt-0.5",
         caption_label: "text-sm font-medium hidden",
         nav: "contents",
         nav_button: cn(
@@ -40,11 +40,11 @@ function Calendar({
         ),
         nav_button_previous: "order-first",
         nav_button_next: "order-last",
-        table: "w-full border-collapse space-y-1",
+        table: "w-full border-collapse space-y-0.5",
         head_row: "flex w-full",
         head_cell:
           "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
-        row: "flex w-full mt-2",
+        row: "mt-1.5 flex w-full",
         cell: "flex-1 aspect-square text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-[var(--radius-md)] [&:has([aria-selected].day-outside)]:bg-accent/50 focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),

@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { type DesignTaskType } from "@/lib/designTaskType";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -1670,6 +1671,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const modelName = packageItemName ?? model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
         const assigneeUserId = data.designAssigneeId ?? null;
+        const designTaskType = data.designTaskType;
+        if (!designTaskType) throw new Error("Оберіть тип дизайнерської задачі");
         const assignedAt = assigneeUserId ? new Date().toISOString() : null;
         const { data: designTaskRow, error: designTaskError } = await supabase
           .from("activity_log")
@@ -1689,6 +1692,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               design_task_id: null,
               assignee_user_id: assigneeUserId,
               assigned_at: assignedAt,
+              design_task_type: designTaskType,
               quote_type: data.quoteType,
               methods_count: isPrintPackageQuote ? 1 : data.printApplications.length,
               has_files: data.files.length > 0,
@@ -2158,6 +2162,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     designBrief: string | null;
     designDeadline: string | null;
     assigneeUserId: string | null;
+    designTaskType: DesignTaskType;
     hasFiles: boolean;
   }) => {
     const { data: existingTask, error: existingTaskError } = await supabase
@@ -2211,6 +2216,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           design_task_id: null,
           assignee_user_id: params.assigneeUserId,
           assigned_at: assignedAt,
+          design_task_type: params.designTaskType,
           quote_type: params.quoteType ?? null,
           methods_count: params.methodsCount,
           has_files: params.hasFiles,
@@ -3362,6 +3368,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
 
       if (data.createDesignTask) {
+        if (!data.designTaskType) {
+          throw new Error("Оберіть тип дизайнерської задачі");
+        }
         await ensureDesignTaskForQuote({
           quoteId: editTarget.id,
           quoteType: data.quoteType?.trim() ? data.quoteType : undefined,
@@ -3370,6 +3379,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
           designDeadline: formatDeadlineValue(data.deadline),
           assigneeUserId: data.designAssigneeId ?? null,
+          designTaskType: data.designTaskType,
           hasFiles: data.files.length > 0,
         });
       }

@@ -22,13 +22,13 @@ export function DateQuickActions({
   const monthEnd = endOfMonth(today);
 
   const actionButtonClass = cn(
-    "h-7 rounded-full border border-border/60 px-2 text-xs font-medium",
+    "h-6.5 rounded-full border border-border/60 px-2 text-[11px] font-medium",
     fullWidth ? "w-full justify-center" : ""
   );
 
   return (
-    <div className={cn("flex border-t border-border/60 px-2 pb-3 pt-2", fullWidth ? "justify-stretch" : "justify-center", className)}>
-      <div className={cn(fullWidth ? "grid w-full grid-cols-3 gap-1.5" : "inline-grid grid-cols-[auto_auto_auto] gap-1.5")}>
+    <div className={cn("flex border-t border-border/60 px-1.5 pb-2 pt-1.5", fullWidth ? "justify-stretch" : "justify-center", className)}>
+      <div className={cn(fullWidth ? "grid w-full grid-cols-3 gap-1" : "inline-grid grid-cols-[auto_auto_auto] gap-1")}>
         <Button
           type="button"
           size="sm"
@@ -79,7 +79,7 @@ export function DateQuickActions({
           size="sm"
           variant="ghost"
           className={cn(
-            "h-7 rounded-full border border-transparent px-2 text-xs font-medium text-muted-foreground hover:text-foreground min-w-0",
+            "h-6.5 rounded-full border border-transparent px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground min-w-0",
             fullWidth ? "w-full justify-center" : ""
           )}
           onClick={() => void onSelect(null)}

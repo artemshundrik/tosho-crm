@@ -35,8 +35,8 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
         <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>
         <Command
           className={cn(
-            "[&_[cmdk-group-heading]]:px-4",
-            "[&_[cmdk-group-heading]]:py-2.5",
+            "[&_[cmdk-group-heading]]:px-3",
+            "[&_[cmdk-group-heading]]:py-2",
             "[&_[cmdk-group-heading]]:font-semibold",
             "[&_[cmdk-group-heading]]:text-muted-foreground",
             "[&_[cmdk-group-heading]]:text-[10px]",
@@ -62,14 +62,14 @@ const CommandInput = React.forwardRef<
 >(({ className, leftIcon, rightSlot, ...props }, ref) => (
   <div className="relative border-b border-border" cmdk-input-wrapper="">
     {leftIcon ? (
-      <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
+      <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
         {leftIcon}
       </div>
     ) : null}
 
     {/* ✅ rightSlot має бути клікабельний (clear button!) */}
     {rightSlot ? (
-      <div className="absolute right-4 top-1/2 -translate-y-1/2">
+      <div className="absolute right-3 top-1/2 -translate-y-1/2">
         {rightSlot}
       </div>
     ) : null}
@@ -77,12 +77,12 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-14 w-full bg-transparent px-4 py-3 text-[15px] outline-none",
+        "flex h-12 w-full bg-transparent px-3 py-2.5 text-[15px] outline-none",
         "placeholder:text-muted-foreground",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        leftIcon ? "pl-12" : "",
+        leftIcon ? "pl-10" : "",
         // ✅ місце під clear + kbd
-        rightSlot ? "pr-44" : "pr-6",
+        rightSlot ? "pr-40" : "pr-5",
         className
       )}
       {...props}
@@ -97,7 +97,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("flex-1 overflow-y-auto overflow-x-hidden py-2", className)}
+    className={cn("flex-1 overflow-y-auto overflow-x-hidden py-1.5", className)}
     {...props}
   />
 ));
@@ -121,7 +121,7 @@ const CommandGroup = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Group
     ref={ref}
-    className={cn("overflow-hidden px-2 pb-2 text-foreground", className)}
+    className={cn("overflow-hidden px-1.5 pb-1.5 text-foreground", className)}
     {...props}
   />
 ));
@@ -133,7 +133,7 @@ const CommandSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Separator
     ref={ref}
-    className={cn("mx-4 my-2 h-px bg-border", className)}
+    className={cn("mx-3 my-1.5 h-px bg-border", className)}
     {...props}
   />
 ));
@@ -146,7 +146,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-3 rounded-[var(--radius-lg)] px-4 py-3 text-[15px] outline-none",
+      "relative flex cursor-default select-none items-center gap-3 rounded-[var(--radius-lg)] px-3 py-2.5 text-[15px] outline-none",
       "transition-colors hover:bg-muted/50",
       "aria-selected:bg-muted aria-selected:text-foreground",
       "focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",

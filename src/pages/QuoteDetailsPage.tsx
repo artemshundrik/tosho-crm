@@ -41,6 +41,7 @@ import {
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { normalizeUnitLabel } from "@/lib/units";
+import { DESIGN_TASK_TYPE_LABELS, DESIGN_TASK_TYPE_OPTIONS, parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
 import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
@@ -486,6 +487,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
   const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
+  const [designTaskType, setDesignTaskType] = useState<DesignTaskType | null>(null);
   const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
   const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
   const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
@@ -1922,6 +1924,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!quoteId || !teamId) {
       setDesignTask(null);
       setDesignAssigneeId(null);
+      setDesignTaskType(null);
       return;
     }
     setDesignTaskLoading(true);
@@ -1955,11 +1958,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!row) {
         setDesignTask(null);
         setDesignAssigneeId(null);
+        setDesignTaskType(null);
         return;
       }
       const metadata = row.metadata ?? {};
       const assigneeUserId = (metadata as { assignee_user_id?: string | null }).assignee_user_id ?? null;
       const assignedAt = (metadata as { assigned_at?: string | null }).assigned_at ?? null;
+      const parsedTaskType = parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type);
       setDesignTask({
         id: row.id,
         assigneeUserId,
@@ -1967,9 +1972,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata,
       });
       setDesignAssigneeId(assigneeUserId);
+      setDesignTaskType(parsedTaskType);
     } catch (e: unknown) {
       setDesignTaskError(getErrorMessage(e, "Не вдалося завантажити дизайн-задачу."));
       setDesignTask(null);
+      setDesignTaskType(null);
     } finally {
       setDesignTaskLoading(false);
     }
@@ -2170,6 +2177,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     modelName?: string | null;
     methodsCount?: number;
     designBrief?: string | null;
+    designTaskType?: DesignTaskType | null;
   }) => {
     if (!teamId) return;
     setDesignTaskSaving(true);
@@ -2185,6 +2193,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const methodsCount = override?.methodsCount ?? items[0]?.methods?.length ?? 0;
       const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
       const assigneeUserId = override?.assigneeUserId ?? designAssigneeId ?? null;
+      const nextDesignTaskType = override?.designTaskType ?? designTaskType;
+      if (!nextDesignTaskType) {
+        throw new Error("Оберіть тип дизайнерської задачі");
+      }
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
@@ -2207,6 +2219,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             design_task_id: null,
             assignee_user_id: assigneeUserId,
             assigned_at: assignedAt,
+            design_task_type: nextDesignTaskType,
             quote_type: quote?.quote_type ?? null,
             methods_count: methodsCount,
             has_files: attachments.length > 0,
@@ -2235,6 +2248,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata: meta,
       });
       setDesignAssigneeId(nextAssignee ?? null);
+      setDesignTaskType(nextDesignTaskType);
 
       try {
         await notifyDesignTaskStakeholdersOnCreate({
@@ -3578,6 +3592,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (data.createDesignTask && !designTask) {
         await createDesignTask({
           assigneeUserId: data.designAssigneeId ?? null,
+          designTaskType: data.designTaskType ?? null,
           modelName: model?.name ?? primaryItem?.title ?? "Позиція",
           methodsCount: methodsPayload?.length ?? 0,
           designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
@@ -5640,6 +5655,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             Обраний візуал: <span className="font-medium text-foreground">{selectedDesignOutputFileName}</span>
                           </div>
                         ) : null}
+                        {designTaskType ? (
+                          <div className="inline-flex max-w-[360px] items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                            Тип задачі: {DESIGN_TASK_TYPE_LABELS[designTaskType]}
+                          </div>
+                        ) : null}
                         <div className="max-w-[360px]">
                           <div className="mb-2 text-xs font-medium text-muted-foreground">Виконавець</div>
                           <Select
@@ -5710,6 +5730,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Створи нову задачу або привʼяжи існуючу дизайн-задачу цього ж замовника.
+                      </div>
+                      <div className="max-w-[360px]">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">Тип задачі</div>
+                        <Select
+                          value={designTaskType ?? "none"}
+                          onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
+                          disabled={designTaskSaving}
+                        >
+                          <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                            <SelectValue placeholder="Оберіть тип задачі" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" disabled>
+                              Оберіть тип задачі
+                            </SelectItem>
+                            {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>

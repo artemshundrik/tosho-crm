@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -56,6 +56,13 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import {
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  DESIGN_TASK_TYPE_OPTIONS,
+  parseDesignTaskType,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
@@ -73,6 +80,7 @@ type DesignTask = {
   quoteId: string;
   title: string | null;
   status: DesignStatus;
+  designTaskType?: DesignTaskType | null;
   assigneeUserId?: string | null;
   quoteManagerUserId?: string | null;
   assignedAt?: string | null;
@@ -111,11 +119,18 @@ type CustomerOption = CustomerLeadOption;
 
 type DesignViewMode = "kanban" | "timeline" | "assignee";
 type DesignContentView = "all" | "linked" | "standalone";
+type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
 
 const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const NO_MANAGER_FILTER = "__none__";
+const DESIGN_COMPLETED_PERIOD_OPTIONS: Array<{ value: DesignCompletedPeriod; label: string }> = [
+  { value: "7d", label: "7 днів" },
+  { value: "30d", label: "30 днів" },
+  { value: "month", label: "Цей місяць" },
+  { value: "quarter", label: "90 днів" },
+];
 
 type DesignPageCachePayload = {
   tasks: DesignTask[];
@@ -427,6 +442,14 @@ const normalizeDeadlineTimeInput = (value: string) => {
   return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 };
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
+  const now = new Date();
+  if (period === "month") {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+};
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session } = useAuth();
@@ -463,8 +486,8 @@ export default function DesignPage() {
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
   const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
-  const [createDeadlineDraftDate, setCreateDeadlineDraftDate] = useState<Date | undefined>();
-  const [createDeadlineDraftTime, setCreateDeadlineDraftTime] = useState("12:00");
+  const [createDesignTaskType, setCreateDesignTaskType] = useState<DesignTaskType | null>(null);
+  const [createDesignTaskTypePopoverOpen, setCreateDesignTaskTypePopoverOpen] = useState(false);
   const createDeadlineTime = useMemo(() => {
     if (!createDeadline) return "12:00";
     return `${String(createDeadline.getHours()).padStart(2, "0")}:${String(createDeadline.getMinutes()).padStart(2, "0")}`;
@@ -507,6 +530,9 @@ export default function DesignPage() {
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
+  const [completedPeriod, setCompletedPeriod] = useState<DesignCompletedPeriod>("30d");
+  const [completedByAssignee, setCompletedByAssignee] = useState<Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }>>({});
+  const [completedSummaryLoading, setCompletedSummaryLoading] = useState(false);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
@@ -525,20 +551,24 @@ export default function DesignPage() {
     const raw = session?.user?.user_metadata?.avatar_url;
     return typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }, [session?.user?.user_metadata]);
-  const applyCreateDeadlineDraft = () => {
-    const normalizedTime = isValidDeadlineTime(createDeadlineDraftTime.trim()) ? createDeadlineDraftTime.trim() : "12:00";
-    setCreateDeadlineDraftTime(normalizedTime);
-    if (!createDeadlineDraftDate) {
+  const updateCreateDeadlineDate = useCallback((date?: Date) => {
+    if (!date) {
       setCreateDeadline(undefined);
-      setCreateDeadlinePopoverOpen(false);
       return;
     }
-    const next = new Date(createDeadlineDraftDate);
-    const [hours, minutes] = normalizedTime.split(":").map((part) => Number(part) || 0);
+    const next = new Date(date);
+    const [hours, minutes] = createDeadlineTime.split(":").map((part) => Number(part) || 0);
     next.setHours(hours, minutes, 0, 0);
     setCreateDeadline(next);
-    setCreateDeadlinePopoverOpen(false);
-  };
+  }, [createDeadlineTime]);
+
+  const updateCreateDeadlineTime = useCallback((value: string) => {
+    if (!createDeadline) return;
+    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
+    const next = new Date(createDeadline);
+    next.setHours(hours, minutes, 0, 0);
+    setCreateDeadline(next);
+  }, [createDeadline]);
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -805,6 +835,7 @@ export default function DesignPage() {
             quoteId: resolvedQuoteId,
             title: (row.title as string) ?? null,
             status: (metadata.status as DesignStatus) ?? "new",
+            designTaskType: parseDesignTaskType(metadata.design_task_type),
             designTaskNumber:
               typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
                 ? (/^DZ-/i.test(metadata.design_task_number.trim()) ? null : metadata.design_task_number.trim())
@@ -1063,6 +1094,70 @@ export default function DesignPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId]);
 
+  useEffect(() => {
+    if (!effectiveTeamId) {
+      setCompletedByAssignee({});
+      return;
+    }
+
+    let active = true;
+    const loadCompletedSummary = async () => {
+      setCompletedSummaryLoading(true);
+      try {
+        const since = getCompletedPeriodStart(completedPeriod).toISOString();
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("entity_id,metadata,created_at")
+          .eq("team_id", effectiveTeamId)
+          .eq("action", "design_task_status")
+          .gte("created_at", since);
+        if (fetchError) throw fetchError;
+
+        const taskById = new Map(tasks.map((task) => [task.id, task]));
+        const nextSummary: Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }> = {};
+
+        ((data ?? []) as Array<{ entity_id?: string | null; metadata?: Record<string, unknown> | null }>).forEach((row) => {
+          const metadata = row.metadata ?? {};
+          if (metadata.to_status !== "approved") return;
+
+          const taskId = typeof row.entity_id === "string" ? row.entity_id.trim() : "";
+          const task = taskById.get(taskId);
+          const assigneeUserId =
+            (typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id.trim()
+              ? metadata.assignee_user_id.trim()
+              : null) ??
+            task?.assigneeUserId ??
+            null;
+          if (!assigneeUserId) return;
+
+          const taskType =
+            parseDesignTaskType(metadata.design_task_type) ??
+            task?.designTaskType ??
+            null;
+          const bucket = nextSummary[assigneeUserId] ?? { total: 0, byType: {} };
+          bucket.total += 1;
+          if (taskType) {
+            bucket.byType[taskType] = (bucket.byType[taskType] ?? 0) + 1;
+          }
+          nextSummary[assigneeUserId] = bucket;
+        });
+
+        if (active) setCompletedByAssignee(nextSummary);
+      } catch (summaryError) {
+        console.warn("Failed to load completed design summary", summaryError);
+        if (active) setCompletedByAssignee({});
+      } finally {
+        if (active) setCompletedSummaryLoading(false);
+      }
+    };
+
+    void loadCompletedSummary();
+
+    return () => {
+      active = false;
+    };
+  }, [completedPeriod, effectiveTeamId, tasks]);
+
   const getTaskDisplayNumber = (task: DesignTask) => {
     if (task.designTaskNumber) return task.designTaskNumber;
     if (isUuid(task.quoteId) && task.quoteNumber) return task.quoteNumber;
@@ -1186,6 +1281,7 @@ export default function DesignPage() {
         task.title,
         task.customerName,
         task.productName,
+        task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : null,
       ]
         .filter(Boolean)
         .join(" ")
@@ -1444,6 +1540,28 @@ export default function DesignPage() {
       string,
       { id: string | null; label: string; tasks: DesignTask[]; estimateMinutesTotal: number; tasksWithoutEstimate: number }
     >();
+
+    designerMembers.forEach((member) => {
+      map.set(member.id, {
+        id: member.id,
+        label: member.label,
+        tasks: [],
+        estimateMinutesTotal: 0,
+        tasksWithoutEstimate: 0,
+      });
+    });
+
+    Object.keys(completedByAssignee).forEach((memberId) => {
+      if (map.has(memberId)) return;
+      map.set(memberId, {
+        id: memberId,
+        label: getMemberLabel(memberId),
+        tasks: [],
+        estimateMinutesTotal: 0,
+        tasksWithoutEstimate: 0,
+      });
+    });
+
     filteredTasks.forEach((task) => {
       const key = task.assigneeUserId ?? "__unassigned__";
       if (!map.has(key)) {
@@ -1470,7 +1588,7 @@ export default function DesignPage() {
       return a.label.localeCompare(b.label, "uk");
     });
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredTasks, memberById]);
+  }, [completedByAssignee, designerMembers, filteredTasks, memberById]);
 
   const selectedAssignee = useMemo(
     () => designerMembers.find((member) => member.id === createAssigneeUserId) ?? null,
@@ -1661,6 +1779,8 @@ export default function DesignPage() {
             source: "design_task_status",
             from_status: previousStatus,
             to_status: next,
+            assignee_user_id: task.assigneeUserId ?? null,
+            design_task_type: task.designTaskType ?? null,
           },
         });
       } catch (logError) {
@@ -1975,6 +2095,10 @@ export default function DesignPage() {
       toast.error("Клієнт/лід обов'язковий");
       return;
     }
+    if (!createDesignTaskType) {
+      setCreateError("Оберіть тип дизайнерської задачі.");
+      return;
+    }
 
     setCreateSaving(true);
     setCreateError(null);
@@ -2025,6 +2149,7 @@ export default function DesignPage() {
             customer_name: customerName || null,
             customer_type: customerName ? customerType : null,
             customer_logo_url: customerLogoUrl,
+            design_task_type: createDesignTaskType,
             design_brief: brief || null,
             standalone_brief_files: [],
             design_deadline: deadline,
@@ -2066,6 +2191,7 @@ export default function DesignPage() {
         quoteId: createdRow.entity_id || entityId,
         title: createdRow.title ?? subject,
         status: ((metadata.status as DesignStatus) ?? "new") as DesignStatus,
+        designTaskType: parseDesignTaskType(metadata.design_task_type),
         assigneeUserId:
           typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
             ? (metadata.assignee_user_id as string)
@@ -2111,6 +2237,7 @@ export default function DesignPage() {
       setCreateCustomerLogoUrl(null);
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
+      setCreateDesignTaskType(null);
       setCreateDeadline(undefined);
       setCreateDeadlinePopoverOpen(false);
       setCreateManagerUserId(userId ?? "none");
@@ -2390,6 +2517,15 @@ export default function DesignPage() {
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/6 px-2.5 py-1 text-[11px] text-muted-foreground">
             <Link2 className="h-3.5 w-3.5 text-primary" />
             <span>Окрема задача привʼязана до прорахунку</span>
+          </div>
+        ) : null}
+        {task.designTaskType ? (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
+            {(() => {
+              const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
+              return <TypeIcon className="h-3.5 w-3.5" />;
+            })()}
+            <span>{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
           </div>
         ) : null}
         <div className="mt-3 space-y-3">
@@ -3028,6 +3164,21 @@ export default function DesignPage() {
 
       {viewMode === "assignee" ? (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2.5">
+            <div className="text-sm font-medium text-foreground">Виконані роботи за період</div>
+            <div className="flex flex-wrap items-center gap-1">
+              {DESIGN_COMPLETED_PERIOD_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  size="sm"
+                  variant={completedPeriod === option.value ? "secondary" : "ghost"}
+                  onClick={() => setCompletedPeriod(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
           {assigneeGrouped.length === 0 ? (
             <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
               Немає задач
@@ -3057,6 +3208,18 @@ export default function DesignPage() {
                         Без естімейту: {group.tasksWithoutEstimate}
                       </Badge>
                     ) : null}
+                    {group.id ? (
+                      <>
+                        <Badge variant="outline" className="text-[11px] border-success-soft-border bg-success-soft text-success-foreground">
+                          Виконано: {completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)}
+                        </Badge>
+                        {Object.entries(completedByAssignee[group.id]?.byType ?? {}).map(([type, count]) => (
+                          <Badge key={type} variant="outline" className="text-[11px]">
+                            {DESIGN_TASK_TYPE_LABELS[type as DesignTaskType]}: {count}
+                          </Badge>
+                        ))}
+                      </>
+                    ) : null}
                   </div>
                   <Badge variant="secondary">{group.tasks.length}</Badge>
                 </div>
@@ -3077,6 +3240,7 @@ export default function DesignPage() {
                           </Badge>
                         </div>
                         <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                          <div>Тип: {task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : "Не вказано"}</div>
                           <div>Дедлайн: {hasValidDeadline ? deadlineDate.toLocaleDateString("uk-UA", { day: "numeric", month: "short" }) : "Без дедлайну"}</div>
                           <div>Естімейт: {formatEstimateMinutes(getTaskEstimateMinutes(task))}</div>
                           <div>Час: {formatElapsedSeconds(getTaskTrackedSeconds(task.id))}</div>
@@ -3087,10 +3251,10 @@ export default function DesignPage() {
                 </div>
                 <div className="hidden md:block overflow-x-auto">
                   <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[1.2fr_1.1fr_0.9fr_0.9fr_0.7fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <div className="grid grid-cols-[1.2fr_1.1fr_1fr_0.9fr_0.7fr_0.8fr] gap-2 border-b border-border/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
                       <div>Задача</div>
                       <div>Клієнт</div>
-                      <div>Статус</div>
+                      <div>Статус / Тип</div>
                       <div>Дедлайн</div>
                       <div>Естімейт / Час</div>
                       <div className="text-right">Дії</div>
@@ -3104,7 +3268,7 @@ export default function DesignPage() {
                       return (
                         <div
                           key={task.id}
-                          className="grid grid-cols-[1.2fr_1.1fr_0.9fr_0.9fr_0.7fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
+                          className="grid grid-cols-[1.2fr_1.1fr_1fr_0.9fr_0.7fr_0.8fr] gap-2 px-3 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20"
                         >
                           <button
                             className="text-left min-w-0"
@@ -3134,13 +3298,22 @@ export default function DesignPage() {
                             </div>
                           </button>
                           <div className="truncate">{task.customerName ?? "Не вказано"}</div>
-                          <div>
+                          <div className="space-y-1">
                             <Badge
                               variant="outline"
                               className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[task.status])}
                             >
                               {statusLabel}
                             </Badge>
+                            {task.designTaskType ? (
+                              <div className="truncate text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                                {(() => {
+                                  const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
+                                  return <TypeIcon className="h-3.5 w-3.5 shrink-0" />;
+                                })()}
+                                <span className="truncate">{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
+                              </div>
+                            ) : null}
                           </div>
                           <div className="text-muted-foreground">
                             {hasValidDeadline ? (
@@ -3305,6 +3478,8 @@ export default function DesignPage() {
             setCreateCustomerLogoUrl(null);
             setCreateCustomerType("customer");
             setCreateCustomerPopoverOpen(false);
+            setCreateDesignTaskType(null);
+            setCreateDesignTaskTypePopoverOpen(false);
             setCreateAssigneePopoverOpen(false);
             setCreateManagerPopoverOpen(false);
             setCreateDeadlinePopoverOpen(false);
@@ -3312,14 +3487,14 @@ export default function DesignPage() {
           }
         }}
       >
-        <DialogContent className="max-w-[640px] max-h-[85vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-[640px] max-h-[85vh] p-0 gap-0">
+          <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle>Нова дизайн-задача (без прорахунку)</DialogTitle>
             <DialogDescription>
               Заповніть основні поля задачі, виберіть дедлайн, відповідальних та додайте матеріали для дизайнера.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto pr-1 max-h-[calc(85vh-170px)]">
+          <div className="space-y-4 overflow-y-auto px-4 pb-4 pr-3 max-h-[calc(85vh-170px)]">
             <div className="space-y-2">
               <Label htmlFor="standalone-design-title">Назва задачі</Label>
               <Input
@@ -3330,6 +3505,51 @@ export default function DesignPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Popover open={createDesignTaskTypePopoverOpen} onOpenChange={setCreateDesignTaskTypePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Chip
+                    size="md"
+                    icon={
+                      createDesignTaskType ? (
+                        (() => {
+                          const TypeIcon = DESIGN_TASK_TYPE_ICONS[createDesignTaskType];
+                          return <TypeIcon className="h-4 w-4" />;
+                        })()
+                      ) : (
+                        <Package className="h-4 w-4" />
+                      )
+                    }
+                    active={!!createDesignTaskType}
+                  >
+                    {createDesignTaskType ? DESIGN_TASK_TYPE_LABELS[createDesignTaskType] : "Тип задачі"}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start">
+                  <div className="space-y-1">
+                    {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-9 text-sm"
+                        onClick={() => {
+                          setCreateDesignTaskType(option.value);
+                          setCreateDesignTaskTypePopoverOpen(false);
+                        }}
+                      >
+                        {(() => {
+                          const TypeIcon = DESIGN_TASK_TYPE_ICONS[option.value];
+                          return <TypeIcon className="h-3.5 w-3.5" />;
+                        })()}
+                        <span>{option.label}</span>
+                        {createDesignTaskType === option.value ? <Check className="ml-auto h-4 w-4" /> : null}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               <CustomerLeadPicker
                 open={createCustomerPopoverOpen}
                 onOpenChange={(open) => {
@@ -3365,16 +3585,7 @@ export default function DesignPage() {
                 }}
               />
 
-              <Popover
-                open={createDeadlinePopoverOpen}
-                onOpenChange={(open) => {
-                  setCreateDeadlinePopoverOpen(open);
-                  if (open) {
-                    setCreateDeadlineDraftDate(createDeadline ? new Date(createDeadline) : undefined);
-                    setCreateDeadlineDraftTime(createDeadlineTime);
-                  }
-                }}
-              >
+              <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Chip size="md" icon={<CalendarIcon className="h-4 w-4" />} active={!!createDeadline}>
                     {createDeadline
@@ -3382,61 +3593,34 @@ export default function DesignPage() {
                       : "Дедлайн"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
+                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={createDeadlineDraftDate}
+                    selected={createDeadline}
                     onSelect={(date) => {
-                      setCreateDeadlineDraftDate(date ?? undefined);
+                      updateCreateDeadlineDate(date ?? undefined);
                     }}
                     captionLayout="dropdown-buttons"
                     fromYear={new Date().getFullYear() - 3}
                     toYear={new Date().getFullYear() + 5}
                     initialFocus
                   />
-                  <div className="space-y-2 border-t border-border/50 px-2 py-3">
-                    <Input
-                      value={createDeadlineDraftTime}
-                      onChange={(event) => setCreateDeadlineDraftTime(normalizeDeadlineTimeInput(event.target.value))}
-                      onBlur={() => {
-                        setCreateDeadlineDraftTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
-                      }}
-                      placeholder="HH:MM"
-                      className="h-9 text-sm"
-                    />
-                    <div className="grid w-full grid-cols-4 gap-1.5">
-                      {DEADLINE_PRESET_TIMES.map((time) => (
-                        <Button
-                          key={time}
-                          type="button"
-                          size="xs"
-                          variant={createDeadlineDraftTime === time ? "secondary" : "outline"}
-                          className="w-full justify-center"
-                          onClick={() => setCreateDeadlineDraftTime(time)}
-                        >
-                          {time}
-                        </Button>
-                      ))}
+                  <div className="border-t border-border/50 px-3 py-3">
+                    <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                      Час дедлайну
                     </div>
+                    <Input
+                      type="time"
+                      value={createDeadlineTime}
+                      onChange={(event) => updateCreateDeadlineTime(event.target.value)}
+                      className="mt-2 h-9"
+                    />
                   </div>
                   <DateQuickActions
                     onSelect={(date) => {
-                      setCreateDeadlineDraftDate(date ?? undefined);
+                      updateCreateDeadlineDate(date ?? undefined);
                     }}
                   />
-                  <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setCreateDeadlinePopoverOpen(false)}
-                    >
-                      Скасувати
-                    </Button>
-                    <Button type="button" size="sm" onClick={applyCreateDeadlineDraft}>
-                      Зберегти
-                    </Button>
-                  </div>
                 </PopoverContent>
               </Popover>
 
@@ -3680,7 +3864,7 @@ export default function DesignPage() {
               </div>
             ) : null}
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-4 py-4 pt-0">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={createSaving}>
               Скасувати
             </Button>

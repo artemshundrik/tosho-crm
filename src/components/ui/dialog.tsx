@@ -44,7 +44,7 @@ const DialogContent = React.forwardRef<
         "max-h-[calc(100dvh-1.5rem)]",
         // контейнер — bg-card (білий у light, піднятий у dark), ring замість shadow (shadow заблокований)
         "rounded-[var(--radius-inner)] border border-border/90 bg-card ring-1 ring-black/8 dark:ring-white/6 outline-none",
-        "flex flex-col gap-3 overflow-hidden p-4 sm:gap-4 sm:p-6",
+        "flex flex-col gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4",
         // ✅ м’яка анімація: fade + slide зверху, без zoom
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2",
@@ -72,12 +72,20 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
+  <div
+    data-slot="dialog-header"
+    className={cn("flex flex-col space-y-1 text-left", className)}
+    {...props}
+  />
 );
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div
+    data-slot="dialog-footer"
+    className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2", className)}
+    {...props}
+  />
 );
 DialogFooter.displayName = "DialogFooter";
 

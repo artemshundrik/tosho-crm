@@ -80,6 +80,13 @@ import { format } from "date-fns";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import {
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  DESIGN_TASK_TYPE_OPTIONS,
+  parseDesignTaskType,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
+import {
   buildMentionAlias,
   extractMentionKeys,
   isMentionTerminator,
@@ -92,6 +99,7 @@ type DesignTask = {
   quoteId: string;
   title: string | null;
   status: DesignStatus;
+  designTaskType?: DesignTaskType | null;
   creatorUserId?: string | null;
   assigneeUserId?: string | null;
   assignedAt?: string | null;
@@ -685,8 +693,10 @@ export default function DesignTaskPage() {
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
+  const [headerTypePopoverOpen, setHeaderTypePopoverOpen] = useState(false);
   const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [typeSaving, setTypeSaving] = useState(false);
   const [deadlineDraftDate, setDeadlineDraftDate] = useState<Date | undefined>();
   const [deadlineTime, setDeadlineTime] = useState("12:00");
   const [estimatePendingAction, setEstimatePendingAction] = useState<
@@ -1328,6 +1338,7 @@ export default function DesignTaskPage() {
           quoteId,
           title: (row?.title as string) ?? null,
           status: (meta.status as DesignStatus) ?? "new",
+          designTaskType: parseDesignTaskType(meta.design_task_type),
           creatorUserId:
             typeof row?.user_id === "string" && row.user_id.trim()
               ? row.user_id.trim()
@@ -3302,6 +3313,8 @@ export default function DesignTaskPage() {
             source: "design_task_status",
             from_status: previousStatus,
             to_status: nextStatus,
+            assignee_user_id: task.assigneeUserId ?? null,
+            design_task_type: task.designTaskType ?? null,
           },
         });
         await loadHistory(task.id);
@@ -3405,6 +3418,67 @@ export default function DesignTaskPage() {
       setDeadlineSaving(false);
       setDeadlinePopoverOpen(false);
       setHeaderDeadlinePopoverOpen(false);
+    }
+  };
+
+  const applyTaskType = async (nextType: DesignTaskType) => {
+    if (!task || !effectiveTeamId || typeSaving) return;
+    if (!ensureCanEdit()) return;
+    if (task.designTaskType === nextType) {
+      setHeaderTypePopoverOpen(false);
+      return;
+    }
+
+    const previousType = task.designTaskType ?? null;
+    const previousLabel = previousType ? DESIGN_TASK_TYPE_LABELS[previousType] : "Не вказано";
+    const nextLabel = DESIGN_TASK_TYPE_LABELS[nextType];
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_task_type: nextType,
+    };
+
+    const previousTask = task;
+    setTypeSaving(true);
+    setTask((prev) => (prev ? { ...prev, designTaskType: nextType, metadata: nextMetadata } : prev));
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_type",
+          title: `Тип задачі: ${previousLabel} → ${nextLabel}`,
+          metadata: {
+            source: "design_task_type",
+            from_design_task_type: previousType,
+            to_design_task_type: nextType,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task type update", logError);
+      }
+
+      toast.success(`Тип задачі оновлено: ${nextLabel}`);
+      setHeaderTypePopoverOpen(false);
+    } catch (e: unknown) {
+      setTask(previousTask);
+      const message = getErrorMessage(e, "Не вдалося оновити тип задачі");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setTypeSaving(false);
     }
   };
 
@@ -3981,6 +4055,8 @@ export default function DesignTaskPage() {
               source: "design_task_status",
               from_status: task.status,
               to_status: nextStatus,
+              assignee_user_id: task.assigneeUserId ?? null,
+              design_task_type: task.designTaskType ?? null,
             },
           });
         }
@@ -4452,6 +4528,50 @@ export default function DesignTaskPage() {
               />
               <span className="truncate max-w-[160px]">{getMemberLabel(task.assigneeUserId)}</span>
             </Badge>
+            <Popover open={headerTypePopoverOpen} onOpenChange={setHeaderTypePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs gap-1.5"
+                  disabled={typeSaving || designTaskLockedByOther}
+                >
+                  {task.designTaskType ? (
+                    (() => {
+                      const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
+                      return <TypeIcon className="h-3.5 w-3.5" />;
+                    })()
+                  ) : (
+                    <Palette className="h-3.5 w-3.5" />
+                  )}
+                  <span>{task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : "Тип задачі"}</span>
+                  {typeSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-2" align="start">
+                <div className="space-y-1">
+                  {DESIGN_TASK_TYPE_OPTIONS.map((option) => {
+                    const TypeIcon = DESIGN_TASK_TYPE_ICONS[option.value];
+                    return (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-full justify-start gap-2 text-sm"
+                        disabled={typeSaving || task.designTaskType === option.value}
+                        onClick={() => void applyTaskType(option.value)}
+                      >
+                        <TypeIcon className="h-3.5 w-3.5" />
+                        <span>{option.label}</span>
+                        {task.designTaskType === option.value ? <Check className="ml-auto h-4 w-4" /> : null}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Popover open={headerDeadlinePopoverOpen} onOpenChange={setHeaderDeadlinePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button

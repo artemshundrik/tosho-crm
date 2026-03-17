@@ -31,6 +31,7 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
+import { DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
 import {
   createEmptyPrintPackageConfig,
   getConfiguratorProductLabel,
@@ -285,7 +286,7 @@ const RunsEditor: React.FC<{
 const ChipDropdown: React.FC<{
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: ReadonlyArray<{ value: string; label: string }>;
   placeholder: string;
   icon: React.ReactNode;
   disabled?: boolean;
@@ -402,6 +403,7 @@ export type NewQuoteFormData = {
   customerType?: "customer" | "lead";
   managerId?: string;
   designAssigneeId?: string | null;
+  designTaskType?: DesignTaskType | null;
   deadline?: Date;
   deadlineNote?: string;
   deadlineReminderOffsetMinutes?: number | null;
@@ -472,6 +474,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     payer: "",
   });
   const [designAssigneeId, setDesignAssigneeId] = React.useState<string | null>(null);
+  const [designTaskType, setDesignTaskType] = React.useState<DesignTaskType | null>(null);
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
   const [modelId, setModelId] = React.useState<string>("");
@@ -704,9 +707,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     if (nextPrintMode === "no_print") {
       setCreateDesignTask(false);
       setDesignAssigneeId(null);
+      setDesignTaskType(null);
     } else {
       setCreateDesignTask(!!initialValues?.createDesignTask);
       setDesignAssigneeId(initialValues?.designAssigneeId ?? null);
+      setDesignTaskType(initialValues?.designTaskType ?? null);
     }
     setFiles(initialValues?.files ?? []);
 
@@ -984,6 +989,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     const finalPrints = printMode === "no_print" ? [] : printApplications;
     const shouldCreateDesignTask =
       ((printMode !== "no_print" && !isPrintPackageMode) || isPrintPackageMode) && createDesignTask;
+    if (shouldCreateDesignTask && !designTaskType) {
+      showValidationError("Оберіть тип дизайнерської задачі");
+      return;
+    }
     const sanitizedDeliveryDetails: DeliveryDetails = {
       region: "",
       city: "",
@@ -1016,6 +1025,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       customerType,
       managerId,
       designAssigneeId: shouldCreateDesignTask ? designAssigneeId : null,
+      designTaskType: shouldCreateDesignTask ? designTaskType : null,
       deadline,
       deadlineNote,
       deadlineReminderOffsetMinutes:
@@ -1082,7 +1092,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[1180px] max-h-[88vh] overflow-hidden !p-0 sm:!p-0">
         <div className="flex max-h-[85vh] flex-col">
-          <DialogHeader className="px-6 pt-6 pb-2">
+          <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle className="text-base font-medium flex items-center gap-2">
               <Plus className="h-4 w-4" />
               {isEditMode ? "Редагувати прорахунок" : "Новий прорахунок"}
@@ -1093,7 +1103,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 : "Заповніть параметри замовлення, щоб створити прорахунок."}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-w-0 overflow-x-hidden overflow-y-auto px-6 pb-6">
+          <div className="min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-4">
 
             {isEditMode ? (
               <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
@@ -1894,7 +1904,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <SectionHeader>Дизайн</SectionHeader>
           <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
             <div className="grid gap-5">
-              <div className="grid gap-4 md:grid-cols-[280px_280px]">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
                   <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                     Задача на дизайн
@@ -1904,7 +1914,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     onClick={() => {
                       const next = !createDesignTask;
                       setCreateDesignTask(next);
-                      if (!next) setDesignAssigneeId(null);
+                      if (!next) {
+                        setDesignAssigneeId(null);
+                        setDesignTaskType(null);
+                      }
                     }}
                     className={cn(
                       "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm font-medium transition-all",
@@ -1951,6 +1964,22 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     icon={<User className="h-3.5 w-3.5" />}
                     popoverClassName="w-[320px]"
                     isActive={Boolean(designAssigneeId)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Тип задачі
+                  </div>
+                  <ChipDropdown
+                    value={designTaskType ?? ""}
+                    onChange={(value) => setDesignTaskType((value || null) as DesignTaskType | null)}
+                    disabled={!createDesignTask}
+                    options={DESIGN_TASK_TYPE_OPTIONS}
+                    placeholder={createDesignTask ? "Оберіть тип задачі" : "Увімкніть задачу"}
+                    icon={<Palette className="h-3.5 w-3.5" />}
+                    popoverClassName="w-[320px]"
+                    isActive={Boolean(designTaskType)}
                   />
                 </div>
               </div>
