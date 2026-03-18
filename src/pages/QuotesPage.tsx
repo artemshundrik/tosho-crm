@@ -337,6 +337,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [currency, setCurrency] = useState("UAH");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
     const saved = localStorage.getItem("quotes_view_mode");
@@ -1417,6 +1418,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   // ✨ New Linear-style form submit handler
   const handleNewFormSubmit = async (data: NewQuoteFormData) => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     setCreateError(null);
 
@@ -1777,6 +1780,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         description: getErrorMessage(e, ""),
       });
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
@@ -5357,6 +5361,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={handleNewFormSubmit}
+        submitting={creating}
         teamId={teamId}
         customers={customers}
         customersLoading={customersLoading}

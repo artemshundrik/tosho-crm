@@ -127,6 +127,13 @@ const DELIVERY_PAYER_OPTIONS = [
 ];
 
 const DEFAULT_DEADLINE_TIME = "09:00";
+const normalizeDeadlineTimeInput = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
+const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -495,6 +502,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [customerPopoverOpen, setCustomerPopoverOpen] = React.useState(false);
   const [managerPopoverOpen, setManagerPopoverOpen] = React.useState(false);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
+  const [deadlineTimeDraft, setDeadlineTimeDraft] = React.useState(DEFAULT_DEADLINE_TIME);
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = React.useState(false);
   const [deliveryPopoverOpen, setDeliveryPopoverOpen] = React.useState(false);
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
@@ -508,19 +516,27 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       setDeadline(undefined);
       return;
     }
-    const [hours, minutes] = deadlineTime.split(":").map((part) => Number(part) || 0);
+    const resolvedTime = isValidDeadlineTime(deadlineTimeDraft.trim()) ? deadlineTimeDraft.trim() : DEFAULT_DEADLINE_TIME;
+    const [hours, minutes] = resolvedTime.split(":").map((part) => Number(part) || 0);
     const next = new Date(date);
     next.setHours(hours, minutes, 0, 0);
     setDeadline(next);
-  }, [deadlineTime]);
+  }, [deadlineTimeDraft]);
 
   const updateDeadlineTime = React.useCallback((value: string) => {
-    if (!deadline) return;
-    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
+    const normalized = normalizeDeadlineTimeInput(value);
+    setDeadlineTimeDraft(normalized);
+    if (!deadline || !isValidDeadlineTime(normalized)) return;
+    const [hours, minutes] = normalized.split(":").map((part) => Number(part) || 0);
     const next = new Date(deadline);
     next.setHours(hours, minutes, 0, 0);
     setDeadline(next);
   }, [deadline]);
+
+  React.useEffect(() => {
+    if (!deadlinePopoverOpen) return;
+    setDeadlineTimeDraft(deadlineTime);
+  }, [deadlinePopoverOpen, deadlineTime]);
 
   const selectedType = React.useMemo(
     () => catalogTypes.find((type) => type.id === categoryId),
@@ -1268,9 +1284,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   Час дедлайну
                 </div>
                 <Input
-                  type="time"
-                  value={deadlineTime}
+                  type="text"
+                  inputMode="numeric"
+                  value={deadlineTimeDraft}
                   onChange={(e) => updateDeadlineTime(e.target.value)}
+                  onBlur={() => {
+                    const normalized = isValidDeadlineTime(deadlineTimeDraft.trim())
+                      ? deadlineTimeDraft.trim()
+                      : DEFAULT_DEADLINE_TIME;
+                    setDeadlineTimeDraft(normalized);
+                    updateDeadlineTime(normalized);
+                  }}
+                  placeholder="HH:MM"
                   className="mt-2 h-9"
                 />
               </div>
@@ -2078,7 +2103,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] shadow-md shadow-primary/20"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  {isEditMode ? "Зберегти" : "Створити"}
+                  {submitting ? "Збереження..." : isEditMode ? "Зберегти" : "Створити"}
                 </Button>
               </div>
             </div>
