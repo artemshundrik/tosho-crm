@@ -158,6 +158,7 @@ type CatalogPrintPosition = { id: string; label: string; sort_order?: number | n
 type CatalogKind = {
   id: string;
   name: string;
+  modelCount: number;
   models: CatalogModel[];
   methods: CatalogMethod[];
   printPositions: CatalogPrintPosition[];
@@ -966,10 +967,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const kindsByType = new Map<string, CatalogKind[]>();
         (kindRows ?? []).forEach((row) => {
           const list = kindsByType.get(row.type_id) ?? [];
+          const models = modelsByKind.get(row.id) ?? [];
           list.push({
             id: row.id,
             name: row.name,
-            models: modelsByKind.get(row.id) ?? [],
+            modelCount: models.length,
+            models,
             methods: methodsByKind.get(row.id) ?? [],
             printPositions: printPositionsByKind.get(row.id) ?? [],
           });

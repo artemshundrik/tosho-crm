@@ -79,6 +79,7 @@ type LeadRow = {
   team_id?: string | null;
   company_name?: string | null;
   legal_name?: string | null;
+  ownership_type?: string | null;
   logo_url?: string | null;
   first_name?: string | null;
   last_name?: string | null;
@@ -321,6 +322,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadForm, setLeadForm] = useState({
     companyName: "",
     legalName: "",
+    ownershipType: "",
     logoUrl: "",
     firstName: "",
     lastName: "",
@@ -589,6 +591,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadForm({
       companyName: "",
       legalName: "",
+      ownershipType: "",
       logoUrl: "",
       firstName: "",
       lastName: "",
@@ -672,6 +675,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadForm({
       companyName: lead.company_name ?? "",
       legalName: lead.legal_name ?? "",
+      ownershipType: lead.ownership_type ?? "",
       logoUrl: lead.logo_url ?? "",
       firstName: lead.first_name ?? "",
       lastName: lead.last_name ?? "",
@@ -1021,6 +1025,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
+      ownership_type: leadForm.ownershipType || null,
       logo_url: leadForm.logoUrl.trim() || null,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
@@ -1074,6 +1079,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
               .eq("id", leadEditingId)
               .eq("team_id", teamId);
             if (fallbackError) throw fallbackError;
+          } else if (message.includes("column") && message.includes("ownership_type")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.ownership_type;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .update(fallbackPayload)
+              .eq("id", leadEditingId)
+              .eq("team_id", teamId);
+            if (fallbackError) throw fallbackError;
           } else {
             throw updateError;
           }
@@ -1096,6 +1111,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
           } else if (message.includes("column") && message.includes("manager_user_id")) {
             const fallbackPayload = { ...payload };
             delete fallbackPayload.manager_user_id;
+            const { error: fallbackError } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .insert(fallbackPayload);
+            if (fallbackError) throw fallbackError;
+          } else if (message.includes("column") && message.includes("ownership_type")) {
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.ownership_type;
             const { error: fallbackError } = await supabase
               .schema("tosho")
               .from("leads")
@@ -1640,6 +1663,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         }}
         form={leadForm}
         setForm={setLeadForm}
+        ownershipOptions={OWNERSHIP_OPTIONS}
         teamMembers={managerDialogMembers}
         saving={leadSaving}
         error={leadFormError}

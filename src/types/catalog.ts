@@ -56,6 +56,7 @@ export type CatalogPrintPosition = {
 export type CatalogKind = {
   id: string;
   name: string;
+  modelCount: number;
   models: CatalogModel[];
   methods: CatalogMethod[];
   printPositions: CatalogPrintPosition[];

@@ -96,6 +96,8 @@ type DesignTask = {
   productName?: string | null;
   productImageUrl?: string | null;
   productQtyLabel?: string | null;
+  assigneeLabel?: string | null;
+  assigneeAvatarUrl?: string | null;
   createdAt?: string | null;
 };
 
@@ -135,6 +137,14 @@ const DESIGN_COMPLETED_PERIOD_OPTIONS: Array<{ value: DesignCompletedPeriod; lab
 
 type DesignPageCachePayload = {
   tasks: DesignTask[];
+  cachedAt: number;
+};
+
+type DesignMemberCachePayload = {
+  memberById: Record<string, string>;
+  memberAvatarById: Record<string, string | null>;
+  managerMembers: Array<{ id: string; label: string; avatarUrl?: string | null }>;
+  designerMembers: Array<{ id: string; label: string; avatarUrl?: string | null }>;
   cachedAt: number;
 };
 
@@ -384,6 +394,26 @@ function readDesignCustomerLogoCache(teamId: string): DesignCustomerLogoCachePay
   }
 }
 
+function readDesignMemberCache(teamId: string): DesignMemberCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`design-member-cache:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DesignMemberCachePayload;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      memberById: typeof parsed.memberById === "object" && parsed.memberById ? parsed.memberById : {},
+      memberAvatarById:
+        typeof parsed.memberAvatarById === "object" && parsed.memberAvatarById ? parsed.memberAvatarById : {},
+      managerMembers: Array.isArray(parsed.managerMembers) ? parsed.managerMembers : [],
+      designerMembers: Array.isArray(parsed.designerMembers) ? parsed.designerMembers : [],
+      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function resolveTaskCustomerLogo(
   task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
   entries: Array<{
@@ -505,6 +535,7 @@ export default function DesignPage() {
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   const initialLogoCache = readDesignCustomerLogoCache(effectiveTeamId ?? "");
+  const initialMemberCache = readDesignMemberCache(effectiveTeamId ?? "");
   const initialCacheRaw = readDesignPageCache(effectiveTeamId ?? "");
   const initialCache =
     initialCacheRaw && initialLogoCache?.entries?.length
@@ -516,7 +547,7 @@ export default function DesignPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
   const [refreshing, setRefreshing] = useState(false);
-  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
   const [error, setError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -574,10 +605,16 @@ export default function DesignPage() {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">("day");
   const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(ALL_ASSIGNEE_SPOTLIGHT);
-  const [memberById, setMemberById] = useState<Record<string, string>>({});
-  const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
-  const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
-  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
+  const [memberById, setMemberById] = useState<Record<string, string>>(() => initialMemberCache?.memberById ?? {});
+  const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>(
+    () => initialMemberCache?.memberAvatarById ?? {}
+  );
+  const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
+    () => initialMemberCache?.managerMembers ?? []
+  );
+  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
+    () => initialMemberCache?.designerMembers ?? []
+  );
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const [completedPeriod, setCompletedPeriod] = useState<DesignCompletedPeriod>("30d");
@@ -638,6 +675,20 @@ export default function DesignPage() {
     if (id === userId && currentUserAvatarUrl) return currentUserAvatarUrl;
     return memberAvatarById[id] ?? null;
   };
+  const getTaskAssigneeLabel = (task: DesignTask) => {
+    if (task.assigneeLabel?.trim()) return task.assigneeLabel.trim();
+    if (
+      task.assigneeUserId &&
+      membersLoading &&
+      !memberById[task.assigneeUserId] &&
+      !(task.assigneeUserId === userId && currentUserDisplayName)
+    ) {
+      return "Завантаження...";
+    }
+    return getMemberLabel(task.assigneeUserId);
+  };
+  const getTaskAssigneeAvatar = (task: DesignTask) =>
+    task.assigneeAvatarUrl?.trim() || getMemberAvatar(task.assigneeUserId);
   const getAllowedStatusTransitions = (task: DesignTask) =>
     DESIGN_COLUMNS.filter((column) =>
       canChangeDesignStatus({
@@ -702,13 +753,6 @@ export default function DesignPage() {
 
         // If no one is marked as designer, still allow assignment to any team member.
         const assigneeRows = designerRows.length > 0 ? designerRows : rows;
-        setDesignerMembers(
-          assigneeRows.map((row) => ({
-            id: row.userId,
-            label: labelById[row.userId] ?? row.userId,
-            avatarUrl: avatarById[row.userId] ?? null,
-          }))
-        );
 
         let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
         if (managerRows.length === 0 && userId) {
@@ -716,13 +760,30 @@ export default function DesignPage() {
           if (me) managerRows = [me];
         }
         if (managerRows.length === 0) managerRows = rows;
-        setManagerMembers(
-          managerRows.map((row) => ({
-            id: row.userId,
-            label: labelById[row.userId] ?? row.userId,
-            avatarUrl: avatarById[row.userId] ?? null,
-          }))
-        );
+        const nextManagerMembers = managerRows.map((row) => ({
+          id: row.userId,
+          label: labelById[row.userId] ?? row.userId,
+          avatarUrl: avatarById[row.userId] ?? null,
+        }));
+        const nextDesignerMembers = assigneeRows.map((row) => ({
+          id: row.userId,
+          label: labelById[row.userId] ?? row.userId,
+          avatarUrl: avatarById[row.userId] ?? null,
+        }));
+        setDesignerMembers(nextDesignerMembers);
+        setManagerMembers(nextManagerMembers);
+        if (typeof window !== "undefined" && effectiveTeamId) {
+          sessionStorage.setItem(
+            `design-member-cache:${effectiveTeamId}`,
+            JSON.stringify({
+              memberById: labelById,
+              memberAvatarById: avatarById,
+              managerMembers: nextManagerMembers,
+              designerMembers: nextDesignerMembers,
+              cachedAt: Date.now(),
+            } satisfies DesignMemberCachePayload)
+          );
+        }
       } catch (e: unknown) {
         console.warn("Failed to load workspace members for design page", e);
       } finally {
@@ -918,7 +979,15 @@ export default function DesignPage() {
                     ? "lead"
                     : metadata.customer_type.trim().toLowerCase() === "customer"
                       ? "customer"
-                      : null)
+                    : null)
+                : null,
+            assigneeLabel:
+              typeof metadata.assignee_label === "string" && metadata.assignee_label.trim()
+                ? metadata.assignee_label.trim()
+                : null,
+            assigneeAvatarUrl:
+              typeof metadata.assignee_avatar_url === "string" && metadata.assignee_avatar_url.trim()
+                ? metadata.assignee_avatar_url.trim()
                 : null,
             productName:
               typeof metadata.product_name === "string" && metadata.product_name.trim()
@@ -1101,6 +1170,20 @@ export default function DesignPage() {
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
         productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
+        assigneeLabel:
+          t.assigneeLabel ??
+          (t.assigneeUserId
+            ? (t.assigneeUserId === userId && currentUserDisplayName
+                ? currentUserDisplayName
+                : (memberById[t.assigneeUserId] ?? null))
+            : null),
+        assigneeAvatarUrl:
+          t.assigneeAvatarUrl ??
+          (t.assigneeUserId
+            ? (t.assigneeUserId === userId && currentUserAvatarUrl
+                ? currentUserAvatarUrl
+                : (memberAvatarById[t.assigneeUserId] ?? null))
+            : null),
       }));
       const parsed = applyCustomerLogosToTasks(
         parsedBase,
@@ -1709,7 +1792,7 @@ export default function DesignPage() {
       if (!map.has(key)) {
         map.set(key, {
           id: task.assigneeUserId ?? null,
-          label: task.assigneeUserId ? getMemberLabel(task.assigneeUserId) : "Без виконавця",
+          label: task.assigneeUserId ? getTaskAssigneeLabel(task) : "Без виконавця",
           tasks: [],
           estimateMinutesTotal: 0,
           tasksWithoutEstimate: 0,
@@ -1890,6 +1973,10 @@ export default function DesignPage() {
       })
     ) {
       toast.error("Ви не можете перевести задачу в цей статус");
+      return;
+    }
+    if (next === "changes") {
+      toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
     }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
@@ -2080,6 +2167,10 @@ export default function DesignPage() {
     const previousMetadata = task.metadata ?? {};
     const previousAssigneeLabel = getMemberLabel(previousAssignee);
     const nextAssigneeLabel = getMemberLabel(nextAssigneeUserId);
+    const nextAssigneeAvatarUrl = getMemberAvatar(nextAssigneeUserId);
+    const previousAssigneeAvatarUrl = task.assigneeAvatarUrl ?? getMemberAvatar(previousAssignee);
+    nextMetadata.assignee_label = nextAssigneeUserId ? nextAssigneeLabel : null;
+    nextMetadata.assignee_avatar_url = nextAssigneeUserId ? nextAssigneeAvatarUrl : null;
 
     setTasks((prev) =>
       prev.map((row) =>
@@ -2088,6 +2179,8 @@ export default function DesignPage() {
               ...row,
               assigneeUserId: nextAssigneeUserId,
               assignedAt: nextAssignedAt,
+              assigneeLabel: nextAssigneeUserId ? nextAssigneeLabel : null,
+              assigneeAvatarUrl: nextAssigneeUserId ? nextAssigneeAvatarUrl : null,
               metadata: nextMetadata,
             }
           : row
@@ -2156,8 +2249,10 @@ export default function DesignPage() {
             source: "design_task_assignment",
             from_assignee_user_id: previousAssignee,
             from_assignee_label: previousAssigneeLabel,
+            from_assignee_avatar_url: previousAssignee ? previousAssigneeAvatarUrl ?? null : null,
             to_assignee_user_id: nextAssigneeUserId,
             to_assignee_label: nextAssigneeUserId ? nextAssigneeLabel : null,
+            to_assignee_avatar_url: nextAssigneeUserId ? nextAssigneeAvatarUrl : null,
           },
         });
       } catch (logError) {
@@ -2324,6 +2419,8 @@ export default function DesignPage() {
       const entityId = `standalone-${crypto.randomUUID()}`;
       const actorName = userId ? getMemberLabel(userId) : "System";
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
+      const assigneeLabel = assigneeUserId ? getMemberLabel(assigneeUserId) : null;
+      const assigneeAvatarUrl = assigneeUserId ? getMemberAvatar(assigneeUserId) : null;
       const brief = createBrief.trim();
       const customerType = createCustomerType;
       const customerId = createCustomerId;
@@ -2352,6 +2449,8 @@ export default function DesignPage() {
             design_task_number: designTaskNumber,
             quote_id: null,
             assignee_user_id: assigneeUserId,
+            assignee_label: assigneeLabel,
+            assignee_avatar_url: assigneeAvatarUrl,
             assigned_at: assignedAt,
             manager_user_id: managerUserId,
             manager_label: managerLabel,
@@ -2407,6 +2506,14 @@ export default function DesignPage() {
             ? (metadata.assignee_user_id as string)
             : null,
         assignedAt: typeof metadata.assigned_at === "string" ? (metadata.assigned_at as string) : null,
+        assigneeLabel:
+          typeof metadata.assignee_label === "string" && metadata.assignee_label.trim()
+            ? metadata.assignee_label.trim()
+            : null,
+        assigneeAvatarUrl:
+          typeof metadata.assignee_avatar_url === "string" && metadata.assignee_avatar_url.trim()
+            ? metadata.assignee_avatar_url.trim()
+            : null,
         metadata,
         designTaskNumber:
           (typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
@@ -2591,7 +2698,7 @@ export default function DesignPage() {
     const isLinkedQuote = isUuid(task.quoteId);
     const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
     const partyLabel = getTaskPartyLabel();
-    const assigneeLabel = getMemberLabel(task.assigneeUserId);
+    const assigneeLabel = getTaskAssigneeLabel(task);
     const deadlineBadge = getDeadlineBadge(task.designDeadline);
     return (
       <KanbanCard
@@ -2795,7 +2902,7 @@ export default function DesignPage() {
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
           <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
             <AvatarBase
-              src={task.assigneeUserId ? getMemberAvatar(task.assigneeUserId) : null}
+              src={task.assigneeUserId ? getTaskAssigneeAvatar(task) : null}
               name={assigneeLabel}
               fallback={task.assigneeUserId ? getInitials(assigneeLabel) : "БВ"}
               size={26}
@@ -3336,13 +3443,13 @@ export default function DesignPage() {
                       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1.5">
                           <AvatarBase
-                            src={getMemberAvatar(row.task.assigneeUserId)}
-                            name={getMemberLabel(row.task.assigneeUserId)}
-                            fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
+                            src={getTaskAssigneeAvatar(row.task)}
+                            name={getTaskAssigneeLabel(row.task)}
+                            fallback={getInitials(getTaskAssigneeLabel(row.task))}
                             size={16}
                             className="border-border/70"
                           />
-                          {getMemberLabel(row.task.assigneeUserId)}
+                          {getTaskAssigneeLabel(row.task)}
                         </span>
                         <span>{row.task.productName ?? "Без товару"}</span>
                       </div>
@@ -3449,13 +3556,13 @@ export default function DesignPage() {
                           <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
                             <div className="flex items-center gap-2">
                               <AvatarBase
-                                src={getMemberAvatar(row.task.assigneeUserId)}
-                                name={getMemberLabel(row.task.assigneeUserId)}
-                                fallback={getInitials(getMemberLabel(row.task.assigneeUserId))}
+                                src={getTaskAssigneeAvatar(row.task)}
+                                name={getTaskAssigneeLabel(row.task)}
+                                fallback={getInitials(getTaskAssigneeLabel(row.task))}
                                 size={18}
                                 className="shrink-0 border-border/70"
                               />
-                              <span className="truncate">{getMemberLabel(row.task.assigneeUserId)}</span>
+                              <span className="truncate">{getTaskAssigneeLabel(row.task)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Clock3 className="h-3.5 w-3.5 shrink-0" />

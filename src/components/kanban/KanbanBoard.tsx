@@ -1,4 +1,4 @@
-import { useCallback, useRef, type PropsWithChildren, type WheelEvent } from "react";
+import { useEffect, useRef, type PropsWithChildren } from "react";
 import { cn } from "@/lib/utils";
 
 type KanbanBoardProps = PropsWithChildren<{
@@ -8,33 +8,44 @@ type KanbanBoardProps = PropsWithChildren<{
 
 export function KanbanBoard({ className, rowClassName, children }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
-
-  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+  useEffect(() => {
     const board = boardRef.current;
-    if (!board || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!board) return;
 
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const columnBody = target?.closest<HTMLElement>("[data-kanban-column-body='true']");
-    const hasMostlyVerticalIntent = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+    const handleWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-    if (columnBody && hasMostlyVerticalIntent) {
-      const { scrollTop, scrollHeight, clientHeight } = columnBody;
-      const canScrollUp = scrollTop > 0;
-      const canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const columnBody = target?.closest<HTMLElement>("[data-kanban-column-body='true']");
+      const hasMostlyVerticalIntent = Math.abs(event.deltaY) > Math.abs(event.deltaX);
 
-      if ((event.deltaY < 0 && canScrollUp) || (event.deltaY > 0 && canScrollDown)) {
-        return;
+      if (columnBody && hasMostlyVerticalIntent) {
+        const { scrollTop, scrollHeight, clientHeight } = columnBody;
+        const canScrollUp = scrollTop > 0;
+        const canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
+
+        if ((event.deltaY < 0 && canScrollUp) || (event.deltaY > 0 && canScrollDown)) {
+          return;
+        }
       }
-    }
 
-    const horizontalDelta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
-    if (horizontalDelta === 0 || board.scrollWidth <= board.clientWidth) return;
+      const horizontalDelta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+      if (horizontalDelta === 0 || board.scrollWidth <= board.clientWidth) return;
 
-    const nextScrollLeft = Math.max(0, Math.min(board.scrollLeft + horizontalDelta, board.scrollWidth - board.clientWidth));
-    if (nextScrollLeft === board.scrollLeft) return;
+      const nextScrollLeft = Math.max(
+        0,
+        Math.min(board.scrollLeft + horizontalDelta, board.scrollWidth - board.clientWidth)
+      );
+      if (nextScrollLeft === board.scrollLeft) return;
 
-    board.scrollLeft = nextScrollLeft;
-    event.preventDefault();
+      board.scrollLeft = nextScrollLeft;
+      event.preventDefault();
+    };
+
+    board.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      board.removeEventListener("wheel", handleWheel);
+    };
   }, []);
 
   return (
@@ -44,7 +55,6 @@ export function KanbanBoard({ className, rowClassName, children }: KanbanBoardPr
         "overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-6 md:px-5 md:pt-5 md:pb-7 [scrollbar-gutter:stable_both-edges]",
         className
       )}
-      onWheel={handleWheel}
     >
       <div className={cn("flex w-max gap-4 pb-2", rowClassName)}>{children}</div>
     </div>

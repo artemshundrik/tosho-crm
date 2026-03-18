@@ -5,13 +5,15 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
+import { Loader2, PackageSearch, Search } from "lucide-react";
 import { SimpleModelCard } from "./SimpleModelCard";
 import type { ModelWithContext } from "@/types/catalog";
 
 interface SimpleModelGridProps {
   filteredModels: ModelWithContext[];
   globalSearch: string;
+  hasActiveSelection: boolean;
+  loading?: boolean;
   onClone: (modelId: string) => void;
   onEdit: (modelId: string) => void;
   onDelete: (modelId: string) => void;
@@ -21,11 +23,39 @@ interface SimpleModelGridProps {
 export function SimpleModelGrid({
   filteredModels,
   globalSearch,
+  hasActiveSelection,
+  loading = false,
   onClone,
   onEdit,
   onDelete,
   onClearFilters,
 }: SimpleModelGridProps) {
+  if (!hasActiveSelection) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center py-16">
+        <div className="rounded-full bg-muted/30 p-6 mb-4">
+          <PackageSearch className="h-12 w-12 text-muted-foreground/40" />
+        </div>
+        <p className="text-lg font-medium text-muted-foreground mb-2">Оберіть вид у каталозі</p>
+        <p className="text-sm text-muted-foreground/60 mb-4">
+          На старті каталог більше не відкриває першу позицію автоматично.
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center py-16">
+        <div className="rounded-full bg-muted/30 p-6 mb-4">
+          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground/40" />
+        </div>
+        <p className="text-lg font-medium text-muted-foreground mb-2">Завантажуємо моделі</p>
+        <p className="text-sm text-muted-foreground/60">Підтягуємо тільки вибраний вид, а не весь каталог.</p>
+      </div>
+    );
+  }
+
   if (filteredModels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center py-16">

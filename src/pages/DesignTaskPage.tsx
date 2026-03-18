@@ -3397,6 +3397,14 @@ export default function DesignTaskPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
+    if (nextStatus === "changes") {
+      setDeadlineDraftDate(toLocalDate(task.designDeadline));
+      const match = (task.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
+      setDeadlineTime(match ? `${match[1]}:${match[2]}` : "12:00");
+      setDeadlinePopoverOpen(true);
+      toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн.");
+      return;
+    }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (nextStatus === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
       requestEstimateDialog({ mode: "status", nextStatus });

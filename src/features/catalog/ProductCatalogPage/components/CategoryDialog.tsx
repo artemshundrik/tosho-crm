@@ -79,7 +79,7 @@ export function CategoryDialog({
               {isEditingType
                 ? "Змініть назву категорії або тип прорахунку"
                 : isEditingKind
-                ? "Змініть назву виду"
+                ? "Змініть назву виду або перенесіть його в іншу категорію"
                 : mode === "type"
                 ? "Створіть нову категорію товарів (наприклад: Одяг, Аксесуари)"
                 : "Додайте новий вид у вибрану категорію"}
@@ -87,7 +87,7 @@ export function CategoryDialog({
           </DialogHeader>
         </div>
         <div className="px-6 py-4 space-y-4">
-          {mode === "kind" && !isEditingKind && (
+          {mode === "kind" && (
             <div className="space-y-2">
               <Label>Категорія</Label>
               <Select value={selectedTypeForKind} onValueChange={onSelectedTypeForKindChange}>
@@ -102,14 +102,6 @@ export function CategoryDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-          {mode === "kind" && isEditingKind && (
-            <div className="space-y-2">
-              <Label>Категорія</Label>
-              <div className="px-3 py-2 rounded-md bg-muted text-sm text-muted-foreground">
-                {catalog.find((t) => t.id === selectedTypeForKind)?.name || "Н/Д"}
-              </div>
             </div>
           )}
           {mode === "type" && (

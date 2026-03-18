@@ -181,6 +181,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const currentOwnership = ownershipOptions.find(
     (option) => option.value === form.ownershipType
   );
+  const isFopOwnership = form.ownershipType === "fop";
   const currentVat = vatOptions.find((option) => option.value === form.vatRate);
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [vatOpen, setVatOpen] = React.useState(false);
@@ -468,16 +469,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Назва компанії *</Label>
+                    <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="Напр. ТОВ “Вектор”"
+                      placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Напр. ТОВ “Вектор”"}
                       className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Юридична назва</Label>
+                    <Label>{isFopOwnership ? "Реєстраційна назва ФОП (ПІБ)" : "Юридична назва"}</Label>
                     <Input
                       value={form.legalName}
                       onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}

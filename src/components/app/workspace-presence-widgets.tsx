@@ -54,6 +54,7 @@ const ONLINE_LIST_ROW_HEIGHT_PX = 60;
 
 export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineNowDropdownProps) {
   const listRef = React.useRef<HTMLDivElement | null>(null);
+  const dropdownBodyRef = React.useRef<HTMLDivElement | null>(null);
   const [showTopFade, setShowTopFade] = React.useState(false);
   const [showBottomFade, setShowBottomFade] = React.useState(false);
   const needsScroll = !loading && entries.length > ONLINE_LIST_VISIBLE_ROWS;
@@ -75,7 +76,7 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
     setShowBottomFade(node.scrollTop < maxScrollTop - 2);
   }, []);
 
-  const handleListWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+  const handleListWheel = React.useCallback((event: WheelEvent) => {
     const node = listRef.current;
     if (!node || !needsScroll) return;
 
@@ -102,6 +103,30 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
     updateScrollHints();
   }, [entries.length, loading, updateScrollHints]);
 
+  React.useEffect(() => {
+    const bodyNode = dropdownBodyRef.current;
+    if (!bodyNode) return;
+
+    const stopWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    bodyNode.addEventListener("wheel", stopWheel, { passive: false });
+    return () => {
+      bodyNode.removeEventListener("wheel", stopWheel);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const node = listRef.current;
+    if (!node) return;
+    node.addEventListener("wheel", handleListWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handleListWheel);
+    };
+  }, [handleListWheel]);
+
   return (
     <AppDropdown
       align="end"
@@ -122,11 +147,8 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
       }
       content={
         <div
+          ref={dropdownBodyRef}
           className="py-1"
-          onWheelCapture={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
         >
           <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Онлайн зараз ({entries.length})
@@ -144,7 +166,6 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
                   needsScroll ? "overflow-y-auto" : "overflow-hidden"
                 )}
                 style={needsScroll ? { maxHeight: `${ONLINE_LIST_VISIBLE_ROWS * ONLINE_LIST_ROW_HEIGHT_PX}px` } : undefined}
-                onWheel={handleListWheel}
                 onWheelCapture={(event) => event.stopPropagation()}
                 onScroll={updateScrollHints}
               >

@@ -87,14 +87,6 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
   const totalModels = allModelsWithContext.length;
   const incompleteModels = allModelsWithContext.filter((item) => !item.validation.isValid).length;
 
-  // Auto-select first type and kind if available
-  if (catalog.length > 0 && !selectedTypeId) {
-    const nextTypeId = catalog[0].id;
-    const nextKindId = catalog[0].kinds[0]?.id ?? "";
-    setSelectedTypeId(nextTypeId);
-    setSelectedKindId(nextKindId);
-  }
-
   return {
     selectedTypeId,
     setSelectedTypeId,

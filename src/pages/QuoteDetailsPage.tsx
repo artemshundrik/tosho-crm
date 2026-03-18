@@ -231,6 +231,14 @@ type QuoteItem = {
     type: string;
     url: string;
   };
+  resolvedTypeId?: string;
+  resolvedTypeName?: string;
+  resolvedKindId?: string;
+  resolvedKindName?: string;
+  resolvedModelId?: string;
+  resolvedModelName?: string;
+  resolvedModelImageUrl?: string;
+  resolvedMethodNames?: Record<string, string>;
 };
 type QuoteComment = {
   id: string;
@@ -299,6 +307,12 @@ type DesignTaskCandidate = {
   metadata: Record<string, unknown>;
   selectedFile: DesignOutputMetaFile | null;
   outputsCount: number;
+};
+
+type ResolvedCatalogSelection = {
+  typeId?: string;
+  kindId?: string;
+  modelId?: string;
 };
 
 type ActivityIcon = LucideIcon;
@@ -430,6 +444,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
 
   const [runs, setRuns] = useState<QuoteRun[]>([]);
   const [runsOriginal, setRunsOriginal] = useState<QuoteRun[]>([]);
@@ -925,6 +940,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [selectedRun]);
 
   const [runsLoaded, setRunsLoaded] = useState(false);
+  const quoteSectionsBootstrapping = !itemsLoaded || !runsLoaded;
 
   const toDateInputValue = (value?: string | null) => {
     if (!value) return "";
@@ -1491,13 +1507,63 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [itemsSubtotal, runs.length, selectedRunPricing.saleTotal]);
 
+  const catalogSelectionIndex = useMemo(() => {
+    const typeIdByKindId = new Map<string, string>();
+    const pathByModelId = new Map<string, { typeId: string; kindId: string }>();
+
+    catalogTypes.forEach((type) => {
+      type.kinds.forEach((kind) => {
+        typeIdByKindId.set(kind.id, type.id);
+        kind.models.forEach((model) => {
+          pathByModelId.set(model.id, { typeId: type.id, kindId: kind.id });
+        });
+      });
+    });
+
+    return { typeIdByKindId, pathByModelId };
+  }, [catalogTypes]);
+
+  const resolveCatalogSelection = useCallback(
+    ({ typeId, kindId, modelId }: ResolvedCatalogSelection): ResolvedCatalogSelection => {
+      if (modelId) {
+        const modelPath = catalogSelectionIndex.pathByModelId.get(modelId);
+        if (modelPath) return { typeId: modelPath.typeId, kindId: modelPath.kindId, modelId };
+      }
+
+      if (kindId) {
+        return {
+          typeId: catalogSelectionIndex.typeIdByKindId.get(kindId) ?? typeId,
+          kindId,
+          modelId,
+        };
+      }
+
+      return { typeId, kindId, modelId };
+    },
+    [catalogSelectionIndex]
+  );
+
+  const resolvedItemSelection = useMemo(
+    () =>
+      resolveCatalogSelection({
+        typeId: itemTypeId || undefined,
+        kindId: itemKindId || undefined,
+        modelId: itemModelId || undefined,
+      }),
+    [itemKindId, itemModelId, itemTypeId, resolveCatalogSelection]
+  );
+
+  const effectiveItemTypeId = resolvedItemSelection.typeId ?? itemTypeId;
+  const effectiveItemKindId = resolvedItemSelection.kindId ?? itemKindId;
+  const effectiveItemModelId = resolvedItemSelection.modelId ?? itemModelId;
+
   const selectedType = useMemo(
-    () => catalogTypes.find((type) => type.id === itemTypeId) ?? null,
-    [catalogTypes, itemTypeId]
+    () => catalogTypes.find((type) => type.id === effectiveItemTypeId) ?? null,
+    [catalogTypes, effectiveItemTypeId]
   );
 
   const availableKinds = selectedType?.kinds ?? [];
-  const selectedKind = availableKinds.find((kind) => kind.id === itemKindId) ?? null;
+  const selectedKind = availableKinds.find((kind) => kind.id === effectiveItemKindId) ?? null;
   const availableModels = selectedKind?.models ?? [];
 // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableMethods = selectedKind?.methods ?? [];
@@ -1525,12 +1591,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return Number(itemPrice) || 0;
     }
     const qty = Math.max(1, Number(itemQty) || 1);
-    const base = getModelPrice(catalogTypes, itemTypeId, itemKindId, itemModelId, qty);
+    const base = getModelPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId, qty);
     const methodsTotal = itemMethods.reduce((sum, method) => {
-      return sum + getMethodPrice(catalogTypes, itemTypeId, itemKindId, method.methodId) * method.count;
+      return sum + getMethodPrice(catalogTypes, effectiveItemTypeId, effectiveItemKindId, method.methodId) * method.count;
     }, 0);
     return Math.max(0, base + methodsTotal);
-  }, [catalogTypes, itemTypeId, itemKindId, itemModelId, itemMethods, itemPrice, itemFormMode, itemQty]);
+  }, [catalogTypes, effectiveItemKindId, effectiveItemModelId, effectiveItemTypeId, itemMethods, itemPrice, itemFormMode, itemQty]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1540,67 +1606,139 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setCatalogLoading(true);
       setCatalogError(null);
       try {
-        const { data: typeRows, error: typeError } = await supabase
-          .schema("tosho")
-          .from("catalog_types")
-          .select("id,name,sort_order")
-          .eq("team_id", teamId)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true });
+        const [
+          { data: typeRows, error: typeError },
+          { data: kindRows, error: kindError },
+          { data: modelRows, error: modelError },
+        ] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("catalog_types")
+            .select("id,name,sort_order")
+            .eq("team_id", teamId)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+          supabase
+            .schema("tosho")
+            .from("catalog_kinds")
+            .select("id,type_id,name,sort_order")
+            .eq("team_id", teamId)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true }),
+          supabase
+            .schema("tosho")
+            .from("catalog_models")
+            .select("id,kind_id,name,price,image_url,metadata")
+            .eq("team_id", teamId)
+            .order("name", { ascending: true }),
+        ]);
+
         if (typeError) throw typeError;
-
-        const { data: kindRows, error: kindError } = await supabase
-          .schema("tosho")
-          .from("catalog_kinds")
-          .select("id,type_id,name,sort_order")
-          .eq("team_id", teamId)
-          .order("sort_order", { ascending: true })
-          .order("name", { ascending: true });
         if (kindError) throw kindError;
-
-        const { data: modelRows, error: modelError } = await supabase
-          .schema("tosho")
-          .from("catalog_models")
-          .select("id,kind_id,name,price,image_url,metadata")
-          .eq("team_id", teamId)
-          .order("name", { ascending: true });
         if (modelError) throw modelError;
 
-        const { data: methodRows, error: methodError } = await supabase
-          .schema("tosho")
-          .from("catalog_methods")
-          .select("id,kind_id,name,price")
-          .eq("team_id", teamId)
-          .order("name", { ascending: true });
-        if (methodError) throw methodError;
+        const buildCatalog = ({
+          methodsByKind,
+          printPositionsByKind,
+          methodIdsByModel,
+          tiersByModel,
+        }: {
+          methodsByKind: Map<string, CatalogMethod[]>;
+          printPositionsByKind: Map<string, CatalogPrintPosition[]>;
+          methodIdsByModel: Map<string, string[]>;
+          tiersByModel: Map<string, CatalogPriceTier[]>;
+        }) => {
+          const modelsByKind = new Map<string, CatalogModel[]>();
+          (modelRows ?? []).forEach((row) => {
+            const list = modelsByKind.get(row.kind_id) ?? [];
+            list.push({
+              id: row.id,
+              name: row.name,
+              price: row.price ?? undefined,
+              imageUrl: row.image_url ?? undefined,
+              metadata:
+                row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                  ? (row.metadata as CatalogModel["metadata"])
+                  : undefined,
+              methodIds: methodIdsByModel.get(row.id) ?? [],
+              priceTiers: tiersByModel.get(row.id),
+            });
+            modelsByKind.set(row.kind_id, list);
+          });
 
-        const { data: printRows, error: printError } = await supabase
-          .schema("tosho")
-          .from("catalog_print_positions")
-          .select("id,kind_id,label,sort_order")
-          .order("sort_order", { ascending: true })
-          .order("label", { ascending: true });
-        if (printError) throw printError;
+          const kindsByType = new Map<string, CatalogKind[]>();
+          (kindRows ?? []).forEach((row) => {
+            const list = kindsByType.get(row.type_id) ?? [];
+            const models = modelsByKind.get(row.id) ?? [];
+            list.push({
+              id: row.id,
+              name: row.name,
+              modelCount: models.length,
+              models,
+              methods: methodsByKind.get(row.id) ?? [],
+              printPositions: printPositionsByKind.get(row.id) ?? [],
+            });
+            kindsByType.set(row.type_id, list);
+          });
+
+          return (typeRows ?? []).map((row) => ({
+            id: row.id,
+            name: row.name,
+            kinds: kindsByType.get(row.id) ?? [],
+          }));
+        };
+
+        if (!cancelled) {
+          setCatalogTypes(
+            buildCatalog({
+              methodsByKind: new Map(),
+              printPositionsByKind: new Map(),
+              methodIdsByModel: new Map(),
+              tiersByModel: new Map(),
+            })
+          );
+          setCatalogLoading(false);
+        }
 
         const modelIds = (modelRows ?? []).map((row) => row.id);
+        const [
+          { data: methodRows, error: methodError },
+          { data: printRows, error: printError },
+          { data: modelMethodRows, error: modelMethodError },
+          { data: tierRows, error: tierError },
+        ] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("catalog_methods")
+            .select("id,kind_id,name,price")
+            .eq("team_id", teamId)
+            .order("name", { ascending: true }),
+          supabase
+            .schema("tosho")
+            .from("catalog_print_positions")
+            .select("id,kind_id,label,sort_order")
+            .order("sort_order", { ascending: true })
+            .order("label", { ascending: true }),
+          modelIds.length
+            ? supabase
+                .schema("tosho")
+                .from("catalog_model_methods")
+                .select("model_id,method_id")
+                .in("model_id", modelIds)
+            : Promise.resolve({ data: [], error: null }),
+          modelIds.length
+            ? supabase
+                .schema("tosho")
+                .from("catalog_price_tiers")
+                .select("id,model_id,min_qty,max_qty,price")
+                .in("model_id", modelIds)
+                .order("min_qty", { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+        ]);
 
-        const { data: modelMethodRows, error: modelMethodError } = modelIds.length
-          ? await supabase
-              .schema("tosho")
-              .from("catalog_model_methods")
-              .select("model_id,method_id")
-              .in("model_id", modelIds)
-          : { data: [], error: null };
+        if (methodError) throw methodError;
+        if (printError) throw printError;
         if (modelMethodError) throw modelMethodError;
-
-        const { data: tierRows, error: tierError } = modelIds.length
-          ? await supabase
-              .schema("tosho")
-              .from("catalog_price_tiers")
-              .select("id,model_id,min_qty,max_qty,price")
-              .in("model_id", modelIds)
-              .order("min_qty", { ascending: true })
-          : { data: [], error: null };
         if (tierError) throw tierError;
 
         const methodIdsByModel = new Map<string, string[]>();
@@ -1613,12 +1751,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const tiersByModel = new Map<string, CatalogPriceTier[]>();
         (tierRows ?? []).forEach((row) => {
           const list = tiersByModel.get(row.model_id) ?? [];
-          list.push({
-            id: row.id,
-            min: row.min_qty,
-            max: row.max_qty,
-            price: row.price,
-          });
+          list.push({ id: row.id, min: row.min_qty, max: row.max_qty, price: row.price });
           tiersByModel.set(row.model_id, list);
         });
 
@@ -1636,44 +1769,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           printPositionsByKind.set(row.kind_id, list);
         });
 
-        const modelsByKind = new Map<string, CatalogModel[]>();
-        (modelRows ?? []).forEach((row) => {
-          const list = modelsByKind.get(row.kind_id) ?? [];
-          list.push({
-            id: row.id,
-            name: row.name,
-            price: row.price ?? undefined,
-            imageUrl: row.image_url ?? undefined,
-            metadata:
-              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as CatalogModel["metadata"])
-                : undefined,
-            priceTiers: tiersByModel.get(row.id),
-          });
-          modelsByKind.set(row.kind_id, list);
-        });
-
-        const kindsByType = new Map<string, CatalogKind[]>();
-        (kindRows ?? []).forEach((row) => {
-          const list = kindsByType.get(row.type_id) ?? [];
-          list.push({
-            id: row.id,
-            name: row.name,
-            models: modelsByKind.get(row.id) ?? [],
-            methods: methodsByKind.get(row.id) ?? [],
-            printPositions: printPositionsByKind.get(row.id) ?? [],
-          });
-          kindsByType.set(row.type_id, list);
-        });
-
-        const nextCatalog = (typeRows ?? []).map((row) => ({
-          id: row.id,
-          name: row.name,
-          kinds: kindsByType.get(row.id) ?? [],
-        }));
-
         if (!cancelled) {
-          setCatalogTypes(nextCatalog);
+          setCatalogTypes(
+            buildCatalog({
+              methodsByKind,
+              printPositionsByKind,
+              methodIdsByModel,
+              tiersByModel,
+            })
+          );
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -1728,6 +1832,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (teamMembers.length === 0) return;
+    if (import.meta.env.DEV) return;
 
     let active = true;
     const loadMentionLabelOverrides = async () => {
@@ -2380,6 +2485,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const loadItems = async () => {
     setItemsLoading(true);
+    setItemsLoaded(false);
     setItemsError(null);
     try {
       const quoteItemColumnsWithMetadata =
@@ -2423,6 +2529,91 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       }
       if (error) throw error;
       const rows = data ?? [];
+      const kindIds = Array.from(
+        new Set(
+          rows
+            .map((row: any) => (typeof row.catalog_kind_id === "string" ? row.catalog_kind_id.trim() : ""))
+            .filter(Boolean)
+        )
+      );
+      const modelIds = Array.from(
+        new Set(
+          rows
+            .map((row: any) => (typeof row.catalog_model_id === "string" ? row.catalog_model_id.trim() : ""))
+            .filter(Boolean)
+        )
+      );
+      const methodIds = Array.from(
+        new Set(
+          rows.flatMap((row: any) =>
+            Array.isArray(row.methods)
+              ? row.methods
+                  .map((method: any) =>
+                    typeof (method?.method_id ?? method?.methodId ?? method?.id) === "string"
+                      ? String(method.method_id ?? method.methodId ?? method.id).trim()
+                      : ""
+                  )
+                  .filter(Boolean)
+              : []
+          )
+        )
+      );
+
+      const [kindResult, modelResult, methodResult] = await Promise.all([
+        kindIds.length
+          ? supabase
+              .schema("tosho")
+              .from("catalog_kinds")
+              .select("id,type_id,name")
+              .in("id", kindIds)
+          : Promise.resolve({ data: [], error: null }),
+        modelIds.length
+          ? supabase
+              .schema("tosho")
+              .from("catalog_models")
+              .select("id,kind_id,name,image_url")
+              .in("id", modelIds)
+          : Promise.resolve({ data: [], error: null }),
+        methodIds.length
+          ? supabase
+              .schema("tosho")
+              .from("catalog_methods")
+              .select("id,name")
+              .in("id", methodIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (kindResult.error) throw kindResult.error;
+      if (modelResult.error) throw modelResult.error;
+      if (methodResult.error) throw methodResult.error;
+
+      const kindRows = (kindResult.data ?? []) as Array<{ id: string; type_id: string; name: string }>;
+      const modelRows = (modelResult.data ?? []) as Array<{
+        id: string;
+        kind_id: string;
+        name: string;
+        image_url: string | null;
+      }>;
+      const typeIds = Array.from(new Set(kindRows.map((row) => row.type_id).filter(Boolean)));
+
+      const typeResult = typeIds.length
+        ? await supabase
+            .schema("tosho")
+            .from("catalog_types")
+            .select("id,name")
+            .in("id", typeIds)
+        : { data: [], error: null };
+      if (typeResult.error) throw typeResult.error;
+
+      const kindById = new Map(kindRows.map((row) => [row.id, row]));
+      const modelById = new Map(modelRows.map((row) => [row.id, row]));
+      const methodById = new Map(
+        ((methodResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name])
+      );
+      const typeById = new Map(
+        ((typeResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row])
+      );
+
       setItems(
         rows.map((row: any) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
@@ -2463,6 +2654,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   url: row.attachment.url ?? "",
                 }
               : undefined;
+          const rawKindId = row.catalog_kind_id ?? undefined;
+          const rawModelId = row.catalog_model_id ?? undefined;
+          const resolvedModel = rawModelId ? modelById.get(rawModelId) : undefined;
+          const resolvedKind = (resolvedModel?.kind_id ? kindById.get(resolvedModel.kind_id) : undefined) ??
+            (rawKindId ? kindById.get(rawKindId) : undefined);
+          const resolvedType = resolvedKind?.type_id ? typeById.get(resolvedKind.type_id) : undefined;
+          const resolvedMethodNames = Object.fromEntries(
+            parsedMethods
+              .map((method) => [method.methodId, methodById.get(method.methodId)])
+              .filter((entry): entry is [string, string] => Boolean(entry[0] && entry[1]))
+          );
           return {
             id: row.id,
             position: row.position ?? undefined,
@@ -2483,6 +2685,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             productModelId: undefined,
             methods: parsedMethods.length > 0 ? parsedMethods : undefined,
             attachment,
+            resolvedTypeId: resolvedType?.id ?? undefined,
+            resolvedTypeName: resolvedType?.name ?? undefined,
+            resolvedKindId: resolvedKind?.id ?? undefined,
+            resolvedKindName: resolvedKind?.name ?? undefined,
+            resolvedModelId: resolvedModel?.id ?? undefined,
+            resolvedModelName: resolvedModel?.name ?? undefined,
+            resolvedModelImageUrl: resolvedModel?.image_url ?? undefined,
+            resolvedMethodNames,
           };
         })
       );
@@ -2491,6 +2701,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setItems([]);
     } finally {
       setItemsLoading(false);
+      setItemsLoaded(true);
     }
   };
 
@@ -2894,7 +3105,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   useEffect(() => {
+    if (!quoteId) return;
+    setItemsLoaded(false);
+    setRunsLoaded(false);
     void loadQuote();
+    void loadItems();
+    void loadRuns();
+    void loadAttachments();
+    void loadComments();
+    void loadActivityLog();
+    void loadDesignTask();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, teamId]);
 
@@ -2918,11 +3138,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [quoteId, teamId]);
 
   useEffect(() => {
-    void loadDesignTask();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteId, teamId]);
-
-  useEffect(() => {
     if (!quote || quote.id !== quoteId || !teamId) {
       setDesignTaskCandidates([]);
       return;
@@ -2934,11 +3149,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   useEffect(() => {
     if (!quote || quote.id !== quoteId || error) return;
     void loadHistory();
-    void loadItems();
-    void loadRuns();
-    void loadAttachments();
-    void loadComments();
-    void loadActivityLog();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.id, quoteId, error]);
 
@@ -3670,15 +3880,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const openEditItem = (item: QuoteItem) => {
+    const resolvedSelection = resolveCatalogSelection({
+      typeId: item.catalogTypeId ?? item.productTypeId ?? undefined,
+      kindId: item.catalogKindId ?? item.productKindId ?? undefined,
+      modelId: item.catalogModelId ?? item.productModelId ?? undefined,
+    });
     setEditingItemId(item.id);
     setItemTitle(item.title);
     setItemQty(String(item.qty));
     setItemUnit(normalizeUnitLabel(item.unit));
     setItemPrice(String(item.price));
     setItemDescription(item.description ?? "");
-    setItemTypeId(item.catalogTypeId ?? item.productTypeId ?? "");
-    setItemKindId(item.catalogKindId ?? item.productKindId ?? "");
-    setItemModelId(item.catalogModelId ?? item.productModelId ?? "");
+    setItemTypeId(resolvedSelection.typeId ?? "");
+    setItemKindId(resolvedSelection.kindId ?? "");
+    setItemModelId(resolvedSelection.modelId ?? "");
     setItemMethods(item.methods ?? []);
     setItemAttachment(item.attachment ?? null);
     setItemAttachmentError(null);
@@ -3823,23 +4038,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (itemFormMode !== "advanced") return;
-    if (!itemModelId) return;
-    const modelLabel = getModelLabel(catalogTypes, itemTypeId, itemKindId, itemModelId) ?? "";
+    if (!effectiveItemModelId) return;
+    const modelLabel = getModelLabel(
+      catalogTypes,
+      effectiveItemTypeId,
+      effectiveItemKindId,
+      effectiveItemModelId
+    ) ?? "";
     if (!modelLabel) return;
     if (!itemTitle.trim() || itemTitle === lastAutoTitle) {
       setItemTitle(modelLabel);
       setLastAutoTitle(modelLabel);
     }
-  }, [catalogTypes, itemFormMode, itemTypeId, itemKindId, itemModelId, itemTitle, lastAutoTitle]);
+  }, [
+    catalogTypes,
+    effectiveItemKindId,
+    effectiveItemModelId,
+    effectiveItemTypeId,
+    itemFormMode,
+    itemTitle,
+    lastAutoTitle,
+  ]);
 
   useEffect(() => {
     if (itemFormMode !== "advanced") return;
-    if (!itemModelId) return;
+    if (!effectiveItemModelId) return;
     if (autoMethodsApplied) return;
     if (availableMethods.length === 0) return;
     setItemMethods([{ id: createLocalId(), methodId: availableMethods[0].id, count: 1 }]);
     setAutoMethodsApplied(true);
-  }, [itemFormMode, itemModelId, availableMethods, autoMethodsApplied]);
+  }, [itemFormMode, effectiveItemModelId, availableMethods, autoMethodsApplied]);
 
   const handleSaveItem = async () => {
     if (!itemTitle.trim()) return;
@@ -3880,12 +4108,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       price: computedItemPrice,
       description: itemDescription.trim() || undefined,
       metadata: existingItemMetadata,
-      catalogTypeId: itemFormMode === "advanced" ? itemTypeId : undefined,
-      catalogKindId: itemFormMode === "advanced" ? itemKindId : undefined,
-      catalogModelId: itemFormMode === "advanced" ? itemModelId : undefined,
-      productTypeId: itemFormMode === "advanced" ? itemTypeId : undefined,
-      productKindId: itemFormMode === "advanced" ? itemKindId : undefined,
-      productModelId: itemFormMode === "advanced" ? itemModelId : undefined,
+      catalogTypeId: itemFormMode === "advanced" ? effectiveItemTypeId : undefined,
+      catalogKindId: itemFormMode === "advanced" ? effectiveItemKindId : undefined,
+      catalogModelId: itemFormMode === "advanced" ? effectiveItemModelId : undefined,
+      productTypeId: itemFormMode === "advanced" ? effectiveItemTypeId : undefined,
+      productKindId: itemFormMode === "advanced" ? effectiveItemKindId : undefined,
+      productModelId: itemFormMode === "advanced" ? effectiveItemModelId : undefined,
       methods: itemFormMode === "advanced" ? itemMethods : undefined,
       attachment: itemAttachment
         ? {
@@ -4542,7 +4770,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </summary>
 
-              {items.length === 0 && (
+              {quoteSectionsBootstrapping ? (
+                <AppSectionLoader label="Завантаження..." />
+              ) : itemsLoading ? (
+                <AppSectionLoader label="Завантаження..." />
+              ) : itemsError ? (
+                <div className="py-4 text-sm text-destructive">{itemsError}</div>
+              ) : items.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 px-6 py-10 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/30" />
                   <div>
@@ -4554,27 +4788,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     Обрати модель
                   </Button>
                 </div>
-              )}
-
-              {itemsLoading ? (
-                <AppSectionLoader label="Завантаження..." />
-              ) : itemsError ? (
-                <div className="py-4 text-sm text-destructive">{itemsError}</div>
-              ) : items.length === 0 ? null : (
+              ) : (
                 <div>
                   {items.slice(0, 1).map((item) => {
-                    const resolvedTypeId = item.catalogTypeId ?? item.productTypeId;
-                    const resolvedKindId = item.catalogKindId ?? item.productKindId;
-                    const resolvedModelId = item.catalogModelId ?? item.productModelId;
-                    const typeLabel = getTypeLabel(catalogTypes, resolvedTypeId);
-                    const kindLabel = getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
-                    const modelLabel = getModelLabel(
+                    const { typeId: resolvedTypeId, kindId: resolvedKindId, modelId: resolvedModelId } =
+                      resolveCatalogSelection({
+                        typeId: item.catalogTypeId ?? item.productTypeId ?? undefined,
+                        kindId: item.catalogKindId ?? item.productKindId ?? undefined,
+                        modelId: item.catalogModelId ?? item.productModelId ?? undefined,
+                      });
+                    const typeLabel =
+                      item.resolvedTypeName ?? getTypeLabel(catalogTypes, resolvedTypeId);
+                    const kindLabel =
+                      item.resolvedKindName ?? getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
+                    const modelLabel =
+                      item.resolvedModelName ??
+                      getModelLabel(
                       catalogTypes,
                       resolvedTypeId,
                       resolvedKindId,
                       resolvedModelId
                     );
-                    const metaLine = [typeLabel, kindLabel, modelLabel].filter(Boolean).join(" / ");
+                    const metaLine = [typeLabel, kindLabel].filter(Boolean).join(" / ");
                     const positionLabel = getPrintPositionLabel(
                       catalogTypes,
                       resolvedTypeId,
@@ -4589,14 +4824,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         : item.printHeightMm
                         ? `${item.printHeightMm} мм`
                         : null;
-                    const catalogImage = getModelImage(
+                    const catalogImage = item.resolvedModelImageUrl ?? getModelImage(
                       catalogTypes,
                       resolvedTypeId,
                       resolvedKindId,
                       resolvedModelId
                     );
-                    const productPreview = catalogImage
-                      ? { type: "image" as const, url: catalogImage }
+                    const attachmentImage =
+                      !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
+                        ? item.attachment.url
+                        : null;
+                    const productPreview = catalogImage || attachmentImage
+                      ? { type: "image" as const, url: catalogImage ?? attachmentImage ?? "" }
                       : null;
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
@@ -4643,17 +4882,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             title: "Нанесення",
                             fields: item.methods.map((method) => {
                               const methodName =
+                                item.resolvedMethodNames?.[method.methodId] ??
                                 getMethodLabel(
                                   catalogTypes,
-                                  item.catalogTypeId,
-                                  item.catalogKindId,
+                                  resolvedTypeId,
+                                  resolvedKindId,
                                   method.methodId
                                 ) ?? "Метод";
                               const place =
                                 getPrintPositionLabel(
                                   catalogTypes,
-                                  item.catalogTypeId,
-                                  item.catalogKindId,
+                                  resolvedTypeId,
+                                  resolvedKindId,
                                   method.printPositionId
                                 ) ?? positionLabel ?? "Місце не вказано";
                               const size =
@@ -4856,7 +5096,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </summary>
 
-              {runsLoading ? (
+              {quoteSectionsBootstrapping ? (
+                <AppSectionLoader label="Завантаження..." />
+              ) : runsLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-sm">Завантаження...</span>

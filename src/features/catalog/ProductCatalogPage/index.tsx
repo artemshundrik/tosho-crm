@@ -8,7 +8,7 @@
  * sub-components for a modular architecture.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { PageHeader } from "@/components/app/headers/PageHeader";
@@ -58,10 +58,28 @@ export default function ProductCatalogPage() {
   const { teamId, teamLoading, teamError } = useTeamData();
 
   // Load catalog data
-  const { catalog, setCatalog, catalogLoading, catalogError } = useCatalogData(teamId);
+  const {
+    catalog,
+    setCatalog,
+    catalogLoading,
+    catalogModelsLoading,
+    catalogError,
+    ensureKindModelsLoaded,
+    ensureAllModelsLoaded,
+  } = useCatalogData(teamId);
 
   // Initialize filters (will auto-select first type/kind when catalog loads)
   const filters = useFilters({ catalog });
+
+  useEffect(() => {
+    if (filters.globalSearch.trim()) {
+      void ensureAllModelsLoaded();
+      return;
+    }
+    if (filters.selectedKindId) {
+      void ensureKindModelsLoaded(filters.selectedKindId);
+    }
+  }, [ensureAllModelsLoaded, ensureKindModelsLoaded, filters.globalSearch, filters.selectedKindId]);
 
   // Bulk selection (for table view)
   const bulkSelection = useBulkSelection({
@@ -383,6 +401,8 @@ export default function ProductCatalogPage() {
               <SimpleModelGrid
                 filteredModels={filters.filteredGlobalModels}
                 globalSearch={filters.globalSearch}
+                hasActiveSelection={!!filters.selectedKindId || !!filters.globalSearch.trim()}
+                loading={catalogModelsLoading}
                 onClone={modelEditor.handleCloneModel}
                 onEdit={modelEditor.openEditDrawer}
                 onDelete={modelEditor.confirmDeleteModel}

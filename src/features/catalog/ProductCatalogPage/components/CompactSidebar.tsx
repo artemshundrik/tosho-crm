@@ -5,7 +5,7 @@
  * Based on the new design reference
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,11 +40,19 @@ export function CompactSidebar({
   onEditKind,
 }: CompactSidebarProps) {
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(
-    new Set(catalog.map((t) => t.id))
+    new Set(selectedTypeId ? [selectedTypeId] : [])
   );
   const [expandedGroups, setExpandedGroups] = useState<Set<QuoteType>>(
     new Set<QuoteType>(["merch", "print", "other"])
   );
+
+  useEffect(() => {
+    if (!selectedTypeId) return;
+    setExpandedTypes((prev) => {
+      if (prev.has(selectedTypeId)) return prev;
+      return new Set([...prev, selectedTypeId]);
+    });
+  }, [selectedTypeId]);
 
   const toggleType = (typeId: string) => {
     const newExpanded = new Set(expandedTypes);
@@ -229,7 +237,7 @@ export function CompactSidebar({
                                             isKindSelected ? "text-primary/70" : "text-muted-foreground/50"
                                           )}
                                         >
-                                          {kind.models.length}
+                                          {kind.modelCount}
                                         </span>
                                       </button>
                                       {onEditKind && (

@@ -179,22 +179,36 @@ export function useCategoryManager({
           const { error } = await supabase
             .schema("tosho")
             .from("catalog_kinds")
-            .update({ name })
+            .update({ name, type_id: selectedTypeForKind })
             .eq("id", editingKindId);
             
           if (error) throw error;
 
           // Update local state
-          setCatalog((prev) =>
-            prev.map((type) => ({
-              ...type,
-              kinds: type.kinds.map((kind) =>
-                kind.id === editingKindId
-                  ? { ...kind, name }
-                  : kind
-              ),
-            }))
-          );
+          setCatalog((prev) => {
+            let movedKind: CatalogKind | null = null;
+
+            const catalogWithoutKind = prev.map((type) => {
+              const existingKind = type.kinds.find((kind) => kind.id === editingKindId);
+              if (existingKind) {
+                movedKind = { ...existingKind, name };
+              }
+              return {
+                ...type,
+                kinds: type.kinds.filter((kind) => kind.id !== editingKindId),
+              };
+            });
+
+            if (!movedKind) return prev;
+
+            return catalogWithoutKind.map((type) =>
+              type.id === selectedTypeForKind
+                ? { ...type, kinds: [...type.kinds, movedKind as CatalogKind] }
+                : type
+            );
+          });
+          setSelectedTypeId(selectedTypeForKind);
+          setSelectedKindId(editingKindId);
           setEditingKindId(null); // Clear editing state
         } else {
           // INSERT new kind
@@ -210,6 +224,7 @@ export function useCategoryManager({
           const newKind: CatalogKind = {
             id: data.id,
             name: data.name,
+            modelCount: 0,
             models: [],
             methods: [],
             printPositions: [],

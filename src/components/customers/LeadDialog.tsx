@@ -22,11 +22,12 @@ import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/contro
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
+import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
 
 export type LeadFormState = {
   companyName: string;
   legalName: string;
+  ownershipType: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -61,6 +62,10 @@ export type LeadDialogProps = {
   onOpenChange: (open: boolean) => void;
   form: LeadFormState;
   setForm: React.Dispatch<React.SetStateAction<LeadFormState>>;
+  ownershipOptions?: Array<{
+    value: string;
+    label: string;
+  }>;
   teamMembers?: Array<{
     id: string;
     label: string;
@@ -129,6 +134,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   onOpenChange,
   form,
   setForm,
+  ownershipOptions = [],
   teamMembers = [],
   saving = false,
   error,
@@ -140,6 +146,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   orders = [],
   linkedLoading = false,
 }) => {
+  const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
@@ -149,6 +156,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
     "basic"
   );
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
+  const currentOwnership = ownershipOptions.find((option) => option.value === form.ownershipType);
+  const isFopOwnership = form.ownershipType === "fop";
 
   const hasManagerInList = teamMembers.some((member) => member.id === form.managerId || member.label === form.manager);
   const selectedManager =
@@ -165,6 +174,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
 
   React.useEffect(() => {
     if (!open) {
+      setOwnershipOpen(false);
       setLogoOpen(false);
       setManagerOpen(false);
       setReminderDateOpen(false);
@@ -212,6 +222,55 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Popover open={ownershipOpen} onOpenChange={setOwnershipOpen}>
+            <PopoverTrigger asChild>
+              <Chip
+                size="md"
+                icon={<Building2 className="h-4 w-4" />}
+                active={!!form.ownershipType}
+              >
+                {currentOwnership?.label ?? "Тип власності"}
+              </Chip>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2" align="start">
+              <div className="space-y-1">
+                {ownershipOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start gap-2 h-9 text-sm"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, ownershipType: option.value }));
+                      setOwnershipOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3.5 w-3.5 text-primary",
+                        form.ownershipType === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="text-sm">{option.label}</span>
+                  </Button>
+                ))}
+                {form.ownershipType ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start h-9 text-sm text-muted-foreground"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, ownershipType: "" }));
+                      setOwnershipOpen(false);
+                    }}
+                  >
+                    Очистити
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
               <Chip
@@ -393,11 +452,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Назва компанії *</Label>
+                    <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
                     <Input
                       value={form.companyName}
                       onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                      placeholder="Назва компанії"
+                      placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Назва компанії"}
                       className="h-9"
                     />
                   </div>
@@ -496,16 +555,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>Назва компанії *</Label>
+                      <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
                       <Input
                         value={form.companyName}
                         onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                        placeholder="Назва компанії"
+                        placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Назва компанії"}
                         className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>Юридична назва</Label>
+                      <Label>{isFopOwnership ? "Реєстраційна назва ФОП (ПІБ)" : "Юридична назва"}</Label>
                       <Input
                         value={form.legalName}
                         onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}

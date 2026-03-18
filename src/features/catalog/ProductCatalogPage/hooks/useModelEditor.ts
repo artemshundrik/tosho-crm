@@ -5,7 +5,7 @@
  * including price tiers, methods, and image handling
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogModel,
@@ -18,6 +18,15 @@ import type {
 } from "@/types/catalog";
 import { createLocalId, createNextTier, readImageFile } from "@/utils/catalogUtils";
 import { DEFAULT_PRICE } from "@/constants/catalog";
+
+const syncKindModelCounts = (catalog: CatalogType[]) =>
+  catalog.map((type) => ({
+    ...type,
+    kinds: type.kinds.map((kind) => ({
+      ...kind,
+      modelCount: kind.models.length,
+    })),
+  }));
 
 interface UseModelEditorProps {
   teamId: string | null;
@@ -72,6 +81,29 @@ export function useModelEditor({
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlinePrice, setInlinePrice] = useState("");
 
+  const loadPriceTiersForModel = useCallback(
+    async (modelId: string): Promise<CatalogPriceTier[]> => {
+      if (!teamId || !modelId) return [];
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_price_tiers")
+        .select("id,min_qty,max_qty,price")
+        .eq("model_id", modelId)
+        .order("min_qty", { ascending: true });
+
+      if (error) throw error;
+
+      return (data ?? []).map((tier) => ({
+        id: tier.id,
+        min: tier.min_qty,
+        max: tier.max_qty,
+        price: tier.price,
+      }));
+    },
+    [teamId]
+  );
+
   /**
    * Opens drawer for creating a new model
    */
@@ -92,11 +124,35 @@ export function useModelEditor({
   /**
    * Opens drawer for editing an existing model
    */
-  const openEditDrawer = (modelId: string) => {
+  const openEditDrawer = async (modelId: string) => {
     const item = allModelsWithContext.find((i) => i.model.id === modelId);
     if (!item) return;
 
-    const { model } = item;
+    let { model } = item;
+
+    if (model.priceTiers === undefined) {
+      try {
+        const fetchedTiers = await loadPriceTiersForModel(model.id);
+        model = {
+          ...model,
+          priceTiers: fetchedTiers.length > 0 ? fetchedTiers : undefined,
+        };
+
+        setCatalog((prev) =>
+          prev.map((type) => ({
+            ...type,
+            kinds: type.kinds.map((kind) => ({
+              ...kind,
+              models: kind.models.map((existingModel) =>
+                existingModel.id === model.id ? model : existingModel
+              ),
+            })),
+          }))
+        );
+      } catch (error) {
+        console.error("load price tiers failed", error);
+      }
+    }
 
     setEditingModelId(model.id);
     setDraftTypeId(item.typeId);
@@ -603,7 +659,7 @@ export function useModelEditor({
           })),
         }));
 
-        return cleanedCatalog.map((type) => {
+        return syncKindModelCounts(cleanedCatalog.map((type) => {
           if (type.id !== draftTypeId) return type;
           return {
             ...type,
@@ -612,7 +668,7 @@ export function useModelEditor({
               return { ...kind, models: [...kind.models, { ...nextModel, id: persistedModelId }] };
             }),
           };
-        });
+        }));
       });
 
       setDrawerOpen(false);
@@ -650,13 +706,13 @@ export function useModelEditor({
     }
     
     setCatalog((prev) =>
-      prev.map((type) => ({
+      syncKindModelCounts(prev.map((type) => ({
         ...type,
         kinds: type.kinds.map((kind) => ({
           ...kind,
           models: kind.models.filter((model) => model.id !== modelToDelete),
         })),
-      }))
+      })))
     );
     
     setDeleteDialogOpen(false);
@@ -673,9 +729,20 @@ export function useModelEditor({
     const item = allModelsWithContext.find((i) => i.model.id === modelId);
     if (!item) return;
 
+    let sourcePriceTiers = item.model.priceTiers;
+    if (sourcePriceTiers === undefined) {
+      try {
+        sourcePriceTiers = await loadPriceTiersForModel(item.model.id);
+      } catch (error) {
+        console.error("clone model load price tiers failed", error);
+        sourcePriceTiers = [];
+      }
+    }
+
     const clonedModel: CatalogModel = {
       ...item.model,
       name: `${item.model.name} (копія)`,
+      priceTiers: sourcePriceTiers && sourcePriceTiers.length > 0 ? sourcePriceTiers : undefined,
     };
 
     const { data: insertModel, error: insertError } = await supabase
@@ -726,7 +793,7 @@ export function useModelEditor({
 
     const nextModel = { ...clonedModel, id: newModelId };
     setCatalog((prev) =>
-      prev.map((type) => {
+      syncKindModelCounts(prev.map((type) => {
         if (type.id !== item.typeId) return type;
         return {
           ...type,
@@ -735,7 +802,7 @@ export function useModelEditor({
             return { ...kind, models: [...kind.models, nextModel] };
           }),
         };
-      })
+      }))
     );
   };
 

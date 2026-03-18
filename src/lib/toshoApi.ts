@@ -605,8 +605,8 @@ export async function getQuoteSummary(quoteId: string) {
   try {
     const { data, error } = await supabase
       .schema("tosho")
-      .from("v_quotes_list")
-      .select("id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,processing_minutes,deadline_at,deadline_note")
+      .from("quotes")
+      .select("id,team_id,customer_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,delivery_details,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment")
       .eq("id", quoteId)
       .single();
     handleError(error);
@@ -819,7 +819,7 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
     return await query;
   };
 
-  let { data, error } = await runQuery(!!teamId);
+  let { data, error } = await runQuery(false);
   if (
     error &&
     teamId &&

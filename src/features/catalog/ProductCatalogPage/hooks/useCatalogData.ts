@@ -5,7 +5,7 @@
  * models, methods, price tiers, and print positions
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   CatalogType,
@@ -30,20 +30,198 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 const normalizeQuoteType = (value?: string | null): "merch" | "print" | "other" =>
   value === "merch" || value === "print" || value === "other" ? value : "other";
 
+const normalizeCatalogModelCounts = (catalog: CatalogType[]) =>
+  catalog.map((type) => ({
+    ...type,
+    kinds: type.kinds.map((kind) => ({
+      ...kind,
+      modelCount: typeof kind.modelCount === "number" ? kind.modelCount : kind.models.length,
+    })),
+  }));
+
 export function useCatalogData(teamId: string | null) {
   const cacheKey = useMemo(() => (teamId ? `catalog:${teamId}` : "catalog:none"), [teamId]);
   const { cached, setCache, isStale } = usePageCache<CatalogType[]>(cacheKey);
-  const [catalog, setCatalog] = useState<CatalogType[]>(cached ?? INITIAL_CATALOG);
+  const [catalog, setCatalog] = useState<CatalogType[]>(() =>
+    cached ? normalizeCatalogModelCounts(cached) : INITIAL_CATALOG
+  );
   const [catalogLoading, setCatalogLoading] = useState(!cached);
+  const [catalogModelsLoading, setCatalogModelsLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const loadedKindIdsRef = useRef<Set<string>>(new Set());
+  const allModelsLoadedRef = useRef(false);
+
+  const mergeModelsIntoCatalog = useCallback(
+    (
+      baseCatalog: CatalogType[],
+      payload: {
+        models: Array<{ id: string; kind_id: string; name: string; price: number | null; image_url: string | null; metadata: unknown }>;
+        modelMethods: Array<{ model_id: string; method_id: string }>;
+        tiers: Array<{ id: string; model_id: string; min_qty: number; max_qty: number | null; price: number }>;
+        targetKindIds?: Set<string> | null;
+      }
+    ) => {
+      const methodIdsByModel = new Map<string, string[]>();
+      payload.modelMethods.forEach((row) => {
+        const list = methodIdsByModel.get(row.model_id) ?? [];
+        list.push(row.method_id);
+        methodIdsByModel.set(row.model_id, list);
+      });
+
+      const tiersByModel = new Map<string, CatalogPriceTier[]>();
+      payload.tiers.forEach((row) => {
+        const list = tiersByModel.get(row.model_id) ?? [];
+        list.push({
+          id: row.id,
+          min: row.min_qty,
+          max: row.max_qty,
+          price: row.price,
+        });
+        tiersByModel.set(row.model_id, list);
+      });
+
+      const modelsByKind = new Map<string, CatalogModel[]>();
+      payload.models.forEach((row) => {
+        const list = modelsByKind.get(row.kind_id) ?? [];
+        list.push({
+          id: row.id,
+          name: row.name,
+          price: row.price ?? undefined,
+          imageUrl: row.image_url ?? undefined,
+          metadata:
+            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+              ? (row.metadata as CatalogModel["metadata"])
+              : undefined,
+          methodIds: methodIdsByModel.get(row.id) ?? [],
+          priceTiers: tiersByModel.get(row.id),
+        });
+        modelsByKind.set(row.kind_id, list);
+      });
+
+      return baseCatalog.map((type) => ({
+        ...type,
+        kinds: type.kinds.map((kind) => {
+          if (payload.targetKindIds && !payload.targetKindIds.has(kind.id)) return kind;
+          const nextModels = modelsByKind.get(kind.id) ?? [];
+          return { ...kind, models: nextModels, modelCount: nextModels.length };
+        }),
+      }));
+    },
+    []
+  );
+
+  const loadModelPayload = useCallback(
+    async (kindIds?: string[]) => {
+      if (!teamId) return { models: [], modelMethods: [], tiers: [] };
+
+      let modelsQuery = supabase
+        .schema("tosho")
+        .from("catalog_models")
+        .select("id,kind_id,name,price,image_url,metadata")
+        .eq("team_id", teamId)
+        .order("name", { ascending: true });
+
+      if (kindIds && kindIds.length > 0) {
+        modelsQuery = modelsQuery.in("kind_id", kindIds);
+      }
+
+      const { data: modelRows, error: modelError } = await modelsQuery;
+      if (modelError) throw modelError;
+
+      const modelIds = (modelRows ?? []).map((row) => row.id);
+      if (modelIds.length === 0) {
+        return { models: [], modelMethods: [], tiers: [] };
+      }
+
+      const [{ data: modelMethodRows, error: modelMethodError }] =
+        await Promise.all([
+          supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds),
+        ]);
+
+      if (modelMethodError) throw modelMethodError;
+
+      return {
+        models: (modelRows ?? []) as Array<{
+          id: string;
+          kind_id: string;
+          name: string;
+          price: number | null;
+          image_url: string | null;
+          metadata: unknown;
+        }>,
+        modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
+        tiers: [],
+      };
+    },
+    [teamId]
+  );
+
+  const ensureKindModelsLoaded = useCallback(
+    async (kindId?: string | null) => {
+      const normalizedKindId = (kindId ?? "").trim();
+      if (!normalizedKindId || !teamId || allModelsLoadedRef.current || loadedKindIdsRef.current.has(normalizedKindId)) return;
+      setCatalogModelsLoading(true);
+      setCatalogError(null);
+      try {
+        const payload = await loadModelPayload([normalizedKindId]);
+        const targetKindIds = new Set([normalizedKindId]);
+        setCatalog((prev) => {
+          const next = mergeModelsIntoCatalog(prev, { ...payload, targetKindIds });
+          setCache(next);
+          return next;
+        });
+        loadedKindIdsRef.current.add(normalizedKindId);
+      } catch (e: unknown) {
+        setCatalogError(getErrorMessage(e, "Не вдалося завантажити моделі каталогу"));
+      } finally {
+        setCatalogModelsLoading(false);
+      }
+    },
+    [loadModelPayload, mergeModelsIntoCatalog, setCache, teamId]
+  );
+
+  const ensureAllModelsLoaded = useCallback(async () => {
+    if (!teamId || allModelsLoadedRef.current) return;
+    setCatalogModelsLoading(true);
+    setCatalogError(null);
+    try {
+      const payload = await loadModelPayload();
+      setCatalog((prev) => {
+        const next = mergeModelsIntoCatalog(prev, { ...payload, targetKindIds: null });
+        setCache(next);
+        return next;
+      });
+      allModelsLoadedRef.current = true;
+      const nextLoadedKindIds = new Set<string>();
+      payload.models.forEach((row) => nextLoadedKindIds.add(row.kind_id));
+      loadedKindIdsRef.current = nextLoadedKindIds;
+    } catch (e: unknown) {
+      setCatalogError(getErrorMessage(e, "Не вдалося завантажити моделі каталогу"));
+    } finally {
+      setCatalogModelsLoading(false);
+    }
+  }, [loadModelPayload, mergeModelsIntoCatalog, setCache, teamId]);
 
   useEffect(() => {
     if (!teamId) return;
     if (cached) {
-      setCatalog(cached);
+      const normalizedCached = normalizeCatalogModelCounts(cached);
+      setCatalog(normalizedCached);
+      const nextLoadedKindIds = new Set<string>();
+      normalizedCached.forEach((type) => {
+        type.kinds.forEach((kind) => {
+          if ((kind.models?.length ?? 0) > 0) {
+            nextLoadedKindIds.add(kind.id);
+          }
+        });
+      });
+      loadedKindIdsRef.current = nextLoadedKindIds;
+      allModelsLoadedRef.current = false;
       return;
     }
     setCatalog(INITIAL_CATALOG);
+    loadedKindIdsRef.current = new Set();
+    allModelsLoadedRef.current = false;
   }, [teamId, cached]);
 
   useEffect(() => {
@@ -86,9 +264,8 @@ export function useCatalogData(teamId: string | null) {
           supabase
             .schema("tosho")
             .from("catalog_models")
-            .select("id,kind_id,name,price,image_url,metadata")
-            .eq("team_id", teamId)
-            .order("name", { ascending: true }),
+            .select("id,kind_id")
+            .eq("team_id", teamId),
           supabase
             .schema("tosho")
             .from("catalog_methods")
@@ -109,49 +286,9 @@ export function useCatalogData(teamId: string | null) {
         if (methodError) throw methodError;
         if (printError) throw printError;
 
-        const modelIds = (modelRows ?? []).map((row) => row.id);
-
-        // Load related data for models
-        const [
-          { data: modelMethodRows, error: modelMethodError },
-          { data: tierRows, error: tierError },
-        ] = modelIds.length
-          ? await Promise.all([
-              supabase
-                .schema("tosho")
-                .from("catalog_model_methods")
-                .select("model_id,method_id")
-                .in("model_id", modelIds),
-              supabase
-                .schema("tosho")
-                .from("catalog_price_tiers")
-                .select("id,model_id,min_qty,max_qty,price")
-                .in("model_id", modelIds)
-                .order("min_qty", { ascending: true }),
-            ])
-          : [{ data: [], error: null }, { data: [], error: null }];
-
-        if (modelMethodError) throw modelMethodError;
-        if (tierError) throw tierError;
-
-        // Build lookup maps
-        const methodIdsByModel = new Map<string, string[]>();
-        (modelMethodRows ?? []).forEach((row) => {
-          const list = methodIdsByModel.get(row.model_id) ?? [];
-          list.push(row.method_id);
-          methodIdsByModel.set(row.model_id, list);
-        });
-
-        const tiersByModel = new Map<string, CatalogPriceTier[]>();
-        (tierRows ?? []).forEach((row) => {
-          const list = tiersByModel.get(row.model_id) ?? [];
-          list.push({
-            id: row.id,
-            min: row.min_qty,
-            max: row.max_qty,
-            price: row.price,
-          });
-          tiersByModel.set(row.model_id, list);
+        const modelCountByKind = new Map<string, number>();
+        (modelRows ?? []).forEach((row) => {
+          modelCountByKind.set(row.kind_id, (modelCountByKind.get(row.kind_id) ?? 0) + 1);
         });
 
         const methodsByKind = new Map<string, CatalogMethod[]>();
@@ -168,31 +305,14 @@ export function useCatalogData(teamId: string | null) {
           printPositionsByKind.set(row.kind_id, list);
         });
 
-        const modelsByKind = new Map<string, CatalogModel[]>();
-        (modelRows ?? []).forEach((row) => {
-          const list = modelsByKind.get(row.kind_id) ?? [];
-          list.push({
-            id: row.id,
-            name: row.name,
-            price: row.price ?? undefined,
-            imageUrl: row.image_url ?? undefined,
-            metadata:
-              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as CatalogModel["metadata"])
-                : undefined,
-            methodIds: methodIdsByModel.get(row.id) ?? [],
-            priceTiers: tiersByModel.get(row.id),
-          });
-          modelsByKind.set(row.kind_id, list);
-        });
-
         const kindsByType = new Map<string, CatalogKind[]>();
         (kindRows ?? []).forEach((row) => {
           const list = kindsByType.get(row.type_id) ?? [];
           list.push({
             id: row.id,
             name: row.name,
-            models: modelsByKind.get(row.id) ?? [],
+            modelCount: modelCountByKind.get(row.id) ?? 0,
+            models: [],
             methods: methodsByKind.get(row.id) ?? [],
             printPositions: printPositionsByKind.get(row.id) ?? [],
           });
@@ -209,6 +329,8 @@ export function useCatalogData(teamId: string | null) {
         if (!cancelled) {
           setCatalog(nextCatalog);
           setCache(nextCatalog);
+          loadedKindIdsRef.current = new Set();
+          allModelsLoadedRef.current = false;
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -231,5 +353,13 @@ export function useCatalogData(teamId: string | null) {
     };
   }, [teamId, cached, isStale, setCache]);
 
-  return { catalog, setCatalog, catalogLoading, catalogError };
+  return {
+    catalog,
+    setCatalog,
+    catalogLoading,
+    catalogModelsLoading,
+    catalogError,
+    ensureKindModelsLoaded,
+    ensureAllModelsLoaded,
+  };
 }

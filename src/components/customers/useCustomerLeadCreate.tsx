@@ -72,6 +72,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
 const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string): LeadFormState => ({
   companyName: prefillName,
   legalName: "",
+  ownershipType: "",
   firstName: "",
   lastName: "",
   email: "",
@@ -265,6 +266,7 @@ export const useCustomerLeadCreate = ({
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
+      ownership_type: leadForm.ownershipType || null,
       logo_url: leadForm.logoUrl.trim() || null,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
@@ -308,6 +310,12 @@ export const useCustomerLeadCreate = ({
         if (message.includes("column") && message.includes("logo_url")) {
           const fallbackPayload = { ...basePayload };
           delete fallbackPayload.logo_url;
+          const fallbackRes = await createWithPayload(fallbackPayload);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        } else if (message.includes("column") && message.includes("ownership_type")) {
+          const fallbackPayload = { ...basePayload };
+          delete fallbackPayload.ownership_type;
           const fallbackRes = await createWithPayload(fallbackPayload);
           data = fallbackRes.data;
           error = fallbackRes.error;
@@ -375,6 +383,7 @@ export const useCustomerLeadCreate = ({
         }}
         form={leadForm}
         setForm={setLeadForm}
+        ownershipOptions={OWNERSHIP_OPTIONS}
         teamMembers={teamMembers}
         saving={leadSaving}
         error={leadError}

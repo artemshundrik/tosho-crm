@@ -6,12 +6,14 @@ export type CatalogModel = {
   name: string;
   price?: number;
   priceTiers?: CatalogPriceTier[];
+  methodIds?: string[];
   imageUrl?: string;
   metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
 };
 export type CatalogKind = {
   id: string;
   name: string;
+  modelCount: number;
   models: CatalogModel[];
   methods: CatalogMethod[];
   printPositions: CatalogPrintPosition[];
