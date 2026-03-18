@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Image as ImageIcon, Link2, Upload, X } from "lucide-react";
 import type { CatalogModelMetadata, CatalogType, ImageUploadMode } from "@/types/catalog";
+import * as React from "react";
 
 interface BasicInfoTabProps {
   catalog: CatalogType[];
@@ -47,6 +48,13 @@ export function BasicInfoTab({
   const draftKinds = catalog.find((t) => t.id === draftTypeId)?.kinds ?? [];
   const draftType = catalog.find((t) => t.id === draftTypeId);
   const showConfiguratorPreset = draftType?.quote_type === "print";
+  const [imageErrored, setImageErrored] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageErrored(false);
+  }, [draftImageUrl]);
+
+  const showImagePreview = Boolean(draftImageUrl) && !imageErrored;
 
   return (
     <div className="space-y-8">
@@ -60,21 +68,34 @@ export function BasicInfoTab({
         </div>
 
         <div className="flex gap-4">
-          {draftImageUrl && (
-            <div className="relative group">
+          <div className="relative group">
+            {showImagePreview ? (
               <img
                 src={draftImageUrl}
                 alt="Preview"
                 className="w-32 h-32 rounded-xl object-cover border-2 border-border/60"
+                onError={() => setImageErrored(true)}
               />
+            ) : (
+              <div className="w-32 h-32 rounded-xl border-2 border-dashed border-border/60 bg-muted/20 flex flex-col items-center justify-center text-center px-3">
+                <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+                <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+                  Немає фото
+                </div>
+                <div className="mt-1 text-[11px] text-muted-foreground/60">
+                  Додайте URL або файл
+                </div>
+              </div>
+            )}
+            {draftImageUrl ? (
               <button
                 onClick={() => onImageUrlChange("")}
                 className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
               >
                 <X className="h-3 w-3" />
               </button>
-            </div>
-          )}
+            ) : null}
+          </div>
 
           <div className="flex-1 space-y-3">
             <ToggleGroup

@@ -4,7 +4,7 @@
  * Simplified model card matching the reference design with product type placeholder
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ export function SimpleModelCard({
 }: SimpleModelCardProps) {
   const { model, kindName, validation } = item;
   const [isHovered, setIsHovered] = useState(false);
+  const [imageErrored, setImageErrored] = useState(false);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;
 
@@ -49,6 +50,10 @@ export function SimpleModelCard({
   };
 
   const productTypeLabel = getProductTypeLabel(kindName);
+
+  useEffect(() => {
+    setImageErrored(false);
+  }, [model.id, model.imageUrl]);
 
   // Get actual method names from the kind's methods
   const getMethodNames = () => {
@@ -113,11 +118,12 @@ export function SimpleModelCard({
 
       {/* Image / Placeholder */}
       <div className="relative w-full aspect-square bg-gradient-to-br from-muted/30 to-muted/10 rounded-t-xl overflow-hidden">
-        {model.imageUrl ? (
+        {model.imageUrl && !imageErrored ? (
           <img
             src={model.imageUrl}
             alt={model.name}
             className="w-full h-full object-cover"
+            onError={() => setImageErrored(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
