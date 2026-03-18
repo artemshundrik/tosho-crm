@@ -3397,7 +3397,13 @@ export default function DesignTaskPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
-    if (nextStatus === "changes") {
+    const statusChangedAt = typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
+    const deadlineUpdatedAt =
+      typeof task.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
+    const deadlineWasUpdatedAfterCurrentStatus =
+      !!deadlineUpdatedAt &&
+      (!statusChangedAt || new Date(deadlineUpdatedAt).getTime() > new Date(statusChangedAt).getTime());
+    if (nextStatus === "changes" && !deadlineWasUpdatedAfterCurrentStatus) {
       setDeadlineDraftDate(toLocalDate(task.designDeadline));
       const match = (task.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
       setDeadlineTime(match ? `${match[1]}:${match[2]}` : "12:00");
@@ -3424,6 +3430,7 @@ export default function DesignTaskPage() {
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: nextStatus,
+      status_changed_at: new Date().toISOString(),
       methods_count: task.methodsCount ?? 0,
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,
@@ -3547,6 +3554,7 @@ export default function DesignTaskPage() {
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       status: task.status,
+      deadline_updated_at: new Date().toISOString(),
       methods_count: task.methodsCount ?? 0,
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,

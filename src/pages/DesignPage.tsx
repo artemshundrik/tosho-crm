@@ -1975,7 +1975,13 @@ export default function DesignPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
-    if (next === "changes") {
+    const statusChangedAt = typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
+    const deadlineUpdatedAt =
+      typeof task.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
+    const deadlineWasUpdatedAfterCurrentStatus =
+      !!deadlineUpdatedAt &&
+      (!statusChangedAt || new Date(deadlineUpdatedAt).getTime() > new Date(statusChangedAt).getTime());
+    if (next === "changes" && !deadlineWasUpdatedAfterCurrentStatus) {
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
     }
@@ -1997,6 +2003,7 @@ export default function DesignPage() {
     const baseMetadata = {
       ...(task.metadata ?? {}),
       status: next,
+      status_changed_at: new Date().toISOString(),
       methods_count: task.methodsCount ?? 0,
       has_files: task.hasFiles ?? false,
       quote_id: task.quoteId,
