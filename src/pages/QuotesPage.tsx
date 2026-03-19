@@ -493,7 +493,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     (row: QuoteListRow) => {
       if (permissions.isSuperAdmin || permissions.isSeo) return true;
       if (!isManagerUser) return true;
-      return (row.assigned_to?.trim() ?? "") === (userId ?? "");
+      const viewerId = userId ?? "";
+      return (
+        (row.assigned_to?.trim() ?? "") === viewerId ||
+        (row.created_by?.trim() ?? "") === viewerId
+      );
     },
     [isManagerUser, permissions.isSeo, permissions.isSuperAdmin, userId]
   );

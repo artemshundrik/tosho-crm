@@ -597,23 +597,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const effectiveManagerId = quote?.assigned_to?.trim() || userId || null;
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
+  const quoteCreatedByUserId = quote?.created_by?.trim() || null;
   const viewerJobRole = normalizeJobRole(jobRole);
   const isManagerLikeUser = permissions.isAdmin || permissions.isManagerJob;
   const canOpenCurrentQuote = canOpenQuoteDetails({
     userId,
     quoteManagerUserId,
+    quoteCreatedByUserId,
     permissions,
   });
   const canViewSummarySection = canViewQuoteSummary({
     userId,
     quoteManagerUserId,
+    quoteCreatedByUserId,
     permissions,
   });
   const canEditQuoteContent =
     permissions.isSuperAdmin ||
     permissions.isSeo ||
     viewerJobRole === "pm" ||
-    (isManagerLikeUser && quoteManagerUserId !== null && quoteManagerUserId === userId);
+    (isManagerLikeUser &&
+      userId !== null &&
+      (quoteManagerUserId === userId || quoteCreatedByUserId === userId));
   const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
   const canDeleteDesignerBriefAttachment = useCallback(
     (attachment: QuoteAttachment) =>
@@ -2008,6 +2013,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         !canOpenQuoteDetails({
           userId,
           quoteManagerUserId: summary.assigned_to ?? null,
+          quoteCreatedByUserId: summary.created_by ?? null,
           permissions,
         })
       ) {

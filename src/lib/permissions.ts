@@ -21,6 +21,7 @@ export type AppPermissions = {
 type QuoteAccessContext = {
   userId?: string | null;
   quoteManagerUserId?: string | null;
+  quoteCreatedByUserId?: string | null;
   viewerJobRole?: string | null;
   permissions: AppPermissions;
 };
@@ -87,33 +88,57 @@ export function buildPermissions({
 
 const normalizeId = (value?: string | null) => (value ?? "").trim();
 
-export function canOpenQuoteDetails({ userId, quoteManagerUserId, permissions }: QuoteAccessContext) {
+export function canOpenQuoteDetails({
+  userId,
+  quoteManagerUserId,
+  quoteCreatedByUserId,
+  permissions,
+}: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   if (!permissions.isAdmin && !permissions.isManagerJob) return true;
-  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+  const viewer = normalizeId(userId);
+  return (
+    viewer !== "" &&
+    (viewer === normalizeId(quoteManagerUserId) || viewer === normalizeId(quoteCreatedByUserId))
+  );
 }
 
-export function canViewQuoteSummary({ userId, quoteManagerUserId, permissions }: QuoteAccessContext) {
+export function canViewQuoteSummary({
+  userId,
+  quoteManagerUserId,
+  quoteCreatedByUserId,
+  permissions,
+}: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   if (!permissions.isAdmin && !permissions.isManagerJob) return false;
-  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+  const viewer = normalizeId(userId);
+  return (
+    viewer !== "" &&
+    (viewer === normalizeId(quoteManagerUserId) || viewer === normalizeId(quoteCreatedByUserId))
+  );
 }
 
 export function canEditQuoteContent({
   userId,
   quoteManagerUserId,
+  quoteCreatedByUserId,
   viewerJobRole,
   permissions,
 }: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   if (normalizeJobRole(viewerJobRole) === "pm") return true;
   if (!permissions.isAdmin && !permissions.isManagerJob) return true;
-  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+  const viewer = normalizeId(userId);
+  return (
+    viewer !== "" &&
+    (viewer === normalizeId(quoteManagerUserId) || viewer === normalizeId(quoteCreatedByUserId))
+  );
 }
 
 export function canEditQuoteDelivery({
   userId,
   quoteManagerUserId,
+  quoteCreatedByUserId,
   viewerJobRole,
   permissions,
 }: QuoteAccessContext) {
@@ -121,5 +146,9 @@ export function canEditQuoteDelivery({
   const role = normalizeJobRole(viewerJobRole);
   if (role === "pm" || role === "logistics") return true;
   if (!permissions.isAdmin && !permissions.isManagerJob) return true;
-  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+  const viewer = normalizeId(userId);
+  return (
+    viewer !== "" &&
+    (viewer === normalizeId(quoteManagerUserId) || viewer === normalizeId(quoteCreatedByUserId))
+  );
 }

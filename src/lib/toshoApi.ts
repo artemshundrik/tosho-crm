@@ -27,6 +27,7 @@ export type QuoteListRow = {
   total?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
+  created_by?: string | null;
   customer_name?: string | null;
   customer_logo_url?: string | null;
   assigned_to?: string | null;
@@ -219,9 +220,9 @@ export async function listQuotes(params: ListQuotesParams) {
 
   const listFromQuotes = async () => {
     const baseWithCustomerMeta =
-      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url";
+      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url";
     const baseWithoutCustomerMeta =
-      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,assigned_to,deadline_at,deadline_note";
+      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note";
     const variants = [
       baseWithCustomerMeta,
       `${baseWithCustomerMeta},processing_minutes`,
@@ -606,7 +607,7 @@ export async function getQuoteSummary(quoteId: string) {
     const { data, error } = await supabase
       .schema("tosho")
       .from("quotes")
-      .select("id,team_id,customer_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,delivery_details,currency,total,created_at,updated_at,customer_name,customer_logo_url,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment")
+      .select("id,team_id,customer_id,number,status,comment,design_brief,title,quote_type,print_type,delivery_type,delivery_details,currency,total,created_at,updated_at,created_by,customer_name,customer_logo_url,assigned_to,deadline_at,customer_deadline_at,design_deadline_at,deadline_note,deadline_reminder_offset_minutes,deadline_reminder_comment")
       .eq("id", quoteId)
       .single();
     handleError(error);
@@ -618,7 +619,7 @@ export async function getQuoteSummary(quoteId: string) {
     };
 
     let { data: briefRow, error: briefError } = await readExtras(
-      "design_brief,delivery_details,customer_name,customer_logo_url,customer_deadline_at,design_deadline_at,deadline_reminder_offset_minutes,deadline_reminder_comment"
+      "design_brief,created_by,delivery_details,customer_name,customer_logo_url,customer_deadline_at,design_deadline_at,deadline_reminder_offset_minutes,deadline_reminder_comment"
     );
     if (
       briefError &&
@@ -633,7 +634,7 @@ export async function getQuoteSummary(quoteId: string) {
         /deadline_reminder_comment/i.test(briefError.message ?? ""))
     ) {
       ({ data: briefRow, error: briefError } = await readExtras(
-        "design_brief,customer_name,customer_logo_url,deadline_reminder_offset_minutes,deadline_reminder_comment"
+        "design_brief,created_by,customer_name,customer_logo_url,deadline_reminder_offset_minutes,deadline_reminder_comment"
       ));
     }
     if (
@@ -737,6 +738,7 @@ export async function getQuoteSummary(quoteId: string) {
         leadFallback?.logo_url ??
         null
       ),
+      created_by: summary.created_by ?? (briefRow as { created_by?: string | null } | null)?.created_by ?? null,
     } as QuoteSummaryRow;
   } catch (error: unknown) {
     const message = getErrorMessage(error).toLowerCase();
@@ -780,6 +782,7 @@ export async function getQuoteSummary(quoteId: string) {
           : null,
       created_at: (fallback.created_at as string | null | undefined) ?? null,
       updated_at: (fallback.updated_at as string | null | undefined) ?? null,
+      created_by: (fallback.created_by as string | null | undefined) ?? null,
       customer_name: (fallback.customer_name as string | null | undefined) ?? null,
       customer_logo_url: normalizeCustomerLogoUrl((fallback.customer_logo_url as string | null | undefined) ?? null),
       assigned_to: (fallback.assigned_to as string | null | undefined) ?? null,
