@@ -67,8 +67,8 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { 
-  Search, 
-  X, 
+  Search,
+  X,
   FilterX,
   Layers,
   MoreVertical,
@@ -86,6 +86,7 @@ import {
   Printer,
   Download,
   FileDown,
+  Lock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -282,7 +283,7 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
 }
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
-  const { accessRole, jobRole } = useAuth();
+  const { userId, accessRole, jobRole, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
@@ -487,6 +488,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const job = (jobRole ?? "").trim().toLowerCase();
     return access === "owner" || access === "admin" || job === "manager" || job === "менеджер";
   }, [accessRole, jobRole]);
+  const viewerJobRole = (jobRole ?? "").trim().toLowerCase();
+  const canOpenQuoteRow = useCallback(
+    (row: QuoteListRow) => {
+      if (permissions.isSuperAdmin || permissions.isSeo) return true;
+      if (!isManagerUser) return true;
+      return (row.assigned_to?.trim() ?? "") === (userId ?? "");
+    },
+    [isManagerUser, permissions.isSeo, permissions.isSuperAdmin, userId]
+  );
   useEffect(() => {
     if (!currentUserId) return;
     const workspaceLabel = workspaceMemberLabelById[currentUserId]?.trim();
@@ -4581,15 +4591,29 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                   <div className="divide-y divide-border/50">
                     {group.rows.map((row) => (
+                      (() => {
+                        const canOpen = canOpenQuoteRow(row);
+                        return (
                       <div
                         key={`${group.id}-${row.id}`}
-                        className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                        className={cn(
+                          "px-5 py-3 flex items-center justify-between gap-3 transition-colors",
+                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
+                        )}
+                        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                       >
                         <div className="min-w-0">
                           <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                            <span className="truncate">
+                              {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                            </span>
+                            {!canOpen ? (
+                              <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                                <Lock className="h-3 w-3" />
+                                Лише свої
+                              </Badge>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -4598,6 +4622,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </Badge>
                         </div>
                       </div>
+                        );
+                      })()
                     ))}
                   </div>
                 </div>
@@ -4608,21 +4634,37 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <div className="px-5 py-4 border-b border-border/60 text-sm font-semibold">Без групи</div>
                   <div className="divide-y divide-border/50">
                     {groupedQuotesView.ungrouped.map((row) => (
+                      (() => {
+                        const canOpen = canOpenQuoteRow(row);
+                        return (
                       <div
                         key={`ungrouped-${row.id}`}
-                        className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/10 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                        className={cn(
+                          "px-5 py-3 flex items-center justify-between gap-3 transition-colors",
+                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
+                        )}
+                        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                       >
                         <div className="min-w-0">
                           <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                            <span className="truncate">
+                              {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
+                            </span>
+                            {!canOpen ? (
+                              <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                                <Lock className="h-3 w-3" />
+                                Лише свої
+                              </Badge>
+                            ) : null}
                           </div>
                         </div>
                         <Badge className={cn("border", statusPillClasses(row.status))} variant="outline">
                           {formatStatusLabel(row.status)}
                         </Badge>
                       </div>
+                        );
+                      })()
                     ))}
                   </div>
                 </div>
@@ -4638,11 +4680,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 const deadlineBadge = getDeadlineBadge(row.deadline_at ?? null);
                 const manager = resolveManagerMember(row.assigned_to);
                 const managerLabel = getManagerLabel(row.assigned_to);
+                const canOpen = canOpenQuoteRow(row);
                 return (
                   <div
                     key={row.id}
-                    className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
-                    onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                    className={cn(
+                      "rounded-[var(--radius-inner)] border border-border bg-card p-4",
+                      canOpen ? "cursor-pointer" : "cursor-not-allowed opacity-70"
+                    )}
+                    onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -4652,6 +4698,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             <StatusIcon className="mr-1 h-3.5 w-3.5" />
                             {formatStatusLabel(normalizedStatus)}
                           </Badge>
+                          {!canOpen ? (
+                            <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                              <Lock className="h-3 w-3" />
+                              Лише свої
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {row.created_at
@@ -4670,19 +4722,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                            <DropdownMenuItem
+                              disabled={!canOpen}
+                              onClick={() => (canOpen ? navigate(`/orders/estimates/${row.id}`) : undefined)}
+                            >
                               <FileText className="mr-2 h-4 w-4" />
                               Відкрити
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(row)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? openEdit(row) : undefined)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Редагувати
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? handleDuplicate(row.id) : undefined)}>
                               <Copy className="mr-2 h-4 w-4" />
                               Дублювати
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handleOpenQuickAddToSet(row)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? void handleOpenQuickAddToSet(row) : undefined)}>
                               <Layers className="mr-2 h-4 w-4" />
                               Додати в КП/набір
                             </DropdownMenuItem>
@@ -4690,7 +4745,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             <DropdownMenuItem
                               onClick={() => requestDelete(row.id)}
                               className="text-destructive focus:text-destructive"
-                              disabled={rowDeleteBusy === row.id}
+                              disabled={rowDeleteBusy === row.id || !canOpen}
                             >
                               {rowDeleteBusy === row.id ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -4830,17 +4885,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   {filteredAndSortedRows.map((row) => {
                     const isSelected = selectedIds.has(row.id);
                     const membership = quoteMembershipByQuoteId.get(row.id);
+                    const canOpen = canOpenQuoteRow(row);
                     return (
                       <TableRow
                         key={row.id}
                         className={cn(
-                          "hover:bg-muted/10 cursor-pointer group transition-colors border-b border-border/50",
+                          "group transition-colors border-b border-border/50",
+                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70",
                           isSelected && "bg-primary/5"
                         )}
-                        onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(event) => {
+                          if (!canOpen) return;
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             navigate(`/orders/estimates/${row.id}`);
@@ -4872,6 +4930,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               <span className="group-hover:underline underline-offset-2">
                                 {row.number ?? "Не вказано"}
                               </span>
+                              {!canOpen ? (
+                                <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                                  <Lock className="h-3 w-3" />
+                                  Лише свої
+                                </Badge>
+                              ) : null}
                             </div>
                             {membership ? (
                               <div className="flex flex-wrap items-center gap-1.5">
@@ -5013,19 +5077,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${row.id}`)}>
+                            <DropdownMenuItem
+                              disabled={!canOpen}
+                              onClick={() => (canOpen ? navigate(`/orders/estimates/${row.id}`) : undefined)}
+                            >
                               <FileText className="mr-2 h-4 w-4" />
                               Відкрити
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(row)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? openEdit(row) : undefined)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Редагувати
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(row.id)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? handleDuplicate(row.id) : undefined)}>
                               <Copy className="mr-2 h-4 w-4" />
                               Дублювати
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handleOpenQuickAddToSet(row)}>
+                            <DropdownMenuItem disabled={!canOpen} onClick={() => (canOpen ? void handleOpenQuickAddToSet(row) : undefined)}>
                               <Layers className="mr-2 h-4 w-4" />
                               Додати в КП/набір
                             </DropdownMenuItem>
@@ -5033,7 +5100,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               <DropdownMenuItem
                                 onClick={() => requestDelete(row.id)}
                                 className="text-destructive focus:text-destructive"
-                                disabled={rowDeleteBusy === row.id}
+                                disabled={rowDeleteBusy === row.id || !canOpen}
                               >
                                 {rowDeleteBusy === row.id ? (
                                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -5195,22 +5262,24 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             const productPreview = kanbanProductByQuoteId[row.id];
                             const manager = resolveManagerMember(row.assigned_to);
                             const managerLabel = getManagerLabel(row.assigned_to);
+                            const canOpen = canOpenQuoteRow(row);
                             return (
                               <div key={row.id}>
                                 {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
                                   <div className="kanban-drop-placeholder-inline" />
                                 ) : null}
                                 <KanbanCard
-                                  draggable
-                                  onDragStart={() => handleDragStart(row.id)}
+                                  draggable={canOpen}
+                                  onDragStart={canOpen ? () => handleDragStart(row.id) : undefined}
                                   onDragEnd={() => {
                                     setDraggingId(null);
                                     setDragOverColumnId(null);
                                     setDragPlaceholder(null);
                                   }}
-                                  onClick={() => navigate(`/orders/estimates/${row.id}`)}
+                                  onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                                   className={cn(
-                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
+                                    canOpen ? "cursor-pointer hover:border-foreground/24" : "cursor-not-allowed opacity-70",
                                     draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                   )}
                                 >
@@ -5231,6 +5300,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         {Icon ? <Icon className="h-3 w-3" /> : null}
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
+                                      {!canOpen ? (
+                                        <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold text-muted-foreground">
+                                          <Lock className="h-3 w-3" />
+                                          Лише свої
+                                        </div>
+                                      ) : null}
                                     </div>
                                   </div>
                                   {membership && (membership.kp_count > 0 || membership.set_count > 0) ? (

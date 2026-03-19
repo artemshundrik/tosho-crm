@@ -18,6 +18,13 @@ export type AppPermissions = {
   canViewManagerOverview: boolean;
 };
 
+type QuoteAccessContext = {
+  userId?: string | null;
+  quoteManagerUserId?: string | null;
+  viewerJobRole?: string | null;
+  permissions: AppPermissions;
+};
+
 const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
 export const normalizeAccessRole = (value?: string | null): string => normalize(value);
@@ -76,4 +83,43 @@ export function buildPermissions({
     canWriteStandings,
     canViewManagerOverview,
   };
+}
+
+const normalizeId = (value?: string | null) => (value ?? "").trim();
+
+export function canOpenQuoteDetails({ userId, quoteManagerUserId, permissions }: QuoteAccessContext) {
+  if (permissions.isSuperAdmin || permissions.isSeo) return true;
+  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+}
+
+export function canViewQuoteSummary({ userId, quoteManagerUserId, permissions }: QuoteAccessContext) {
+  if (permissions.isSuperAdmin || permissions.isSeo) return true;
+  if (!permissions.isAdmin && !permissions.isManagerJob) return false;
+  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+}
+
+export function canEditQuoteContent({
+  userId,
+  quoteManagerUserId,
+  viewerJobRole,
+  permissions,
+}: QuoteAccessContext) {
+  if (permissions.isSuperAdmin || permissions.isSeo) return true;
+  if (normalizeJobRole(viewerJobRole) === "pm") return true;
+  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
+}
+
+export function canEditQuoteDelivery({
+  userId,
+  quoteManagerUserId,
+  viewerJobRole,
+  permissions,
+}: QuoteAccessContext) {
+  if (permissions.isSuperAdmin || permissions.isSeo) return true;
+  const role = normalizeJobRole(viewerJobRole);
+  if (role === "pm" || role === "logistics") return true;
+  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  return normalizeId(userId) !== "" && normalizeId(userId) === normalizeId(quoteManagerUserId);
 }

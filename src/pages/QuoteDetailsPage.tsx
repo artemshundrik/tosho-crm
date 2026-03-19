@@ -75,7 +75,12 @@ import {
   type QuoteRun,
   type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
-import { isDesignerJobRole } from "@/lib/permissions";
+import {
+  canOpenQuoteDetails,
+  canViewQuoteSummary,
+  isDesignerJobRole,
+  normalizeJobRole,
+} from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
@@ -398,7 +403,7 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
-  const { userId, accessRole, jobRole } = useAuth();
+  const { userId, jobRole, permissions } = useAuth();
   const initialCache = readQuoteDetailsCache(teamId, quoteId);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
@@ -590,12 +595,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   }, []);
 
-  const canViewAllManagerRates =
-    accessRole === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
-  const effectiveManagerId = canViewAllManagerRates
-    ? quote?.assigned_to?.trim() || userId || null
-    : userId || null;
+  const effectiveManagerId = quote?.assigned_to?.trim() || userId || null;
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
+  const viewerJobRole = normalizeJobRole(jobRole);
+  const isManagerLikeUser = permissions.isAdmin || permissions.isManagerJob;
+  const canOpenCurrentQuote = canOpenQuoteDetails({
+    userId,
+    quoteManagerUserId,
+    permissions,
+  });
+  const canViewSummarySection = canViewQuoteSummary({
+    userId,
+    quoteManagerUserId,
+    permissions,
+  });
+  const canEditQuoteContent =
+    permissions.isSuperAdmin ||
+    permissions.isSeo ||
+    viewerJobRole === "pm" ||
+    (isManagerLikeUser && quoteManagerUserId !== null && quoteManagerUserId === userId);
   const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
   const canDeleteDesignerBriefAttachment = useCallback(
     (attachment: QuoteAttachment) =>
@@ -780,7 +798,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
-        manager_rate: Math.max(0, Number(run.manager_rate) || DEFAULT_MANAGER_RATE),
+        manager_rate: Math.max(0, Number(run.manager_rate) || currentManagerRate || DEFAULT_MANAGER_RATE),
         fixed_cost_rate: Math.max(0, Number(run.fixed_cost_rate) || DEFAULT_FIXED_COST_RATE),
         vat_rate: Math.max(0, Number(run.vat_rate) || DEFAULT_VAT_RATE),
       }));
@@ -1335,10 +1353,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const canEditRuns = useMemo(
     () =>
+      canEditQuoteContent &&
       ["new", "estimating", "estimated", "awaiting_approval", "approved"].includes(
         currentStatus ?? ""
       ),
-    [currentStatus]
+    [canEditQuoteContent, currentStatus]
   );
 
   const openStatusDialog = () => {
@@ -1983,6 +2002,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     try {
       const summary = await getQuoteSummary(quoteId);
       if (summary.team_id && summary.team_id !== teamId) {
+        throw new Error("Немає доступу до цього прорахунку.");
+      }
+      if (
+        !canOpenQuoteDetails({
+          userId,
+          quoteManagerUserId: summary.assigned_to ?? null,
+          permissions,
+        })
+      ) {
         throw new Error("Немає доступу до цього прорахунку.");
       }
       setQuote(summary);
@@ -2734,14 +2762,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: 0,
           logistics_cost: 0,
           desired_manager_income: 0,
-          manager_rate: DEFAULT_MANAGER_RATE,
+          manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
           fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
           vat_rate: DEFAULT_VAT_RATE,
         },
       ]);
       setSelectedRunId(newId);
     }
-  }, [runsLoaded, runs.length, items]);
+  }, [runsLoaded, runs.length, items, currentManagerRate]);
 
   useEffect(() => {
     if (!runsLoaded) return;
@@ -3601,7 +3629,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: Number(run.unit_price_print ?? 0) || 0,
           logistics_cost: Number(run.logistics_cost ?? 0) || 0,
           desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-          manager_rate: Number(run.manager_rate ?? DEFAULT_MANAGER_RATE) || DEFAULT_MANAGER_RATE,
+          manager_rate: currentManagerRate || Number(run.manager_rate ?? DEFAULT_MANAGER_RATE) || DEFAULT_MANAGER_RATE,
           fixed_cost_rate: Number(run.fixed_cost_rate ?? DEFAULT_FIXED_COST_RATE) || DEFAULT_FIXED_COST_RATE,
           vat_rate: Number(run.vat_rate ?? DEFAULT_VAT_RATE) || DEFAULT_VAT_RATE,
         }));
@@ -3798,7 +3826,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               unit_price_print: 0,
               logistics_cost: 0,
               desired_manager_income: 0,
-              manager_rate: DEFAULT_MANAGER_RATE,
+              manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
               fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
               vat_rate: DEFAULT_VAT_RATE,
             }))
@@ -4627,7 +4655,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   variant="outline"
                   size="sm"
                   className="h-8 gap-2"
-                  disabled={designTaskSaving}
+                  disabled={designTaskSaving || !canEditQuoteContent}
                   onClick={() => void createDesignTask()}
                 >
                   <Palette className="h-4 w-4" />
@@ -4638,7 +4666,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 variant="primary"
                 size="sm"
                 className="h-8 gap-2"
-                disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
+                disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
                 onClick={handlePrimaryStatusAction}
               >
                 {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock, {
@@ -4650,7 +4678,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 variant="outline"
                 size="sm"
                 className="h-8 gap-2"
-                disabled={statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
+                disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
                 onClick={openStatusDialog}
               >
                 Змінити статус
@@ -4664,7 +4692,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    disabled={!quote}
+                    disabled={!quote || (!canEditQuoteContent && viewerJobRole !== "logistics")}
                     onSelect={(event) => {
                       event.preventDefault();
                       openEditQuote();
@@ -4674,7 +4702,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     Редагувати
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    disabled={duplicateQuoteBusy || !quote?.id}
+                    disabled={duplicateQuoteBusy || !quote?.id || !canOpenCurrentQuote}
                     onSelect={(event) => {
                       event.preventDefault();
                       void handleDuplicateQuote();
@@ -4685,6 +4713,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
+                    disabled={!canEditQuoteContent}
                     className="text-destructive focus:text-destructive"
                     onSelect={(event) => {
                       event.preventDefault();
@@ -6713,37 +6742,38 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
             </details>
 
-            <details open className="group pb-1">
-              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Calculator className="h-4 w-4" />
-                  </div>
-                  <div className="text-base font-semibold tracking-tight text-foreground">Підсумок</div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Інформація про підсумок"
-                      onClick={(event) => event.preventDefault()}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Фінальний підсумок по вибраному тиражу: собівартість, бажаний заробіток, націнка та ціна продажу.
+            {canViewSummarySection ? (
+              <details open className="group pb-1">
+                <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                      <Calculator className="h-4 w-4" />
+                    </div>
+                    <div className="text-base font-semibold tracking-tight text-foreground">Підсумок</div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label="Інформація про підсумок"
+                        onClick={(event) => event.preventDefault()}
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" />
+                      </button>
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                        Фінальний підсумок по вибраному тиражу: собівартість, бажаний заробіток, націнка та ціна продажу.
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
 
-              <div className="space-y-3 px-0 py-0">
-                <div className="flex items-center justify-between py-1 text-sm">
-                  <span className="text-muted-foreground">Собівартість</span>
-                  <span className="font-mono font-semibold tabular-nums">
-                    {formatCurrency(runs.length > 0 ? selectedRunPricing.costTotal : totals.subtotal, quote.currency)}
-                  </span>
-                </div>
+                <div className="space-y-3 px-0 py-0">
+                  <div className="flex items-center justify-between py-1 text-sm">
+                    <span className="text-muted-foreground">Собівартість</span>
+                    <span className="font-mono font-semibold tabular-nums">
+                      {formatCurrency(runs.length > 0 ? selectedRunPricing.costTotal : totals.subtotal, quote.currency)}
+                    </span>
+                  </div>
 
                 {selectedRun ? (
                   <>
@@ -6828,19 +6858,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </div>
 
-                <div className="space-y-1 border-t border-border/40 pt-3">
-                  <div className="text-[11px] text-muted-foreground/60">
-                    Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
-                  </div>
-                  {items.length > 0 && (
-                    <div className="flex justify-between text-[11px] text-muted-foreground/60">
-                      <span>Позицій:</span>
-                      <span className="font-medium text-muted-foreground">{items.length}</span>
+                  <div className="space-y-1 border-t border-border/40 pt-3">
+                    <div className="text-[11px] text-muted-foreground/60">
+                      Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
                     </div>
-                  )}
+                    {items.length > 0 && (
+                      <div className="flex justify-between text-[11px] text-muted-foreground/60">
+                        <span>Позицій:</span>
+                        <span className="font-medium text-muted-foreground">{items.length}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </details>
+              </details>
+            ) : null}
           </div>
         </aside>
       </div>
