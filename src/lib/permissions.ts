@@ -38,14 +38,7 @@ export const isDesignerJobRole = (value?: string | null) => {
 
 export const isQuoteManagerJobRole = (value?: string | null) => {
   const jobRole = normalizeJobRole(value);
-  return [
-    "manager",
-    "менеджер",
-    "sales_manager",
-    "top_manager",
-    "junior_sales_manager",
-    "office_manager",
-  ].includes(jobRole);
+  return ["manager", "менеджер", "sales_manager", "junior_sales_manager"].includes(jobRole);
 };
 
 export const mapAccessRoleToTeamRole = (accessRole?: string | null): TeamRole => {

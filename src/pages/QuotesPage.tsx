@@ -141,7 +141,6 @@ type QuotesPageProps = {
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
-const NO_MANAGER_FILTER = "__none__";
 const isUuid = (value?: string | null) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value ?? "").trim());
 
@@ -485,9 +484,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
   const isManagerUser = useMemo(() => {
-    const access = (accessRole ?? "").trim().toLowerCase();
-    return access === "owner" || access === "admin" || isQuoteManagerJobRole(jobRole);
-  }, [accessRole, jobRole]);
+    return isQuoteManagerJobRole(jobRole);
+  }, [jobRole]);
   const viewerJobRole = (jobRole ?? "").trim().toLowerCase();
   const canOpenQuoteRow = useCallback(
     (row: QuoteListRow) => {
@@ -500,6 +498,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       );
     },
     [isManagerUser, permissions.isSeo, permissions.isSuperAdmin, userId]
+  );
+  const visibleRows = useMemo(
+    () => (isManagerUser ? rows.filter((row) => canOpenQuoteRow(row)) : rows),
+    [canOpenQuoteRow, isManagerUser, rows]
   );
   useEffect(() => {
     if (!currentUserId) return;
@@ -597,7 +599,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     row.customer_id ? "Клієнт" : "Лід";
   const managerFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
-    rows.forEach((row) => {
+    visibleRows.forEach((row) => {
       const assigned = row.assigned_to?.trim();
       if (!assigned) return;
       const label = getManagerLabel(assigned);
@@ -606,14 +608,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return Array.from(options.entries())
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
-  }, [getManagerLabel, rows]);
+  }, [getManagerLabel, visibleRows]);
   const filteredRowsByManager = useMemo(() => {
-    if (managerFilter === ALL_MANAGERS_FILTER) return rows;
-    if (managerFilter === NO_MANAGER_FILTER) {
-      return rows.filter((row) => !(row.assigned_to?.trim() ?? ""));
-    }
-    return rows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
-  }, [managerFilter, rows]);
+    if (managerFilter === ALL_MANAGERS_FILTER) return visibleRows;
+    return visibleRows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
+  }, [managerFilter, visibleRows]);
 
   const selectedType = useMemo(
     () => catalogTypes.find((t) => t.id === selectedTypeId),
@@ -666,7 +665,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
   const renderManagerFilterValue = (value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
-    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
     const member = resolveManagerMember(value);
     const label = member?.label?.trim() || getManagerLabel(value);
     const avatarUrl = member?.avatarUrl ?? null;
@@ -4077,22 +4075,46 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={managerFilter} onValueChange={setManagerFilter}>
-                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
-                    <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_MANAGERS_FILTER}>
-                      {renderManagerFilterValue(ALL_MANAGERS_FILTER)}
-                    </SelectItem>
-                    <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
-                    {managerFilterOptions.map((manager) => (
-                      <SelectItem key={manager.id} value={manager.id}>
-                        {renderManagerFilterValue(manager.id)}
+                {isManagerUser ? (
+                  <div
+                    className={cn(
+                      TOOLBAR_CONTROL,
+                      "flex w-full cursor-not-allowed items-center justify-start opacity-90 sm:w-[210px]"
+                    )}
+                    aria-disabled="true"
+                    title="Показуються тільки ваші прорахунки"
+                  >
+                    <div className="flex h-full min-w-0 items-center gap-2">
+                      <AvatarBase
+                        src={getManagerAvatar(currentUserId ?? null)}
+                        name={currentUserManagerLabel || "Менеджер"}
+                        fallback={getInitials(currentUserManagerLabel || "Менеджер")}
+                        size={20}
+                        className="border-border/60 shrink-0"
+                        fallbackClassName="text-[10px] font-semibold"
+                      />
+                      <span className="truncate leading-none">
+                        {currentUserManagerLabel || getManagerLabel(currentUserId ?? null)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <Select value={managerFilter} onValueChange={setManagerFilter}>
+                    <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
+                      <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_MANAGERS_FILTER}>
+                        {renderManagerFilterValue(ALL_MANAGERS_FILTER)}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {managerFilterOptions.map((manager) => (
+                        <SelectItem key={manager.id} value={manager.id}>
+                          {renderManagerFilterValue(manager.id)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 {viewMode === "table" ? (
                   <div className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
                     <Button
