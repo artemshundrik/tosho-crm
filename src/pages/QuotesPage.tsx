@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import {
   formatPrintProductSummary,
@@ -485,8 +486,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
   const isManagerUser = useMemo(() => {
     const access = (accessRole ?? "").trim().toLowerCase();
-    const job = (jobRole ?? "").trim().toLowerCase();
-    return access === "owner" || access === "admin" || job === "manager" || job === "менеджер";
+    return access === "owner" || access === "admin" || isQuoteManagerJobRole(jobRole);
   }, [accessRole, jobRole]);
   const viewerJobRole = (jobRole ?? "").trim().toLowerCase();
   const canOpenQuoteRow = useCallback(
@@ -4613,10 +4613,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
                             </span>
                             {!canOpen ? (
-                              <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                              <div
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                title="Лише свої"
+                                aria-label="Лише свої"
+                              >
                                 <Lock className="h-3 w-3" />
-                                Лише свої
-                              </Badge>
+                              </div>
                             ) : null}
                           </div>
                         </div>
@@ -4656,10 +4659,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
                             </span>
                             {!canOpen ? (
-                              <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                              <div
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                title="Лише свої"
+                                aria-label="Лише свої"
+                              >
                                 <Lock className="h-3 w-3" />
-                                Лише свої
-                              </Badge>
+                              </div>
                             ) : null}
                           </div>
                         </div>
@@ -4703,10 +4709,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             {formatStatusLabel(normalizedStatus)}
                           </Badge>
                           {!canOpen ? (
-                            <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                            <div
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                              title="Лише свої"
+                              aria-label="Лише свої"
+                            >
                               <Lock className="h-3 w-3" />
-                              Лише свої
-                            </Badge>
+                            </div>
                           ) : null}
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
@@ -4935,10 +4944,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 {row.number ?? "Не вказано"}
                               </span>
                               {!canOpen ? (
-                                <Badge variant="outline" className="h-5 gap-1 px-2 text-[10px]">
+                                <div
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
+                                  title="Лише свої"
+                                  aria-label="Лише свої"
+                                >
                                   <Lock className="h-3 w-3" />
-                                  Лише свої
-                                </Badge>
+                                </div>
                               ) : null}
                             </div>
                             {membership ? (
@@ -5305,9 +5317,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
                                       {!canOpen ? (
-                                        <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold text-muted-foreground">
+                                        <div
+                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold text-muted-foreground"
+                                          title="Лише свої"
+                                          aria-label="Лише свої"
+                                        >
                                           <Lock className="h-3 w-3" />
-                                          Лише свої
                                         </div>
                                       ) : null}
                                     </div>

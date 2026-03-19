@@ -36,6 +36,18 @@ export const isDesignerJobRole = (value?: string | null) => {
   return jobRole === "designer" || jobRole === "дизайнер";
 };
 
+export const isQuoteManagerJobRole = (value?: string | null) => {
+  const jobRole = normalizeJobRole(value);
+  return [
+    "manager",
+    "менеджер",
+    "sales_manager",
+    "top_manager",
+    "junior_sales_manager",
+    "office_manager",
+  ].includes(jobRole);
+};
+
 export const mapAccessRoleToTeamRole = (accessRole?: string | null): TeamRole => {
   const normalized = normalizeAccessRole(accessRole);
   if (normalized === "owner") return "super_admin";
@@ -93,9 +105,10 @@ export function canOpenQuoteDetails({
   quoteManagerUserId,
   quoteCreatedByUserId,
   permissions,
+  viewerJobRole,
 }: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
-  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  if (!permissions.isAdmin && !isQuoteManagerJobRole(viewerJobRole)) return true;
   const viewer = normalizeId(userId);
   return (
     viewer !== "" &&
@@ -108,9 +121,10 @@ export function canViewQuoteSummary({
   quoteManagerUserId,
   quoteCreatedByUserId,
   permissions,
+  viewerJobRole,
 }: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
-  if (!permissions.isAdmin && !permissions.isManagerJob) return false;
+  if (!permissions.isAdmin && !isQuoteManagerJobRole(viewerJobRole)) return false;
   const viewer = normalizeId(userId);
   return (
     viewer !== "" &&
@@ -127,7 +141,7 @@ export function canEditQuoteContent({
 }: QuoteAccessContext) {
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   if (normalizeJobRole(viewerJobRole) === "pm") return true;
-  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  if (!permissions.isAdmin && !isQuoteManagerJobRole(viewerJobRole)) return true;
   const viewer = normalizeId(userId);
   return (
     viewer !== "" &&
@@ -145,7 +159,7 @@ export function canEditQuoteDelivery({
   if (permissions.isSuperAdmin || permissions.isSeo) return true;
   const role = normalizeJobRole(viewerJobRole);
   if (role === "pm" || role === "logistics") return true;
-  if (!permissions.isAdmin && !permissions.isManagerJob) return true;
+  if (!permissions.isAdmin && !isQuoteManagerJobRole(viewerJobRole)) return true;
   const viewer = normalizeId(userId);
   return (
     viewer !== "" &&

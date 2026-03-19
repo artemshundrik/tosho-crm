@@ -79,6 +79,7 @@ import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
   isDesignerJobRole,
+  isQuoteManagerJobRole,
   normalizeJobRole,
 } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
@@ -599,24 +600,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
   const quoteCreatedByUserId = quote?.created_by?.trim() || null;
   const viewerJobRole = normalizeJobRole(jobRole);
-  const isManagerLikeUser = permissions.isAdmin || permissions.isManagerJob;
   const canOpenCurrentQuote = canOpenQuoteDetails({
     userId,
     quoteManagerUserId,
     quoteCreatedByUserId,
+    viewerJobRole,
     permissions,
   });
   const canViewSummarySection = canViewQuoteSummary({
     userId,
     quoteManagerUserId,
     quoteCreatedByUserId,
+    viewerJobRole,
     permissions,
   });
   const canEditQuoteContent =
     permissions.isSuperAdmin ||
     permissions.isSeo ||
     viewerJobRole === "pm" ||
-    (isManagerLikeUser &&
+    ((permissions.isAdmin || permissions.isManagerJob || isQuoteManagerJobRole(viewerJobRole)) &&
       userId !== null &&
       (quoteManagerUserId === userId || quoteCreatedByUserId === userId));
   const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
