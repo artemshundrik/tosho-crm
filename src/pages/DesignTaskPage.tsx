@@ -545,6 +545,51 @@ function readDesignTaskPageCache(teamId: string, taskId: string): DesignTaskPage
   }
 }
 
+function syncDesignPageCacheTask(
+  teamId: string,
+  task: Pick<
+    DesignTask,
+    "id" | "quoteId" | "quoteNumber" | "customerName" | "customerLogoUrl" | "quoteManagerUserId"
+  > | null
+) {
+  if (typeof window === "undefined" || !teamId || !task) return;
+  try {
+    const raw = sessionStorage.getItem(`design-page-cache:${teamId}`);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { tasks?: DesignTask[]; cachedAt?: number };
+    if (!Array.isArray(parsed.tasks)) return;
+    const nextTasks = parsed.tasks.map((row) =>
+      row.id === task.id
+        ? {
+            ...row,
+            quoteId: task.quoteId,
+            quoteNumber: task.quoteNumber ?? row.quoteNumber ?? null,
+            customerName: task.customerName ?? row.customerName ?? null,
+            customerLogoUrl: task.customerLogoUrl ?? row.customerLogoUrl ?? null,
+            quoteManagerUserId: task.quoteManagerUserId ?? row.quoteManagerUserId ?? null,
+          }
+        : row
+    );
+    const changed = nextTasks.some((row, index) => row !== parsed.tasks?.[index]);
+    if (!changed) return;
+    sessionStorage.setItem(
+      `design-page-cache:${teamId}`,
+      JSON.stringify({
+        ...parsed,
+        tasks: nextTasks,
+        cachedAt: Date.now(),
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent("design:page-cache-updated", {
+        detail: { teamId },
+      })
+    );
+  } catch {
+    // ignore cache sync failures
+  }
+}
+
 const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] => {
   if (!Array.isArray(value)) return [];
   const rows = value
@@ -766,6 +811,18 @@ export default function DesignTaskPage() {
     enabled: !!effectiveTeamId && !!id && !!userId,
   });
   const designTaskLockedByOther = designTaskLock.lockedByOther;
+
+  useEffect(() => {
+    syncDesignPageCacheTask(effectiveTeamId ?? "", task);
+  }, [
+    effectiveTeamId,
+    task?.id,
+    task?.quoteId,
+    task?.quoteNumber,
+    task?.customerName,
+    task?.customerLogoUrl,
+    task?.quoteManagerUserId,
+  ]);
 
   const ensureCanEdit = () => {
     if (!designTaskLockedByOther) return true;
@@ -1033,7 +1090,7 @@ export default function DesignTaskPage() {
           }
 
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
+          customerName = cust?.name ?? cust?.legal_name ?? customerName;
           customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
         } else if (metadataCustomerId && metadataCustomerType === "customer") {
           let customerQuery = await supabase
@@ -1055,7 +1112,7 @@ export default function DesignTaskPage() {
               .maybeSingle();
           }
           const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = customerName ?? cust?.name ?? cust?.legal_name ?? null;
+          customerName = cust?.name ?? cust?.legal_name ?? customerName;
           customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
         } else if (metadataCustomerId && metadataCustomerType === "lead") {
           let leadQuery = await supabase
@@ -1079,7 +1136,7 @@ export default function DesignTaskPage() {
               .maybeSingle();
           }
           const leadRow = leadQuery.data as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = customerName ?? leadRow?.company_name ?? leadRow?.legal_name ?? null;
+          customerName = leadRow?.company_name ?? leadRow?.legal_name ?? customerName;
           customerLogoUrl = normalizeLogoUrl(leadRow?.logo_url ?? null) ?? customerLogoUrl;
         } else {
           const leadLookupName = (customerName ?? quote?.title ?? "").trim();

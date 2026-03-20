@@ -363,6 +363,8 @@ export type Customer = {
   name?: string | null;
   legal_name?: string | null;
   logo_url?: string | null;
+  manager?: string | null;
+  manager_user_id?: string | null;
   entityType?: "customer" | "lead";
 };
 
@@ -398,6 +400,8 @@ export interface NewQuoteDialogProps {
   teamMembers?: TeamMember[];
   catalogTypes?: CatalogType[];
   currentUserId?: string;
+  restrictPartySelectionToOwn?: boolean;
+  currentManagerLabel?: string;
 }
 
 /**
@@ -455,6 +459,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   teamMembers = [],
   catalogTypes = [],
   currentUserId,
+  restrictPartySelectionToOwn = false,
+  currentManagerLabel,
 }) => {
   void _teamId;
   const isEditMode = mode === "edit";
@@ -1078,14 +1084,25 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
   const runsSummary = runs.filter((run) => Number(run.quantity) > 0);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
-    () =>
-      customers.map((customer) => ({
+    () => {
+      const isOwnParty = (customer: Customer) =>
+        (customer.manager_user_id?.trim() && customer.manager_user_id.trim() === currentUserId) ||
+        ((customer.manager?.trim() ?? "") &&
+          (currentManagerLabel?.trim() ?? "") &&
+          customer.manager!.trim() === currentManagerLabel!.trim());
+
+      return customers.map((customer) => ({
         id: customer.id,
         label: customer.name || customer.legal_name || "Без назви",
         logoUrl: customer.logo_url ?? null,
         entityType: customer.entityType ?? "customer",
-      })),
-    [customers]
+        disabled: restrictPartySelectionToOwn ? !isOwnParty(customer) : false,
+        disabledReason: restrictPartySelectionToOwn && !isOwnParty(customer)
+          ? "Можна вибрати тільки свого клієнта або ліда"
+          : null,
+      }));
+    },
+    [currentManagerLabel, currentUserId, customers, restrictPartySelectionToOwn]
   );
   const selectedCustomer = customerOptions.find(
     (customer) => customer.id === customerId && customer.entityType === customerType

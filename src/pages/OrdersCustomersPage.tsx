@@ -22,6 +22,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -196,7 +197,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
-const NO_MANAGER_FILTER = "__none__";
 const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -439,10 +439,29 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
     return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
   }, [leads, resolveManagerLabel]);
+  const currentManagerLabel = useMemo(() => {
+    const fromMember = userId ? memberById.get(userId)?.label?.trim() : "";
+    if (fromMember) return fromMember;
+    return defaultManagerName.trim();
+  }, [defaultManagerName, memberById, userId]);
+  const isManagerUser = useMemo(() => isQuoteManagerJobRole(jobRole), [jobRole]);
+  const isOwnedByCurrentManager = useCallback(
+    (managerUserId?: string | null, manager?: string | null) => {
+      if (!isManagerUser) return true;
+      if (!userId) return false;
+      if (managerUserId?.trim()) return managerUserId.trim() === userId;
+      const resolved = resolveManagerMember(managerUserId, manager);
+      if (resolved?.userId?.trim()) return resolved.userId.trim() === userId;
+      const managerLabel = resolveManagerLabel(managerUserId, manager);
+      return !!managerLabel && !!currentManagerLabel && managerLabel === currentManagerLabel;
+    },
+    [currentManagerLabel, isManagerUser, resolveManagerLabel, resolveManagerMember, userId]
+  );
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     let next = rows.filter((row) => {
+      if (!isOwnedByCurrentManager(row.manager_user_id, row.manager)) return false;
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
       const manager = resolveManagerLabel(row.manager_user_id, row.manager).toLowerCase();
@@ -454,18 +473,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return !q || name.includes(q) || legal.includes(q) || manager.includes(q) || contactBlob.includes(q);
     });
 
-    if (customerManagerFilter === NO_MANAGER_FILTER) {
-      next = next.filter((row) => !resolveManagerLabel(row.manager_user_id, row.manager));
-    } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
+    if (!isManagerUser && customerManagerFilter !== ALL_MANAGERS_FILTER) {
       next = next.filter((row) => resolveManagerLabel(row.manager_user_id, row.manager) === customerManagerFilter);
     }
 
     return next;
-  }, [customerManagerFilter, resolveManagerLabel, rows, search]);
+  }, [customerManagerFilter, currentManagerLabel, isManagerUser, isOwnedByCurrentManager, resolveManagerLabel, rows, search]);
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
     let next = leads.filter((lead) => {
+      if (!isOwnedByCurrentManager(lead.manager_user_id, lead.manager)) return false;
       const company = lead.company_name?.toLowerCase() ?? "";
       const legal = lead.legal_name?.toLowerCase() ?? "";
       const first = lead.first_name?.toLowerCase() ?? "";
@@ -487,24 +505,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       );
     });
 
-    if (leadManagerFilter === NO_MANAGER_FILTER) {
-      next = next.filter((lead) => !resolveManagerLabel(lead.manager_user_id, lead.manager));
-    } else if (leadManagerFilter !== ALL_MANAGERS_FILTER) {
+    if (!isManagerUser && leadManagerFilter !== ALL_MANAGERS_FILTER) {
       next = next.filter((lead) => resolveManagerLabel(lead.manager_user_id, lead.manager) === leadManagerFilter);
     }
 
     return next;
-  }, [leadManagerFilter, leads, resolveManagerLabel, search]);
-  const currentManagerLabel = useMemo(() => {
-    const fromMember = userId ? memberById.get(userId)?.label?.trim() : "";
-    if (fromMember) return fromMember;
-    return defaultManagerName.trim();
-  }, [defaultManagerName, memberById, userId]);
-  const isManagerUser = useMemo(() => {
-    const access = (accessRole ?? "").trim().toLowerCase();
-    const job = (jobRole ?? "").trim().toLowerCase();
-    return access === "owner" || access === "admin" || job === "manager" || job === "менеджер";
-  }, [accessRole, jobRole]);
+  }, [currentManagerLabel, isManagerUser, isOwnedByCurrentManager, leadManagerFilter, leads, resolveManagerLabel, search]);
   const calculationQuotes = useMemo(
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
@@ -537,7 +543,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const renderManagerFilterValue = (value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
-    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
     const member = memberByLabel.get(value);
     return (
       <span className="flex items-center gap-2 min-w-0">
@@ -987,6 +992,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setDialogOpen(false);
       resetForm();
       await loadCustomers();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      }
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, "Не вдалося зберегти замовника."));
     } finally {
@@ -1133,6 +1141,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadDialogOpen(false);
       resetLeadForm();
       await loadLeads();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      }
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Не вдалося зберегти ліда.");
       if (message.includes("relation") && message.includes("leads")) {
@@ -1160,6 +1171,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
       await loadCustomers();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      }
     } catch (err: unknown) {
       setDeleteError(getErrorMessage(err, "Не вдалося видалити замовника."));
     } finally {
@@ -1182,6 +1196,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadDeleteDialogOpen(false);
       setLeadDeleteTarget(null);
       await loadLeads();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
+      }
     } catch (err: unknown) {
       setLeadDeleteError(getErrorMessage(err, "Не вдалося видалити ліда."));
     } finally {
@@ -1235,28 +1252,48 @@ function CustomersPage({ teamId }: { teamId: string }) {
             className={cn(TOOLBAR_CONTROL, "pl-9")}
           />
         </div>
-        <Select
-          value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
-          onValueChange={(value) => {
-            if (activeTab === "customers") setCustomerManagerFilter(value);
-            else setLeadManagerFilter(value);
-          }}
-        >
-          <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-            <div className="min-w-0 flex items-center">
-              {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
-            <SelectItem value={NO_MANAGER_FILTER}>Без менеджера</SelectItem>
-            {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
-              <SelectItem key={manager} value={manager}>
-                {renderManagerFilterValue(manager)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isManagerUser ? (
+          <div
+            className={cn(
+              TOOLBAR_CONTROL,
+              "flex w-full min-w-0 items-center gap-2 cursor-default opacity-100 sm:w-[220px]"
+            )}
+            aria-disabled="true"
+            title="Показуються тільки ваші замовники та ліди"
+          >
+            <AvatarBase
+              src={memberById.get(userId ?? "")?.avatarDisplayUrl ?? null}
+              name={currentManagerLabel || defaultManagerName || "Менеджер"}
+              fallback={(currentManagerLabel || defaultManagerName || "ME").slice(0, 2).toUpperCase()}
+              size={20}
+              className="shrink-0 border-border/60"
+              fallbackClassName="text-[10px] font-semibold"
+            />
+            <span className="truncate">{currentManagerLabel || defaultManagerName || "Менеджер"}</span>
+          </div>
+        ) : (
+          <Select
+            value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
+            onValueChange={(value) => {
+              if (activeTab === "customers") setCustomerManagerFilter(value);
+              else setLeadManagerFilter(value);
+            }}
+          >
+            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
+              <div className="min-w-0 flex items-center">
+                {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
+              {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
+                <SelectItem key={manager} value={manager}>
+                  {renderManagerFilterValue(manager)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="text-sm font-semibold text-foreground sm:ml-auto">
           {activeTab === "customers" ? filteredRows.length : filteredLeads.length}
           <span className="ml-1 text-muted-foreground">знайдено</span>

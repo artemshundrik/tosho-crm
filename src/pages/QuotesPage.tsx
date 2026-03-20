@@ -866,6 +866,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           name: lead.company_name ?? lead.legal_name ?? null,
           legal_name: lead.legal_name ?? null,
           logo_url: lead.logo_url ?? null,
+          manager: lead.manager ?? null,
+          manager_user_id: lead.manager_user_id ?? null,
           entityType: "lead",
         }));
         const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
@@ -1414,6 +1416,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         name: lead.company_name ?? lead.legal_name ?? null,
         legal_name: lead.legal_name ?? null,
         logo_url: lead.logo_url ?? null,
+        manager: lead.manager ?? null,
+        manager_user_id: lead.manager_user_id ?? null,
         entityType: "lead",
       }));
       const customerOptions: QuotePartyOption[] = customerRows.map((customer) => ({
@@ -5491,6 +5495,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
         currentUserId={currentUserId}
+        restrictPartySelectionToOwn={isManagerUser}
+        currentManagerLabel={currentUserManagerLabel}
       />
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
@@ -6267,6 +6273,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
         currentUserId={currentUserId}
+        restrictPartySelectionToOwn={isManagerUser}
+        currentManagerLabel={currentUserManagerLabel}
       />
     </PageCanvas>
   );

@@ -56,6 +56,7 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -83,6 +84,8 @@ type DesignTask = {
   designTaskType?: DesignTaskType | null;
   assigneeUserId?: string | null;
   quoteManagerUserId?: string | null;
+  customerId?: string | null;
+  customerType?: "customer" | "lead" | null;
   assignedAt?: string | null;
   metadata?: Record<string, unknown>;
   methodsCount?: number;
@@ -126,7 +129,6 @@ type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
 const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
-const NO_MANAGER_FILTER = "__none__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
 const DESIGN_COMPLETED_PERIOD_OPTIONS: Array<{ value: DesignCompletedPeriod; label: string }> = [
   { value: "7d", label: "7 днів" },
@@ -531,7 +533,7 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
 };
 
 export default function DesignPage() {
-  const { teamId, userId, permissions, session } = useAuth();
+  const { teamId, userId, permissions, session, jobRole } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   const initialLogoCache = readDesignCustomerLogoCache(effectiveTeamId ?? "");
@@ -634,6 +636,7 @@ export default function DesignPage() {
       user.email
     ).displayName;
   }, [session?.user]);
+  const isManagerUser = useMemo(() => isQuoteManagerJobRole(jobRole), [jobRole]);
   const currentUserAvatarUrl = useMemo(() => {
     const raw = session?.user?.user_metadata?.avatar_url;
     return typeof raw === "string" && raw.trim() ? raw.trim() : null;
@@ -842,11 +845,26 @@ export default function DesignPage() {
 
         if (!active) return;
 
+        const restrictToOwnParties = isQuoteManagerJobRole(jobRole);
+        const isOwnParty = (managerUserId?: string | null, managerLabel?: string | null) => {
+          if (!restrictToOwnParties) return true;
+          if (!userId) return false;
+          if (managerUserId?.trim()) return managerUserId.trim() === userId;
+          const normalizedManagerLabel = managerLabel?.trim() ?? "";
+          const normalizedCurrentLabel =
+            (memberById[userId]?.trim() || currentUserDisplayName?.trim() || "").trim();
+          return !!normalizedManagerLabel && !!normalizedCurrentLabel && normalizedManagerLabel === normalizedCurrentLabel;
+        };
+
         const customerOptions: CustomerOption[] = customerRows.map((customer) => ({
           id: customer.id,
           label: customer.name?.trim() || customer.legal_name?.trim() || "Клієнт без назви",
           entityType: "customer",
           logoUrl: normalizeLogoUrl(customer.logo_url ?? null),
+          disabled: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null),
+          disabledReason: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null)
+            ? "Можна вибрати тільки свого клієнта або ліда"
+            : null,
         }));
 
         const leadOptions: CustomerOption[] = leadRows.map((lead) => ({
@@ -858,6 +876,10 @@ export default function DesignPage() {
             "Лід без назви",
           entityType: "lead",
           logoUrl: normalizeLogoUrl(lead.logo_url ?? null),
+          disabled: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null),
+          disabledReason: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null)
+            ? "Можна вибрати тільки свого клієнта або ліда"
+            : null,
         }));
 
         setCreateCustomerOptions(
@@ -874,7 +896,7 @@ export default function DesignPage() {
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [createCustomerSearch, createDialogOpen, effectiveTeamId]);
+  }, [createCustomerSearch, createDialogOpen, currentUserDisplayName, effectiveTeamId, jobRole, memberById, userId]);
 
   useEffect(() => {
     if (customers.length === 0 || tasks.length === 0) return;
@@ -907,14 +929,14 @@ export default function DesignPage() {
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!permissions.isManagerJob || !userId) return;
+    if (!isManagerUser || !userId) return;
     if (loading && tasks.length === 0) return;
     const hasOwnManagedTasks = tasks.some((task) => task.quoteManagerUserId === userId);
     if (hasOwnManagedTasks) {
       setManagerFilter(userId);
     }
     setDefaultManagerFilterApplied(true);
-  }, [defaultManagerFilterApplied, loading, managerFilter, permissions.isManagerJob, tasks, userId]);
+  }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
   const loadTasks = async () => {
     if (!effectiveTeamId) return;
@@ -959,6 +981,18 @@ export default function DesignPage() {
             quoteManagerUserId:
               typeof metadata.manager_user_id === "string" && metadata.manager_user_id.trim()
                 ? metadata.manager_user_id.trim()
+                : null,
+            customerId:
+              typeof metadata.customer_id === "string" && metadata.customer_id.trim()
+                ? metadata.customer_id.trim()
+                : null,
+            customerType:
+              typeof metadata.customer_type === "string"
+                ? (metadata.customer_type.trim().toLowerCase() === "lead"
+                    ? "lead"
+                    : metadata.customer_type.trim().toLowerCase() === "customer"
+                      ? "customer"
+                    : null)
                 : null,
             metadata,
             quoteNumber:
@@ -1015,6 +1049,8 @@ export default function DesignPage() {
         partyType: "customer" | "lead";
         managerUserId: string | null;
       }>();
+      const customerMap = new Map<string, { name: string | null; logoUrl: string | null }>();
+      const leadMap = new Map<string, { name: string | null; logoUrl: string | null }>();
       const productNameByQuoteId = new Map<string, string | null>();
       const productImageByQuoteId = new Map<string, string | null>();
       const productQtyByQuoteId = new Map<string, string | null>();
@@ -1027,9 +1063,20 @@ export default function DesignPage() {
         if (quoteError) throw quoteError;
 
         const customerIds = Array.from(
-          new Set((quoteRows ?? []).map((q) => q.customer_id).filter(Boolean) as string[])
+          new Set([
+            ...(quoteRows ?? []).map((q) => q.customer_id).filter(Boolean),
+            ...parsedRaw
+              .filter((task) => task.customerType !== "lead" && task.customerId)
+              .map((task) => task.customerId as string),
+          ] as string[])
         );
-        const customerMap = new Map<string, { name: string | null; logoUrl: string | null }>();
+        const leadIds = Array.from(
+          new Set(
+            parsedRaw
+              .filter((task) => task.customerType === "lead" && task.customerId)
+              .map((task) => task.customerId as string)
+          )
+        );
         if (customerIds.length > 0) {
           const { data: customers, error: custError } = await supabase
             .schema("tosho")
@@ -1045,6 +1092,22 @@ export default function DesignPage() {
             customerMap.set(c.id, { name, logoUrl });
           });
         }
+        if (leadIds.length > 0) {
+          const { data: leads, error: leadError } = await supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id, company_name, legal_name, logo_url")
+            .eq("team_id", effectiveTeamId)
+            .in("id", leadIds);
+          if (leadError) throw leadError;
+          (leads ?? []).forEach((lead) => {
+            const name =
+              (typeof lead.company_name === "string" && lead.company_name.trim() ? lead.company_name : null) ??
+              (typeof lead.legal_name === "string" && lead.legal_name.trim() ? lead.legal_name : null);
+            const logoUrl = typeof lead.logo_url === "string" && lead.logo_url.trim() ? lead.logo_url : null;
+            leadMap.set(lead.id, { name, logoUrl });
+          });
+        }
 
         quoteMap = new Map(
           (quoteRows ?? []).map((q) => [
@@ -1052,8 +1115,8 @@ export default function DesignPage() {
             {
               number: (q.number as string) ?? null,
               customerName:
-                (typeof q.customer_name === "string" && q.customer_name.trim() ? q.customer_name.trim() : null) ??
                 customerMap.get(q.customer_id as string)?.name ??
+                (typeof q.customer_name === "string" && q.customer_name.trim() ? q.customer_name.trim() : null) ??
                 (typeof q.title === "string" && q.title.trim() ? q.title.trim() : null),
               customerLogoUrl:
                 normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null) ??
@@ -1160,12 +1223,32 @@ export default function DesignPage() {
         ...t,
         designTaskNumber: t.designTaskNumber ?? derivedNumbers.get(t.id) ?? null,
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
-        customerName: t.customerName ?? quoteMap.get(t.quoteId)?.customerName ?? null,
+        customerName:
+          (t.customerId
+            ? customerMap.get(t.customerId)?.name ?? leadMap.get(t.customerId)?.name ?? null
+            : null) ??
+          quoteMap.get(t.quoteId)?.customerName ??
+          t.customerName ??
+          null,
         customerLogoUrl:
+          (t.customerId
+            ? normalizeLogoUrl(customerMap.get(t.customerId)?.logoUrl ?? null) ??
+              normalizeLogoUrl(leadMap.get(t.customerId)?.logoUrl ?? null) ??
+              null
+            : null) ??
           normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null) ??
           normalizeLogoUrl(t.customerLogoUrl) ??
           null,
-        partyType: t.partyType ?? quoteMap.get(t.quoteId)?.partyType ?? null,
+        partyType:
+          t.partyType ??
+          t.customerType ??
+          (t.customerId && customerMap.has(t.customerId)
+            ? "customer"
+            : t.customerId && leadMap.has(t.customerId)
+              ? "lead"
+              : null) ??
+          quoteMap.get(t.quoteId)?.partyType ??
+          null,
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
         productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
@@ -1231,6 +1314,36 @@ export default function DesignPage() {
   useEffect(() => {
     void loadTasks();
 // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveTeamId]);
+
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+    const handlePageCacheUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ teamId?: string }>;
+      if (customEvent.detail?.teamId !== effectiveTeamId) return;
+      const cached = readDesignPageCache(effectiveTeamId);
+      if (!cached?.tasks) return;
+      setTasks(cached.tasks);
+    };
+
+    window.addEventListener("design:page-cache-updated", handlePageCacheUpdate as EventListener);
+    return () => {
+      window.removeEventListener("design:page-cache-updated", handlePageCacheUpdate as EventListener);
+    };
+  }, [effectiveTeamId]);
+
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+    const handleCustomersUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ teamId?: string }>;
+      if (customEvent.detail?.teamId !== effectiveTeamId) return;
+      void loadTasks();
+    };
+
+    window.addEventListener("design:customers-updated", handleCustomersUpdated as EventListener);
+    return () => {
+      window.removeEventListener("design:customers-updated", handleCustomersUpdated as EventListener);
+    };
   }, [effectiveTeamId]);
 
   useEffect(() => {
@@ -1355,6 +1468,14 @@ export default function DesignPage() {
     return renderDesignerFilterValue(value);
   };
 
+  const visibleTasks = useMemo(
+    () =>
+      isManagerUser && userId
+        ? tasks.filter((task) => (task.quoteManagerUserId?.trim() ?? "") === userId)
+        : tasks,
+    [isManagerUser, tasks, userId]
+  );
+
   const managerFilterOptions = useMemo(() => {
     const byId = new Map<string, { id: string; label: string; avatarUrl?: string | null }>();
 
@@ -1362,7 +1483,7 @@ export default function DesignPage() {
       byId.set(member.id, member);
     });
 
-    tasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       const managerId = task.quoteManagerUserId?.trim();
       if (!managerId || byId.has(managerId)) return;
       const label =
@@ -1377,11 +1498,10 @@ export default function DesignPage() {
     });
 
     return Array.from(byId.values()).sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
-  }, [currentUserDisplayName, managerMembers, memberById, tasks, userId]);
+  }, [currentUserDisplayName, managerMembers, memberById, userId, visibleTasks]);
 
   const renderManagerFilterValue = (value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
-    if (value === NO_MANAGER_FILTER) return <span>Без менеджера</span>;
     const label = value === userId && currentUserDisplayName ? currentUserDisplayName : (memberById[value] ?? "Користувач");
     const avatarUrl = getMemberAvatar(value);
     return (
@@ -1403,7 +1523,7 @@ export default function DesignPage() {
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return tasks.filter((task) => {
+    return visibleTasks.filter((task) => {
       const isLinkedTask = isUuid(task.quoteId);
       if (contentView === "linked" && !isLinkedTask) return false;
       if (contentView === "standalone" && isLinkedTask) return false;
@@ -1419,8 +1539,7 @@ export default function DesignPage() {
         return false;
       }
 
-      if (managerFilter === NO_MANAGER_FILTER && task.quoteManagerUserId) return false;
-      if (managerFilter !== ALL_MANAGERS_FILTER && managerFilter !== NO_MANAGER_FILTER && task.quoteManagerUserId !== managerFilter) {
+      if (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER && task.quoteManagerUserId !== managerFilter) {
         return false;
       }
 
@@ -1440,19 +1559,19 @@ export default function DesignPage() {
 
       return haystack.includes(query);
     });
-  }, [contentView, effectiveDesignerFilter, managerFilter, search, statusFilter, tasks]);
+  }, [contentView, effectiveDesignerFilter, isManagerUser, managerFilter, search, statusFilter, visibleTasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
     statusFilter !== "all" ||
     effectiveDesignerFilter !== ALL_DESIGNERS_FILTER ||
-    managerFilter !== ALL_MANAGERS_FILTER;
+    (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER);
 
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
     setDesignerFilter(ALL_DESIGNERS_FILTER);
-    setManagerFilter(ALL_MANAGERS_FILTER);
+    setManagerFilter(isManagerUser && userId ? userId : ALL_MANAGERS_FILTER);
   };
 
   useEffect(() => {
@@ -2532,6 +2651,18 @@ export default function DesignPage() {
           typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
             ? normalizeLogoUrl(metadata.customer_logo_url as string)
             : null,
+        customerId:
+          typeof metadata.customer_id === "string" && metadata.customer_id.trim()
+            ? metadata.customer_id.trim()
+            : null,
+        customerType:
+          typeof metadata.customer_type === "string"
+            ? (metadata.customer_type.trim().toLowerCase() === "lead"
+                ? "lead"
+                : metadata.customer_type.trim().toLowerCase() === "customer"
+                  ? "customer"
+                : null)
+            : null,
         methodsCount: 0,
         hasFiles: createFiles.length > 0,
         designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
@@ -3088,20 +3219,44 @@ export default function DesignPage() {
               </Select>
             ) : null}
 
-            <Select value={managerFilter} onValueChange={setManagerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-                <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
-                <SelectItem value={NO_MANAGER_FILTER}>{renderManagerFilterValue(NO_MANAGER_FILTER)}</SelectItem>
-                {managerFilterOptions.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {renderManagerFilterValue(member.id)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isManagerUser ? (
+              <div
+                className={cn(
+                  TOOLBAR_CONTROL,
+                  "flex w-full cursor-not-allowed items-center justify-start opacity-90 sm:w-[220px]"
+                )}
+                aria-disabled="true"
+                title="Показуються тільки ваші дизайн-задачі"
+              >
+                <div className="flex h-full min-w-0 items-center gap-2">
+                  <AvatarBase
+                    src={getMemberAvatar(userId ?? null)}
+                    name={currentUserDisplayName || "Менеджер"}
+                    fallback={getInitials(currentUserDisplayName || "Менеджер")}
+                    size={20}
+                    className="border-border/60 shrink-0"
+                    fallbackClassName="text-[10px] font-semibold"
+                  />
+                  <span className="truncate leading-none">
+                    {currentUserDisplayName || "Менеджер"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <Select value={managerFilter} onValueChange={setManagerFilter}>
+                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
+                  <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
+                  {managerFilterOptions.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {renderManagerFilterValue(member.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
           </div>

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Building2, Check } from "lucide-react";
+import { Building2, Check, Lock } from "lucide-react";
 import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -12,6 +12,8 @@ export type CustomerLeadOption = {
   label: string;
   entityType: "customer" | "lead";
   logoUrl?: string | null;
+  disabled?: boolean;
+  disabledReason?: string | null;
 };
 
 export type CustomerLeadPickerProps = {
@@ -146,12 +148,17 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm"
+                      disabled={option.disabled}
+                      className={cn(
+                        "h-auto min-h-12 w-full items-center justify-start gap-3 rounded-[var(--radius-lg)] px-2 py-2 text-left text-sm",
+                        option.disabled && "cursor-not-allowed opacity-55"
+                      )}
                       onClick={() => {
+                        if (option.disabled) return;
                         onSelect(option);
                         onOpenChange(false);
                       }}
-                      title={option.label}
+                      title={option.disabledReason || option.label}
                     >
                       <EntityAvatar
                         src={option.logoUrl ?? null}
@@ -162,15 +169,23 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                       />
                       <span className="min-w-0 flex-1 leading-tight">
                         <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
-                        <span
-                          className={cn(
-                            "mt-0.5 inline-flex h-4.5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-wide",
-                            option.entityType === "lead"
-                              ? "border-amber-300 bg-amber-100 text-amber-950"
-                              : "border-emerald-300 bg-emerald-100 text-emerald-950"
-                          )}
-                        >
-                          {option.entityType === "lead" ? "Лід" : "Клієнт"}
+                        <span className="mt-0.5 flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "inline-flex h-4.5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-wide",
+                              option.entityType === "lead"
+                                ? "border-amber-300 bg-amber-100 text-amber-950"
+                                : "border-emerald-300 bg-emerald-100 text-emerald-950"
+                            )}
+                          >
+                            {option.entityType === "lead" ? "Лід" : "Клієнт"}
+                          </span>
+                          {option.disabled ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                              <Lock className="h-3 w-3" />
+                              Недоступно
+                            </span>
+                          ) : null}
                         </span>
                       </span>
                       <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", isSelected ? "opacity-100" : "opacity-0")} />

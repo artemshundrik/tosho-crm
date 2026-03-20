@@ -83,6 +83,8 @@ export type CustomerRow = {
   name?: string | null;
   legal_name?: string | null;
   logo_url?: string | null;
+  manager?: string | null;
+  manager_user_id?: string | null;
 };
 export type LeadSearchRow = {
   id: string;
@@ -91,6 +93,8 @@ export type LeadSearchRow = {
   first_name?: string | null;
   last_name?: string | null;
   logo_url?: string | null;
+  manager?: string | null;
+  manager_user_id?: string | null;
 };
 
 export type LeadRow = {
@@ -395,8 +399,13 @@ export async function listQuotes(params: ListQuotesParams) {
 
 export async function listCustomersBySearch(teamId: string, search: string) {
   const q = search.trim();
-  const runQuery = async (withLogo: boolean) => {
-    const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
+  const runQuery = async (variant: "full" | "no_logo" | "base") => {
+    const columns =
+      variant === "full"
+        ? "id,name,legal_name,logo_url,manager,manager_user_id"
+        : variant === "no_logo"
+          ? "id,name,legal_name,manager,manager_user_id"
+          : "id,name,legal_name";
     let query = supabase
       .schema("tosho")
       .from("customers")
@@ -411,13 +420,18 @@ export async function listCustomersBySearch(teamId: string, search: string) {
     return await query;
   };
 
-  let { data, error } = await runQuery(true);
+  let { data, error } = await runQuery("full");
+  const message = getErrorMessage(error);
+  if (error && /column/i.test(message) && /logo_url/i.test(message)) {
+    ({ data, error } = await runQuery("no_logo"));
+  }
+  const secondMessage = getErrorMessage(error);
   if (
     error &&
-    /column/i.test(error.message ?? "") &&
-    /logo_url/i.test(error.message ?? "")
+    /column/i.test(secondMessage) &&
+    /(manager|manager_user_id)/i.test(secondMessage)
   ) {
-    ({ data, error } = await runQuery(false));
+    ({ data, error } = await runQuery("base"));
   }
   handleError(error);
   return (data as unknown as CustomerRow[]) ?? [];
@@ -425,23 +439,33 @@ export async function listCustomersBySearch(teamId: string, search: string) {
 
 export async function listLeadsBySearch(teamId: string, search: string) {
   const q = search.trim();
-  let query = supabase
-    .schema("tosho")
-    .from("leads")
-    .select("id,company_name,legal_name,first_name,last_name,logo_url")
-    .eq("team_id", teamId)
-    .order("company_name", { ascending: true })
-    .limit(20);
+  const runQuery = async (variant: "full" | "base") => {
+    let query = supabase
+      .schema("tosho")
+      .from("leads")
+      .select(
+        variant === "full"
+          ? "id,company_name,legal_name,first_name,last_name,logo_url,manager,manager_user_id"
+          : "id,company_name,legal_name,first_name,last_name,logo_url"
+      )
+      .eq("team_id", teamId)
+      .order("company_name", { ascending: true })
+      .limit(20);
 
-  if (q.length > 0) {
-    query = query.or(
-      `company_name.ilike.%${q}%,legal_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`
-    );
+    if (q.length > 0) {
+      query = query.or(
+        `company_name.ilike.%${q}%,legal_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`
+      );
+    }
+    return await query;
+  };
+
+  let { data, error } = await runQuery("full");
+  if (error && /column/i.test(getErrorMessage(error)) && /(manager|manager_user_id)/i.test(getErrorMessage(error))) {
+    ({ data, error } = await runQuery("base"));
   }
-
-  const { data, error } = await query;
   handleError(error);
-  return (data as LeadSearchRow[]) ?? [];
+  return (data as unknown as LeadSearchRow[]) ?? [];
 }
 
 export async function getLeadById(teamId: string, leadId: string) {
