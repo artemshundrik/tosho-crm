@@ -132,6 +132,11 @@ function getErrorMessage(error: unknown): string {
   return typeof message === "string" ? message : "";
 }
 
+function resolveNumericRate(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function getQuoteMonthCode(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear()).slice(-2);
@@ -880,9 +885,9 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-    manager_rate: Number(run.manager_rate ?? 10) || 10,
-    fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
-    vat_rate: Number(run.vat_rate ?? 20) || 20,
+    manager_rate: resolveNumericRate(run.manager_rate, 10),
+    fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
+    vat_rate: resolveNumericRate(run.vat_rate, 20),
   }));
 }
 
@@ -942,9 +947,9 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     unit_price_print: Number(run.unit_price_print ?? 0) || 0,
     logistics_cost: Number(run.logistics_cost ?? 0) || 0,
     desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-    manager_rate: Number(run.manager_rate ?? 10) || 10,
-    fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
-    vat_rate: Number(run.vat_rate ?? 20) || 20,
+    manager_rate: resolveNumericRate(run.manager_rate, 10),
+    fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
+    vat_rate: resolveNumericRate(run.vat_rate, 20),
   }));
 }
 

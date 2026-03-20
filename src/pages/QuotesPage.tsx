@@ -141,6 +141,9 @@ type QuotesPageProps = {
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
+const DEFAULT_MANAGER_RATE = 10;
+const DEFAULT_FIXED_COST_RATE = 30;
+const DEFAULT_VAT_RATE = 20;
 const isUuid = (value?: string | null) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value ?? "").trim());
 
@@ -520,6 +523,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCurrentUserManagerLabel(presenceLabel);
     }
   }, [currentUserId, memberById, presenceLabelById, workspaceMemberLabelById]);
+  const getManagerRateForUser = useCallback(async (targetUserId?: string | null) => {
+    const normalizedUserId = targetUserId?.trim();
+    if (!normalizedUserId) return DEFAULT_MANAGER_RATE;
+
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("team_member_manager_rates")
+        .select("manager_rate")
+        .eq("workspace_id", teamId)
+        .eq("user_id", normalizedUserId)
+        .maybeSingle<{ manager_rate?: number | null }>();
+
+      if (error) {
+        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
+          throw error;
+        }
+        return DEFAULT_MANAGER_RATE;
+      }
+
+      return Math.max(0, Number(data?.manager_rate) || DEFAULT_MANAGER_RATE);
+    } catch (error) {
+      console.error("Failed to load manager rate", error);
+      return DEFAULT_MANAGER_RATE;
+    }
+  }, [teamId]);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
@@ -1610,6 +1639,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (itemError) throw itemError;
 
         if (normalizedRuns.length > 0) {
+          const creatorManagerRate = await getManagerRateForUser(userId);
           const runRows = normalizedRuns.map((run) => ({
             id: crypto.randomUUID(),
             quote_id: created.id,
@@ -1619,9 +1649,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_print: 0,
             logistics_cost: 0,
             desired_manager_income: 0,
-            manager_rate: 10,
-            fixed_cost_rate: 30,
-            vat_rate: 20,
+            manager_rate: creatorManagerRate,
+            fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+            vat_rate: DEFAULT_VAT_RATE,
             team_id: teamId,
           }));
           let { error: runsError } = await supabase
@@ -3176,9 +3206,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_print: Number(run.unit_price_print ?? 0) || 0,
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
             desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-            manager_rate: Number(run.manager_rate ?? 10) || 10,
-            fixed_cost_rate: Number(run.fixed_cost_rate ?? 30) || 30,
-            vat_rate: Number(run.vat_rate ?? 20) || 20,
+            manager_rate: Number.isFinite(Number(run.manager_rate)) ? Number(run.manager_rate) : DEFAULT_MANAGER_RATE,
+            fixed_cost_rate: Number.isFinite(Number(run.fixed_cost_rate)) ? Number(run.fixed_cost_rate) : DEFAULT_FIXED_COST_RATE,
+            vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : DEFAULT_VAT_RATE,
           }))
         );
       }
@@ -3385,6 +3415,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (deleteRunsError) throw deleteRunsError;
 
         if (normalizedRuns.length > 0) {
+          const creatorManagerRate = await getManagerRateForUser(editTarget.created_by ?? currentUserId ?? userId);
           await upsertQuoteRuns(
             editTarget.id,
             normalizedRuns.map((run) => ({
@@ -3396,9 +3427,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               unit_price_print: 0,
               logistics_cost: 0,
               desired_manager_income: 0,
-              manager_rate: 10,
-              fixed_cost_rate: 30,
-              vat_rate: 20,
+              manager_rate: creatorManagerRate,
+              fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+              vat_rate: DEFAULT_VAT_RATE,
             }))
           );
         }

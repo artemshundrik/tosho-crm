@@ -199,6 +199,11 @@ const DEADLINE_REMINDER_OPTIONS = [
   { value: "1440", label: "За 1 день" },
 ] as const;
 
+const resolveNumericRate = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+};
+
 const isGenericMentionLabel = (label?: string | null) => {
   const normalized = (label ?? "").trim().toLowerCase();
   return normalized === "користувач" || normalized === "невідомий користувач";
@@ -596,9 +601,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   }, []);
 
-  const effectiveManagerId = quote?.assigned_to?.trim() || userId || null;
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
   const quoteCreatedByUserId = quote?.created_by?.trim() || null;
+  const effectiveManagerId = quoteCreatedByUserId || quoteManagerUserId || userId || null;
   const viewerJobRole = normalizeJobRole(jobRole);
   const canOpenCurrentQuote = canOpenQuoteDetails({
     userId,
@@ -637,17 +642,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
 
     try {
-      const workspaceId = await resolveWorkspaceId(effectiveManagerId);
-      if (!workspaceId) {
-        setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-        return;
-      }
-
       const { data, error } = await supabase
         .schema("tosho")
         .from("team_member_manager_rates")
         .select("manager_rate")
-        .eq("workspace_id", workspaceId)
+        .eq("workspace_id", teamId)
         .eq("user_id", effectiveManagerId)
         .maybeSingle<{ manager_rate?: number | null }>();
 
@@ -664,7 +663,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       console.error("Failed to load current manager rate", error);
       setCurrentManagerRate(DEFAULT_MANAGER_RATE);
     }
-  }, [effectiveManagerId]);
+  }, [effectiveManagerId, teamId]);
 
   useEffect(() => {
     void loadCurrentManagerRate();
@@ -714,9 +713,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const costTotal = getRunTotal(run);
     const costPerUnit = quantity > 0 ? costTotal / quantity : null;
     const desiredManagerIncome = Math.max(0, Number(run.desired_manager_income) || 0);
-    const managerRate = Math.max(0, currentManagerRate || DEFAULT_MANAGER_RATE);
-    const fixedCostRate = DEFAULT_FIXED_COST_RATE;
-    const vatRate = DEFAULT_VAT_RATE;
+    const managerRate = resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
+    const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE);
+    const vatRate = resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE);
     const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
     const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
     const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
@@ -752,7 +751,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: 0,
         logistics_cost: 0,
         desired_manager_income: 0,
-        manager_rate: DEFAULT_MANAGER_RATE,
+        manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
         fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
         vat_rate: DEFAULT_VAT_RATE,
       },
@@ -805,9 +804,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
-        manager_rate: Math.max(0, Number(run.manager_rate) || currentManagerRate || DEFAULT_MANAGER_RATE),
-        fixed_cost_rate: Math.max(0, Number(run.fixed_cost_rate) || DEFAULT_FIXED_COST_RATE),
-        vat_rate: Math.max(0, Number(run.vat_rate) || DEFAULT_VAT_RATE),
+        manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
+        fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
+        vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
       }));
       // delete missing (present before, absent now)
       const originalIds = new Set(
@@ -3637,9 +3636,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: Number(run.unit_price_print ?? 0) || 0,
           logistics_cost: Number(run.logistics_cost ?? 0) || 0,
           desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-          manager_rate: currentManagerRate || Number(run.manager_rate ?? DEFAULT_MANAGER_RATE) || DEFAULT_MANAGER_RATE,
-          fixed_cost_rate: Number(run.fixed_cost_rate ?? DEFAULT_FIXED_COST_RATE) || DEFAULT_FIXED_COST_RATE,
-          vat_rate: Number(run.vat_rate ?? DEFAULT_VAT_RATE) || DEFAULT_VAT_RATE,
+          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
+          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
         }));
         await upsertQuoteRuns(newQuoteId, runsPayload);
       }
