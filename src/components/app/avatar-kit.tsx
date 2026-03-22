@@ -104,9 +104,19 @@ export function AvatarBase({
     if (!src) return null;
     return getCachedAvatarDisplayUrl(src) ?? src;
   });
+  const mountedRef = React.useRef(true);
+  const refreshAttemptedForSrcRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     setErrored(false);
+    refreshAttemptedForSrcRef.current = null;
   }, [src]);
 
   React.useEffect(() => {
@@ -140,6 +150,28 @@ export function AvatarBase({
   const computedSize = size ?? VARIANT_SIZES[variant];
   const initials = getInitials(name, fallback);
   const showImage = Boolean(resolvedSrc) && !errored;
+  const handleImageError = React.useCallback(() => {
+    if (!src) {
+      setErrored(true);
+      return;
+    }
+
+    if (refreshAttemptedForSrcRef.current === src) {
+      setErrored(true);
+      return;
+    }
+
+    refreshAttemptedForSrcRef.current = src;
+    void resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET, { forceRefresh: true }).then((nextUrl) => {
+      if (!mountedRef.current) return;
+      if (nextUrl && nextUrl !== resolvedSrc) {
+        setResolvedSrc(nextUrl);
+        setErrored(false);
+        return;
+      }
+      setErrored(true);
+    });
+  }, [resolvedSrc, src]);
 
   return (
     <Avatar
@@ -158,7 +190,7 @@ export function AvatarBase({
           style={imageStyle}
           loading={loading}
           referrerPolicy={referrerPolicy}
-          onError={() => setErrored(true)}
+          onError={handleImageError}
         />
       ) : null}
       <AvatarFallback

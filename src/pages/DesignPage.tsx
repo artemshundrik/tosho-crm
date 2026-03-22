@@ -17,6 +17,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
@@ -557,6 +558,10 @@ export default function DesignPage() {
   const [suppressCardClick, setSuppressCardClick] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<DesignTask | null>(null);
+  const [taskToRename, setTaskToRename] = useState<DesignTask | null>(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
@@ -2754,6 +2759,85 @@ export default function DesignPage() {
     }
   };
 
+  const openRenameDialog = (task: DesignTask) => {
+    if (!userId || (task.assigneeUserId !== userId && !canManageAssignments)) return;
+    setTaskToRename(task);
+    setRenameError(null);
+    setRenameDialogOpen(true);
+  };
+
+  const submitRenameDialog = async (nextTitle: string) => {
+    if (!effectiveTeamId || !taskToRename || !userId) return;
+    if (taskToRename.assigneeUserId !== userId && !canManageAssignments) return;
+    const normalizedTitle = nextTitle.trim();
+    if (!normalizedTitle) {
+      setRenameError("Вкажіть назву задачі.");
+      return;
+    }
+
+    const previousTask = taskToRename;
+    const previousTitle = previousTask.title?.trim() || "";
+    if (previousTitle === normalizedTitle) {
+      setRenameDialogOpen(false);
+      setTaskToRename(null);
+      setRenameError(null);
+      return;
+    }
+
+    const nextTask = { ...previousTask, title: normalizedTitle };
+    const nextTasks = tasks.map((row) => (row.id === previousTask.id ? nextTask : row));
+    setRenameError(null);
+    setRenamingTaskId(previousTask.id);
+    setTasks(nextTasks);
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ title: normalizedTitle })
+        .eq("id", previousTask.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: previousTask.id,
+        quoteId: previousTask.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_title",
+        title: `Назва задачі: ${previousTitle || "Без назви"} → ${normalizedTitle}`,
+        metadata: {
+          source: "design_task_title",
+          from_title: previousTitle || null,
+          to_title: normalizedTitle,
+        },
+      });
+
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(
+          `design-page-cache:${effectiveTeamId}`,
+          JSON.stringify({
+            tasks: nextTasks,
+            cachedAt: Date.now(),
+          } satisfies DesignPageCachePayload)
+        );
+      }
+
+      toast.success("Назву задачі оновлено");
+      setRenameDialogOpen(false);
+      setTaskToRename(null);
+    } catch (e: unknown) {
+      setTasks((prev) => prev.map((row) => (row.id === previousTask.id ? previousTask : row)));
+      const message = getErrorMessage(e, "Не вдалося оновити назву задачі");
+      setRenameError(message);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setRenamingTaskId(null);
+    }
+  };
+
   const updateTaskEstimate = async (task: DesignTask, estimateMinutes: number, reason?: string) => {
     if (!effectiveTeamId) return;
     const previousEstimate = getTaskEstimateMinutes(task);
@@ -2907,6 +2991,9 @@ export default function DesignPage() {
             </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
                 <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
+                {userId && (task.assigneeUserId === userId || canManageAssignments) ? (
+                  <DropdownMenuItem onClick={() => openRenameDialog(task)}>Редагувати назву</DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
               {canSelfAssign &&
               userId &&
@@ -4100,7 +4187,9 @@ export default function DesignPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                       <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>Відкрити</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => navigate(`/design/${task.id}`)}>Редагувати</DropdownMenuItem>
+                                      {userId && (task.assigneeUserId === userId || canManageAssignments) ? (
+                                        <DropdownMenuItem onClick={() => openRenameDialog(task)}>Редагувати назву</DropdownMenuItem>
+                                      ) : null}
                                       <DropdownMenuItem onClick={() => requestReestimate(task)}>Оновити естімейт</DropdownMenuItem>
                                       {canMarkTaskReady(task) ? (
                                         <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
@@ -4719,6 +4808,22 @@ export default function DesignPage() {
       </Dialog>
 
       {customerLeadCreate.dialogs}
+
+      <DesignTaskRenameDialog
+        open={renameDialogOpen}
+        onOpenChange={(open) => {
+          setRenameDialogOpen(open);
+          if (!open) {
+            setTaskToRename(null);
+            setRenameError(null);
+          }
+        }}
+        initialValue={taskToRename?.title ?? ""}
+        taskLabel={taskToRename ? `«${getTaskDisplayNumber(taskToRename)}»` : null}
+        saving={!!renamingTaskId}
+        error={renameError}
+        onSubmit={submitRenameDialog}
+      />
 
       <ConfirmDialog
         open={!!taskToDelete}

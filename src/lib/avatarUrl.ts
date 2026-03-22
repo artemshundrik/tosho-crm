@@ -53,13 +53,14 @@ function extractObjectPath(url: string, bucket: string): string | null {
 export async function resolveAvatarDisplayUrl(
   supabase: SupabaseClient,
   rawUrl: string | null | undefined,
-  bucket: string
+  bucket: string,
+  options?: { forceRefresh?: boolean }
 ): Promise<string | null> {
   if (!rawUrl) return null;
-  if (avatarResolvedCache.has(rawUrl)) {
+  if (!options?.forceRefresh && avatarResolvedCache.has(rawUrl)) {
     return avatarResolvedCache.get(rawUrl) ?? null;
   }
-  const inflight = avatarInflightCache.get(rawUrl);
+  const inflight = !options?.forceRefresh ? avatarInflightCache.get(rawUrl) : null;
   if (inflight) return inflight;
 
   const promise = (async () => {

@@ -45,6 +45,7 @@ import {
   Link2,
   Trash2,
   Check,
+  PencilLine,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -55,6 +56,7 @@ import { normalizeCustomerLogoUrl as normalizeLogoUrl } from "@/lib/customerLogo
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
+import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
@@ -549,7 +551,7 @@ function syncDesignPageCacheTask(
   teamId: string,
   task: Pick<
     DesignTask,
-    "id" | "quoteId" | "quoteNumber" | "customerName" | "customerLogoUrl" | "quoteManagerUserId"
+    "id" | "title" | "quoteId" | "quoteNumber" | "customerName" | "customerLogoUrl" | "quoteManagerUserId"
   > | null
 ) {
   if (typeof window === "undefined" || !teamId || !task) return;
@@ -562,6 +564,7 @@ function syncDesignPageCacheTask(
       row.id === task.id
         ? {
             ...row,
+            title: task.title ?? row.title ?? null,
             quoteId: task.quoteId,
             quoteNumber: task.quoteNumber ?? row.quoteNumber ?? null,
             customerName: task.customerName ?? row.customerName ?? null,
@@ -704,6 +707,9 @@ export default function DesignTaskPage() {
     [getEntityViewers, id]
   );
   const [task, setTask] = useState<DesignTask | null>(() => initialCache?.task ?? null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(() => initialCache?.quoteItem ?? null);
   const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(() => initialCache?.productPreviewUrl ?? null);
   const [attachments, setAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
@@ -3599,6 +3605,84 @@ export default function DesignTaskPage() {
     }
   };
 
+  const submitRenameDialog = async (nextTitle: string) => {
+    if (!task || !effectiveTeamId || !canEditTaskTitle) return;
+    if (!ensureCanEdit()) return;
+
+    const normalizedTitle = nextTitle.trim();
+    if (!normalizedTitle) {
+      setRenameError("Вкажіть назву задачі.");
+      return;
+    }
+
+    const previousTask = task;
+    const previousTitle = previousTask.title?.trim() || "";
+    if (previousTitle === normalizedTitle) {
+      setRenameDialogOpen(false);
+      setRenameError(null);
+      return;
+    }
+
+    const nextTask = { ...previousTask, title: normalizedTitle };
+    setRenameError(null);
+    setRenameSaving(true);
+    setTask(nextTask);
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ title: normalizedTitle })
+        .eq("id", previousTask.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: previousTask.id,
+        quoteId: previousTask.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_title",
+        title: `Назва задачі: ${previousTitle || "Без назви"} → ${normalizedTitle}`,
+        metadata: {
+          source: "design_task_title",
+          from_title: previousTitle || null,
+          to_title: normalizedTitle,
+        },
+      });
+      await loadHistory(previousTask.id);
+
+      if (typeof window !== "undefined" && id) {
+        sessionStorage.setItem(
+          `design-task-page-cache:${effectiveTeamId}:${id}`,
+          JSON.stringify({
+            task: nextTask,
+            quoteItem,
+            productPreviewUrl,
+            attachments: [],
+            designOutputFiles: [],
+            designOutputLinks,
+            designOutputGroups,
+            cachedAt: Date.now(),
+          } satisfies DesignTaskPageCachePayload)
+        );
+      }
+      syncDesignPageCacheTask(effectiveTeamId, nextTask);
+
+      toast.success("Назву задачі оновлено");
+      setRenameDialogOpen(false);
+    } catch (e: unknown) {
+      setTask(previousTask);
+      const message = getErrorMessage(e, "Не вдалося оновити назву задачі");
+      setRenameError(message);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
   const updateTaskDeadline = async (nextDate: Date | null, nextTime?: string) => {
     if (!task || !effectiveTeamId) return;
     if (!ensureCanEdit()) return;
@@ -4751,6 +4835,12 @@ export default function DesignTaskPage() {
     (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
     (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");
   const taskManagerAvatar = taskManagerUserId ? getMemberAvatar(taskManagerUserId) : null;
+  const canEditTaskTitle = !!task && !!userId && (task.assigneeUserId === userId || canManageAssignments);
+  const openRenameDialog = () => {
+    if (!canEditTaskTitle) return;
+    setRenameError(null);
+    setRenameDialogOpen(true);
+  };
 
   return (
     <div className="w-full max-w-none px-0 pb-20 md:pb-0 space-y-4">
@@ -4767,7 +4857,24 @@ export default function DesignTaskPage() {
             </Badge>
           </>
         }
-        title={taskHeaderTitle}
+        title={
+          <div className="flex items-center gap-2">
+            <span>{taskHeaderTitle}</span>
+            {canEditTaskTitle ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={openRenameDialog}
+                disabled={renameSaving || designTaskLockedByOther}
+                title="Редагувати назву"
+              >
+                <PencilLine className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        }
         subtitle={taskHeaderSubtitle}
         viewers={<EntityViewersBar entries={designTaskViewers} label="Переглядають задачу" />}
         meta={
@@ -5572,6 +5679,11 @@ export default function DesignTaskPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {canEditTaskTitle ? (
+                    <DropdownMenuItem onClick={openRenameDialog} disabled={renameSaving || designTaskLockedByOther}>
+                      Редагувати назву
+                    </DropdownMenuItem>
+                  ) : null}
                   {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => (
                     <DropdownMenuItem
                       key={status}
@@ -6664,6 +6776,19 @@ export default function DesignTaskPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DesignTaskRenameDialog
+        open={renameDialogOpen}
+        onOpenChange={(open) => {
+          setRenameDialogOpen(open);
+          if (!open) setRenameError(null);
+        }}
+        initialValue={task?.title ?? ""}
+        taskLabel={task ? `«${getTaskDisplayNumber(task)}»` : null}
+        saving={renameSaving}
+        error={renameError}
+        onSubmit={submitRenameDialog}
+      />
 
       <ConfirmDialog
         open={deleteDialogOpen}
