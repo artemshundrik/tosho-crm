@@ -65,6 +65,8 @@ export type LeadDialogProps = {
   ownershipOptions?: Array<{
     value: string;
     label: string;
+    description?: string;
+    group?: string;
   }>;
   teamMembers?: Array<{
     id: string;
@@ -158,6 +160,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const currentOwnership = ownershipOptions.find((option) => option.value === form.ownershipType);
   const isFopOwnership = form.ownershipType === "fop";
+  const groupedOwnershipOptions = React.useMemo(() => {
+    const groups = new Map<string, NonNullable<LeadDialogProps["ownershipOptions"]>>();
+    ownershipOptions.forEach((option) => {
+      const groupName = option.group ?? "Інше";
+      const next = groups.get(groupName) ?? [];
+      next.push(option);
+      groups.set(groupName, next);
+    });
+    return Array.from(groups.entries());
+  }, [ownershipOptions]);
 
   const hasManagerInList = teamMembers.some((member) => member.id === form.managerId || member.label === form.manager);
   const selectedManager =
@@ -210,9 +222,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
     setForm((prev) => ({ ...prev, reminderTime: normalizeTime(prev.reminderTime) }));
   };
 
+  const formatOwnershipOptionText = (option: NonNullable<LeadDialogProps["ownershipOptions"]>[number]) =>
+    option.description ? `${option.label} (${option.description})` : option.label;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[760px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="top-[3vh] max-h-[92vh] max-w-[760px] translate-y-0 overflow-y-auto sm:top-[4vh]">
         <DialogHeader>
           <DialogTitle className="text-base font-medium flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
@@ -229,30 +244,37 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 icon={<Building2 className="h-4 w-4" />}
                 active={!!form.ownershipType}
               >
-                {currentOwnership?.label ?? "Тип власності"}
+                {currentOwnership?.label ?? "Тип контрагента"}
               </Chip>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-2" align="start">
-              <div className="space-y-1">
-                {ownershipOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, ownershipType: option.value }));
-                      setOwnershipOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "h-3.5 w-3.5 text-primary",
-                        form.ownershipType === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <span className="text-sm">{option.label}</span>
-                  </Button>
+            <PopoverContent className="w-[360px] p-2" align="start">
+              <div className="space-y-2">
+                {groupedOwnershipOptions.map(([groupName, options]) => (
+                  <div key={groupName} className="space-y-1">
+                    <div className="px-2 pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {groupName}
+                    </div>
+                    {options.map((option) => (
+                      <Button
+                        key={option.value}
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto min-h-9 w-full justify-start gap-2 py-2 text-left"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, ownershipType: option.value }));
+                          setOwnershipOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mt-0.5 h-3.5 w-3.5 shrink-0 text-primary",
+                            form.ownershipType === option.value ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <span className="text-sm leading-5">{formatOwnershipOptionText(option)}</span>
+                      </Button>
+                    ))}
+                  </div>
                 ))}
                 {form.ownershipType ? (
                   <Button
@@ -452,11 +474,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
+                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
                     <Input
                       value={form.companyName}
                       onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                      placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Назва компанії"}
+                      placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
                       className="h-9"
                     />
                   </div>
@@ -555,31 +577,31 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
+                      <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
                       <Input
                         value={form.companyName}
                         onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
-                        placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Назва компанії"}
+                        placeholder={isFopOwnership ? "Напр. Берновська Ольга Василівна" : "Назва компанії"}
                         className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>{isFopOwnership ? "Реєстраційна назва ФОП (ПІБ)" : "Юридична назва"}</Label>
+                      <Label>{isFopOwnership ? "Назва бренду" : "Юридична назва"}</Label>
                       <Input
                         value={form.legalName}
                         onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                        placeholder="Повна юридична назва"
+                        placeholder={isFopOwnership ? "Напр. EDLIGHT" : "Повна юридична назва"}
                         className="h-9"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>Сайт компанії</Label>
+                      <Label>{isFopOwnership ? "Instagram" : "Сайт компанії"}</Label>
                       <Input
                         value={form.website}
                         onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
-                        placeholder="https://"
+                        placeholder={isFopOwnership ? "@brandname" : "https://"}
                         className="h-9"
                       />
                     </div>

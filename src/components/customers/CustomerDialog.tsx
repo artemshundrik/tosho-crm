@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
@@ -20,14 +20,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
+import {
+  createEmptyCustomerLegalEntity,
+  formatOwnershipTypeLabel,
+  formatCustomerLegalEntitySummary,
+  formatVatRateLabel,
+  hasCustomerLegalEntityIdentity,
+  type CustomerLegalEntity,
+} from "@/lib/customerLegalEntities";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import {
-  Building2,
   CalendarIcon,
-  Check,
   Image as ImageIcon,
-  Percent,
   PlusCircle,
   Trash2,
   User,
@@ -37,6 +42,8 @@ import {
 export type OwnershipOption = {
   value: string;
   label: string;
+  description?: string;
+  group?: string;
 };
 
 export type VatOption = {
@@ -47,23 +54,12 @@ export type VatOption = {
 
 export type CustomerFormState = {
   name: string;
-  legalName: string;
   manager: string;
   managerId: string;
-  ownershipType: string;
-  vatRate: string;
-  taxId: string;
   website: string;
-  iban: string;
   logoUrl: string;
+  legalEntities: CustomerLegalEntity[];
   contacts: CustomerContact[];
-  contactName: string;
-  contactPosition: string;
-  contactPhone: string;
-  contactEmail: string;
-  contactBirthday: string;
-  signatoryName: string;
-  signatoryPosition: string;
   reminderDate: string;
   reminderTime: string;
   reminderComment: string;
@@ -80,6 +76,8 @@ export type CustomerContact = {
   email: string;
   birthday: string;
 };
+
+export type { CustomerLegalEntity } from "@/lib/customerLegalEntities";
 
 export type CustomerLinkedItem = {
   id: string;
@@ -178,18 +176,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   linkedLoading = false,
 }) => {
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
-  const currentOwnership = ownershipOptions.find(
-    (option) => option.value === form.ownershipType
-  );
-  const isFopOwnership = form.ownershipType === "fop";
-  const currentVat = vatOptions.find((option) => option.value === form.vatRate);
-  const [ownershipOpen, setOwnershipOpen] = React.useState(false);
-  const [vatOpen, setVatOpen] = React.useState(false);
+  const primaryLegalEntity = form.legalEntities[0] ?? createEmptyCustomerLegalEntity();
+  const isFopOwnership = primaryLegalEntity.ownershipType === "fop";
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
-  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
+  const [activeLegalEntityId, setActiveLegalEntityId] = React.useState<string | null>(null);
+  const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "history">(
     "basic"
   );
 
@@ -205,17 +199,39 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const selectedManager =
     teamMembers.find((member) => member.id === form.managerId) ??
     teamMembers.find((member) => member.label === form.manager);
+  const groupedOwnershipOptions = React.useMemo(() => {
+    const groups = new Map<string, OwnershipOption[]>();
+    ownershipOptions.forEach((option) => {
+      const groupName = option.group ?? "Інше";
+      const next = groups.get(groupName) ?? [];
+      next.push(option);
+      groups.set(groupName, next);
+    });
+    return Array.from(groups.entries());
+  }, [ownershipOptions]);
+  const activeOwnershipType =
+    form.legalEntities.find((entity) => entity.id === activeLegalEntityId)?.ownershipType ??
+    primaryLegalEntity.ownershipType;
+  const activeOwnershipOption = ownershipOptions.find((option) => option.value === activeOwnershipType);
 
   React.useEffect(() => {
     if (!open) {
-      setOwnershipOpen(false);
-      setVatOpen(false);
       setLogoOpen(false);
       setManagerOpen(false);
       setReminderDateOpen(false);
       setEventDateOpen(false);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (form.legalEntities.length === 0) {
+      setActiveLegalEntityId(null);
+      return;
+    }
+    if (!activeLegalEntityId || !form.legalEntities.some((entity) => entity.id === activeLegalEntityId)) {
+      setActiveLegalEntityId(form.legalEntities[0]?.id ?? null);
+    }
+  }, [activeLegalEntityId, form.legalEntities]);
 
   const handleReminderTimeChange = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 4);
@@ -234,6 +250,45 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     }));
   };
 
+  const updateLegalEntity = (index: number, patch: Partial<CustomerLegalEntity>) => {
+    setForm((prev) => ({
+      ...prev,
+      legalEntities: prev.legalEntities.map((entity, entityIndex) =>
+        entityIndex === index ? { ...entity, ...patch } : entity
+      ),
+    }));
+  };
+
+  const addLegalEntity = () => {
+    const next = createEmptyCustomerLegalEntity();
+    setForm((prev) => ({
+      ...prev,
+      legalEntities: [...prev.legalEntities, next],
+    }));
+    setActiveLegalEntityId(next.id);
+  };
+
+  const removeLegalEntity = (index: number) => {
+    setForm((prev) => {
+      if (prev.legalEntities.length <= 1) return prev;
+      return {
+        ...prev,
+        legalEntities: prev.legalEntities.filter((_, entityIndex) => entityIndex !== index),
+      };
+    });
+  };
+
+  const formatOwnershipOptionText = (option: OwnershipOption) =>
+    option.description ? `${option.label} (${option.description})` : option.label;
+
+  const activeLegalEntityIndex = Math.max(
+    0,
+    form.legalEntities.findIndex((entity) => entity.id === activeLegalEntityId)
+  );
+  const activeLegalEntity = form.legalEntities[activeLegalEntityIndex] ?? form.legalEntities[0] ?? null;
+  const activeLegalEntityIsPerson = activeLegalEntity?.ownershipType === "fop";
+  const hasMultipleLegalEntities = form.legalEntities.length > 1;
+
   const addContact = () => {
     setForm((prev) => ({
       ...prev,
@@ -250,7 +305,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[800px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="top-[3vh] max-h-[92vh] max-w-[800px] translate-y-0 overflow-y-auto sm:top-[4vh]">
         <DialogHeader>
           <DialogTitle className="text-base font-medium flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
@@ -260,78 +315,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Popover open={ownershipOpen} onOpenChange={setOwnershipOpen}>
-            <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={<Building2 className="h-4 w-4" />}
-                active={!!form.ownershipType}
-              >
-                {currentOwnership?.label ?? "Тип власності"}
-              </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-2" align="start">
-              <div className="space-y-1">
-                {ownershipOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, ownershipType: option.value }));
-                      setOwnershipOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "h-3.5 w-3.5 text-primary",
-                        form.ownershipType === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <span className="text-sm">{option.label}</span>
-                  </Button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Popover open={vatOpen} onOpenChange={setVatOpen}>
-            <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={<Percent className="h-4 w-4" />}
-                active={!!form.vatRate && form.vatRate !== "none"}
-              >
-                {currentVat?.value === "none" ? "ПДВ" : (currentVat?.label ?? "ПДВ")}
-              </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-40 p-2" align="start">
-              <div className="space-y-1">
-                {vatOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start gap-2 h-9 text-sm"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, vatRate: option.value }));
-                      setVatOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "h-3.5 w-3.5 text-primary",
-                        form.vatRate === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <span className="text-sm">{option.label}</span>
-                  </Button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
               <Chip
@@ -449,17 +432,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           </Popover>
         </div>
 
-        <div className="rounded-md border border-border/50 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
-          {[form.name || "Без назви", form.manager || "Без менеджера", form.reminderDate || "Без нагадування"]
-            .filter(Boolean)
-            .join(" • ")}
-        </div>
-
         <div className="space-y-3">
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
             <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
               <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
-              <TabsTrigger value="requisites" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Реквізити</TabsTrigger>
+              <TabsTrigger value="legalEntities" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Юр. Особи</TabsTrigger>
               <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
               <TabsTrigger value="history" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Історія</TabsTrigger>
             </TabsList>
@@ -469,40 +446,20 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "Назва ФОП *" : "Назва компанії *"}</Label>
+                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder={isFopOwnership ? "Напр. ФОП Янукович В.Ф." : "Напр. ТОВ “Вектор”"}
+                      placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
                       className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "Реєстраційна назва ФОП (ПІБ)" : "Юридична назва"}</Label>
-                    <Input
-                      value={form.legalName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
-                      placeholder="Повна назва"
-                      className="h-9"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>ЄДРПОУ / ІПН</Label>
-                    <Input
-                      value={form.taxId}
-                      onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
-                      placeholder="Код або ІПН"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Сайт</Label>
+                    <Label>{isFopOwnership ? "Instagram" : "Сайт"}</Label>
                     <Input
                       value={form.website}
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
-                      placeholder="https://"
+                      placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
                       className="h-9"
                     />
                   </div>
@@ -513,7 +470,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-muted-foreground">
-                    Додайте кілька контактів: імʼя, номер, посада, email.
+                    Додайте кілька контактів: імʼя, номер{isFopOwnership ? "" : ", посада"}, email.
                   </div>
                   <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addContact}>
                     <PlusCircle className="mr-1 h-4 w-4" />
@@ -546,24 +503,26 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           className="h-9"
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label>Посада</Label>
-                        <Select
-                          value={contact.position}
-                          onValueChange={(value) => updateContact(index, { position: value })}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Оберіть посаду" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {POSITION_OPTIONS.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {!isFopOwnership ? (
+                        <div className="grid gap-2">
+                          <Label>Посада</Label>
+                          <Select
+                            value={contact.position}
+                            onValueChange={(value) => updateContact(index, { position: value })}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Оберіть посаду" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {POSITION_OPTIONS.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
@@ -600,38 +559,257 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="requisites" className="space-y-3 mt-3">
-              <SectionHeader>Реквізити</SectionHeader>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>IBAN</Label>
-                    <Input
-                      value={form.iban}
-                      onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
-                      placeholder="UA..."
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Підписант</Label>
-                    <Input
-                      value={form.signatoryName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, signatoryName: e.target.value }))}
-                      placeholder="ПІБ підписанта"
-                      className="h-9"
-                    />
-                  </div>
+            <TabsContent value="legalEntities" className="space-y-3 mt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs text-muted-foreground">
+                  Додайте реквізити для рахунків і договорів.
                 </div>
-                <div className="grid gap-2">
-                  <Label>Посада підписанта</Label>
-                  <Input
-                    value={form.signatoryPosition}
-                    onChange={(e) => setForm((prev) => ({ ...prev, signatoryPosition: e.target.value }))}
-                    placeholder="Напр. Директор"
-                    className="h-9"
-                  />
-                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addLegalEntity}>
+                  <PlusCircle className="mr-1 h-4 w-4" />
+                  Додати юр. особу
+                </Button>
+              </div>
+
+              <div className={cn("grid gap-3", hasMultipleLegalEntities ? "lg:grid-cols-[320px_minmax(0,1fr)]" : "grid-cols-1")}>
+                {hasMultipleLegalEntities ? (
+                  <div className="space-y-2">
+                  {form.legalEntities.map((entity, index) => {
+                    const isActive = entity.id === activeLegalEntity?.id;
+                    const ownershipLabel = formatOwnershipTypeLabel(entity.ownershipType) || "Тип не вказано";
+                    const vatLabel = formatVatRateLabel(entity.vatRate);
+                    const hasIdentity = hasCustomerLegalEntityIdentity(entity);
+                    const isPerson = entity.ownershipType === "fop";
+                    const title = entity.legalName.trim() || (hasIdentity ? `Юр. особа ${index + 1}` : "Нова юрособа");
+
+                    return (
+                      <button
+                        key={entity.id}
+                        type="button"
+                        onClick={() => setActiveLegalEntityId(entity.id)}
+                        className={cn(
+                          "w-full rounded-xl border px-3 py-3 text-left transition-colors",
+                          !hasIdentity
+                            ? isActive
+                              ? "border-primary/35 border-dashed bg-primary/5 shadow-sm"
+                              : "border-dashed border-border/70 bg-muted/10 hover:border-border hover:bg-muted/20"
+                            : isActive
+                              ? "border-primary/40 bg-primary/5 shadow-sm"
+                              : "border-border/60 bg-card hover:border-border hover:bg-muted/20"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">
+                                {index === 0 ? "Основна" : `Юр. особа ${index + 1}`}
+                            </span>
+                            {entity.ownershipType.trim() ? (
+                              <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                                {ownershipLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className={cn("mt-1 text-sm", hasIdentity ? "font-medium" : "font-medium text-muted-foreground")}>
+                            {title}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {entity.taxId.trim()
+                              ? `${isPerson ? "ІПН" : "ЄДРПОУ / ІПН"}: ${entity.taxId.trim()}`
+                              : hasIdentity
+                                ? "Код не вказано"
+                                : "Заповніть тип, назву та код для документів"}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {hasIdentity
+                              ? isPerson
+                                ? [entity.cardNumber.trim() ? `Карта ${entity.cardNumber.trim()}` : "", entity.iban.trim() ? `IBAN ${entity.iban.trim()}` : ""]
+                                    .filter(Boolean)
+                                    .join(" • ") || "Реквізити виплати не вказано"
+                                : `${vatLabel}${entity.iban.trim() ? ` • ${entity.iban.trim()}` : ""}`
+                              : "Натисніть, щоб внести реквізити"}
+                          </div>
+                        </div>
+                        {form.legalEntities.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                removeLegalEntity(index);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  </div>
+                ) : null}
+
+                {activeLegalEntity ? (
+                  <div className="rounded-xl border border-border/60 bg-card p-4">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">
+                          {form.legalEntities.length === 1
+                            ? "Реквізити"
+                            : activeLegalEntityIndex === 0
+                              ? "Редагування основної юр. особи"
+                              : `Редагування юр. особи ${activeLegalEntityIndex + 1}`}
+                        </div>
+                      </div>
+                      {hasMultipleLegalEntities && hasCustomerLegalEntityIdentity(activeLegalEntity) ? (
+                        <div className="rounded-full border border-border/70 px-2.5 py-1 text-xs text-muted-foreground">
+                          {formatCustomerLegalEntitySummary(activeLegalEntity)}
+                        </div>
+                      ) : hasMultipleLegalEntities ? (
+                        <div className="rounded-full border border-dashed border-border/70 px-2.5 py-1 text-xs text-muted-foreground">
+                          Нова юрособа
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {!hasCustomerLegalEntityIdentity(activeLegalEntity) ? (
+                      <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+                        Ця юрособа ще порожня. Вкажіть хоча б тип, назву та код, щоб менеджер міг використовувати її в документах.
+                      </div>
+                    ) : null}
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid min-w-0 gap-2">
+                        <Label>Тип контрагента</Label>
+                        <Select
+                          value={activeLegalEntity.ownershipType}
+                          onValueChange={(value) =>
+                            updateLegalEntity(activeLegalEntityIndex, {
+                              ownershipType: value,
+                              ...(value === "fop"
+                                ? { vatRate: "none", signatoryName: "", signatoryPosition: "" }
+                                : {}),
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-9 min-w-0">
+                            <SelectValue placeholder="Оберіть тип">
+                              {activeOwnershipOption?.label}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {groupedOwnershipOptions.map(([groupName, options], groupIndex) => (
+                              <React.Fragment key={groupName}>
+                                {groupIndex > 0 ? <SelectSeparator /> : null}
+                                <SelectGroup>
+                                  <SelectLabel className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                    {groupName}
+                                  </SelectLabel>
+                                  {options.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {formatOwnershipOptionText(option)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              </React.Fragment>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {!activeLegalEntityIsPerson ? (
+                        <div className="grid min-w-0 gap-2">
+                          <Label>ПДВ</Label>
+                          <Select
+                            value={activeLegalEntity.vatRate}
+                            onValueChange={(value) => updateLegalEntity(activeLegalEntityIndex, { vatRate: value })}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Оберіть ставку" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {vatOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>{activeLegalEntityIsPerson ? "Назва бренду" : "Юридична назва"}</Label>
+                        <Input
+                          value={activeLegalEntity.legalName}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalName: e.target.value })}
+                          placeholder={activeLegalEntityIsPerson ? "Напр. EDLIGHT" : "Напр. ТОВ «Кока-Кола-Україна Лімітед»"}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>{activeLegalEntityIsPerson ? "ІПН" : "ЄДРПОУ / ІПН"}</Label>
+                        <Input
+                          value={activeLegalEntity.taxId}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { taxId: e.target.value })}
+                          placeholder={activeLegalEntityIsPerson ? "ІПН" : "Код або ІПН"}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {activeLegalEntityIsPerson ? (
+                        <div className="grid gap-2">
+                          <Label>Номер карти</Label>
+                          <Input
+                            value={activeLegalEntity.cardNumber}
+                            onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { cardNumber: e.target.value })}
+                            placeholder="0000 0000 0000 0000"
+                            className="h-9"
+                          />
+                        </div>
+                      ) : null}
+                      <div className="grid gap-2">
+                        <Label>IBAN</Label>
+                        <Input
+                          value={activeLegalEntity.iban}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { iban: e.target.value })}
+                          placeholder="UA..."
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+
+                    {!activeLegalEntityIsPerson ? (
+                      <>
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <div className="grid gap-2">
+                            <Label>Підписант</Label>
+                            <Input
+                              value={activeLegalEntity.signatoryName}
+                              onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryName: e.target.value })}
+                              placeholder="ПІБ підписанта"
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-2">
+                          <Label>Посада підписанта</Label>
+                          <Input
+                            value={activeLegalEntity.signatoryPosition}
+                            onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
+                            placeholder="Напр. Директор"
+                            className="h-9"
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </TabsContent>
 

@@ -10,6 +10,7 @@ alter table tosho.customers
   add column if not exists website text,
   add column if not exists iban text,
   add column if not exists logo_url text,
+  add column if not exists legal_entities jsonb,
   add column if not exists contact_name text,
   add column if not exists contact_position text,
   add column if not exists contact_phone text,

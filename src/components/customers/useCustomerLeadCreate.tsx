@@ -3,6 +3,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { CustomerDialog, type CustomerFormState } from "./CustomerDialog";
 import { LeadDialog, type LeadFormState } from "./LeadDialog";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
+import {
+  createEmptyCustomerLegalEntity,
+  getPrimaryCustomerLegalEntity,
+  serializeCustomerLegalEntities,
+} from "@/lib/customerLegalEntities";
 
 type MemberOption = {
   id: string;
@@ -43,23 +48,12 @@ const defaultResolveErrorMessage = (error: unknown, fallback: string) => {
 
 const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: string): CustomerFormState => ({
   name: prefillName,
-  legalName: "",
   manager: defaultManagerLabel,
   managerId: "",
-  ownershipType: "",
-  vatRate: "none",
-  taxId: "",
   website: "",
-  iban: "",
   logoUrl: "",
+  legalEntities: [createEmptyCustomerLegalEntity()],
   contacts: [{ name: "", position: "", phone: "", email: "", birthday: "" }],
-  contactName: "",
-  contactPosition: "",
-  contactPhone: "",
-  contactEmail: "",
-  contactBirthday: "",
-  signatoryName: "",
-  signatoryPosition: "",
   reminderDate: "",
   reminderTime: "",
   reminderComment: "",
@@ -164,30 +158,43 @@ export const useCustomerLeadCreate = ({
     setCustomerSaving(true);
     setCustomerError(null);
 
-    const vatOption = VAT_OPTIONS.find((option) => option.value === customerForm.vatRate);
     const managerValue = customerForm.manager.trim();
     const selectedManagerLabel = customerForm.managerId
       ? teamMembers.find((member) => member.id === customerForm.managerId)?.label ?? managerValue
       : managerValue;
+    const contacts = customerForm.contacts
+      .map((contact) => ({
+        name: contact.name.trim(),
+        position: contact.position.trim(),
+        phone: contact.phone.trim(),
+        email: contact.email.trim(),
+        birthday: contact.birthday.trim(),
+      }))
+      .filter((contact) => Object.values(contact).some(Boolean));
+    const primaryContact = contacts[0] ?? null;
+    const legalEntities = serializeCustomerLegalEntities(customerForm.legalEntities);
+    const primaryLegalEntity = getPrimaryCustomerLegalEntity(customerForm.legalEntities);
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: customerForm.name.trim(),
-      legal_name: customerForm.legalName.trim() || null,
+      legal_name: primaryLegalEntity?.legal_name ?? null,
       manager: selectedManagerLabel || defaultManagerLabel || null,
       manager_user_id: customerForm.managerId || null,
-      ownership_type: customerForm.ownershipType || null,
-      vat_rate: vatOption?.rate ?? null,
-      tax_id: customerForm.taxId.trim() || null,
+      ownership_type: primaryLegalEntity?.ownership_type ?? null,
+      vat_rate: primaryLegalEntity?.vat_rate ?? null,
+      tax_id: primaryLegalEntity?.tax_id ?? null,
       website: customerForm.website.trim() || null,
-      iban: customerForm.iban.trim() || null,
+      iban: primaryLegalEntity?.iban ?? null,
       logo_url: customerForm.logoUrl.trim() || null,
-      contact_name: customerForm.contactName.trim() || null,
-      contact_position: customerForm.contactPosition || null,
-      contact_phone: customerForm.contactPhone.trim() || null,
-      contact_email: customerForm.contactEmail.trim() || null,
-      contact_birthday: customerForm.contactBirthday || null,
-      signatory_name: customerForm.signatoryName.trim() || null,
-      signatory_position: customerForm.signatoryPosition.trim() || null,
+      contacts: contacts.length > 0 ? contacts : null,
+      contact_name: primaryContact?.name || null,
+      contact_position: primaryContact?.position || null,
+      contact_phone: primaryContact?.phone || null,
+      contact_email: primaryContact?.email || null,
+      contact_birthday: primaryContact?.birthday || null,
+      legal_entities: legalEntities.length > 0 ? legalEntities : null,
+      signatory_name: primaryLegalEntity?.signatory_name ?? null,
+      signatory_position: primaryLegalEntity?.signatory_position ?? null,
       reminder_at:
         customerForm.reminderDate && customerForm.reminderTime
           ? `${customerForm.reminderDate}T${customerForm.reminderTime}:00`
@@ -211,7 +218,13 @@ export const useCustomerLeadCreate = ({
       let { data, error } = await createWithPayload(payload);
       if (error) {
         const message = error.message ?? "";
-        if (message.includes("column") && message.includes("manager_user_id")) {
+        if (message.includes("column") && message.includes("legal_entities")) {
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.legal_entities;
+          const fallbackRes = await createWithPayload(fallbackPayload);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        } else if (message.includes("column") && message.includes("manager_user_id")) {
           const fallbackPayload = { ...payload };
           delete fallbackPayload.manager_user_id;
           const fallbackRes = await createWithPayload(fallbackPayload);

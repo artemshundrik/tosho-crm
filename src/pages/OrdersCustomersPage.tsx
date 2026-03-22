@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { CustomerDialog, LeadDialog, type CustomerContact } from "@/components/customers";
+import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { listCustomerQuotes } from "@/lib/toshoApi";
@@ -24,6 +24,17 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
+  createEmptyCustomerLegalEntity,
+  formatCustomerLegalEntitySummary,
+  formatCustomerLegalEntityTitle,
+  formatOwnershipTypeLabel,
+  getPrimaryCustomerLegalEntity,
+  hasCustomerLegalEntityIdentity,
+  parseCustomerLegalEntities,
+  serializeCustomerLegalEntities,
+} from "@/lib/customerLegalEntities";
+import { Badge } from "@/components/ui/badge";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -32,17 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
-
-type OwnershipOption = {
-  value: string;
-  label: string;
-};
-
-type VatOption = {
-  value: string;
-  label: string;
-  rate: number | null;
-};
+import { OWNERSHIP_OPTIONS, VAT_OPTIONS, type OwnershipOption, type VatOption } from "@/features/quotes/quotes-page/config";
 
 type CustomerRow = {
   id: string;
@@ -57,6 +58,7 @@ type CustomerRow = {
   website?: string | null;
   iban?: string | null;
   logo_url?: string | null;
+  legal_entities?: unknown;
   contact_name?: string | null;
   contact_position?: string | null;
   contact_phone?: string | null;
@@ -111,24 +113,6 @@ type QuoteHistoryRow = {
   created_at?: string | null;
 };
 
-const OWNERSHIP_OPTIONS: OwnershipOption[] = [
-  { value: "tov", label: "ТОВ" },
-  { value: "pp", label: "ПП" },
-  { value: "vp", label: "ВП" },
-  { value: "go", label: "ГО" },
-  { value: "at", label: "АТ" },
-  { value: "dp", label: "ДП" },
-  { value: "fop", label: "ФОП" },
-];
-
-const VAT_OPTIONS: VatOption[] = [
-  { value: "none", label: "немає", rate: null },
-  { value: "0", label: "0%", rate: 0 },
-  { value: "7", label: "7%", rate: 7 },
-  { value: "14", label: "14%", rate: 14 },
-  { value: "20", label: "20%", rate: 20 },
-];
-
 const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   name: "",
   position: "",
@@ -136,6 +120,23 @@ const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   email: "",
   birthday: "",
 };
+
+const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerFormState => ({
+  name: "",
+  manager,
+  managerId,
+  website: "",
+  logoUrl: "",
+  legalEntities: [createEmptyCustomerLegalEntity()],
+  contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
+  reminderDate: "",
+  reminderTime: "",
+  reminderComment: "",
+  eventName: "",
+  eventDate: "",
+  eventComment: "",
+  notes: "",
+});
 
 const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerContact[] => {
   const raw = Array.isArray(row?.contacts) ? row?.contacts : [];
@@ -163,18 +164,6 @@ const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerConta
   };
 
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
-};
-
-const formatOwnership = (value?: string | null) => {
-  if (!value) return "Не вказано";
-  const match = OWNERSHIP_OPTIONS.find((option) => option.value === value);
-  return match?.label ?? value;
-};
-
-const formatVat = (value?: number | null) => {
-  if (value === null || value === undefined) return "немає";
-  const match = VAT_OPTIONS.find((option) => option.rate === value);
-  return match?.label ?? `${value}%`;
 };
 
 const getInitials = (value?: string | null) => {
@@ -283,33 +272,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    legalName: "",
-    manager: "",
-    managerId: "",
-    ownershipType: "",
-    vatRate: "none",
-    taxId: "",
-    website: "",
-    iban: "",
-    logoUrl: "",
-    contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
-    contactName: "",
-    contactPosition: "",
-    contactPhone: "",
-    contactEmail: "",
-    contactBirthday: "",
-    signatoryName: "",
-    signatoryPosition: "",
-    reminderDate: "",
-    reminderTime: "",
-    reminderComment: "",
-    eventName: "",
-    eventDate: "",
-    eventComment: "",
-    notes: "",
-  });
+  const [form, setForm] = useState<CustomerFormState>(() => createInitialCustomerFormState());
 
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [leadEditingId, setLeadEditingId] = useState<string | null>(null);
@@ -465,12 +428,23 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const name = row.name?.toLowerCase() ?? "";
       const legal = row.legal_name?.toLowerCase() ?? "";
       const manager = resolveManagerLabel(row.manager_user_id, row.manager).toLowerCase();
+      const legalEntitiesBlob = parseCustomerLegalEntities(row)
+        .map((entity) => [entity.ownershipType, entity.legalName, entity.taxId, entity.iban].filter(Boolean).join(" "))
+        .join(" ")
+        .toLowerCase();
       const contacts = parseCustomerContacts(row);
       const contactBlob = contacts
         .map((contact) => [contact.name, contact.position, contact.phone, contact.email].filter(Boolean).join(" "))
         .join(" ")
         .toLowerCase();
-      return !q || name.includes(q) || legal.includes(q) || manager.includes(q) || contactBlob.includes(q);
+      return (
+        !q ||
+        name.includes(q) ||
+        legal.includes(q) ||
+        manager.includes(q) ||
+        legalEntitiesBlob.includes(q) ||
+        contactBlob.includes(q)
+      );
     });
 
     if (!isManagerUser && customerManagerFilter !== ALL_MANAGERS_FILTER) {
@@ -559,34 +533,28 @@ function CustomersPage({ teamId }: { teamId: string }) {
     );
   };
 
+  const getCustomerLegalEntities = (row: CustomerRow) => parseCustomerLegalEntities(row);
+  const getCustomerPrimaryLegalEntity = (row: CustomerRow) => getCustomerLegalEntities(row)[0] ?? null;
+  const getCustomerPrimaryLegalEntityType = (row: CustomerRow) => {
+    const primary = getCustomerPrimaryLegalEntity(row);
+    if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
+    return formatOwnershipTypeLabel(primary.ownershipType) || null;
+  };
+  const getCustomerPrimaryLegalEntityTypeDescription = (row: CustomerRow) => {
+    const primary = getCustomerPrimaryLegalEntity(row);
+    if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
+    const option = OWNERSHIP_OPTIONS.find((entry) => entry.value === (primary.ownershipType ?? "").trim().toLowerCase());
+    return option?.description ?? null;
+  };
+  const renderPrimaryEntityLabel = (row: CustomerRow) => {
+    const primary = getCustomerPrimaryLegalEntity(row);
+    if (!primary) return "Не вказано";
+    if (!hasCustomerLegalEntityIdentity(primary)) return "Реквізити не заповнені";
+    return formatCustomerLegalEntityTitle(primary);
+  };
+
   const resetForm = () => {
-    setForm({
-      name: "",
-      legalName: "",
-      manager: currentManagerLabel || defaultManagerName,
-      managerId: userId ?? "",
-      ownershipType: "",
-      vatRate: "none",
-      taxId: "",
-      website: "",
-      iban: "",
-      logoUrl: "",
-      contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
-      contactName: "",
-      contactPosition: "",
-      contactPhone: "",
-      contactEmail: "",
-      contactBirthday: "",
-      signatoryName: "",
-      signatoryPosition: "",
-      reminderDate: "",
-      reminderTime: "",
-      reminderComment: "",
-      eventName: "",
-      eventDate: "",
-      eventComment: "",
-      notes: "",
-    });
+    setForm(createInitialCustomerFormState(currentManagerLabel || defaultManagerName, userId ?? ""));
     setLinkedQuotes([]);
     setLinkedQuotesLoading(false);
     setFormError(null);
@@ -628,28 +596,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const openEdit = (row: CustomerRow) => {
     const contacts = parseCustomerContacts(row);
-    const primaryContact = contacts[0] ?? EMPTY_CUSTOMER_CONTACT;
     setEditingId(row.id);
     setForm({
       name: row.name ?? "",
-      legalName: row.legal_name ?? "",
       manager: resolveManagerLabel(row.manager_user_id, row.manager),
       managerId: row.manager_user_id ?? "",
-      ownershipType: row.ownership_type ?? "",
-      vatRate:
-        row.vat_rate === null || row.vat_rate === undefined ? "none" : String(row.vat_rate),
-      taxId: row.tax_id ?? "",
       website: row.website ?? "",
-      iban: row.iban ?? "",
       logoUrl: row.logo_url ?? "",
+      legalEntities: parseCustomerLegalEntities(row),
       contacts,
-      contactName: primaryContact.name,
-      contactPosition: primaryContact.position,
-      contactPhone: primaryContact.phone,
-      contactEmail: primaryContact.email,
-      contactBirthday: primaryContact.birthday,
-      signatoryName: row.signatory_name ?? "",
-      signatoryPosition: row.signatory_position ?? "",
       reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
       reminderTime: row.reminder_at ? row.reminder_at.slice(11, 16) : "",
       reminderComment: row.reminder_comment ?? "",
@@ -866,7 +821,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setSaving(true);
     setFormError(null);
 
-    const vatOption = VAT_OPTIONS.find((option) => option.value === form.vatRate);
     const managerValue = form.manager.trim();
     const selectedManagerLabel = form.managerId
       ? memberById.get(form.managerId)?.label ?? managerValue
@@ -881,28 +835,31 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
     const primaryContact = contacts[0] ?? null;
+    const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
+    const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: form.name.trim(),
-      legal_name: form.legalName.trim() || null,
+      legal_name: primaryLegalEntity?.legal_name ?? null,
       manager: editingId
         ? (selectedManagerLabel || null)
         : (selectedManagerLabel || currentManagerLabel || defaultManagerName || null),
       manager_user_id: form.managerId || null,
-      ownership_type: form.ownershipType || null,
-      vat_rate: vatOption?.rate ?? null,
-      tax_id: form.taxId.trim() || null,
+      ownership_type: primaryLegalEntity?.ownership_type ?? null,
+      vat_rate: primaryLegalEntity?.vat_rate ?? null,
+      tax_id: primaryLegalEntity?.tax_id ?? null,
       website: form.website.trim() || null,
-      iban: form.iban.trim() || null,
+      iban: primaryLegalEntity?.iban ?? null,
       logo_url: form.logoUrl.trim() || null,
+      legal_entities: legalEntities.length > 0 ? legalEntities : null,
       contacts: contacts.length > 0 ? contacts : null,
       contact_name: primaryContact?.name || null,
       contact_position: primaryContact?.position || null,
       contact_phone: primaryContact?.phone || null,
       contact_email: primaryContact?.email || null,
       contact_birthday: primaryContact?.birthday || null,
-      signatory_name: form.signatoryName.trim() || null,
-      signatory_position: form.signatoryPosition.trim() || null,
+      signatory_name: primaryLegalEntity?.signatory_name ?? null,
+      signatory_position: primaryLegalEntity?.signatory_position ?? null,
       reminder_at:
         form.reminderDate && form.reminderTime
           ? `${form.reminderDate}T${form.reminderTime}:00`
@@ -916,7 +873,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
     const basePayload: Record<string, unknown> = {
       name: form.name.trim(),
-      legal_name: form.legalName.trim() || null,
+      legal_name: primaryLegalEntity?.legal_name ?? null,
     };
 
     const removeOptionalFields = () => {
@@ -929,6 +886,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.website;
       delete clone.iban;
       delete clone.logo_url;
+      delete clone.legal_entities;
       delete clone.contacts;
       delete clone.contact_name;
       delete clone.contact_position;
@@ -1330,155 +1288,221 @@ function CustomersPage({ teamId }: { teamId: string }) {
               <>
                 <div className="space-y-3 md:hidden">
                   {filteredRows.map((row) => (
-                    <div
-                      key={row.id}
-                      className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
-                      onClick={() => openEdit(row)}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <EntityAvatar
-                            src={row.logo_url ?? null}
-                            name={row.name ?? row.legal_name ?? "Компанія"}
-                            fallback={getInitials(row.name ?? row.legal_name)}
-                            size={40}
-                          />
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{row.name ?? "Не вказано"}</div>
-                            {row.legal_name ? (
-                              <div className="text-xs text-muted-foreground truncate">{row.legal_name}</div>
+                    (() => {
+                      const legalEntities = getCustomerLegalEntities(row);
+                      const primaryEntity = getCustomerPrimaryLegalEntity(row);
+
+                      return (
+                        <div
+                          key={row.id}
+                          className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                          onClick={() => openEdit(row)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <EntityAvatar
+                                src={row.logo_url ?? null}
+                                name={row.name ?? row.legal_name ?? "Компанія"}
+                                fallback={getInitials(row.name ?? row.legal_name)}
+                                size={40}
+                              />
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{row.name ?? "Не вказано"}</div>
+                                {legalEntities.length > 1 ? (
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {legalEntities.length} юр. ос.
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => openDelete(row)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Видалити
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">
+                                {legalEntities.length > 1 ? "Основна юр. особа:" : "Юр. особа:"}
+                              </span>{" "}
+                              {renderPrimaryEntityLabel(row)}
+                            </div>
+                            {!primaryEntity || !hasCustomerLegalEntityIdentity(primaryEntity) ? (
+                              <div>
+                                <span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> Додайте реквізити
+                              </div>
+                            ) : primaryEntity.taxId ? (
+                              <div>
+                                <span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> {primaryEntity.taxId}
+                              </div>
+                            ) : null}
+                            <div className="sm:col-span-2">
+                              <span className="text-muted-foreground">Менеджер:</span>{" "}
+                              {resolveManagerLabel(row.manager_user_id, row.manager) || "Не вказано"}
+                            </div>
+                            {legalEntities.length > 1 ? (
+                              <div className="text-xs text-muted-foreground">
+                                Також: {legalEntities.slice(1).map((entity) => formatCustomerLegalEntitySummary(entity)).join(", ")}
+                              </div>
+                            ) : null}
+                            {row.website ? (
+                              <div className="sm:col-span-2">
+                                <a
+                                  href={row.website}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary underline underline-offset-2"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  {row.website}
+                                </a>
+                              </div>
                             ) : null}
                           </div>
                         </div>
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => openDelete(row)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Видалити
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                        <div><span className="text-muted-foreground">Тип:</span> {formatOwnership(row.ownership_type)}</div>
-                        <div><span className="text-muted-foreground">ПДВ:</span> {formatVat(row.vat_rate ?? null)}</div>
-                        <div><span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> {row.tax_id ?? "Не вказано"}</div>
-                        <div><span className="text-muted-foreground">IBAN:</span> {row.iban ?? "Не вказано"}</div>
-                        <div className="sm:col-span-2">
-                          <span className="text-muted-foreground">Менеджер:</span>{" "}
-                          {resolveManagerLabel(row.manager_user_id, row.manager) || "Не вказано"}
-                        </div>
-                        {row.website ? (
-                          <div className="sm:col-span-2">
-                            <a
-                              href={row.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline underline-offset-2"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {row.website}
-                            </a>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
+                      );
+                    })()
                   ))}
                 </div>
                 <div className="hidden md:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableHead className="pl-6">Компанія</TableHead>
-                        <TableHead>Тип</TableHead>
-                        <TableHead>ПДВ</TableHead>
-                        <TableHead>ЄДРПОУ / ІПН</TableHead>
-                        <TableHead>Сайт</TableHead>
-                        <TableHead>IBAN</TableHead>
-                        <TableHead>Менеджер</TableHead>
+                        <TableHead className="w-[34%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[92px] px-2">Тип</TableHead>
+                        <TableHead className="w-[30%] pl-2">Юрособа</TableHead>
+                        <TableHead className="w-[18%]">Сайт</TableHead>
+                        <TableHead className="w-[16%]">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="hover:bg-muted/10 cursor-pointer"
-                          onClick={() => openEdit(row)}
-                        >
-                          <TableCell className="pl-6">
-                            <div className="flex items-center gap-3">
-                              <EntityAvatar
-                                src={row.logo_url ?? null}
-                                name={row.name ?? row.legal_name ?? "Компанія"}
-                                fallback={getInitials(row.name ?? row.legal_name)}
-                                size={36}
-                              />
-                              <div>
-                                <div className="font-medium">{row.name ?? "Не вказано"}</div>
-                                {row.legal_name && (
-                                  <div className="text-xs text-muted-foreground">{row.legal_name}</div>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatOwnership(row.ownership_type)}</TableCell>
-                          <TableCell>{formatVat(row.vat_rate ?? null)}</TableCell>
-                          <TableCell>{row.tax_id ?? "Не вказано"}</TableCell>
-                          <TableCell className="truncate max-w-[200px]">
-                            {row.website ? (
-                              <a
-                                href={row.website}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary underline underline-offset-2"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {row.website}
-                              </a>
-                            ) : (
-                              "Не вказано"
-                            )}
-                          </TableCell>
-                          <TableCell className="truncate max-w-[200px]">{row.iban ?? "Не вказано"}</TableCell>
-                          <TableCell>{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
-                          <TableCell
-                            className="text-right pr-4"
-                            onClick={(event) => event.stopPropagation()}
+                      {filteredRows.map((row) => {
+                        const legalEntities = getCustomerLegalEntities(row);
+                        const primaryEntity = getCustomerPrimaryLegalEntity(row);
+                        const primaryEntityType = getCustomerPrimaryLegalEntityType(row);
+                        const primaryEntityTypeDescription = getCustomerPrimaryLegalEntityTypeDescription(row);
+
+                        return (
+                          <TableRow
+                            key={row.id}
+                            className="hover:bg-muted/10 cursor-pointer"
+                            onClick={() => openEdit(row)}
                           >
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => openDelete(row)}
-                                  className="text-destructive focus:text-destructive"
+                            <TableCell className="pl-6">
+                              <div className="flex items-center gap-3">
+                                <EntityAvatar
+                                  src={row.logo_url ?? null}
+                                  name={row.name ?? row.legal_name ?? "Компанія"}
+                                  fallback={getInitials(row.name ?? row.legal_name)}
+                                  size={36}
+                                />
+                                <div>
+                                  <div className="font-medium">{row.name ?? "Не вказано"}</div>
+                                  {legalEntities.length > 1 ? (
+                                    <div className="text-xs text-muted-foreground">{legalEntities.length} юр. ос.</div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-top px-2">
+                              {primaryEntityType ? (
+                                <div className="group relative inline-flex">
+                                  <Badge
+                                    variant="outline"
+                                    className="rounded-full px-2.5 py-0.5 text-[11px]"
+                                  >
+                                    {primaryEntityType}
+                                  </Badge>
+                                  {primaryEntityTypeDescription ? (
+                                    <span
+                                      className={cn(
+                                        "pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap",
+                                        "rounded-[10px] border border-border/70 bg-card/95 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-[var(--shadow-overlay)] backdrop-blur-md",
+                                        "opacity-0 translate-x-1 transition-all duration-200 ease-out",
+                                        "group-hover:opacity-100 group-hover:translate-x-0"
+                                      )}
+                                      role="tooltip"
+                                    >
+                                      {primaryEntityTypeDescription}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="align-top pl-2 max-w-[360px]">
+                              <div className="space-y-1">
+                                <div className="truncate font-medium">{renderPrimaryEntityLabel(row)}</div>
+                                {(primaryEntity && hasCustomerLegalEntityIdentity(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    {primaryEntity && hasCustomerLegalEntityIdentity(primaryEntity) && primaryEntity.taxId ? (
+                                      <span>{`Код ${primaryEntity.taxId}`}</span>
+                                    ) : null}
+                                    {legalEntities.length > 1 ? (
+                                      <span className="rounded-full border border-border/70 px-2 py-0.5">
+                                        +{legalEntities.length - 1} ще
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-top max-w-[220px]">
+                              {row.website ? (
+                                <a
+                                  href={row.website}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block truncate text-primary underline underline-offset-2"
+                                  onClick={(event) => event.stopPropagation()}
                                 >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Видалити
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  {row.website}
+                                </a>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
+                            <TableCell
+                              className="text-right pr-4"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => openDelete(row)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Видалити
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

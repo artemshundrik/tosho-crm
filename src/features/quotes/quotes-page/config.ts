@@ -78,6 +78,8 @@ export const KANBAN_COLUMNS = [
 export type OwnershipOption = {
   value: string;
   label: string;
+  description?: string;
+  group?: string;
 };
 
 export type VatOption = {
@@ -87,13 +89,18 @@ export type VatOption = {
 };
 
 export const OWNERSHIP_OPTIONS: OwnershipOption[] = [
-  { value: "tov", label: "ТОВ" },
-  { value: "pp", label: "ПП" },
-  { value: "vp", label: "ВП" },
-  { value: "go", label: "ГО" },
-  { value: "at", label: "АТ" },
-  { value: "dp", label: "ДП" },
-  { value: "fop", label: "ФОП" },
+  { value: "tov", label: "ТОВ", description: "Товариство з обмеженою відповідальністю", group: "Бізнес" },
+  { value: "pp", label: "ПП", description: "Приватне підприємство", group: "Бізнес" },
+  { value: "vp", label: "ВП", description: "Відокремлений підрозділ", group: "Бізнес" },
+  { value: "go", label: "ГО", description: "Громадська організація", group: "Бізнес" },
+  { value: "at", label: "АТ", description: "Акціонерне товариство", group: "Бізнес" },
+  { value: "du", label: "ДУ", description: "Державна установа", group: "Державний сектор" },
+  { value: "ku", label: "КУ", description: "Комунальна установа", group: "Державний сектор" },
+  { value: "dp", label: "ДП", description: "Державне підприємство", group: "Державний сектор" },
+  { value: "kp", label: "КП", description: "Комунальне підприємство", group: "Державний сектор" },
+  { value: "odv", label: "ОДВ", description: "Орган державної влади", group: "Державний сектор" },
+  { value: "oms", label: "ОМС", description: "Орган місцевого самоврядування", group: "Державний сектор" },
+  { value: "fop", label: "ФОП", description: "Фізична особа-підприємець", group: "Фізичні особи" },
 ];
 
 export const VAT_OPTIONS: VatOption[] = [

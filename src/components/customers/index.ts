@@ -12,6 +12,7 @@ export type {
   CustomerContact,
   CustomerDialogProps,
   CustomerFormState,
+  CustomerLegalEntity,
   OwnershipOption,
   VatOption,
 } from "./CustomerDialog";
