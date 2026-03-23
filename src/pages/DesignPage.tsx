@@ -524,6 +524,13 @@ const normalizeDeadlineTimeInput = (value: string) => {
   return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 };
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+const DEFAULT_CREATE_DEADLINE_TIME = "12:00";
+const createDefaultDesignDeadline = (time = DEFAULT_CREATE_DEADLINE_TIME) => {
+  const [hours, minutes] = time.split(":").map((part) => Number(part) || 0);
+  const next = new Date();
+  next.setHours(hours, minutes, 0, 0);
+  return next;
+};
 const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
   const now = new Date();
   if (period === "month") {
@@ -571,12 +578,12 @@ export default function DesignPage() {
   const [createCustomerType, setCreateCustomerType] = useState<"customer" | "lead">("customer");
   const [createCustomerSearch, setCreateCustomerSearch] = useState("");
   const [createCustomerPopoverOpen, setCreateCustomerPopoverOpen] = useState(false);
-  const [createDeadline, setCreateDeadline] = useState<Date | undefined>();
+  const [createDeadline, setCreateDeadline] = useState<Date | undefined>(() => createDefaultDesignDeadline());
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
   const [createDesignTaskType, setCreateDesignTaskType] = useState<DesignTaskType | null>(null);
   const [createDesignTaskTypePopoverOpen, setCreateDesignTaskTypePopoverOpen] = useState(false);
   const createDeadlineTime = useMemo(() => {
-    if (!createDeadline) return "12:00";
+    if (!createDeadline) return DEFAULT_CREATE_DEADLINE_TIME;
     return `${String(createDeadline.getHours()).padStart(2, "0")}:${String(createDeadline.getMinutes()).padStart(2, "0")}`;
   }, [createDeadline]);
   const [createManagerUserId, setCreateManagerUserId] = useState<string>("none");
@@ -658,9 +665,9 @@ export default function DesignPage() {
   }, [createDeadlineTime]);
 
   const updateCreateDeadlineTime = useCallback((value: string) => {
-    if (!createDeadline) return;
+    if (!isValidDeadlineTime(value)) return;
     const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
-    const next = new Date(createDeadline);
+    const next = createDeadline ? new Date(createDeadline) : createDefaultDesignDeadline(value);
     next.setHours(hours, minutes, 0, 0);
     setCreateDeadline(next);
   }, [createDeadline]);
@@ -2556,7 +2563,9 @@ export default function DesignPage() {
       const customerType = createCustomerType;
       const customerId = createCustomerId;
       const customerLogoUrl = normalizeLogoUrl(createCustomerLogoUrl);
-      const normalizedDeadlineTime = isValidDeadlineTime(createDeadlineTime.trim()) ? createDeadlineTime.trim() : "12:00";
+      const normalizedDeadlineTime = isValidDeadlineTime(createDeadlineTime.trim())
+        ? createDeadlineTime.trim()
+        : DEFAULT_CREATE_DEADLINE_TIME;
       const deadline = createDeadline ? `${format(createDeadline, "yyyy-MM-dd")}T${normalizedDeadlineTime}:00` : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(effectiveTeamId, createdAtIso);
@@ -2701,7 +2710,7 @@ export default function DesignPage() {
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDesignTaskType(null);
-      setCreateDeadline(undefined);
+      setCreateDeadline(createDefaultDesignDeadline());
       setCreateDeadlinePopoverOpen(false);
       setCreateManagerUserId(userId ?? "none");
       setCreateManagerPopoverOpen(false);

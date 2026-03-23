@@ -127,13 +127,13 @@ const DELIVERY_PAYER_OPTIONS = [
 ];
 
 const DEFAULT_DEADLINE_TIME = "09:00";
-const normalizeDeadlineTimeInput = (value: string) => {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-};
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+const createDefaultDeadline = (time = DEFAULT_DEADLINE_TIME) => {
+  const [hours, minutes] = time.split(":").map((part) => Number(part) || 0);
+  const next = new Date();
+  next.setHours(hours, minutes, 0, 0);
+  return next;
+};
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -471,7 +471,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [customerType, setCustomerType] = React.useState<"customer" | "lead">("customer");
   const [customerSearch, setCustomerSearch] = React.useState("");
   const [managerId, setManagerId] = React.useState<string>("");
-  const [deadline, setDeadline] = React.useState<Date>();
+  const [deadline, setDeadline] = React.useState<Date | undefined>(() => (isEditMode ? undefined : createDefaultDeadline()));
   const [deadlineNote, setDeadlineNote] = React.useState("");
   const [deadlineReminderOffset, setDeadlineReminderOffset] = React.useState<string>("0");
   const [deadlineReminderComment, setDeadlineReminderComment] = React.useState("");
@@ -530,11 +530,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   }, [deadlineTimeDraft]);
 
   const updateDeadlineTime = React.useCallback((value: string) => {
-    const normalized = normalizeDeadlineTimeInput(value);
-    setDeadlineTimeDraft(normalized);
-    if (!deadline || !isValidDeadlineTime(normalized)) return;
-    const [hours, minutes] = normalized.split(":").map((part) => Number(part) || 0);
-    const next = new Date(deadline);
+    setDeadlineTimeDraft(value);
+    if (!isValidDeadlineTime(value)) return;
+    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
+    const next = deadline ? new Date(deadline) : createDefaultDeadline(value);
     next.setHours(hours, minutes, 0, 0);
     setDeadline(next);
   }, [deadline]);
@@ -674,7 +673,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCustomerType(initialValues?.customerType ?? "customer");
     setCustomerSearch("");
     setManagerId(initialValues?.managerId ?? currentUserId ?? "");
-    setDeadline(initialValues?.deadline);
+    setDeadline(initialValues?.deadline ?? (isEditMode ? undefined : createDefaultDeadline()));
     setDeadlineNote(initialValues?.deadlineNote ?? "");
     setDeadlineReminderOffset(
       initialValues?.deadlineReminderOffsetMinutes === null || initialValues?.deadlineReminderOffsetMinutes === undefined
@@ -1301,8 +1300,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   Час дедлайну
                 </div>
                 <Input
-                  type="text"
-                  inputMode="numeric"
+                  type="time"
                   value={deadlineTimeDraft}
                   onChange={(e) => updateDeadlineTime(e.target.value)}
                   onBlur={() => {
@@ -1312,7 +1310,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     setDeadlineTimeDraft(normalized);
                     updateDeadlineTime(normalized);
                   }}
-                  placeholder="HH:MM"
+                  step={60}
                   className="mt-2 h-9"
                 />
               </div>
