@@ -126,9 +126,22 @@ const DELIVERY_PAYER_OPTIONS = [
   { value: "client", label: "Клієнт" },
 ];
 
-const DEFAULT_DEADLINE_TIME = "09:00";
+const DEFAULT_DEADLINE_TIME = "10:00";
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const createDefaultDeadline = (time = DEFAULT_DEADLINE_TIME) => {
+  if (time === DEFAULT_DEADLINE_TIME) {
+    const now = new Date();
+    const next = new Date(now);
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    if (next.getTime() - now.getTime() < 30 * 60 * 1000) {
+      next.setHours(next.getHours() + 1);
+    }
+    if (next.toDateString() !== now.toDateString()) {
+      next.setHours(10, 0, 0, 0);
+    }
+    return next;
+  }
   const [hours, minutes] = time.split(":").map((part) => Number(part) || 0);
   const next = new Date();
   next.setHours(hours, minutes, 0, 0);
