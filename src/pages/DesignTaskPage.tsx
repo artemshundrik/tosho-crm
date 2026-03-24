@@ -88,6 +88,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import {
   buildMentionAlias,
   extractMentionKeys,
@@ -298,6 +299,20 @@ const statusColors: Record<DesignStatus, string> = {
 
 const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
+
+const CAPACITY_BADGE_CLASS_BY_LEVEL = {
+  low: "border-success-soft-border bg-success-soft text-success-foreground",
+  medium: "border-info-soft-border bg-info-soft text-info-foreground",
+  high: "border-warning-soft-border bg-warning-soft text-warning-foreground",
+  critical: "border-danger-soft-border bg-danger-soft text-danger-foreground",
+} as const;
+
+const CAPACITY_LABEL_BY_LEVEL = {
+  low: "Низьке",
+  medium: "Середнє",
+  high: "Високе",
+  critical: "Перевантаження",
+} as const;
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -723,8 +738,9 @@ export default function DesignTaskPage() {
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [memberRoleById, setMemberRoleById] = useState<Record<string, string>>({});
-  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string }>>([]);
+  const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string }>>([]);
+  const [designQueueTasks, setDesignQueueTasks] = useState<DesignTask[]>([]);
   const [assigningSelf, setAssigningSelf] = useState(false);
   const [assigningMemberId, setAssigningMemberId] = useState<string | null>(null);
   const [managerSaving, setManagerSaving] = useState(false);
@@ -962,7 +978,11 @@ export default function DesignTaskPage() {
         setDesignerMembers(
           rows
             .filter((row) => isDesignerRole(row.jobRole))
-            .map((row) => ({ id: row.userId, label: labels[row.userId] ?? row.userId }))
+            .map((row) => ({
+              id: row.userId,
+              label: labels[row.userId] ?? row.userId,
+              avatarUrl: avatars[row.userId] ?? null,
+            }))
         );
         let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
         if (managerRows.length === 0 && userId) {
@@ -982,6 +1002,64 @@ export default function DesignTaskPage() {
     };
     void loadMembers();
   }, [userId, effectiveTeamId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDesignQueue = async () => {
+      if (!effectiveTeamId) return;
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("id,entity_id,title,metadata,created_at")
+          .eq("team_id", effectiveTeamId)
+          .eq("action", "design_task");
+        if (fetchError) throw fetchError;
+
+        const parsed = ((data ?? []) as Array<{
+          id: string;
+          entity_id?: string | null;
+          title?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string | null;
+        }>).map((row) => {
+          const metadata = row.metadata ?? {};
+          const metadataQuoteId =
+            typeof metadata.quote_id === "string" && metadata.quote_id.trim() ? metadata.quote_id.trim() : null;
+          return {
+            id: row.id,
+            quoteId: metadataQuoteId ?? (typeof row.entity_id === "string" ? row.entity_id : ""),
+            title: row.title ?? null,
+            status: (metadata.status as DesignStatus) ?? "new",
+            designTaskType: parseDesignTaskType(metadata.design_task_type),
+            assigneeUserId:
+              typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id.trim()
+                ? metadata.assignee_user_id.trim()
+                : null,
+            assignedAt: typeof metadata.assigned_at === "string" ? metadata.assigned_at : null,
+            metadata,
+            designDeadline:
+              typeof metadata.design_deadline === "string"
+                ? metadata.design_deadline
+                : typeof metadata.deadline === "string"
+                  ? metadata.deadline
+                  : null,
+            createdAt: typeof row.created_at === "string" ? row.created_at : null,
+          } as DesignTask;
+        });
+
+        if (active) setDesignQueueTasks(parsed);
+      } catch (queueError) {
+        console.warn("Failed to load design queue for workload insights", queueError);
+        if (active) setDesignQueueTasks([]);
+      }
+    };
+
+    void loadDesignQueue();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveTeamId]);
 
   useEffect(() => {
     const load = async () => {
@@ -2069,12 +2147,37 @@ export default function DesignTaskPage() {
   );
   const canMarkReadyNow = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
-    if (!sourceTask) return null;
-    const raw = (sourceTask.metadata ?? {}).estimate_minutes;
-    const parsed = typeof raw === "number" ? raw : Number(raw);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.round(parsed);
+    return getDesignTaskEstimateMinutes(sourceTask);
   }
+
+  const designerWorkloadById = useMemo(() => {
+    const map = new Map<
+      string,
+      ReturnType<typeof calculateDesignWorkload>
+    >();
+    designerMembers.forEach((member) => {
+      const tasks = designQueueTasks.filter((queueTask) => queueTask.assigneeUserId === member.id);
+      map.set(member.id, calculateDesignWorkload(tasks));
+    });
+    return map;
+  }, [designQueueTasks, designerMembers]);
+
+  const sortedDesignerMembers = useMemo(
+    () =>
+      [...designerMembers].sort((a, b) => {
+        const aWorkload = designerWorkloadById.get(a.id);
+        const bWorkload = designerWorkloadById.get(b.id);
+        if (aWorkload && bWorkload && aWorkload.score !== bWorkload.score) {
+          return aWorkload.score - bWorkload.score;
+        }
+        if (aWorkload && !bWorkload) return -1;
+        if (!aWorkload && bWorkload) return 1;
+        return a.label.localeCompare(b.label, "uk", { sensitivity: "base" });
+      }),
+    [designerMembers, designerWorkloadById]
+  );
+
+  const recommendedDesigner = useMemo(() => sortedDesignerMembers[0] ?? null, [sortedDesignerMembers]);
 
   const requestEstimateDialog = (
     pending: { mode: "assign"; nextAssigneeUserId: string | null } | { mode: "assign_self"; alsoStart: boolean } | { mode: "status"; nextStatus: DesignStatus }
@@ -4081,6 +4184,18 @@ export default function DesignTaskPage() {
           }
         : prev
     );
+    setDesignQueueTasks((prev) =>
+      prev.map((queueTask) =>
+        queueTask.id === task.id
+          ? {
+              ...queueTask,
+              assigneeUserId: nextAssigneeUserId,
+              assignedAt: nextAssignedAt,
+              metadata: nextMetadata,
+            }
+          : queueTask
+      )
+    );
 
     try {
       const query = supabase
@@ -4186,6 +4301,7 @@ export default function DesignTaskPage() {
       toast.success(nextAssigneeUserId ? `Виконавця змінено: ${getMemberLabel(nextAssigneeUserId)}` : "Виконавця знято");
     } catch (e: unknown) {
       setTask(previousTask);
+      setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
       const message = getErrorMessage(e, "Не вдалося оновити виконавця");
       setError(message);
       toast.error(message);
@@ -4318,6 +4434,19 @@ export default function DesignTaskPage() {
           }
         : prev
     );
+    setDesignQueueTasks((prev) =>
+      prev.map((queueTask) =>
+        queueTask.id === task.id
+          ? {
+              ...queueTask,
+              status: nextStatus,
+              assigneeUserId: userId,
+              assignedAt: nextAssignedAt,
+              metadata: nextMetadata,
+            }
+          : queueTask
+      )
+    );
 
     try {
       const query = supabase
@@ -4430,6 +4559,7 @@ export default function DesignTaskPage() {
       );
     } catch (e: unknown) {
       setTask(previousTask);
+      setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
       const message = getErrorMessage(e, "Не вдалося призначити задачу");
       toast.error(message);
       setError(message);
@@ -5743,6 +5873,27 @@ export default function DesignTaskPage() {
                   Призначити себе
                 </Button>
               ) : null}
+              {canManageAssignments && recommendedDesigner ? (
+                <div className="rounded-md border border-primary/15 bg-primary/5 px-2.5 py-2">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-primary">Рекомендуємо</div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <AvatarBase
+                      src={recommendedDesigner.avatarUrl ?? getMemberAvatar(recommendedDesigner.id)}
+                      name={recommendedDesigner.label}
+                      fallback={getInitials(recommendedDesigner.label)}
+                      size={20}
+                      className="shrink-0 border-border/70"
+                      fallbackClassName="text-[10px] font-semibold"
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-foreground">{recommendedDesigner.label}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {designerWorkloadById.get(recommendedDesigner.id)?.recommendation ?? "Найменше поточне навантаження"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {canManageAssignments ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -5758,33 +5909,52 @@ export default function DesignTaskPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-64">
                     <DropdownMenuLabel>Дизайнери</DropdownMenuLabel>
-                    {designerMembers.length === 0 ? (
+                    {sortedDesignerMembers.length === 0 ? (
                       <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
                     ) : (
-                      designerMembers.map((member) => (
+                      sortedDesignerMembers.map((member) => {
+                        const workload = designerWorkloadById.get(member.id);
+                        return (
                         <DropdownMenuItem
                           key={member.id}
                           onClick={() => void applyAssignee(member.id)}
                           disabled={task.assigneeUserId === member.id}
-                          className="gap-2"
+                          className="gap-2 py-2"
                         >
                           <AvatarBase
-                            src={getMemberAvatar(member.id)}
+                            src={member.avatarUrl ?? getMemberAvatar(member.id)}
                             name={member.label}
                             fallback={getInitials(member.label)}
                             size={18}
                             className="shrink-0 border-border/70"
                             fallbackClassName="text-[10px] font-semibold"
                           />
-                          <span className="truncate">{member.label}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate">{member.label}</div>
+                            {workload ? (
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                                <span>·</span>
+                                <span>{workload.activeTaskCount} задач</span>
+                                <span>·</span>
+                                <span>{workload.score}</span>
+                              </div>
+                            ) : null}
+                          </div>
+                          {workload ? (
+                            <Badge variant="outline" className={cn("ml-auto text-[10px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                              {workload.score}
+                            </Badge>
+                          ) : null}
                           <Check
                             className={cn(
-                              "ml-auto h-3.5 w-3.5 text-primary",
+                              "h-3.5 w-3.5 text-primary",
                               task.assigneeUserId === member.id ? "opacity-100" : "opacity-0"
                             )}
                           />
                         </DropdownMenuItem>
-                      ))
+                        );
+                      })
                     )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => void applyAssignee(null)} disabled={!task.assigneeUserId}>

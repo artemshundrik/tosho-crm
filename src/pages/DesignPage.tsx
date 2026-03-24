@@ -65,6 +65,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
@@ -316,6 +317,20 @@ const WORKLOAD_PROGRESS_CLASS_BY_LEVEL = {
   balanced: "bg-info-foreground/75",
   busy: "bg-warning-foreground/80",
   overloaded: "bg-danger-foreground/80",
+} as const;
+
+const CAPACITY_BADGE_CLASS_BY_LEVEL = {
+  low: "border-success-soft-border bg-success-soft text-success-foreground",
+  medium: "border-info-soft-border bg-info-soft text-info-foreground",
+  high: "border-warning-soft-border bg-warning-soft text-warning-foreground",
+  critical: "border-danger-soft-border bg-danger-soft text-danger-foreground",
+} as const;
+
+const CAPACITY_LABEL_BY_LEVEL = {
+  low: "Низьке",
+  medium: "Середнє",
+  high: "Високе",
+  critical: "Перевантаження",
 } as const;
 
 const getInitials = (name?: string | null) => {
@@ -1665,11 +1680,20 @@ export default function DesignPage() {
     return bucket;
   }, [filteredTasks]);
 
+  const workloadSourceTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const isLinkedTask = isUuid(task.quoteId);
+      if (contentView === "linked" && !isLinkedTask) return false;
+      if (contentView === "standalone" && isLinkedTask) return false;
+      if (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER && task.quoteManagerUserId !== managerFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [contentView, isManagerUser, managerFilter, tasks]);
+
   const getTaskEstimateMinutes = (task: DesignTask) => {
-    const raw = (task.metadata ?? {}).estimate_minutes;
-    const parsed = typeof raw === "number" ? raw : Number(raw);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.round(parsed);
+    return getDesignTaskEstimateMinutes(task);
   };
 
   const requestEstimateBeforeAction = (params: {
@@ -1907,7 +1931,13 @@ export default function DesignPage() {
   const assigneeGrouped = useMemo(() => {
     const map = new Map<
       string,
-      { id: string | null; label: string; tasks: DesignTask[]; estimateMinutesTotal: number; tasksWithoutEstimate: number }
+      {
+        id: string | null;
+        label: string;
+        tasks: DesignTask[];
+        estimateMinutesTotal: number;
+        tasksWithoutEstimate: number;
+      }
     >();
 
     designerMembers.forEach((member) => {
@@ -1931,7 +1961,7 @@ export default function DesignPage() {
       });
     });
 
-    filteredTasks.forEach((task) => {
+    workloadSourceTasks.forEach((task) => {
       const key = task.assigneeUserId ?? "__unassigned__";
       if (!map.has(key)) {
         map.set(key, {
@@ -1950,14 +1980,37 @@ export default function DesignPage() {
       else group.tasksWithoutEstimate += 1;
     });
 
-    return Array.from(map.values()).sort((a, b) => {
-      if (!a.id && b.id) return 1;
-      if (a.id && !b.id) return -1;
-      if (b.tasks.length !== a.tasks.length) return b.tasks.length - a.tasks.length;
-      return a.label.localeCompare(b.label, "uk");
+    return Array.from(map.values())
+      .map((group) => ({
+        ...group,
+        workload: group.id ? calculateDesignWorkload(group.tasks) : null,
+      }))
+      .sort((a, b) => {
+        if (!a.id && b.id) return 1;
+        if (a.id && !b.id) return -1;
+        if (a.workload && b.workload && a.workload.score !== b.workload.score) {
+          return a.workload.score - b.workload.score;
+        }
+        if (a.workload && b.workload && a.workload.overdueCount !== b.workload.overdueCount) {
+          return a.workload.overdueCount - b.workload.overdueCount;
+        }
+        if (a.tasks.length !== b.tasks.length) return a.tasks.length - b.tasks.length;
+        return a.label.localeCompare(b.label, "uk");
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedByAssignee, designerMembers, memberById, workloadSourceTasks]);
+
+  const recommendedAssigneeGroup = useMemo(() => {
+    return assigneeGrouped.find((group) => group.id) ?? null;
+  }, [assigneeGrouped]);
+
+  const designerLoadById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof calculateDesignWorkload>>();
+    assigneeGrouped.forEach((group) => {
+      if (group.id && group.workload) map.set(group.id, group.workload);
     });
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completedByAssignee, designerMembers, filteredTasks, memberById]);
+    return map;
+  }, [assigneeGrouped]);
 
   const timelineSummary = useMemo(() => {
     const today = new Date();
@@ -1997,8 +2050,13 @@ export default function DesignPage() {
       (sum, group) => sum + group.tasks.reduce((taskSum, task) => taskSum + getTaskTrackedSeconds(task.id), 0),
       0
     );
-    const busyCount = activeGroups.filter((group) => getWorkloadLevel(group.tasks.length, group.estimateMinutesTotal) !== "calm").length;
+    const busyCount = activeGroups.filter((group) => {
+      if (!group.workload) return false;
+      return group.workload.level === "high" || group.workload.level === "critical";
+    }).length;
     const unassignedCount = assigneeGrouped.find((group) => !group.id)?.tasks.length ?? 0;
+    const availableNowCount = activeGroups.filter((group) => group.workload?.level === "low").length;
+    const criticalCount = activeGroups.filter((group) => group.workload?.level === "critical").length;
 
     return {
       activeDesigners: activeGroups.length,
@@ -2006,8 +2064,25 @@ export default function DesignPage() {
       totalTrackedSeconds,
       busyCount,
       unassignedCount,
+      availableNowCount,
+      criticalCount,
     };
   }, [assigneeGrouped, timerNowMs, timerSummaryByTaskId]);
+
+  const sortedDesignerCapacityOptions = useMemo(
+    () =>
+      [...designerMembers].sort((a, b) => {
+        const aWorkload = designerLoadById.get(a.id);
+        const bWorkload = designerLoadById.get(b.id);
+        if (aWorkload && bWorkload && aWorkload.score !== bWorkload.score) {
+          return aWorkload.score - bWorkload.score;
+        }
+        if (aWorkload && !bWorkload) return -1;
+        if (!aWorkload && bWorkload) return 1;
+        return a.label.localeCompare(b.label, "uk", { sensitivity: "base" });
+      }),
+    [designerLoadById, designerMembers]
+  );
 
   const assigneeVisibleGroups = useMemo(() => {
     if (assigneeSpotlight === ALL_ASSIGNEE_SPOTLIGHT) return assigneeGrouped;
@@ -3918,85 +3993,134 @@ export default function DesignPage() {
       ) : null}
 
       {viewMode === "assignee" ? (
-        <div className="space-y-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
-            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    <Users className="h-3.5 w-3.5" />
-                    Designer Capacity
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold tracking-tight text-foreground">Навантаження, вихід і черга по дизайнерах</h3>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                      Замість сухої таблиці тут видно, хто перевантажений, у кого є запас, і які задачі треба рухати першими.
-                    </p>
-                  </div>
+        <div className="space-y-4 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
+          <section className="rounded-[18px] border border-border/60 bg-background/70 p-5">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                <Users className="h-3.5 w-3.5" />
+                Balance Team
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-foreground">Баланс команди дизайнерів</h3>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  Тут менеджер бачить тільки головне: кому можна ставити нову задачу зараз, хто вже завантажений, і чи є задачі без виконавця.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+              <div className="space-y-4">
+                <div className="border-b border-border/60 pb-5">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Рекомендуємо зараз</div>
+                  {recommendedAssigneeGroup?.id && recommendedAssigneeGroup.workload ? (
+                    <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <AvatarBase
+                          src={getMemberAvatar(recommendedAssigneeGroup.id)}
+                          name={recommendedAssigneeGroup.label}
+                          fallback={getInitials(recommendedAssigneeGroup.label)}
+                          size={48}
+                          className="border-border/70"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-xl font-semibold text-foreground">{recommendedAssigneeGroup.label}</div>
+                          <div className="mt-1 text-[15px] text-muted-foreground">{recommendedAssigneeGroup.workload.recommendation}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2.5">
+                        <Badge variant="outline" className={cn("px-3 py-1.5 text-[12px]", CAPACITY_BADGE_CLASS_BY_LEVEL[recommendedAssigneeGroup.workload.level])}>
+                          {CAPACITY_LABEL_BY_LEVEL[recommendedAssigneeGroup.workload.level]}
+                        </Badge>
+                        <Badge variant="outline" className="border-border/60 px-3 py-1.5 text-[12px]">
+                          {recommendedAssigneeGroup.workload.activeTaskCount} задач
+                        </Badge>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm text-muted-foreground">Немає доступних дизайнерів для рекомендації.</div>
+                  )}
                 </div>
-                <div className="rounded-xl border border-border/60 bg-background/80 p-1">
-                  <div className="flex flex-wrap items-center gap-1">
-                    {DESIGN_COMPLETED_PERIOD_OPTIONS.map((option) => (
-                      <Button
-                        key={option.value}
-                        size="sm"
-                        variant={completedPeriod === option.value ? "secondary" : "ghost"}
-                        onClick={() => setCompletedPeriod(option.value)}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
+
+                <div className="overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
+                  <div className="grid grid-cols-[minmax(260px,1.8fr)_150px_190px] gap-4 border-b border-border/60 px-5 py-4 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    <div>Дизайнер</div>
+                    <div>Задачі зараз</div>
+                    <div>Навантаження</div>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {assigneeGrouped
+                      .filter((group) => group.id && group.workload)
+                      .map((group, index) => {
+                        const workload = group.workload;
+                        if (!group.id || !workload) return null;
+                        return (
+                          <div
+                            key={`team-balance-${group.id}`}
+                            className={cn(
+                              "grid grid-cols-[minmax(260px,1.8fr)_150px_190px] gap-4 px-5 py-5 transition-colors",
+                              index === 0 ? "bg-primary/5" : "bg-transparent hover:bg-muted/10"
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-4">
+                                <AvatarBase
+                                  src={getMemberAvatar(group.id)}
+                                  name={group.label}
+                                  fallback={getInitials(group.label)}
+                                  size={40}
+                                  className="border-border/70"
+                                />
+                                <div className="min-w-0">
+                                  <div className="truncate text-[18px] font-semibold leading-tight text-foreground">{group.label}</div>
+                                  <div className="mt-1 truncate text-sm text-muted-foreground">
+                                    {workload.recommendation}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="inline-flex min-w-[56px] items-center justify-center rounded-full border border-border/60 bg-background px-3 py-2 text-base font-semibold tabular-nums text-foreground">
+                                {workload.activeTaskCount}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <Badge variant="outline" className={cn("px-3 py-1.5 text-[12px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                                {CAPACITY_LABEL_BY_LEVEL[workload.level]}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+
+              <div className="grid gap-0 overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
+                <div className="border-b border-border/60 px-5 py-5">
                   <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Активні дизайнери</div>
-                  <div className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{assigneeOverview.activeDesigners}</div>
-                  <div className="mt-2 text-xs text-muted-foreground">Тільки учасники з дизайнерською роллю</div>
+                  <div className="mt-2 text-4xl font-semibold tabular-nums text-foreground">{assigneeOverview.activeDesigners}</div>
+                  <div className="mt-2 text-[15px] text-muted-foreground">Дизайнери, які зараз у команді</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-info-soft-border bg-info-soft/60 p-3">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Планове навантаження</div>
-                  <div className="mt-2 text-2xl font-semibold tabular-nums text-info-foreground">{formatHoursLoad(assigneeOverview.totalEstimateMinutes)}</div>
-                  <div className="mt-2 text-xs text-info-foreground/80">Сумарний estimate по поточній вибірці</div>
+                <div className="border-b border-border/60 px-5 py-5">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Можна ставити нову задачу</div>
+                  <div className="mt-2 text-4xl font-semibold tabular-nums text-info-foreground">{assigneeOverview.availableNowCount}</div>
+                  <div className="mt-2 text-[15px] text-info-foreground/80">Людей з низьким поточним навантаженням</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 p-3">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Щільне навантаження</div>
-                  <div className="mt-2 text-2xl font-semibold tabular-nums text-warning-foreground">{assigneeOverview.busyCount}</div>
-                  <div className="mt-2 text-xs text-warning-foreground/80">Дизайнерів у стані `busy` або `overloaded`</div>
+                <div className="border-b border-border/60 px-5 py-5">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Уже завантажені</div>
+                  <div className="mt-2 text-4xl font-semibold tabular-nums text-warning-foreground">{assigneeOverview.busyCount}</div>
+                  <div className="mt-2 text-[15px] text-warning-foreground/80">Кому краще не давати звичайні нові задачі</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-danger-soft-border bg-danger-soft/60 p-3">
+                <div className="px-5 py-5">
                   <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-danger-foreground/85">Без виконавця</div>
-                  <div className="mt-2 text-2xl font-semibold tabular-nums text-danger-foreground">{assigneeOverview.unassignedCount}</div>
-                  <div className="mt-2 text-xs text-danger-foreground/80">Задачі, які не закріплені за дизайнером</div>
+                  <div className="mt-2 text-4xl font-semibold tabular-nums text-danger-foreground">{assigneeOverview.unassignedCount}</div>
+                  <div className="mt-2 text-[15px] text-danger-foreground/80">Задач, які ще треба комусь розподілити</div>
                 </div>
               </div>
             </div>
+          </section>
 
-            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Delivery Pulse</div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">Виконані роботи за період</div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="mt-4 rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
-                <div className="text-xs text-muted-foreground">Витрачений час</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{formatElapsedSeconds(assigneeOverview.totalTrackedSeconds)}</div>
-              </div>
-              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 px-3 py-2">
-                  Період перемикає тільки блок виконаних робіт і не змінює активну чергу.
-                </div>
-                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 px-3 py-2">
-                  Найризиковіші задачі піднімаються вгорі кожної черги: прострочені, без естімейту, з ближчим дедлайном.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <section className="flex flex-col gap-3 border-y border-border/60 bg-background/50 px-1 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-sm font-semibold text-foreground">Фокус по дизайнеру</div>
               <div className="mt-1 text-sm text-muted-foreground">
@@ -4017,12 +4141,14 @@ export default function DesignPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </section>
 
           {assigneeVisibleGroups.length === 0 ? (
             <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">Немає задач</div>
           ) : (
-            assigneeVisibleGroups.map((group) => {
+            <div className="overflow-hidden rounded-[18px] border border-border/60 bg-background/60">
+            {assigneeVisibleGroups.map((group, index) => {
+              const workload = group.workload;
               const workloadLevel = getWorkloadLevel(group.tasks.length, group.estimateMinutesTotal);
               const statusBreakdown = DESIGN_COLUMNS.map((column) => ({
                 ...column,
@@ -4052,8 +4178,11 @@ export default function DesignPage() {
               });
 
               return (
-                <div key={group.id ?? "unassigned"} className="overflow-hidden rounded-[var(--radius-section)] border border-border/60 bg-card/70 shadow-sm">
-                  <div className="border-b border-border/50 bg-background/45 px-4 py-4">
+                <section
+                  key={group.id ?? "unassigned"}
+                  className={cn(index !== 0 ? "border-t border-border/60" : "", "bg-transparent")}
+                >
+                  <div className="border-b border-border/50 bg-background/35 px-5 py-5">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -4073,72 +4202,81 @@ export default function DesignPage() {
                           <div className="min-w-0">
                             <div className="truncate text-base font-semibold text-foreground">{group.label}</div>
                             <div className="mt-0.5 text-xs text-muted-foreground">
-                              {group.id ? "Персональна черга дизайнера" : "Черга задач, які треба розподілити"}
+                              {group.id
+                                ? workload?.recommendation ?? "Персональна черга дизайнера"
+                                : "Черга задач, які треба розподілити"}
                             </div>
                           </div>
-                          <Badge variant="outline" className={cn("text-[11px]", WORKLOAD_BADGE_CLASS_BY_LEVEL[workloadLevel])}>
-                            {WORKLOAD_LABEL_BY_LEVEL[workloadLevel]}
-                          </Badge>
+                          {workload ? (
+                            <Badge variant="outline" className={cn("text-[11px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                              {CAPACITY_LABEL_BY_LEVEL[workload.level]}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className={cn("text-[11px]", WORKLOAD_BADGE_CLASS_BY_LEVEL[workloadLevel])}>
+                              {WORKLOAD_LABEL_BY_LEVEL[workloadLevel]}
+                            </Badge>
+                          )}
                         </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Черга</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">{group.tasks.length}</div>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Estimate</div>
-                            <div className="mt-1 text-lg font-semibold text-foreground">{formatHoursLoad(group.estimateMinutesTotal)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Факт</div>
-                            <div className="mt-1 text-lg font-semibold text-foreground">{formatElapsedSeconds(trackedSecondsTotal)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Закрито</div>
-                            <div className="mt-1 text-lg font-semibold text-foreground">
-                              {group.id ? (completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)) : "—"}
-                            </div>
-                          </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-1.5">
+                            <span className="text-muted-foreground">Задач зараз</span>
+                            <span className="font-semibold text-foreground">{workload?.activeTaskCount ?? group.tasks.length}</span>
+                          </span>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-1.5">
+                            <span className="text-muted-foreground">Estimate</span>
+                            <span className="font-semibold text-foreground">{formatHoursLoad(workload?.estimateMinutesTotal ?? group.estimateMinutesTotal)}</span>
+                          </span>
+                          {group.tasksWithoutEstimate > 0 ? (
+                            <span className="inline-flex items-center gap-2 rounded-full border border-warning-soft-border bg-warning-soft/60 px-3 py-1.5 text-warning-foreground">
+                              Без estimate: {group.tasksWithoutEstimate}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
-                      <div className="w-full max-w-[360px] rounded-[var(--radius-inner)] border border-border/60 bg-card/80 p-3">
+                      <div className="w-full max-w-[360px] border-l border-border/60 pl-0 xl:pl-5">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Завантаження</div>
-                          <div className="text-xs text-muted-foreground">{Math.round(completionRatio * 100)}%</div>
+                          <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Навантаження</div>
+                          <div className="text-xs text-muted-foreground">
+                            {workload ? `${workload.capacityPercent}%` : `${Math.round(completionRatio * 100)}%`}
+                          </div>
                         </div>
                         <div className="mt-2 h-2.5 rounded-full bg-muted/70">
                           <div
-                            className={cn("h-2.5 rounded-full transition-all", WORKLOAD_PROGRESS_CLASS_BY_LEVEL[workloadLevel])}
-                            style={{ width: `${Math.max(6, Math.round(completionRatio * 100))}%` }}
+                            className={cn(
+                              "h-2.5 rounded-full transition-all",
+                              workload
+                                ? workload.level === "low"
+                                  ? "bg-success-foreground/80"
+                                  : workload.level === "medium"
+                                    ? "bg-info-foreground/80"
+                                    : workload.level === "high"
+                                      ? "bg-warning-foreground/80"
+                                      : "bg-danger-foreground/80"
+                                : WORKLOAD_PROGRESS_CLASS_BY_LEVEL[workloadLevel]
+                            )}
+                            style={{ width: `${Math.max(6, workload?.capacityPercent ?? Math.round(completionRatio * 100))}%` }}
                           />
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {group.tasksWithoutEstimate > 0 ? (
-                            <Badge variant="outline" className="text-[11px] border-warning-soft-border bg-warning-soft text-warning-foreground">
-                              Без естімейту: {group.tasksWithoutEstimate}
+                          {workload?.signals.slice(0, 3).map((signal) => (
+                            <Badge key={signal} variant="outline" className="text-[11px] border-border/60 bg-background/70">
+                              {signal}
                             </Badge>
-                          ) : null}
+                          ))}
                           {statusBreakdown.slice(0, 4).map((status) => (
                             <Badge key={status.id} variant="outline" className="text-[11px]">
                               {status.label}: {status.count}
                             </Badge>
                           ))}
-                          {group.id
-                            ? Object.entries(completedByAssignee[group.id]?.byType ?? {}).slice(0, 3).map(([type, count]) => (
-                                <Badge key={type} variant="outline" className="text-[11px] border-success-soft-border bg-success-soft/60 text-success-foreground">
-                                  {DESIGN_TASK_TYPE_LABELS[type as DesignTaskType]}: {count}
-                                </Badge>
-                              ))
-                            : null}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.95fr)]">
+                  <div className="grid gap-5 px-5 py-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.95fr)]">
                     <div className="space-y-3">
                       {queue.length === 0 ? (
-                        <div className="rounded-[var(--radius-inner)] border border-dashed border-border/60 p-4 text-center text-sm text-muted-foreground">
+                        <div className="border border-dashed border-border/60 px-4 py-5 text-center text-sm text-muted-foreground">
                           Немає задач у цій черзі
                         </div>
                       ) : (
@@ -4151,7 +4289,7 @@ export default function DesignPage() {
                           const trackedSeconds = getTaskTrackedSeconds(task.id);
                           const itemProgressRatio = estimateMinutes ? Math.min(1, trackedSeconds / Math.max(1, estimateMinutes * 60)) : 0;
                           return (
-                            <div key={task.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+                            <div key={task.id} className="border border-border/60 bg-background/85 p-3">
                               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                 <button
                                   className="min-w-0 text-left"
@@ -4285,7 +4423,7 @@ export default function DesignPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
+                      <div className="border border-border/60 bg-background/80 p-3">
                         <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Статуси в черзі</div>
                         <div className="mt-3 space-y-2">
                           {statusBreakdown.length > 0 ? (
@@ -4309,7 +4447,7 @@ export default function DesignPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/80 p-3">
+                      <div className="border border-border/60 bg-background/80 p-3">
                         <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Фокус дій</div>
                         <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                           <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
@@ -4319,7 +4457,11 @@ export default function DesignPage() {
                           </div>
                           <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
                             {group.id
-                              ? `За період закрито ${completedSummaryLoading ? "…" : (completedByAssignee[group.id]?.total ?? 0)} задач.`
+                              ? workload?.level === "low"
+                                ? "Цьому дизайнеру можна віддавати наступні нові задачі."
+                                : workload?.level === "medium"
+                                  ? "Планові задачі ще можна ставити, але без перевантаження."
+                                  : "Нові задачі сюди краще ставити тільки якщо це справді пріоритет."
                               : "Цей блок показує чергу, яку треба розподілити між дизайнерами."}
                           </div>
                           <div className="rounded-lg border border-border/60 bg-card/80 px-3 py-2">
@@ -4331,9 +4473,10 @@ export default function DesignPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </section>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       ) : null}
@@ -4683,6 +4826,15 @@ export default function DesignPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-64 p-2" align="start">
                     <div className="space-y-1">
+                      {recommendedAssigneeGroup?.id ? (
+                        <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2">
+                          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-primary">Рекомендуємо</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{recommendedAssigneeGroup.label}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {recommendedAssigneeGroup.workload?.recommendation ?? "Найменше навантаження в команді"}
+                          </div>
+                        </div>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
@@ -4702,14 +4854,16 @@ export default function DesignPage() {
                           )}
                         />
                       </Button>
-                      {designerMembers.length > 0 ? (
-                        designerMembers.map((member) => (
+                      {sortedDesignerCapacityOptions.length > 0 ? (
+                        sortedDesignerCapacityOptions.map((member) => {
+                          const workload = designerLoadById.get(member.id);
+                          return (
                           <Button
                             key={member.id}
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start gap-2 h-9 text-sm"
+                            className="h-auto w-full justify-start gap-2 py-2 text-sm"
                             onClick={() => {
                               setCreateAssigneeUserId(member.id);
                               setCreateAssigneePopoverOpen(false);
@@ -4724,7 +4878,18 @@ export default function DesignPage() {
                               className="border-border/60 shrink-0"
                               fallbackClassName="text-[10px] font-semibold"
                             />
-                            <span className="truncate">{member.label}</span>
+                            <div className="min-w-0 flex-1 text-left">
+                              <div className="truncate">{member.label}</div>
+                              {workload ? (
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                                  <span>·</span>
+                                  <span>{workload.activeTaskCount} задач</span>
+                                  <span>·</span>
+                                  <span>{formatHoursLoad(workload.estimateMinutesTotal)}</span>
+                                </div>
+                              ) : null}
+                            </div>
                             <Check
                               className={cn(
                                 "ml-auto h-3.5 w-3.5 text-primary",
@@ -4732,7 +4897,8 @@ export default function DesignPage() {
                               )}
                             />
                           </Button>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="text-xs text-muted-foreground p-2">Немає користувачів</div>
                       )}
