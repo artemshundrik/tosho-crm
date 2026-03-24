@@ -22,6 +22,22 @@ const numericRate = (value, fallback = DEFAULT_MANAGER_RATE) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const resolveWorkspaceIdForUser = async (userId) => {
+  const normalizedUserId = userId?.trim();
+  if (!normalizedUserId) return null;
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("memberships_view")
+    .select("workspace_id")
+    .eq("user_id", normalizedUserId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.workspace_id?.trim() || null;
+};
+
 const { data: quotes, error: quotesError } = await supabase
   .schema("tosho")
   .from("quotes")
@@ -72,18 +88,18 @@ for (const run of runs ?? []) {
     continue;
   }
 
-  const workspaceId = quote.team_id?.trim();
-  if (!workspaceId) {
-    skipped.push({ runId: run.id, quoteId: run.quote_id, reason: "missing_team_id" });
-    continue;
-  }
-
   const creatorId = quote.created_by?.trim() || null;
   const assignedId = quote.assigned_to?.trim() || null;
-  const sourceUserId = creatorId || assignedId;
+  const sourceUserId = assignedId || creatorId;
 
   if (!sourceUserId) {
     skipped.push({ runId: run.id, quoteId: run.quote_id, reason: "missing_manager_source" });
+    continue;
+  }
+
+  const workspaceId = await resolveWorkspaceIdForUser(sourceUserId);
+  if (!workspaceId) {
+    skipped.push({ runId: run.id, quoteId: run.quote_id, reason: "missing_workspace_id", sourceUserId });
     continue;
   }
 

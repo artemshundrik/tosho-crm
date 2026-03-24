@@ -707,8 +707,8 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <PermissionGate
-                allowed={permissions.canEditMemberRoles}
-                requirement="access_role: owner або access_role: admin"
+                allowed={permissions.canManageMembers}
+                requirement="access_role: owner або access_role: admin, або job_role: seo"
                 accessRole={accessRole}
                 jobRole={jobRole}
               >

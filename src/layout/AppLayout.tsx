@@ -382,6 +382,7 @@ if (pathname === ROUTES.profile)
       subtitle: "Керуй своїм обліковим записом та налаштуваннями.",
       breadcrumbLabel: "Профіль",
       breadcrumbTo: ROUTES.profile,
+      showPageHeader: false,
     };
   // fallback
   return {
@@ -471,11 +472,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     () =>
       sidebarLinks.filter((link) => {
         if (link.to === ROUTES.membersAccess) {
-          return permissions.canEditMemberRoles;
+          return permissions.canManageMembers;
         }
         return true;
       }),
-    [permissions.canEditMemberRoles]
+    [permissions.canManageMembers]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {

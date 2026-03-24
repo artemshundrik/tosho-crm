@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar } from "lucide-react";
+import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar, BriefcaseBusiness, Hourglass } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
@@ -14,6 +14,15 @@ import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName, toFullName } from "@/lib/userName";
+import {
+  formatEmploymentDate,
+  formatEmploymentDuration,
+  getEmploymentDurationDays,
+  getEmploymentStatusLabel,
+  getProbationSummary,
+  normalizeEmploymentStatus,
+  type EmploymentStatus,
+} from "@/lib/employment";
 import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile } from "@/lib/workspaceMemberDirectory";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -30,6 +39,10 @@ type ProfileCache = {
   jobRole: string | null;
   initials: string;
   avatarUrl: string | null;
+  phone: string;
+  startDate: string;
+  probationEndDate: string;
+  employmentStatus: EmploymentStatus;
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -78,7 +91,12 @@ export function ProfilePage() {
   const [accessRole, setAccessRole] = useState(cached?.accessRole ?? "");
   const [jobRole, setJobRole] = useState<string | null>(cached?.jobRole ?? null);
   const [initials, setInitials] = useState(cached?.initials ?? "");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(cached?.phone ?? "");
+  const [startDate, setStartDate] = useState(cached?.startDate ?? "");
+  const [probationEndDate, setProbationEndDate] = useState(cached?.probationEndDate ?? "");
+  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus>(
+    cached?.employmentStatus ?? normalizeEmploymentStatus(undefined, cached?.probationEndDate)
+  );
   const [avatarStoragePath, setAvatarStoragePath] = useState<string | null>(null);
 
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
@@ -95,6 +113,10 @@ export function ProfilePage() {
       jobRole,
       initials,
       avatarUrl,
+      phone,
+      startDate,
+      probationEndDate,
+      employmentStatus,
       ...overrides,
     });
   };
@@ -144,6 +166,9 @@ export function ProfilePage() {
         let resolvedProfileName = resolvedName;
         let resolvedBirthDate = metaBirthDate;
         let resolvedPhone = metaPhone;
+        let resolvedStartDate = "";
+        let resolvedProbationEndDate = "";
+        let resolvedEmploymentStatus: EmploymentStatus = "active";
 
         if (resolvedWorkspaceId) {
           const directoryEntry = await getCurrentWorkspaceMemberDirectoryEntry();
@@ -158,6 +183,9 @@ export function ProfilePage() {
             resolvedPhone = directoryEntry.phone || metaPhone;
             resolvedAvatarUrl = directoryEntry.avatarUrl || resolvedAvatarUrl;
             resolvedAvatarPath = directoryEntry.avatarPath || null;
+            resolvedStartDate = directoryEntry.startDate || "";
+            resolvedProbationEndDate = directoryEntry.probationEndDate || "";
+            resolvedEmploymentStatus = directoryEntry.employmentStatus;
           }
 
           const { data: membership } = await supabase
@@ -182,6 +210,9 @@ export function ProfilePage() {
         setDisplayName(resolvedProfileName.displayName);
         setBirthDate(resolvedBirthDate);
         setPhone(resolvedPhone);
+        setStartDate(resolvedStartDate);
+        setProbationEndDate(resolvedProbationEndDate);
+        setEmploymentStatus(resolvedEmploymentStatus);
 
         const i = getInitialsFromName(resolvedProfileName.displayName, user.email);
         setInitials(i);
@@ -201,6 +232,10 @@ export function ProfilePage() {
           jobRole: resolvedJobRole,
           initials: i,
           avatarUrl: displayAvatarUrl,
+          phone: resolvedPhone,
+          startDate: resolvedStartDate,
+          probationEndDate: resolvedProbationEndDate,
+          employmentStatus: resolvedEmploymentStatus,
         });
       }
     } catch (error) {
@@ -426,40 +461,57 @@ export function ProfilePage() {
     if (shouldShowSkeleton) return <DetailSkeleton />;
   }
 
+  const employmentDuration = formatEmploymentDuration(startDate);
+  const employmentDays = getEmploymentDurationDays(startDate);
+  const probation = getProbationSummary(startDate, probationEndDate);
+  const resolvedEmploymentStatus = normalizeEmploymentStatus(employmentStatus, probationEndDate);
+  const employmentStatusTone =
+    resolvedEmploymentStatus === "active"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      : resolvedEmploymentStatus === "inactive"
+      ? "border-border bg-muted text-muted-foreground"
+      : resolvedEmploymentStatus === "rejected"
+      ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  const employmentHeadline =
+    resolvedEmploymentStatus === "active"
+      ? "Штатний статус підтверджено"
+      : resolvedEmploymentStatus === "inactive"
+      ? "Співпрацю завершено"
+      : resolvedEmploymentStatus === "rejected"
+      ? "Після випробувального не прийнято"
+      : probation
+      ? `До ${probation.endLabel}`
+      : "Кінець випробувального не вказано";
+  const employmentDescription =
+    resolvedEmploymentStatus === "active"
+      ? "Ти вже працюєш у компанії в штатному статусі."
+      : resolvedEmploymentStatus === "inactive"
+      ? "У профілі зафіксовано, що співпрацю з компанією завершено."
+      : resolvedEmploymentStatus === "rejected"
+      ? "Зафіксовано рішення, що після випробувального терміну співпрацю не продовжили."
+      : probation
+      ? probation.caption
+      : "Адміністратор може задати дату завершення випробувального в управлінні командою.";
+
   return (
-    <div className="max-w-4xl mx-auto py-6 space-y-8">
-      
-      {/* Картка профілю: використовуємо системні змінні для кольорів та радіусів */}
-      <div className={cn(
-        "bg-card border border-border overflow-hidden",
-        "shadow-surface", // Твій кастомний клас тіні з CSS
-        "rounded-[var(--radius-section)]" // Велике заокруглення (як --radius-section)
-      )}>
-        
-        {/* Banner: градієнт на основі Primary кольору (працює і в темній темі) */}
-        <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/5 to-background/0 relative">
-          <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02]" />
-        </div>
-        
-        <div className="px-6 pb-8 md:px-10">
-          {/* Avatar Row */}
-          <div className="relative -mt-12 mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-6">
-              
-              {/* Avatar Wrapper */}
-              <div className="relative group mx-auto sm:mx-0">
+    <div className="mx-auto max-w-6xl py-6">
+      <div className="overflow-hidden rounded-[var(--radius-section)] border border-border bg-card shadow-surface">
+        <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-8 pt-6 md:px-10">
+          <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.36)_18%,transparent_36%)] opacity-60 dark:opacity-20" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex flex-col gap-5 md:flex-row md:items-end">
+              <div className="relative mx-auto shrink-0 md:mx-0">
                 <AvatarBase
                   src={avatarUrl}
                   name={displayName || "Користувач"}
                   fallback={initials}
-                  size={112}
+                  size={120}
                   shape="circle"
-                  className="border-[4px] border-card shadow-lg bg-card text-foreground"
+                  className="border-[5px] border-card bg-card text-foreground ring-1 ring-black/5"
                   imageClassName="object-cover"
                   fallbackClassName="text-3xl font-bold text-foreground"
                 />
-                
-                {/* Edit Photo Button */}
                 <Button
                   type="button"
                   variant="inverted"
@@ -470,9 +522,9 @@ export function ProfilePage() {
                   disabled={avatarUploading}
                 >
                   {avatarUploading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Camera className="w-3.5 h-3.5" />
+                    <Camera className="h-3.5 w-3.5" />
                   )}
                 </Button>
                 <input
@@ -483,44 +535,70 @@ export function ProfilePage() {
                   onChange={handleAvatarChange}
                 />
               </div>
-              
-              <div className="mb-3 space-y-1.5 text-center sm:text-left">
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">{displayName || "Користувач"}</h2>
-                  <div className="flex items-center justify-center sm:justify-start gap-2">
-                   {/* Role Badge: Soft style */}
-                   <div
-                     className={cn(
-                       "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold",
-                       accessRole === "owner"
-                         ? "bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-400 dark:border-purple-500/20"
-                         : accessRole === "admin"
-                         ? "bg-primary/10 text-foreground border-primary/20"
-                         : "bg-muted text-muted-foreground border-border"
-                     )}
-                   >
-                      {accessRole === "owner"
-                        ? "Super Admin"
-                        : accessRole === "admin"
-                        ? "Admin"
-                        : "Member"}
-                   </div>
-                   <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      <Globe className="w-3 h-3" /> Kyiv, UA
-                   </span>
+
+              <div className="space-y-3 text-center md:text-left">
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-semibold tracking-tight text-foreground">{displayName || "Користувач"}</h1>
+                  <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                        accessRole === "owner"
+                          ? "border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                          : accessRole === "admin"
+                          ? "border-primary/20 bg-primary/10 text-foreground"
+                          : "border-border bg-background/80 text-muted-foreground"
+                      )}
+                    >
+                      {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
+                    </span>
+                    {jobRole ? (
+                      <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+                        {jobRole}
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Globe className="h-3.5 w-3.5" />
+                      Kyiv, UA
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Старт</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">
+                      {startDate ? formatEmploymentDate(startDate) : "Не вказано"}
+                    </div>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Стаж</div>
+                    <div className="mt-1 text-sm font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Статус</div>
+                    <div className="mt-1">
+                      <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", employmentStatusTone)}>
+                        {getEmploymentStatusLabel(resolvedEmploymentStatus)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <Button onClick={updateProfile} disabled={updating} className="shadow-sm hidden sm:flex">
+            <Button onClick={updateProfile} disabled={updating} className="hidden h-11 min-w-[220px] sm:inline-flex">
               {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Зберегти зміни
             </Button>
           </div>
+        </div>
 
+        <div className="px-6 py-6 md:px-10">
           {avatarDraftUrl ? (
-            <div className="mb-8 rounded-[var(--radius-inner)] border border-border bg-muted/20 p-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="relative h-36 w-36 overflow-hidden rounded-full border border-border bg-background">
+            <div className="mb-6 rounded-[var(--radius-inner)] border border-border bg-muted/20 p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                <div className="relative h-40 w-40 overflow-hidden rounded-full border border-border bg-background">
                   <Cropper
                     image={avatarDraftUrl}
                     crop={crop}
@@ -533,34 +611,28 @@ export function ProfilePage() {
                     onCropComplete={handleCropComplete}
                   />
                 </div>
-
-                <div className="flex flex-col gap-3 md:flex-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Zoom</label>
-                  <input
-                    type="range"
-                    min={1}
-                    max={3}
-                    step={0.01}
-                    value={zoom}
-                    onChange={(e) => setZoom(Number(e.target.value))}
-                    className="w-full accent-primary"
-                  />
+                <div className="flex min-w-0 flex-1 flex-col gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Оновлення фото</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Піджени кадрування і збережи новий аватар.</div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Zoom</label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.01}
+                      value={zoom}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9"
-                      onClick={handleCropCancel}
-                      disabled={avatarUploading}
-                    >
+                    <Button type="button" variant="outline" className="h-10" onClick={handleCropCancel} disabled={avatarUploading}>
                       Скасувати
                     </Button>
-                    <Button
-                      type="button"
-                      className="h-9"
-                      onClick={handleCropSave}
-                      disabled={avatarUploading || !croppedAreaPixels}
-                    >
+                    <Button type="button" className="h-10" onClick={handleCropSave} disabled={avatarUploading || !croppedAreaPixels}>
                       {avatarUploading ? "Завантажую..." : "Застосувати"}
                     </Button>
                   </div>
@@ -569,109 +641,150 @@ export function ProfilePage() {
             </div>
           ) : null}
 
-          <Separator className="my-8" />
-
-          {/* Form Grid */}
-          <div className="grid gap-8 md:grid-cols-[250px_1fr]">
-            
-            {/* Section Title */}
-            <div>
-               <h3 className="text-lg font-semibold text-foreground">Особисті дані</h3>
-               <p className="text-sm text-muted-foreground mt-1">Інформація, яку бачать інші учасники команди.</p>
-            </div>
-
-            {/* Inputs */}
-            <div className="space-y-5 max-w-lg">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  Імʼя
-                </label>
-                <Input 
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Введи імʼя"
-                />
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+            <div className="space-y-6">
+              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+                <div className="mb-5">
+                  <div className="text-lg font-semibold text-foreground">Особисті дані</div>
+                  <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Імʼя</label>
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Введи імʼя" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Прізвище</label>
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Введи прізвище" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Дата народження</label>
+                    <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Телефон</label>
+                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-foreground">Email</label>
+                    <Input value={email} disabled />
+                    <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid gap-2">
-                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  Прізвище
-                </label>
-                <Input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Введи прізвище"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  Дата народження
-                </label>
-                <Input
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
-                  <Mail className="w-4 h-4 text-muted-foreground" />
-                  Email
-                </label>
-                <Input 
-                  value={email}
-                  disabled
-                />
-                <p className="text-[11px] text-muted-foreground px-1">
-                  Змінити email можна лише через звернення до адміністратора.
-                </p>
+              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+                <div className="mb-5">
+                  <div className="text-lg font-semibold text-foreground">Безпека</div>
+                  <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Пароль</label>
+                    <Input disabled value="••••••••••••••" type="password" />
+                  </div>
+                  <Button asChild variant="outline" className="h-10 min-w-[140px]">
+                    <Link to="/reset-password">Змінити</Link>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <Separator className="my-8" />
+            <div className="space-y-6">
+              <div className="rounded-[var(--radius-inner)] border border-border bg-muted/20 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-lg font-semibold text-foreground">Робота в компанії</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Стаж, статус роботи і поточний стан співпраці.</div>
+                  </div>
+                  <div className="rounded-full border border-border bg-background p-2.5 text-muted-foreground">
+                    <BriefcaseBusiness className="h-4 w-4" />
+                  </div>
+                </div>
 
-          {/* Security Section */}
-          <div className="grid gap-8 md:grid-cols-[250px_1fr]">
-            <div>
-               <h3 className="text-lg font-semibold text-foreground">Безпека</h3>
-               <p className="text-sm text-muted-foreground mt-1">Оновлення пароля та захист акаунту.</p>
-            </div>
+                <div className="mt-5 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Дата старту</div>
+                      <div className="mt-1.5 text-base font-semibold text-foreground">
+                        {startDate ? formatEmploymentDate(startDate) : "Поки не вказано"}
+                      </div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Стаж</div>
+                      <div className="mt-1.5 text-base font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {employmentDays !== null && employmentDays >= 0 ? `${employmentDays} днів у компанії` : "Потрібна дата початку"}
+                      </div>
+                    </div>
+                  </div>
 
-            <div className="space-y-5 max-w-lg">
-               <div className="grid gap-2">
-                <label className="text-sm font-medium flex items-center gap-2 text-foreground/80">
-                  <Lock className="w-4 h-4 text-muted-foreground" />
-                  Пароль
-                </label>
-                <div className="flex gap-3">
-                   <div className="relative w-full">
-                     <Input 
-                        disabled 
-                        value="••••••••••••••" 
-                        type="password"
-                     />
-                   </div>
-                   <Button asChild variant="outline" className="h-10">
-                     <Link to="/reset-password">Змінити</Link>
-                   </Button>
+                  <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">
+                          {resolvedEmploymentStatus === "probation" ? "Випробувальний термін" : "Статус роботи"}
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">{employmentHeadline}</div>
+                      </div>
+                      <div className="rounded-full border border-border bg-muted/30 p-2 text-muted-foreground">
+                        <Hourglass className="h-4 w-4" />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", employmentStatusTone)}>
+                        {getEmploymentStatusLabel(resolvedEmploymentStatus)}
+                      </span>
+                    </div>
+
+                    {resolvedEmploymentStatus === "probation" && probation ? (
+                      <>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-muted-foreground">{probation.statusLabel}</span>
+                          <span className="text-xs text-muted-foreground">{probation.progress}%</span>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/50">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-[width]",
+                              probation.status === "completed"
+                                ? "bg-emerald-500"
+                                : probation.status === "active"
+                                ? "bg-amber-500"
+                                : "bg-muted-foreground/40"
+                            )}
+                            style={{ width: `${probation.progress}%` }}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+
+                    <div
+                      className={cn(
+                        "mt-4 rounded-[var(--radius)] border px-3 py-3 text-sm",
+                        resolvedEmploymentStatus === "active"
+                          ? "border-emerald-500/15 bg-emerald-500/5 text-foreground"
+                          : resolvedEmploymentStatus === "inactive"
+                          ? "border-border/70 bg-muted/20 text-foreground"
+                          : resolvedEmploymentStatus === "rejected"
+                          ? "border-rose-500/15 bg-rose-500/5 text-foreground"
+                          : "border-amber-500/15 bg-amber-500/5 text-foreground"
+                      )}
+                    >
+                      {employmentDescription}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          
-          {/* Mobile Save Button */}
-          <div className="mt-8 sm:hidden">
-            <Button onClick={updateProfile} disabled={updating} className="w-full h-11 text-base">
+
+          <div className="sm:hidden">
+            <Button onClick={updateProfile} disabled={updating} className="h-11 w-full text-base">
               {updating ? "Зберігаю..." : "Зберегти зміни"}
             </Button>
           </div>
-
         </div>
       </div>
     </div>

@@ -528,11 +528,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!normalizedUserId) return DEFAULT_MANAGER_RATE;
 
     try {
+      const workspaceId = await resolveWorkspaceId(normalizedUserId);
+      if (!workspaceId) return DEFAULT_MANAGER_RATE;
+
       const { data, error } = await supabase
         .schema("tosho")
         .from("team_member_manager_rates")
         .select("manager_rate")
-        .eq("workspace_id", teamId)
+        .eq("workspace_id", workspaceId)
         .eq("user_id", normalizedUserId)
         .maybeSingle<{ manager_rate?: number | null }>();
 
@@ -548,7 +551,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       console.error("Failed to load manager rate", error);
       return DEFAULT_MANAGER_RATE;
     }
-  }, [teamId]);
+  }, []);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
@@ -1639,7 +1642,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (itemError) throw itemError;
 
         if (normalizedRuns.length > 0) {
-          const creatorManagerRate = await getManagerRateForUser(userId);
+          const managerRate = await getManagerRateForUser(data.managerId?.trim() || userId);
           const runRows = normalizedRuns.map((run) => ({
             id: crypto.randomUUID(),
             quote_id: created.id,
@@ -1649,7 +1652,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             unit_price_print: 0,
             logistics_cost: 0,
             desired_manager_income: 0,
-            manager_rate: creatorManagerRate,
+            manager_rate: managerRate,
             fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
             vat_rate: DEFAULT_VAT_RATE,
             team_id: teamId,
@@ -3415,7 +3418,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (deleteRunsError) throw deleteRunsError;
 
         if (normalizedRuns.length > 0) {
-          const creatorManagerRate = await getManagerRateForUser(editTarget.created_by ?? currentUserId ?? userId);
+          const managerRate = await getManagerRateForUser(
+            data.managerId?.trim() ||
+              editTarget.assigned_to ||
+              editTarget.created_by ||
+              currentUserId ||
+              userId
+          );
           await upsertQuoteRuns(
             editTarget.id,
             normalizedRuns.map((run) => ({
@@ -3427,7 +3436,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               unit_price_print: 0,
               logistics_cost: 0,
               desired_manager_income: 0,
-              manager_rate: creatorManagerRate,
+              manager_rate: managerRate,
               fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
               vat_rate: DEFAULT_VAT_RATE,
             }))

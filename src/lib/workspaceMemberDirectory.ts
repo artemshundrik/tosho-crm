@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -23,6 +24,11 @@ export type WorkspaceMemberDirectoryRow = {
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
   startDate: string;
   probationEndDate: string;
+  employmentStatus: EmploymentStatus;
+  probationReviewNotifiedAt: string;
+  probationReviewedAt: string;
+  probationReviewedBy: string;
+  probationExtensionCount: number;
   managerUserId: string;
   moduleAccess: Record<string, boolean>;
 };
@@ -48,6 +54,11 @@ type DirectoryViewRow = {
   availability_status?: string | null;
   start_date?: string | null;
   probation_end_date?: string | null;
+  employment_status?: string | null;
+  probation_review_notified_at?: string | null;
+  probation_reviewed_at?: string | null;
+  probation_reviewed_by?: string | null;
+  probation_extension_count?: number | null;
   manager_user_id?: string | null;
   module_access?: unknown;
 };
@@ -75,6 +86,11 @@ type TeamProfileRow = {
   availability_status?: string | null;
   start_date?: string | null;
   probation_end_date?: string | null;
+  employment_status?: string | null;
+  probation_review_notified_at?: string | null;
+  probation_reviewed_at?: string | null;
+  probation_reviewed_by?: string | null;
+  probation_extension_count?: number | null;
   manager_user_id?: string | null;
   module_access?: unknown;
 };
@@ -92,6 +108,11 @@ type UpsertWorkspaceMemberProfileInput = {
   availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
   startDate?: string | null;
   probationEndDate?: string | null;
+  employmentStatus?: EmploymentStatus | null;
+  probationReviewNotifiedAt?: string | null;
+  probationReviewedAt?: string | null;
+  probationReviewedBy?: string | null;
+  probationExtensionCount?: number | null;
   managerUserId?: string | null;
   moduleAccess?: Record<string, boolean> | null;
   updatedBy?: string | null;
@@ -160,6 +181,11 @@ function buildRow(input: {
   availabilityStatus?: string | null;
   startDate?: string | null;
   probationEndDate?: string | null;
+  employmentStatus?: string | null;
+  probationReviewNotifiedAt?: string | null;
+  probationReviewedAt?: string | null;
+  probationReviewedBy?: string | null;
+  probationExtensionCount?: number | null;
   managerUserId?: string | null;
   moduleAccess?: unknown;
 }): WorkspaceMemberDirectoryRow {
@@ -199,6 +225,11 @@ function buildRow(input: {
     availabilityStatus: normalizeAvailabilityStatus(input.availabilityStatus),
     startDate: input.startDate?.trim() || "",
     probationEndDate: input.probationEndDate?.trim() || "",
+    employmentStatus: normalizeEmploymentStatus(input.employmentStatus, input.probationEndDate),
+    probationReviewNotifiedAt: input.probationReviewNotifiedAt?.trim() || "",
+    probationReviewedAt: input.probationReviewedAt?.trim() || "",
+    probationReviewedBy: input.probationReviewedBy?.trim() || "",
+    probationExtensionCount: Math.max(0, Number(input.probationExtensionCount) || 0),
     managerUserId: input.managerUserId?.trim() || "",
     moduleAccess: normalizeModuleAccess(input.moduleAccess),
   };
@@ -209,7 +240,7 @@ async function listFromUnifiedView(workspaceId: string) {
     .schema("tosho")
     .from("workspace_member_directory")
     .select(
-      "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access"
+      "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access"
     )
     .eq("workspace_id", workspaceId);
 
@@ -232,6 +263,11 @@ async function listFromUnifiedView(workspaceId: string) {
       availabilityStatus: row.availability_status ?? null,
       startDate: row.start_date ?? null,
       probationEndDate: row.probation_end_date ?? null,
+      employmentStatus: row.employment_status ?? null,
+      probationReviewNotifiedAt: row.probation_review_notified_at ?? null,
+      probationReviewedAt: row.probation_reviewed_at ?? null,
+      probationReviewedBy: row.probation_reviewed_by ?? null,
+      probationExtensionCount: row.probation_extension_count ?? null,
       managerUserId: row.manager_user_id ?? null,
       moduleAccess: row.module_access,
     })
@@ -270,9 +306,9 @@ async function listFromFallback(workspaceId: string) {
   let teamProfileError: unknown = null;
 
   const teamProfileVariants = [
-    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,avatar_path,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
-    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
-    "workspace_id,user_id,first_name,last_name,full_name,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
+    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,avatar_path,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
+    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
+    "workspace_id,user_id,first_name,last_name,full_name,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
     "workspace_id,user_id,first_name,last_name,full_name,birth_date,phone",
   ];
 
@@ -315,6 +351,11 @@ async function listFromFallback(workspaceId: string) {
       availabilityStatus: profile?.availability_status ?? null,
       startDate: profile?.start_date ?? null,
       probationEndDate: profile?.probation_end_date ?? null,
+      employmentStatus: profile?.employment_status ?? null,
+      probationReviewNotifiedAt: profile?.probation_review_notified_at ?? null,
+      probationReviewedAt: profile?.probation_reviewed_at ?? null,
+      probationReviewedBy: profile?.probation_reviewed_by ?? null,
+      probationExtensionCount: profile?.probation_extension_count ?? null,
       managerUserId: profile?.manager_user_id ?? null,
       moduleAccess: profile?.module_access,
     });
@@ -346,6 +387,11 @@ async function listFromFallback(workspaceId: string) {
           availabilityStatus: currentUserRow.availabilityStatus,
           startDate: currentUserRow.startDate,
           probationEndDate: currentUserRow.probationEndDate,
+          employmentStatus: currentUserRow.employmentStatus,
+          probationReviewNotifiedAt: currentUserRow.probationReviewNotifiedAt,
+          probationReviewedAt: currentUserRow.probationReviewedAt,
+          probationReviewedBy: currentUserRow.probationReviewedBy,
+          probationExtensionCount: currentUserRow.probationExtensionCount,
           managerUserId: currentUserRow.managerUserId,
           moduleAccess: currentUserRow.moduleAccess,
         });
@@ -400,19 +446,29 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
   const payload = {
     workspace_id: input.workspaceId,
     user_id: input.userId,
-    first_name: input.firstName?.trim() || null,
-    last_name: input.lastName?.trim() || null,
-    full_name: input.fullName?.trim() || null,
-    avatar_url: input.avatarUrl?.trim() || null,
-    avatar_path: input.avatarPath?.trim() || null,
-    birth_date: input.birthDate?.trim() || null,
-    phone: input.phone?.trim() || null,
-    availability_status: input.availabilityStatus?.trim() || "available",
-    start_date: input.startDate?.trim() || null,
-    probation_end_date: input.probationEndDate?.trim() || null,
-    manager_user_id: input.managerUserId?.trim() || null,
-    module_access: input.moduleAccess ?? DEFAULT_MODULE_ACCESS,
-    updated_by: input.updatedBy?.trim() || null,
+    first_name: input.firstName === undefined ? undefined : input.firstName?.trim() || null,
+    last_name: input.lastName === undefined ? undefined : input.lastName?.trim() || null,
+    full_name: input.fullName === undefined ? undefined : input.fullName?.trim() || null,
+    avatar_url: input.avatarUrl === undefined ? undefined : input.avatarUrl?.trim() || null,
+    avatar_path: input.avatarPath === undefined ? undefined : input.avatarPath?.trim() || null,
+    birth_date: input.birthDate === undefined ? undefined : input.birthDate?.trim() || null,
+    phone: input.phone === undefined ? undefined : input.phone?.trim() || null,
+    availability_status:
+      input.availabilityStatus === undefined ? undefined : input.availabilityStatus?.trim() || "available",
+    start_date: input.startDate === undefined ? undefined : input.startDate?.trim() || null,
+    probation_end_date: input.probationEndDate === undefined ? undefined : input.probationEndDate?.trim() || null,
+    employment_status: input.employmentStatus === undefined ? undefined : input.employmentStatus?.trim() || null,
+    probation_review_notified_at:
+      input.probationReviewNotifiedAt === undefined ? undefined : input.probationReviewNotifiedAt?.trim() || null,
+    probation_reviewed_at:
+      input.probationReviewedAt === undefined ? undefined : input.probationReviewedAt?.trim() || null,
+    probation_reviewed_by:
+      input.probationReviewedBy === undefined ? undefined : input.probationReviewedBy?.trim() || null,
+    probation_extension_count:
+      input.probationExtensionCount === undefined ? undefined : input.probationExtensionCount ?? 0,
+    manager_user_id: input.managerUserId === undefined ? undefined : input.managerUserId?.trim() || null,
+    module_access: input.moduleAccess === undefined ? undefined : input.moduleAccess ?? DEFAULT_MODULE_ACCESS,
+    updated_by: input.updatedBy === undefined ? undefined : input.updatedBy?.trim() || null,
   };
 
   const variants = [
@@ -432,6 +488,11 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
       availability_status: payload.availability_status,
       start_date: payload.start_date,
       probation_end_date: payload.probation_end_date,
+      employment_status: payload.employment_status,
+      probation_review_notified_at: payload.probation_review_notified_at,
+      probation_reviewed_at: payload.probation_reviewed_at,
+      probation_reviewed_by: payload.probation_reviewed_by,
+      probation_extension_count: payload.probation_extension_count,
       manager_user_id: payload.manager_user_id,
       module_access: payload.module_access,
       updated_by: payload.updated_by,

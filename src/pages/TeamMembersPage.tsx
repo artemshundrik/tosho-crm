@@ -71,8 +71,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
+import {
+  addMonthsToDateOnly,
+  getEmploymentStatusLabel,
+  formatEmploymentDate,
+  formatEmploymentDuration,
+  getEmploymentDurationDays,
+  isProbationReviewDue,
+  normalizeEmploymentStatus,
+  getProbationSummary,
+  type EmploymentStatus,
+} from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import {
   listWorkspaceMemberDirectory,
   upsertWorkspaceMemberProfile,
@@ -103,6 +115,11 @@ type MemberProfileMeta = {
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
   startDate: string;
   probationEndDate: string;
+  employmentStatus: EmploymentStatus;
+  probationReviewNotifiedAt: string;
+  probationReviewedAt: string;
+  probationReviewedBy: string;
+  probationExtensionCount: number;
   managerUserId: string;
   moduleAccess: {
     overview: boolean;
@@ -255,6 +272,11 @@ const DEFAULT_MEMBER_META: MemberProfileMeta = {
   availabilityStatus: "available",
   startDate: "",
   probationEndDate: "",
+  employmentStatus: "active",
+  probationReviewNotifiedAt: "",
+  probationReviewedAt: "",
+  probationReviewedBy: "",
+  probationExtensionCount: 0,
   managerUserId: "",
   moduleAccess: DEFAULT_MODULE_ACCESS,
 };
@@ -282,6 +304,10 @@ function getJobBadgeClass(role: string | null) {
   return "bg-muted/30 border-border text-muted-foreground";
 }
 
+function supportsManagerRate(role: string | null) {
+  return ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes((role ?? "").toLowerCase());
+}
+
 function getAvailabilityLabel(value: MemberProfileMeta["availabilityStatus"]) {
   return AVAILABILITY_OPTIONS.find((option) => option.value === value)?.label ?? "Доступний";
 }
@@ -303,6 +329,19 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
   };
+}
+
+function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
+  if (status === "completed") return "bg-success-soft text-success-foreground border-success-soft-border";
+  if (status === "active") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
+  return "bg-muted text-muted-foreground border-border";
+}
+
+function getEmploymentStatusBadgeClass(status: EmploymentStatus) {
+  if (status === "rejected") return "bg-danger-soft text-danger-foreground border-danger-soft-border";
+  if (status === "inactive") return "bg-muted text-muted-foreground border-border";
+  if (status === "probation") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
+  return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
 function getRangeStartIso(range: "day" | "week" | "month") {
@@ -444,6 +483,10 @@ export function TeamMembersPage() {
   const [editProfileModuleAccess, setEditProfileModuleAccess] =
     useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
   const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [probationActionBusy, setProbationActionBusy] = useState<"active" | "rejected" | "extend" | null>(null);
+  const [pendingProbationDecision, setPendingProbationDecision] = useState<"rejected" | null>(null);
+  const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
+  const [pendingEmploymentDecision, setPendingEmploymentDecision] = useState<"inactive" | null>(null);
   const [workspaceFunctionAvailable, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -463,6 +506,16 @@ export function TeamMembersPage() {
   const canManage = isSuperAdmin || isAdmin;
   const canManageManagerRates = isSuperAdmin || isSeo;
   const canOpenProfileCard = canManage || canManageManagerRates;
+
+  useEffect(() => {
+    const memberId = params.get("member")?.trim();
+    if (!memberId || !canOpenProfileCard || members.length === 0) return;
+    if (editProfileMember?.user_id === memberId) return;
+    const member = members.find((entry) => entry.user_id === memberId);
+    if (!member) return;
+    setActiveTab("members");
+    openEditProfileDialog(member);
+  }, [canOpenProfileCard, editProfileMember?.user_id, members, params]);
 
   useEffect(() => {
     let cancelled = false;
@@ -698,6 +751,11 @@ export function TeamMembersPage() {
             availabilityStatus: row.availabilityStatus,
             startDate: row.startDate,
             probationEndDate: row.probationEndDate,
+            employmentStatus: row.employmentStatus,
+            probationReviewNotifiedAt: row.probationReviewNotifiedAt,
+            probationReviewedAt: row.probationReviewedAt,
+            probationReviewedBy: row.probationReviewedBy,
+            probationExtensionCount: row.probationExtensionCount,
             managerUserId: row.managerUserId,
             moduleAccess: normalizeModuleAccess(row.moduleAccess),
           };
@@ -990,11 +1048,7 @@ export function TeamMembersPage() {
 
   const formatBirthDate = (dateStr?: string | null) => {
     if (!dateStr) return "Не вказано";
-    return new Date(dateStr).toLocaleDateString("uk-UA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatEmploymentDate(dateStr);
   };
 
   const formatRelativeTime = (dateStr?: string | null) => {
@@ -1024,12 +1078,40 @@ export function TeamMembersPage() {
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
     "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
+  const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
+  const selectedEmploymentDays = getEmploymentDurationDays(editProfileStartDate);
+  const selectedProbation = getProbationSummary(editProfileStartDate, editProfileProbationEndDate);
+  const selectedEmploymentStatus = normalizeEmploymentStatus(
+    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
+    editProfileProbationEndDate
+  );
+  const shouldShowManagerRateField =
+    canManageManagerRates && supportsManagerRate(editProfileMember?.job_role ?? null);
+  const shouldShowProbationSection =
+    selectedEmploymentStatus === "probation" || selectedEmploymentStatus === "rejected";
+  const selectedProbationReviewDue = isProbationReviewDue(
+    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
+    editProfileProbationEndDate
+  );
+  const canApproveProbationNow = selectedEmploymentStatus === "probation";
+  const canRejectProbationNow = selectedEmploymentStatus === "probation";
+  const canExtendProbationNow = selectedEmploymentStatus === "probation" && selectedProbationReviewDue;
+  const canDeactivateEmployment = selectedEmploymentStatus === "active";
+  const canReactivateEmployment = selectedEmploymentStatus === "inactive";
 
   const isExpired = (dateStr: string) => new Date(dateStr) < new Date();
 
   const handleTabChange = (next: "members" | "invites" | "activity") => {
     setActiveTab(next);
     setParams(next === "members" ? {} : { tab: next });
+  };
+
+  const closeEditProfileDialog = () => {
+    setEditProfileMember(null);
+    const nextParams = new URLSearchParams(params);
+    nextParams.delete("member");
+    nextParams.delete("review");
+    setParams(nextParams);
   };
 
   const openEditProfileDialog = (member: Member) => {
@@ -1052,6 +1134,7 @@ export function TeamMembersPage() {
 
     setEditProfileBusy(true);
     try {
+      const currentMeta = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
       const firstName = editProfileFirstName.trim();
       const lastName = editProfileLastName.trim();
       const fullName = `${firstName} ${lastName}`.trim();
@@ -1063,6 +1146,25 @@ export function TeamMembersPage() {
       const probationEndDate = editProfileProbationEndDate.trim();
       const managerUserId = editProfileManagerUserId.trim();
       const moduleAccess = editProfileModuleAccess;
+      const currentEmploymentStatus = normalizeEmploymentStatus(currentMeta.employmentStatus, currentMeta.probationEndDate);
+      const nextEmploymentStatus =
+        currentEmploymentStatus === "rejected" || currentEmploymentStatus === "inactive"
+          ? currentEmploymentStatus
+          : probationEndDate
+          ? "probation"
+          : "active";
+      const probationDatesChanged = currentMeta.probationEndDate !== probationEndDate;
+      const probationReviewNotifiedAt =
+        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewNotifiedAt;
+      const probationReviewedAt =
+        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewedAt;
+      const probationReviewedBy =
+        nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewedBy;
+      const probationExtensionCount = currentMeta.probationExtensionCount ?? 0;
+
+      if (startDate && probationEndDate && new Date(`${probationEndDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
+        throw new Error("Кінець випробувального не може бути раніше дати старту");
+      }
 
       if (canManage) {
         try {
@@ -1080,6 +1182,11 @@ export function TeamMembersPage() {
             availabilityStatus,
             startDate,
             probationEndDate,
+            employmentStatus: nextEmploymentStatus,
+            probationReviewNotifiedAt,
+            probationReviewedAt,
+            probationReviewedBy,
+            probationExtensionCount,
             managerUserId,
             moduleAccess,
             updatedBy: currentUserId ?? null,
@@ -1109,6 +1216,7 @@ export function TeamMembersPage() {
               availabilityStatus,
               startDate,
               probationEndDate,
+              employmentStatus: nextEmploymentStatus,
               managerUserId,
               moduleAccess,
             }),
@@ -1156,6 +1264,11 @@ export function TeamMembersPage() {
           availabilityStatus,
           startDate,
           probationEndDate,
+          employmentStatus: nextEmploymentStatus,
+          probationReviewNotifiedAt,
+          probationReviewedAt,
+          probationReviewedBy,
+          probationExtensionCount,
           managerUserId,
           moduleAccess,
         },
@@ -1172,11 +1285,137 @@ export function TeamMembersPage() {
       );
 
       toast.success(canManage ? "Профіль учасника оновлено" : "Відсоток менеджера оновлено");
-      setEditProfileMember(null);
+      closeEditProfileDialog();
     } catch (error: unknown) {
       toast.error("Не вдалося оновити профіль", { description: getErrorMessage(error) });
     } finally {
       setEditProfileBusy(false);
+    }
+  };
+
+  const applyProbationDecision = async (decision: "active" | "rejected" | "extend") => {
+    if (!editProfileMember || !workspaceId) return;
+
+    setProbationActionBusy(decision);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+
+      const response = await fetch("/.netlify/functions/team-member-probation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: editProfileMember.user_id,
+          decision,
+        }),
+      });
+
+      const payload = await parseJsonSafe<{
+        error?: string;
+        profile?: Partial<MemberProfileMeta>;
+      }>(response);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || `Не вдалося оновити випробувальний термін (HTTP ${response.status})`);
+      }
+
+      const current = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
+      const nextMeta: MemberProfileMeta = {
+        ...current,
+        ...payload?.profile,
+        employmentStatus: normalizeEmploymentStatus(payload?.profile?.employmentStatus, payload?.profile?.probationEndDate),
+        probationReviewNotifiedAt: payload?.profile?.probationReviewNotifiedAt ?? current.probationReviewNotifiedAt,
+        probationReviewedAt: payload?.profile?.probationReviewedAt ?? current.probationReviewedAt,
+        probationReviewedBy: payload?.profile?.probationReviewedBy ?? current.probationReviewedBy,
+        probationExtensionCount: payload?.profile?.probationExtensionCount ?? current.probationExtensionCount,
+      };
+
+      setMemberMetaByUserId((prev) => ({
+        ...prev,
+        [editProfileMember.user_id]: nextMeta,
+      }));
+      setEditProfileStartDate(nextMeta.startDate);
+      setEditProfileProbationEndDate(nextMeta.probationEndDate);
+
+      toast.success(
+        decision === "active"
+          ? "Співробітника переведено в штат"
+          : decision === "extend"
+          ? "Випробувальний термін продовжено"
+          : "Рішення по випробувальному збережено"
+      );
+      setPendingProbationDecision(null);
+    } catch (error: unknown) {
+      toast.error("Не вдалося оновити випробувальний термін", { description: getErrorMessage(error) });
+    } finally {
+      setProbationActionBusy(null);
+    }
+  };
+
+  const requestProbationRejection = () => {
+    if (!canRejectProbationNow) return;
+    setPendingProbationDecision("rejected");
+  };
+
+  const applyEmploymentDecision = async (decision: "inactive" | "reactivate") => {
+    if (!editProfileMember || !workspaceId) return;
+
+    setEmploymentActionBusy(decision);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+
+      const response = await fetch("/.netlify/functions/team-member-employment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: editProfileMember.user_id,
+          decision,
+        }),
+      });
+
+      const payload = await parseJsonSafe<{
+        error?: string;
+        profile?: Partial<MemberProfileMeta>;
+      }>(response);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || `Не вдалося оновити статус співпраці (HTTP ${response.status})`);
+      }
+
+      const current = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
+      const nextMeta: MemberProfileMeta = {
+        ...current,
+        ...payload?.profile,
+        employmentStatus: normalizeEmploymentStatus(payload?.profile?.employmentStatus, payload?.profile?.probationEndDate),
+        probationReviewNotifiedAt: payload?.profile?.probationReviewNotifiedAt ?? current.probationReviewNotifiedAt,
+        probationReviewedAt: payload?.profile?.probationReviewedAt ?? current.probationReviewedAt,
+        probationReviewedBy: payload?.profile?.probationReviewedBy ?? current.probationReviewedBy,
+        probationExtensionCount: payload?.profile?.probationExtensionCount ?? current.probationExtensionCount,
+      };
+
+      setMemberMetaByUserId((prev) => ({
+        ...prev,
+        [editProfileMember.user_id]: nextMeta,
+      }));
+      setEditProfileProbationEndDate(nextMeta.probationEndDate);
+
+      toast.success(
+        decision === "inactive" ? "Співпрацю завершено" : "Співробітника повернуто в штат"
+      );
+      setPendingEmploymentDecision(null);
+    } catch (error: unknown) {
+      toast.error("Не вдалося оновити статус співпраці", { description: getErrorMessage(error) });
+    } finally {
+      setEmploymentActionBusy(null);
     }
   };
 
@@ -1332,6 +1571,11 @@ export function TeamMembersPage() {
           availabilityStatus: status,
           startDate: currentMeta.startDate,
           probationEndDate: currentMeta.probationEndDate,
+          employmentStatus: currentMeta.employmentStatus,
+          probationReviewNotifiedAt: currentMeta.probationReviewNotifiedAt,
+          probationReviewedAt: currentMeta.probationReviewedAt,
+          probationReviewedBy: currentMeta.probationReviewedBy,
+          probationExtensionCount: currentMeta.probationExtensionCount,
           managerUserId: currentMeta.managerUserId,
           moduleAccess: currentMeta.moduleAccess,
           updatedBy: currentUserId ?? null,
@@ -1361,6 +1605,7 @@ export function TeamMembersPage() {
             availabilityStatus: status,
             startDate: currentMeta.startDate,
             probationEndDate: currentMeta.probationEndDate,
+            employmentStatus: currentMeta.employmentStatus,
             managerUserId: currentMeta.managerUserId,
             moduleAccess: currentMeta.moduleAccess,
           }),
@@ -1958,6 +2203,9 @@ export function TeamMembersPage() {
                 const meta = memberMetaByUserId[m.user_id];
                 const availability = meta?.availabilityStatus ?? "available";
                 const presence = memberPresenceByUserId[m.user_id];
+                const employmentDuration = formatEmploymentDuration(meta?.startDate);
+                const employmentDays = getEmploymentDurationDays(meta?.startDate);
+                const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
                 const displayName = getMemberDisplayName(m);
                 const initials = getInitialsFromName(displayName, m.email ?? null);
                 return (
@@ -2083,7 +2331,38 @@ export function TeamMembersPage() {
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground">
                       <div>Народження: {formatBirthDate(meta?.birthDate)}</div>
-                      <div>Приєднався: {formatDate(m.created_at)}</div>
+                      <div>Почав роботу: {meta?.startDate ? formatEmploymentDate(meta.startDate) : "Не вказано"}</div>
+                      <div>Стаж: {employmentDuration || "Не вказано"}</div>
+                      {employmentDays !== null && employmentDays >= 0 ? <div>У компанії: {employmentDays} днів</div> : null}
+                      {probation ? (
+                        <div className="rounded-[var(--radius)] border border-border/70 bg-muted/30 px-2.5 py-2 text-foreground">
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                                getProbationBadgeClass(probation.status)
+                              )}
+                            >
+                              Випробувальний: {probation.statusLabel}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{probation.progress}%</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                            <div
+                              className={cn(
+                                "h-full rounded-full",
+                                probation.status === "completed"
+                                  ? "bg-emerald-500"
+                                  : probation.status === "active"
+                                  ? "bg-amber-500"
+                                  : "bg-muted-foreground/40"
+                              )}
+                              style={{ width: `${probation.progress}%` }}
+                            />
+                          </div>
+                          <div className="mt-2 text-[11px] text-muted-foreground">{probation.caption}</div>
+                        </div>
+                      ) : null}
                       <div>{presence?.online ? "Зараз онлайн" : formatRelativeTime(presence?.lastSeenAt)}</div>
                     </div>
                   </Card>
@@ -2102,7 +2381,7 @@ export function TeamMembersPage() {
                   <TableTextHeaderCell>Роль / Посада</TableTextHeaderCell>
                   <TableTextHeaderCell>Статус</TableTextHeaderCell>
                   <TableTextHeaderCell>Дата народження</TableTextHeaderCell>
-                  <TableTextHeaderCell>Приєднався</TableTextHeaderCell>
+                  <TableTextHeaderCell>Робота / Випробувальний</TableTextHeaderCell>
                   <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
@@ -2117,10 +2396,21 @@ export function TeamMembersPage() {
                     const meta = memberMetaByUserId[m.user_id];
                     const availability = meta?.availabilityStatus ?? "available";
                     const presence = memberPresenceByUserId[m.user_id];
+                    const employmentDuration = formatEmploymentDuration(meta?.startDate);
+                    const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
                     const displayName = getMemberDisplayName(m);
                     const initials = getInitialsFromName(displayName, m.email ?? null);
                     return (
-                      <TableRow key={m.user_id} className="hover:bg-muted/40 transition-colors group">
+                      <TableRow
+                        key={m.user_id}
+                        className={cn(
+                          "transition-colors group",
+                          canOpenProfileCard ? "cursor-pointer hover:bg-muted/40" : "hover:bg-muted/40"
+                        )}
+                        onClick={() => {
+                          if (canOpenProfileCard) openEditProfileDialog(m);
+                        }}
+                      >
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
                             <div className="relative shrink-0">
@@ -2176,28 +2466,30 @@ export function TeamMembersPage() {
                         <TableCell>
                           <div className="flex flex-col gap-1.5">
                             {canManage ? (
-                              <AppDropdown
-                                align="start"
-                                contentClassName="w-44"
-                                trigger={
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      "px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit cursor-pointer transition-opacity hover:opacity-80",
-                                      getAvailabilityBadgeClass(availability)
-                                    )}
-                                  >
-                                    {getAvailabilityLabel(availability)}
-                                  </Badge>
-                                }
-                                items={AVAILABILITY_OPTIONS.map((option) => ({
-                                  label:
-                                    option.value === availability
-                                      ? `• ${option.label}`
-                                      : option.label,
-                                  onSelect: () => void updateAvailabilityStatus(m, option.value),
-                                }))}
-                              />
+                              <div onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                                <AppDropdown
+                                  align="start"
+                                  contentClassName="w-44"
+                                  trigger={
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit cursor-pointer transition-opacity hover:opacity-80",
+                                        getAvailabilityBadgeClass(availability)
+                                      )}
+                                    >
+                                      {getAvailabilityLabel(availability)}
+                                    </Badge>
+                                  }
+                                  items={AVAILABILITY_OPTIONS.map((option) => ({
+                                    label:
+                                      option.value === availability
+                                        ? `• ${option.label}`
+                                        : option.label,
+                                    onSelect: () => void updateAvailabilityStatus(m, option.value),
+                                  }))}
+                                />
+                              </div>
                             ) : (
                               <Badge
                                 variant="outline"
@@ -2218,12 +2510,53 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="w-3.5 h-3.5 opacity-70" />
-                            <span>{formatDate(m.created_at)}</span>
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                              <Calendar className="w-3.5 h-3.5 opacity-70" />
+                              <span>{meta?.startDate ? formatEmploymentDate(meta.startDate) : "Старт не вказано"}</span>
+                              <Activity className="h-3.5 w-3.5 opacity-70" />
+                              <span>{employmentDuration || "Стаж не розраховано"}</span>
+                            </div>
+                            {probation ? (
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "h-7 px-2.5 py-0 text-[11px] rounded-[var(--radius)] shrink-0",
+                                    getProbationBadgeClass(probation.status)
+                                  )}
+                                >
+                                  {probation.statusLabel}
+                                </Badge>
+                                <div className="h-1.5 min-w-[72px] flex-1 max-w-[112px] overflow-hidden rounded-full bg-muted">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full",
+                                      probation.status === "completed"
+                                        ? "bg-emerald-500"
+                                        : probation.status === "active"
+                                        ? "bg-amber-500"
+                                        : "bg-muted-foreground/40"
+                                    )}
+                                    style={{ width: `${probation.progress}%` }}
+                                  />
+                                </div>
+                                <span className="min-w-[42px] whitespace-nowrap text-right">
+                                  {probation.status === "completed"
+                                    ? "Завершено"
+                                    : probation.daysLeft >= 0
+                                    ? `${probation.daysLeft} дн`
+                                    : `${Math.abs(probation.daysLeft)} дн тому`}
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
-                        <TableActionCell className="pr-6">
+                        <TableActionCell
+                          className="pr-6"
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                        >
                           <AppDropdown
                             align="end"
                             contentClassName="w-48"
@@ -2699,178 +3032,363 @@ export function TeamMembersPage() {
       <Dialog
         open={!!editProfileMember}
         onOpenChange={(open) => {
-          if (!open && !editProfileBusy) setEditProfileMember(null);
+          if (!open && !editProfileBusy) closeEditProfileDialog();
         }}
       >
-        <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground max-h-[90dvh] flex flex-col">
-          <div className="p-6 border-b border-border bg-muted/10 shrink-0">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[min(1180px,96vw)] !p-0 !gap-0 overflow-hidden border border-border bg-card text-foreground max-h-[94dvh] flex flex-col">
+          <div className="border-b border-border bg-muted/10 px-6 py-5 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Картка учасника</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
                 {canManage
                   ? "Редагування профілю учасника команди. Пароль змінюється тільки в його профілі."
-                  : "SEO може керувати тільки відсотком менеджера. Інші поля доступні лише для перегляду."}
+                  : "SEO може керувати відсотком менеджера та приймати рішення по випробувальному терміну. Інші поля доступні лише для перегляду."}
               </DialogDescription>
             </DialogHeader>
           </div>
-          <div className="p-6 space-y-6 overflow-y-auto">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground">Email</Label>
-              <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Імʼя</Label>
-                <Input
-                  value={editProfileFirstName}
-                  onChange={(event) => setEditProfileFirstName(event.target.value)}
-                  className="h-11"
-                  placeholder="Імʼя"
-                  disabled={!canManage}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Прізвище</Label>
-                <Input
-                  value={editProfileLastName}
-                  onChange={(event) => setEditProfileLastName(event.target.value)}
-                  className="h-11"
-                  placeholder="Прізвище"
-                  disabled={!canManage}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Дата народження</Label>
-                <Input
-                  type="date"
-                  value={editProfileBirthDate}
-                  onChange={(event) => setEditProfileBirthDate(event.target.value)}
-                  className="h-11"
-                  disabled={!canManage}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Телефон</Label>
-                <Input
-                  value={editProfilePhone}
-                  onChange={(event) => setEditProfilePhone(event.target.value)}
-                  className="h-11"
-                  placeholder="+380..."
-                  disabled={!canManage}
-                />
-              </div>
-            </div>
-            {canManageManagerRates ? (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">% менеджера</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editProfileManagerRate}
-                  onChange={(event) => setEditProfileManagerRate(event.target.value)}
-                  className="h-11"
-                  placeholder={String(DEFAULT_MANAGER_RATE)}
-                />
-              </div>
-            ) : null}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
-                <Select
-                  value={editProfileAvailabilityStatus}
-                  onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
-                  disabled={!canManage}
-                >
-                  <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                    {getAvailabilityLabel(editProfileAvailabilityStatus)}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AVAILABILITY_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+            <div className="px-6 py-5">
+            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.95fr)]">
+              <div className="min-w-0 space-y-6">
+                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-foreground">Email</Label>
+                    <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
+                  </div>
+                </div>
+                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                  <div className="mb-4 text-sm font-semibold text-foreground">Особисті дані</div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Імʼя</Label>
+                      <Input
+                        value={editProfileFirstName}
+                        onChange={(event) => setEditProfileFirstName(event.target.value)}
+                        className="h-11"
+                        placeholder="Імʼя"
+                        disabled={!canManage}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Прізвище</Label>
+                      <Input
+                        value={editProfileLastName}
+                        onChange={(event) => setEditProfileLastName(event.target.value)}
+                        className="h-11"
+                        placeholder="Прізвище"
+                        disabled={!canManage}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Дата народження</Label>
+                      <Input
+                        type="date"
+                        value={editProfileBirthDate}
+                        onChange={(event) => setEditProfileBirthDate(event.target.value)}
+                        className="h-11"
+                        disabled={!canManage}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Телефон</Label>
+                      <Input
+                        value={editProfilePhone}
+                        onChange={(event) => setEditProfilePhone(event.target.value)}
+                        className="h-11"
+                        placeholder="+380..."
+                        disabled={!canManage}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                  <div className="mb-4 text-sm font-semibold text-foreground">Робочі параметри</div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {shouldShowManagerRateField ? (
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label className="text-sm font-medium text-foreground">% менеджера</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={editProfileManagerRate}
+                          onChange={(event) => setEditProfileManagerRate(event.target.value)}
+                          className="h-11"
+                          placeholder={String(DEFAULT_MANAGER_RATE)}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
+                      <Select
+                        value={editProfileAvailabilityStatus}
+                        onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
+                        disabled={!canManage}
+                      >
+                        <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                          {getAvailabilityLabel(editProfileAvailabilityStatus)}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AVAILABILITY_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Менеджер</Label>
+                      <Select
+                        value={editProfileManagerUserId || "__none__"}
+                        onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
+                        disabled={!canManage}
+                      >
+                        <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Не обрано</SelectItem>
+                          {managerOptions
+                            .filter((option) => option.id !== editProfileMember?.user_id)
+                            .map((option) => (
+                              <SelectItem key={option.id} value={option.id}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Дата старту</Label>
+                      <Input
+                        type="date"
+                        value={editProfileStartDate}
+                        onChange={(event) => setEditProfileStartDate(event.target.value)}
+                        className="h-11"
+                        disabled={!canManage}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
+                      <Input
+                        type="date"
+                        value={editProfileProbationEndDate}
+                        onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
+                        className="h-11"
+                        disabled={!canManage}
+                      />
+                      {canManage ? (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-primary transition-opacity hover:opacity-80 disabled:text-muted-foreground"
+                          disabled={!editProfileStartDate}
+                          onClick={() => setEditProfileProbationEndDate(addMonthsToDateOnly(editProfileStartDate, 1))}
+                        >
+                          Поставити +1 місяць від дати старту
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                  <div className="mb-4 text-sm font-semibold text-foreground">Доступ до модулів</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
+                      <label
+                        key={key}
+                        className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
+                      >
+                        <Checkbox
+                          checked={editProfileModuleAccess[key]}
+                          disabled={!canManage}
+                          onCheckedChange={(checked) =>
+                            setEditProfileModuleAccess((prev) => ({
+                              ...prev,
+                              [key]: checked === true,
+                            }))
+                          }
+                        />
+                        <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
+                      </label>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Менеджер</Label>
-                <Select
-                  value={editProfileManagerUserId || "__none__"}
-                  onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
-                  disabled={!canManage}
-                >
-                  <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Не обрано</SelectItem>
-                    {managerOptions
-                      .filter((option) => option.id !== editProfileMember?.user_id)
-                      .map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+              <div className="min-w-0 space-y-4">
+                <div className={cn("grid gap-4", shouldShowProbationSection ? "sm:grid-cols-2 xl:grid-cols-1" : "grid-cols-1")}>
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                      Стаж роботи
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-foreground">
+                      {selectedEmploymentDuration || "Ще не задано"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {editProfileStartDate
+                        ? `${formatEmploymentDate(editProfileStartDate)}${selectedEmploymentDays !== null && selectedEmploymentDays >= 0 ? `, ${selectedEmploymentDays} днів у компанії` : ""}`
+                        : "Вкажи дату старту, щоб побачити стаж"}
+                    </div>
+                  </div>
+                  {shouldShowProbationSection ? (
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        Випробувальний
+                      </div>
+                      {selectedProbation ? (
+                        <>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "px-2 py-0.5 text-[11px] rounded-[var(--radius)]",
+                                getProbationBadgeClass(selectedProbation.status)
+                              )}
+                            >
+                              {selectedProbation.statusLabel}
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">{selectedProbation.progress}%</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                            <div
+                              className={cn(
+                                "h-full rounded-full",
+                                selectedProbation.status === "completed"
+                                  ? "bg-emerald-500"
+                                  : selectedProbation.status === "active"
+                                  ? "bg-amber-500"
+                                  : "bg-muted-foreground/40"
+                              )}
+                              style={{ width: `${selectedProbation.progress}%` }}
+                            />
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">{selectedProbation.caption}</div>
+                        </>
+                      ) : (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Вкажи дату завершення, щоб показати шкалу випробувального терміну.
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                {shouldShowProbationSection ? (
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between xl:flex-col xl:items-start">
+                      <div>
+                        <div className="text-sm font-medium text-foreground">Рішення по випробувальному</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {selectedEmploymentStatus === "probation"
+                            ? selectedProbationReviewDue
+                              ? "Термін завершився. Можна взяти в штат, дати ще місяць або завершити співпрацю."
+                              : "Рішення можна прийняти достроково. Продовження доступне після завершення терміну."
+                            : "Співробітник не був прийнятий після випробувального."}
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "w-fit px-2.5 py-1 rounded-[var(--radius)]",
+                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
+                        )}
+                      >
+                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
+                      </Badge>
+                    </div>
+                    {selectedEmploymentStatus === "probation" ? (
+                      <div className="mt-4 flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          className="h-10 w-full"
+                          onClick={() => void applyProbationDecision("active")}
+                          disabled={probationActionBusy !== null || !canApproveProbationNow}
+                        >
+                          {probationActionBusy === "active" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          {selectedProbationReviewDue ? "Взяти на роботу" : "Взяти на роботу достроково"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 w-full"
+                          onClick={() => void applyProbationDecision("extend")}
+                          disabled={probationActionBusy !== null || !canExtendProbationNow}
+                        >
+                          {probationActionBusy === "extend" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Дати ще місяць
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 w-full border-danger-soft-border text-danger-foreground"
+                          onClick={requestProbationRejection}
+                          disabled={probationActionBusy !== null || !canRejectProbationNow}
+                        >
+                          {probationActionBusy === "rejected" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          {selectedProbationReviewDue ? "Не брати" : "Завершити співпрацю"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {selectedEmploymentStatus === "active" || selectedEmploymentStatus === "inactive" ? (
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-foreground">Статус співпраці</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {selectedEmploymentStatus === "active"
+                            ? "Співробітник працює у штаті. Якщо людина пішла або її звільнили, тут можна завершити співпрацю."
+                            : "Співпрацю вже завершено. За потреби співробітника можна повернути в штат."}
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "w-fit px-2.5 py-1 rounded-[var(--radius)]",
+                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
+                        )}
+                      >
+                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
+                      </Badge>
+                      {selectedEmploymentStatus === "active" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 w-full border-danger-soft-border text-danger-foreground"
+                          onClick={() => setPendingEmploymentDecision("inactive")}
+                          disabled={employmentActionBusy !== null || !canDeactivateEmployment}
+                        >
+                          {employmentActionBusy === "inactive" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Завершити співпрацю
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="h-10 w-full"
+                          onClick={() => void applyEmploymentDecision("reactivate")}
+                          disabled={employmentActionBusy !== null || !canReactivateEmployment}
+                        >
+                          {employmentActionBusy === "reactivate" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Повернути в штат
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Дата старту</Label>
-                <Input
-                  type="date"
-                  value={editProfileStartDate}
-                  onChange={(event) => setEditProfileStartDate(event.target.value)}
-                  className="h-11"
-                  disabled={!canManage}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
-                <Input
-                  type="date"
-                  value={editProfileProbationEndDate}
-                  onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
-                  className="h-11"
-                  disabled={!canManage}
-                />
-              </div>
             </div>
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-foreground">Доступ до модулів</Label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
-                  <label
-                    key={key}
-                    className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
-                  >
-                    <Checkbox
-                      checked={editProfileModuleAccess[key]}
-                      disabled={!canManage}
-                      onCheckedChange={(checked) =>
-                        setEditProfileModuleAccess((prev) => ({
-                          ...prev,
-                          [key]: checked === true,
-                        }))
-                      }
-                    />
-                    <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+          </div>
+          <div className="shrink-0 border-t border-border bg-card px-6 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
-                className="flex-1 h-11"
-                onClick={() => setEditProfileMember(null)}
+                className="h-11 min-w-[180px]"
+                onClick={closeEditProfileDialog}
                 disabled={editProfileBusy}
               >
                 Скасувати
               </Button>
-              <Button className="flex-1 h-11" onClick={saveMemberProfile} disabled={editProfileBusy}>
+              <Button className="h-11 min-w-[220px]" onClick={saveMemberProfile} disabled={editProfileBusy}>
                 {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : canManage ? "Зберегти профіль" : "Зберегти %"}
               </Button>
             </div>
@@ -3008,6 +3526,48 @@ export function TeamMembersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={pendingProbationDecision === "rejected"}
+        onOpenChange={(open) => {
+          if (!open && probationActionBusy !== "rejected") setPendingProbationDecision(null);
+        }}
+        title={selectedProbationReviewDue ? "Не брати після випробувального?" : "Достроково завершити співпрацю?"}
+        description={
+          editProfileMember
+            ? selectedProbationReviewDue
+              ? `Для ${getMemberDisplayName(editProfileMember)} буде зафіксовано рішення не брати на роботу після випробувального терміну.`
+              : `Ти достроково завершуєш випробувальний термін для ${getMemberDisplayName(editProfileMember)} і позначаєш, що співпрацю не продовжено.`
+            : undefined
+        }
+        icon={<AlertTriangle className="h-5 w-5 text-danger-foreground" />}
+        confirmLabel={selectedProbationReviewDue ? "Так, не брати" : "Так, завершити"}
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        loading={probationActionBusy === "rejected"}
+        onConfirm={() => {
+          void applyProbationDecision("rejected");
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingEmploymentDecision === "inactive"}
+        onOpenChange={(open) => {
+          if (!open && employmentActionBusy !== "inactive") setPendingEmploymentDecision(null);
+        }}
+        title="Завершити співпрацю?"
+        description={
+          editProfileMember
+            ? `Для ${getMemberDisplayName(editProfileMember)} буде зафіксовано, що співпрацю завершено. Це не те саме, що не пройти випробувальний термін.`
+            : undefined
+        }
+        icon={<AlertTriangle className="h-5 w-5 text-danger-foreground" />}
+        confirmLabel="Так, завершити"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        loading={employmentActionBusy === "inactive"}
+        onConfirm={() => {
+          void applyEmploymentDecision("inactive");
+        }}
+      />
     </div>
   );
 }

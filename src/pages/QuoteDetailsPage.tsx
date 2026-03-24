@@ -603,7 +603,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
   const quoteCreatedByUserId = quote?.created_by?.trim() || null;
-  const effectiveManagerId = quoteCreatedByUserId || quoteManagerUserId || userId || null;
+  const effectiveManagerId = quoteManagerUserId || quoteCreatedByUserId || userId || null;
   const viewerJobRole = normalizeJobRole(jobRole);
   const canOpenCurrentQuote = canOpenQuoteDetails({
     userId,
@@ -619,6 +619,35 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     viewerJobRole,
     permissions,
   });
+  const getManagerRateForUser = useCallback(async (targetUserId?: string | null) => {
+    const normalizedUserId = targetUserId?.trim();
+    if (!normalizedUserId) return DEFAULT_MANAGER_RATE;
+
+    try {
+      const workspaceId = await resolveWorkspaceId(normalizedUserId);
+      if (!workspaceId) return DEFAULT_MANAGER_RATE;
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("team_member_manager_rates")
+        .select("manager_rate")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", normalizedUserId)
+        .maybeSingle<{ manager_rate?: number | null }>();
+
+      if (error) {
+        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
+          throw error;
+        }
+        return DEFAULT_MANAGER_RATE;
+      }
+
+      return resolveNumericRate(data?.manager_rate, DEFAULT_MANAGER_RATE);
+    } catch (error) {
+      console.error("Failed to load current manager rate", error);
+      return DEFAULT_MANAGER_RATE;
+    }
+  }, []);
   const canEditQuoteContent =
     permissions.isSuperAdmin ||
     permissions.isSeo ||
@@ -642,11 +671,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
 
     try {
+      const workspaceId = await resolveWorkspaceId(effectiveManagerId);
+      if (!workspaceId) {
+        setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+        return;
+      }
+
       const { data, error } = await supabase
         .schema("tosho")
         .from("team_member_manager_rates")
         .select("manager_rate")
-        .eq("workspace_id", teamId)
+        .eq("workspace_id", workspaceId)
         .eq("user_id", effectiveManagerId)
         .maybeSingle<{ manager_rate?: number | null }>();
 
@@ -663,7 +698,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       console.error("Failed to load current manager rate", error);
       setCurrentManagerRate(DEFAULT_MANAGER_RATE);
     }
-  }, [effectiveManagerId, teamId]);
+  }, [effectiveManagerId]);
 
   useEffect(() => {
     void loadCurrentManagerRate();
@@ -713,7 +748,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const costTotal = getRunTotal(run);
     const costPerUnit = quantity > 0 ? costTotal / quantity : null;
     const desiredManagerIncome = Math.max(0, Number(run.desired_manager_income) || 0);
-    const managerRate = resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
+    const managerRate = effectiveManagerId
+      ? currentManagerRate || DEFAULT_MANAGER_RATE
+      : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
     const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE);
     const vatRate = resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE);
     const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
@@ -2779,6 +2816,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [runsLoaded, runs.length, items, currentManagerRate]);
 
   useEffect(() => {
+    if (!runsLoaded || !effectiveManagerId || runs.length === 0) return;
+    const normalizedRate = currentManagerRate || DEFAULT_MANAGER_RATE;
+    setRuns((prev) => {
+      const hasMismatch = prev.some((run) => resolveNumericRate(run.manager_rate, normalizedRate) !== normalizedRate);
+      if (!hasMismatch) return prev;
+      return prev.map((run) => ({ ...run, manager_rate: normalizedRate }));
+    });
+    setRunsOriginal((prev) => {
+      const hasMismatch = prev.some((run) => resolveNumericRate(run.manager_rate, normalizedRate) !== normalizedRate);
+      if (!hasMismatch) return prev;
+      return prev.map((run) => ({ ...run, manager_rate: normalizedRate }));
+    });
+  }, [runsLoaded, runs.length, effectiveManagerId, currentManagerRate]);
+
+  useEffect(() => {
     if (!runsLoaded) return;
     if (runs.length === 0) {
       setSelectedRunId(null);
@@ -3636,7 +3688,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           unit_price_print: Number(run.unit_price_print ?? 0) || 0,
           logistics_cost: Number(run.logistics_cost ?? 0) || 0,
           desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
+        manager_rate: effectiveManagerId
+          ? currentManagerRate || DEFAULT_MANAGER_RATE
+          : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
           fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
           vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
         }));
@@ -3822,6 +3876,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (deleteRunsError) throw deleteRunsError;
 
         if (normalizedRuns.length > 0) {
+          const targetManagerRate = await getManagerRateForUser(data.managerId?.trim() || quote?.assigned_to || quote?.created_by || userId);
           await upsertQuoteRuns(
             quoteId,
             normalizedRuns.map((run) => ({
@@ -3833,7 +3888,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               unit_price_print: 0,
               logistics_cost: 0,
               desired_manager_income: 0,
-              manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
+              manager_rate: targetManagerRate,
               fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
               vat_rate: DEFAULT_VAT_RATE,
             }))
