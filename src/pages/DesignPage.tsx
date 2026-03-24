@@ -4405,7 +4405,7 @@ export default function DesignPage() {
         </DialogContent>
       </Dialog>
 
-      {((loading && tasks.length === 0) || membersLoading || refreshing) && (
+      {viewMode !== "kanban" && (((loading && tasks.length === 0) || membersLoading || refreshing)) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           {membersLoading
