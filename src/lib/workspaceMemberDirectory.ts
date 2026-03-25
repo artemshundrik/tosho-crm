@@ -5,6 +5,11 @@ import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const workspaceDirectoryCache = new Map<string, WorkspaceMemberDirectoryRow[]>();
+const workspaceDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDirectoryRow[]>>();
+let currentWorkspaceMemberDirectoryEntryCache: WorkspaceMemberDirectoryRow | null | undefined = undefined;
+let unifiedViewUnsupported = false;
+export const WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT = "workspace-member-directory-updated";
 
 export type WorkspaceMemberDirectoryRow = {
   workspaceId: string;
@@ -125,6 +130,7 @@ const DEFAULT_MODULE_ACCESS = {
   design: true,
   logistics: false,
   catalog: false,
+  contractors: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -158,7 +164,45 @@ function normalizeModuleAccess(value: unknown) {
     design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
+    contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
   };
+}
+
+function notifyWorkspaceMemberDirectoryUpdated(workspaceId: string, userId: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, {
+      detail: { workspaceId, userId },
+    })
+  );
+}
+
+function updateCachedWorkspaceMemberProfile(
+  workspaceId: string,
+  userId: string,
+  updates: Partial<Pick<WorkspaceMemberDirectoryRow, "moduleAccess">>
+) {
+  const cached = workspaceDirectoryCache.get(workspaceId);
+  if (!cached) return;
+
+  workspaceDirectoryCache.set(
+    workspaceId,
+    cached.map((row) =>
+      row.userId === userId
+        ? {
+            ...row,
+            ...(updates.moduleAccess ? { moduleAccess: normalizeModuleAccess(updates.moduleAccess) } : {}),
+          }
+        : row
+    )
+  );
+
+  if (currentWorkspaceMemberDirectoryEntryCache?.workspaceId === workspaceId && currentWorkspaceMemberDirectoryEntryCache.userId === userId) {
+    currentWorkspaceMemberDirectoryEntryCache = {
+      ...currentWorkspaceMemberDirectoryEntryCache,
+      ...(updates.moduleAccess ? { moduleAccess: normalizeModuleAccess(updates.moduleAccess) } : {}),
+    };
+  }
 }
 
 function normalizeAvailabilityStatus(value?: string | null): WorkspaceMemberDirectoryRow["availabilityStatus"] {
@@ -236,6 +280,10 @@ function buildRow(input: {
 }
 
 async function listFromUnifiedView(workspaceId: string) {
+  if (unifiedViewUnsupported) {
+    throw new Error('relation "workspace_member_directory" does not exist');
+  }
+
   const { data, error } = await supabase
     .schema("tosho")
     .from("workspace_member_directory")
@@ -244,7 +292,12 @@ async function listFromUnifiedView(workspaceId: string) {
     )
     .eq("workspace_id", workspaceId);
 
-  if (error) throw error;
+  if (error) {
+    if (isMissingSchemaObject(error) || isMissingColumn(error)) {
+      unifiedViewUnsupported = true;
+    }
+    throw error;
+  }
 
   return ((data as DirectoryViewRow[] | null) ?? []).map((row) =>
     buildRow({
@@ -406,10 +459,19 @@ async function listFromFallback(workspaceId: string) {
 }
 
 export async function listWorkspaceMemberDirectory(workspaceId: string): Promise<WorkspaceMemberDirectoryRow[]> {
+  if (workspaceDirectoryCache.has(workspaceId)) {
+    return workspaceDirectoryCache.get(workspaceId) ?? [];
+  }
+  const existing = workspaceDirectoryInFlight.get(workspaceId);
+  if (existing) return existing;
+
+  const promise = (async () => {
   try {
     const rows = await listFromUnifiedView(workspaceId);
     if (rows.length > 0) {
-      return rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+      const resolved = rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+      workspaceDirectoryCache.set(workspaceId, resolved);
+      return resolved;
     }
   } catch (error: unknown) {
     if (!isMissingSchemaObject(error) && !isMissingColumn(error)) {
@@ -418,7 +480,17 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
   }
 
   const rows = await listFromFallback(workspaceId);
-  return rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+  const resolved = rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+  workspaceDirectoryCache.set(workspaceId, resolved);
+  return resolved;
+  })();
+
+  workspaceDirectoryInFlight.set(workspaceId, promise);
+  try {
+    return await promise;
+  } finally {
+    workspaceDirectoryInFlight.delete(workspaceId);
+  }
 }
 
 export async function listWorkspaceMembersForDisplay(workspaceId: string): Promise<WorkspaceMemberDisplayRow[]> {
@@ -434,12 +506,21 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
 }
 
 export async function getCurrentWorkspaceMemberDirectoryEntry() {
+  if (currentWorkspaceMemberDirectoryEntryCache !== undefined) {
+    return currentWorkspaceMemberDirectoryEntryCache;
+  }
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
   const workspaceId = await resolveWorkspaceId(data.user.id);
   if (!workspaceId) return null;
   const rows = await listWorkspaceMemberDirectory(workspaceId);
-  return rows.find((row) => row.userId === data.user?.id) ?? null;
+  const entry = rows.find((row) => row.userId === data.user?.id) ?? null;
+  currentWorkspaceMemberDirectoryEntryCache = entry;
+  return entry;
+}
+
+export function getCachedCurrentWorkspaceMemberDirectoryEntry() {
+  return currentWorkspaceMemberDirectoryEntryCache;
 }
 
 export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberProfileInput) {
@@ -507,7 +588,13 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
       .from("team_member_profiles")
       .upsert(variant, { onConflict: "workspace_id,user_id" });
 
-    if (!error) return;
+    if (!error) {
+      updateCachedWorkspaceMemberProfile(input.workspaceId, input.userId, {
+        moduleAccess: payload.module_access ?? undefined,
+      });
+      notifyWorkspaceMemberDirectoryUpdated(input.workspaceId, input.userId);
+      return;
+    }
     lastError = error;
     if (!isMissingColumn(error) && !isMissingSchemaObject(error)) {
       throw error;

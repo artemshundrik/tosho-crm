@@ -1,11 +1,10 @@
 // src/layout/AppLayout.tsx
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
+import { Link, matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Building2,
   Calculator,
-  ChevronRight,
   Factory,
   FileCheck,
   FileMinus,
@@ -35,6 +34,11 @@ import {
 import { preloadRoute } from "@/routes/routePreload";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  getCachedCurrentWorkspaceMemberDirectoryEntry,
+  getCurrentWorkspaceMemberDirectoryEntry,
+  WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT,
+} from "@/lib/workspaceMemberDirectory";
 
 import {
   disableRealtimeForSession,
@@ -62,9 +66,8 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { PageReveal } from "@/components/app/PageReveal";
 import { TabBar } from "@/components/app/TabBar";
 
-// --- Types ---
 type AppLayoutProps = {
-  children: ReactNode;
+  children?: ReactNode;
 };
 
 type SidebarGroupKey = "overview" | "orders" | "finance" | "operations" | "account";
@@ -74,6 +77,7 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
+  moduleKey?: "overview" | "orders" | "finance" | "design" | "logistics" | "catalog" | "contractors";
 };
 
 type HeaderConfig = {
@@ -130,28 +134,29 @@ const ROUTES = {
 // --- Sidebar Config ---
 const baseSidebarLinks: SidebarLink[] = [
   // Головне
-  { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid },
+  { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
 
   // Замовлення
-  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2 },
-  { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator },
-  { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory },
-  { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck },
+  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2, moduleKey: "orders" },
+  { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "orders" },
+  { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
+  { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "orders" },
 
   // Фінанси
-  { label: "Рахунки", to: ROUTES.financeInvoices, group: "finance", icon: ReceiptText },
-  { label: "Видаткові накладні", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus },
-  { label: "Акти виконаних робіт", to: ROUTES.financeActs, group: "finance", icon: FileCheck },
+  { label: "Рахунки", to: ROUTES.financeInvoices, group: "finance", icon: ReceiptText, moduleKey: "finance" },
+  { label: "Видаткові накладні", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus, moduleKey: "finance" },
+  { label: "Акти виконаних робіт", to: ROUTES.financeActs, group: "finance", icon: FileCheck, moduleKey: "finance" },
 
   // Операції
-  { label: "Каталог продукції", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban },
-  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck },
-  { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette },
+  { label: "Каталог продукції", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
+  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck, moduleKey: "logistics" },
+  { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
   {
     label: "Підрядники та Постачальники",
     to: ROUTES.contractors,
     group: "operations",
     icon: Users,
+    moduleKey: "contractors",
   },
 
   // Акаунт
@@ -189,10 +194,11 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.ordersProduction))
     return {
-      title: "У виробництві",
-      subtitle: "Активні замовлення, що зараз виконуються.",
-      breadcrumbLabel: "У виробництві",
+      title: "Замовлення",
+      subtitle: "Черга оформлення, оплати, виробництва та відвантаження.",
+      breadcrumbLabel: "Замовлення",
       breadcrumbTo: ROUTES.ordersProduction,
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.ordersReadyToShip))
     return {
@@ -466,17 +472,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { userId, teamId, session, permissions } = useAuth();
+  const pageNode = children ?? <Outlet />;
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
+  const [currentModuleAccess, setCurrentModuleAccess] = useState<Record<string, boolean> | null | undefined>(() => {
+    if (!userId) return null;
+    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess;
+  });
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
         if (link.to === ROUTES.membersAccess) {
           return permissions.canManageMembers;
         }
+        if (link.moduleKey) {
+          if (currentModuleAccess === undefined) {
+            return false;
+          }
+          return currentModuleAccess?.[link.moduleKey] !== false;
+        }
         return true;
       }),
-    [permissions.canManageMembers]
+    [currentModuleAccess, permissions.canManageMembers]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
@@ -486,16 +503,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     });
   }, [location.pathname, sidebarRoutes]);
   const pageContent = shouldReveal ? (
-    <PageReveal key={location.pathname} activeKey={location.pathname}>
-      {children}
+    <PageReveal activeKey={location.pathname}>
+      {pageNode}
     </PageReveal>
   ) : (
-    children
+    pageNode
   );
   const isCanvasMode =
     location.pathname === ROUTES.ordersEstimates ||
     location.pathname.startsWith(`${ROUTES.ordersEstimates}/`) ||
     location.pathname.startsWith(ROUTES.ordersCustomers) ||
+    location.pathname.startsWith(ROUTES.ordersProduction) ||
     location.pathname.startsWith(ROUTES.design);
 
   // /matches/:matchId/events
@@ -512,6 +530,44 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     ((matchDetailsRoute?.params as { matchId?: string } | undefined)?.matchId);
 
   const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentModuleAccess = async () => {
+      if (!userId) {
+        if (!cancelled) setCurrentModuleAccess(null);
+        return;
+      }
+
+      try {
+        const entry = await getCurrentWorkspaceMemberDirectoryEntry();
+        if (!cancelled) {
+          setCurrentModuleAccess(entry?.moduleAccess ?? null);
+        }
+      } catch (error) {
+        console.error("Failed to resolve current member module access", error);
+        if (!cancelled) {
+          setCurrentModuleAccess(null);
+        }
+      }
+    };
+
+    void loadCurrentModuleAccess();
+
+    const handleDirectoryUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!detail?.userId || detail.userId === userId) {
+        void loadCurrentModuleAccess();
+      }
+    };
+
+    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate as EventListener);
+    };
+  }, [userId]);
 
   // Optional workspace logo (kept null by default to avoid heavy legacy team queries)
   const [workspaceLogo] = useState<string | null>(null);
@@ -1634,7 +1690,9 @@ function SidebarGroup({
           const navLink = (
             <Link
               to={link.to}
-              onClick={onNavigate}
+              onClick={() => {
+                onNavigate?.();
+              }}
               onMouseEnter={() => preloadRoute(link.to)}
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}

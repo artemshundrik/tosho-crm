@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +83,11 @@ import {
   isQuoteManagerJobRole,
   normalizeJobRole,
 } from "@/lib/permissions";
+import {
+  createOrderFromApprovedQuote,
+  loadOrderCreationDraft,
+  type OrderCreationDraft,
+} from "@/features/orders/orderRecords";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
@@ -578,6 +584,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState("new");
+  const [createOrderDialogOpen, setCreateOrderDialogOpen] = useState(false);
+  const [createOrderDraft, setCreateOrderDraft] = useState<OrderCreationDraft | null>(null);
+  const [createOrderSelectedItemIds, setCreateOrderSelectedItemIds] = useState<string[]>([]);
+  const [createOrderLoading, setCreateOrderLoading] = useState(false);
+  const [createOrderSubmitting, setCreateOrderSubmitting] = useState(false);
+  const [createOrderError, setCreateOrderError] = useState<string | null>(null);
 
   const downloadFileToDevice = useCallback(async (url: string, filename?: string) => {
     try {
@@ -1428,6 +1440,60 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return;
     }
     void handleQuickStatusChange(nextAction.nextStatus, "");
+  };
+
+  const openCreateOrderDialog = async () => {
+    if (currentStatus !== "approved") {
+      const message = "Замовлення можна створити тільки із затвердженого прорахунку.";
+      setCreateOrderError(message);
+      toast.error(message);
+      return;
+    }
+    setCreateOrderLoading(true);
+    setCreateOrderError(null);
+    setCreateOrderDialogOpen(true);
+    try {
+      const draft = await loadOrderCreationDraft(teamId, quoteId, userId);
+      setCreateOrderDraft(draft);
+      setCreateOrderSelectedItemIds(
+        draft.selectableItems.map((item) => item.quoteItemId ?? item.id).filter(Boolean) as string[]
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Не вдалося підготувати створення замовлення.";
+      setCreateOrderDraft(null);
+      setCreateOrderSelectedItemIds([]);
+      setCreateOrderError(message);
+    } finally {
+      setCreateOrderLoading(false);
+    }
+  };
+
+  const toggleCreateOrderItem = (quoteItemId: string, checked: boolean) => {
+    setCreateOrderSelectedItemIds((prev) => {
+      if (checked) return Array.from(new Set([...prev, quoteItemId]));
+      return prev.filter((id) => id !== quoteItemId);
+    });
+  };
+
+  const handleCreateOrder = async () => {
+    if (!createOrderDraft) return;
+    setCreateOrderSubmitting(true);
+    setCreateOrderError(null);
+    try {
+      const result = await createOrderFromApprovedQuote({
+        teamId,
+        quoteId,
+        selectedQuoteItemIds: createOrderSelectedItemIds,
+        userId,
+      });
+      toast.success(result.created ? "Замовлення створено" : "Замовлення вже існує");
+      window.location.assign(`/orders/production/${result.id}`);
+    } catch (error: unknown) {
+      setCreateOrderError(error instanceof Error ? error.message : "Не вдалося створити замовлення.");
+    } finally {
+      setCreateOrderSubmitting(false);
+    }
   };
 
   const activityEvents = useMemo<ActivityEvent[]>(() => {
@@ -4712,6 +4778,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              {currentStatus === "approved" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  onClick={() => void openCreateOrderDialog()}
+                >
+                  <FileDown className="h-4 w-4" />
+                  Створити замовлення
+                </Button>
+              ) : null}
               {!designTask && !designTaskLoading ? (
                 <Button
                   variant="outline"
@@ -7633,6 +7710,106 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   {itemAttachmentUploading ? "Збереження..." : "Додати"}
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createOrderDialogOpen}
+        onOpenChange={(open) => {
+          setCreateOrderDialogOpen(open);
+          if (!open) {
+            setCreateOrderDraft(null);
+            setCreateOrderSelectedItemIds([]);
+            setCreateOrderError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[760px]">
+          <DialogHeader>
+            <DialogTitle>Створити замовлення</DialogTitle>
+          </DialogHeader>
+
+          {createOrderLoading ? (
+            <div className="py-6 text-sm text-muted-foreground">Готуємо дані для замовлення...</div>
+          ) : createOrderDraft ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                <div className="text-sm font-semibold text-foreground">{createOrderDraft.quoteNumber}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{createOrderDraft.readiness.customerName}</div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-foreground">Gate-перевірки</div>
+                <div className="space-y-2">
+                  {createOrderDraft.readiness.readinessSteps.map((step) => (
+                    <div key={step.label} className="flex items-start gap-3 rounded-lg border border-border/50 px-3 py-2">
+                      <Checkbox checked={step.done} disabled />
+                      <div className="text-sm text-foreground">{step.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-foreground">Позиції, що підуть у замовлення</div>
+                <div className="space-y-2">
+                  {createOrderDraft.selectableItems.map((item) => {
+                    const itemId = item.quoteItemId ?? item.id;
+                    const checked = createOrderSelectedItemIds.includes(itemId);
+                    return (
+                      <label
+                        key={itemId}
+                        className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/50 px-3 py-2"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => toggleCreateOrderItem(itemId, Boolean(value))}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-foreground">{item.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.qty} {item.unit} × {formatCurrency(item.unitPrice, quote.currency)} ={" "}
+                            {formatCurrency(item.lineTotal, quote.currency)}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {createOrderDraft.readiness.blockers.length > 0 ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Перед створенням замовлення треба закрити блокери: {createOrderDraft.readiness.blockers.join(", ")}.
+                </div>
+              ) : null}
+
+              {createOrderError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {createOrderError}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="py-6 text-sm text-muted-foreground">{createOrderError ?? "Не вдалося підготувати замовлення."}</div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOrderDialogOpen(false)} disabled={createOrderSubmitting}>
+              Скасувати
+            </Button>
+            <Button
+              onClick={() => void handleCreateOrder()}
+              disabled={
+                createOrderSubmitting ||
+                !createOrderDraft ||
+                createOrderDraft.readiness.blockers.length > 0 ||
+                createOrderSelectedItemIds.length === 0
+              }
+            >
+              {createOrderSubmitting ? "Створення..." : "Створити замовлення"}
             </Button>
           </DialogFooter>
         </DialogContent>

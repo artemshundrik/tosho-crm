@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -160,6 +161,7 @@ type DesignOutputFile = {
   uploaded_by: string | null;
   created_at: string;
   group_label?: string | null;
+  output_kind?: DesignOutputKind | null;
   signed_url?: string | null;
 };
 
@@ -170,6 +172,7 @@ type DesignOutputLink = {
   created_at: string;
   created_by: string | null;
   group_label?: string | null;
+  output_kind?: DesignOutputKind | null;
 };
 
 type StorageBackedFile = {
@@ -231,6 +234,13 @@ type GroupedDesignOutputs = {
   label: string;
   files: DesignOutputFile[];
   links: DesignOutputLink[];
+};
+
+type DesignOutputKind = "visualization" | "layout";
+
+const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
+  visualization: "Візуал",
+  layout: "Макет",
 };
 
 type DesignTaskHistoryEvent = {
@@ -370,7 +380,34 @@ const parseStringArray = (value: unknown) =>
     ? value.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => !!entry)
     : [];
 
-const getSelectedDesignOutputFileIdsFromMetadata = (metadata?: Record<string, unknown>) => {
+const parseDesignOutputKind = (
+  value: unknown,
+  fallbackTaskType?: DesignTaskType | null
+): DesignOutputKind | null => {
+  if (value === "visualization" || value === "layout") return value;
+  if (fallbackTaskType === "visualization") return "visualization";
+  if (
+    fallbackTaskType === "layout" ||
+    fallbackTaskType === "layout_adaptation" ||
+    fallbackTaskType === "visualization_layout_adaptation"
+  ) {
+    return "layout";
+  }
+  return "layout";
+};
+
+const getSelectedDesignOutputFileIdsFromMetadata = (
+  metadata?: Record<string, unknown>,
+  kind?: DesignOutputKind
+) => {
+  if (kind) {
+    const idsKey = kind === "visualization" ? "selected_visual_output_file_ids" : "selected_layout_output_file_ids";
+    const idKey = kind === "visualization" ? "selected_visual_output_file_id" : "selected_layout_output_file_id";
+    const many = parseStringArray(metadata?.[idsKey]);
+    if (many.length > 0) return Array.from(new Set(many));
+    const legacy = toNonEmptyString(metadata?.[idKey]);
+    return legacy ? [legacy] : [];
+  }
   const many = parseStringArray(metadata?.selected_design_output_file_ids);
   if (many.length > 0) return Array.from(new Set(many));
   const legacy = toNonEmptyString(metadata?.selected_design_output_file_id);
@@ -767,11 +804,14 @@ export default function DesignTaskPage() {
   const [addLinkLabel, setAddLinkLabel] = useState("");
   const [addLinkGroupValue, setAddLinkGroupValue] = useState("__none__");
   const [addLinkGroupDraft, setAddLinkGroupDraft] = useState("");
+  const [addLinkKind, setAddLinkKind] = useState<DesignOutputKind>("layout");
   const [addLinkError, setAddLinkError] = useState<string | null>(null);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createGroupDraft, setCreateGroupDraft] = useState("");
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [uploadTargetGroup, setUploadTargetGroup] = useState("__none__");
+  const [uploadTargetKind, setUploadTargetKind] = useState<DesignOutputKind>("layout");
+  const [activeDesignOutputTab, setActiveDesignOutputTab] = useState<DesignOutputKind>("visualization");
   const [attachQuoteDialogOpen, setAttachQuoteDialogOpen] = useState(false);
   const [quoteCandidates, setQuoteCandidates] = useState<QuoteCandidate[]>([]);
   const [quoteCandidatesLoading, setQuoteCandidatesLoading] = useState(false);
@@ -1418,6 +1458,7 @@ export default function DesignTaskPage() {
         );
 
         const rawDesignFiles = Array.isArray(meta.design_output_files) ? meta.design_output_files : [];
+        const designOutputFallbackType = parseDesignTaskType(meta.design_task_type);
         const parsedDesignFiles: DesignOutputFile[] = rawDesignFiles
           .map((row: unknown) => {
             if (!row || typeof row !== "object") return null;
@@ -1436,6 +1477,7 @@ export default function DesignTaskPage() {
               uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
               created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
+              output_kind: parseDesignOutputKind(entry.output_kind, designOutputFallbackType),
               signed_url: null,
             } satisfies DesignOutputFile;
           })
@@ -1464,6 +1506,7 @@ export default function DesignTaskPage() {
               created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               created_by: typeof entry.created_by === "string" ? entry.created_by : null,
               group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
+              output_kind: parseDesignOutputKind(entry.output_kind, designOutputFallbackType),
             } satisfies DesignOutputLink;
           })
           .filter(Boolean) as DesignOutputLink[];
@@ -2145,7 +2188,6 @@ export default function DesignTaskPage() {
     () => (task ? (statusQuickActions[task.status] ?? []).filter((action) => allowedStatusTransitions.includes(action.next)) : []),
     [allowedStatusTransitions, task]
   );
-  const canMarkReadyNow = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
     return getDesignTaskEstimateMinutes(sourceTask);
   }
@@ -2616,6 +2658,7 @@ export default function DesignTaskPage() {
       uploaded_by: file.uploaded_by,
       created_at: file.created_at,
       group_label: normalizeOutputGroupLabel(file.group_label),
+      output_kind: file.output_kind ?? null,
     }));
     const linksForMeta = nextLinks.map((link) => ({
       id: link.id,
@@ -2624,6 +2667,7 @@ export default function DesignTaskPage() {
       created_at: link.created_at,
       created_by: link.created_by,
       group_label: normalizeOutputGroupLabel(link.group_label),
+      output_kind: link.output_kind ?? null,
     }));
     const nextGroups = Array.from(
       new Set(
@@ -2684,39 +2728,51 @@ export default function DesignTaskPage() {
     if (insertError) throw insertError;
   };
 
-  const clearSelectedDesignOutputMetadata = (metadata: Record<string, unknown>) => ({
-    ...metadata,
-    selected_design_output_file_ids: [],
-    selected_design_output_file_id: null,
-    selected_design_output_file_name: null,
-    selected_design_output_storage_bucket: null,
-    selected_design_output_storage_path: null,
-    selected_design_output_mime_type: null,
-    selected_design_output_file_size: null,
-    selected_design_output_selected_at: null,
-    selected_design_output_selected_by: null,
-    selected_design_output_selected_by_label: null,
-  });
+  const buildOutputSelectionMetadata = (
+    metadata: Record<string, unknown>,
+    nextSelectedByKind: Record<DesignOutputKind, string[]>,
+    actorLabel: string
+  ) => {
+    const nextMetadata = { ...metadata };
+    const unionSelectedIds = Array.from(
+      new Set(
+        (["visualization", "layout"] as DesignOutputKind[]).flatMap((kind) =>
+          nextSelectedByKind[kind].map((entry) => entry.trim()).filter(Boolean)
+        )
+      )
+    );
 
-  const buildSelectedDesignOutputMetadata = (selectedIds: string[], actorLabel: string) => {
-    const normalizedSelectedIds = Array.from(new Set(selectedIds.map((entry) => entry.trim()).filter(Boolean)));
-    if (normalizedSelectedIds.length === 0) {
-      return clearSelectedDesignOutputMetadata(task?.metadata ?? {});
-    }
-    const primarySelected = designOutputFiles.find((file) => file.id === normalizedSelectedIds[0]) ?? null;
-    return {
-      ...(task?.metadata ?? {}),
-      selected_design_output_file_ids: normalizedSelectedIds,
-      selected_design_output_file_id: primarySelected?.id ?? null,
-      selected_design_output_file_name: primarySelected?.file_name ?? null,
-      selected_design_output_storage_bucket: primarySelected?.storage_bucket ?? null,
-      selected_design_output_storage_path: primarySelected?.storage_path ?? null,
-      selected_design_output_mime_type: primarySelected?.mime_type ?? null,
-      selected_design_output_file_size: primarySelected?.file_size ?? null,
-      selected_design_output_selected_at: new Date().toISOString(),
-      selected_design_output_selected_by: userId ?? null,
-      selected_design_output_selected_by_label: actorLabel,
-    } satisfies Record<string, unknown>;
+    (["visualization", "layout"] as DesignOutputKind[]).forEach((kind) => {
+      const normalizedSelectedIds = Array.from(
+        new Set(nextSelectedByKind[kind].map((entry) => entry.trim()).filter(Boolean))
+      );
+      const primarySelected =
+        designOutputFiles.find((file) => file.id === normalizedSelectedIds[0] && file.output_kind === kind) ?? null;
+      const prefix = kind === "visualization" ? "selected_visual_output" : "selected_layout_output";
+      nextMetadata[`${prefix}_file_ids`] = normalizedSelectedIds;
+      nextMetadata[`${prefix}_file_id`] = primarySelected?.id ?? null;
+      nextMetadata[`${prefix}_file_name`] = primarySelected?.file_name ?? null;
+      nextMetadata[`${prefix}_storage_bucket`] = primarySelected?.storage_bucket ?? null;
+      nextMetadata[`${prefix}_storage_path`] = primarySelected?.storage_path ?? null;
+      nextMetadata[`${prefix}_mime_type`] = primarySelected?.mime_type ?? null;
+      nextMetadata[`${prefix}_file_size`] = primarySelected?.file_size ?? null;
+      nextMetadata[`${prefix}_selected_at`] = normalizedSelectedIds.length > 0 ? new Date().toISOString() : null;
+      nextMetadata[`${prefix}_selected_by`] = normalizedSelectedIds.length > 0 ? (userId ?? null) : null;
+      nextMetadata[`${prefix}_selected_by_label`] = normalizedSelectedIds.length > 0 ? actorLabel : null;
+    });
+
+    const primarySelected = designOutputFiles.find((file) => file.id === unionSelectedIds[0]) ?? null;
+    nextMetadata.selected_design_output_file_ids = unionSelectedIds;
+    nextMetadata.selected_design_output_file_id = primarySelected?.id ?? null;
+    nextMetadata.selected_design_output_file_name = primarySelected?.file_name ?? null;
+    nextMetadata.selected_design_output_storage_bucket = primarySelected?.storage_bucket ?? null;
+    nextMetadata.selected_design_output_storage_path = primarySelected?.storage_path ?? null;
+    nextMetadata.selected_design_output_mime_type = primarySelected?.mime_type ?? null;
+    nextMetadata.selected_design_output_file_size = primarySelected?.file_size ?? null;
+    nextMetadata.selected_design_output_selected_at = unionSelectedIds.length > 0 ? new Date().toISOString() : null;
+    nextMetadata.selected_design_output_selected_by = unionSelectedIds.length > 0 ? (userId ?? null) : null;
+    nextMetadata.selected_design_output_selected_by_label = unionSelectedIds.length > 0 ? actorLabel : null;
+    return nextMetadata;
   };
 
   const handleUploadDesignOutputs = async (files: FileList | null) => {
@@ -2762,6 +2818,7 @@ export default function DesignTaskPage() {
           uploaded_by: userId,
           created_at: new Date().toISOString(),
           group_label: targetGroupLabel,
+          output_kind: uploadTargetKind,
           signed_url: isUsableStorageUrl(signed?.signedUrl) ? (signed?.signedUrl ?? null) : null,
         });
       }
@@ -2975,11 +3032,12 @@ export default function DesignTaskPage() {
     }
   };
 
-  const openAddDesignLinkModal = () => {
+  const openAddDesignLinkModal = (kind: DesignOutputKind) => {
     setAddLinkUrl("https://");
     setAddLinkLabel("");
     setAddLinkGroupValue(uploadTargetGroup);
     setAddLinkGroupDraft("");
+    setAddLinkKind(kind);
     setAddLinkError(null);
     setAddLinkOpen(true);
   };
@@ -3016,6 +3074,7 @@ export default function DesignTaskPage() {
         created_at: new Date().toISOString(),
         created_by: userId ?? null,
         group_label: nextGroupLabel,
+        output_kind: addLinkKind,
       };
       const nextLinks = [nextLink, ...designOutputLinks];
       await persistDesignOutputs(designOutputFiles, nextLinks, { nextGroups });
@@ -3073,12 +3132,12 @@ export default function DesignTaskPage() {
         }
         return true;
       });
-      const nextSelectedIds = selectedDesignOutputFileIds.filter((id) => id !== fileId);
       const actorLabel = userId ? getMemberLabel(userId) : "System";
-      const nextMetadataPatch =
-        nextSelectedIds.length > 0
-          ? buildSelectedDesignOutputMetadata(nextSelectedIds, actorLabel)
-          : clearSelectedDesignOutputMetadata(latestMetadata);
+      const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
+        visualization: selectedVisualizationOutputFileIds.filter((id) => id !== fileId),
+        layout: selectedLayoutOutputFileIds.filter((id) => id !== fileId),
+      };
+      const nextMetadataPatch = buildOutputSelectionMetadata(latestMetadata, nextSelectedByKind, actorLabel);
       const nextMetadata: Record<string, unknown> = {
         ...latestMetadata,
         design_output_files: nextFilesForMeta,
@@ -3089,6 +3148,7 @@ export default function DesignTaskPage() {
           created_at: link.created_at,
           created_by: link.created_by,
           group_label: normalizeOutputGroupLabel(link.group_label),
+          output_kind: link.output_kind ?? null,
         })),
         design_output_groups: Array.from(
           new Set(
@@ -3261,7 +3321,7 @@ export default function DesignTaskPage() {
     }
   };
 
-  const handleSelectDesignOutputFile = async (fileId: string) => {
+  const handleSelectDesignOutputFile = async (fileId: string, kind: DesignOutputKind) => {
     if (!task || !effectiveTeamId) return;
     if (!canManageAssignments) {
       toast.error("Тільки менеджер може зафіксувати обраний варіант замовника.");
@@ -3270,19 +3330,25 @@ export default function DesignTaskPage() {
     if (!ensureCanEdit()) return;
     if (outputSaving) return;
 
-    const alreadySelected = selectedDesignOutputFileIdSet.has(fileId);
+    const selectedIdsForKind =
+      kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+    const selectedIdSetForKind =
+      kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
+    const alreadySelected = selectedIdSetForKind.has(fileId);
     const nextSelectedIds = alreadySelected
-      ? selectedDesignOutputFileIds.filter((id) => id !== fileId)
-      : [...selectedDesignOutputFileIds, fileId];
-    const selectedFiles = designOutputFiles.filter((file) => nextSelectedIds.includes(file.id));
+      ? selectedIdsForKind.filter((id) => id !== fileId)
+      : [...selectedIdsForKind, fileId];
+    const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
+      visualization:
+        kind === "visualization" ? nextSelectedIds : [...selectedVisualizationOutputFileIds],
+      layout: kind === "layout" ? nextSelectedIds : [...selectedLayoutOutputFileIds],
+    };
+    const selectedFiles = designOutputFiles.filter((file) => nextSelectedByKind[kind].includes(file.id));
     const actorLabel = userId ? getMemberLabel(userId) : "System";
 
     setOutputSaving(true);
     try {
-      const nextMetadata =
-        nextSelectedIds.length > 0
-          ? buildSelectedDesignOutputMetadata(nextSelectedIds, actorLabel)
-          : clearSelectedDesignOutputMetadata(task.metadata ?? {});
+      const nextMetadata = buildOutputSelectionMetadata(task.metadata ?? {}, nextSelectedByKind, actorLabel);
       const { error: updateError } = await supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
@@ -3307,15 +3373,20 @@ export default function DesignTaskPage() {
         action: "design_output_selection",
         title:
           nextSelectedIds.length > 0
-            ? `Замовник погодив макети: ${selectedFiles.map((file) => file.file_name).slice(0, 3).join(", ")}${selectedFiles.length > 3 ? ` +${selectedFiles.length - 3}` : ""}`
-            : "Скасовано всі погоджені макети замовника",
+            ? `Замовник погодив ${kind === "visualization" ? "візуали" : "макети"}: ${selectedFiles.map((file) => file.file_name).slice(0, 3).join(", ")}${selectedFiles.length > 3 ? ` +${selectedFiles.length - 3}` : ""}`
+            : `Скасовано погоджені ${kind === "visualization" ? "візуали" : "макети"} замовника`,
         metadata: {
           source: "design_output_selection",
+          output_kind: kind,
           selected_design_output_file_ids: nextSelectedIds,
         },
       });
       await loadHistory(task.id);
-      toast.success(nextSelectedIds.length > 0 ? "Погоджені макети оновлено" : "Погоджені макети очищено");
+      toast.success(
+        nextSelectedIds.length > 0
+          ? `Погоджені ${kind === "visualization" ? "візуали" : "макети"} оновлено`
+          : `Погоджені ${kind === "visualization" ? "візуали" : "макети"} очищено`
+      );
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося зберегти вибір варіанту"));
     } finally {
@@ -3384,7 +3455,7 @@ export default function DesignTaskPage() {
     setAttachingQuoteId(quoteCandidate.id);
     try {
       const actorLabel = userId ? getMemberLabel(userId) : "System";
-      const selectedFiles = designOutputFiles.filter((file) => selectedDesignOutputFileIdSet.has(file.id));
+      const selectedFiles = designOutputFiles.filter((file) => selectedApprovedDesignOutputFileIdSet.has(file.id));
       const nextMetadata: Record<string, unknown> = {
         ...(task.metadata ?? {}),
         quote_id: quoteCandidate.id,
@@ -3580,6 +3651,10 @@ export default function DesignTaskPage() {
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (nextStatus === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
       requestEstimateDialog({ mode: "status", nextStatus });
+      return;
+    }
+    if (nextStatus === "pm_review" && designReadyBlockers.length > 0) {
+      toast.error(`Щоб позначити дизайн готовим, закрийте блокери: ${designReadyBlockers.join(", ")}.`);
       return;
     }
     const previousStatus = task.status;
@@ -4705,15 +4780,66 @@ export default function DesignTaskPage() {
 
   const isStatusStartable = task?.status === "new" || task?.status === "changes";
   const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId;
-  const selectedDesignOutputFileIds = useMemo(
-    () => getSelectedDesignOutputFileIdsFromMetadata(task?.metadata),
-    [task?.metadata]
+  const selectedVisualizationOutputFileIds = useMemo(() => {
+    const explicit = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata, "visualization");
+    if (explicit.length > 0) return explicit;
+    const legacy = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata);
+    return legacy.filter((id) => designOutputFiles.some((file) => file.id === id && file.output_kind === "visualization"));
+  }, [designOutputFiles, task?.metadata]);
+  const selectedLayoutOutputFileIds = useMemo(() => {
+    const explicit = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata, "layout");
+    if (explicit.length > 0) return explicit;
+    const legacy = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata);
+    return legacy.filter((id) => designOutputFiles.some((file) => file.id === id && file.output_kind === "layout"));
+  }, [designOutputFiles, task?.metadata]);
+  const selectedVisualizationOutputFileIdSet = useMemo(
+    () => new Set(selectedVisualizationOutputFileIds),
+    [selectedVisualizationOutputFileIds]
   );
-  const selectedDesignOutputFileId = selectedDesignOutputFileIds[0] ?? null;
-  const selectedDesignOutputFileIdSet = useMemo(
-    () => new Set(selectedDesignOutputFileIds),
-    [selectedDesignOutputFileIds]
+  const selectedLayoutOutputFileIdSet = useMemo(
+    () => new Set(selectedLayoutOutputFileIds),
+    [selectedLayoutOutputFileIds]
   );
+  const selectedApprovedDesignOutputFileIdSet = useMemo(
+    () => new Set([...selectedVisualizationOutputFileIds, ...selectedLayoutOutputFileIds]),
+    [selectedLayoutOutputFileIds, selectedVisualizationOutputFileIds]
+  );
+  const requiresVisualizationOutput =
+    task?.designTaskType === "visualization" || task?.designTaskType === "visualization_layout_adaptation";
+  const requiresLayoutOutput =
+    task?.designTaskType === "layout" ||
+    task?.designTaskType === "layout_adaptation" ||
+    task?.designTaskType === "visualization_layout_adaptation";
+  const designReadyBlockers = useMemo(() => {
+    const blockers: string[] = [];
+    if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) {
+      blockers.push("Потрібно погодити хоча б один візуал");
+    }
+    if (requiresLayoutOutput && selectedLayoutOutputFileIds.length === 0) {
+      blockers.push("Потрібно погодити хоча б один макет");
+    }
+    return blockers;
+  }, [
+    requiresLayoutOutput,
+    requiresVisualizationOutput,
+    selectedLayoutOutputFileIds.length,
+    selectedVisualizationOutputFileIds.length,
+  ]);
+  const canSeeMarkReadyAction = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
+  const canMarkReadyNow = canSeeMarkReadyAction && designReadyBlockers.length === 0;
+  useEffect(() => {
+    if (requiresVisualizationOutput) {
+      setUploadTargetKind((prev) => (prev === "visualization" ? prev : "visualization"));
+      setAddLinkKind((prev) => (prev === "visualization" ? prev : "visualization"));
+      setActiveDesignOutputTab((prev) => (prev === "visualization" ? prev : "visualization"));
+      return;
+    }
+    if (requiresLayoutOutput) {
+      setUploadTargetKind((prev) => (prev === "layout" ? prev : "layout"));
+      setAddLinkKind((prev) => (prev === "layout" ? prev : "layout"));
+      setActiveDesignOutputTab((prev) => (prev === "layout" ? prev : "layout"));
+    }
+  }, [requiresLayoutOutput, requiresVisualizationOutput]);
   const groupedDesignOutputs = useMemo(() => {
     const map = new Map<string, GroupedDesignOutputs>();
     for (const label of designOutputGroups) {
@@ -4762,6 +4888,23 @@ export default function DesignTaskPage() {
       return a.label.localeCompare(b.label, "uk");
     });
   }, [designOutputFiles, designOutputGroups, designOutputLinks]);
+  const groupedDesignOutputsByKind = useMemo(
+    () =>
+      (["visualization", "layout"] as DesignOutputKind[]).reduce(
+        (acc, kind) => {
+          acc[kind] = groupedDesignOutputs
+            .map((group) => ({
+              ...group,
+              files: group.files.filter((file) => file.output_kind === kind),
+              links: group.links.filter((link) => link.output_kind === kind),
+            }))
+            .filter((group) => group.files.length > 0 || group.links.length > 0);
+          return acc;
+        },
+        {} as Record<DesignOutputKind, GroupedDesignOutputs[]>
+      ),
+    [groupedDesignOutputs]
+  );
   const selectedGroupingItems = useMemo(() => {
     const selectedKeys = new Set(groupingSelectionIds);
     return [
@@ -4970,6 +5113,292 @@ export default function DesignTaskPage() {
     if (!canEditTaskTitle) return;
     setRenameError(null);
     setRenameDialogOpen(true);
+  };
+
+  const renderDesignOutputSection = (kind: DesignOutputKind) => {
+    const groupedOutputs = groupedDesignOutputsByKind[kind];
+    const selectedIdSet = kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
+    const selectedIds = kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+    const requiresThisKind = kind === "visualization" ? requiresVisualizationOutput : requiresLayoutOutput;
+    const kindLabel = DESIGN_OUTPUT_KIND_LABELS[kind];
+    const kindIcon =
+      kind === "visualization" ? <ImageIcon className="h-4 w-4 text-sky-600" /> : <PencilLine className="h-4 w-4 text-emerald-600" />;
+
+    return (
+      <div className="rounded-xl border border-border/60 bg-card/60 p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              {kindIcon}
+              <div className="text-sm font-semibold text-foreground">{kindLabel}</div>
+              <Badge variant={requiresThisKind ? "default" : "outline"} className="text-[10px]">
+                {requiresThisKind ? "Обов'язково для погодження" : "Опціонально"}
+              </Badge>
+              {selectedIds.length > 0 ? (
+                <Badge variant="outline" className="text-[10px] border-success/40 bg-success/10 text-success-foreground">
+                  Погоджено: {selectedIds.length}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {kind === "visualization"
+                ? "Тут має бути превʼю виробу або нанесення, яке погоджує замовник."
+                : "Тут має бути фінальний друкарський / виробничий макет."}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              disabled={outputUploading || outputSaving}
+              onClick={() => {
+                setUploadTargetKind(kind);
+                outputInputRef.current?.click();
+              }}
+            >
+              {outputUploading && uploadTargetKind === kind ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Завантажити {kindLabel.toLowerCase()}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-2"
+              disabled={outputSaving}
+              onClick={() => openAddDesignLinkModal(kind)}
+            >
+              <Link2 className="h-4 w-4" />
+              Додати посилання
+            </Button>
+          </div>
+        </div>
+
+        {groupedOutputs.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-3 py-3 text-sm text-muted-foreground">
+            {kind === "visualization"
+              ? "Поки що не додано жодного візуалу. Для друку в замовлення має бути окремо погоджений візуал."
+              : "Поки що не додано жодного макета. Для запуску в замовлення має бути окремо погоджений макет."}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {groupedOutputs.map((group) => {
+              const selectedCountInGroup = selectedGroupingItems.filter((item) => item.groupKey === group.key).length;
+              const hasSelection = groupingSelectionIds.length > 0;
+              const allSelectedAlreadyInGroup = hasSelection && selectedCountInGroup === groupingSelectionIds.length;
+              const canUngroup = group.key !== "__ungrouped__" && selectedCountInGroup > 0;
+              return (
+                <div key={`${kind}:${group.key}`} className="rounded-xl border border-border/60 bg-card/60 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-foreground">{group.label}</div>
+                      <Badge variant="outline" className="text-[10px]">
+                        {group.files.length + group.links.length} матеріалів
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {canUngroup ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={outputSaving}
+                          onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key)}
+                        >
+                          Забрати з групи
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={outputSaving || groupingSelectionIds.length === 0 || allSelectedAlreadyInGroup}
+                        onClick={() => void handleMoveSelectedOutputsToSpecificGroup(group.key === "__ungrouped__" ? null : group.label)}
+                      >
+                        Перемістити сюди
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {group.files.map((file) => {
+                      const isImage = isImageAttachment(file.file_name);
+                      const isPdf = isPdfAttachment(file.file_name);
+                      const ext = getFileExtension(file.file_name);
+                      const fileUrl = resolveAttachmentUrl(file);
+                      return (
+                        <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex items-start gap-2.5">
+                              {isImage && fileUrl ? (
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                  onClick={() => void openStorageFilePreview(file, "image")}
+                                >
+                                  <KanbanImageZoomPreview
+                                    imageUrl={fileUrl}
+                                    alt={file.file_name}
+                                    className="h-11 w-11 rounded-md border border-border/60 shrink-0"
+                                  />
+                                </button>
+                              ) : isPdf && fileUrl ? (
+                                <button
+                                  type="button"
+                                  className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                  onClick={() => void openStorageFilePreview(file, "pdf")}
+                                >
+                                  <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
+                                </button>
+                              ) : (
+                                <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
+                                  {ext}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium" title={file.file_name}>
+                                  {file.file_name}
+                                </div>
+                                {selectedIdSet.has(file.id) ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
+                                  >
+                                    Погоджено замовником
+                                  </Badge>
+                                ) : null}
+                                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
+                                  <span>{formatFileSize(file.file_size)}</span>
+                                  <span>·</span>
+                                  <span>{formatDate(file.created_at, true)}</span>
+                                  <span>·</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <AvatarBase
+                                      src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
+                                      name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
+                                      fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
+                                      size={14}
+                                      className="shrink-0 border-border/70"
+                                    />
+                                    <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                <Checkbox
+                                  checked={groupingSelectionIds.includes(`file:${file.id}`)}
+                                  disabled={outputSaving}
+                                  onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
+                                  aria-label={`Вибрати для групи: ${file.file_name}`}
+                                />
+                                <span>До групи</span>
+                              </label>
+                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                <Checkbox
+                                  checked={selectedIdSet.has(file.id)}
+                                  disabled={outputSaving || !canManageAssignments}
+                                  onCheckedChange={() => void handleSelectDesignOutputFile(file.id, kind)}
+                                  aria-label={`Погодити ${kindLabel.toLowerCase()}: ${file.file_name}`}
+                                />
+                                <span>Погоджено</span>
+                              </label>
+                              {fileUrl || (file.storage_bucket && file.storage_path) ? (
+                                <>
+                                  <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFileInNewTab(file)}>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" aria-label="Завантажити файл" onClick={() => void downloadStorageBackedFile(file)}>
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button size="icon" variant="ghost" disabled>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" disabled>
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                disabled={outputSaving}
+                                onClick={() => void handleRemoveDesignFile(file.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {group.links.map((link) => (
+                      <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-w-0 flex-1 truncate text-sm font-medium text-primary hover:underline"
+                            title={link.url}
+                          >
+                            {link.label}
+                          </a>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                              <Checkbox
+                                checked={groupingSelectionIds.includes(`link:${link.id}`)}
+                                disabled={outputSaving}
+                                onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
+                                aria-label={`Вибрати для групи: ${link.label}`}
+                              />
+                              <span>До групи</span>
+                            </label>
+                            <Button size="icon" variant="ghost" asChild>
+                              <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              disabled={outputSaving}
+                              onClick={() => void handleRemoveDesignLink(link.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
+                          <span>{formatDate(link.created_at, true)}</span>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1">
+                            <AvatarBase
+                              src={link.created_by ? getMemberAvatar(link.created_by) : null}
+                              name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
+                              fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
+                              size={14}
+                              className="shrink-0 border-border/70"
+                            />
+                            <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -5520,7 +5949,7 @@ export default function DesignTaskPage() {
                 onClick={() => outputInputRef.current?.click()}
               >
                 {outputUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Завантажити макет
+                Завантажити {DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind].toLowerCase()}
               </Button>
               <Button
                 size="sm"
@@ -5550,250 +5979,51 @@ export default function DesignTaskPage() {
                 variant="ghost"
                 className="gap-2"
                 disabled={outputSaving}
-                onClick={openAddDesignLinkModal}
+                onClick={() => openAddDesignLinkModal(uploadTargetKind)}
               >
                 <Link2 className="h-4 w-4" />
                 Додати посилання
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">
-              Оберіть зверху групу, відмітьте потрібні матеріали чекбоксом `До групи`, потім натисніть `Перемістити вибране`.
+              Оберіть зверху групу, а нижче окремо завантажуйте та погоджуйте візуал і макет. Для друку в замовлення мають бути відмічені обидва.
             </div>
 
-            {designOutputFiles.length === 0 && designOutputLinks.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-3 py-3 text-sm text-muted-foreground">
-                Додайте файл макета або посилання на Figma/Drive. Тут зберігається фінальна видача дизайну.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {groupedDesignOutputs.map((group) => (
-                  <div key={group.key} className="rounded-xl border border-border/60 bg-card/60 p-3 space-y-2">
-                    {(() => {
-                      const selectedCountInGroup = selectedGroupingItems.filter((item) => item.groupKey === group.key).length;
-                      const hasSelection = groupingSelectionIds.length > 0;
-                      const allSelectedAlreadyInGroup =
-                        hasSelection && selectedCountInGroup === groupingSelectionIds.length;
-                      const canUngroup = group.key !== "__ungrouped__" && selectedCountInGroup > 0;
-                      return (
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold text-foreground">{group.label}</div>
-                        <Badge variant="outline" className="text-[10px]">
-                          {group.files.length + group.links.length} матеріалів
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {canUngroup ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={outputSaving}
-                            onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key)}
-                          >
-                            Забрати з групи
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={outputSaving || groupingSelectionIds.length === 0 || allSelectedAlreadyInGroup}
-                          onClick={() => void handleMoveSelectedOutputsToSpecificGroup(group.key === "__ungrouped__" ? null : group.label)}
-                        >
-                          Перемістити сюди
-                        </Button>
-                      </div>
-                    </div>
-                      );
-                    })()}
-                    <div className="space-y-2">
-                      {group.files.map((file) => {
-                        const isImage = isImageAttachment(file.file_name);
-                        const isPdf = isPdfAttachment(file.file_name);
-                        const ext = getFileExtension(file.file_name);
-                        const fileUrl = resolveAttachmentUrl(file);
-                        return (
-                          <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex items-start gap-2.5">
-                                {isImage && fileUrl ? (
-                                  <button
-                                    type="button"
-                                    className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                    onClick={() => void openStorageFilePreview(file, "image")}
-                                  >
-                                    <KanbanImageZoomPreview
-                                      imageUrl={fileUrl}
-                                      alt={file.file_name}
-                                      className="h-11 w-11 rounded-md border border-border/60 shrink-0"
-                                    />
-                                  </button>
-                                ) : isPdf && fileUrl ? (
-                                  <button
-                                    type="button"
-                                    className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                    onClick={() => void openStorageFilePreview(file, "pdf")}
-                                  >
-                                    <FileHoverPreview src={fileUrl} title={file.file_name ?? "PDF preview"} />
-                                  </button>
-                                ) : (
-                                  <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                                    {ext}
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-medium" title={file.file_name}>
-                                    {file.file_name}
-                                  </div>
-                                  {selectedDesignOutputFileIdSet.has(file.id) ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
-                                    >
-                                      Погоджено замовником
-                                    </Badge>
-                                  ) : null}
-                                  <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span>{formatFileSize(file.file_size)}</span>
-                                    <span>·</span>
-                                    <span>{formatDate(file.created_at, true)}</span>
-                                    <span>·</span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <AvatarBase
-                                        src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
-                                        name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
-                                        fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
-                                        size={14}
-                                        className="shrink-0 border-border/70"
-                                      />
-                                      <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                  <Checkbox
-                                    checked={groupingSelectionIds.includes(`file:${file.id}`)}
-                                    disabled={outputSaving}
-                                    onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
-                                    aria-label={`Вибрати для групи: ${file.file_name}`}
-                                  />
-                                  <span>До групи</span>
-                                </label>
-                                <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                  <Checkbox
-                                    checked={selectedDesignOutputFileIdSet.has(file.id)}
-                                    disabled={outputSaving || !canManageAssignments}
-                                    onCheckedChange={() => void handleSelectDesignOutputFile(file.id)}
-                                    aria-label={`Вибір замовника: ${file.file_name}`}
-                                  />
-                                  <span>Вибір замовника</span>
-                                </label>
-                                {fileUrl || (file.storage_bucket && file.storage_path) ? (
-                                  <>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      aria-label="Переглянути файл"
-                                      onClick={() => void openStorageFileInNewTab(file)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      aria-label="Завантажити файл"
-                                      onClick={() => void downloadStorageBackedFile(file)}
-                                    >
-                                      <Download className="h-4 w-4" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Button size="icon" variant="ghost" disabled>
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" disabled>
-                                      <Download className="h-4 w-4" />
-                                    </Button>
-                                  </>
-                                )}
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  disabled={outputSaving}
-                                  onClick={() => void handleRemoveDesignFile(file.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {group.links.map((link) => (
-                        <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <a
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="min-w-0 flex-1 text-sm font-medium text-primary hover:underline truncate"
-                              title={link.url}
-                            >
-                              {link.label}
-                            </a>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                <Checkbox
-                                  checked={groupingSelectionIds.includes(`link:${link.id}`)}
-                                  disabled={outputSaving}
-                                  onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
-                                  aria-label={`Вибрати для групи: ${link.label}`}
-                                />
-                                <span>До групи</span>
-                              </label>
-                              <Button size="icon" variant="ghost" asChild>
-                                <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
-                                  <ExternalLink className="h-4 w-4" />
-                                </a>
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                disabled={outputSaving}
-                                onClick={() => void handleRemoveDesignLink(link.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
-                            <span>{formatDate(link.created_at, true)}</span>
-                            <span>·</span>
-                            <span className="inline-flex items-center gap-1">
-                              <AvatarBase
-                                src={link.created_by ? getMemberAvatar(link.created_by) : null}
-                                name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
-                                fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
-                                size={14}
-                                className="shrink-0 border-border/70"
-                              />
-                              <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <Tabs
+              value={activeDesignOutputTab}
+              onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
+              className="w-full"
+            >
+              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-xl bg-muted/30 p-1 shadow-inner">
+                <TabsTrigger value="visualization" className="gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  <span>Візуал</span>
+                  {selectedVisualizationOutputFileIds.length > 0 ? (
+                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      {selectedVisualizationOutputFileIds.length}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+                <TabsTrigger value="layout" className="gap-2">
+                  <PencilLine className="h-4 w-4" />
+                  <span>Макет</span>
+                  {selectedLayoutOutputFileIds.length > 0 ? (
+                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      {selectedLayoutOutputFileIds.length}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="visualization" className="mt-0">
+                {renderDesignOutputSection("visualization")}
+              </TabsContent>
+              <TabsContent value="layout" className="mt-0">
+                {renderDesignOutputSection("layout")}
+              </TabsContent>
+            </Tabs>
 
             <div className="rounded-lg border border-border/50 bg-muted/5 px-3 py-2 text-xs text-muted-foreground">
-              Рекомендація: додавайте 1) прев’ю PNG/JPG + 2) робочий файл (AI/PSD/SVG) + 3) лінк на Figma.
+              Рекомендація: для друку додавайте окремо 1) візуал для погодження із замовником і 2) фінальний макет для виробництва.
             </div>
           </div>
         </div>
@@ -5823,8 +6053,8 @@ export default function DesignTaskPage() {
                       {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
                     </DropdownMenuItem>
                   ))}
-                  {canMarkReadyNow ? (
-                    <DropdownMenuItem disabled={!!statusSaving} onClick={() => void updateTaskStatus("pm_review")}>
+                  {canSeeMarkReadyAction ? (
+                    <DropdownMenuItem disabled={!!statusSaving || !canMarkReadyNow} onClick={() => void updateTaskStatus("pm_review")}>
                       Позначити як дизайн готовий
                     </DropdownMenuItem>
                   ) : null}
@@ -5980,17 +6210,24 @@ export default function DesignTaskPage() {
                   {task.status === "changes" ? "Почати правки (В роботі)" : "Почати роботу (В роботі)"}
                 </Button>
               ) : null}
-              {canMarkReadyNow ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-2 w-full justify-start"
-                  disabled={!!statusSaving}
-                  onClick={() => void updateTaskStatus("pm_review")}
-                >
-                  {statusSaving === "pm_review" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Позначити як дизайн готовий
-                </Button>
+              {canSeeMarkReadyAction ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="mt-2 w-full justify-start"
+                    disabled={!!statusSaving || !canMarkReadyNow}
+                    onClick={() => void updateTaskStatus("pm_review")}
+                  >
+                    {statusSaving === "pm_review" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Позначити як дизайн готовий
+                  </Button>
+                  {designReadyBlockers.length > 0 ? (
+                    <div className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
+                      {designReadyBlockers.join(" · ")}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
 
@@ -6713,9 +6950,23 @@ export default function DesignTaskPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Додати посилання на макет</DialogTitle>
+            <DialogTitle>
+              Додати посилання на {addLinkKind === "visualization" ? "візуал" : "макет"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Тип матеріалу</Label>
+              <Select value={addLinkKind} onValueChange={(value) => setAddLinkKind(value as DesignOutputKind)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="visualization">Візуал</SelectItem>
+                  <SelectItem value="layout">Макет</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Група</Label>
               <Select value={addLinkGroupValue} onValueChange={setAddLinkGroupValue}>

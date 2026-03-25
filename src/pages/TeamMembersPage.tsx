@@ -128,6 +128,7 @@ type MemberProfileMeta = {
     design: boolean;
     logistics: boolean;
     catalog: boolean;
+    contractors: boolean;
   };
 };
 
@@ -243,6 +244,7 @@ const DEFAULT_MODULE_ACCESS = {
   design: true,
   logistics: false,
   catalog: false,
+  contractors: false,
 };
 
 const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
@@ -252,14 +254,17 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   design: "Дизайн",
   logistics: "Логістика",
   catalog: "Каталог",
+  contractors: "Підрядники",
 };
 
-const VISIBLE_MODULE_ACCESS_KEYS: Array<Exclude<keyof MemberProfileMeta["moduleAccess"], "finance">> = [
+const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]> = [
   "overview",
   "orders",
+  "finance",
   "design",
   "logistics",
   "catalog",
+  "contractors",
 ];
 
 const DEFAULT_MEMBER_META: MemberProfileMeta = {
@@ -328,6 +333,7 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
     design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
+    contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
   };
 }
 

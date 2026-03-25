@@ -16,7 +16,7 @@ create table if not exists tosho.team_member_profiles (
   start_date date,
   probation_end_date date,
   manager_user_id uuid,
-  module_access jsonb not null default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false}'::jsonb,
+  module_access jsonb not null default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   updated_by uuid,

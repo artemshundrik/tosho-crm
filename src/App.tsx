@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { Suspense, lazy, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import React, { Suspense, lazy, useEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -20,6 +20,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
+import { OverviewPage } from "@/pages/OverviewPage";
 
 // =======================
 // Helpers UI
@@ -60,6 +61,7 @@ const OrdersCustomersPage = lazyWithRetry(() => import("./pages/OrdersCustomersP
 const OrdersEstimateDetailsPage = lazyWithRetry(() => import("./pages/OrdersEstimateDetailsPage"));
 const ProductCatalogPage = lazyWithRetry(() => import("./features/catalog/ProductCatalogPage"));
 const OrdersProductionPage = lazyWithRetry(() => import("./pages/OrdersProductionPage"));
+const OrdersProductionDetailsRoutePage = lazyWithRetry(() => import("./pages/OrdersProductionDetailsRoutePage"));
 const OrdersReadyToShipPage = lazyWithRetry(() => import("./pages/OrdersReadyToShipPage"));
 const FinanceInvoicesPage = lazyWithRetry(() => import("./pages/FinanceInvoicesPage"));
 const FinanceExpenseInvoicesPage = lazyWithRetry(() => import("./pages/FinanceExpenseInvoicesPage"));
@@ -68,9 +70,6 @@ const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
 const DesignPage = lazyWithRetry(() => import("./pages/DesignPage"));
 const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
-const OverviewPage = lazyWithRetry(() =>
-  import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
-);
 const FinancePage = lazyWithRetry(() =>
   import("./pages/FinancePage").then((module) => ({ default: module.FinancePage }))
 );
@@ -248,6 +247,20 @@ function RequireAuth({
   }
 
   return <>{children}</>;
+}
+
+function ProtectedAppLayout({
+  session,
+  loading,
+}: {
+  session: Session | null;
+  loading: boolean;
+}) {
+  return (
+    <RequireAuth session={session} loading={loading}>
+      <AppLayout />
+    </RequireAuth>
+  );
 }
 
 function PermissionGate({
@@ -465,15 +478,75 @@ function ScrollToTop() {
   return null;
 }
 
+type BrowserLocationSnapshot = {
+  pathname: string;
+  search: string;
+  hash: string;
+};
+
+let cachedBrowserLocationSnapshot: BrowserLocationSnapshot | null = null;
+
+function getBrowserLocationSnapshot(): BrowserLocationSnapshot {
+  const nextSnapshot = {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+  };
+  if (
+    cachedBrowserLocationSnapshot &&
+    cachedBrowserLocationSnapshot.pathname === nextSnapshot.pathname &&
+    cachedBrowserLocationSnapshot.search === nextSnapshot.search &&
+    cachedBrowserLocationSnapshot.hash === nextSnapshot.hash
+  ) {
+    return cachedBrowserLocationSnapshot;
+  }
+  cachedBrowserLocationSnapshot = nextSnapshot;
+  return nextSnapshot;
+}
+
+function subscribeToBrowserLocation(onStoreChange: () => void) {
+  const historyState = window.history as History & {
+    __toshoRoutesPatched?: boolean;
+    __toshoPushState?: History["pushState"];
+    __toshoReplaceState?: History["replaceState"];
+  };
+
+  if (!historyState.__toshoRoutesPatched) {
+    historyState.__toshoRoutesPatched = true;
+    historyState.__toshoPushState = window.history.pushState.bind(window.history);
+    historyState.__toshoReplaceState = window.history.replaceState.bind(window.history);
+
+    window.history.pushState = function (...args) {
+      const result = historyState.__toshoPushState!.apply(this, args);
+      window.dispatchEvent(new Event("tosho:browser-location-change"));
+      return result;
+    };
+
+    window.history.replaceState = function (...args) {
+      const result = historyState.__toshoReplaceState!.apply(this, args);
+      window.dispatchEvent(new Event("tosho:browser-location-change"));
+      return result;
+    };
+  }
+
+  const handleChange = () => onStoreChange();
+  window.addEventListener("popstate", handleChange);
+  window.addEventListener("tosho:browser-location-change", handleChange);
+  return () => {
+    window.removeEventListener("popstate", handleChange);
+    window.removeEventListener("tosho:browser-location-change", handleChange);
+  };
+}
+
 function AppRoutes() {
   const { session, loading, accessRole, jobRole, permissions } = useAuth();
-  const location = useLocation();
-
-
-
-
+  const browserLocation = useSyncExternalStore(
+    subscribeToBrowserLocation,
+    getBrowserLocationSnapshot,
+    () => ({ pathname: "/", search: "", hash: "" })
+  );
   return (
-    <Routes location={location}>
+    <Routes location={browserLocation}>
       {/* public */}
       <Route path="/login" element={<LoginPage />} />
       <Route
@@ -492,31 +565,6 @@ function AppRoutes() {
           </RouteSuspense>
         }
       />
-      <Route
-        path="/notifications"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <NotificationsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/activity"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <ActivityPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
       {/* --- ВИПРАВЛЕНО: Інвайт тепер "публічний" (має свій лейаут всередині) --- */}
       <Route
         path="/invite"
@@ -527,286 +575,215 @@ function AppRoutes() {
         }
       />
 
-      {/* Orders */}
-      <Route
-        path="/overview"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
+      <Route element={<ProtectedAppLayout session={session} loading={loading} />}>
+        <Route
+          path="notifications"
+          element={
+            <RouteSuspense shell>
+              <NotificationsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="activity"
+          element={
+            <RouteSuspense shell>
+              <ActivityPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="overview"
+          element={
+            <RouteSuspense shell>
+              <OverviewPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/customers"
+          element={
+            <RouteSuspense shell>
+              <OrdersCustomersPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/estimates"
+          element={
+            <RouteSuspense shell>
+              <OrdersEstimatesPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/estimates/:id"
+          element={
+            <RouteSuspense shell>
+              <OrdersEstimateDetailsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/production"
+          element={
+            <RouteSuspense shell>
+              <OrdersProductionPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/production/:id"
+          element={
+            <RouteSuspense shell>
+              <OrdersProductionDetailsRoutePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="orders/ready-to-ship"
+          element={
+            <RouteSuspense shell>
+              <OrdersReadyToShipPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="catalog/products"
+          element={
+            <RouteSuspense shell>
+              <ProductCatalogPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/invoices"
+          element={
+            <RouteSuspense shell>
+              <FinanceInvoicesPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/expense-invoices"
+          element={
+            <RouteSuspense shell>
+              <FinanceExpenseInvoicesPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/acts"
+          element={
+            <RouteSuspense shell>
+              <FinanceActsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="logistics"
+          element={
+            <RouteSuspense shell>
+              <LogisticsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="design"
+          element={
+            <RouteSuspense shell>
+              <DesignPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="design/:id"
+          element={
+            <RouteSuspense shell>
+              <DesignTaskPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="contractors"
+          element={
+            <RouteSuspense shell>
+              <ContractorsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="settings/members"
+          element={
+            <PermissionGate
+              allowed={permissions.canManageMembers}
+              requirement="access_role: owner або access_role: admin, або job_role: seo"
+              accessRole={accessRole}
+              jobRole={jobRole}
+            >
               <RouteSuspense shell>
-                <OverviewPage />
+                <TeamMembersPage />
               </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/orders/customers"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <OrdersCustomersPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/orders/estimates"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <OrdersEstimatesPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/orders/estimates/:id"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <OrdersEstimateDetailsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/orders/production"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <OrdersProductionPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/orders/ready-to-ship"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <OrdersReadyToShipPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/catalog/products"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <ProductCatalogPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Finance */}
-      <Route
-        path="/finance/invoices"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinanceInvoicesPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/expense-invoices"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinanceExpenseInvoicesPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/acts"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinanceActsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Logistics / Design / Contractors */}
-      <Route
-        path="/logistics"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <LogisticsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/design"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <DesignPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/design/:id"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <DesignTaskPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/contractors"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <ContractorsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      <Route
-        path="/settings/members"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <PermissionGate
-                allowed={permissions.canManageMembers}
-                requirement="access_role: owner або access_role: admin, або job_role: seo"
-                accessRole={accessRole}
-                jobRole={jobRole}
-              >
-                <RouteSuspense shell>
-                  <TeamMembersPage />
-                </RouteSuspense>
-              </PermissionGate>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinancePage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/transactions/new"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinanceTransactionCreatePage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/invoices/new"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinanceInvoiceCreatePage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/pools/new"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinancePoolCreatePage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/finance/pools/:id"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <FinancePoolDetailsPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      <Route
-        path="/profile"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <ProfilePage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Legacy admin page (якщо треба) */}
-      <Route
-        path="/admin"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <RouteSuspense shell>
-                <AdminPage />
-              </RouteSuspense>
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
+            </PermissionGate>
+          }
+        />
+        <Route
+          path="finance"
+          element={
+            <RouteSuspense shell>
+              <FinancePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/transactions/new"
+          element={
+            <RouteSuspense shell>
+              <FinanceTransactionCreatePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/invoices/new"
+          element={
+            <RouteSuspense shell>
+              <FinanceInvoiceCreatePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/pools/new"
+          element={
+            <RouteSuspense shell>
+              <FinancePoolCreatePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="finance/pools/:id"
+          element={
+            <RouteSuspense shell>
+              <FinancePoolDetailsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <RouteSuspense shell>
+              <ProfilePage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="admin"
+          element={
+            <RouteSuspense shell>
+              <AdminPage />
+            </RouteSuspense>
+          }
+        />
+      </Route>
 
       {/* Default */}
       <Route path="/" element={<Navigate to="/overview" replace />} />

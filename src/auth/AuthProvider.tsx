@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { resolveWorkspaceId } from '@/lib/workspace';
+import { resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
 import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
 
 type AuthState = {
@@ -93,18 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let accessRoleValue: AccessRole = null;
     let jobRoleValue: JobRole = null;
     if (workspaceId) {
-      const { data: membership, error: membershipError } = await supabase
-        .schema("tosho")
-        .from("memberships_view")
-        .select("access_role,job_role")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", effectiveUserId)
-        .maybeSingle();
-
-      if (!membershipError) {
-        const membershipData = (membership as { access_role?: string | null; job_role?: string | null } | null) ?? null;
-        accessRoleValue = membershipData?.access_role ?? null;
-        jobRoleValue = membershipData?.job_role ?? null;
+      const membership = await resolveWorkspaceMembership(workspaceId, effectiveUserId);
+      if (membership) {
+        accessRoleValue = (membership.accessRole as AccessRole) ?? null;
+        jobRoleValue = (membership.jobRole as JobRole) ?? null;
         roleValue = mapAccessRoleToTeamRole(accessRoleValue);
       }
     }
@@ -199,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [refreshTeamContext]);
+  }, [refreshTeamContext, resetTeamContext]);
 
   useEffect(() => {
     (async () => {

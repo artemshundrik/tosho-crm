@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -244,6 +244,7 @@ function readCustomersPageCache(teamId: string): CustomersPageCachePayload | nul
 }
 
 function CustomersPage({ teamId }: { teamId: string }) {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { session, userId, accessRole, jobRole } = useAuth();
   const initialCache = readCustomersPageCache(teamId);
@@ -309,6 +310,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
   const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
   const [handledDeepLink, setHandledDeepLink] = useState<string | null>(null);
+  const previousPathnameRef = useRef(location.pathname);
 
   const defaultManagerName = useMemo(() => {
     const resolved = buildUserNameFromMetadata(
@@ -812,6 +814,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   }, [handledDeepLink, leads, rows, searchParams]);
 
+  useEffect(() => {
+    if (previousPathnameRef.current === location.pathname) {
+      return;
+    }
+
+    previousPathnameRef.current = location.pathname;
+    setDialogOpen(false);
+    setLeadDialogOpen(false);
+    setDeleteDialogOpen(false);
+    setLeadDeleteDialogOpen(false);
+
+    if (typeof document !== "undefined") {
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
+      document.body.removeAttribute("data-scroll-locked");
+    }
+  }, [location.pathname]);
+
   const handleSave = async () => {
     if (!form.name.trim()) {
       setFormError("Вкажіть назву компанії.");
@@ -834,6 +854,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
         birthday: contact.birthday.trim(),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
+
+    if (!contacts.some((contact) => contact.phone)) {
+      setSaving(false);
+      setFormError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
+      return;
+    }
+
+    if (!contacts.some((contact) => contact.email)) {
+      setSaving(false);
+      setFormError("Для замовника обовʼязково вкажіть email.");
+      return;
+    }
+
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
