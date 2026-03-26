@@ -1013,7 +1013,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [selectedRun]);
 
   const [runsLoaded, setRunsLoaded] = useState(false);
-  const quoteSectionsBootstrapping = !itemsLoaded || !runsLoaded;
+  const quoteSectionsBootstrapping =
+    (!itemsLoaded && items.length === 0) || (!runsLoaded && runs.length === 0);
 
   const toDateInputValue = (value?: string | null) => {
     if (!value) return "";
@@ -2623,7 +2624,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const loadItems = async () => {
     setItemsLoading(true);
-    setItemsLoaded(false);
     setItemsError(null);
     try {
       const quoteItemColumnsWithMetadata =
@@ -3259,8 +3259,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (!quoteId) return;
-    setItemsLoaded(false);
-    setRunsLoaded(false);
+    setItemsLoaded(items.length > 0);
+    setRunsLoaded(runs.length > 0);
     void loadQuote();
     void loadItems();
     void loadRuns();
@@ -4720,8 +4720,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     <div className="text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-transparent">
         <div className="px-4 py-2 md:px-5 lg:px-6">
-          <div className="flex min-h-10 items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-h-10 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3 lg:items-center">
               <Button
                 variant="ghost"
                 size="icon"
@@ -4777,50 +4777,50 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:justify-end">
               {currentStatus === "approved" ? (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-2"
+                  className="h-8 gap-2 max-sm:flex-1"
                   onClick={() => void openCreateOrderDialog()}
                 >
                   <FileDown className="h-4 w-4" />
-                  Створити замовлення
+                  <span className="truncate">Створити замовлення</span>
                 </Button>
               ) : null}
               {!designTask && !designTaskLoading ? (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-2"
+                  className="h-8 gap-2 max-sm:flex-1"
                   disabled={designTaskSaving || !canEditQuoteContent}
                   onClick={() => void createDesignTask()}
                 >
                   <Palette className="h-4 w-4" />
-                  {designTaskSaving ? "Створення..." : "Створити дизайн-задачу"}
+                  <span className="truncate">{designTaskSaving ? "Створення..." : "Створити дизайн-задачу"}</span>
                 </Button>
               ) : null}
               <Button
                 variant="primary"
                 size="sm"
-                className="h-8 gap-2"
+                className="h-8 gap-2 max-sm:flex-1"
                 disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
                 onClick={handlePrimaryStatusAction}
               >
                 {createElement(statusIcons[nextAction.nextStatus ?? currentStatus] ?? Clock, {
                   className: "h-4 w-4",
                 })}
-                {nextAction.ctaLabel}
+                <span className="truncate">{nextAction.ctaLabel}</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-2"
+                className="h-8 gap-2 max-sm:flex-1"
                 disabled={!canEditQuoteContent || statusBusy || quoteLockedByOther || quoteRequirements.length > 0}
                 onClick={openStatusDialog}
               >
-                Змінити статус
+                <span className="truncate">Змінити статус</span>
                 <ChevronDown className="h-3 w-3" />
               </Button>
               <DropdownMenu>
@@ -4869,7 +4869,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       </header>
 
-      <div className="flex w-full flex-col gap-6 px-4 pb-10 pt-2 md:px-5 lg:px-6 2xl:flex-row 2xl:gap-8">
+      <div className="flex w-full flex-col gap-6 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex-row xl:gap-6 2xl:gap-8">
         <main className="min-w-0 flex-1">
           <div className="space-y-6">
             {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
@@ -5292,14 +5292,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ) : (
                 <>
                   <div className="space-y-2">
-                    <div className="hidden items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground 2xl:grid 2xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
-                      <div>Тираж</div>
-                      <div>Кількість</div>
-                      <div>{`Ціна модель (${quote.currency})`}</div>
-                      <div>{`Ціна нанесення (${quote.currency})`}</div>
-                      <div>{`Доставка (${quote.currency})`}</div>
-                      <div className="text-right">Сума</div>
-                      <div />
+                    <div className="hidden xl:block">
+                      <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <div className="grid min-w-0 flex-1 items-center gap-2 xl:grid-cols-[132px_76px_96px_112px_96px] 2xl:gap-3 2xl:grid-cols-[132px_minmax(84px,98px)_minmax(104px,122px)_minmax(126px,148px)_minmax(96px,116px)]">
+                          <div>Тираж</div>
+                          <div>Кількість</div>
+                          <div>{`Модель (${quote.currency})`}</div>
+                          <div>{`Нанесення (${quote.currency})`}</div>
+                          <div>{`Доставка (${quote.currency})`}</div>
+                        </div>
+                        <div className="w-[120px] text-right 2xl:w-[132px]">Сума</div>
+                        <div className="w-7" />
+                      </div>
                     </div>
 
                     {runs.map((run, idx) => {
@@ -5321,122 +5325,226 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               : "border-border/40 hover:bg-muted/10"
                           )}
                         >
-                          <div className="grid items-center gap-3 2xl:grid-cols-[150px_minmax(92px,110px)_minmax(120px,138px)_minmax(150px,176px)_minmax(120px,138px)_minmax(160px,1fr)_32px]">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div
-                                className={cn(
-                                  "h-2.5 w-2.5 rounded-full transition-all",
-                                  isSelected
-                                    ? "scale-110 bg-primary"
-                                    : "bg-border group-hover:bg-muted-foreground/40"
-                                )}
-                              />
-                              <div>
-                                <div className="text-sm font-semibold text-foreground">
-                                  {`Тираж ${idx + 1}`}
+                          <div className="space-y-4 xl:hidden">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div
+                                  className={cn(
+                                    "h-2.5 w-2.5 rounded-full transition-all",
+                                    isSelected
+                                      ? "scale-110 bg-primary"
+                                      : "bg-border group-hover:bg-muted-foreground/40"
+                                  )}
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-base font-semibold text-foreground">{`Тираж ${idx + 1}`}</div>
+                                  {isSelected ? (
+                                    <div className="mt-0.5 text-[11px] font-medium text-primary">Активний</div>
+                                  ) : null}
                                 </div>
-                                {isSelected ? (
-                                  <div className="mt-0.5 text-[11px] font-medium text-primary">
-                                    Активний
-                                  </div>
-                                ) : null}
                               </div>
-                            </div>
-                            <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">Кількість</div>
-                              <Input
-                                type="number"
-                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.quantity ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.quantity === 0) e.target.select();
-                                }}
-                                min={1}
-                              />
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
-                                Ціна модель <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
-                              </div>
-                              <Input
-                                type="number"
-                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.unit_price_model ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.unit_price_model === 0) e.target.select();
-                                }}
-                                min={0}
-                              />
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
-                                Ціна нанесення <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
-                              </div>
-                              <Input
-                                type="number"
-                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                value={run.unit_price_print ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
-                                onFocus={(e) => {
-                                  if (run.unit_price_print === 0) e.target.select();
-                                }}
-                                min={0}
-                              />
-                            </div>
-
-                            <div className="space-y-1">
-                              <div className="text-[11px] font-medium text-muted-foreground 2xl:hidden">
-                                Доставка <span className="ml-1 text-muted-foreground/60">{quote.currency}</span>
-                              </div>
-                              <Input
-                                type="number"
-                                className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
-                                value={run.logistics_cost ?? ""}
-                                disabled={disabled}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
-                                onFocus={(e) => {
-                                  if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
-                                }}
-                                placeholder="—"
-                                min={0}
-                              />
-                            </div>
-
-                            <div className="min-w-0 text-right">
-                              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                                {formatCurrency(total, quote.currency)}
-                              </div>
-                              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                                ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
-                                {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                              <div className="shrink-0 text-right">
+                                <div className="font-mono text-lg font-semibold tabular-nums text-foreground">
+                                  {formatCurrency(total, quote.currency)}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                  ({formatCurrencyCompact(modelPrice, quote.currency)} + {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                                </div>
                               </div>
                             </div>
 
-                            <div className="flex justify-end">
-                              {!disabled ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-medium text-muted-foreground">Кількість</div>
+                                <Input
+                                  type="number"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  value={run.quantity ?? ""}
+                                  disabled={disabled}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
+                                  onFocus={(e) => {
+                                    if (run.quantity === 0) e.target.select();
+                                  }}
+                                  min={1}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
+                                <Input
+                                  type="number"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  value={run.unit_price_model ?? ""}
+                                  disabled={disabled}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
+                                  onFocus={(e) => {
+                                    if (run.unit_price_model === 0) e.target.select();
+                                  }}
+                                  min={0}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
+                                <Input
+                                  type="number"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
+                                  value={run.unit_price_print ?? ""}
+                                  disabled={disabled}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
+                                  onFocus={(e) => {
+                                    if (run.unit_price_print === 0) e.target.select();
+                                  }}
+                                  min={0}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-medium text-muted-foreground">{`Доставка · ${quote.currency}`}</div>
+                                <Input
+                                  type="number"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                  value={run.logistics_cost ?? ""}
+                                  disabled={disabled}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
+                                  onFocus={(e) => {
+                                    if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
+                                  }}
+                                  placeholder="—"
+                                  min={0}
+                                />
+                              </div>
+                            </div>
+
+                            {!disabled ? (
+                              <div className="flex justify-end">
                                 <Button
                                   variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                  size="sm"
+                                  className="h-8 gap-1.5 text-destructive hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     void removeRun(idx);
                                   }}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
+                                  Видалити
                                 </Button>
-                              ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="hidden xl:block">
+                            <div className="flex items-center gap-3 pr-2">
+                              <div className="grid min-w-0 flex-1 items-center gap-2 xl:grid-cols-[132px_76px_96px_112px_96px] 2xl:gap-3 2xl:grid-cols-[132px_minmax(84px,98px)_minmax(104px,122px)_minmax(126px,148px)_minmax(96px,116px)]">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <div
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full transition-all",
+                                      isSelected
+                                        ? "scale-110 bg-primary"
+                                        : "bg-border group-hover:bg-muted-foreground/40"
+                                    )}
+                                  />
+                                  <div>
+                                    <div className="text-sm font-semibold text-foreground">
+                                      {`Тираж ${idx + 1}`}
+                                    </div>
+                                    {isSelected ? (
+                                      <div className="mt-0.5 text-[11px] font-medium text-primary">
+                                        Активний
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <Input
+                                    type="number"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    value={run.quantity ?? ""}
+                                    disabled={disabled}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
+                                    onFocus={(e) => {
+                                      if (run.quantity === 0) e.target.select();
+                                    }}
+                                    min={1}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <Input
+                                    type="number"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    value={run.unit_price_model ?? ""}
+                                    disabled={disabled}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
+                                    onFocus={(e) => {
+                                      if (run.unit_price_model === 0) e.target.select();
+                                    }}
+                                    min={0}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <Input
+                                    type="number"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    value={run.unit_price_print ?? ""}
+                                    disabled={disabled}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
+                                    onFocus={(e) => {
+                                      if (run.unit_price_print === 0) e.target.select();
+                                    }}
+                                    min={0}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <Input
+                                    type="number"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
+                                    value={run.logistics_cost ?? ""}
+                                    disabled={disabled}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
+                                    onFocus={(e) => {
+                                      if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
+                                    }}
+                                    placeholder="—"
+                                    min={0}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="w-[120px] shrink-0 text-right 2xl:w-[132px]">
+                                <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                                  {formatCurrency(total, quote.currency)}
+                                </div>
+                                <div className="mt-0.5 hidden truncate text-[11px] text-muted-foreground 2xl:block">
+                                  ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
+                                  {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
+                                </div>
+                              </div>
+
+                              <div className="flex w-7 shrink-0 justify-end">
+                                {!disabled ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void removeRun(idx);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -6680,8 +6788,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
         </main>
 
-        <aside className="hidden w-full min-w-0 xl:block 2xl:w-[min(32vw,380px)] 2xl:min-w-[320px] 2xl:shrink-0">
-          <div className="space-y-4 2xl:sticky 2xl:top-[4.5rem]">
+        <aside className="block w-full min-w-0 xl:w-[min(28vw,340px)] xl:min-w-[280px] xl:shrink xl:self-start 2xl:w-[min(32vw,380px)] 2xl:min-w-[320px] 2xl:shrink-0">
+          <div className="space-y-4 xl:sticky xl:top-[4.5rem]">
             <details open className="group pb-2">
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">

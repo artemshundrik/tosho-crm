@@ -42,7 +42,6 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -129,6 +128,7 @@ type MemberProfileMeta = {
     logistics: boolean;
     catalog: boolean;
     contractors: boolean;
+    team: boolean;
   };
 };
 
@@ -245,6 +245,7 @@ const DEFAULT_MODULE_ACCESS = {
   logistics: false,
   catalog: false,
   contractors: false,
+  team: false,
 };
 
 const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
@@ -255,6 +256,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   logistics: "Логістика",
   catalog: "Каталог",
   contractors: "Підрядники",
+  team: "Управління командою",
 };
 
 const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]> = [
@@ -265,6 +267,7 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "logistics",
   "catalog",
   "contractors",
+  "team",
 ];
 
 const DEFAULT_MEMBER_META: MemberProfileMeta = {
@@ -334,6 +337,7 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
+    team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
 
@@ -424,10 +428,10 @@ function isRecoverableTeamProfileError(message: string) {
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
-  const { onlineEntries } = useWorkspacePresence();
+  const { entries, onlineEntries } = useWorkspacePresence();
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
-  const hasCache = Boolean(cached);
+  const hasCache = Boolean(cached?.workspaceId);
   const [workspaceResolved, setWorkspaceResolved] = useState(Boolean(cached?.workspaceId));
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(cached?.workspaceId ?? null);
@@ -436,18 +440,16 @@ export function TeamMembersPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const [members, setMembers] = useState<Member[]>(cached?.members ?? []);
-  const [membersLoading, setMembersLoading] = useState(!hasCache);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
-  >(cached?.memberProfilesByUserId ?? {});
+  >({});
   const [directoryRows, setDirectoryRows] = useState<WorkspaceMemberDirectoryRow[]>([]);
-  const [memberProfilesLoading, setMemberProfilesLoading] = useState(!hasCache);
-  const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>(
-    cached?.memberMetaByUserId ?? {}
-  );
-  const [memberMetaLoading, setMemberMetaLoading] = useState(!hasCache);
+  const [memberProfilesLoading, setMemberProfilesLoading] = useState(true);
+  const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>({});
+  const [memberMetaLoading, setMemberMetaLoading] = useState(true);
   const [memberProfileStorageAvailable, setMemberProfileStorageAvailable] = useState(true);
   const [memberPresenceByUserId, setMemberPresenceByUserId] = useState<Record<string, MemberPresence>>({});
   const [activityRange, setActivityRange] = useState<"day" | "week" | "month">("day");
@@ -541,17 +543,10 @@ export function TeamMembersPage() {
   }, []);
 
   useEffect(() => {
-    if (hasCache) {
-      if (workspaceLoading) setWorkspaceLoading(false);
-      if (membersLoading) setMembersLoading(false);
-    }
-  }, [hasCache, workspaceLoading, membersLoading]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const loadWorkspaceId = async () => {
-      if (!hasCache) setWorkspaceLoading(true);
+      setWorkspaceLoading(true);
       setWorkspaceError(null);
 
       let resolvedId: string | null = null;
@@ -587,7 +582,7 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMembers = async () => {
-      if (!hasCache) setMembersLoading(true);
+      setMembersLoading(true);
       setMembersError(null);
 
       try {
@@ -636,6 +631,7 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMemberProfiles = async () => {
+      setMemberProfilesLoading(true);
       try {
         const memberIds = Array.from(new Set(directoryRows.map((member) => member.userId).filter(Boolean)));
 
@@ -828,62 +824,21 @@ export function TeamMembersPage() {
   }, [workspaceId, canOpenProfileCard, canManageManagerRates, directoryRows]);
 
   useEffect(() => {
-    if (!workspaceId || members.length === 0) {
+    if (members.length === 0) {
       setMemberPresenceByUserId({});
       return;
     }
+    const presenceMap = entries.reduce<Record<string, MemberPresence>>((acc, entry) => {
+      acc[entry.userId] = {
+        currentLabel: entry.currentLabel?.trim() || "У CRM",
+        lastSeenAt: entry.lastSeenAt ?? "",
+        online: entry.online,
+      };
+      return acc;
+    }, {});
 
-    let cancelled = false;
-
-    const loadPresenceAndActivity = async () => {
-      try {
-        const loadPresenceRows = async () => {
-          const teamScoped = await supabase
-            .from("user_presence")
-            .select("user_id,current_label,last_seen_at")
-            .eq("team_id", workspaceId);
-          if (!teamScoped.error) return teamScoped.data ?? [];
-          const workspaceScoped = await supabase
-            .from("user_presence")
-            .select("user_id,current_label,last_seen_at")
-            .eq("workspace_id", workspaceId);
-          if (!workspaceScoped.error) return workspaceScoped.data ?? [];
-          return [];
-        };
-
-        const presenceRows = await loadPresenceRows();
-
-        if (cancelled) return;
-
-        const nowMs = Date.now();
-        const presenceMap = ((presenceRows ?? []) as Array<{ user_id?: string | null; current_label?: string | null; last_seen_at?: string | null }>).reduce<
-          Record<string, MemberPresence>
-        >((acc, row) => {
-          const userId = row.user_id ?? "";
-          if (!userId) return acc;
-          const lastSeenAt = row.last_seen_at ?? "";
-          const online =
-            !!lastSeenAt && nowMs - new Date(lastSeenAt).getTime() <= 2 * 60 * 1000;
-          acc[userId] = {
-            currentLabel: row.current_label?.trim() || "У CRM",
-            lastSeenAt,
-            online,
-          };
-          return acc;
-        }, {});
-
-        setMemberPresenceByUserId(presenceMap);
-      } catch {
-        if (cancelled) return;
-      }
-    };
-
-    void loadPresenceAndActivity();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, members.length]);
+    setMemberPresenceByUserId(presenceMap);
+  }, [entries, members.length]);
 
   useEffect(() => {
     if (!workspaceId || !canManage) {
@@ -1987,6 +1942,16 @@ export function TeamMembersPage() {
     setRevokeId(id);
   };
 
+  const openInviteDialog = () => {
+    setActiveTab("invites");
+    setInviteOpen(true);
+    setGeneratedLink(null);
+    setInviteEmail("");
+    setInviteAccessRole("member");
+    setInviteJobRole("none");
+    setParams({ tab: "invites" });
+  };
+
   const handleRevoke = async () => {
     if (!revokeId || !workspaceId) return;
     setRevokeBusy(true);
@@ -2010,14 +1975,13 @@ export function TeamMembersPage() {
   };
 
   const showSkeleton = useMinimumLoading(
-    (!workspaceResolved ||
+    !workspaceResolved ||
       workspaceLoading ||
       membersLoading ||
       memberProfilesLoading ||
-      (canManage && memberMetaLoading) ||
+      (canOpenProfileCard && memberMetaLoading) ||
       (activeTab === "invites" && invitesLoading) ||
-      (activeTab === "activity" && teamActivityLoading)) &&
-      (!hasCache || !workspaceResolved)
+      (activeTab === "activity" && teamActivityLoading)
   );
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
@@ -2048,33 +2012,6 @@ export function TeamMembersPage() {
   });
   const selectedManagerLabel =
     managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
-
-  const teamMembersHeaderActions = useMemo(
-    () => (
-      <div className="flex items-center justify-end">
-        {canManage ? (
-          <Button
-            size="sm"
-            className="h-10"
-            onClick={() => {
-              setActiveTab("invites");
-              setInviteOpen(true);
-              setGeneratedLink(null);
-              setInviteEmail("");
-              setInviteAccessRole("member");
-              setInviteJobRole("none");
-              setParams({ tab: "invites" });
-            }}
-          >
-            Інвайт
-          </Button>
-        ) : null}
-      </div>
-    ),
-    [canManage, setParams]
-  );
-
-  usePageHeaderActions(teamMembersHeaderActions, [teamMembersHeaderActions]);
 
   if (showSkeleton) {
     return <ListSkeleton />;
@@ -2182,17 +2119,24 @@ export function TeamMembersPage() {
               ) : null}
             </div>
 
-            {activeTab === "members" ? (
-              <div className="relative w-full md:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-10 bg-background border-input rounded-[var(--radius-lg)]"
-                  placeholder="Пошук учасників..."
-                />
-              </div>
-            ) : null}
+            <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end">
+              {activeTab === "members" ? (
+                <div className="relative w-full md:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-10 bg-background border-input rounded-[var(--radius-lg)]"
+                    placeholder="Пошук учасників..."
+                  />
+                </div>
+              ) : null}
+              {canManage ? (
+                <Button size="sm" className="h-10 md:px-5" onClick={openInviteDialog}>
+                  Інвайт
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -2380,7 +2324,7 @@ export function TeamMembersPage() {
             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableTextHeaderCell widthClass="w-[34%]" className="pl-6">
+                  <TableTextHeaderCell widthClass="w-[30%]" className="pl-6">
                     Користувач
                   </TableTextHeaderCell>
                   <TableTextHeaderCell>Доступ</TableTextHeaderCell>
@@ -2443,11 +2387,7 @@ export function TeamMembersPage() {
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="inline-flex items-center gap-1.5">
                                   <Mail className="w-3 h-3 opacity-70" />
-                                  <span className="truncate max-w-[170px]">{m.email || "Не вказано"}</span>
-                                </span>
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Phone className="w-3 h-3 opacity-70" />
-                                  <span>{meta?.phone || "—"}</span>
+                                  <span className="truncate max-w-[220px]">{m.email || "Не вказано"}</span>
                                 </span>
                               </div>
                             </div>

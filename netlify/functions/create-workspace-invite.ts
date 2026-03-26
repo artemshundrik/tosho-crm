@@ -24,6 +24,7 @@ type InviteRequest = {
     logistics?: boolean;
     catalog?: boolean;
     contractors?: boolean;
+    team?: boolean;
   } | null;
 };
 type HttpEvent = {
@@ -479,6 +480,7 @@ export const handler = async (event: HttpEvent) => {
           logistics: boolean;
           catalog: boolean;
           contractors: boolean;
+          team: boolean;
         };
       }
     > = {};
@@ -514,6 +516,7 @@ export const handler = async (event: HttpEvent) => {
                     logistics: Boolean((meta.module_access as Record<string, unknown>).logistics),
                     catalog: Boolean((meta.module_access as Record<string, unknown>).catalog),
                     contractors: Boolean((meta.module_access as Record<string, unknown>).contractors),
+                    team: Boolean((meta.module_access as Record<string, unknown>).team),
                   }
                 : {
                     overview: true,
@@ -523,6 +526,7 @@ export const handler = async (event: HttpEvent) => {
                     logistics: false,
                     catalog: false,
                     contractors: false,
+                    team: false,
                   },
           };
         } catch {
@@ -605,6 +609,7 @@ export const handler = async (event: HttpEvent) => {
             logistics: Boolean(payload.moduleAccess.logistics),
             catalog: Boolean(payload.moduleAccess.catalog),
             contractors: Boolean(payload.moduleAccess.contractors),
+            team: Boolean(payload.moduleAccess.team),
           }
         : {
             overview: true,
@@ -614,6 +619,7 @@ export const handler = async (event: HttpEvent) => {
             logistics: false,
             catalog: false,
             contractors: false,
+            team: false,
           };
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
 

@@ -77,7 +77,7 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?: "overview" | "orders" | "finance" | "design" | "logistics" | "catalog" | "contractors";
+  moduleKey?: "overview" | "orders" | "finance" | "design" | "logistics" | "catalog" | "contractors" | "team";
 };
 
 type HeaderConfig = {
@@ -161,7 +161,7 @@ const baseSidebarLinks: SidebarLink[] = [
 
   // Акаунт
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
-  { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert },
+  { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert, moduleKey: "team" },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -482,18 +482,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
-        if (link.to === ROUTES.membersAccess) {
-          return permissions.canManageMembers;
-        }
         if (link.moduleKey) {
           if (currentModuleAccess === undefined) {
             return false;
           }
-          return currentModuleAccess?.[link.moduleKey] !== false;
+          return currentModuleAccess?.[link.moduleKey] !== false || (link.to === ROUTES.membersAccess && permissions.canEditMemberRoles);
         }
         return true;
       }),
-    [currentModuleAccess, permissions.canManageMembers]
+    [currentModuleAccess, permissions.canEditMemberRoles]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {

@@ -131,6 +131,7 @@ const DEFAULT_MODULE_ACCESS = {
   logistics: false,
   catalog: false,
   contractors: false,
+  team: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -165,6 +166,7 @@ function normalizeModuleAccess(value: unknown) {
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
+    team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
 

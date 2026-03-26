@@ -21,6 +21,11 @@ import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
 import { OverviewPage } from "@/pages/OverviewPage";
+import {
+  getCachedCurrentWorkspaceMemberDirectoryEntry,
+  getCurrentWorkspaceMemberDirectoryEntry,
+  WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT,
+} from "@/lib/workspaceMemberDirectory";
 
 // =======================
 // Helpers UI
@@ -295,6 +300,62 @@ function PermissionGate({
   }
 
   return <>{children}</>;
+}
+
+function TeamMembersRouteGate({
+  accessRole,
+  jobRole,
+  canEditMemberRoles,
+  children,
+}: {
+  accessRole: string | null;
+  jobRole: string | null;
+  canEditMemberRoles: boolean;
+  children: React.ReactNode;
+}) {
+  const [hasTeamModuleAccess, setHasTeamModuleAccess] = useState<boolean>(() => {
+    if (canEditMemberRoles) return true;
+    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess?.team === true;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncAccess = async () => {
+      if (canEditMemberRoles) {
+        if (!cancelled) setHasTeamModuleAccess(true);
+        return;
+      }
+
+      const entry = await getCurrentWorkspaceMemberDirectoryEntry();
+      if (!cancelled) {
+        setHasTeamModuleAccess(entry?.moduleAccess?.team === true);
+      }
+    };
+
+    void syncAccess();
+
+    const handleUpdate = () => {
+      void syncAccess();
+    };
+
+    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
+    };
+  }, [canEditMemberRoles]);
+
+  return (
+    <PermissionGate
+      allowed={canEditMemberRoles || hasTeamModuleAccess}
+      requirement="картка доступів: Управління командою або access_role: owner/admin"
+      accessRole={accessRole}
+      jobRole={jobRole}
+    >
+      {children}
+    </PermissionGate>
+  );
 }
 
 // =======================
@@ -715,16 +776,15 @@ function AppRoutes() {
         <Route
           path="settings/members"
           element={
-            <PermissionGate
-              allowed={permissions.canManageMembers}
-              requirement="access_role: owner або access_role: admin, або job_role: seo"
+            <TeamMembersRouteGate
               accessRole={accessRole}
               jobRole={jobRole}
+              canEditMemberRoles={permissions.canEditMemberRoles}
             >
               <RouteSuspense shell>
                 <TeamMembersPage />
               </RouteSuspense>
-            </PermissionGate>
+            </TeamMembersRouteGate>
           }
         />
         <Route
