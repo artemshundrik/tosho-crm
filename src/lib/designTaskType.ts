@@ -3,12 +3,14 @@ import {
   Image,
   Layers3,
   PanelsTopLeft,
+  Presentation,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
 export const DESIGN_TASK_TYPE_OPTIONS = [
   { value: "visualization", label: "Візуалізація" },
+  { value: "presentation", label: "Презентація" },
   { value: "layout_adaptation", label: "Адаптація макету" },
   { value: "visualization_layout_adaptation", label: "Візуал + адаптація макету" },
   { value: "layout", label: "Верстка" },
@@ -27,6 +29,7 @@ export const DESIGN_TASK_TYPE_LABELS: Record<DesignTaskType, string> = DESIGN_TA
 
 export const DESIGN_TASK_TYPE_ICONS: Record<DesignTaskType, LucideIcon> = {
   visualization: Image,
+  presentation: Presentation,
   layout_adaptation: Copy,
   visualization_layout_adaptation: Layers3,
   layout: PanelsTopLeft,
