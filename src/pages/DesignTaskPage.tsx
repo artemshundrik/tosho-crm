@@ -3653,8 +3653,8 @@ export default function DesignTaskPage() {
       requestEstimateDialog({ mode: "status", nextStatus });
       return;
     }
-    if (nextStatus === "pm_review" && designReadyBlockers.length > 0) {
-      toast.error(`Щоб позначити дизайн готовим, закрийте блокери: ${designReadyBlockers.join(", ")}.`);
+    if (nextStatus === "client_review" && clientReviewBlockers.length > 0) {
+      toast.error(`Щоб передати дизайн клієнту, закрийте блокери: ${clientReviewBlockers.join(", ")}.`);
       return;
     }
     const previousStatus = task.status;
@@ -4810,7 +4810,7 @@ export default function DesignTaskPage() {
     task?.designTaskType === "layout" ||
     task?.designTaskType === "layout_adaptation" ||
     task?.designTaskType === "visualization_layout_adaptation";
-  const designReadyBlockers = useMemo(() => {
+  const clientReviewBlockers = useMemo(() => {
     const blockers: string[] = [];
     if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) {
       blockers.push("Потрібно погодити хоча б один візуал");
@@ -4826,7 +4826,8 @@ export default function DesignTaskPage() {
     selectedVisualizationOutputFileIds.length,
   ]);
   const canSeeMarkReadyAction = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
-  const canMarkReadyNow = canSeeMarkReadyAction && designReadyBlockers.length === 0;
+  const canMarkReadyNow = canSeeMarkReadyAction;
+  const canSendToClientNow = clientReviewBlockers.length === 0;
   useEffect(() => {
     if (requiresVisualizationOutput) {
       setUploadTargetKind((prev) => (prev === "visualization" ? prev : "visualization"));
@@ -5079,6 +5080,8 @@ export default function DesignTaskPage() {
   const statusQuickActionsWithoutStart = quickActions.filter(
     (action) => !(isStatusStartable && action.next === "in_progress")
   );
+  const mobileSecondaryActionDisabled =
+    !!statusSaving || (mobileSecondaryAction?.next === "client_review" && !canSendToClientNow);
 
   if (loading) {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо дизайн-задачу." />;
@@ -6222,9 +6225,9 @@ export default function DesignTaskPage() {
                     {statusSaving === "pm_review" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Позначити як дизайн готовий
                   </Button>
-                  {designReadyBlockers.length > 0 ? (
+                  {clientReviewBlockers.length > 0 ? (
                     <div className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
-                      {designReadyBlockers.join(" · ")}
+                      Для передачі клієнту: {clientReviewBlockers.join(" · ")}
                     </div>
                   ) : null}
                 </>
@@ -6372,13 +6375,18 @@ export default function DesignTaskPage() {
                     key={`${task.status}-${action.next}`}
                     variant="secondary"
                     className="w-full justify-start"
-                    disabled={!!statusSaving}
+                    disabled={!!statusSaving || (action.next === "client_review" && !canSendToClientNow)}
                     onClick={() => void updateTaskStatus(action.next)}
                   >
                     {statusSaving === action.next ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     {action.label}
                   </Button>
                 ))}
+                {task.status === "pm_review" && clientReviewBlockers.length > 0 ? (
+                  <div className="rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
+                    Для передачі клієнту: {clientReviewBlockers.join(" · ")}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -7242,7 +7250,7 @@ export default function DesignTaskPage() {
           <Button
             variant="secondary"
             size="sm"
-            disabled={!!statusSaving}
+            disabled={mobileSecondaryActionDisabled}
             onClick={() => void updateTaskStatus(mobileSecondaryAction.next)}
           >
             {statusSaving === mobileSecondaryAction.next ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
