@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
 import { DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
+import { formatUserShortName } from "@/lib/userName";
 import {
   createEmptyPrintPackageConfig,
   getConfiguratorProductLabel,
@@ -1097,11 +1098,30 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const runsSummary = runs.filter((run) => Number(run.quantity) > 0);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
     () => {
-      const isOwnParty = (customer: Customer) =>
-        (customer.manager_user_id?.trim() && customer.manager_user_id.trim() === currentUserId) ||
-        ((customer.manager?.trim() ?? "") &&
-          (currentManagerLabel?.trim() ?? "") &&
-          customer.manager!.trim() === currentManagerLabel!.trim());
+      const normalizeManagerKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
+      const currentManagerKey = normalizeManagerKey(currentManagerLabel);
+
+      const isOwnParty = (customer: Customer) => {
+        const managerUserId = customer.manager_user_id?.trim() ?? "";
+        if (managerUserId && managerUserId === currentUserId) return true;
+
+        const managerValue = customer.manager?.trim() ?? "";
+        if (!managerValue || !currentManagerKey) return false;
+
+        if (normalizeManagerKey(managerValue) === currentManagerKey) return true;
+
+        const managerShortLabel = formatUserShortName({ fullName: managerValue, fallback: managerValue });
+        if (normalizeManagerKey(managerShortLabel) === currentManagerKey) return true;
+
+        const matchedTeamMember = teamMembers.find((member) => {
+          const memberLabel = member.label.trim();
+          if (!memberLabel) return false;
+          const memberKey = normalizeManagerKey(memberLabel);
+          return memberKey === normalizeManagerKey(managerValue) || memberKey === normalizeManagerKey(managerShortLabel);
+        });
+
+        return !!matchedTeamMember?.id && matchedTeamMember.id === currentUserId;
+      };
 
       return customers.map((customer) => ({
         id: customer.id,
@@ -1114,7 +1134,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           : null,
       }));
     },
-    [currentManagerLabel, currentUserId, customers, restrictPartySelectionToOwn]
+    [currentManagerLabel, currentUserId, customers, restrictPartySelectionToOwn, teamMembers]
   );
   const selectedCustomer = customerOptions.find(
     (customer) => customer.id === customerId && customer.entityType === customerType
