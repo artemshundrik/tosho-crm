@@ -2766,6 +2766,10 @@ export default function DesignPage() {
           typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
             ? (metadata.assignee_user_id as string)
             : null,
+        quoteManagerUserId:
+          typeof metadata.manager_user_id === "string" && metadata.manager_user_id.trim()
+            ? metadata.manager_user_id.trim()
+            : managerUserId,
         assignedAt: typeof metadata.assigned_at === "string" ? (metadata.assigned_at as string) : null,
         assigneeLabel:
           typeof metadata.assignee_label === "string" && metadata.assignee_label.trim()
@@ -2803,7 +2807,19 @@ export default function DesignPage() {
         designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
         createdAt: createdRow.created_at,
       };
-      setTasks((prev) => [createdTask, ...prev]);
+      setTasks((prev) => {
+        const nextTasks = [createdTask, ...prev];
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(
+            `design-page-cache:${effectiveTeamId}`,
+            JSON.stringify({
+              tasks: nextTasks,
+              cachedAt: Date.now(),
+            } satisfies DesignPageCachePayload)
+          );
+        }
+        return nextTasks;
+      });
 
       if (assigneeUserId && assigneeUserId !== userId) {
         try {
