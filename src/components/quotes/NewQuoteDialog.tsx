@@ -1098,15 +1098,20 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const runsSummary = runs.filter((run) => Number(run.quantity) > 0);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
     () => {
+      const effectiveCurrentManagerLabel =
+        teamMembers.find((member) => member.id === currentUserId)?.label?.trim() || currentManagerLabel || "";
       const normalizeManagerKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
-      const currentManagerKey = normalizeManagerKey(currentManagerLabel);
+      const currentManagerKey = normalizeManagerKey(effectiveCurrentManagerLabel);
 
       const isOwnParty = (customer: Customer) => {
         const managerUserId = customer.manager_user_id?.trim() ?? "";
         if (managerUserId && managerUserId === currentUserId) return true;
 
         const managerValue = customer.manager?.trim() ?? "";
-        if (!managerValue || !currentManagerKey) return false;
+        if (!managerValue) {
+          return !managerUserId;
+        }
+        if (!currentManagerKey) return false;
 
         if (normalizeManagerKey(managerValue) === currentManagerKey) return true;
 
@@ -1120,7 +1125,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           return memberKey === normalizeManagerKey(managerValue) || memberKey === normalizeManagerKey(managerShortLabel);
         });
 
-        return !!matchedTeamMember?.id && matchedTeamMember.id === currentUserId;
+        if (matchedTeamMember?.id && matchedTeamMember.id === currentUserId) return true;
+
+        return false;
       };
 
       return customers.map((customer) => ({
