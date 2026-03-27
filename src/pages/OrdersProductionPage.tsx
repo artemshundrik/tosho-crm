@@ -52,6 +52,13 @@ type OrdersProductionPageCachePayload = {
   cachedAt: number;
 };
 
+type OrdersProductionPageFiltersState = {
+  search?: string;
+  headerFilter?: HeaderFilter;
+  managerFilter?: string;
+  viewTab?: "queue" | "register";
+};
+
 const HEADER_FILTER_OPTIONS: Array<{ value: HeaderFilter; label: string }> = [
   { value: "all", label: "Всі статуси" },
   { value: "created", label: "Створено замовлення" },
@@ -88,6 +95,19 @@ function readOrdersProductionPageCache(teamId: string): OrdersProductionPageCach
   }
 }
 
+function readOrdersProductionPageFiltersState(teamId: string): OrdersProductionPageFiltersState | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`orders-production-page-filters:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as OrdersProductionPageFiltersState;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 const renderDocBadge = (label: string, ready: boolean) => (
   <Badge
     variant="outline"
@@ -108,15 +128,18 @@ export default function OrdersProductionPage() {
   const workspacePresence = useWorkspacePresence();
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const initialCache = readOrdersProductionPageCache(teamId ?? "");
+  const initialFilters = readOrdersProductionPageFiltersState(teamId ?? "");
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.records.length > 0));
   const [refreshing, setRefreshing] = useState(false);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<DerivedOrderRecord[]>(() => initialCache?.records ?? []);
-  const [search, setSearch] = useState("");
-  const [headerFilter, setHeaderFilter] = useState<HeaderFilter>("all");
-  const [managerFilter, setManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
-  const [viewTab, setViewTab] = useState<"queue" | "register">("register");
+  const [search, setSearch] = useState(() => initialFilters?.search ?? "");
+  const [headerFilter, setHeaderFilter] = useState<HeaderFilter>(() => initialFilters?.headerFilter ?? "all");
+  const [managerFilter, setManagerFilter] = useState<string>(
+    () => initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER
+  );
+  const [viewTab, setViewTab] = useState<"queue" | "register">(() => initialFilters?.viewTab ?? "register");
 
   const openRecord = (record: DerivedOrderRecord) => {
     if (record.source === "stored") {
@@ -167,6 +190,19 @@ export default function OrdersProductionPage() {
     void loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, userId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !teamId) return;
+    sessionStorage.setItem(
+      `orders-production-page-filters:${teamId}`,
+      JSON.stringify({
+        search,
+        headerFilter,
+        managerFilter,
+        viewTab,
+      } satisfies OrdersProductionPageFiltersState)
+    );
+  }, [teamId, search, headerFilter, managerFilter, viewTab]);
 
   const managerFilterOptions = useMemo(
     () =>

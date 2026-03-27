@@ -13,6 +13,8 @@ import {
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabaseClient";
+import { logActivity } from "@/lib/activityLogger";
+import { resolveWorkspaceId } from "@/lib/workspace";
 import { useAuth } from "@/auth/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -114,7 +116,7 @@ function RouteSuspense({
 }
 
 const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";
-const DOM_RECOVERY_RELOAD_GUARD_KEY = "app_dom_recovery_reload_once";
+const RUNTIME_ERROR_LOG_GUARD_KEY = "app_runtime_error_log_once";
 const RUNTIME_RECOVERY_RELOAD_COOLDOWN_MS = 30_000;
 
 type ReloadGuardPayload = {
@@ -177,18 +179,107 @@ function consumeReloadGuard(key: string): boolean {
   }
 }
 
+function consumeRuntimeErrorLogGuard(signature: string): boolean {
+  if (typeof window === "undefined") return false;
+
+  const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const now = Date.now();
+
+  try {
+    const raw = window.sessionStorage.getItem(RUNTIME_ERROR_LOG_GUARD_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<ReloadGuardPayload> & { signature?: string };
+      if (
+        parsed.path === path &&
+        parsed.signature === signature &&
+        typeof parsed.ts === "number" &&
+        now - parsed.ts < RUNTIME_RECOVERY_RELOAD_COOLDOWN_MS
+      ) {
+        return false;
+      }
+    }
+
+    window.sessionStorage.setItem(
+      RUNTIME_ERROR_LOG_GUARD_KEY,
+      JSON.stringify({ path, ts: now, signature })
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveRuntimeLogTeamId(userId?: string | null) {
+  const normalizedUserId = userId?.trim();
+  if (!normalizedUserId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("team_id")
+      .eq("user_id", normalizedUserId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle<{ team_id?: string | null }>();
+    if (!error && data?.team_id) return data.team_id;
+  } catch {
+    // ignore and try workspace fallback
+  }
+
+  try {
+    return await resolveWorkspaceId(normalizedUserId);
+  } catch {
+    return null;
+  }
+}
+
+function summarizeComponentStack(info?: ErrorInfo | null) {
+  const stack = info?.componentStack?.trim();
+  if (!stack) return null;
+  return stack.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 8).join(" | ");
+}
+
+function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; source: "boundary" | "window_error" | "unhandledrejection" }) {
+  const message = getRuntimeErrorMessage(params.error) || "Unknown runtime error";
+  const path = typeof window !== "undefined"
+    ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+    : "/";
+  const signature = `${params.source}:${message.slice(0, 200)}:${path}`;
+  if (!consumeRuntimeErrorLogGuard(signature)) return;
+
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user ?? null;
+      const userId = user?.id ?? null;
+      const teamId = await resolveRuntimeLogTeamId(userId);
+      if (!teamId || !userId) return;
+
+      await logActivity({
+        teamId,
+        userId,
+        action: "app_runtime_error",
+        entityType: "app_runtime_error",
+        entityId: path,
+        title: `${params.source}: ${message.slice(0, 180)}`,
+        href: path,
+        metadata: {
+          source: params.source,
+          message,
+          path,
+          user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+          component_stack: summarizeComponentStack(params.info),
+        },
+      });
+    } catch (loggingError) {
+      console.warn("Failed to log runtime error", loggingError);
+    }
+  })();
+}
+
 function reloadOnceForChunkError(): boolean {
   if (typeof window === "undefined") return false;
   if (!consumeReloadGuard(CHUNK_RELOAD_GUARD_KEY)) {
-    return false;
-  }
-  window.location.reload();
-  return true;
-}
-
-function reloadOnceForDomError(): boolean {
-  if (typeof window === "undefined") return false;
-  if (!consumeReloadGuard(DOM_RECOVERY_RELOAD_GUARD_KEY)) {
     return false;
   }
   window.location.reload();
@@ -210,6 +301,7 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error("App runtime error:", error, info);
+    reportRuntimeError({ error, info, source: "boundary" });
     if (isChunkLikeError(error)) {
       const reloaded = reloadOnceForChunkError();
       if (!reloaded) {
@@ -221,14 +313,12 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
       return;
     }
     if (isDomDetachRaceError(error)) {
-      const reloaded = reloadOnceForDomError();
-      if (!reloaded) {
-        this.setState({
-          hasError: true,
-          message:
-            "Сталася тимчасова помилка DOM. Оновіть сторінку та вимкніть розширення перекладу/інʼєкції сторінки для цього сайту.",
-        });
-      }
+      this.setState({
+        hasError: true,
+        message:
+          "Сталася тимчасова помилка DOM. Спробуйте ще раз без авто-перекладу та браузерних розширень, що змінюють сторінку.",
+      });
+      return;
     }
   }
 
@@ -878,12 +968,14 @@ function AppRoutes() {
 export default function App() {
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      reportRuntimeError({ error: event.reason, source: "unhandledrejection" });
       if (!isChunkLikeError(event.reason)) return;
       event.preventDefault();
       reloadOnceForChunkError();
     };
 
     const handleWindowError = (event: ErrorEvent) => {
+      reportRuntimeError({ error: event.error ?? event.message, source: "window_error" });
       if (!isChunkLikeError(event.error ?? event.message)) return;
       reloadOnceForChunkError();
     };

@@ -230,6 +230,20 @@ type QuotesPageCachePayload = {
   cachedAt: number;
 };
 
+type QuotesPageFiltersState = {
+  search?: string;
+  status?: string;
+  managerFilter?: string;
+  viewMode?: "table" | "kanban";
+  quickFilter?: "all" | "new" | "estimated";
+  contentView?: "quotes" | "sets" | "all";
+  quoteListMode?: "flat" | "grouped";
+  quoteSetSearch?: string;
+  quoteSetKindFilter?: "all" | "kp" | "set";
+  sortBy?: "date" | "number" | null;
+  sortOrder?: "asc" | "desc";
+};
+
 function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
   if (typeof window === "undefined" || !teamId) return null;
   try {
@@ -266,6 +280,19 @@ function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
   }
 }
 
+function readQuotesPageFiltersState(teamId: string): QuotesPageFiltersState | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`quotes-page-filters:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QuotesPageFiltersState;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
   if (typeof window === "undefined" || !teamId) return [];
   try {
@@ -290,15 +317,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
+  const initialFilters = readQuotesPageFiltersState(teamId);
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [status, setStatusFilter] = useState("all");
-  const [managerFilter, setManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
-  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
+  const [search, setSearch] = useState(() => initialFilters?.search ?? "");
+  const [status, setStatusFilter] = useState(() => initialFilters?.status ?? "all");
+  const [managerFilter, setManagerFilter] = useState<string>(() => initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER);
+  const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
+    () => (initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+  );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
   const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
@@ -344,6 +374,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const creatingRef = useRef(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
+    if (initialFilters?.viewMode) return initialFilters.viewMode;
     const saved = localStorage.getItem("quotes_view_mode");
     return saved === "kanban" ? "kanban" : "table";
   });
@@ -364,9 +395,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => Object.fromEntries(initialCache?.kanbanProductEntries ?? [])
   );
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
-  const [sortBy, setSortBy] = useState<"date" | "number" | null>("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">("all");
+  const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => initialFilters?.sortBy ?? "date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => initialFilters?.sortOrder ?? "desc");
+  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">(
+    () => initialFilters?.quickFilter ?? "all"
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [quoteSets, setQuoteSets] = useState<QuoteSetListRow[]>([]);
@@ -379,8 +412,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         initialCache?.quoteMembershipEntries ?? []
       )
   );
-  const [contentView, setContentView] = useState<"quotes" | "sets" | "all">("quotes");
-  const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">("flat");
+  const [contentView, setContentView] = useState<"quotes" | "sets" | "all">(
+    () => initialFilters?.contentView ?? "quotes"
+  );
+  const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">(
+    () => initialFilters?.quoteListMode ?? "flat"
+  );
 
   const toPrintApplications = (rawMethods: unknown): NewQuoteFormData["printApplications"] => {
     if (!Array.isArray(rawMethods)) return [];
@@ -412,8 +449,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       })
       .filter(Boolean) as NewQuoteFormData["printApplications"];
   };
-  const [quoteSetSearch, setQuoteSetSearch] = useState("");
-  const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">("all");
+  const [quoteSetSearch, setQuoteSetSearch] = useState(() => initialFilters?.quoteSetSearch ?? "");
+  const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">(
+    () => initialFilters?.quoteSetKindFilter ?? "all"
+  );
   const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
   const [quoteSetDetailsLoading, setQuoteSetDetailsLoading] = useState(false);
   void rowStatusBusy;
@@ -2944,7 +2983,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
   const buildCommercialExcelTsv = (doc: CommercialDocument) => {
@@ -3011,7 +3050,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }, 120);
     };
     window.setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      iframe.remove();
     }, 60_000);
   };
 
@@ -3021,6 +3060,39 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setStatusFilter("all");
     setManagerFilter(ALL_MANAGERS_FILTER);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !teamId) return;
+    sessionStorage.setItem(
+      `quotes-page-filters:${teamId}`,
+      JSON.stringify({
+        search,
+        status,
+        managerFilter,
+        viewMode,
+        quickFilter,
+        contentView,
+        quoteListMode,
+        quoteSetSearch,
+        quoteSetKindFilter,
+        sortBy,
+        sortOrder,
+      } satisfies QuotesPageFiltersState)
+    );
+  }, [
+    teamId,
+    search,
+    status,
+    managerFilter,
+    viewMode,
+    quickFilter,
+    contentView,
+    quoteListMode,
+    quoteSetSearch,
+    quoteSetKindFilter,
+    sortBy,
+    sortOrder,
+  ]);
 
   useEffect(() => {
     localStorage.setItem("quotes_view_mode", viewMode);
