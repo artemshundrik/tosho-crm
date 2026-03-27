@@ -115,6 +115,12 @@ function RouteSuspense({
 
 const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";
 const DOM_RECOVERY_RELOAD_GUARD_KEY = "app_dom_recovery_reload_once";
+const RUNTIME_RECOVERY_RELOAD_COOLDOWN_MS = 30_000;
+
+type ReloadGuardPayload = {
+  path: string;
+  ts: number;
+};
 
 function getRuntimeErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
@@ -144,32 +150,49 @@ function isDomDetachRaceError(error: unknown): boolean {
   );
 }
 
-function reloadOnceForChunkError(): boolean {
+function consumeReloadGuard(key: string): boolean {
   if (typeof window === "undefined") return false;
+
+  const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const now = Date.now();
+
   try {
-    if (window.sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY) === "1") {
-      return false;
+    const raw = window.sessionStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<ReloadGuardPayload>;
+      if (
+        parsed.path === path &&
+        typeof parsed.ts === "number" &&
+        now - parsed.ts < RUNTIME_RECOVERY_RELOAD_COOLDOWN_MS
+      ) {
+        return false;
+      }
     }
-    window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, "1");
-    window.location.reload();
+
+    const payload: ReloadGuardPayload = { path, ts: now };
+    window.sessionStorage.setItem(key, JSON.stringify(payload));
     return true;
   } catch {
     return false;
   }
 }
 
-function reloadOnceForDomError(): boolean {
+function reloadOnceForChunkError(): boolean {
   if (typeof window === "undefined") return false;
-  try {
-    if (window.sessionStorage.getItem(DOM_RECOVERY_RELOAD_GUARD_KEY) === "1") {
-      return false;
-    }
-    window.sessionStorage.setItem(DOM_RECOVERY_RELOAD_GUARD_KEY, "1");
-    window.location.reload();
-    return true;
-  } catch {
+  if (!consumeReloadGuard(CHUNK_RELOAD_GUARD_KEY)) {
     return false;
   }
+  window.location.reload();
+  return true;
+}
+
+function reloadOnceForDomError(): boolean {
+  if (typeof window === "undefined") return false;
+  if (!consumeReloadGuard(DOM_RECOVERY_RELOAD_GUARD_KEY)) {
+    return false;
+  }
+  window.location.reload();
+  return true;
 }
 
 type AppBoundaryProps = { children: ReactNode };
@@ -854,13 +877,6 @@ function AppRoutes() {
 
 export default function App() {
   useEffect(() => {
-    try {
-      window.sessionStorage.removeItem(CHUNK_RELOAD_GUARD_KEY);
-      window.sessionStorage.removeItem(DOM_RECOVERY_RELOAD_GUARD_KEY);
-    } catch {
-      // ignore sessionStorage access issues
-    }
-
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       if (!isChunkLikeError(event.reason)) return;
       event.preventDefault();
