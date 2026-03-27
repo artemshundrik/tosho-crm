@@ -15,12 +15,13 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px]",
+      "fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] notranslate",
       "data-[state=open]:animate-in data-[state=open]:fade-in-0",
       "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
       "duration-200",
       className
     )}
+    translate="no"
     {...props}
   />
 ));
@@ -40,7 +41,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%]",
+        "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%] notranslate",
         "max-h-[calc(100dvh-1.5rem)]",
         // контейнер — bg-card (білий у light, піднятий у dark), ring замість shadow (shadow заблокований)
         "rounded-[var(--radius-inner)] border border-border/90 bg-card ring-1 ring-black/8 dark:ring-white/6 outline-none",
@@ -51,6 +52,7 @@ const DialogContent = React.forwardRef<
         "duration-200",
         className
       )}
+      translate="no"
       {...props}
     >
       {children}

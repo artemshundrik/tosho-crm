@@ -597,7 +597,9 @@ function reminderKeyFromHref(href?: string | null) {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <PageHeaderActionsProvider>
-      <AppLayoutInner>{children}</AppLayoutInner>
+      <div className="notranslate" translate="no">
+        <AppLayoutInner>{children}</AppLayoutInner>
+      </div>
     </PageHeaderActionsProvider>
   );
 }

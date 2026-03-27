@@ -240,6 +240,60 @@ function summarizeComponentStack(info?: ErrorInfo | null) {
   return stack.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 8).join(" | ");
 }
 
+function getRuntimeRouteContext(pathname: string) {
+  const normalized = pathname.trim() || "/";
+
+  const routeMatchers: Array<{
+    pattern: string;
+    scope: string;
+    group: string;
+    test: (value: string) => boolean;
+  }> = [
+    { pattern: "/overview", scope: "page", group: "overview", test: (value) => value === "/overview" },
+    { pattern: "/notifications", scope: "page", group: "account", test: (value) => value.startsWith("/notifications") },
+    { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
+    { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
+    { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
+    { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
+    { pattern: "/admin/runtime-errors", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/runtime-errors") },
+    { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
+    { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
+    { pattern: "/orders/estimates/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/estimates\/[^/]+$/.test(value) },
+    { pattern: "/orders/production", scope: "page", group: "orders", test: (value) => value === "/orders/production" },
+    { pattern: "/orders/production/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/production\/[^/]+$/.test(value) },
+    { pattern: "/orders/ready-to-ship", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/ready-to-ship") },
+    { pattern: "/catalog/products", scope: "page", group: "catalog", test: (value) => value.startsWith("/catalog/products") },
+    { pattern: "/logistics", scope: "page", group: "operations", test: (value) => value.startsWith("/logistics") },
+    { pattern: "/design", scope: "page", group: "operations", test: (value) => value === "/design" },
+    { pattern: "/design/:id", scope: "details", group: "operations", test: (value) => /^\/design\/[^/]+$/.test(value) },
+    { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
+    { pattern: "/finance", scope: "page", group: "finance", test: (value) => value === "/finance" },
+    { pattern: "/finance/invoices", scope: "page", group: "finance", test: (value) => value === "/finance/invoices" },
+    { pattern: "/finance/invoices/new", scope: "create", group: "finance", test: (value) => value === "/finance/invoices/new" },
+    { pattern: "/finance/expense-invoices", scope: "page", group: "finance", test: (value) => value.startsWith("/finance/expense-invoices") },
+    { pattern: "/finance/acts", scope: "page", group: "finance", test: (value) => value.startsWith("/finance/acts") },
+    { pattern: "/finance/transactions/new", scope: "create", group: "finance", test: (value) => value === "/finance/transactions/new" },
+    { pattern: "/finance/pools/new", scope: "create", group: "finance", test: (value) => value === "/finance/pools/new" },
+    { pattern: "/finance/pools/:id", scope: "details", group: "finance", test: (value) => /^\/finance\/pools\/[^/]+$/.test(value) },
+  ];
+
+  const matched = routeMatchers.find((entry) => entry.test(normalized));
+  if (matched) {
+    return {
+      route_pattern: matched.pattern,
+      route_scope: matched.scope,
+      route_group: matched.group,
+    };
+  }
+
+  const rootSegment = normalized.split("/").filter(Boolean)[0] ?? "root";
+  return {
+    route_pattern: null,
+    route_scope: "unknown",
+    route_group: rootSegment,
+  };
+}
+
 function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; source: "boundary" | "window_error" | "unhandledrejection" }) {
   const message = getRuntimeErrorMessage(params.error) || "Unknown runtime error";
   const path = typeof window !== "undefined"
@@ -248,6 +302,7 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
   const search = typeof window !== "undefined" ? window.location.search : "";
   const hash = typeof window !== "undefined" ? window.location.hash : "";
+  const routeContext = getRuntimeRouteContext(pathname);
   const signature = `${params.source}:${message.slice(0, 200)}:${path}`;
   if (!consumeRuntimeErrorLogGuard(signature)) return;
 
@@ -274,6 +329,9 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
           pathname,
           search,
           hash,
+          route_pattern: routeContext.route_pattern,
+          route_scope: routeContext.route_scope,
+          route_group: routeContext.route_group,
           user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
           language: typeof navigator !== "undefined" ? navigator.language ?? null : null,
           platform: typeof navigator !== "undefined" ? navigator.platform ?? null : null,
@@ -1020,6 +1078,14 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    document.documentElement.lang = "uk";
+    document.documentElement.setAttribute("translate", "no");
+    document.documentElement.classList.add("notranslate");
+    document.body.setAttribute("translate", "no");
+    document.body.classList.add("notranslate");
+  }, []);
+
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       reportRuntimeError({ error: event.reason, source: "unhandledrejection" });
