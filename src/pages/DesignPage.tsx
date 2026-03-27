@@ -886,14 +886,47 @@ export default function DesignPage() {
         if (!active) return;
 
         const restrictToOwnParties = isQuoteManagerJobRole(jobRole);
+        const normalizeManagerKey = (value?: string | null) => (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+        const currentManagerKey = normalizeManagerKey(memberById[userId ?? ""] ?? currentUserDisplayName ?? "");
+        const resolvePartyManagerUserId = (managerUserId?: string | null, managerLabel?: string | null) => {
+          const normalizedManagerUserId = managerUserId?.trim() ?? "";
+          if (normalizedManagerUserId) return normalizedManagerUserId;
+
+          const normalizedManagerLabel = managerLabel?.trim() ?? "";
+          if (!normalizedManagerLabel) return "";
+
+          const managerShortLabel = formatUserShortName({ fullName: normalizedManagerLabel, fallback: normalizedManagerLabel });
+          const matchedMember = Object.entries(memberById).find(([, label]) => {
+            const normalizedLabel = normalizeManagerKey(label);
+            return (
+              normalizedLabel === normalizeManagerKey(normalizedManagerLabel) ||
+              normalizedLabel === normalizeManagerKey(managerShortLabel)
+            );
+          });
+
+          return matchedMember?.[0] ?? "";
+        };
         const isOwnParty = (managerUserId?: string | null, managerLabel?: string | null) => {
           if (!restrictToOwnParties) return true;
           if (!userId) return false;
-          if (managerUserId?.trim()) return managerUserId.trim() === userId;
+
+          const resolvedManagerUserId = resolvePartyManagerUserId(managerUserId, managerLabel);
+          if (resolvedManagerUserId) {
+            return resolvedManagerUserId === userId;
+          }
+
           const normalizedManagerLabel = managerLabel?.trim() ?? "";
-          const normalizedCurrentLabel =
-            (memberById[userId]?.trim() || currentUserDisplayName?.trim() || "").trim();
-          return !!normalizedManagerLabel && !!normalizedCurrentLabel && normalizedManagerLabel === normalizedCurrentLabel;
+          if (!normalizedManagerLabel) return true;
+
+          if (!currentManagerKey) return true;
+
+          if (normalizeManagerKey(normalizedManagerLabel) === currentManagerKey) return true;
+
+          const managerShortLabel = formatUserShortName({ fullName: normalizedManagerLabel, fallback: normalizedManagerLabel });
+          if (normalizeManagerKey(managerShortLabel) === currentManagerKey) return true;
+
+          // Old/ambiguous records should stay selectable; block only when ownership is explicit.
+          return true;
         };
 
         const customerOptions: CustomerOption[] = customerRows.map((customer) => ({

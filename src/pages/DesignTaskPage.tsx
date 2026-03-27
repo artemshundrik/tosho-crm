@@ -5826,8 +5826,8 @@ export default function DesignTaskPage() {
                       value={changeRequestDraft}
                       onChange={(event) => setChangeRequestDraft(event.target.value)}
                       placeholder="Опишіть правку…"
-                      rows={2}
                       disabled={changeRequestSaving || designTaskLockedByOther}
+                      className="resize-y min-h-[140px]"
                     />
                     <div className="flex items-center gap-2">
                       <Button

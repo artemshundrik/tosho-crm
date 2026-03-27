@@ -1103,21 +1103,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       const normalizeManagerKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
       const currentManagerKey = normalizeManagerKey(effectiveCurrentManagerLabel);
 
-      const isOwnParty = (customer: Customer) => {
+      const resolvePartyManagerUserId = (customer: Customer) => {
         const managerUserId = customer.manager_user_id?.trim() ?? "";
-        if (managerUserId && managerUserId === currentUserId) return true;
+        if (managerUserId) return managerUserId;
 
         const managerValue = customer.manager?.trim() ?? "";
-        if (!managerValue) {
-          return !managerUserId;
-        }
-        if (!currentManagerKey) return false;
-
-        if (normalizeManagerKey(managerValue) === currentManagerKey) return true;
+        if (!managerValue) return "";
 
         const managerShortLabel = formatUserShortName({ fullName: managerValue, fallback: managerValue });
-        if (normalizeManagerKey(managerShortLabel) === currentManagerKey) return true;
-
         const matchedTeamMember = teamMembers.find((member) => {
           const memberLabel = member.label.trim();
           if (!memberLabel) return false;
@@ -1125,7 +1118,26 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           return memberKey === normalizeManagerKey(managerValue) || memberKey === normalizeManagerKey(managerShortLabel);
         });
 
-        if (matchedTeamMember?.id && matchedTeamMember.id === currentUserId) return true;
+        return matchedTeamMember?.id ?? "";
+      };
+
+      const isBlockedForCurrentManager = (customer: Customer) => {
+        if (!restrictPartySelectionToOwn) return false;
+        if (!currentUserId) return false;
+
+        const resolvedManagerUserId = resolvePartyManagerUserId(customer);
+        if (resolvedManagerUserId) {
+          return resolvedManagerUserId !== currentUserId;
+        }
+
+        const managerValue = customer.manager?.trim() ?? "";
+        if (!managerValue) return false;
+        if (!currentManagerKey) return false;
+
+        if (normalizeManagerKey(managerValue) === currentManagerKey) return false;
+
+        const managerShortLabel = formatUserShortName({ fullName: managerValue, fallback: managerValue });
+        if (normalizeManagerKey(managerShortLabel) === currentManagerKey) return false;
 
         return false;
       };
@@ -1135,8 +1147,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         label: customer.name || customer.legal_name || "Без назви",
         logoUrl: customer.logo_url ?? null,
         entityType: customer.entityType ?? "customer",
-        disabled: restrictPartySelectionToOwn ? !isOwnParty(customer) : false,
-        disabledReason: restrictPartySelectionToOwn && !isOwnParty(customer)
+        disabled: isBlockedForCurrentManager(customer),
+        disabledReason: isBlockedForCurrentManager(customer)
           ? "Можна вибрати тільки свого клієнта або ліда"
           : null,
       }));
