@@ -16,9 +16,9 @@ import {
   Loader2,
   AlertTriangle,
   Activity,
-  UserCheck,
-  UserX,
   Shield,
+  Gift,
+  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -73,9 +73,11 @@ import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } f
 import {
   addMonthsToDateOnly,
   getEmploymentStatusLabel,
+  getBirthdayInsight,
   formatEmploymentDate,
   formatEmploymentDuration,
   getEmploymentDurationDays,
+  getWorkAnniversaryInsight,
   isProbationReviewDue,
   normalizeEmploymentStatus,
   getProbationSummary,
@@ -1042,10 +1044,17 @@ export function TeamMembersPage() {
   const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
   const selectedEmploymentDays = getEmploymentDurationDays(editProfileStartDate);
   const selectedProbation = getProbationSummary(editProfileStartDate, editProfileProbationEndDate);
+  const selectedBirthdayInsight = getBirthdayInsight(editProfileBirthDate);
+  const selectedAnniversaryInsight = getWorkAnniversaryInsight(editProfileStartDate);
   const selectedEmploymentStatus = normalizeEmploymentStatus(
     memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
     editProfileProbationEndDate
   );
+  const selectedDisplayName = editProfileMember ? getMemberDisplayName(editProfileMember) : "Учасник";
+  const selectedProfile = editProfileMember ? memberProfilesByUserId[editProfileMember.user_id] : null;
+  const selectedInitials = editProfileMember
+    ? getInitialsFromName(selectedDisplayName, editProfileMember.email ?? null)
+    : "U";
   const shouldShowManagerRateField =
     canManageManagerRates && supportsManagerRate(editProfileMember?.job_role ?? null);
   const shouldShowProbationSection =
@@ -2012,6 +2021,74 @@ export function TeamMembersPage() {
   });
   const selectedManagerLabel =
     managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
+  const upcomingBirthdayEvents = useMemo(() => {
+    const candidates = members
+      .map((member) => {
+        const insight = getBirthdayInsight(memberMetaByUserId[member.user_id]?.birthDate);
+        if (!insight) return null;
+        return {
+          type: "birthday" as const,
+          member,
+          insight,
+        };
+      })
+      .filter(Boolean) as Array<{
+      type: "birthday";
+      member: Member;
+      insight: NonNullable<ReturnType<typeof getBirthdayInsight>>;
+    }>;
+
+    candidates.sort((a, b) => a.insight.daysUntil - b.insight.daysUntil);
+    return candidates;
+  }, [members, memberMetaByUserId]);
+  const upcomingAnniversaryEvents = useMemo(() => {
+    const candidates = members
+      .map((member) => {
+        const insight = getWorkAnniversaryInsight(memberMetaByUserId[member.user_id]?.startDate);
+        if (!insight) return null;
+        return {
+          type: "anniversary" as const,
+          member,
+          insight,
+        };
+      })
+      .filter(Boolean) as Array<{
+      type: "anniversary";
+      member: Member;
+      insight: NonNullable<ReturnType<typeof getWorkAnniversaryInsight>>;
+    }>;
+
+    candidates.sort((a, b) => a.insight.daysUntil - b.insight.daysUntil);
+    return candidates;
+  }, [members, memberMetaByUserId]);
+  const upcomingTeamEvents = useMemo(() => {
+    const combined = [...upcomingBirthdayEvents, ...upcomingAnniversaryEvents]
+      .sort((a, b) => {
+        if (a.insight.daysUntil !== b.insight.daysUntil) return a.insight.daysUntil - b.insight.daysUntil;
+        return getMemberDisplayName(a.member).localeCompare(getMemberDisplayName(b.member), "uk");
+      })
+      .slice(0, 3);
+    return combined;
+  }, [upcomingAnniversaryEvents, upcomingBirthdayEvents]);
+  const needsAttentionCount = useMemo(() => {
+    return members.filter((member) => {
+      const meta = memberMetaByUserId[member.user_id];
+      const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
+      return (
+        !meta?.birthDate ||
+        !meta?.startDate ||
+        !(member.job_role ?? "").trim() ||
+        isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate) ||
+        probation?.status === "upcoming"
+      );
+    }).length;
+  }, [members, memberMetaByUserId]);
+  const probationReviewDueCount = useMemo(() => {
+    return members.filter((member) => {
+      const meta = memberMetaByUserId[member.user_id];
+      return isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate);
+    }).length;
+  }, [members, memberMetaByUserId]);
 
   if (showSkeleton) {
     return <ListSkeleton />;
@@ -2034,50 +2111,127 @@ export function TeamMembersPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-primary/50 overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-muted-foreground">Усього в команді</div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-              <Shield className="h-3.5 w-3.5 text-primary" />
+      <Card className="overflow-hidden border border-border bg-card shadow-none">
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.55fr)_390px]">
+          <div className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Команда сьогодні</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Швидкий зріз по складу, присутності та тому, що потребує уваги.
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Усього</div>
+                  <Shield className="h-4 w-4 text-primary/70" />
+                </div>
+                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{members.length}</div>
+                <div className="mt-1 text-sm text-muted-foreground">учасників у команді</div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Онлайн</div>
+                  <Activity className="h-4 w-4 text-emerald-600/80 dark:text-emerald-400/80" />
+                </div>
+                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{onlineNowCount}</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {onlineNowCount > 0 ? `з ${members.length} активних` : "нікого онлайн"}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Увага</div>
+                  <AlertTriangle className="h-4 w-4 text-amber-600/80 dark:text-amber-400/80" />
+                </div>
+                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{needsAttentionCount}</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {probationReviewDueCount > 0
+                    ? `${probationReviewDueCount} рішень по випробувальному`
+                    : activeInvitesCount > 0
+                    ? `${activeInvitesCount} інвайтів очікують`
+                    : `перевірити профілі та ролі`}
+                </div>
+              </div>
             </div>
           </div>
-          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{members.length}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">учасників</div>
-        </Card>
-        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-emerald-500/60 overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-muted-foreground">Онлайн зараз</div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10">
-              <Activity className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+
+          <div className="border-t border-border bg-muted/[0.03] p-5 xl:border-l xl:border-t-0">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Найближчі події</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  День народження та річниці в компанії
+                </div>
+              </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-foreground/[0.04] text-foreground/70">
+                <Calendar className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              {upcomingTeamEvents.length > 0 ? (
+                upcomingTeamEvents.map((event) => {
+                  const eventLabel =
+                    event.type === "birthday"
+                      ? "День народження"
+                      : `${event.insight.years} ${event.insight.years === 1 ? "рік" : event.insight.years >= 2 && event.insight.years <= 4 ? "роки" : "років"} в компанії`;
+                  const timingLabel =
+                    event.insight.daysUntil === 0 ? "Сьогодні" : `Через ${event.insight.daysUntil} дн`;
+                  return (
+                    <div
+                      key={`${event.type}:${event.member.user_id}:${event.insight.dateLabel}`}
+                      className="rounded-2xl border border-border/70 bg-background/70 px-3 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div
+                            className={cn(
+                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                              event.type === "birthday"
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                                : "bg-sky-500/10 text-sky-600 dark:text-sky-300"
+                            )}
+                          >
+                            {event.type === "birthday" ? (
+                              <Gift className="h-4 w-4" />
+                            ) : (
+                              <Award className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-foreground">
+                              {getMemberDisplayName(event.member)}
+                            </div>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {eventLabel}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {event.insight.caption}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="shrink-0 rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-foreground/80">
+                          {timingLabel}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                  Додай дати народження та старту в профілі учасників.
+                </div>
+              )}
             </div>
           </div>
-          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{onlineNowCount}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {onlineNowCount > 0 ? `з ${members.length} активних` : "нікого онлайн"}
-          </div>
-        </Card>
-        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-sky-500/60 overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-muted-foreground">Активні запрошення</div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-500/10">
-              <UserCheck className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-            </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{activeInvitesCount}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">очікують реєстрації</div>
-        </Card>
-        <Card className="border border-border/60 bg-card/70 p-4 border-l-[3px] border-l-amber-500/60 overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-muted-foreground">Не в роботі</div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/10">
-              <UserX className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-foreground tabular-nums">{unavailableCount}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">Без посади: {withoutJobRoleCount}</div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
         <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
@@ -2295,21 +2449,23 @@ export function TeamMembersPage() {
                             >
                               Випробувальний: {probation.statusLabel}
                             </span>
-                            <span className="text-[11px] text-muted-foreground">{probation.progress}%</span>
+                            {probation.status !== "completed" ? (
+                              <span className="text-[11px] text-muted-foreground">{probation.progress}%</span>
+                            ) : null}
                           </div>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
-                            <div
-                              className={cn(
-                                "h-full rounded-full",
-                                probation.status === "completed"
-                                  ? "bg-emerald-500"
-                                  : probation.status === "active"
-                                  ? "bg-amber-500"
-                                  : "bg-muted-foreground/40"
-                              )}
-                              style={{ width: `${probation.progress}%` }}
-                            />
-                          </div>
+                          {probation.status !== "completed" ? (
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full",
+                                  probation.status === "active"
+                                    ? "bg-amber-500"
+                                    : "bg-muted-foreground/40"
+                                )}
+                                style={{ width: `${probation.progress}%` }}
+                              />
+                            </div>
+                          ) : null}
                           <div className="mt-2 text-[11px] text-muted-foreground">{probation.caption}</div>
                         </div>
                       ) : null}
@@ -2348,6 +2504,7 @@ export function TeamMembersPage() {
                     const presence = memberPresenceByUserId[m.user_id];
                     const employmentDuration = formatEmploymentDuration(meta?.startDate);
                     const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
+                    const showEmploymentDurationInline = !probation || probation.status === "completed";
                     const displayName = getMemberDisplayName(m);
                     const initials = getInitialsFromName(displayName, m.email ?? null);
                     return (
@@ -2460,41 +2617,41 @@ export function TeamMembersPage() {
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                               <Calendar className="w-3.5 h-3.5 opacity-70" />
                               <span>{meta?.startDate ? formatEmploymentDate(meta.startDate) : "Старт не вказано"}</span>
-                              <Activity className="h-3.5 w-3.5 opacity-70" />
-                              <span>{employmentDuration || "Стаж не розраховано"}</span>
+                              {showEmploymentDurationInline ? (
+                                <>
+                                  <Activity className="h-3.5 w-3.5 opacity-70" />
+                                  <span>{employmentDuration || "Стаж не розраховано"}</span>
+                                </>
+                              ) : null}
                             </div>
-                            {probation ? (
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "h-7 px-2.5 py-0 text-[11px] rounded-[var(--radius)] shrink-0",
-                                    getProbationBadgeClass(probation.status)
-                                  )}
-                                >
-                                  {probation.statusLabel}
-                                </Badge>
-                                <div className="h-1.5 min-w-[72px] flex-1 max-w-[112px] overflow-hidden rounded-full bg-muted">
-                                  <div
+                            {probation && probation.status !== "completed" ? (
+                                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <Badge
+                                    variant="outline"
                                     className={cn(
-                                      "h-full rounded-full",
-                                      probation.status === "completed"
-                                        ? "bg-emerald-500"
-                                        : probation.status === "active"
-                                        ? "bg-amber-500"
-                                        : "bg-muted-foreground/40"
+                                      "h-7 px-2.5 py-0 text-[11px] rounded-[var(--radius)] shrink-0",
+                                      getProbationBadgeClass(probation.status)
                                     )}
-                                    style={{ width: `${probation.progress}%` }}
-                                  />
+                                  >
+                                    {probation.statusLabel}
+                                  </Badge>
+                                  <div className="h-1.5 min-w-[72px] flex-1 max-w-[104px] overflow-hidden rounded-full bg-muted">
+                                    <div
+                                      className={cn(
+                                        "h-full rounded-full",
+                                        probation.status === "active"
+                                          ? "bg-amber-500"
+                                          : "bg-muted-foreground/40"
+                                      )}
+                                      style={{ width: `${probation.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="min-w-[36px] whitespace-nowrap text-right">
+                                    {probation.daysLeft >= 0
+                                      ? `${probation.daysLeft} дн`
+                                      : `${Math.abs(probation.daysLeft)} дн тому`}
+                                  </span>
                                 </div>
-                                <span className="min-w-[42px] whitespace-nowrap text-right">
-                                  {probation.status === "completed"
-                                    ? "Завершено"
-                                    : probation.daysLeft >= 0
-                                    ? `${probation.daysLeft} дн`
-                                    : `${Math.abs(probation.daysLeft)} дн тому`}
-                                </span>
-                              </div>
                             ) : null}
                           </div>
                         </TableCell>
@@ -2994,6 +3151,88 @@ export function TeamMembersPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
             <div className="px-6 py-5">
+            <div className="mb-6 rounded-[var(--radius)] border border-border bg-background/80 p-5">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-center gap-4">
+                  <AvatarBase
+                    src={selectedProfile?.avatarUrl ?? editProfileMember?.avatar_url ?? null}
+                    name={selectedDisplayName}
+                    fallback={selectedInitials}
+                    size={64}
+                    shape="circle"
+                    className="border-border bg-muted/50"
+                    fallbackClassName="text-base font-bold"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-xl font-semibold text-foreground">{selectedDisplayName}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {editProfileMember?.email ?? "Не вказано"}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getAccessBadgeClass(editProfileMember?.access_role ?? null))}>
+                        {getAccessRoleLabel(editProfileMember?.access_role ?? null)}
+                      </Badge>
+                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getJobBadgeClass(editProfileMember?.job_role ?? null))}>
+                        {getJobRoleLabel(editProfileMember?.job_role ?? null)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "px-2.5 py-1 font-medium rounded-[var(--radius)]",
+                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
+                        )}
+                      >
+                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px] lg:flex-1">
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <Calendar className="h-3.5 w-3.5" />
+                      День народження
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-foreground">
+                      {selectedBirthdayInsight?.label ?? formatBirthDate(editProfileBirthDate)}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selectedBirthdayInsight?.caption ?? "Дата не вказана"}
+                    </div>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <Activity className="h-3.5 w-3.5" />
+                      Річниця в компанії
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-foreground">
+                      {selectedAnniversaryInsight?.label ?? (selectedEmploymentDuration || "Стаж не вказано")}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selectedAnniversaryInsight?.caption ?? "Додай дату старту"}
+                    </div>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      Статус роботи
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-foreground">
+                      {selectedProbation && selectedProbation.status !== "completed"
+                        ? selectedProbation.statusLabel
+                        : selectedEmploymentDuration || getEmploymentStatusLabel(selectedEmploymentStatus)}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selectedProbation && selectedProbation.status !== "completed"
+                        ? selectedProbation.caption
+                        : editProfileStartDate
+                        ? `${formatEmploymentDate(editProfileStartDate)} • ${selectedEmploymentDuration || "Стаж"}`
+                        : "Вкажи дату старту"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.95fr)]">
               <div className="min-w-0 space-y-6">
                 <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">

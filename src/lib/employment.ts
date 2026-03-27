@@ -102,6 +102,105 @@ export function addMonthsToDateOnly(value: string, months: number) {
   return `${year}-${month}-${day}`;
 }
 
+export type BirthdayInsight = {
+  dateLabel: string;
+  daysUntil: number;
+  ageTurning: number | null;
+  label: string;
+  caption: string;
+};
+
+export function getBirthdayInsight(birthDate?: string | null, now = new Date()): BirthdayInsight | null {
+  const parsed = parseDateParts(birthDate);
+  if (!parsed) return null;
+
+  const today = startOfLocalDay(now);
+  const currentYearBirthday = new Date(today.getFullYear(), parsed.month - 1, parsed.day, 12, 0, 0, 0);
+  const nextBirthday =
+    currentYearBirthday.getTime() >= today.getTime()
+      ? currentYearBirthday
+      : new Date(today.getFullYear() + 1, parsed.month - 1, parsed.day, 12, 0, 0, 0);
+
+  const daysUntil = diffDays(today, nextBirthday);
+  const ageTurning = nextBirthday.getFullYear() - parsed.year;
+  const dateLabel = nextBirthday.toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+
+  if (daysUntil === 0) {
+    return {
+      dateLabel,
+      daysUntil,
+      ageTurning,
+      label: "Сьогодні",
+      caption: ageTurning > 0 ? `${ageTurning} років` : "День народження",
+    };
+  }
+
+  return {
+    dateLabel,
+    daysUntil,
+    ageTurning,
+    label: `Через ${formatDays(daysUntil)}`,
+    caption: ageTurning > 0 ? `${dateLabel} • ${ageTurning} років` : dateLabel,
+  };
+}
+
+export type WorkAnniversaryInsight = {
+  dateLabel: string;
+  daysUntil: number;
+  years: number;
+  label: string;
+  caption: string;
+};
+
+export function getWorkAnniversaryInsight(
+  startDate?: string | null,
+  now = new Date()
+): WorkAnniversaryInsight | null {
+  const start = parseDateOnly(startDate);
+  if (!start) return null;
+
+  const today = startOfLocalDay(now);
+  const yearsWorked = Math.max(0, today.getFullYear() - start.getFullYear());
+  let anniversary = new Date(start);
+  anniversary.setFullYear(start.getFullYear() + yearsWorked);
+
+  let nextYears = yearsWorked;
+  if (anniversary.getTime() < today.getTime()) {
+    nextYears += 1;
+    anniversary = new Date(start);
+    anniversary.setFullYear(start.getFullYear() + nextYears);
+  }
+
+  if (nextYears <= 0) nextYears = 1;
+  const daysUntil = diffDays(today, anniversary);
+  const dateLabel = anniversary.toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  if (daysUntil === 0) {
+    return {
+      dateLabel,
+      daysUntil,
+      years: nextYears,
+      label: `Сьогодні ${formatYears(nextYears)}`,
+      caption: dateLabel,
+    };
+  }
+
+  return {
+    dateLabel,
+    daysUntil,
+    years: nextYears,
+    label: `До ${formatYears(nextYears)}`,
+    caption: `Через ${formatDays(daysUntil)} • ${dateLabel}`,
+  };
+}
+
 export type ProbationSummary = {
   daysLeft: number;
   progress: number;
