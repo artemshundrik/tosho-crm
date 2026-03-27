@@ -253,6 +253,7 @@ const ROUTES = {
   notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
+  runtimeErrors: "/admin/runtime-errors",
 } as const;
 
 // --- Sidebar Config ---
@@ -286,6 +287,7 @@ const baseSidebarLinks: SidebarLink[] = [
   // Акаунт
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert, moduleKey: "team" },
+  { label: "Технічні помилки", to: ROUTES.runtimeErrors, group: "account", icon: ShieldAlert },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -498,6 +500,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Активність",
       breadcrumbTo: ROUTES.activity,
     };
+  if (pathname.startsWith(ROUTES.runtimeErrors))
+    return {
+      title: "Технічні помилки",
+      subtitle: "Фронтові runtime-помилки інтерфейсу для діагностики.",
+      breadcrumbLabel: "Технічні помилки",
+      breadcrumbTo: ROUTES.runtimeErrors,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
       title: "Управління командою",
@@ -606,6 +616,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
+        if (link.to === ROUTES.runtimeErrors && !permissions.isSuperAdmin) {
+          return false;
+        }
         if (link.moduleKey) {
           if (currentModuleAccess === undefined) {
             return false;
@@ -614,7 +627,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         }
         return true;
       }),
-    [currentModuleAccess, permissions.canEditMemberRoles]
+    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {

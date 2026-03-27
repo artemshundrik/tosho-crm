@@ -3610,7 +3610,7 @@ export default function DesignPage() {
   usePageHeaderActions(designHeaderActions, [designHeaderActions]);
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3 notranslate" translate="no">
 
       {error ? (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -4612,7 +4612,7 @@ export default function DesignPage() {
           }
         }}
       >
-        <DialogContent className="max-w-[420px]">
+        <DialogContent className="max-w-[420px] notranslate" translate="no">
           <DialogHeader>
             <DialogTitle>Вкажіть естімейт задачі</DialogTitle>
             <DialogDescription>
@@ -4635,7 +4635,7 @@ export default function DesignPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent portalled={false}>
                   <SelectItem value="minutes">Хвилини</SelectItem>
                   <SelectItem value="hours">Години</SelectItem>
                   <SelectItem value="days">Дні</SelectItem>
@@ -4699,7 +4699,7 @@ export default function DesignPage() {
           }
         }}
       >
-        <DialogContent className="max-w-[640px] max-h-[85vh] p-0 gap-0">
+        <DialogContent className="max-w-[640px] max-h-[85vh] p-0 gap-0 notranslate" translate="no">
           <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle>Нова дизайн-задача (без прорахунку)</DialogTitle>
             <DialogDescription>
@@ -4736,7 +4736,7 @@ export default function DesignPage() {
                     {createDesignTaskType ? DESIGN_TASK_TYPE_LABELS[createDesignTaskType] : "Тип задачі"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 p-2" align="start">
+                <PopoverContent className="w-64 p-2" align="start" portalled={false}>
                   <div className="space-y-1">
                     {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
                       <Button
@@ -4805,7 +4805,7 @@ export default function DesignPage() {
                       : "Дедлайн"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
+                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start" portalled={false}>
                   <Calendar
                     mode="single"
                     selected={createDeadline}
@@ -4859,7 +4859,7 @@ export default function DesignPage() {
                     {selectedManager?.label ?? "Менеджер"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 p-2" align="start">
+                <PopoverContent className="w-64 p-2" align="start" portalled={false}>
                   <div className="space-y-1">
                     {managerMembers.length > 0 ? (
                       managerMembers.map((member) => (
@@ -4944,7 +4944,7 @@ export default function DesignPage() {
                       {selectedAssignee?.label ?? "Виконавець"}
                     </Chip>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-2" align="start">
+                  <PopoverContent className="w-64 p-2" align="start" portalled={false}>
                     <div className="space-y-1">
                       {recommendedAssigneeGroup?.id ? (
                         <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2">

@@ -11,6 +11,7 @@ const routeImporters: Array<[RegExp, RouteImporter]> = [
   [/^\/settings\/members$/, () => import("../pages/TeamMembersPage")],
   [/^\/profile$/, () => import("../pages/ProfilePage")],
   [/^\/admin$/, () => import("../pages/AdminPage")],
+  [/^\/admin\/runtime-errors$/, () => import("../pages/RuntimeErrorsPage")],
   [/^\/orders\/estimates$/, () => import("../pages/OrdersEstimatesPage")],
   [/^\/orders\/estimates\/[^/]+$/, () => import("../pages/OrdersEstimateDetailsPage")],
   [/^\/orders\/customers$/, () => import("../pages/OrdersCustomersPage")],

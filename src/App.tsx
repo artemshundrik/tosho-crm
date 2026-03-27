@@ -104,6 +104,7 @@ const ResetPasswordPage = lazyWithRetry(() => import("./pages/ResetPasswordPage"
 const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPage"));
 const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
+const RuntimeErrorsPage = lazyWithRetry(() => import("./pages/RuntimeErrorsPage"));
 
 function RouteSuspense({
   children,
@@ -244,6 +245,9 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
   const path = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}${window.location.hash}`
     : "/";
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const hash = typeof window !== "undefined" ? window.location.hash : "";
   const signature = `${params.source}:${message.slice(0, 200)}:${path}`;
   if (!consumeRuntimeErrorLogGuard(signature)) return;
 
@@ -267,7 +271,20 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
           source: params.source,
           message,
           path,
+          pathname,
+          search,
+          hash,
           user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+          language: typeof navigator !== "undefined" ? navigator.language ?? null : null,
+          platform: typeof navigator !== "undefined" ? navigator.platform ?? null : null,
+          viewport:
+            typeof window !== "undefined"
+              ? {
+                  width: window.innerWidth,
+                  height: window.innerHeight,
+                  devicePixelRatio: window.devicePixelRatio ?? 1,
+                }
+              : null,
           component_stack: summarizeComponentStack(params.info),
         },
       });
@@ -463,6 +480,29 @@ function TeamMembersRouteGate({
     <PermissionGate
       allowed={canEditMemberRoles || hasTeamModuleAccess}
       requirement="картка доступів: Управління командою або access_role: owner/admin"
+      accessRole={accessRole}
+      jobRole={jobRole}
+    >
+      {children}
+    </PermissionGate>
+  );
+}
+
+function RuntimeErrorsRouteGate({
+  accessRole,
+  jobRole,
+  isSuperAdmin,
+  children,
+}: {
+  accessRole: string | null;
+  jobRole: string | null;
+  isSuperAdmin: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <PermissionGate
+      allowed={isSuperAdmin}
+      requirement="access_role: owner (Super Admin)"
       accessRole={accessRole}
       jobRole={jobRole}
     >
@@ -954,6 +994,20 @@ function AppRoutes() {
             <RouteSuspense shell>
               <AdminPage />
             </RouteSuspense>
+          }
+        />
+        <Route
+          path="admin/runtime-errors"
+          element={
+            <RuntimeErrorsRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              isSuperAdmin={permissions.isSuperAdmin}
+            >
+              <RouteSuspense shell>
+                <RuntimeErrorsPage />
+              </RouteSuspense>
+            </RuntimeErrorsRouteGate>
           }
         />
       </Route>
