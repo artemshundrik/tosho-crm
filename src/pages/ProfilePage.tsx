@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar, BriefcaseBusiness, Hourglass } from "lucide-react";
+import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar, BriefcaseBusiness, Hourglass, BellRing } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
@@ -685,6 +685,29 @@ export function ProfilePage() {
                   </div>
                   <Button asChild variant="outline" className="h-10 min-w-[140px]">
                     <Link to="/reset-password">Змінити</Link>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+                <div className="mb-5">
+                  <div className="text-lg font-semibold text-foreground">Сповіщення</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Push, in-app сповіщення та звук тепер зібрані в одному центрі керування.
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <BellRing className="h-4 w-4 text-primary" />
+                      Центр сповіщень
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Відкрий сторінку сповіщень, щоб керувати push, in-app popup та звуком.
+                    </div>
+                  </div>
+                  <Button asChild type="button" variant="outline" className="min-w-[168px]">
+                    <Link to="/notifications">Відкрити</Link>
                   </Button>
                 </div>
               </div>

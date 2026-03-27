@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import React, { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -13,6 +13,7 @@ import {
   Menu,
   Moon,
   Palette,
+  X as CloseIcon,
   ReceiptText,
   Search,
   ShieldAlert,
@@ -20,6 +21,7 @@ import {
   Truck,
   Users,
   X,
+  BadgeCheck,
   CircleDot,
   PanelLeftClose,
   PanelLeftOpen,
@@ -55,6 +57,11 @@ import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { playNotificationSound } from "@/lib/notificationSound";
+import {
+  IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT,
+  readInAppNotificationPreferences,
+} from "@/lib/inAppNotificationPreferences";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
@@ -95,6 +102,123 @@ type MatchMeta = {
   score_team: number | null;
   score_opponent: number | null;
 };
+
+const IN_APP_NOTIFICATION_TOAST_MS = 6500;
+const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
+
+function getInAppNotificationDuration(tone?: NotificationItem["tone"]) {
+  if (tone === "warning") return IN_APP_WARNING_NOTIFICATION_TOAST_MS;
+  return IN_APP_NOTIFICATION_TOAST_MS;
+}
+
+function getInAppNotificationIcon(tone?: NotificationItem["tone"]) {
+  if (tone === "warning") return <ShieldAlert className="h-4 w-4 text-warning-foreground" />;
+  if (tone === "success") return <BadgeCheck className="h-4 w-4 text-success-foreground" />;
+  return <Bell className="h-4 w-4 text-primary" />;
+}
+
+function renderInAppToastContent({
+  title,
+  description,
+  tone,
+  actionLabel,
+  onAction,
+  onClose,
+}: {
+  title: string;
+  description?: string;
+  tone?: NotificationItem["tone"];
+  actionLabel?: string;
+  onAction?: () => void;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-black/5 dark:ring-white/8 shadow-[0_42px_120px_-40px_rgba(15,23,42,0.58),0_22px_54px_-34px_rgba(15,23,42,0.34)] dark:shadow-[0_52px_140px_-42px_rgba(2,6,23,0.85),0_26px_60px_-36px_rgba(2,6,23,0.62)]">
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+            tone === "success" && "border-success-soft-border bg-success-soft text-success-foreground",
+            tone === "warning" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
+            (!tone || tone === "info") && "border-info-soft-border bg-info-soft text-info-foreground"
+          )}
+        >
+          {getInAppNotificationIcon(tone)}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="text-[15px] font-semibold leading-5 text-foreground">{title}</div>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Закрити сповіщення"
+              >
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          {description ? <div className="text-sm leading-5 text-muted-foreground">{description}</div> : null}
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {actionLabel && onAction ? (
+              <button
+                type="button"
+                onClick={onAction}
+                className="inline-flex h-8 items-center rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
+              >
+                {actionLabel}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function normalizeNotificationHref(href?: string) {
+  if (!href) return "";
+  const trimmed = href.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+function trimNotificationDescription(text?: string, limit = 160) {
+  const normalized = (text ?? "").trim().replace(/\s+/g, " ");
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
+}
+
+function shouldSuppressInAppNotificationToast(currentPath: string, href?: string) {
+  const normalizedHref = normalizeNotificationHref(href);
+  if (!normalizedHref) return false;
+  if (normalizedHref === currentPath) return true;
+
+  const currentPathname = currentPath.split("?")[0] ?? currentPath;
+  const hrefPathname = normalizedHref.split("?")[0] ?? normalizedHref;
+
+  if (hrefPathname === currentPathname) return true;
+
+  const entityRoutes = [ROUTES.ordersEstimates, ROUTES.ordersCustomers, ROUTES.ordersProduction, ROUTES.design, ROUTES.contractors];
+  return entityRoutes.some((route) => currentPathname.startsWith(`${route}/`) && hrefPathname === currentPathname);
+}
+
+function getNotificationActionLabel(href?: string) {
+  const normalizedHref = normalizeNotificationHref(href);
+  if (!normalizedHref) return "Відкрити";
+  if (normalizedHref.startsWith(ROUTES.design)) return "До задачі";
+  if (normalizedHref.startsWith(ROUTES.ordersEstimates)) return "До прорахунку";
+  if (normalizedHref.startsWith(ROUTES.ordersCustomers)) return "До замовника";
+  if (normalizedHref.startsWith(ROUTES.ordersProduction)) return "До замовлення";
+  if (normalizedHref.startsWith(ROUTES.notifications)) return "До сповіщень";
+  return "Відкрити";
+}
 
 // --- Routes ---
 const ROUTES = {
@@ -655,6 +779,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => readInAppNotificationPreferences().enabled);
+  const [inAppNotificationSoundEnabled, setInAppNotificationSoundEnabled] = useState(
+    () => readInAppNotificationPreferences().soundEnabled
+  );
+  const shownInAppNotificationIdsRef = useRef<Set<string>>(new Set());
+  const lastInAppNotificationSoundAtRef = useRef(0);
   const push = usePushNotifications(userId);
   const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
@@ -690,6 +820,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       // ignore storage errors
     }
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const syncPreferences = () => {
+      const next = readInAppNotificationPreferences();
+      setInAppNotificationsEnabled(next.enabled);
+      setInAppNotificationSoundEnabled(next.soundEnabled);
+    };
+
+    syncPreferences();
+    window.addEventListener("storage", syncPreferences);
+    window.addEventListener(IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT, syncPreferences);
+    return () => {
+      window.removeEventListener("storage", syncPreferences);
+      window.removeEventListener(IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT, syncPreferences);
+    };
+  }, []);
 
   const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
     setUsdUahLoading(true);
@@ -806,6 +952,18 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     }
     setNotificationsLoading(false);
   }, [userId]);
+
+  const playInAppNotificationSound = React.useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!inAppNotificationSoundEnabled) return;
+    if (document.visibilityState !== "visible") return;
+
+    const now = Date.now();
+    if (now - lastInAppNotificationSoundAtRef.current < 2500) return;
+    lastInAppNotificationSoundAtRef.current = now;
+
+    await playNotificationSound();
+  }, [inAppNotificationSoundEnabled]);
 
   useEffect(() => {
     loadNotifications();
@@ -984,6 +1142,56 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     };
   }, [loadActivityUnread]);
 
+  const openNotification = React.useCallback(async (n: NotificationItem) => {
+    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+    if (!n.read) {
+      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
+    }
+    if (n.href) navigate(n.href);
+  }, [navigate]);
+
+  const showInAppNotificationToast = React.useCallback(
+    (item: NotificationItem) => {
+      if (typeof window === "undefined") return;
+      if (!inAppNotificationsEnabled) return;
+      if (location.pathname.startsWith("/notifications")) return;
+      if (document.visibilityState !== "visible") return;
+
+      const currentRoute = `${location.pathname}${location.search}`;
+      if (shouldSuppressInAppNotificationToast(currentRoute, item.href)) return;
+
+      const toastId = `notification:${item.id}`;
+      if (shownInAppNotificationIdsRef.current.has(toastId)) return;
+      shownInAppNotificationIdsRef.current.add(toastId);
+
+      const description = trimNotificationDescription(item.description);
+      toast.custom(
+        (t) =>
+          renderInAppToastContent({
+            title: item.title?.trim() || "Нове сповіщення",
+            description,
+            tone: item.tone,
+            actionLabel: item.href ? getNotificationActionLabel(item.href) : undefined,
+            onAction: item.href
+              ? () => {
+                  void openNotification(item);
+                }
+              : undefined,
+            onClose: () => toast.dismiss(t),
+          }),
+        {
+        id: toastId,
+        position: "top-right",
+        duration: getInAppNotificationDuration(item.tone),
+        className: "!border-0 !bg-transparent !p-0 !shadow-none",
+        }
+      );
+
+      void playInAppNotificationSound();
+    },
+    [inAppNotificationsEnabled, location.pathname, location.search, openNotification, playInAppNotificationSound]
+  );
+
   useEffect(() => {
     if (realtimeDisabled) return;
     if (!userId) return;
@@ -1001,12 +1209,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           const row = payload.new as NotificationRow;
           const item = mapNotificationRow(row);
           setNotifications((prev) => [item, ...prev].slice(0, 20));
-          if (location.pathname.startsWith("/notifications")) {
-            return;
-          }
-          const toastTitle = item.title?.trim() || "Нове сповіщення";
-          const toastDescription = item.description?.trim() || undefined;
-          toast(toastTitle, { description: toastDescription });
+          showInAppNotificationToast(item);
         }
       )
       .subscribe((status) => {
@@ -1024,7 +1227,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadNotifications, location.pathname, realtimeDisabled, userId]);
+  }, [loadNotifications, realtimeDisabled, showInAppNotificationToast, userId]);
 
   useEffect(() => {
     if (realtimeDisabled) return;
@@ -1080,14 +1283,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     } else {
       toast.error("Не вдалося оновити сповіщення");
     }
-  };
-
-  const openNotification = async (n: NotificationItem) => {
-    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
-    if (!n.read) {
-      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
-    }
-    if (n.href) navigate(n.href);
   };
 
   return (
