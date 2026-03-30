@@ -145,7 +145,14 @@ async function fetchMinfinFxRates(signal?: AbortSignal) {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} for ${endpoint}`);
       }
-      return response;
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.toLowerCase().includes("application/json")) {
+        throw new Error(`Unexpected content-type for ${endpoint}: ${contentType || "unknown"}`);
+      }
+
+      const payload = await response.json();
+      return payload;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("Unknown fetch error");
     }
@@ -895,8 +902,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
     setUsdUahLoading(true);
     try {
-      const response = await fetchMinfinFxRates(signal);
-      const payload = (await response.json()) as Partial<MinfinFxResponse>;
+      const payload = (await fetchMinfinFxRates(signal)) as Partial<MinfinFxResponse>;
       const usdToUah = payload?.usd?.sell;
       const eurToUah = payload?.eur?.sell;
       if (
