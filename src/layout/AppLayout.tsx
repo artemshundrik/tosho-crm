@@ -132,7 +132,9 @@ function getFxSourceText(sourceLabel: string | null, hasRates: boolean) {
 }
 
 async function fetchMinfinFxRates(signal?: AbortSignal) {
-  const endpoints = ["/api/fx-rates", "/.netlify/functions/fx-rates"];
+  const endpoints = import.meta.env.DEV
+    ? ["/api/fx-rates", "/.netlify/functions/fx-rates"]
+    : ["/.netlify/functions/fx-rates", "/api/fx-rates"];
   let lastError: Error | null = null;
 
   for (const endpoint of endpoints) {
@@ -952,7 +954,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         // Ignore storage failures (private mode, quota etc).
       }
     } catch (error) {
-      console.warn("Failed to refresh Minfin rates", error);
+      if (import.meta.env.DEV) {
+        console.warn("Failed to refresh Minfin rates", error);
+      }
     } finally {
       setUsdUahLoading(false);
     }
