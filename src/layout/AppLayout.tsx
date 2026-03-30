@@ -62,6 +62,7 @@ import {
   IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT,
   readInAppNotificationPreferences,
 } from "@/lib/inAppNotificationPreferences";
+import { MINFIN_MB_URL, type MinfinFxResponse } from "@/lib/minfinFx";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
@@ -115,6 +116,13 @@ function getInAppNotificationIcon(tone?: NotificationItem["tone"]) {
   if (tone === "warning") return <ShieldAlert className="h-4 w-4 text-warning-foreground" />;
   if (tone === "success") return <BadgeCheck className="h-4 w-4 text-success-foreground" />;
   return <Bell className="h-4 w-4 text-primary" />;
+}
+
+function formatFxDelta(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return null;
+  return Math.abs(value)
+    .toFixed(3)
+    .replace(/\.?0+$/u, "");
 }
 
 function renderInAppToastContent({
@@ -344,7 +352,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
   if (pathname.startsWith(ROUTES.financeInvoices))
     return {
       title: "Рахунки",
-      subtitle: "Рахунки для клієнтів і статуси оплат.",
+      subtitle: "Рахунки для замовників і статуси оплат.",
       breadcrumbLabel: "Рахунки",
       breadcrumbTo: ROUTES.financeInvoices,
       showPageHeader: false,
@@ -804,7 +812,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [, setActivityUnreadCount] = useState(0);
   const [usdUahRate, setUsdUahRate] = useState<number | null>(null);
   const [eurUahRate, setEurUahRate] = useState<number | null>(null);
+  const [usdUahDelta, setUsdUahDelta] = useState<number | null>(null);
+  const [eurUahDelta, setEurUahDelta] = useState<number | null>(null);
   const [usdUahUpdatedAt, setUsdUahUpdatedAt] = useState<string | null>(null);
+  const [usdUahSourceLabel, setUsdUahSourceLabel] = useState<string | null>(null);
   const [usdUahLoading, setUsdUahLoading] = useState(false);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
   const reminderAssigneeKeys = useMemo(() => {
@@ -855,35 +866,57 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
     setUsdUahLoading(true);
     try {
-      const response = await fetch("https://open.er-api.com/v6/latest/USD", {
+      const response = await fetch("/api/fx-rates", {
         method: "GET",
         cache: "no-store",
         signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = (await response.json()) as { rates?: Record<string, number | undefined> };
-      const usdToUah = payload?.rates?.UAH;
-      const usdToEur = payload?.rates?.EUR;
+      const payload = (await response.json()) as Partial<MinfinFxResponse>;
+      const usdToUah = payload?.usd?.sell;
+      const eurToUah = payload?.eur?.sell;
       if (
         typeof usdToUah !== "number" ||
         !Number.isFinite(usdToUah) ||
         usdToUah <= 0 ||
-        typeof usdToEur !== "number" ||
-        !Number.isFinite(usdToEur) ||
-        usdToEur <= 0
+        typeof eurToUah !== "number" ||
+        !Number.isFinite(eurToUah) ||
+        eurToUah <= 0
       ) {
-        throw new Error("Invalid USD/UAH rate payload");
+        throw new Error("Invalid Minfin rate payload");
       }
       const nextUsdUahRate = usdToUah;
-      const nextEurUahRate = usdToUah / usdToEur;
-      const nowIso = new Date().toISOString();
+      const nextEurUahRate = eurToUah;
+      const nextUsdUahDelta =
+        typeof payload?.usd?.sellChange === "number" && Number.isFinite(payload.usd.sellChange)
+          ? payload.usd.sellChange
+          : null;
+      const nextEurUahDelta =
+        typeof payload?.eur?.sellChange === "number" && Number.isFinite(payload.eur.sellChange)
+          ? payload.eur.sellChange
+          : null;
+      const nowIso =
+        typeof payload.fetchedAt === "string" && !Number.isNaN(new Date(payload.fetchedAt).getTime())
+          ? payload.fetchedAt
+          : new Date().toISOString();
+      const sourceLabel = typeof payload.updatedAtLabel === "string" ? payload.updatedAtLabel : null;
       setUsdUahRate(nextUsdUahRate);
       setEurUahRate(nextEurUahRate);
+      setUsdUahDelta(nextUsdUahDelta);
+      setEurUahDelta(nextEurUahDelta);
       setUsdUahUpdatedAt(nowIso);
+      setUsdUahSourceLabel(sourceLabel);
       try {
         localStorage.setItem(
           "tosho_fx_rates",
-          JSON.stringify({ usdUah: nextUsdUahRate, eurUah: nextEurUahRate, updatedAt: nowIso })
+          JSON.stringify({
+            usdUah: nextUsdUahRate,
+            eurUah: nextEurUahRate,
+            usdUahDelta: nextUsdUahDelta,
+            eurUahDelta: nextEurUahDelta,
+            updatedAt: nowIso,
+            sourceLabel,
+          })
         );
       } catch {
         // Ignore storage failures (private mode, quota etc).
@@ -903,15 +936,31 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     try {
       const raw = localStorage.getItem("tosho_fx_rates");
       if (!raw) return;
-      const parsed = JSON.parse(raw) as { usdUah?: unknown; eurUah?: unknown; updatedAt?: unknown };
+      const parsed = JSON.parse(raw) as {
+        usdUah?: unknown;
+        eurUah?: unknown;
+        usdUahDelta?: unknown;
+        eurUahDelta?: unknown;
+        updatedAt?: unknown;
+        sourceLabel?: unknown;
+      };
       if (typeof parsed.usdUah === "number" && Number.isFinite(parsed.usdUah) && parsed.usdUah > 0) {
         setUsdUahRate(parsed.usdUah);
       }
       if (typeof parsed.eurUah === "number" && Number.isFinite(parsed.eurUah) && parsed.eurUah > 0) {
         setEurUahRate(parsed.eurUah);
       }
+      if (typeof parsed.usdUahDelta === "number" && Number.isFinite(parsed.usdUahDelta)) {
+        setUsdUahDelta(parsed.usdUahDelta);
+      }
+      if (typeof parsed.eurUahDelta === "number" && Number.isFinite(parsed.eurUahDelta)) {
+        setEurUahDelta(parsed.eurUahDelta);
+      }
       if (typeof parsed.updatedAt === "string" && parsed.updatedAt) {
         setUsdUahUpdatedAt(parsed.updatedAt);
+      }
+      if (typeof parsed.sourceLabel === "string" && parsed.sourceLabel) {
+        setUsdUahSourceLabel(parsed.sourceLabel);
       }
     } catch {
       // Ignore invalid local cache.
@@ -1609,22 +1658,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <AppDropdown
                 align="end"
                 sideOffset={10}
-                contentClassName="w-[280px]"
+                contentClassName="w-[308px] p-0"
                 open={usdRateOpen}
                 onOpenChange={setUsdRateOpen}
                 trigger={
                   <button
                     type="button"
-                    className="hidden lg:inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-2.5 text-xs transition-colors duration-150 hover:bg-muted/60 hover:border-border cursor-pointer"
+                    className="hidden lg:inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-2.5 text-xs transition-colors duration-150 hover:bg-muted/60 hover:border-border cursor-pointer"
                     aria-label="Курси валют"
-                    title="USD/UAH · EUR/UAH"
+                    title="Мінфін міжбанк · продаж"
                   >
                     <span className="font-medium tabular-nums text-foreground/90">
-                      USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
+                      🇺🇸 USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
                     </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="font-medium tabular-nums text-foreground/90">
-                      EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
+                      🇪🇺 EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
                     </span>
                   </button>
                 }
@@ -1635,26 +1684,43 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       {usdUahLoading ? <CircleDot className="h-3.5 w-3.5 animate-pulse text-muted-foreground" /> : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {usdUahUpdatedAt
-                        ? `Оновлено ${new Date(usdUahUpdatedAt).toLocaleString("uk-UA", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}`
-                        : "Ще не оновлено"}
+                      {usdUahSourceLabel ? `Мінфін міжбанк · ${usdUahSourceLabel}` : "Ще не оновлено на Мінфіні"}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2">
-                        <div className="text-[11px] text-muted-foreground">USD/UAH</div>
-                        <div className="text-base font-semibold tabular-nums text-foreground">
-                          {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
+                        <div className="text-[11px] text-muted-foreground">🇺🇸 Долар США</div>
+                        <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
+                          <div className="text-[17px] font-semibold tabular-nums text-foreground">
+                            {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
+                          </div>
+                          {usdUahDelta !== null && usdUahDelta !== 0 ? (
+                            <div
+                              className={cn(
+                                "text-[13px] font-medium tabular-nums",
+                                usdUahDelta > 0 ? "text-success-foreground" : "text-danger-foreground"
+                              )}
+                            >
+                              {usdUahDelta > 0 ? "↑" : "↓"} {formatFxDelta(usdUahDelta)}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
-                      <div className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2">
-                        <div className="text-[11px] text-muted-foreground">EUR/UAH</div>
-                        <div className="text-base font-semibold tabular-nums text-foreground">
-                          {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
+                      <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
+                        <div className="text-[11px] text-muted-foreground">🇪🇺 Євро</div>
+                        <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
+                          <div className="text-[17px] font-semibold tabular-nums text-foreground">
+                            {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
+                          </div>
+                          {eurUahDelta !== null && eurUahDelta !== 0 ? (
+                            <div
+                              className={cn(
+                                "text-[13px] font-medium tabular-nums",
+                                eurUahDelta > 0 ? "text-success-foreground" : "text-danger-foreground"
+                              )}
+                            >
+                              {eurUahDelta > 0 ? "↑" : "↓"} {formatFxDelta(eurUahDelta)}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1668,6 +1734,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     >
                       Оновити
                     </Button>
+                    <a
+                      href={MINFIN_MB_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      Відкрити джерело на Мінфіні
+                    </a>
                   </div>
                 }
               />

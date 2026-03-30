@@ -50,7 +50,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   onCreateCustomer,
   onCreateLead,
   onClear,
-  chipLabel = "Клієнт / Лід",
+  chipLabel = "Замовник / Лід",
   popoverClassName = "w-80 p-2",
   align = "start",
   maxVisible = 50,
@@ -127,7 +127,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
           <Input
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Пошук клієнта або ліда..."
+            placeholder="Пошук замовника або ліда..."
             className="h-9"
           />
           <div className="relative">
@@ -178,7 +178,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                                 : "border-emerald-300 bg-emerald-100 text-emerald-950"
                             )}
                           >
-                            {option.entityType === "lead" ? "Лід" : "Клієнт"}
+                            {option.entityType === "lead" ? "Лід" : "Замовник"}
                           </span>
                           {option.disabled ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
@@ -193,7 +193,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                   );
                 })
               ) : search ? (
-                <div className="p-2 text-xs text-muted-foreground">Клієнтів або лідів не знайдено</div>
+                <div className="p-2 text-xs text-muted-foreground">Замовників або лідів не знайдено</div>
               ) : (
                 <div className="p-2 text-xs text-muted-foreground">Введіть назву для пошуку</div>
               )}
@@ -218,7 +218,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                   onOpenChange(false);
                 }}
               >
-                Новий клієнт
+                Новий замовник
               </Button>
             ) : null}
             {onCreateLead ? (

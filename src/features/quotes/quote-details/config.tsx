@@ -114,7 +114,7 @@ export const CANCEL_REASON_OPTIONS = [
   "Обрали іншого підрядника",
   "Змінились вимоги/бриф",
   "Втрата актуальності",
-  "Немає відповіді від клієнта",
+  "Немає відповіді від замовника",
 ];
 
 export const normalizeStatus = (value?: string | null) => {
@@ -216,7 +216,7 @@ export const STATUS_NEXT_ACTION: Record<
   awaiting_approval: {
     ctaLabel: "Підтвердити",
     title: "Етап погодження",
-    description: "Зафіксуйте фінальне рішення клієнта.",
+    description: "Зафіксуйте фінальне рішення замовника.",
     nextStatus: "approved",
   },
   approved: {

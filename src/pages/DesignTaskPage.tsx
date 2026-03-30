@@ -3654,7 +3654,7 @@ export default function DesignTaskPage() {
       return;
     }
     if (nextStatus === "client_review" && clientReviewBlockers.length > 0) {
-      toast.error(`Щоб передати дизайн клієнту, закрийте блокери: ${clientReviewBlockers.join(", ")}.`);
+      toast.error(`Щоб передати дизайн замовнику, закрийте блокери: ${clientReviewBlockers.join(", ")}.`);
       return;
     }
     const previousStatus = task.status;
@@ -5098,8 +5098,8 @@ export default function DesignTaskPage() {
   const isLinkedQuote = isUuid(task.quoteId);
   const taskHeaderTitle = getTaskDisplayNumber(task);
   const taskHeaderSubtitle = isLinkedQuote
-    ? `${task.customerName ?? "Клієнт"} · ${quoteItem?.name ?? "Позиція"}`
-    : `${task.customerName ?? "Клієнт"} · Дизайн-задача без прорахунку`;
+    ? `${task.customerName ?? "Замовник"} · ${quoteItem?.name ?? "Позиція"}`
+    : `${task.customerName ?? "Замовник"} · Дизайн-задача без прорахунку`;
   const taskManagerUserId =
     typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
       ? (task.metadata.manager_user_id as string)
@@ -5643,7 +5643,7 @@ export default function DesignTaskPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
-                <div className="text-xs text-muted-foreground mb-1">Клієнт</div>
+                <div className="text-xs text-muted-foreground mb-1">Замовник</div>
                 <div className="flex items-center gap-2.5">
                   <EntityAvatar
                     src={task.customerLogoUrl ?? null}
@@ -5748,7 +5748,7 @@ export default function DesignTaskPage() {
             </div>
             {task.status === "changes" ? (
               <div className="rounded-lg border border-warning-soft-border bg-warning-soft p-3 text-sm text-warning-foreground">
-                {task.title ?? "Клієнт надіслав правки, перевірте деталі та оновіть макет."}
+                {task.title ?? "Замовник надіслав правки, перевірте деталі та оновіть макет."}
               </div>
             ) : null}
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
@@ -6227,7 +6227,7 @@ export default function DesignTaskPage() {
                   </Button>
                   {clientReviewBlockers.length > 0 ? (
                     <div className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
-                      Для передачі клієнту: {clientReviewBlockers.join(" · ")}
+                      Для передачі замовнику: {clientReviewBlockers.join(" · ")}
                     </div>
                   ) : null}
                 </>
@@ -6384,7 +6384,7 @@ export default function DesignTaskPage() {
                 ))}
                 {task.status === "pm_review" && clientReviewBlockers.length > 0 ? (
                   <div className="rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
-                    Для передачі клієнту: {clientReviewBlockers.join(" · ")}
+                    Для передачі замовнику: {clientReviewBlockers.join(" · ")}
                   </div>
                 ) : null}
               </div>
@@ -6542,7 +6542,7 @@ export default function DesignTaskPage() {
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Інформація</div>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />Клієнт</span>
+                <span className="text-muted-foreground inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />Замовник</span>
                 <span className="font-medium text-right">{task.customerName ?? "Не вказано"}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -7181,7 +7181,7 @@ export default function DesignTaskPage() {
                           size={24}
                         />
                         <div className="truncate text-sm text-foreground">
-                          {candidate.customerName ?? "Клієнт не вказано"}
+                          {candidate.customerName ?? "Замовника не вказано"}
                         </div>
                       </div>
                     </div>

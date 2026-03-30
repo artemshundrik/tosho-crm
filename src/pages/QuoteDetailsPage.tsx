@@ -1397,7 +1397,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ];
     }
     if (currentStatus === "awaiting_approval") {
-      return [{ label: "Після відповіді клієнта зафіксуйте результат", done: false }];
+      return [{ label: "Після відповіді замовника зафіксуйте результат", done: false }];
     }
     if (currentStatus === "approved") {
       return [{ label: "Готово. Можна переходити до наступного процесу", done: true }];
@@ -6818,13 +6818,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <div className="flex items-center gap-4 py-3">
                   <EntityAvatar
                     src={quote.customer_logo_url ?? null}
-                    name={quote.customer_name ?? "Клієнт / Лід"}
+                    name={quote.customer_name ?? "Замовник / Лід"}
                     fallback={getInitials(quote.customer_name)}
                     size={44}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium text-muted-foreground">
-                      {quote.customer_id ? "Клієнт" : "Лід"}
+                      {quote.customer_id ? "Замовник" : "Лід"}
                     </div>
                     <div className="mt-0.5 truncate text-base font-semibold text-foreground">
                       {quote.customer_name ?? "Не вказано"}

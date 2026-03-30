@@ -375,7 +375,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return message;
 };
 
-const getTaskPartyLabel = () => "Клієнт";
+const getTaskPartyLabel = () => "Замовник";
 
 const isTaskAttachedFromStandalone = (task: DesignTask) => {
   const source = typeof task.metadata?.source === "string" ? task.metadata.source.trim() : "";
@@ -973,12 +973,12 @@ export default function DesignPage() {
 
         const customerOptions: CustomerOption[] = customerRows.map((customer) => ({
           id: customer.id,
-          label: customer.name?.trim() || customer.legal_name?.trim() || "Клієнт без назви",
+          label: customer.name?.trim() || customer.legal_name?.trim() || "Замовник без назви",
           entityType: "customer",
           logoUrl: normalizeLogoUrl(customer.logo_url ?? null),
           disabled: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null),
           disabledReason: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null)
-            ? "Можна вибрати тільки свого клієнта або ліда"
+            ? "Можна вибрати тільки свого замовника або ліда"
             : null,
         }));
 
@@ -993,7 +993,7 @@ export default function DesignPage() {
           logoUrl: normalizeLogoUrl(lead.logo_url ?? null),
           disabled: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null),
           disabledReason: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null)
-            ? "Можна вибрати тільки свого клієнта або ліда"
+            ? "Можна вибрати тільки свого замовника або ліда"
             : null,
         }));
 
@@ -2237,9 +2237,9 @@ export default function DesignPage() {
     teamMembers: managerMembers,
     onCreated: handleCreatedParty,
     resolveErrorMessage: getErrorMessage,
-    customerDialogTitle: "Новий клієнт",
-    customerDialogDescription: "Додайте дані клієнта для подальшої роботи в дизайн-задачах.",
-    customerSubmitLabel: "Створити клієнта",
+    customerDialogTitle: "Новий замовник",
+    customerDialogDescription: "Додайте дані замовника для подальшої роботи в дизайн-задачах.",
+    customerSubmitLabel: "Створити замовника",
     leadDialogTitle: "Новий лід",
     leadDialogDescription: "Додайте контакт ліда для подальшої роботи в дизайн-задачах.",
     leadSubmitLabel: "Створити ліда",
@@ -2727,7 +2727,7 @@ export default function DesignPage() {
       return;
     }
     if (!customerName) {
-      toast.error("Клієнт/лід обов'язковий");
+      toast.error("Замовник/лід обов'язковий");
       return;
     }
     if (!createDesignTaskType) {
@@ -3300,7 +3300,7 @@ export default function DesignPage() {
           <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
             <EntityAvatar
               src={task.customerLogoUrl ?? null}
-              name={task.customerName ?? "Клієнт / Лід"}
+              name={task.customerName ?? "Замовник / Лід"}
               fallback={getInitials(task.customerName)}
               size={32}
             />

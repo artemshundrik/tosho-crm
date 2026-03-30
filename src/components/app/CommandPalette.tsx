@@ -148,7 +148,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-customers",
         label: "Замовники",
-        keywords: ["клієнти", "customers", "companies"],
+        keywords: ["замовники", "customers", "companies"],
         to: "/orders/customers",
         icon: Building2,
       },

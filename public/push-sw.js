@@ -17,8 +17,8 @@ self.addEventListener("push", (event) => {
       body,
       tag,
       data: { href },
-      badge: "/favicon.svg",
-      icon: "/favicon.svg",
+      badge: "/favicon-light-v2.svg",
+      icon: "/apple-touch-icon.png",
     })
   );
 });

@@ -64,7 +64,7 @@ export const ORDER_STATUS_SECTIONS = [
       {
         id: "approved",
         label: "Погоджено",
-        description: "Клієнт погодив замовлення, можна рухатись до оплати й запуску.",
+        description: "Замовник погодив замовлення, можна рухатись до оплати й запуску.",
         tone: "success",
       },
       {
@@ -156,7 +156,7 @@ export const ORDER_STATUS_SECTIONS = [
       {
         id: "artwork_review",
         label: "Макет на погодженні",
-        description: "Візуал або макет уже на стороні клієнта.",
+        description: "Візуал або макет уже на стороні замовника.",
         tone: "info",
       },
       {
@@ -192,7 +192,7 @@ export const ORDER_STATUS_SECTIONS = [
         tone: "info",
       },
       { id: "shipped", label: "Відвантажено", description: "Відправка створена, ТТН уже можна прикріпити.", tone: "info" },
-      { id: "delivered", label: "Доставлено", description: "Клієнт отримав замовлення.", tone: "success" },
+      { id: "delivered", label: "Доставлено", description: "Замовник отримав замовлення.", tone: "success" },
       {
         id: "partially_delivered",
         label: "Частково доставлено",

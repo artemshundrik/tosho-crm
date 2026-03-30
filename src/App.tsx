@@ -153,6 +153,14 @@ function isDomDetachRaceError(error: unknown): boolean {
   );
 }
 
+function isIgnorableWindowError(error: unknown): boolean {
+  const message = getRuntimeErrorMessage(error).toLowerCase();
+  return (
+    message.includes("resizeobserver loop completed with undelivered notifications") ||
+    message.includes("resizeobserver loop limit exceeded")
+  );
+}
+
 function consumeReloadGuard(key: string): boolean {
   if (typeof window === "undefined") return false;
 
@@ -1095,8 +1103,13 @@ export default function App() {
     };
 
     const handleWindowError = (event: ErrorEvent) => {
-      reportRuntimeError({ error: event.error ?? event.message, source: "window_error" });
-      if (!isChunkLikeError(event.error ?? event.message)) return;
+      const error = event.error ?? event.message;
+      if (isIgnorableWindowError(error)) {
+        event.preventDefault();
+        return;
+      }
+      reportRuntimeError({ error, source: "window_error" });
+      if (!isChunkLikeError(error)) return;
       reloadOnceForChunkError();
     };
 

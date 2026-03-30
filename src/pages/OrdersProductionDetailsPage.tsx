@@ -853,7 +853,7 @@ export default function OrdersProductionDetailsPage() {
           </div>
 
           <div className="mt-4 border-t border-border/60 pt-4">
-            <div className="mb-2 text-sm font-semibold text-foreground">Відправити клієнту</div>
+            <div className="mb-2 text-sm font-semibold text-foreground">Відправити замовнику</div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={openEmailDraft} disabled={!record.contactEmail}>
                 <Mail className="mr-2 h-4 w-4" />

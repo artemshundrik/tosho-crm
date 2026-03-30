@@ -124,7 +124,7 @@ const NOVA_POSHTA_DELIVERY_TYPES = [
 
 const DELIVERY_PAYER_OPTIONS = [
   { value: "company", label: "Ми" },
-  { value: "client", label: "Клієнт" },
+  { value: "client", label: "Замовник" },
 ];
 
 const DEFAULT_DEADLINE_TIME = "10:00";
@@ -1149,7 +1149,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         entityType: customer.entityType ?? "customer",
         disabled: isBlockedForCurrentManager(customer),
         disabledReason: isBlockedForCurrentManager(customer)
-          ? "Можна вибрати тільки свого клієнта або ліда"
+          ? "Можна вибрати тільки свого замовника або ліда"
           : null,
       }));
     },
@@ -1494,7 +1494,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <Input
                 value={deadlineReminderComment}
                 onChange={(e) => setDeadlineReminderComment(e.target.value)}
-                placeholder="Напр. Перевірити готовність і зв'язатись з клієнтом"
+                placeholder="Напр. Перевірити готовність і зв'язатись з замовником"
                 className="h-9"
               />
             </div>

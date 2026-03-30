@@ -27,7 +27,7 @@ export function getSupabaseClient(): AnySupabaseClient {
 }
 
 /**
- * DB-клієнт для CRM зі схемою `tosho`
+ * DB-замовник для CRM зі схемою `tosho`
  */
 export function getDbClient(): AnyPostgrestClient {
   if (cachedDb) return cachedDb;

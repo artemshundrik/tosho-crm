@@ -667,7 +667,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [resolveManagerMember, teamMembersLoaded]
   );
   const getPartyLabel = (row: Pick<QuoteListRow, "customer_id">) =>
-    row.customer_id ? "Клієнт" : "Лід";
+    row.customer_id ? "Замовник" : "Лід";
   const managerFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
     visibleRows.forEach((row) => {
@@ -1876,7 +1876,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const validateStep1 = () => {
     setCreateError(null);
     if (!customerId) {
-      setCreateError("Оберіть клієнта.");
+      setCreateError("Оберіть замовника.");
       return false;
     }
     return true;
@@ -1913,7 +1913,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     resolveErrorMessage: getErrorMessage,
     customerDialogTitle: "Новий замовник",
     customerDialogDescription: "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
-    customerSubmitLabel: "Створити клієнта",
+    customerSubmitLabel: "Створити замовника",
     leadDialogTitle: "Новий лід",
     leadDialogDescription: "Додайте контакт ліда для подальшої роботи в прорахунках і задачах.",
     leadSubmitLabel: "Створити ліда",
@@ -4579,7 +4579,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <TableHead className="w-[12px]"></TableHead>
                   <TableHead>Назва</TableHead>
                   <TableHead>Тип</TableHead>
-                  <TableHead>Клієнт / Лід</TableHead>
+                  <TableHead>Замовник / Лід</TableHead>
                   <TableHead>Позицій</TableHead>
                   <TableHead>Створено</TableHead>
                   <TableHead className="w-[120px] text-right">Дія</TableHead>
@@ -4705,7 +4705,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-2">Немає прорахунків</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для клієнта"}
+                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
                 <Button onClick={openCreate} variant="outline" className="gap-2">
@@ -4913,7 +4913,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <div className="mt-3 flex items-center gap-3 min-w-0">
                       <EntityAvatar
                         src={row.customer_logo_url ?? null}
-                        name={row.customer_name ?? "Клієнт / Лід"}
+                        name={row.customer_name ?? "Замовник / Лід"}
                         fallback={getInitials(row.customer_name)}
                         size={40}
                       />
@@ -5012,7 +5012,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableHead>
                     <TableHead className="w-[220px]">
                       <div className="flex items-center font-semibold">
-                        Клієнт / Лід
+                        Замовник / Лід
                       </div>
                     </TableHead>
                     <TableHead className="w-[200px]">
@@ -5139,7 +5139,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           <div className="flex items-center gap-3 min-w-0">
                             <EntityAvatar
                               src={row.customer_logo_url ?? null}
-                              name={row.customer_name ?? "Клієнт / Лід"}
+                              name={row.customer_name ?? "Замовник / Лід"}
                               fallback={getInitials(row.customer_name)}
                               size={36}
                             />
@@ -5292,7 +5292,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-2">Немає прорахунків</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для клієнта"}
+                {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
                 <Button onClick={openCreate} variant="outline" className="gap-2">
@@ -5491,7 +5491,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
                                       <EntityAvatar
                                         src={row.customer_logo_url ?? null}
-                                        name={row.customer_name ?? "Клієнт / Лід"}
+                                        name={row.customer_name ?? "Замовник / Лід"}
                                         fallback={getInitials(row.customer_name)}
                                         size={32}
                                       />

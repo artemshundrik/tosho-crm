@@ -37,7 +37,7 @@ export async function listCustomerLeadLogoDirectory(teamId: string): Promise<Cus
     ((customersRes.data as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }> | null) ?? [])
       .map((row) => ({
         id: row.id,
-        label: row.name?.trim() || row.legal_name?.trim() || "Клієнт без назви",
+        label: row.name?.trim() || row.legal_name?.trim() || "Замовник без назви",
         legalName: row.legal_name?.trim() || null,
         entityType: "customer" as const,
         logoUrl: normalizeCustomerLogoUrl(row.logo_url ?? null),

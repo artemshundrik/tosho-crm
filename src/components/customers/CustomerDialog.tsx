@@ -169,7 +169,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   error,
   title = "Новий замовник",
   description = "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
-  submitLabel = "Створити клієнта",
+  submitLabel = "Створити замовника",
   onSubmit,
   calculations = [],
   orders = [],

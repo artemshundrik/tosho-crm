@@ -1740,7 +1740,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             ? undefined
             : "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку."
         }
-        submitLabel={editingId ? "Зберегти" : "Створити клієнта"}
+        submitLabel={editingId ? "Зберегти" : "Створити замовника"}
         calculations={calculationQuotes}
         orders={orderQuotes}
         linkedLoading={linkedQuotesLoading}

@@ -13,3 +13,8 @@ node_bundler = "esbuild"
 from = "/api/fetch-v9ky-standings"
 to = "/.netlify/functions/fetch-v9ky-standings"
 status = 200
+
+[[redirects]]
+from = "/api/fx-rates"
+to = "/.netlify/functions/fx-rates"
+status = 200

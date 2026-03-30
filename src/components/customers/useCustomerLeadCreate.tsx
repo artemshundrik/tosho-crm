@@ -94,9 +94,9 @@ export const useCustomerLeadCreate = ({
   teamMembers = [],
   onCreated,
   resolveErrorMessage = defaultResolveErrorMessage,
-  customerDialogTitle = "Новий клієнт",
-  customerDialogDescription = "Додайте дані клієнта.",
-  customerSubmitLabel = "Створити клієнта",
+  customerDialogTitle = "Новий замовник",
+  customerDialogDescription = "Додайте дані замовника.",
+  customerSubmitLabel = "Створити замовника",
   leadDialogTitle = "Новий лід",
   leadDialogDescription = "Додайте дані ліда.",
   leadSubmitLabel = "Створити ліда",
@@ -243,7 +243,7 @@ export const useCustomerLeadCreate = ({
       });
       setCustomerOpen(false);
     } catch (error: unknown) {
-      setCustomerError(resolveErrorMessage(error, "Не вдалося створити клієнта."));
+      setCustomerError(resolveErrorMessage(error, "Не вдалося створити замовника."));
     } finally {
       setCustomerSaving(false);
     }
