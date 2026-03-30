@@ -125,6 +125,12 @@ function formatFxDelta(value: number | null) {
     .replace(/\.?0+$/u, "");
 }
 
+function getFxSourceText(sourceLabel: string | null, hasRates: boolean) {
+  if (sourceLabel) return `Мінфін міжбанк · ${sourceLabel}`;
+  if (hasRates) return "Мінфін міжбанк";
+  return "Ще не оновлено на Мінфіні";
+}
+
 async function fetchMinfinFxRates(signal?: AbortSignal) {
   const endpoints = ["/api/fx-rates", "/.netlify/functions/fx-rates"];
   let lastError: Error | null = null;
@@ -939,8 +945,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       } catch {
         // Ignore storage failures (private mode, quota etc).
       }
-    } catch {
-      // Keep previous value if fetch failed.
+    } catch (error) {
+      console.warn("Failed to refresh Minfin rates", error);
     } finally {
       setUsdUahLoading(false);
     }
@@ -1702,7 +1708,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       {usdUahLoading ? <CircleDot className="h-3.5 w-3.5 animate-pulse text-muted-foreground" /> : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {usdUahSourceLabel ? `Мінфін міжбанк · ${usdUahSourceLabel}` : "Ще не оновлено на Мінфіні"}
+                      {getFxSourceText(usdUahSourceLabel, Boolean(usdUahRate || eurUahRate))}
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
