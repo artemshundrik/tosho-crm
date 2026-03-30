@@ -125,6 +125,29 @@ function formatFxDelta(value: number | null) {
     .replace(/\.?0+$/u, "");
 }
 
+async function fetchMinfinFxRates(signal?: AbortSignal) {
+  const endpoints = ["/api/fx-rates", "/.netlify/functions/fx-rates"];
+  let lastError: Error | null = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "GET",
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} for ${endpoint}`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unknown fetch error");
+    }
+  }
+
+  throw lastError ?? new Error("Failed to load Minfin rates");
+}
+
 function renderInAppToastContent({
   title,
   description,
@@ -866,12 +889,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
     setUsdUahLoading(true);
     try {
-      const response = await fetch("/api/fx-rates", {
-        method: "GET",
-        cache: "no-store",
-        signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const response = await fetchMinfinFxRates(signal);
       const payload = (await response.json()) as Partial<MinfinFxResponse>;
       const usdToUah = payload?.usd?.sell;
       const eurToUah = payload?.eur?.sell;
