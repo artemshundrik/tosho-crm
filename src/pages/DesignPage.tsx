@@ -457,6 +457,15 @@ function readDesignMemberCache(teamId: string): DesignMemberCachePayload | null 
   }
 }
 
+function writeDesignSessionCache(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore cache persistence failures
+  }
+}
+
 function resolveTaskCustomerLogo(
   task: Pick<DesignTask, "customerName" | "customerLogoUrl" | "partyType">,
   entries: Array<{
@@ -858,16 +867,13 @@ export default function DesignPage() {
         setDesignerMembers(nextDesignerMembers);
         setManagerMembers(nextManagerMembers);
         if (typeof window !== "undefined" && effectiveTeamId) {
-          sessionStorage.setItem(
-            `design-member-cache:${effectiveTeamId}`,
-            JSON.stringify({
-              memberById: labelById,
-              memberAvatarById: avatarById,
-              managerMembers: nextManagerMembers,
-              designerMembers: nextDesignerMembers,
-              cachedAt: Date.now(),
-            } satisfies DesignMemberCachePayload)
-          );
+          writeDesignSessionCache(`design-member-cache:${effectiveTeamId}`, {
+            memberById: labelById,
+            memberAvatarById: avatarById,
+            managerMembers: nextManagerMembers,
+            designerMembers: nextDesignerMembers,
+            cachedAt: Date.now(),
+          } satisfies DesignMemberCachePayload);
         }
       } catch (e: unknown) {
         console.warn("Failed to load workspace members for design page", e);
@@ -885,13 +891,10 @@ export default function DesignPage() {
       try {
         const directory = await listCustomerLeadLogoDirectory(effectiveTeamId);
         if (typeof window !== "undefined") {
-          sessionStorage.setItem(
-            `design-customer-logo-cache:${effectiveTeamId}`,
-            JSON.stringify({
-              entries: directory,
-              cachedAt: Date.now(),
-            } satisfies DesignCustomerLogoCachePayload)
-          );
+          writeDesignSessionCache(`design-customer-logo-cache:${effectiveTeamId}`, {
+            entries: directory,
+            cachedAt: Date.now(),
+          } satisfies DesignCustomerLogoCachePayload);
         }
         const options: CustomerOption[] = directory.map((row) => ({
           id: row.id,
@@ -1019,13 +1022,10 @@ export default function DesignPage() {
     if (next === tasks) return;
     setTasks(next);
     if (typeof window !== "undefined" && effectiveTeamId) {
-      sessionStorage.setItem(
-        `design-page-cache:${effectiveTeamId}`,
-        JSON.stringify({
-          tasks: next,
-          cachedAt: Date.now(),
-        } satisfies DesignPageCachePayload)
-      );
+      writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
+        tasks: next,
+        cachedAt: Date.now(),
+      } satisfies DesignPageCachePayload);
     }
   }, [customers, effectiveTeamId, tasks]);
 
@@ -1390,13 +1390,10 @@ export default function DesignPage() {
 
       setTasks(parsed);
       if (typeof window !== "undefined" && effectiveTeamId) {
-        sessionStorage.setItem(
-          `design-page-cache:${effectiveTeamId}`,
-          JSON.stringify({
-            tasks: parsed,
-            cachedAt: Date.now(),
-          } satisfies DesignPageCachePayload)
-        );
+        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
+          tasks: parsed,
+          cachedAt: Date.now(),
+        } satisfies DesignPageCachePayload);
       }
       try {
         const timerSummaryMap = await getDesignTasksTimerSummaryMap(
@@ -1691,20 +1688,17 @@ export default function DesignPage() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !effectiveTeamId) return;
-    sessionStorage.setItem(
-      `design-page-filters:${effectiveTeamId}`,
-      JSON.stringify({
-        contentView,
-        viewMode,
-        search,
-        statusFilter,
-        designerFilter,
-        managerFilter,
-        timelineZoom,
-        assigneeSpotlight,
-        completedPeriod,
-      } satisfies DesignPageFiltersState)
-    );
+    writeDesignSessionCache(`design-page-filters:${effectiveTeamId}`, {
+      contentView,
+      viewMode,
+      search,
+      statusFilter,
+      designerFilter,
+      managerFilter,
+      timelineZoom,
+      assigneeSpotlight,
+      completedPeriod,
+    } satisfies DesignPageFiltersState);
   }, [
     effectiveTeamId,
     contentView,
@@ -2881,13 +2875,10 @@ export default function DesignPage() {
       setTasks((prev) => {
         const nextTasks = [createdTask, ...prev];
         if (typeof window !== "undefined") {
-          sessionStorage.setItem(
-            `design-page-cache:${effectiveTeamId}`,
-            JSON.stringify({
-              tasks: nextTasks,
-              cachedAt: Date.now(),
-            } satisfies DesignPageCachePayload)
-          );
+          writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
+            tasks: nextTasks,
+            cachedAt: Date.now(),
+          } satisfies DesignPageCachePayload);
         }
         return nextTasks;
       });
@@ -3032,13 +3023,10 @@ export default function DesignPage() {
       });
 
       if (typeof window !== "undefined") {
-        sessionStorage.setItem(
-          `design-page-cache:${effectiveTeamId}`,
-          JSON.stringify({
-            tasks: nextTasks,
-            cachedAt: Date.now(),
-          } satisfies DesignPageCachePayload)
-        );
+        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
+          tasks: nextTasks,
+          cachedAt: Date.now(),
+        } satisfies DesignPageCachePayload);
       }
 
       toast.success("Назву задачі оновлено");
