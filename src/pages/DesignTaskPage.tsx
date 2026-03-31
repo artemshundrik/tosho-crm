@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
@@ -47,6 +47,11 @@ import {
   Trash2,
   Check,
   PencilLine,
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Heading2,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -252,6 +257,183 @@ function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight
   const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
   textarea.style.height = `${Math.max(nextHeight, 140)}px`;
   textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function formatBriefSelection(
+  textarea: HTMLTextAreaElement,
+  formatter: (params: {
+    value: string;
+    selectionStart: number;
+    selectionEnd: number;
+    selectedText: string;
+  }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }
+) {
+  const selectionStart = textarea.selectionStart ?? 0;
+  const selectionEnd = textarea.selectionEnd ?? selectionStart;
+  const selectedText = textarea.value.slice(selectionStart, selectionEnd);
+  const formatted = formatter({
+    value: textarea.value,
+    selectionStart,
+    selectionEnd,
+    selectedText,
+  });
+  const replaceStart = formatted.replaceStart ?? selectionStart;
+  const replaceEnd = formatted.replaceEnd ?? selectionEnd;
+  const nextValue = `${textarea.value.slice(0, replaceStart)}${formatted.nextText}${textarea.value.slice(replaceEnd)}`;
+  return {
+    nextValue,
+    selectionStart: replaceStart + formatted.selectionStart,
+    selectionEnd: replaceStart + formatted.selectionEnd,
+  };
+}
+
+function toggleWrappedFormatting(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  marker: string,
+  fallback: string
+) {
+  const selectedText = value.slice(selectionStart, selectionEnd);
+  const beforeSelection = value.slice(Math.max(0, selectionStart - marker.length), selectionStart);
+  const afterSelection = value.slice(selectionEnd, selectionEnd + marker.length);
+  const hasWrappedSelection = beforeSelection === marker && afterSelection === marker;
+  if (hasWrappedSelection) {
+    const unwrapped = selectedText;
+    return {
+      nextText: unwrapped,
+      replaceStart: selectionStart - marker.length,
+      replaceEnd: selectionEnd + marker.length,
+      selectionStart: 0,
+      selectionEnd: unwrapped.length,
+    };
+  }
+  const inlineWrapped =
+    selectedText.startsWith(marker) && selectedText.endsWith(marker) && selectedText.length >= marker.length * 2;
+  if (inlineWrapped) {
+    const unwrapped = selectedText.slice(marker.length, selectedText.length - marker.length);
+    return {
+      nextText: unwrapped,
+      selectionStart: 0,
+      selectionEnd: unwrapped.length,
+    };
+  }
+  const nextValue = selectedText || fallback;
+  return {
+    nextText: `${marker}${nextValue}${marker}`,
+    selectionStart: marker.length,
+    selectionEnd: marker.length + nextValue.length,
+  };
+}
+
+function toggleLinePrefix(selectedText: string, prefixFactory: (index: number) => string, matcher: RegExp, fallback: string) {
+  const source = selectedText || fallback;
+  const lines = source.split("\n");
+  const allFormatted = lines.every((line) => matcher.test(line));
+  const nextText = allFormatted
+    ? lines.map((line) => line.replace(matcher, "")).join("\n")
+    : lines.map((line, index) => `${prefixFactory(index)}${line}`).join("\n");
+  return {
+    nextText,
+    selectionStart: 0,
+    selectionEnd: nextText.length,
+  };
+}
+
+function renderBriefInlineFormatting(text: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+  const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) {
+      parts.push(text.slice(cursor, index));
+    }
+    if (match[2]) {
+      parts.push(<strong key={`b-${key++}`}>{match[2]}</strong>);
+    } else if (match[3]) {
+      parts.push(<em key={`i-${key++}`}>{match[3]}</em>);
+    } else {
+      parts.push(match[0]);
+    }
+    cursor = index + match[0].length;
+  }
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+  return parts;
+}
+
+function renderBriefRichText(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return <span>Порожнє ТЗ</span>;
+
+  const lines = text.split("\n");
+  const blocks: ReactNode[] = [];
+  let bulletItems: ReactNode[] = [];
+  let orderedItems: ReactNode[] = [];
+
+  const flushLists = () => {
+    if (bulletItems.length > 0) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
+          {bulletItems}
+        </ul>
+      );
+      bulletItems = [];
+    }
+    if (orderedItems.length > 0) {
+      blocks.push(
+        <ol key={`ol-${blocks.length}`} className="list-decimal space-y-1 pl-5">
+          {orderedItems}
+        </ol>
+      );
+      orderedItems = [];
+    }
+  };
+
+  lines.forEach((rawLine, lineIndex) => {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushLists();
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^##\s+(.*)$/);
+    if (headingMatch) {
+      flushLists();
+      blocks.push(
+        <div key={`h-${lineIndex}`} className="text-sm font-semibold text-foreground">
+          {renderBriefInlineFormatting(headingMatch[1])}
+        </div>
+      );
+      return;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    if (orderedMatch) {
+      orderedItems.push(<li key={`ol-li-${lineIndex}`}>{renderBriefInlineFormatting(orderedMatch[1])}</li>);
+      return;
+    }
+
+    const bulletMatch = trimmed.match(/^-+\s+(.*)$/);
+    if (bulletMatch) {
+      bulletItems.push(<li key={`ul-li-${lineIndex}`}>{renderBriefInlineFormatting(bulletMatch[1])}</li>);
+      return;
+    }
+
+    flushLists();
+    blocks.push(
+      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words">
+        {renderBriefInlineFormatting(line)}
+      </p>
+    );
+  });
+
+  flushLists();
+  return <div className="space-y-2">{blocks}</div>;
 }
 
 type DesignTaskHistoryEvent = {
@@ -854,6 +1036,8 @@ export default function DesignTaskPage() {
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
   const [briefEditorOpen, setBriefEditorOpen] = useState(false);
+  const [briefInlineEditing, setBriefInlineEditing] = useState(false);
+  const [briefSelection, setBriefSelection] = useState({ start: 0, end: 0 });
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
   const [changeRequestSaving, setChangeRequestSaving] = useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = useState(false);
@@ -1775,12 +1959,29 @@ export default function DesignTaskPage() {
     if (!task) return;
     if (briefDirty) return;
     setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+    setBriefInlineEditing(false);
   }, [task, briefDirty, activeBriefVersion]);
 
   useEffect(() => {
     resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
     resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
-  }, [briefDraft, briefEditorOpen]);
+  }, [briefDraft, briefEditorOpen, briefInlineEditing]);
+
+  useEffect(() => {
+    if (!briefInlineEditing) return;
+    const frameId = requestAnimationFrame(() => {
+      briefTextareaRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [briefInlineEditing]);
+
+  const handleBriefInlineBlur = useCallback(() => {
+    if (briefDirty) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement === briefTextareaRef.current) return;
+      setBriefInlineEditing(false);
+    });
+  }, [briefDirty]);
 
   useEffect(() => {
     if (!briefEditorOpen) return;
@@ -1788,9 +1989,67 @@ export default function DesignTaskPage() {
       briefDialogTextareaRef.current?.focus();
       const length = briefDialogTextareaRef.current?.value.length ?? 0;
       briefDialogTextareaRef.current?.setSelectionRange(length, length);
+      setBriefSelection({ start: length, end: length });
     });
     return () => cancelAnimationFrame(frameId);
   }, [briefEditorOpen]);
+
+  const applyBriefFormatting = useCallback(
+    (formatter: (params: {
+      value: string;
+      selectionStart: number;
+      selectionEnd: number;
+      selectedText: string;
+    }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }) => {
+      const textarea = briefDialogTextareaRef.current;
+      if (!textarea || briefSaving || designTaskLockedByOther) return;
+      const formatted = formatBriefSelection(textarea, formatter);
+      setBriefDraft(formatted.nextValue);
+      setBriefDirty(true);
+      requestAnimationFrame(() => {
+        const target = briefDialogTextareaRef.current;
+        if (!target) return;
+        target.focus();
+        target.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
+        resizeTextareaToContent(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+      });
+    },
+    [briefSaving, designTaskLockedByOther]
+  );
+
+  const syncBriefSelection = useCallback(() => {
+    const textarea = briefDialogTextareaRef.current;
+    if (!textarea) return;
+    setBriefSelection({
+      start: textarea.selectionStart ?? 0,
+      end: textarea.selectionEnd ?? 0,
+    });
+  }, []);
+
+  const selectedBriefText = useMemo(() => {
+    const start = Math.min(briefSelection.start, briefSelection.end);
+    const end = Math.max(briefSelection.start, briefSelection.end);
+    return briefDraft.slice(start, end);
+  }, [briefDraft, briefSelection.end, briefSelection.start]);
+
+  const briefSelectionStart = Math.min(briefSelection.start, briefSelection.end);
+  const briefSelectionEnd = Math.max(briefSelection.start, briefSelection.end);
+  const briefSelectionBeforeBold = briefDraft.slice(Math.max(0, briefSelectionStart - 2), briefSelectionStart);
+  const briefSelectionAfterBold = briefDraft.slice(briefSelectionEnd, briefSelectionEnd + 2);
+  const briefSelectionBeforeItalic = briefDraft.slice(Math.max(0, briefSelectionStart - 1), briefSelectionStart);
+  const briefSelectionAfterItalic = briefDraft.slice(briefSelectionEnd, briefSelectionEnd + 1);
+
+  const boldActive =
+    (selectedBriefText.startsWith("**") && selectedBriefText.endsWith("**") && selectedBriefText.length > 4) ||
+    (selectedBriefText.length > 0 && briefSelectionBeforeBold === "**" && briefSelectionAfterBold === "**");
+  const italicActive =
+    ((selectedBriefText.startsWith("*") && selectedBriefText.endsWith("*") && !boldActive && selectedBriefText.length > 2) ||
+      (selectedBriefText.length > 0 && briefSelectionBeforeItalic === "*" && briefSelectionAfterItalic === "*")) &&
+    !boldActive;
+  const headingActive = /^##\s+.+$/m.test(selectedBriefText.trim());
+  const bulletActive = selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^-\s+/.test(line));
+  const orderedActive =
+    selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^\d+\.\s+/.test(line));
 
   const insertMentionIntoComment = (memberId: string) => {
     const suggestion = mentionSuggestions.find((entry) => entry.id === memberId);
@@ -4043,6 +4302,7 @@ export default function DesignTaskPage() {
     const previousBrief = activeBriefVersion?.brief ?? task.designBrief ?? null;
     if ((previousBrief ?? null) === (nextBrief ?? null)) {
       setBriefDirty(false);
+      setBriefInlineEditing(false);
       return;
     }
 
@@ -4152,6 +4412,7 @@ export default function DesignTaskPage() {
       }
 
       setBriefDirty(false);
+      setBriefInlineEditing(false);
       toast.success(`ТЗ оновлено до v${nextVersion.version}`);
     } catch (e: unknown) {
       setTask(previousTask);
@@ -5782,38 +6043,42 @@ export default function DesignTaskPage() {
             ) : null}
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div>
-                  <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
-                  <div className="text-sm text-muted-foreground">
-                    Пишіть поточну версію, правки ведіть окремо. Довге ТЗ відкривайте в розгорнутому редакторі.
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setBriefEditorOpen(true)}>
-                    Розгорнути
-                  </Button>
+                <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
+                  <Button size="sm" variant="outline" onClick={() => setBriefEditorOpen(true)}>
+                    Відкрити редактор
+                  </Button>
                 </div>
               </div>
 
               <div className="mt-3 space-y-3">
-                <Textarea
-                  ref={briefTextareaRef}
-                  value={briefDraft}
-                  onChange={(event) => {
-                    setBriefDraft(event.target.value);
-                    setBriefDirty(true);
-                    resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
-                  }}
-                  placeholder="Опишіть задачу для дизайнера…"
-                  rows={5}
-                  disabled={briefSaving || designTaskLockedByOther}
-                  className="min-h-[140px] resize-none"
-                />
-                <div className="text-xs text-muted-foreground">
-                  Поле росте автоматично до розумної висоти. Для великих текстів використовуйте розгорнутий режим.
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+                {briefInlineEditing || briefDirty ? (
+                  <Textarea
+                    ref={briefTextareaRef}
+                    value={briefDraft}
+                    onChange={(event) => {
+                      setBriefDraft(event.target.value);
+                      setBriefDirty(true);
+                      resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+                    }}
+                    onBlur={handleBriefInlineBlur}
+                    placeholder="Опишіть задачу для дизайнера…"
+                    rows={5}
+                    disabled={briefSaving || designTaskLockedByOther}
+                    className="min-h-[140px] resize-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/20"
+                    onClick={() => setBriefInlineEditing(true)}
+                    disabled={briefSaving || designTaskLockedByOther}
+                  >
+                    <div className="min-h-[140px] text-sm text-foreground">{renderBriefRichText(briefDraft)}</div>
+                  </button>
+                )}
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
                     size="sm"
                     onClick={() => void saveDesignBrief()}
@@ -5838,6 +6103,7 @@ export default function DesignTaskPage() {
                       onClick={() => {
                         setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
                         setBriefDirty(false);
+                        setBriefInlineEditing(false);
                       }}
                     >
                       Скасувати
@@ -5915,7 +6181,7 @@ export default function DesignTaskPage() {
                               Правка: {briefChangeRequestById.get(version.change_request_id)?.request_text}
                             </div>
                           ) : null}
-                          <div className="text-sm whitespace-pre-wrap">{version.brief?.trim() ? version.brief : "Порожнє ТЗ"}</div>
+                          <div className="text-sm break-words">{renderBriefRichText(version.brief)}</div>
                         </div>
                       ))}
                     </div>
@@ -6943,16 +7209,79 @@ export default function DesignTaskPage() {
         <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
           <DialogHeader>
             <DialogTitle>ТЗ для дизайнера</DialogTitle>
-            <DialogDescription>
-              Довгий опис редагуйте тут. Поточна версія і кнопки збереження синхронізовані з основним блоком задачі.
-            </DialogDescription>
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm text-muted-foreground">
-                Пишіть актуальну версію ТЗ тут, а окремі побажання клієнта додавайте через блок правок.
-              </div>
-              <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/10 p-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn("h-8 px-2", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() =>
+                  applyBriefFormatting(({ selectedText }) =>
+                    toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
+                  )
+                }
+              >
+                <Heading2 className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn("h-8 px-2", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() =>
+                  applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                    toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
+                  )
+                }
+              >
+                <Bold className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn("h-8 px-2", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() =>
+                  applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                    toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
+                  )
+                }
+              >
+                <Italic className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn("h-8 px-2", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() =>
+                  applyBriefFormatting(({ selectedText }) =>
+                    toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
+                  )
+                }
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn("h-8 px-2", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() =>
+                  applyBriefFormatting(({ selectedText }) =>
+                    toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
+                  )
+                }
+              >
+                <ListOrdered className="h-4 w-4" />
+              </Button>
             </div>
             <Textarea
               ref={briefDialogTextareaRef}
@@ -6962,13 +7291,23 @@ export default function DesignTaskPage() {
                 setBriefDirty(true);
                 resizeTextareaToContent(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
               }}
+              onSelect={syncBriefSelection}
+              onKeyUp={syncBriefSelection}
+              onClick={syncBriefSelection}
+              onWheelCapture={(event) => event.stopPropagation()}
               placeholder="Опишіть задачу для дизайнера…"
               rows={10}
               disabled={briefSaving || designTaskLockedByOther}
-              className="min-h-[240px] flex-1 resize-none overflow-y-auto"
+              className="min-h-[240px] flex-1 resize-none overflow-y-auto overscroll-contain"
             />
             <div className="text-xs text-muted-foreground">
               Якщо текст довший за видиму область, редактор залишиться стабільним по висоті і ввімкне внутрішній скрол.
+            </div>
+            <div className="min-h-0 rounded-lg border border-border/60 bg-background/70 p-3">
+              <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
+              <div className="max-h-48 overflow-auto text-sm text-foreground">
+                {renderBriefRichText(briefDraft)}
+              </div>
             </div>
           </div>
           <DialogFooter>

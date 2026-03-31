@@ -42,7 +42,13 @@ import {
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import { normalizeUnitLabel } from "@/lib/units";
-import { DESIGN_TASK_TYPE_LABELS, DESIGN_TASK_TYPE_OPTIONS, parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
+import {
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  DESIGN_TASK_TYPE_OPTIONS,
+  parseDesignTaskType,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
 import { supabase } from "@/lib/supabaseClient";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
@@ -123,6 +129,11 @@ import {
   Lock,
   Calculator,
   Palette,
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Heading2,
 } from "lucide-react";
 import {
   ATTACHMENTS_ACCEPT,
@@ -413,6 +424,185 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
   }
 }
 
+const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
+const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
+
+function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
+  if (!textarea) return;
+  textarea.style.height = "0px";
+  const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+  textarea.style.height = `${Math.max(nextHeight, 140)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function formatBriefSelection(
+  textarea: HTMLTextAreaElement,
+  formatter: (params: {
+    value: string;
+    selectionStart: number;
+    selectionEnd: number;
+    selectedText: string;
+  }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }
+) {
+  const selectionStart = textarea.selectionStart ?? 0;
+  const selectionEnd = textarea.selectionEnd ?? selectionStart;
+  const selectedText = textarea.value.slice(selectionStart, selectionEnd);
+  const formatted = formatter({
+    value: textarea.value,
+    selectionStart,
+    selectionEnd,
+    selectedText,
+  });
+  const replaceStart = formatted.replaceStart ?? selectionStart;
+  const replaceEnd = formatted.replaceEnd ?? selectionEnd;
+  const nextValue = `${textarea.value.slice(0, replaceStart)}${formatted.nextText}${textarea.value.slice(replaceEnd)}`;
+  return {
+    nextValue,
+    selectionStart: replaceStart + formatted.selectionStart,
+    selectionEnd: replaceStart + formatted.selectionEnd,
+  };
+}
+
+function toggleWrappedFormatting(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  marker: string,
+  fallback: string
+) {
+  const selectedText = value.slice(selectionStart, selectionEnd);
+  const beforeSelection = value.slice(Math.max(0, selectionStart - marker.length), selectionStart);
+  const afterSelection = value.slice(selectionEnd, selectionEnd + marker.length);
+  const hasWrappedSelection = beforeSelection === marker && afterSelection === marker;
+  if (hasWrappedSelection) {
+    return {
+      nextText: selectedText,
+      replaceStart: selectionStart - marker.length,
+      replaceEnd: selectionEnd + marker.length,
+      selectionStart: 0,
+      selectionEnd: selectedText.length,
+    };
+  }
+  const inlineWrapped =
+    selectedText.startsWith(marker) && selectedText.endsWith(marker) && selectedText.length >= marker.length * 2;
+  if (inlineWrapped) {
+    const unwrapped = selectedText.slice(marker.length, selectedText.length - marker.length);
+    return {
+      nextText: unwrapped,
+      selectionStart: 0,
+      selectionEnd: unwrapped.length,
+    };
+  }
+  const nextValue = selectedText || fallback;
+  return {
+    nextText: `${marker}${nextValue}${marker}`,
+    selectionStart: marker.length,
+    selectionEnd: marker.length + nextValue.length,
+  };
+}
+
+function toggleLinePrefix(selectedText: string, prefixFactory: (index: number) => string, matcher: RegExp, fallback: string) {
+  const source = selectedText || fallback;
+  const lines = source.split("\n");
+  const allFormatted = lines.every((line) => matcher.test(line));
+  const nextText = allFormatted
+    ? lines.map((line) => line.replace(matcher, "")).join("\n")
+    : lines.map((line, index) => `${prefixFactory(index)}${line}`).join("\n");
+  return {
+    nextText,
+    selectionStart: 0,
+    selectionEnd: nextText.length,
+  };
+}
+
+function renderBriefInlineFormatting(text: string) {
+  const parts: Array<string | JSX.Element> = [];
+  let cursor = 0;
+  let key = 0;
+  const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push(text.slice(cursor, index));
+    if (match[2]) parts.push(<strong key={`b-${key++}`}>{match[2]}</strong>);
+    else if (match[3]) parts.push(<em key={`i-${key++}`}>{match[3]}</em>);
+    else parts.push(match[0]);
+    cursor = index + match[0].length;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
+}
+
+function renderBriefRichText(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return <span>Спочатку вкажіть дедлайн дизайну або текст задачі.</span>;
+
+  const lines = text.split("\n");
+  const blocks: JSX.Element[] = [];
+  let bulletItems: JSX.Element[] = [];
+  let orderedItems: JSX.Element[] = [];
+
+  const flushLists = () => {
+    if (bulletItems.length > 0) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
+          {bulletItems}
+        </ul>
+      );
+      bulletItems = [];
+    }
+    if (orderedItems.length > 0) {
+      blocks.push(
+        <ol key={`ol-${blocks.length}`} className="list-decimal space-y-1 pl-5">
+          {orderedItems}
+        </ol>
+      );
+      orderedItems = [];
+    }
+  };
+
+  lines.forEach((rawLine, lineIndex) => {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushLists();
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^##\s+(.*)$/);
+    if (headingMatch) {
+      flushLists();
+      blocks.push(
+        <div key={`h-${lineIndex}`} className="text-sm font-semibold text-foreground">
+          {renderBriefInlineFormatting(headingMatch[1])}
+        </div>
+      );
+      return;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    if (orderedMatch) {
+      orderedItems.push(<li key={`ol-li-${lineIndex}`}>{renderBriefInlineFormatting(orderedMatch[1])}</li>);
+      return;
+    }
+
+    const bulletMatch = trimmed.match(/^-+\s+(.*)$/);
+    if (bulletMatch) {
+      bulletItems.push(<li key={`ul-li-${lineIndex}`}>{renderBriefInlineFormatting(bulletMatch[1])}</li>);
+      return;
+    }
+
+    flushLists();
+    blocks.push(
+      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words">
+        {renderBriefInlineFormatting(line)}
+      </p>
+    );
+  });
+
+  flushLists();
+  return <div className="space-y-2">{blocks}</div>;
+}
+
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
   const { userId, jobRole, permissions } = useAuth();
@@ -486,6 +676,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [briefEditorOpen, setBriefEditorOpen] = useState(false);
+  const [briefInlineEditing, setBriefInlineEditing] = useState(false);
+  const [briefSelection, setBriefSelection] = useState({ start: 0, end: 0 });
+  const briefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -960,6 +1155,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           : prev
       );
       setBriefDirty(false);
+      setBriefInlineEditing(false);
       await logActivity({
         teamId,
         action: "оновив ТЗ",
@@ -1344,8 +1540,99 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (briefDirty) return;
     setBriefText(quote.design_brief ?? quote.comment ?? "");
     setBriefError(null);
+    setBriefInlineEditing(false);
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
+
+  useEffect(() => {
+    resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+    resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+  }, [briefEditorOpen, briefInlineEditing, briefText]);
+
+  useEffect(() => {
+    if (!briefInlineEditing) return;
+    const frameId = requestAnimationFrame(() => {
+      briefTextareaRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [briefInlineEditing]);
+
+  const handleBriefInlineBlur = useCallback(() => {
+    if (briefDirty) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement === briefTextareaRef.current) return;
+      setBriefInlineEditing(false);
+    });
+  }, [briefDirty]);
+
+  useEffect(() => {
+    if (!briefEditorOpen) return;
+    const frameId = requestAnimationFrame(() => {
+      briefDialogTextareaRef.current?.focus();
+      const length = briefDialogTextareaRef.current?.value.length ?? 0;
+      briefDialogTextareaRef.current?.setSelectionRange(length, length);
+      setBriefSelection({ start: length, end: length });
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [briefEditorOpen]);
+
+  const applyBriefFormatting = useCallback(
+    (formatter: (params: {
+      value: string;
+      selectionStart: number;
+      selectionEnd: number;
+      selectedText: string;
+    }) => { nextText: string; replaceStart?: number; replaceEnd?: number; selectionStart: number; selectionEnd: number }) => {
+      const textarea = briefDialogTextareaRef.current;
+      if (!textarea || briefSaving) return;
+      const formatted = formatBriefSelection(textarea, formatter);
+      setBriefText(formatted.nextValue);
+      setBriefDirty(true);
+      requestAnimationFrame(() => {
+        const target = briefDialogTextareaRef.current;
+        if (!target) return;
+        target.focus();
+        target.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
+        setBriefSelection({ start: formatted.selectionStart, end: formatted.selectionEnd });
+        resizeTextareaToContent(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+      });
+    },
+    [briefSaving]
+  );
+
+  const syncBriefSelection = useCallback(() => {
+    const textarea = briefDialogTextareaRef.current;
+    if (!textarea) return;
+    setBriefSelection({
+      start: textarea.selectionStart ?? 0,
+      end: textarea.selectionEnd ?? 0,
+    });
+  }, []);
+
+  const selectedBriefText = useMemo(() => {
+    const start = Math.min(briefSelection.start, briefSelection.end);
+    const end = Math.max(briefSelection.start, briefSelection.end);
+    return briefText.slice(start, end);
+  }, [briefSelection.end, briefSelection.start, briefText]);
+
+  const briefSelectionStart = Math.min(briefSelection.start, briefSelection.end);
+  const briefSelectionEnd = Math.max(briefSelection.start, briefSelection.end);
+  const briefSelectionBeforeBold = briefText.slice(Math.max(0, briefSelectionStart - 2), briefSelectionStart);
+  const briefSelectionAfterBold = briefText.slice(briefSelectionEnd, briefSelectionEnd + 2);
+  const briefSelectionBeforeItalic = briefText.slice(Math.max(0, briefSelectionStart - 1), briefSelectionStart);
+  const briefSelectionAfterItalic = briefText.slice(briefSelectionEnd, briefSelectionEnd + 1);
+
+  const boldActive =
+    (selectedBriefText.startsWith("**") && selectedBriefText.endsWith("**") && selectedBriefText.length > 4) ||
+    (selectedBriefText.length > 0 && briefSelectionBeforeBold === "**" && briefSelectionAfterBold === "**");
+  const italicActive =
+    ((selectedBriefText.startsWith("*") && selectedBriefText.endsWith("*") && !boldActive && selectedBriefText.length > 2) ||
+      (selectedBriefText.length > 0 && briefSelectionBeforeItalic === "*" && briefSelectionAfterItalic === "*")) &&
+    !boldActive;
+  const headingActive = /^##\s+.+$/m.test(selectedBriefText.trim());
+  const bulletActive = selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^-\s+/.test(line));
+  const orderedActive =
+    selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^\d+\.\s+/.test(line));
   const currentStatus = normalizeStatus(quote?.status);
   const quoteRequirements = useMemo(() => {
     const issues: string[] = [];
@@ -5967,7 +6254,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
                     <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      ТЗ для дизайнера, превʼю задачі і готові візуалізації в одному місці.
+                      ТЗ для дизайнера і готові візуалізації в одному місці.
                     </div>
                   </div>
                 </div>
@@ -6006,80 +6293,73 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           Короткий опис задачі без дедлайнів і службових деталей.
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setBriefText(
-                            [
-                              "Мета:",
-                              "Аудиторія:",
-                              "Формат/носій:",
-                              "Розмір/пропорції:",
-                              "Лого/брендгайд:",
-                              "Кольори/шрифти:",
-                              "Референси:",
-                              "Текст/копі:",
-                              "Обмеження:",
-                            ].join("\n")
-                          );
-                          setBriefDirty(true);
-                          setBriefError(null);
-                        }}
-                      >
-                        Шаблон
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBriefEditorOpen(true)}
+                        >
+                          Відкрити редактор
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-                      <div className="space-y-3">
+                    <div className="space-y-3">
+                      {briefInlineEditing || briefDirty ? (
                         <Textarea
+                          ref={briefTextareaRef}
                           value={briefText}
                           onChange={(event) => {
                             setBriefText(event.target.value);
                             setBriefDirty(true);
+                            resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
                           }}
+                          onBlur={handleBriefInlineBlur}
                           placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-                          className="min-h-[220px] resize-y border-border/40 bg-muted/[0.03]"
+                          className="min-h-[220px] resize-none border-border/40 bg-muted/[0.03]"
                         />
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{briefText.length} символів</span>
-                          {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
-                        </div>
-                        {briefError ? <div className="text-sm text-destructive">{briefError}</div> : null}
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setBriefText(quote?.design_brief ?? quote?.comment ?? "");
-                              setBriefDirty(false);
-                              setBriefError(null);
-                            }}
-                            disabled={!briefDirty}
-                          >
-                            Скинути
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void saveBrief()}
-                            disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
-                            className="gap-2"
-                          >
-                            {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                            {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
-                          </Button>
-                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] px-4 py-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06]"
+                          onClick={() => setBriefInlineEditing(true)}
+                        >
+                          <div className="min-h-[220px] text-sm leading-relaxed text-foreground">
+                            {renderBriefRichText(briefText)}
+                          </div>
+                        </button>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{briefText.length} символів</span>
+                        {briefDirty ? <span>Є незбережені зміни</span> : <span>Усі зміни збережено</span>}
                       </div>
-
-                      <div className="rounded-xl border border-border/30 bg-muted/[0.02] px-4 py-4">
-                        <div className="mb-2 text-xs font-medium text-muted-foreground">Превʼю задачі</div>
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                          {designBriefPreview || "Спочатку вкажіть дедлайн дизайну або текст задачі."}
-                        </div>
+                      {briefError ? <div className="text-sm text-destructive">{briefError}</div> : null}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setBriefText(quote?.design_brief ?? quote?.comment ?? "");
+                            setBriefDirty(false);
+                            setBriefInlineEditing(false);
+                            setBriefError(null);
+                          }}
+                          disabled={!briefDirty}
+                        >
+                          Скинути
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void saveBrief()}
+                          disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
+                          className="gap-2"
+                        >
+                          {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -6264,7 +6544,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           disabled={designTaskSaving}
                         >
                           <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
-                            <SelectValue placeholder="Оберіть тип задачі" />
+                            <SelectValue placeholder="Оберіть тип задачі">
+                              {designTaskType ? (
+                                <span className="inline-flex items-center gap-2">
+                                  {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
+                                  <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
+                                </span>
+                              ) : (
+                                "Оберіть тип задачі"
+                              )}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none" disabled>
@@ -6272,7 +6561,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </SelectItem>
                             {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
-                                {option.label}
+                                <span className="inline-flex items-center gap-2">
+                                  {createElement(DESIGN_TASK_TYPE_ICONS[option.value], { className: "h-4 w-4 text-muted-foreground" })}
+                                  <span>{option.label}</span>
+                                </span>
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -7122,6 +7414,138 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
         </aside>
       </div>
+
+    <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
+      <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
+        <DialogHeader>
+          <DialogTitle>ТЗ для дизайнера</DialogTitle>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/10 p-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 px-2", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+              disabled={briefSaving}
+              onClick={() =>
+                applyBriefFormatting(({ selectedText }) =>
+                  toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
+                )
+              }
+            >
+              <Heading2 className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 px-2", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+              disabled={briefSaving}
+              onClick={() =>
+                applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                  toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
+                )
+              }
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 px-2", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+              disabled={briefSaving}
+              onClick={() =>
+                applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                  toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
+                )
+              }
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 px-2", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+              disabled={briefSaving}
+              onClick={() =>
+                applyBriefFormatting(({ selectedText }) =>
+                  toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
+                )
+              }
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 px-2", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+              disabled={briefSaving}
+              onClick={() =>
+                applyBriefFormatting(({ selectedText }) =>
+                  toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
+                )
+              }
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+          </div>
+          <Textarea
+            ref={briefDialogTextareaRef}
+            value={briefText}
+            onChange={(event) => {
+              setBriefText(event.target.value);
+              setBriefDirty(true);
+              resizeTextareaToContent(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+            }}
+            onSelect={syncBriefSelection}
+            onKeyUp={syncBriefSelection}
+            onClick={syncBriefSelection}
+            onWheelCapture={(event) => event.stopPropagation()}
+            placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
+            rows={10}
+            disabled={briefSaving}
+            className="min-h-[240px] flex-1 resize-none overflow-y-auto overscroll-contain border-border/40 bg-muted/[0.03]"
+          />
+          <div className="min-h-0 rounded-lg border border-border/60 bg-background/70 p-3">
+            <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
+            <div className="max-h-48 overflow-auto text-sm text-foreground">
+              {renderBriefRichText(designBriefPreview)}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setBriefText(quote?.design_brief ?? quote?.comment ?? "");
+              setBriefDirty(false);
+              setBriefInlineEditing(false);
+              setBriefError(null);
+            }}
+            disabled={!briefDirty}
+          >
+            Скинути
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setBriefEditorOpen(false)}>
+            Закрити
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void saveBrief()}
+            disabled={!briefDirty || briefSaving || quoteRequirements.length > 0}
+            className="gap-2"
+          >
+            {briefSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {briefSaving ? "Збереження..." : "Зберегти ТЗ"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <ConfirmDialog
       open={deleteQuoteDialogOpen}
