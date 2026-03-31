@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
@@ -242,6 +242,17 @@ const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
   visualization: "Візуал",
   layout: "Макет",
 };
+
+const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
+const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
+
+function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
+  if (!textarea) return;
+  textarea.style.height = "0px";
+  const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+  textarea.style.height = `${Math.max(nextHeight, 140)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
 
 type DesignTaskHistoryEvent = {
   id: string;
@@ -842,6 +853,7 @@ export default function DesignTaskPage() {
   const [briefDraft, setBriefDraft] = useState("");
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
+  const [briefEditorOpen, setBriefEditorOpen] = useState(false);
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
   const [changeRequestSaving, setChangeRequestSaving] = useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = useState(false);
@@ -856,6 +868,8 @@ export default function DesignTaskPage() {
   const outputInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const quoteCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const briefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [attachmentDeletingId, setAttachmentDeletingId] = useState<string | null>(null);
 
@@ -1762,6 +1776,21 @@ export default function DesignTaskPage() {
     if (briefDirty) return;
     setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
   }, [task, briefDirty, activeBriefVersion]);
+
+  useEffect(() => {
+    resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+    resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+  }, [briefDraft, briefEditorOpen]);
+
+  useEffect(() => {
+    if (!briefEditorOpen) return;
+    const frameId = requestAnimationFrame(() => {
+      briefDialogTextareaRef.current?.focus();
+      const length = briefDialogTextareaRef.current?.value.length ?? 0;
+      briefDialogTextareaRef.current?.setSelectionRange(length, length);
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [briefEditorOpen]);
 
   const insertMentionIntoComment = (memberId: string) => {
     const suggestion = mentionSuggestions.find((entry) => entry.id === memberId);
@@ -5755,23 +5784,35 @@ export default function DesignTaskPage() {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div>
                   <div className="text-xs text-muted-foreground">ТЗ для дизайнера</div>
-                  <div className="text-sm text-muted-foreground">Пишіть поточну версію, правки ведіть окремо.</div>
+                  <div className="text-sm text-muted-foreground">
+                    Пишіть поточну версію, правки ведіть окремо. Довге ТЗ відкривайте в розгорнутому редакторі.
+                  </div>
                 </div>
-                <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setBriefEditorOpen(true)}>
+                    Розгорнути
+                  </Button>
+                  <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
+                </div>
               </div>
 
               <div className="mt-3 space-y-3">
                 <Textarea
+                  ref={briefTextareaRef}
                   value={briefDraft}
                   onChange={(event) => {
                     setBriefDraft(event.target.value);
                     setBriefDirty(true);
+                    resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
                   }}
                   placeholder="Опишіть задачу для дизайнера…"
-                  rows={4}
+                  rows={5}
                   disabled={briefSaving || designTaskLockedByOther}
-                  className="resize-y min-h-[96px]"
+                  className="min-h-[140px] resize-none"
                 />
+                <div className="text-xs text-muted-foreground">
+                  Поле росте автоматично до розумної висоти. Для великих текстів використовуйте розгорнутий режим.
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
@@ -6897,6 +6938,65 @@ export default function DesignTaskPage() {
           </div>
         </aside>
       </div>
+
+      <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
+        <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
+          <DialogHeader>
+            <DialogTitle>ТЗ для дизайнера</DialogTitle>
+            <DialogDescription>
+              Довгий опис редагуйте тут. Поточна версія і кнопки збереження синхронізовані з основним блоком задачі.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm text-muted-foreground">
+                Пишіть актуальну версію ТЗ тут, а окремі побажання клієнта додавайте через блок правок.
+              </div>
+              <Badge variant="outline" className="h-7">v{activeBriefVersion?.version ?? 1} активна</Badge>
+            </div>
+            <Textarea
+              ref={briefDialogTextareaRef}
+              value={briefDraft}
+              onChange={(event) => {
+                setBriefDraft(event.target.value);
+                setBriefDirty(true);
+                resizeTextareaToContent(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+              }}
+              placeholder="Опишіть задачу для дизайнера…"
+              rows={10}
+              disabled={briefSaving || designTaskLockedByOther}
+              className="min-h-[240px] flex-1 resize-none overflow-y-auto"
+            />
+            <div className="text-xs text-muted-foreground">
+              Якщо текст довший за видиму область, редактор залишиться стабільним по висоті і ввімкне внутрішній скрол.
+            </div>
+          </div>
+          <DialogFooter>
+            {briefDirty ? (
+              <Button
+                variant="ghost"
+                disabled={briefSaving || designTaskLockedByOther}
+                onClick={() => {
+                  setBriefDraft(activeBriefVersion?.brief ?? task?.designBrief ?? "");
+                  setBriefDirty(false);
+                }}
+              >
+                Скасувати зміни
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => setBriefEditorOpen(false)}>
+              Закрити
+            </Button>
+            <Button
+              onClick={() => void saveDesignBrief()}
+              disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+            >
+              {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Зберегти нову версію
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={estimateDialogOpen}
