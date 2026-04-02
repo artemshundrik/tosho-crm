@@ -501,7 +501,7 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
     rows.map(async (row) => ({
       ...row,
       label: row.displayName || row.email?.split("@")[0]?.trim() || row.userId,
-      avatarDisplayUrl: await resolveAvatarDisplayUrl(supabase, row.avatarUrl, AVATAR_BUCKET),
+      avatarDisplayUrl: await resolveAvatarDisplayUrl(supabase, row.avatarUrl ?? row.avatarPath, AVATAR_BUCKET),
     }))
   );
   return resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));

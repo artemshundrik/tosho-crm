@@ -31,7 +31,12 @@ function persistCacheToSessionStorage() {
 
 loadCacheFromSessionStorage();
 
+function normalizeAvatarKey(rawUrl: string) {
+  return rawUrl.trim();
+}
+
 function extractObjectPath(url: string, bucket: string): string | null {
+  const normalizedUrl = normalizeAvatarKey(url);
   const markers = [
     `/storage/v1/object/public/${bucket}/`,
     `/storage/v1/object/sign/${bucket}/`,
@@ -39,19 +44,45 @@ function extractObjectPath(url: string, bucket: string): string | null {
   ];
 
   for (const marker of markers) {
-    const markerIndex = url.indexOf(marker);
+    const markerIndex = normalizedUrl.indexOf(marker);
     if (markerIndex === -1) continue;
-    const tail = url.slice(markerIndex + marker.length);
+    const tail = normalizedUrl.slice(markerIndex + marker.length);
     const pathPart = tail.split("?")[0] ?? "";
     if (!pathPart) return null;
     return decodeURIComponent(pathPart);
   }
 
-  return null;
+  if (/^(https?:)?\/\//i.test(normalizedUrl) || normalizedUrl.startsWith("data:") || normalizedUrl.startsWith("blob:")) {
+    return null;
+  }
+
+  const pathPart = normalizedUrl.replace(/^\/+/, "").split("?")[0] ?? "";
+  if (!pathPart) return null;
+  return decodeURIComponent(pathPart);
 }
 
 function isPublicStorageUrl(url: string, bucket: string) {
   return url.includes(`/storage/v1/object/public/${bucket}/`);
+}
+
+function isSupabaseStorageUrl(url: string, bucket: string) {
+  return (
+    url.includes(`/storage/v1/object/public/${bucket}/`) ||
+    url.includes(`/storage/v1/object/sign/${bucket}/`) ||
+    url.includes(`/storage/v1/object/${bucket}/`)
+  );
+}
+
+function shouldResolveFromStorage(rawUrl: string, bucket: string) {
+  const normalizedUrl = normalizeAvatarKey(rawUrl);
+  if (!normalizedUrl) return false;
+  if (isSupabaseStorageUrl(normalizedUrl, bucket)) return true;
+  return !/^(https?:)?\/\//i.test(normalizedUrl) && !normalizedUrl.startsWith("data:") && !normalizedUrl.startsWith("blob:");
+}
+
+function setResolvedAvatar(rawUrl: string, resolved: string | null) {
+  avatarResolvedCache.set(normalizeAvatarKey(rawUrl), resolved);
+  persistCacheToSessionStorage();
 }
 
 export async function resolveAvatarDisplayUrl(
@@ -61,45 +92,42 @@ export async function resolveAvatarDisplayUrl(
   options?: { forceRefresh?: boolean }
 ): Promise<string | null> {
   if (!rawUrl) return null;
-  if (!options?.forceRefresh && avatarResolvedCache.has(rawUrl)) {
-    return avatarResolvedCache.get(rawUrl) ?? null;
+  const normalizedRawUrl = normalizeAvatarKey(rawUrl);
+  if (!normalizedRawUrl) return null;
+
+  if (!options?.forceRefresh && avatarResolvedCache.has(normalizedRawUrl)) {
+    return avatarResolvedCache.get(normalizedRawUrl) ?? null;
   }
-  const inflight = !options?.forceRefresh ? avatarInflightCache.get(rawUrl) : null;
+  const inflight = !options?.forceRefresh ? avatarInflightCache.get(normalizedRawUrl) : null;
   if (inflight) return inflight;
 
   const promise = (async () => {
-    const objectPath = extractObjectPath(rawUrl, bucket);
-    if (!objectPath) {
-      avatarResolvedCache.set(rawUrl, rawUrl);
-      persistCacheToSessionStorage();
-      return rawUrl;
-    }
-
-    if (isPublicStorageUrl(rawUrl, bucket)) {
-      avatarResolvedCache.set(rawUrl, rawUrl);
-      persistCacheToSessionStorage();
-      return rawUrl;
+    const objectPath = extractObjectPath(normalizedRawUrl, bucket);
+    if (!objectPath || !shouldResolveFromStorage(normalizedRawUrl, bucket)) {
+      setResolvedAvatar(normalizedRawUrl, normalizedRawUrl);
+      return normalizedRawUrl;
     }
 
     const { data, error } = await supabase.storage
       .from(bucket)
       .createSignedUrl(objectPath, AVATAR_SIGN_TTL_SECONDS);
 
-    const resolved = error || !data?.signedUrl ? rawUrl : data.signedUrl;
-    avatarResolvedCache.set(rawUrl, resolved);
-    persistCacheToSessionStorage();
+    const resolved = error || !data?.signedUrl ? normalizedRawUrl : data.signedUrl;
+    setResolvedAvatar(normalizedRawUrl, resolved);
     return resolved;
   })();
 
-  avatarInflightCache.set(rawUrl, promise);
+  avatarInflightCache.set(normalizedRawUrl, promise);
   try {
     return await promise;
   } finally {
-    avatarInflightCache.delete(rawUrl);
+    avatarInflightCache.delete(normalizedRawUrl);
   }
 }
 
 export function getCachedAvatarDisplayUrl(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) return null;
-  return avatarResolvedCache.get(rawUrl) ?? null;
+  const normalizedRawUrl = normalizeAvatarKey(rawUrl);
+  if (!normalizedRawUrl) return null;
+  return avatarResolvedCache.get(normalizedRawUrl) ?? null;
 }
