@@ -122,7 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data.session ?? null;
         setSession(nextSession);
         if (nextSession?.user?.id) {
-          await refreshTeamContext(nextSession.user.id);
+          void refreshTeamContext(nextSession.user.id).catch((error) => {
+            console.error("Failed to initialize team context", error);
+            if (mounted) {
+              resetTeamContext();
+            }
+          });
         } else {
           resetTeamContext();
         }
@@ -192,21 +197,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, [refreshTeamContext, resetTeamContext]);
-
-  useEffect(() => {
-    (async () => {
-      if (!session?.user?.id) {
-        resetTeamContext();
-        return;
-      }
-      try {
-        await refreshTeamContext(session.user.id);
-      } catch (error) {
-        console.error("Failed to refresh team context", error);
-        resetTeamContext();
-      }
-    })();
-  }, [resetTeamContext, session?.user?.id, refreshTeamContext]);
 
   const permissions = useMemo(
     () => buildPermissions({ role, accessRole, jobRole }),

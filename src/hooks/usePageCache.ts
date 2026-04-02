@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 type PageCacheEntry<T> = {
@@ -14,24 +15,24 @@ type PageCacheEntry<T> = {
  */
 export function usePageCache<T>(key: string) {
   const queryClient = useQueryClient();
-  const cacheKey = ["page-cache", key];
+  const cacheKey = useMemo(() => ["page-cache", key], [key]);
   const cached = queryClient.getQueryData<PageCacheEntry<T>>(cacheKey);
 
-  const setCache = (data: T) => {
+  const setCache = useCallback((data: T) => {
     queryClient.setQueryData<PageCacheEntry<T>>(cacheKey, {
       data,
       updatedAt: Date.now(),
     });
-  };
+  }, [cacheKey, queryClient]);
 
-  const clearCache = () => {
+  const clearCache = useCallback(() => {
     queryClient.removeQueries({ queryKey: cacheKey });
-  };
+  }, [cacheKey, queryClient]);
 
-  const isStale = (ttl: number) => {
+  const isStale = useCallback((ttl: number) => {
     if (!cached) return true;
     return Date.now() - cached.updatedAt > ttl;
-  };
+  }, [cached]);
 
   return { 
     cached: cached?.data ?? null, 

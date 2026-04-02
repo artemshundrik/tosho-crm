@@ -131,6 +131,19 @@ function getErrorMessage(error: unknown): string {
   return typeof message === "string" ? message : "";
 }
 
+function isMissingColumnLike(error: unknown, columnNames?: string[]) {
+  const message = getErrorMessage(error).toLowerCase();
+  const missingColumnSignal =
+    (message.includes("column") && message.includes("does not exist")) ||
+    message.includes("schema cache") ||
+    message.includes("could not find");
+
+  if (!missingColumnSignal) return false;
+  if (!columnNames || columnNames.length === 0) return true;
+
+  return columnNames.some((column) => message.includes(column.toLowerCase()));
+}
+
 function resolveNumericRate(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -173,34 +186,74 @@ export async function listQuotes(params: ListQuotesParams) {
   const q = search?.trim() ?? "";
 
   const listFromQuotes = async () => {
-    const baseWithCustomerMeta =
-      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url";
-    const baseWithoutCustomerMeta =
-      "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note";
-    const variants = [
-      baseWithCustomerMeta,
-      `${baseWithCustomerMeta},processing_minutes`,
-      `${baseWithCustomerMeta},design_brief`,
-      `${baseWithCustomerMeta},design_brief,processing_minutes`,
-      baseWithoutCustomerMeta,
-      `${baseWithoutCustomerMeta},processing_minutes`,
-      `${baseWithoutCustomerMeta},design_brief`,
-      `${baseWithoutCustomerMeta},design_brief,processing_minutes`,
+    const baseSearchableColumns = ["number", "comment", "title"] as const;
+    const variants: Array<{
+      columns: string;
+      optionalColumns: string[];
+      searchableColumns: string[];
+    }> = [
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes,design_brief",
+        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes", "design_brief"],
+        searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,design_brief",
+        optionalColumns: ["customer_name", "customer_logo_url", "design_brief"],
+        searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
+        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes"],
+        searchableColumns: [...baseSearchableColumns, "customer_name"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+        optionalColumns: ["customer_name", "customer_logo_url"],
+        searchableColumns: [...baseSearchableColumns, "customer_name"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,design_brief,processing_minutes",
+        optionalColumns: ["design_brief", "processing_minutes"],
+        searchableColumns: [...baseSearchableColumns, "design_brief"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,design_brief",
+        optionalColumns: ["design_brief"],
+        searchableColumns: [...baseSearchableColumns, "design_brief"],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
+        optionalColumns: ["processing_minutes"],
+        searchableColumns: [...baseSearchableColumns],
+      },
+      {
+        columns:
+          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
+        optionalColumns: [],
+        searchableColumns: [...baseSearchableColumns],
+      },
     ];
 
     let lastError: unknown = null;
-    for (const columns of variants) {
+    for (const variant of variants) {
       let query = supabase
         .schema("tosho")
         .from("quotes")
-        .select(columns)
+        .select(variant.columns)
         .eq("team_id", teamId)
         .order("created_at", { ascending: false });
 
       if (q.length > 0) {
-        query = query.or(
-          `number.ilike.%${q}%,comment.ilike.%${q}%,title.ilike.%${q}%,customer_name.ilike.%${q}%,design_brief.ilike.%${q}%`
-        );
+        const searchFilters = variant.searchableColumns.map((column) => `${column}.ilike.%${q}%`);
+        query = query.or(searchFilters.join(","));
       }
 
       if (status && status !== "all") {
@@ -210,9 +263,7 @@ export async function listQuotes(params: ListQuotesParams) {
       const result = await query;
       if (!result.error) return result;
 
-      const message = getErrorMessage(result.error).toLowerCase();
-      const isMissingColumn = message.includes("column") && message.includes("does not exist");
-      if (!isMissingColumn) return result;
+      if (!isMissingColumnLike(result.error, variant.optionalColumns)) return result;
       lastError = result.error;
     }
 
