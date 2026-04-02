@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import {
   MoreHorizontal,
   Search,
   Mail,
-  Phone,
   Calendar,
   Link as LinkIcon,
   Clock,
@@ -35,7 +34,6 @@ import {
   TableActionCell,
   TableActionHeaderCell,
   TableEmptyRow,
-  TableLoadingRow,
   TableTextHeaderCell,
 } from "@/components/app/table-kit";
 import { AppDropdown } from "@/components/app/AppDropdown";
@@ -497,7 +495,7 @@ export function TeamMembersPage() {
   const [pendingProbationDecision, setPendingProbationDecision] = useState<"rejected" | null>(null);
   const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
   const [pendingEmploymentDecision, setPendingEmploymentDecision] = useState<"inactive" | null>(null);
-  const [workspaceFunctionAvailable, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
+  const [, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     const tab = params.get("tab");
@@ -517,6 +515,21 @@ export function TeamMembersPage() {
   const canManageManagerRates = isSuperAdmin || isSeo;
   const canOpenProfileCard = canManage || canManageManagerRates;
 
+  const openEditProfileDialog = useCallback((member: Member) => {
+    const meta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
+    setEditProfileMember(member);
+    setEditProfileFirstName(meta?.firstName ?? "");
+    setEditProfileLastName(meta?.lastName ?? "");
+    setEditProfileBirthDate(meta?.birthDate ?? "");
+    setEditProfilePhone(meta?.phone ?? "");
+    setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
+    setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
+    setEditProfileStartDate(meta?.startDate ?? "");
+    setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
+    setEditProfileManagerUserId(meta?.managerUserId ?? "");
+    setEditProfileModuleAccess(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS);
+  }, [memberMetaByUserId]);
+
   useEffect(() => {
     const memberId = params.get("member")?.trim();
     if (!memberId || !canOpenProfileCard || members.length === 0) return;
@@ -525,7 +538,7 @@ export function TeamMembersPage() {
     if (!member) return;
     setActiveTab("members");
     openEditProfileDialog(member);
-  }, [canOpenProfileCard, editProfileMember?.user_id, members, params]);
+  }, [canOpenProfileCard, editProfileMember?.user_id, members, openEditProfileDialog, params]);
 
   useEffect(() => {
     let cancelled = false;
@@ -575,7 +588,6 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-// eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -620,7 +632,6 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   useEffect(() => {
@@ -1026,7 +1037,7 @@ export function TeamMembersPage() {
     return `${days} дн тому`;
   };
 
-  const getMemberDisplayName = (member: Member) => {
+  const getMemberDisplayName = useCallback((member: Member) => {
     const profile = memberProfilesByUserId[member.user_id];
     const meta = memberMetaByUserId[member.user_id];
     return (
@@ -1036,7 +1047,7 @@ export function TeamMembersPage() {
         fallback: "Користувач",
       }) || "Користувач"
     );
-  };
+  }, [memberMetaByUserId, memberProfilesByUserId]);
 
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
@@ -1082,21 +1093,6 @@ export function TeamMembersPage() {
     nextParams.delete("member");
     nextParams.delete("review");
     setParams(nextParams);
-  };
-
-  const openEditProfileDialog = (member: Member) => {
-    const meta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
-    setEditProfileMember(member);
-    setEditProfileFirstName(meta?.firstName ?? "");
-    setEditProfileLastName(meta?.lastName ?? "");
-    setEditProfileBirthDate(meta?.birthDate ?? "");
-    setEditProfilePhone(meta?.phone ?? "");
-    setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
-    setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
-    setEditProfileStartDate(meta?.startDate ?? "");
-    setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
-    setEditProfileManagerUserId(meta?.managerUserId ?? "");
-    setEditProfileModuleAccess(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS);
   };
 
   const saveMemberProfile = async () => {
@@ -2001,11 +1997,6 @@ export function TeamMembersPage() {
   const activeInvitesCount = invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length;
   const memberIdsSet = new Set(members.map((member) => member.user_id));
   const onlineNowCount = onlineEntries.filter((entry) => memberIdsSet.has(entry.userId)).length;
-  const withoutJobRoleCount = members.filter((m) => !(m.job_role ?? "").trim()).length;
-  const unavailableCount = members.filter((m) => {
-    const status = memberMetaByUserId[m.user_id]?.availabilityStatus ?? "available";
-    return status !== "available";
-  }).length;
   const managerOptions = members.map((member) => {
     const profile = memberProfilesByUserId[member.user_id];
     const label =
@@ -2069,7 +2060,7 @@ export function TeamMembersPage() {
       })
       .slice(0, 3);
     return combined;
-  }, [upcomingAnniversaryEvents, upcomingBirthdayEvents]);
+  }, [getMemberDisplayName, upcomingAnniversaryEvents, upcomingBirthdayEvents]);
   const needsAttentionCount = useMemo(() => {
     return members.filter((member) => {
       const meta = memberMetaByUserId[member.user_id];

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { User, Mail, Save, Loader2, Camera, Lock, Globe, Calendar, BriefcaseBusiness, Hourglass, BellRing } from "lucide-react";
+import { Save, Loader2, Camera, Globe, BriefcaseBusiness, Hourglass, BellRing } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";

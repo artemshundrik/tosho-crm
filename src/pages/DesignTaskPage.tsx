@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -55,8 +54,6 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
-import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl as normalizeLogoUrl } from "@/lib/customerLogo";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
@@ -123,15 +120,6 @@ type DesignTask = {
   quoteManagerUserId?: string | null;
   designBrief?: string | null;
   createdAt?: string | null;
-};
-
-type MembershipRow = {
-  user_id: string;
-  full_name: string | null;
-  email: string | null;
-  avatar_url?: string | null;
-  access_role: string | null;
-  job_role: string | null;
 };
 
 type QuoteItemRow = {
@@ -539,11 +527,6 @@ const getInitials = (name?: string | null) => {
     .join("");
 };
 
-const hasMeaningfulMemberIdentity = (row: {
-  full_name?: string | null;
-  email?: string | null;
-}) => Boolean(row.full_name?.trim() || row.email?.trim());
-
 const isGenericMentionLabel = (label?: string | null) => {
   const normalized = (label ?? "").trim().toLowerCase();
   return normalized === "користувач" || normalized === "невідомий користувач";
@@ -607,16 +590,6 @@ const getSelectedDesignOutputFileIdsFromMetadata = (
   return legacy ? [legacy] : [];
 };
 
-const isImageAttachment = (name?: string | null) => {
-  if (!name) return false;
-  return /\.(png|jpg|jpeg|gif|webp|svg|bmp|avif)$/i.test(name);
-};
-
-const isPdfAttachment = (name?: string | null) => {
-  if (!name) return false;
-  return /\.pdf$/i.test(name);
-};
-
 const buildPdfPreviewUrl = (src: string) =>
   `${src}#page=1&zoom=page-fit&view=FitV&navpanes=0&scrollbar=0&pagemode=none`;
 
@@ -633,99 +606,8 @@ const isUsableStorageUrl = (value?: string | null) => {
   }
 };
 
-const FileHoverPreview = ({
-  src,
-  title,
-  className,
-}: {
-  src: string;
-  title: string;
-  className?: string;
-}) => {
-  const anchorRef = useRef<HTMLDivElement | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [previewBounds, setPreviewBounds] = useState({
-    top: 0,
-    left: 0,
-    width: 360,
-    height: 224,
-  });
-
-  const previewHeight = 224;
-  const previewWidth = 360;
-  const previewGap = 10;
-  const viewportPadding = 12;
-
-  const updatePlacement = useCallback(() => {
-    const anchor = anchorRef.current;
-    if (!anchor || typeof window === "undefined") return;
-
-    const rect = anchor.getBoundingClientRect();
-    const availableRight = Math.max(0, window.innerWidth - rect.right - viewportPadding - previewGap);
-    const availableLeft = Math.max(0, rect.left - viewportPadding - previewGap);
-    const shouldOpenLeft = availableRight < previewWidth && availableLeft > availableRight;
-    const clampedWidth = Math.min(previewWidth, Math.max(200, shouldOpenLeft ? availableLeft : availableRight || previewWidth));
-
-    let top = rect.top + rect.height / 2 - previewHeight / 2;
-    top = Math.max(viewportPadding, Math.min(top, window.innerHeight - previewHeight - viewportPadding));
-
-    let left = shouldOpenLeft ? rect.left - previewGap - clampedWidth : rect.right + previewGap;
-    left = Math.max(viewportPadding, Math.min(left, window.innerWidth - clampedWidth - viewportPadding));
-
-    setPreviewBounds({
-      top,
-      left,
-      width: clampedWidth,
-      height: previewHeight,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleViewportChange = () => updatePlacement();
-    window.addEventListener("scroll", handleViewportChange, true);
-    window.addEventListener("resize", handleViewportChange);
-    return () => {
-      window.removeEventListener("scroll", handleViewportChange, true);
-      window.removeEventListener("resize", handleViewportChange);
-    };
-  }, [isOpen, updatePlacement]);
-
-  return (
-    <div
-      ref={anchorRef}
-      onMouseEnter={() => {
-        updatePlacement();
-        setIsOpen(true);
-      }}
-      onMouseLeave={() => setIsOpen(false)}
-      className={cn("h-11 w-11 overflow-hidden rounded-md border border-border/60 bg-muted/20 shrink-0", className)}
-    >
-      <iframe src={buildPdfPreviewUrl(src)} title={title} className="h-full w-full pointer-events-none" />
-      {isOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              aria-hidden="true"
-              className="pointer-events-none fixed z-[90] hidden overflow-hidden rounded-[var(--radius-inner)] border border-border/70 bg-card shadow-[0_18px_40px_-14px_rgba(15,23,42,0.45)] md:block"
-              style={{
-                top: `${previewBounds.top}px`,
-                left: `${previewBounds.left}px`,
-                width: `${previewBounds.width}px`,
-                height: `${previewBounds.height}px`,
-              }}
-            >
-              <iframe src={buildPdfPreviewUrl(src)} title="" className="h-full w-full pointer-events-none bg-background" />
-            </div>,
-            document.body
-          )
-        : null}
-    </div>
-  );
-};
-
 const DESIGN_OUTPUT_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
-const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
 const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
@@ -1075,15 +957,7 @@ export default function DesignTaskPage() {
 
   useEffect(() => {
     syncDesignPageCacheTask(effectiveTeamId ?? "", task);
-  }, [
-    effectiveTeamId,
-    task?.id,
-    task?.quoteId,
-    task?.quoteNumber,
-    task?.customerName,
-    task?.customerLogoUrl,
-    task?.quoteManagerUserId,
-  ]);
+  }, [effectiveTeamId, task]);
 
   const ensureCanEdit = () => {
     if (!designTaskLockedByOther) return true;
@@ -1800,7 +1674,7 @@ export default function DesignTaskPage() {
       }
     };
     void load();
-  }, [id, effectiveTeamId]);
+  }, [effectiveTeamId, id, task]);
 
   const loadHistory = async (taskId: string) => {
     if (!effectiveTeamId) return;
@@ -2442,7 +2316,7 @@ export default function DesignTaskPage() {
             })
           )
         : [],
-    [allStatuses, canManageDesignStatuses, isAssignedToMe, task]
+    [canManageDesignStatuses, isAssignedToMe, task]
   );
   const quickActions = useMemo(
     () => (task ? (statusQuickActions[task.status] ?? []).filter((action) => allowedStatusTransitions.includes(action.next)) : []),
@@ -2774,12 +2648,6 @@ export default function DesignTaskPage() {
     return `${file.storage_bucket}:${file.storage_path}`;
   }, []);
 
-  const resolveAttachmentUrl = useCallback((file: StorageBackedFile) => {
-    const key = getStorageFileKey(file);
-    if (key && fileAccessUrlByKey[key]) return fileAccessUrlByKey[key];
-    return null;
-  }, [fileAccessUrlByKey, getStorageFileKey]);
-
   const ensureFileAccessUrl = useCallback(async (file: StorageBackedFile, options?: { forceRefresh?: boolean }) => {
     const key = getStorageFileKey(file);
     if (!key || !file.storage_bucket || !file.storage_path) return null;
@@ -2825,19 +2693,6 @@ export default function DesignTaskPage() {
     }
   }, []);
 
-  const openStorageFilePreview = useCallback(async (file: StorageBackedFile, kind: FilePreviewState["kind"]) => {
-    const url = await ensureFileAccessUrl(file);
-    if (!url) {
-      toast.error("Не вдалося відкрити файл");
-      return;
-    }
-    setFilePreview({
-      name: file.file_name ?? "Файл",
-      url,
-      kind,
-    });
-  }, [ensureFileAccessUrl]);
-
   const openStorageFileInNewTab = useCallback(async (file: StorageBackedFile) => {
     const url = await ensureFileAccessUrl(file);
     if (!url) {
@@ -2857,9 +2712,10 @@ export default function DesignTaskPage() {
   }, [downloadFileToDevice, ensureFileAccessUrl]);
 
   useEffect(() => {
+    const objectUrls = objectUrlRegistryRef.current;
     return () => {
-      objectUrlRegistryRef.current.forEach((url) => URL.revokeObjectURL(url));
-      objectUrlRegistryRef.current.clear();
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      objectUrls.clear();
     };
   }, []);
 

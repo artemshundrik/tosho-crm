@@ -55,7 +55,6 @@ import {
 } from "@/components/customers";
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
@@ -76,7 +75,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, ArrowRight, CalendarRange, Clock3, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarRange, Clock3, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -106,14 +105,6 @@ type DesignTask = {
   createdAt?: string | null;
 };
 
-type MembershipRow = {
-  user_id: string;
-  full_name: string | null;
-  email: string | null;
-  avatar_url?: string | null;
-  access_role: string | null;
-  job_role: string | null;
-};
 type DesignTaskActivityRow = {
   id: string;
   entity_id: string | null;
@@ -132,13 +123,6 @@ const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
-const DESIGN_COMPLETED_PERIOD_OPTIONS: Array<{ value: DesignCompletedPeriod; label: string }> = [
-  { value: "7d", label: "7 днів" },
-  { value: "30d", label: "30 днів" },
-  { value: "month", label: "Цей місяць" },
-  { value: "quarter", label: "90 днів" },
-];
-
 type DesignPageCachePayload = {
   tasks: DesignTask[];
   cachedAt: number;
@@ -265,21 +249,9 @@ const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
   approved: "design-timeline-bar-approved",
   cancelled: "design-timeline-bar-cancelled",
 };
-const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
-  new: 0,
-  changes: 0.15,
-  in_progress: 0.55,
-  pm_review: 0.75,
-  client_review: 0.9,
-  approved: 1,
-  cancelled: 0.3,
-};
-
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
-const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
-const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
 const MAX_BRIEF_FILES = 5;
 const formatEstimateMinutes = (minutes?: number | null) => {
@@ -567,12 +539,6 @@ const normalizePartyLabel = (value?: string | null) => {
 };
 
 const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
-const normalizeDeadlineTimeInput = (value: string) => {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-};
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const DEFAULT_CREATE_DEADLINE_TIME = "10:00";
 const createDefaultDesignDeadline = (time = DEFAULT_CREATE_DEADLINE_TIME) => {
@@ -659,7 +625,7 @@ export default function DesignPage() {
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
+  const [, setCustomersLoading] = useState(false);
   const [createCustomerOptions, setCreateCustomerOptions] = useState<CustomerOption[]>([]);
   const [createCustomerOptionsLoading, setCreateCustomerOptionsLoading] = useState(false);
   const [estimateDialogOpen, setEstimateDialogOpen] = useState(false);
@@ -709,11 +675,11 @@ export default function DesignPage() {
   );
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
-  const [completedPeriod, setCompletedPeriod] = useState<DesignCompletedPeriod>(
+  const [completedPeriod] = useState<DesignCompletedPeriod>(
     () => initialFilters?.completedPeriod ?? "30d"
   );
   const [completedByAssignee, setCompletedByAssignee] = useState<Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }>>({});
-  const [completedSummaryLoading, setCompletedSummaryLoading] = useState(false);
+  const [, setCompletedSummaryLoading] = useState(false);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
@@ -765,11 +731,11 @@ export default function DesignPage() {
     if (id === userId && currentUserDisplayName) return currentUserDisplayName;
     return memberById[id] ?? id.slice(0, 8);
   };
-  const getMemberAvatar = (id: string | null | undefined) => {
+  const getMemberAvatar = useCallback((id: string | null | undefined) => {
     if (!id) return null;
     if (id === userId && currentUserAvatarUrl) return currentUserAvatarUrl;
     return memberAvatarById[id] ?? null;
-  };
+  }, [currentUserAvatarUrl, memberAvatarById, userId]);
   const getTaskAssigneeLabel = (task: DesignTask) => {
     if (task.assigneeLabel?.trim()) return task.assigneeLabel.trim();
     if (
@@ -801,7 +767,7 @@ export default function DesignPage() {
       isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
     });
 
-  const getTaskTimerSummary = (taskId: string): DesignTaskTimerSummary => {
+  const getTaskTimerSummary = useCallback((taskId: string): DesignTaskTimerSummary => {
     return (
       timerSummaryByTaskId[taskId] ?? {
         totalSeconds: 0,
@@ -810,15 +776,15 @@ export default function DesignPage() {
         activeUserId: null,
       }
     );
-  };
+  }, [timerSummaryByTaskId]);
 
-  const getTaskTrackedSeconds = (taskId: string) => {
+  const getTaskTrackedSeconds = useCallback((taskId: string) => {
     const summary = getTaskTimerSummary(taskId);
     const activeSeconds = summary.activeStartedAt
       ? Math.max(0, Math.floor((timerNowMs - new Date(summary.activeStartedAt).getTime()) / 1000))
       : 0;
     return summary.totalSeconds + activeSeconds;
-  };
+  }, [getTaskTimerSummary, timerNowMs]);
 
   useEffect(() => {
     const loadMembers = async () => {
@@ -1054,7 +1020,7 @@ export default function DesignPage() {
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     if (!effectiveTeamId) return;
     if (tasks.length > 0) {
       setRefreshing(true);
@@ -1422,12 +1388,21 @@ export default function DesignPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [
+    currentUserAvatarUrl,
+    currentUserDisplayName,
+    customers,
+    effectiveTeamId,
+    initialLogoCache?.entries,
+    memberAvatarById,
+    memberById,
+    tasks.length,
+    userId,
+  ]);
 
   useEffect(() => {
     void loadTasks();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTeamId]);
+  }, [loadTasks]);
 
   useEffect(() => {
     if (!effectiveTeamId) return;
@@ -1443,7 +1418,7 @@ export default function DesignPage() {
     return () => {
       window.removeEventListener("design:page-cache-updated", handlePageCacheUpdate as EventListener);
     };
-  }, [effectiveTeamId]);
+  }, [effectiveTeamId, loadTasks]);
 
   useEffect(() => {
     if (!effectiveTeamId) return;
@@ -1457,7 +1432,7 @@ export default function DesignPage() {
     return () => {
       window.removeEventListener("design:customers-updated", handleCustomersUpdated as EventListener);
     };
-  }, [effectiveTeamId]);
+  }, [effectiveTeamId, loadTasks]);
 
   useEffect(() => {
     if (!effectiveTeamId) {
@@ -1555,7 +1530,7 @@ export default function DesignPage() {
     [designerMembers]
   );
 
-  const renderDesignerFilterValue = (value: string) => {
+  const renderDesignerFilterValue = useCallback((value: string) => {
     if (value === ALL_DESIGNERS_FILTER) return <span>Всі дизайнери</span>;
     if (value === NO_DESIGNER_FILTER) return <span>Без дизайнера</span>;
     const label = value === userId && currentUserDisplayName ? currentUserDisplayName : (memberById[value] ?? "Користувач");
@@ -1573,7 +1548,7 @@ export default function DesignPage() {
         <span className="truncate">{label}</span>
       </span>
     );
-  };
+  }, [currentUserDisplayName, getMemberAvatar, memberById, userId]);
 
   const renderAssigneeSpotlightValue = (value: string) => {
     if (value === ALL_ASSIGNEE_SPOTLIGHT) return <span>Вся команда</span>;
@@ -1611,9 +1586,9 @@ export default function DesignPage() {
     });
 
     return Array.from(byId.values()).sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
-  }, [currentUserDisplayName, managerMembers, memberById, userId, visibleTasks]);
+  }, [currentUserDisplayName, getMemberAvatar, managerMembers, memberById, userId, visibleTasks]);
 
-  const renderManagerFilterValue = (value: string) => {
+  const renderManagerFilterValue = useCallback((value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
     const label = value === userId && currentUserDisplayName ? currentUserDisplayName : (memberById[value] ?? "Користувач");
     const avatarUrl = getMemberAvatar(value);
@@ -1630,7 +1605,7 @@ export default function DesignPage() {
         <span className="truncate">{label}</span>
       </span>
     );
-  };
+  }, [currentUserDisplayName, getMemberAvatar, memberById, userId]);
 
   const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
 
@@ -1680,12 +1655,12 @@ export default function DesignPage() {
     effectiveDesignerFilter !== ALL_DESIGNERS_FILTER ||
     (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearch("");
     setStatusFilter("all");
     setDesignerFilter(ALL_DESIGNERS_FILTER);
     setManagerFilter(isManagerUser && userId ? userId : ALL_MANAGERS_FILTER);
-  };
+  }, [isManagerUser, userId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !effectiveTeamId) return;
@@ -2166,7 +2141,7 @@ export default function DesignPage() {
       availableNowCount,
       criticalCount,
     };
-  }, [assigneeGrouped, timerNowMs, timerSummaryByTaskId]);
+  }, [assigneeGrouped, getTaskTrackedSeconds]);
 
   const sortedDesignerCapacityOptions = useMemo(
     () =>
@@ -3576,21 +3551,28 @@ export default function DesignPage() {
       </div>
     ),
     [
+      clearFilters,
       contentView,
       allTasksCount,
+      currentUserDisplayName,
       designerFilter,
       designerFilterOptions,
       filteredTasks.length,
+      getMemberAvatar,
       hasActiveFilters,
+      isManagerUser,
       linkedTasksCount,
       loading,
       managerFilter,
       managerFilterOptions,
+      renderDesignerFilterValue,
+      renderManagerFilterValue,
       refreshing,
       search,
       standaloneTasksCount,
       statusFilter,
       tasks.length,
+      userId,
       viewMode,
       workspacePresence.activeHereEntries,
     ]

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { AlertTriangle, Copy, RefreshCw, Search } from "lucide-react";
@@ -55,7 +55,7 @@ export default function RuntimeErrorsPage() {
   const [sourceFilter, setSourceFilter] = useState<RuntimeErrorSource>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const loadErrors = async (mode: "initial" | "refresh" = "initial") => {
+  const loadErrors = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     if (!teamId) return;
     if (mode === "refresh") setRefreshing(true);
     else setLoading(true);
@@ -79,12 +79,12 @@ export default function RuntimeErrorsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [teamId]);
 
   useEffect(() => {
     if (!teamId || !permissions.isSuperAdmin) return;
     void loadErrors();
-  }, [teamId, permissions.isSuperAdmin]);
+  }, [loadErrors, permissions.isSuperAdmin, teamId]);
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -199,9 +199,8 @@ export default function RuntimeErrorsPage() {
                     const userAgent = normalizeText(row.metadata?.user_agent);
                     const componentStack = normalizeText(row.metadata?.component_stack);
 
-                    return (
-                      <>
-                        <TableRow key={row.id}>
+                    return [
+                      <TableRow key={row.id}>
                           <TableCell className="whitespace-nowrap text-sm">{formatCreatedAt(row.created_at)}</TableCell>
                           <TableCell className="text-sm">
                             <div className="font-medium text-foreground">{row.actor_name || "Невідомий користувач"}</div>
@@ -224,9 +223,9 @@ export default function RuntimeErrorsPage() {
                               </Button>
                             </div>
                           </TableActionCell>
-                        </TableRow>
-                        {isExpanded ? (
-                          <TableRow key={`${row.id}:details`}>
+                      </TableRow>,
+                      isExpanded ? (
+                        <TableRow key={`${row.id}:details`}>
                             <TableCell colSpan={6} className="bg-muted/20">
                               <div className="space-y-3 py-2">
                                 <div>
@@ -247,10 +246,9 @@ export default function RuntimeErrorsPage() {
                                 ) : null}
                               </div>
                             </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </>
-                    );
+                        </TableRow>
+                      ) : null,
+                    ];
                   })}
                 </TableBody>
               </Table>

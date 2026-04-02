@@ -8,6 +8,7 @@ type PageRevealProps = {
 };
 
 export function PageReveal({ children, activeKey: _activeKey, className }: PageRevealProps) {
+  void _activeKey;
   return (
     <div className={cn("page-reveal", className)}>
       {children}

@@ -394,7 +394,7 @@ export default function NotificationsPage() {
       ? "active"
       : "muted";
 
-  const notificationsHeaderActions = useMemo(() => (
+  const notificationsHeaderActions = (
     <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className={SEGMENTED_GROUP}>
@@ -433,9 +433,9 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
-  ), [filter, filtered.length, unreadCount]);
+  );
 
-  usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
+  usePageHeaderActions(notificationsHeaderActions, [filter, filtered.length, markAllRead, unreadCount]);
 
   if (showSkeleton) {
     return <ListSkeleton />;

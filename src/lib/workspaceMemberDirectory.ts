@@ -286,13 +286,31 @@ async function listFromUnifiedView(workspaceId: string) {
     throw new Error('relation "workspace_member_directory" does not exist');
   }
 
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("workspace_member_directory")
-    .select(
-      "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access"
-    )
-    .eq("workspace_id", workspaceId);
+  const unifiedViewVariants = [
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count",
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count",
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone",
+    "workspace_id,user_id,email,first_name,last_name,full_name,access_role,job_role",
+    "workspace_id,user_id,access_role,job_role",
+  ];
+
+  let data: DirectoryViewRow[] | null = null;
+  let error: unknown = null;
+
+  for (const columns of unifiedViewVariants) {
+    const result = await supabase
+      .schema("tosho")
+      .from("workspace_member_directory")
+      .select(columns)
+      .eq("workspace_id", workspaceId);
+
+    error = result.error;
+    if (!result.error) {
+      data = (result.data as DirectoryViewRow[] | null) ?? [];
+      break;
+    }
+    if (!isMissingColumn(result.error)) break;
+  }
 
   if (error) {
     if (isMissingSchemaObject(error) || isMissingColumn(error)) {
@@ -334,10 +352,10 @@ async function listFromFallback(workspaceId: string) {
   let membershipError: unknown = null;
 
   const membershipVariants = [
+    "workspace_id,user_id,access_role,job_role",
+    "workspace_id,user_id,email,access_role,job_role",
     "workspace_id,user_id,email,full_name,avatar_url,access_role,job_role",
     "workspace_id,user_id,email,full_name,access_role,job_role",
-    "workspace_id,user_id,email,access_role,job_role",
-    "workspace_id,user_id,access_role,job_role",
   ];
 
   for (const columns of membershipVariants) {

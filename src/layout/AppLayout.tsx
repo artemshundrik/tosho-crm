@@ -852,7 +852,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [eurUahRate, setEurUahRate] = useState<number | null>(null);
   const [usdUahDelta, setUsdUahDelta] = useState<number | null>(null);
   const [eurUahDelta, setEurUahDelta] = useState<number | null>(null);
-  const [usdUahUpdatedAt, setUsdUahUpdatedAt] = useState<string | null>(null);
+  const [, setUsdUahUpdatedAt] = useState<string | null>(null);
   const [usdUahSourceLabel, setUsdUahSourceLabel] = useState<string | null>(null);
   const [usdUahLoading, setUsdUahLoading] = useState(false);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);

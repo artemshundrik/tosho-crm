@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabaseClient";
-import { resolveWorkspaceId } from "@/lib/workspace";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -141,60 +140,6 @@ function getQuoteMonthCode(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear()).slice(-2);
   return `${month}${year}`;
-}
-
-function hasMeaningfulMemberIdentity(row: {
-  full_name?: string | null;
-  email?: string | null;
-}) {
-  return Boolean(row.full_name?.trim() || row.email?.trim());
-}
-
-function isGenericMemberLabel(label?: string | null) {
-  const normalized = (label ?? "").trim();
-  return normalized === "Користувач" || normalized.startsWith("Користувач ") || normalized === "Невідомий користувач";
-}
-
-async function hydrateMemberLabelsFromProfiles(
-  members: TeamMemberRow[]
-): Promise<TeamMemberRow[]> {
-  const genericIds = members
-    .filter((member) => isGenericMemberLabel(member.label))
-    .map((member) => member.id);
-
-  if (genericIds.length === 0) return members;
-
-  const { data, error } = await supabase
-    .from("team_member_profiles")
-    .select("user_id,first_name,last_name,full_name")
-    .in("user_id", genericIds);
-
-  if (error) return members;
-
-  const profileLabelById = new Map(
-    (((data as Array<{
-      user_id?: string | null;
-      first_name?: string | null;
-      last_name?: string | null;
-      full_name?: string | null;
-    }> | null) ?? [])
-      .map((row) => {
-        const userId = row.user_id ?? "";
-        const label = formatUserShortName({
-          firstName: row.first_name ?? null,
-          lastName: row.last_name ?? null,
-          fullName: row.full_name ?? null,
-          fallback: "",
-        });
-        return [userId, label] as const;
-      })
-      .filter(([userId, label]) => Boolean(userId && label)))
-  );
-
-  return members.map((member) => ({
-    ...member,
-    label: profileLabelById.get(member.id) ?? member.label,
-  }));
 }
 
 function formatQuoteNumber(monthCode: string, sequence: number) {
@@ -922,15 +867,14 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     /column/i.test(error.message ?? "") &&
     /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
   ) {
-    const fallbackPayload = payload.map(
-      ({
-        desired_manager_income: _desiredManagerIncome,
-        manager_rate: _managerRate,
-        fixed_cost_rate: _fixedCostRate,
-        vat_rate: _vatRate,
-        ...legacyPayload
-      }) => legacyPayload
-    );
+    const fallbackPayload = payload.map((row) => {
+      const legacyPayload = { ...row };
+      delete legacyPayload.desired_manager_income;
+      delete legacyPayload.manager_rate;
+      delete legacyPayload.fixed_cost_rate;
+      delete legacyPayload.vat_rate;
+      return legacyPayload;
+    });
     ({ data, error } = await supabase
       .schema("tosho")
       .from("quote_item_runs")
@@ -1570,8 +1514,8 @@ export async function listQuoteItemsForQuotes(params: {
     "id,quote_id,position,name,description,qty,unit,unit_price,line_total,methods,attachment,catalog_type_id,catalog_kind_id,catalog_model_id,print_position_id,print_width_mm,print_height_mm";
 
   const readRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
-    const quoteItemsTable: any = supabase.schema("tosho").from("quote_items");
-    let query: any = quoteItemsTable
+    const quoteItemsTable = supabase.schema("tosho").from("quote_items");
+    let query = quoteItemsTable
       .select(withMetadata ? columnsWithMetadata : columnsWithoutMetadata)
       .in("quote_id", uniqueQuoteIds)
       .order("quote_id", { ascending: true })

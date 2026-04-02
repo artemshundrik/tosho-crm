@@ -21,8 +21,6 @@ type TeamMemberRoleRow = {
 
 const normalizeRole = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
-const MANAGER_JOB_ROLES = new Set(["manager", "менеджер"]);
-
 async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRoleRow[]> {
   if (!isUuid(teamId ?? null)) return [];
   const { data, error } = await supabase
@@ -39,17 +37,6 @@ async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRol
 function pickCeoUserIds(rows: TeamMemberRoleRow[]) {
   return rows
     .filter((row) => normalizeRole(row.access_role) === "owner")
-    .map((row) => row.user_id)
-    .filter((value): value is string => !!value);
-}
-
-function pickManagerUserIds(rows: TeamMemberRoleRow[]) {
-  return rows
-    .filter((row) => {
-      const access = normalizeRole(row.access_role);
-      const job = normalizeRole(row.job_role);
-      return access === "manager" || access === "admin" || access === "owner" || MANAGER_JOB_ROLES.has(job);
-    })
     .map((row) => row.user_id)
     .filter((value): value is string => !!value);
 }

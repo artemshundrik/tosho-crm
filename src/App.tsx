@@ -36,7 +36,7 @@ function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function lazyWithRetry<T extends { default: React.ComponentType<any> }>(
+function lazyWithRetry<T extends { default: React.ComponentType<unknown> }>(
   importer: () => Promise<T>
 ) {
   return lazy(async () => {

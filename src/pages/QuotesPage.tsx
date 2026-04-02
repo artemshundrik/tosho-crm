@@ -120,7 +120,6 @@ import {
 } from "@/features/quotes/quotes-page/config";
 import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
 import {
-  CONTROL_BASE,
   SEGMENTED_GROUP,
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
@@ -144,9 +143,6 @@ const ALL_MANAGERS_FILTER = "__all__";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
-const isUuid = (value?: string | null) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value ?? "").trim());
-
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
 };
@@ -313,7 +309,7 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
 }
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
-  const { userId, accessRole, jobRole, permissions } = useAuth();
+  const { userId, jobRole, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
@@ -528,7 +524,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const isManagerUser = useMemo(() => {
     return isQuoteManagerJobRole(jobRole);
   }, [jobRole]);
-  const viewerJobRole = (jobRole ?? "").trim().toLowerCase();
   const canOpenQuoteRow = useCallback(
     (row: QuoteListRow) => {
       if (permissions.isSuperAdmin || permissions.isSeo) return true;
@@ -646,14 +641,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
       return null;
     },
-    [
-      getManagerAvatar,
-      memberById,
-      presenceAvatarById,
-      presenceLabelById,
-      workspaceMemberAvatarById,
-      workspaceMemberLabelById,
-    ]
+    [getManagerAvatar, memberById, presenceLabelById, workspaceMemberLabelById]
   );
   const getManagerLabel = useCallback(
     (assignedTo?: string | null) => {
@@ -734,7 +722,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
     return (first + last).toUpperCase() || "?";
   };
-  const renderManagerFilterValue = (value: string) => {
+  const renderManagerFilterValue = useCallback((value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
     const member = resolveManagerMember(value);
     const label = member?.label?.trim() || getManagerLabel(value);
@@ -752,7 +740,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         <span className="truncate">{label}</span>
       </span>
     );
-  };
+  }, [getManagerLabel, resolveManagerMember]);
 
   const getDateLabels = (value?: string | null) => {
     if (!value) return "Не вказано";
@@ -1413,7 +1401,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
   void handleRowStatusChange;
 
-  const openCreate = () => {
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_types")
+        .select(`
+          id,
+          name,
+          quote_type,
+          kinds:catalog_kinds!inner(
+            id,
+            name,
+            models:catalog_models!inner(id, name, price)
+          )
+        `)
+        .eq("team_id", teamId)
+        .order("name");
+      if (error) throw error;
+      setCatalogTypes(((data as unknown) as CatalogType[]) ?? []);
+    } catch (e: unknown) {
+      setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [teamId]);
+
+  const openCreate = useCallback(() => {
     revokeAttachmentPreviews(pendingAttachments);
     setCreateOpen(true);
     setCustomerSearch("");
@@ -1441,35 +1457,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     // Load catalog for new form
     loadCatalog();
-  };
-
-  const loadCatalog = async () => {
-    setCatalogLoading(true);
-    setCatalogError(null);
-    try {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("catalog_types")
-        .select(`
-          id,
-          name,
-          quote_type,
-          kinds:catalog_kinds!inner(
-            id,
-            name,
-            models:catalog_models!inner(id, name, price)
-          )
-        `)
-        .eq("team_id", teamId)
-        .order("name");
-      if (error) throw error;
-      setCatalogTypes(((data as unknown) as CatalogType[]) ?? []);
-    } catch (e: unknown) {
-      setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
-    } finally {
-      setCatalogLoading(false);
-    }
-  };
+  }, [loadCatalog, pendingAttachments]);
 
   const handleCustomerSearchChange = async (search: string) => {
     if (!search.trim()) {
@@ -1708,9 +1696,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ({ error: runsError } = await supabase
               .schema("tosho")
               .from("quote_item_runs")
-              .insert(
-                runRows.map(({ team_id: _teamId, ...row }) => row)
-              ));
+              .insert(runRows.map((sourceRow) => {
+                const row = { ...sourceRow };
+                delete row.team_id;
+                return row;
+              })));
           }
           if (
             runsError &&
@@ -1720,18 +1710,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ({ error: runsError } = await supabase
               .schema("tosho")
               .from("quote_item_runs")
-              .insert(
-                runRows.map(
-                  ({
-                    team_id: _teamId,
-                    desired_manager_income: _desiredManagerIncome,
-                    manager_rate: _managerRate,
-                    fixed_cost_rate: _fixedCostRate,
-                    vat_rate: _vatRate,
-                    ...row
-                  }) => row
-                )
-              ));
+              .insert(runRows.map((sourceRow) => {
+                const row = { ...sourceRow };
+                delete row.team_id;
+                delete row.desired_manager_income;
+                delete row.manager_rate;
+                delete row.fixed_cost_rate;
+                delete row.vat_rate;
+                return row;
+              })));
           }
           if (runsError) throw runsError;
         }
@@ -3052,12 +3039,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }, 60_000);
   };
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearch("");
     setQuickFilter("all");
     setStatusFilter("all");
     setManagerFilter(ALL_MANAGERS_FILTER);
-  };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !teamId) return;
@@ -3259,9 +3246,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ({ error: insertItemsError } = await supabase
             .schema("tosho")
             .from("quote_items")
-            .insert(
-              itemRows.map(({ metadata, ...item }) => item)
-            ));
+            .insert(itemRows.map((sourceItem) => {
+              const item = { ...sourceItem };
+              delete item.metadata;
+              return item;
+            })));
         }
         if (insertItemsError) throw insertItemsError;
       }
@@ -4313,17 +4302,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </div>
       </div>
   ), [
+    clearFilters,
     contentView,
+    currentUserId,
+    currentUserManagerLabel,
     foundCount,
+    getManagerAvatar,
+    getManagerLabel,
     hasActiveFilters,
+    isManagerUser,
     loading,
     managerFilter,
     managerFilterOptions,
+    openCreate,
     quoteListMode,
     quoteSetKindFilter,
     quoteSetKpCount,
     quoteSetSearch,
     quoteSetSetCount,
+    renderManagerFilterValue,
     refreshing,
     rows.length,
     search,

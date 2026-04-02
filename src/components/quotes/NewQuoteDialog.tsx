@@ -652,7 +652,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     return Array.from(unique.values());
   }, [catalogTypes, selectedType]);
   const resolvedPrintPositions = availablePrintPositions.length > 0 ? availablePrintPositions : fallbackPrintPositions;
-  const productSelectionReady = Boolean(categoryId && kindId && modelId);
   const hasRoleInfo = React.useMemo(
     () => teamMembers.some((member) => !!member.jobRole),
     [teamMembers]
@@ -757,7 +756,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCurrencyPopoverOpen(false);
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
-  }, [open, initialValues, currentUserId, availableStatuses]);
+  }, [availableStatuses, currentUserId, initialValues, isEditMode, open]);
 
   React.useEffect(() => {
     if (quoteType !== "print") return;
@@ -816,6 +815,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     printPackageConfig.kraftColor,
     printPackageConfig.packageType,
     printPackageConfig.paperType,
+    printPackageConfig.productKind,
   ]);
 
   React.useEffect(() => {
@@ -1095,7 +1095,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const currentStatus = availableStatuses.find((s) => s.value === status) ?? availableStatuses[0];
   const currentCurrency = CURRENCIES.find((c) => c.value === currency);
   const currentDelivery = DELIVERY_OPTIONS.find((opt) => opt.value === deliveryType);
-  const runsSummary = runs.filter((run) => Number(run.quantity) > 0);
   const customerOptions = React.useMemo<CustomerLeadOption[]>(
     () => {
       const effectiveCurrentManagerLabel =

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { PrintConfiguratorPreset, PrintProductConfig } from "@/lib/printPackage";
-import { getConfiguratorProductLabel, getProductKindFromPreset } from "@/lib/printPackage";
+import { getProductKindFromPreset } from "@/lib/printPackage";
 import {
   Check,
   CheckCircle2,

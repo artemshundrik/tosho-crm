@@ -80,10 +80,6 @@ function extractObjectPath(url: string, bucket: string): string | null {
   return decodeURIComponent(pathPart);
 }
 
-function isPublicStorageUrl(url: string, bucket: string) {
-  return url.includes(`/storage/v1/object/public/${bucket}/`);
-}
-
 function isSupabaseStorageUrl(url: string, bucket: string) {
   return (
     url.includes(`/storage/v1/object/public/${bucket}/`) ||

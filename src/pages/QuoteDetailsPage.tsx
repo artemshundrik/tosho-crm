@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,6 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -56,13 +54,11 @@ import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import {
   createQuote,
@@ -121,8 +117,6 @@ import {
   Search,
   ChevronDown,
   Loader2,
-  TrendingDown,
-  TrendingUp,
   Package,
   Shirt,
   Image,
@@ -141,18 +135,15 @@ import {
   ITEM_VISUAL_BUCKET,
   MAX_ATTACHMENT_SIZE_BYTES,
   MAX_QUOTE_ATTACHMENTS,
-  STATUS_FLOW,
   STATUS_NEXT_ACTION,
   STATUS_OPTIONS,
   buildMentionAlias,
   canPreviewImage,
-  canPreviewPdf,
   createLocalId,
   extractMentionKeys,
   formatCurrency,
   formatCurrencyCompact,
   formatFileSize,
-  formatQuoteType,
   formatStatusLabel,
   getErrorMessage,
   getFileExtension,
@@ -206,7 +197,6 @@ const DEFAULT_DEADLINE_TIME = "09:00";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
-const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -274,13 +264,23 @@ type QuoteComment = {
   created_at: string;
   created_by?: string | null;
 };
-type MembershipRow = {
-  user_id: string;
-  full_name: string | null;
-  email: string | null;
-  avatar_url?: string | null;
-  access_role?: string | null;
-  job_role?: string | null;
+type QuoteItemRecord = {
+  id?: string | null;
+  position?: number | null;
+  name?: string | null;
+  description?: string | null;
+  metadata?: unknown;
+  qty?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  methods?: unknown;
+  attachment?: unknown;
+  catalog_type_id?: string | null;
+  catalog_kind_id?: string | null;
+  catalog_model_id?: string | null;
+  print_position_id?: string | null;
+  print_width_mm?: number | null;
+  print_height_mm?: number | null;
 };
 type InsertedCommentRow = {
   id: string;
@@ -933,7 +933,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return (model + print) * qty + logistics;
   };
 
-  const getRunPricing = (run: QuoteRun | null) => {
+  const getRunPricing = useCallback((run: QuoteRun | null) => {
     if (!run) {
       return {
         costTotal: 0,
@@ -981,7 +981,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       saleTotal,
       saleUnitPrice,
     };
-  };
+  }, [currentManagerRate, effectiveManagerId]);
 
   // Runs (tirages)
   const addRun = () => {
@@ -1191,12 +1191,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [runs, selectedRun]
   );
 
-  const selectedRunTotal = useMemo(() => {
-    if (!selectedRun) return 0;
-    return getRunTotal(selectedRun);
-  }, [selectedRun]);
-
-  const selectedRunPricing = useMemo(() => getRunPricing(selectedRun), [selectedRun]);
+  const selectedRunPricing = useMemo(() => getRunPricing(selectedRun), [getRunPricing, selectedRun]);
 
   const selectedUnitCost = useMemo(() => {
     if (!selectedRun) return null;
@@ -1656,43 +1651,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   ]
     .filter(Boolean)
     .join("\n\n");
-  const baseTotalForStatus = runs.length > 0 ? selectedRunTotal : itemsSubtotal;
   const nextAction = STATUS_NEXT_ACTION[currentStatus] ?? STATUS_NEXT_ACTION.new;
-
-  const stageHints = useMemo(() => {
-    const hasItems = items.length > 0;
-    const hasDeadline = Boolean(quote?.deadline_at);
-    const hasTotal = baseTotalForStatus > 0;
-    const hasBrief = Boolean(briefText.trim());
-
-    if (currentStatus === "new") {
-      return [
-        { label: "Додано хоча б одну позицію", done: hasItems },
-        { label: "Вказано дедлайн", done: hasDeadline },
-      ];
-    }
-    if (currentStatus === "estimating") {
-      return [
-        { label: "Позиції заповнені", done: hasItems },
-        { label: "Пораховано підсумок", done: hasTotal },
-      ];
-    }
-    if (currentStatus === "estimated") {
-      return [
-        { label: "Є фінальна сума", done: hasTotal },
-        { label: "Заповнено ТЗ/коментар", done: hasBrief },
-      ];
-    }
-    if (currentStatus === "awaiting_approval") {
-      return [{ label: "Після відповіді замовника зафіксуйте результат", done: false }];
-    }
-    if (currentStatus === "approved") {
-      return [{ label: "Готово. Можна переходити до наступного процесу", done: true }];
-    }
-    return [{ label: "Прорахунок скасовано", done: true }];
-  }, [currentStatus, items.length, quote?.deadline_at, baseTotalForStatus, briefText]);
-
-  const pendingHintsCount = stageHints.filter((item) => !item.done).length;
 
   const canEditRuns = useMemo(
     () =>
@@ -2918,8 +2877,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const quoteItemColumnsWithoutMetadata =
         "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
       const loadRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
-        const quoteItemsTable: any = supabase.schema("tosho").from("quote_items");
-        let query: any = quoteItemsTable
+        const quoteItemsTable = supabase.schema("tosho").from("quote_items");
+        let query = quoteItemsTable
           .select(withMetadata ? quoteItemColumnsWithMetadata : quoteItemColumnsWithoutMetadata)
           .eq("quote_id", quoteId)
           .order("position", { ascending: true });
@@ -2953,27 +2912,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       }
       if (error) throw error;
-      const rows = data ?? [];
+      const rows = (data ?? []) as QuoteItemRecord[];
       const kindIds = Array.from(
         new Set(
           rows
-            .map((row: any) => (typeof row.catalog_kind_id === "string" ? row.catalog_kind_id.trim() : ""))
+            .map((row) => (typeof row.catalog_kind_id === "string" ? row.catalog_kind_id.trim() : ""))
             .filter(Boolean)
         )
       );
       const modelIds = Array.from(
         new Set(
           rows
-            .map((row: any) => (typeof row.catalog_model_id === "string" ? row.catalog_model_id.trim() : ""))
+            .map((row) => (typeof row.catalog_model_id === "string" ? row.catalog_model_id.trim() : ""))
             .filter(Boolean)
         )
       );
       const methodIds = Array.from(
         new Set(
-          rows.flatMap((row: any) =>
+          rows.flatMap((row) =>
             Array.isArray(row.methods)
               ? row.methods
-                  .map((method: any) =>
+                  .map((method) =>
                     typeof (method?.method_id ?? method?.methodId ?? method?.id) === "string"
                       ? String(method.method_id ?? method.methodId ?? method.id).trim()
                       : ""
@@ -3040,7 +2999,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       );
 
       setItems(
-        rows.map((row: any) => {
+        rows.map((row) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
           const parsedMethods: ItemMethod[] = rawMethods
             .map((method: unknown) => {

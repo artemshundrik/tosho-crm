@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
-import { OWNERSHIP_OPTIONS, VAT_OPTIONS, type OwnershipOption, type VatOption } from "@/features/quotes/quotes-page/config";
+import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 type CustomerRow = {
   id: string;
@@ -177,12 +177,20 @@ const getInitials = (value?: string | null) => {
 
 
 const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "object" && error !== null) {
-    const record = error as Record<string, unknown>;
-    if (typeof record.message === "string" && record.message) return record.message;
+  const resolveRawMessage = () => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === "object" && error !== null) {
+      const record = error as Record<string, unknown>;
+      if (typeof record.message === "string" && record.message) return record.message;
+    }
+    return fallback;
+  };
+  const message = resolveRawMessage();
+  const normalized = message.toLowerCase();
+  if (normalized.includes("quota has been exceeded") || normalized.includes("quota exceeded")) {
+    return "Не вдалося зберегти локальний кеш сторінки. Оновіть сторінку або спробуйте ще раз трохи пізніше.";
   }
-  return fallback;
+  return message;
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
@@ -190,10 +198,10 @@ const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 type CustomersPageCachePayload = {
-  rows: CustomerRow[];
-  leads: LeadRow[];
-  teamMembers: WorkspaceMemberDisplayRow[];
-  cachedAt: number;
+  activeTab: "customers" | "leads";
+  search: string;
+  customerManagerFilter: string;
+  leadManagerFilter: string;
 };
 
 const toManagerKey = (value?: string | null) => normalizeManagerKey(value);
@@ -221,49 +229,65 @@ const buildManagerAliases = (member: WorkspaceMemberDisplayRow) => {
 function readCustomersPageCache(teamId: string): CustomersPageCachePayload | null {
   if (typeof window === "undefined" || !teamId) return null;
   try {
-    const raw = sessionStorage.getItem(`customers-page-cache:${teamId}`);
+    const raw = sessionStorage.getItem(`customers-page-ui:${teamId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CustomersPageCachePayload;
-    const cachedTeamMembers = Array.isArray(parsed.teamMembers)
-      ? parsed.teamMembers.filter(
-          (row): row is WorkspaceMemberDisplayRow =>
-            typeof row?.userId === "string" &&
-            typeof row?.label === "string" &&
-            typeof row?.workspaceId === "string"
-        )
-      : [];
+    const activeTab = parsed.activeTab === "leads" ? "leads" : "customers";
     return {
-      rows: Array.isArray(parsed.rows) ? parsed.rows : [],
-      leads: Array.isArray(parsed.leads) ? parsed.leads : [],
-      teamMembers: cachedTeamMembers,
-      cachedAt: Number(parsed.cachedAt ?? Date.now()),
+      activeTab,
+      search: typeof parsed.search === "string" ? parsed.search : "",
+      customerManagerFilter:
+        typeof parsed.customerManagerFilter === "string" ? parsed.customerManagerFilter : ALL_MANAGERS_FILTER,
+      leadManagerFilter: typeof parsed.leadManagerFilter === "string" ? parsed.leadManagerFilter : ALL_MANAGERS_FILTER,
     };
   } catch {
     return null;
   }
 }
 
+function writeCustomersPageCache(teamId: string, payload: CustomersPageCachePayload) {
+  if (typeof window === "undefined" || !teamId) return;
+  try {
+    sessionStorage.setItem(`customers-page-ui:${teamId}`, JSON.stringify(payload));
+  } catch {
+    // ignore cache persistence failures to avoid breaking the page on storage quota limits
+  }
+}
+
+function clearLegacyCustomersPageCache(teamId: string) {
+  if (typeof window === "undefined" || !teamId) return;
+  try {
+    sessionStorage.removeItem(`customers-page-cache:${teamId}`);
+  } catch {
+    // ignore storage cleanup failures
+  }
+}
+
 function CustomersPage({ teamId }: { teamId: string }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { session, userId, accessRole, jobRole } = useAuth();
+  const { session, userId, jobRole } = useAuth();
   const initialCache = readCustomersPageCache(teamId);
-  const [activeTab, setActiveTab] = useState<"customers" | "leads">("customers");
-  const [search, setSearch] = useState("");
-  const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
-  const [leadManagerFilter, setLeadManagerFilter] = useState<string>(ALL_MANAGERS_FILTER);
+  const [activeTab, setActiveTab] = useState<"customers" | "leads">(() => initialCache?.activeTab ?? "customers");
+  const [search, setSearch] = useState(() => initialCache?.search ?? "");
+  const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(
+    () => initialCache?.customerManagerFilter ?? ALL_MANAGERS_FILTER
+  );
+  const [leadManagerFilter, setLeadManagerFilter] = useState<string>(
+    () => initialCache?.leadManagerFilter ?? ALL_MANAGERS_FILTER
+  );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
 
-  const [rows, setRows] = useState<CustomerRow[]>(() => initialCache?.rows ?? []);
-  const [customersLoading, setCustomersLoading] = useState(() => !initialCache);
-  const [customersRefreshing, setCustomersRefreshing] = useState(false);
+  const [rows, setRows] = useState<CustomerRow[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [, setCustomersRefreshing] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
 
-  const [leads, setLeads] = useState<LeadRow[]>(() => initialCache?.leads ?? []);
-  const [leadsLoading, setLeadsLoading] = useState(() => !initialCache);
-  const [leadsRefreshing, setLeadsRefreshing] = useState(false);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>(() => initialCache?.teamMembers ?? []);
+  const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -454,7 +478,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     return next;
-  }, [customerManagerFilter, currentManagerLabel, isManagerUser, isOwnedByCurrentManager, resolveManagerLabel, rows, search]);
+  }, [customerManagerFilter, isManagerUser, isOwnedByCurrentManager, resolveManagerLabel, rows, search]);
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -486,7 +510,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     return next;
-  }, [currentManagerLabel, isManagerUser, isOwnedByCurrentManager, leadManagerFilter, leads, resolveManagerLabel, search]);
+  }, [isManagerUser, isOwnedByCurrentManager, leadManagerFilter, leads, resolveManagerLabel, search]);
   const calculationQuotes = useMemo(
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
@@ -517,23 +541,26 @@ function CustomersPage({ teamId }: { teamId: string }) {
     );
   };
 
-  const renderManagerFilterValue = (value: string) => {
-    if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
-    const member = memberByLabel.get(value);
-    return (
-      <span className="flex items-center gap-2 min-w-0">
-        <AvatarBase
-          src={member?.avatarDisplayUrl ?? null}
-          name={value}
-          fallback={value.slice(0, 2).toUpperCase()}
-          size={18}
-          className="border-border/60 shrink-0"
-          fallbackClassName="text-[9px] font-semibold"
-        />
-        <span className="truncate">{value}</span>
-      </span>
-    );
-  };
+  const renderManagerFilterValue = useCallback(
+    (value: string) => {
+      if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
+      const member = memberByLabel.get(value);
+      return (
+        <span className="flex items-center gap-2 min-w-0">
+          <AvatarBase
+            src={member?.avatarDisplayUrl ?? null}
+            name={value}
+            fallback={value.slice(0, 2).toUpperCase()}
+            size={18}
+            className="border-border/60 shrink-0"
+            fallbackClassName="text-[9px] font-semibold"
+          />
+          <span className="truncate">{value}</span>
+        </span>
+      );
+    },
+    [memberByLabel]
+  );
 
   const getCustomerLegalEntities = (row: CustomerRow) => parseCustomerLegalEntities(row);
   const getCustomerPrimaryLegalEntity = (row: CustomerRow) => getCustomerLegalEntities(row)[0] ?? null;
@@ -555,14 +582,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return formatCustomerLegalEntityTitle(primary);
   };
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setForm(createInitialCustomerFormState(currentManagerLabel || defaultManagerName, userId ?? ""));
     setLinkedQuotes([]);
     setLinkedQuotesLoading(false);
     setFormError(null);
-  };
+  }, [currentManagerLabel, defaultManagerName, userId]);
 
-  const resetLeadForm = () => {
+  const resetLeadForm = useCallback(() => {
     setLeadForm({
       companyName: "",
       legalName: "",
@@ -588,15 +615,27 @@ function CustomersPage({ teamId }: { teamId: string }) {
       notes: "",
     });
     setLeadFormError(null);
-  };
+  }, [currentManagerLabel, defaultManagerName, userId]);
 
-  const openCreate = () => {
+  const loadCustomerLinkedQuotes = useCallback(async (customerId: string) => {
+    setLinkedQuotesLoading(true);
+    try {
+      const rows = await listCustomerQuotes({ teamId, customerId, limit: 100 });
+      setLinkedQuotes(rows as QuoteHistoryRow[]);
+    } catch {
+      setLinkedQuotes([]);
+    } finally {
+      setLinkedQuotesLoading(false);
+    }
+  }, [teamId]);
+
+  const openCreate = useCallback(() => {
     setEditingId(null);
     resetForm();
     setDialogOpen(true);
-  };
+  }, [resetForm]);
 
-  const openEdit = (row: CustomerRow) => {
+  const openEdit = useCallback((row: CustomerRow) => {
     const contacts = parseCustomerContacts(row);
     setEditingId(row.id);
     setForm({
@@ -618,7 +657,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setFormError(null);
     setDialogOpen(true);
     void loadCustomerLinkedQuotes(row.id);
-  };
+  }, [loadCustomerLinkedQuotes, resolveManagerLabel]);
 
   const openDelete = (row: CustomerRow) => {
     setDeleteTarget(row);
@@ -626,13 +665,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setDeleteDialogOpen(true);
   };
 
-  const openCreateLead = () => {
+  const openCreateLead = useCallback(() => {
     setLeadEditingId(null);
     resetLeadForm();
     setLeadDialogOpen(true);
-  };
+  }, [resetLeadForm]);
 
-  const openEditLead = (lead: LeadRow) => {
+  const openEditLead = useCallback((lead: LeadRow) => {
     setLeadEditingId(lead.id);
     setLeadForm({
       companyName: lead.company_name ?? "",
@@ -660,19 +699,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
     setLeadFormError(null);
     setLeadDialogOpen(true);
-  };
-
-  const loadCustomerLinkedQuotes = async (customerId: string) => {
-    setLinkedQuotesLoading(true);
-    try {
-      const rows = await listCustomerQuotes({ teamId, customerId, limit: 100 });
-      setLinkedQuotes(rows as QuoteHistoryRow[]);
-    } catch {
-      setLinkedQuotes([]);
-    } finally {
-      setLinkedQuotesLoading(false);
-    }
-  };
+  }, [currentManagerLabel, defaultManagerName, resolveManagerLabel]);
 
   const openDeleteLead = (lead: LeadRow) => {
     setLeadDeleteTarget(lead);
@@ -748,17 +775,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   useEffect(() => {
-    if (typeof window === "undefined" || !teamId) return;
-    sessionStorage.setItem(
-      `customers-page-cache:${teamId}`,
-      JSON.stringify({
-        rows,
-        leads,
-        teamMembers,
-        cachedAt: Date.now(),
-      } satisfies CustomersPageCachePayload)
-    );
-  }, [leads, rows, teamId, teamMembers]);
+    writeCustomersPageCache(teamId, {
+      activeTab,
+      search,
+      customerManagerFilter,
+      leadManagerFilter,
+    } satisfies CustomersPageCachePayload);
+  }, [activeTab, customerManagerFilter, leadManagerFilter, search, teamId]);
+
+  useEffect(() => {
+    clearLegacyCustomersPageCache(teamId);
+  }, [teamId]);
 
   useEffect(() => {
     void loadCustomers();
@@ -812,7 +839,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       openEdit(customer);
       setHandledDeepLink(linkKey);
     }
-  }, [handledDeepLink, leads, rows, searchParams]);
+  }, [handledDeepLink, leads, openEdit, openEditLead, rows, searchParams]);
 
   useEffect(() => {
     if (previousPathnameRef.current === location.pathname) {
@@ -1295,13 +1322,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
     activeTab,
     customerManagerFilter,
     customerManagerOptions,
+    currentManagerLabel,
+    defaultManagerName,
     filteredLeads.length,
     filteredRows.length,
+    isManagerUser,
     leadManagerFilter,
     leadManagerOptions,
     leads.length,
+    memberById,
+    openCreate,
+    openCreateLead,
+    renderManagerFilterValue,
     rows.length,
     search,
+    userId,
   ]);
 
   usePageHeaderActions(customersHeaderActions, [customersHeaderActions]);
