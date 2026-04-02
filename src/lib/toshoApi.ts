@@ -687,14 +687,22 @@ export async function getQuoteSummary(quoteId: string) {
       null
     );
     let resolvedCustomerName = currentCustomerName;
-    if (summary.customer_id) {
+    if (summary.customer_id && (!(resolvedCustomerName ?? "").trim() || !(currentCustomerLogo ?? "").trim())) {
       try {
-        const { data: customerRow, error: customerError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .select("name,legal_name,logo_url")
-          .eq("id", summary.customer_id)
-          .maybeSingle();
+        const loadCustomer = async (withLogo: boolean) => {
+          return await supabase
+            .schema("tosho")
+            .from("customers")
+            .select(withLogo ? "name,legal_name,logo_url" : "name,legal_name")
+            .eq("id", summary.customer_id)
+            .maybeSingle();
+        };
+
+        let { data: customerRow, error: customerError } = await loadCustomer(true);
+        if (isMissingColumnLike(customerError, ["logo_url"])) {
+          ({ data: customerRow, error: customerError } = await loadCustomer(false));
+        }
+
         if (!customerError) {
           const customer = customerRow as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
           resolvedCustomerName = customer?.name?.trim() || customer?.legal_name?.trim() || resolvedCustomerName;
