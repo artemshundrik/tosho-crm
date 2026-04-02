@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -523,92 +524,10 @@ function toggleLinePrefix(selectedText: string, prefixFactory: (index: number) =
   };
 }
 
-function renderBriefInlineFormatting(text: string) {
-  const parts: Array<string | JSX.Element> = [];
-  let cursor = 0;
-  let key = 0;
-  const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push(text.slice(cursor, index));
-    if (match[2]) parts.push(<strong key={`b-${key++}`}>{match[2]}</strong>);
-    else if (match[3]) parts.push(<em key={`i-${key++}`}>{match[3]}</em>);
-    else parts.push(match[0]);
-    cursor = index + match[0].length;
-  }
-  if (cursor < text.length) parts.push(text.slice(cursor));
-  return parts;
-}
-
 function renderBriefRichText(value: string | null | undefined) {
-  const text = value?.trim();
-  if (!text) return <span>Спочатку вкажіть дедлайн дизайну або текст задачі.</span>;
-
-  const lines = text.split("\n");
-  const blocks: JSX.Element[] = [];
-  let bulletItems: JSX.Element[] = [];
-  let orderedItems: JSX.Element[] = [];
-
-  const flushLists = () => {
-    if (bulletItems.length > 0) {
-      blocks.push(
-        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
-          {bulletItems}
-        </ul>
-      );
-      bulletItems = [];
-    }
-    if (orderedItems.length > 0) {
-      blocks.push(
-        <ol key={`ol-${blocks.length}`} className="list-decimal space-y-1 pl-5">
-          {orderedItems}
-        </ol>
-      );
-      orderedItems = [];
-    }
-  };
-
-  lines.forEach((rawLine, lineIndex) => {
-    const line = rawLine.trimEnd();
-    const trimmed = line.trim();
-    if (!trimmed) {
-      flushLists();
-      return;
-    }
-
-    const headingMatch = trimmed.match(/^##\s+(.*)$/);
-    if (headingMatch) {
-      flushLists();
-      blocks.push(
-        <div key={`h-${lineIndex}`} className="text-sm font-semibold text-foreground">
-          {renderBriefInlineFormatting(headingMatch[1])}
-        </div>
-      );
-      return;
-    }
-
-    const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
-    if (orderedMatch) {
-      orderedItems.push(<li key={`ol-li-${lineIndex}`}>{renderBriefInlineFormatting(orderedMatch[1])}</li>);
-      return;
-    }
-
-    const bulletMatch = trimmed.match(/^-+\s+(.*)$/);
-    if (bulletMatch) {
-      bulletItems.push(<li key={`ul-li-${lineIndex}`}>{renderBriefInlineFormatting(bulletMatch[1])}</li>);
-      return;
-    }
-
-    flushLists();
-    blocks.push(
-      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words">
-        {renderBriefInlineFormatting(line)}
-      </p>
-    );
+  return renderRichTextBlocks(value, {
+    emptyFallback: <span>Спочатку вкажіть дедлайн дизайну або текст задачі.</span>,
   });
-
-  flushLists();
-  return <div className="space-y-2">{blocks}</div>;
 }
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
@@ -1543,7 +1462,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (briefDirty) return;
     setBriefText(quote.design_brief ?? quote.comment ?? "");
     setBriefError(null);
-    setBriefInlineEditing(false);
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
 
@@ -6293,15 +6211,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           className="min-h-[220px] resize-none border-border/40 bg-muted/[0.03]"
                         />
                       ) : (
-                        <button
-                          type="button"
-                          className="w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] px-4 py-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06]"
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] px-4 py-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          aria-readonly="true"
                           onClick={() => setBriefInlineEditing(true)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setBriefInlineEditing(true);
+                            }
+                          }}
                         >
                           <div className="min-h-[220px] text-sm leading-relaxed text-foreground">
                             {renderBriefRichText(briefText)}
                           </div>
-                        </button>
+                        </div>
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{briefText.length} символів</span>

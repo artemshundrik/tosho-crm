@@ -7,6 +7,7 @@ import {
   Send,
   XCircle,
 } from "lucide-react";
+import { renderInlineRichText } from "@/components/ui/rich-text-links";
 
 export const ITEM_VISUAL_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
@@ -16,7 +17,6 @@ export const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 export const ATTACHMENTS_ACCEPT =
   ".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx";
 export const MENTION_REGEX = /(^|[\s(])@([^\s@,;:!?()[\]{}<>]+)/gu;
-const MENTION_TOKEN_REGEX = /(@[^\s@,;:!?()[\]{}<>]+)/g;
 
 export const normalizeMentionKey = (value?: string | null) => (value ?? "").trim().toLowerCase();
 export const isMentionTerminator = (char: string) => /[\s,;:!?()[\]{}<>]/u.test(char);
@@ -49,25 +49,7 @@ export const extractMentionKeys = (text: string) => {
 };
 
 export const renderTextWithMentions = (text: string) => {
-  const parts = text.split(MENTION_TOKEN_REGEX);
-  return parts.map((part, index) => {
-    if (!part) return null;
-
-    const lines = part.split("\n");
-    const content = lines.map((line, lineIndex) => (
-      <span key={`line-${index}-${lineIndex}`}>
-        {line}
-        {lineIndex < lines.length - 1 ? <br /> : null}
-      </span>
-    ));
-
-    if (!part.startsWith("@")) return <span key={`text-${index}`}>{content}</span>;
-    return (
-      <span key={`mention-${index}`} className="font-semibold text-primary">
-        {content}
-      </span>
-    );
-  });
+  return renderInlineRichText(text, { highlightMentions: true });
 };
 
 export const shouldUseCommentsFallback = (message?: string | null) => {

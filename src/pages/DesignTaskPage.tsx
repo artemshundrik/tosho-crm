@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -45,6 +45,7 @@ import {
   Link2,
   Trash2,
   Check,
+  Copy,
   PencilLine,
   Bold,
   Italic,
@@ -84,6 +85,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -328,100 +330,8 @@ function toggleLinePrefix(selectedText: string, prefixFactory: (index: number) =
   };
 }
 
-function renderBriefInlineFormatting(text: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  let key = 0;
-  const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index ?? 0;
-    if (index > cursor) {
-      parts.push(text.slice(cursor, index));
-    }
-    if (match[2]) {
-      parts.push(<strong key={`b-${key++}`}>{match[2]}</strong>);
-    } else if (match[3]) {
-      parts.push(<em key={`i-${key++}`}>{match[3]}</em>);
-    } else {
-      parts.push(match[0]);
-    }
-    cursor = index + match[0].length;
-  }
-  if (cursor < text.length) {
-    parts.push(text.slice(cursor));
-  }
-  return parts;
-}
-
 function renderBriefRichText(value: string | null | undefined) {
-  const text = value?.trim();
-  if (!text) return <span>Порожнє ТЗ</span>;
-
-  const lines = text.split("\n");
-  const blocks: ReactNode[] = [];
-  let bulletItems: ReactNode[] = [];
-  let orderedItems: ReactNode[] = [];
-
-  const flushLists = () => {
-    if (bulletItems.length > 0) {
-      blocks.push(
-        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
-          {bulletItems}
-        </ul>
-      );
-      bulletItems = [];
-    }
-    if (orderedItems.length > 0) {
-      blocks.push(
-        <ol key={`ol-${blocks.length}`} className="list-decimal space-y-1 pl-5">
-          {orderedItems}
-        </ol>
-      );
-      orderedItems = [];
-    }
-  };
-
-  lines.forEach((rawLine, lineIndex) => {
-    const line = rawLine.trimEnd();
-    const trimmed = line.trim();
-    if (!trimmed) {
-      flushLists();
-      return;
-    }
-
-    const headingMatch = trimmed.match(/^##\s+(.*)$/);
-    if (headingMatch) {
-      flushLists();
-      blocks.push(
-        <div key={`h-${lineIndex}`} className="text-sm font-semibold text-foreground">
-          {renderBriefInlineFormatting(headingMatch[1])}
-        </div>
-      );
-      return;
-    }
-
-    const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
-    if (orderedMatch) {
-      orderedItems.push(<li key={`ol-li-${lineIndex}`}>{renderBriefInlineFormatting(orderedMatch[1])}</li>);
-      return;
-    }
-
-    const bulletMatch = trimmed.match(/^-+\s+(.*)$/);
-    if (bulletMatch) {
-      bulletItems.push(<li key={`ul-li-${lineIndex}`}>{renderBriefInlineFormatting(bulletMatch[1])}</li>);
-      return;
-    }
-
-    flushLists();
-    blocks.push(
-      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words">
-        {renderBriefInlineFormatting(line)}
-      </p>
-    );
-  });
-
-  flushLists();
-  return <div className="space-y-2">{blocks}</div>;
+  return renderRichTextBlocks(value, { emptyFallback: <span>Порожнє ТЗ</span> });
 }
 
 type DesignTaskHistoryEvent = {
@@ -1656,8 +1566,8 @@ export default function DesignTaskPage() {
                 task: nextTask,
                 quoteItem: nextQuoteItem,
                 productPreviewUrl: nextProductPreviewUrl,
-                attachments: [],
-                designOutputFiles: [],
+                attachments: nextAttachments,
+                designOutputFiles: nextDesignOutputFiles,
                 designOutputLinks: nextDesignOutputLinks,
                 designOutputGroups: nextDesignOutputGroups,
                 cachedAt: Date.now(),
@@ -1674,7 +1584,8 @@ export default function DesignTaskPage() {
       }
     };
     void load();
-  }, [effectiveTeamId, id, task]);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveTeamId, id]);
 
   const loadHistory = async (taskId: string) => {
     if (!effectiveTeamId) return;
@@ -1805,7 +1716,6 @@ export default function DesignTaskPage() {
     if (!task) return;
     if (briefDirty) return;
     setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
-    setBriefInlineEditing(false);
   }, [task, briefDirty, activeBriefVersion]);
 
   useEffect(() => {
@@ -5437,6 +5347,14 @@ export default function DesignTaskPage() {
                             <Button
                               size="icon"
                               variant="ghost"
+                              aria-label="Скопіювати посилання"
+                              onClick={() => void copyText(link.url).catch(() => toast.error("Не вдалося скопіювати посилання"))}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
                               className="text-destructive hover:text-destructive"
                               disabled={outputSaving}
                               onClick={() => void handleRemoveDesignLink(link.id)}
@@ -5846,14 +5764,21 @@ export default function DesignTaskPage() {
                     className="min-h-[140px] resize-none"
                   />
                 ) : (
-                  <button
-                    type="button"
-                    className="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/20"
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    aria-readonly="true"
                     onClick={() => setBriefInlineEditing(true)}
-                    disabled={briefSaving || designTaskLockedByOther}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setBriefInlineEditing(true);
+                      }
+                    }}
                   >
                     <div className="min-h-[140px] text-sm text-foreground">{renderBriefRichText(briefDraft)}</div>
-                  </button>
+                  </div>
                 )}
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
@@ -5897,7 +5822,7 @@ export default function DesignTaskPage() {
                           <span className="text-muted-foreground">
                             {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
                           </span>{" "}
-                          <span>{request.request_text}</span>
+                          <span>{renderInlineRichText(request.request_text)}</span>
                         </div>
                       ))}
                     </div>
@@ -5955,7 +5880,7 @@ export default function DesignTaskPage() {
                           </div>
                           {version.change_request_id && briefChangeRequestById.get(version.change_request_id)?.request_text ? (
                             <div className="text-sm whitespace-pre-wrap break-words">
-                              Правка: {briefChangeRequestById.get(version.change_request_id)?.request_text}
+                              Правка: {renderInlineRichText(briefChangeRequestById.get(version.change_request_id)?.request_text ?? "")}
                             </div>
                           ) : null}
                           <div className="text-sm break-words">{renderBriefRichText(version.brief)}</div>
@@ -6830,7 +6755,9 @@ export default function DesignTaskPage() {
                           <span>·</span>
                           <span>{formatDate(comment.created_at, true)}</span>
                         </div>
-                        <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3">{comment.body}</div>
+                        <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3 break-words">
+                          {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -6946,7 +6873,9 @@ export default function DesignTaskPage() {
                           <span>·</span>
                           <span>{formatDate(comment.created_at, true)}</span>
                         </div>
-                        <div className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</div>
+                        <div className="mt-1 text-sm whitespace-pre-wrap break-words">
+                          {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                        </div>
                       </div>
                     ))}
                   </div>
