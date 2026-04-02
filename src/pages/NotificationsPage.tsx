@@ -279,7 +279,7 @@ export default function NotificationsPage() {
     return notifications;
   }, [notifications, filter]);
 
-  const markAllRead = async () => {
+  const markAllRead = useCallback(async () => {
     if (!userId || unreadCount === 0) return;
     const { error } = await supabase
       .from("notifications")
@@ -292,7 +292,7 @@ export default function NotificationsPage() {
     }
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     toast.success("Усі сповіщення прочитані");
-  };
+  }, [unreadCount, userId]);
 
   const showSkeleton = useMinimumLoading(loading);
 
@@ -394,48 +394,51 @@ export default function NotificationsPage() {
       ? "active"
       : "muted";
 
-  const notificationsHeaderActions = (
-    <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className={SEGMENTED_GROUP}>
-          <Button
-            variant="segmented"
-            size="xs"
-            aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
-            className={SEGMENTED_TRIGGER}
-          >
-            Всі
-          </Button>
-          <Button
-            variant="segmented"
-            size="xs"
-            aria-pressed={filter === "unread"}
-            onClick={() => setFilter("unread")}
-            className={SEGMENTED_TRIGGER}
-          >
-            Непрочитані
-          </Button>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-foreground">
-            {filtered.length}
-            <span className="ml-1 text-muted-foreground">знайдено</span>
+  const notificationsHeaderActions = useMemo(
+    () => (
+      <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={SEGMENTED_GROUP}>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={filter === "all"}
+              onClick={() => setFilter("all")}
+              className={SEGMENTED_TRIGGER}
+            >
+              Всі
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={filter === "unread"}
+              onClick={() => setFilter("unread")}
+              className={SEGMENTED_TRIGGER}
+            >
+              Непрочитані
+            </Button>
           </div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-semibold text-foreground">
+              {filtered.length}
+              <span className="ml-1 text-muted-foreground">знайдено</span>
+            </div>
             <Button
               variant="secondary"
               className={TOOLBAR_ACTION_BUTTON}
               onClick={markAllRead}
               disabled={unreadCount === 0}
             >
-            Позначити всі
-          </Button>
+              Позначити всі
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    ),
+    [filter, filtered.length, markAllRead, unreadCount]
   );
 
-  usePageHeaderActions(notificationsHeaderActions, [filter, filtered.length, markAllRead, unreadCount]);
+  usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
 
   if (showSkeleton) {
     return <ListSkeleton />;

@@ -10,6 +10,11 @@ const workspaceDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDirect
 let currentWorkspaceMemberDirectoryEntryCache: WorkspaceMemberDirectoryRow | null | undefined = undefined;
 let unifiedViewUnsupported = false;
 export const WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT = "workspace-member-directory-updated";
+type BasicQueryBuilder = {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => Promise<{ data: unknown; error: unknown }>;
+  };
+};
 
 export type WorkspaceMemberDirectoryRow = {
   workspaceId: string;
@@ -170,6 +175,47 @@ function normalizeModuleAccess(value: unknown) {
   };
 }
 
+async function fetchTeamProfileSupplements(workspaceId: string, userIds: string[]) {
+  const uniqueUserIds = Array.from(new Set(userIds.map((value) => value.trim()).filter(Boolean)));
+  if (uniqueUserIds.length === 0) {
+    return new Map<string, Pick<TeamProfileRow, "manager_user_id" | "module_access">>();
+  }
+
+  const profileVariants = [
+    "workspace_id,user_id,manager_user_id,module_access",
+    "workspace_id,user_id,module_access",
+    "workspace_id,user_id,manager_user_id",
+    "workspace_id,user_id",
+  ];
+
+  let rows: Array<Pick<TeamProfileRow, "user_id" | "manager_user_id" | "module_access">> = [];
+  let lastError: unknown = null;
+
+  for (const columns of profileVariants) {
+    const result = await supabase
+      .schema("tosho")
+      .from("team_member_profiles")
+      .select(columns)
+      .eq("workspace_id", workspaceId)
+      .in("user_id", uniqueUserIds);
+
+    lastError = result.error;
+    if (!result.error) {
+      rows =
+        ((result.data as unknown) as Array<Pick<TeamProfileRow, "user_id" | "manager_user_id" | "module_access">> | null) ??
+        [];
+      break;
+    }
+    if (!isMissingColumn(result.error) && !isMissingSchemaObject(result.error)) break;
+  }
+
+  if (lastError && !isMissingSchemaObject(lastError) && !isMissingColumn(lastError)) {
+    throw lastError;
+  }
+
+  return new Map(rows.map((row) => [row.user_id, row]));
+}
+
 function notifyWorkspaceMemberDirectoryUpdated(workspaceId: string, userId: string) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
@@ -298,15 +344,16 @@ async function listFromUnifiedView(workspaceId: string) {
   let error: unknown = null;
 
   for (const columns of unifiedViewVariants) {
-    const result = await supabase
+    const table = supabase
       .schema("tosho")
-      .from("workspace_member_directory")
+      .from("workspace_member_directory") as unknown as BasicQueryBuilder;
+    const result = await table
       .select(columns)
       .eq("workspace_id", workspaceId);
 
     error = result.error;
     if (!result.error) {
-      data = (result.data as DirectoryViewRow[] | null) ?? [];
+      data = ((result.data as unknown) as DirectoryViewRow[] | null) ?? [];
       break;
     }
     if (!isMissingColumn(result.error)) break;
@@ -319,7 +366,20 @@ async function listFromUnifiedView(workspaceId: string) {
     throw error;
   }
 
-  return ((data as DirectoryViewRow[] | null) ?? []).map((row) =>
+  const rawRows = ((data as DirectoryViewRow[] | null) ?? []);
+  const needsSupplement = rawRows.some((row) => row.module_access === undefined || row.manager_user_id === undefined);
+  const supplementByUserId = needsSupplement
+    ? await fetchTeamProfileSupplements(
+        workspaceId,
+        rawRows.map((row) => row.user_id)
+      )
+    : new Map<string, Pick<TeamProfileRow, "manager_user_id" | "module_access">>();
+
+  return rawRows.map((row) => {
+    const supplement = supplementByUserId.get(row.user_id);
+    const managerUserId = row.manager_user_id !== undefined ? row.manager_user_id : supplement?.manager_user_id;
+    const moduleAccess = row.module_access !== undefined ? row.module_access : supplement?.module_access;
+    return (
     buildRow({
       workspaceId: row.workspace_id,
       userId: row.user_id,
@@ -341,10 +401,11 @@ async function listFromUnifiedView(workspaceId: string) {
       probationReviewedAt: row.probation_reviewed_at ?? null,
       probationReviewedBy: row.probation_reviewed_by ?? null,
       probationExtensionCount: row.probation_extension_count ?? null,
-      managerUserId: row.manager_user_id ?? null,
-      moduleAccess: row.module_access,
+      managerUserId: managerUserId ?? null,
+      moduleAccess,
     })
-  );
+    );
+  });
 }
 
 async function listFromFallback(workspaceId: string) {

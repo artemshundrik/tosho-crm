@@ -282,6 +282,14 @@ type QuoteItemRecord = {
   print_width_mm?: number | null;
   print_height_mm?: number | null;
 };
+type BasicSelectableQuery = {
+  eq: (column: string, value: string) => BasicSelectableQuery;
+  order: (column: string, options: { ascending: boolean }) => BasicSelectableQuery;
+  then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+};
+type BasicSelectableTable = {
+  select: (columns: string) => BasicSelectableQuery;
+};
 type InsertedCommentRow = {
   id: string;
   body: string;
@@ -2877,9 +2885,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const quoteItemColumnsWithoutMetadata =
         "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
       const loadRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
-        const quoteItemsTable = supabase.schema("tosho").from("quote_items");
-        let query = quoteItemsTable
-          .select(withMetadata ? quoteItemColumnsWithMetadata : quoteItemColumnsWithoutMetadata)
+        const quoteItemsTable = supabase.schema("tosho").from("quote_items") as unknown as BasicSelectableTable;
+        let query = quoteItemsTable.select(withMetadata ? quoteItemColumnsWithMetadata : quoteItemColumnsWithoutMetadata)
           .eq("quote_id", quoteId)
           .order("position", { ascending: true });
         if (withTeamFilter && teamId) {
@@ -3032,10 +3039,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           const attachment =
             row.attachment && typeof row.attachment === "object"
               ? {
-                  name: row.attachment.name ?? "file",
-                  size: Number(row.attachment.size ?? 0),
-                  type: row.attachment.type ?? "application/octet-stream",
-                  url: row.attachment.url ?? "",
+                  name:
+                    typeof (row.attachment as Record<string, unknown>).name === "string"
+                      ? String((row.attachment as Record<string, unknown>).name)
+                      : "file",
+                  size: Number((row.attachment as Record<string, unknown>).size ?? 0),
+                  type:
+                    typeof (row.attachment as Record<string, unknown>).type === "string"
+                      ? String((row.attachment as Record<string, unknown>).type)
+                      : "application/octet-stream",
+                  url:
+                    typeof (row.attachment as Record<string, unknown>).url === "string"
+                      ? String((row.attachment as Record<string, unknown>).url)
+                      : "",
                 }
               : undefined;
           const rawKindId = row.catalog_kind_id ?? undefined;
@@ -3050,7 +3066,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               .filter((entry): entry is [string, string] => Boolean(entry[0] && entry[1]))
           );
           return {
-            id: row.id,
+            id: typeof row.id === "string" && row.id ? row.id : createLocalId(),
             position: row.position ?? undefined,
             title: row.name ?? "",
             qty: Number(row.qty ?? 0) || 0,

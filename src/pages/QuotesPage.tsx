@@ -1696,11 +1696,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ({ error: runsError } = await supabase
               .schema("tosho")
               .from("quote_item_runs")
-              .insert(runRows.map((sourceRow) => {
-                const row = { ...sourceRow };
-                delete row.team_id;
-                return row;
-              })));
+              .insert(
+                runRows.map(({ team_id: _teamId, ...row }) => row)
+              ));
           }
           if (
             runsError &&
@@ -1710,15 +1708,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ({ error: runsError } = await supabase
               .schema("tosho")
               .from("quote_item_runs")
-              .insert(runRows.map((sourceRow) => {
-                const row = { ...sourceRow };
-                delete row.team_id;
-                delete row.desired_manager_income;
-                delete row.manager_rate;
-                delete row.fixed_cost_rate;
-                delete row.vat_rate;
-                return row;
-              })));
+              .insert(
+                runRows.map(
+                  ({
+                    team_id: _teamId,
+                    desired_manager_income: _desiredManagerIncome,
+                    manager_rate: _managerRate,
+                    fixed_cost_rate: _fixedCostRate,
+                    vat_rate: _vatRate,
+                    ...row
+                  }) => row
+                )
+              ));
           }
           if (runsError) throw runsError;
         }
@@ -3246,11 +3247,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ({ error: insertItemsError } = await supabase
             .schema("tosho")
             .from("quote_items")
-            .insert(itemRows.map((sourceItem) => {
-              const item = { ...sourceItem };
-              delete item.metadata;
-              return item;
-            })));
+            .insert(
+              itemRows.map(({ metadata: _metadata, ...item }) => item)
+            ));
         }
         if (insertItemsError) throw insertItemsError;
       }
