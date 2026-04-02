@@ -26,6 +26,7 @@ import {
 import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile } from "@/lib/workspaceMemberDirectory";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const STORAGE_CACHE_CONTROL = "31536000, immutable";
 
 type ProfileCache = {
   userId: string | null;
@@ -320,7 +321,11 @@ export function ProfilePage() {
       const uploadedPath = `avatars/${userId}/current.png`;
       const { error: uploadError } = await supabase.storage
         .from(AVATAR_BUCKET)
-        .upload(uploadedPath, blob, { upsert: true, contentType: blob.type || "image/png" });
+        .upload(uploadedPath, blob, {
+          upsert: true,
+          contentType: blob.type || "image/png",
+          cacheControl: STORAGE_CACHE_CONTROL,
+        });
 
       if (uploadError) throw uploadError;
 

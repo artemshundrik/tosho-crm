@@ -3429,19 +3429,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       for (const file of allowed) {
         const safeName = file.name.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
-        const candidatePaths = [
-          `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-          `${teamId}/quote-attachments/${quoteId}/${baseName}`,
-          `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
-          `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-        ];
+        const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
         let storagePath = "";
         let lastError: unknown = null;
         for (const candidate of candidatePaths) {
           const { error: uploadError } = await supabase.storage
             .from(ITEM_VISUAL_BUCKET)
-            .upload(candidate, file, { upsert: true, contentType: file.type });
+            .upload(candidate, file, {
+              upsert: true,
+              contentType: file.type,
+              cacheControl: "31536000, immutable",
+            });
           if (!uploadError) {
             storagePath = candidate;
             lastError = null;
@@ -4401,19 +4400,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [
-        `teams/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`,
-        `${effectiveTeamId}/quote-items/${quoteId}/${baseName}`,
-        `${uploadedBy}/quote-items/${quoteId}/${baseName}`,
-        `${uploadedBy}/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`,
-      ];
+      const candidatePaths = [`teams/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`];
 
       let path = "";
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
         const { error: uploadError } = await supabase.storage
           .from(ITEM_VISUAL_BUCKET)
-          .upload(candidate, file, { upsert: true, contentType: file.type });
+          .upload(candidate, file, {
+            upsert: true,
+            contentType: file.type,
+            cacheControl: "31536000, immutable",
+          });
         if (!uploadError) {
           path = candidate;
           lastError = null;
@@ -6883,8 +6881,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             >
                               {attachments.map((file) => {
                                 const extension = getFileExtension(file.name);
-                                const showImagePreview = !!file.url && canPreviewImage(extension);
-                                const showPdfPreview = !!file.url && !showImagePreview && canPreviewPdf(extension);
                                 return (
                                   <div
                                     key={file.id}
@@ -6892,21 +6888,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   >
                                     <div className="flex min-w-0 flex-1 items-center gap-3">
                                       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
-                                        {showImagePreview ? (
-                                          <KanbanImageZoomPreview
-                                            imageUrl={file.url!}
-                                            alt={file.name}
-                                            className="h-10 w-10 rounded-lg border border-border/60 bg-primary/10"
-                                          />
-                                        ) : showPdfPreview ? (
-                                          <iframe
-                                            src={`${file.url}#page=1&view=FitH`}
-                                            title={`Preview ${file.name}`}
-                                            className="h-full w-full pointer-events-none transition-transform duration-200 ease-out group-hover:scale-150"
-                                          />
-                                        ) : (
-                                          <Paperclip className="h-5 w-5 text-primary" />
-                                        )}
+                                        <Paperclip className="h-5 w-5 text-primary" />
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">

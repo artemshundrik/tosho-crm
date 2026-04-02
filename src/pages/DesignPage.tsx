@@ -278,6 +278,7 @@ const TIMELINE_PROGRESS_BY_STATUS: Record<DesignStatus, number> = {
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
+const STORAGE_CACHE_CONTROL = "31536000, immutable";
 const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
 const MAX_BRIEF_FILES = 5;
@@ -2673,18 +2674,18 @@ export default function DesignPage() {
     for (const file of params.files) {
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [
-        `teams/${params.teamId}/design-briefs/${params.taskId}/${baseName}`,
-        `${params.teamId}/design-briefs/${params.taskId}/${baseName}`,
-        `${params.userId ?? "unknown"}/design-briefs/${params.taskId}/${baseName}`,
-      ];
+      const candidatePaths = [`teams/${params.teamId}/design-briefs/${params.taskId}/${baseName}`];
 
       let storagePath = "";
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
         const { error: uploadError } = await supabase.storage
           .from(DESIGN_FILES_BUCKET)
-          .upload(candidate, file, { upsert: true, contentType: file.type || undefined });
+          .upload(candidate, file, {
+            upsert: true,
+            contentType: file.type || undefined,
+            cacheControl: STORAGE_CACHE_CONTROL,
+          });
         if (!uploadError) {
           storagePath = candidate;
           lastError = null;

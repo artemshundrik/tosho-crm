@@ -50,6 +50,10 @@ function extractObjectPath(url: string, bucket: string): string | null {
   return null;
 }
 
+function isPublicStorageUrl(url: string, bucket: string) {
+  return url.includes(`/storage/v1/object/public/${bucket}/`);
+}
+
 export async function resolveAvatarDisplayUrl(
   supabase: SupabaseClient,
   rawUrl: string | null | undefined,
@@ -66,6 +70,12 @@ export async function resolveAvatarDisplayUrl(
   const promise = (async () => {
     const objectPath = extractObjectPath(rawUrl, bucket);
     if (!objectPath) {
+      avatarResolvedCache.set(rawUrl, rawUrl);
+      persistCacheToSessionStorage();
+      return rawUrl;
+    }
+
+    if (isPublicStorageUrl(rawUrl, bucket)) {
       avatarResolvedCache.set(rawUrl, rawUrl);
       persistCacheToSessionStorage();
       return rawUrl;

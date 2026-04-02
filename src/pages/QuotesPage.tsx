@@ -2104,12 +2104,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const file = attachment.file;
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [
-        `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-        `${teamId}/quote-attachments/${quoteId}/${baseName}`,
-        `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
-        `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-      ];
+      const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
       let storagePath = "";
       let lastError: unknown = null;
@@ -2117,7 +2112,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       for (const candidate of candidatePaths) {
         const { error: uploadError } = await supabase.storage
           .from(QUOTE_ATTACHMENTS_BUCKET)
-          .upload(candidate, file, { upsert: true, contentType: file.type });
+          .upload(candidate, file, {
+            upsert: true,
+            contentType: file.type,
+            cacheControl: "31536000, immutable",
+          });
         if (!uploadError) {
           storagePath = candidate;
           lastError = null;
@@ -2206,12 +2205,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     for (const file of files) {
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [
-        `teams/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-        `${teamId}/quote-attachments/${quoteId}/${baseName}`,
-        `${uploadedBy}/quote-attachments/${quoteId}/${baseName}`,
-        `${uploadedBy}/${teamId}/quote-attachments/${quoteId}/${baseName}`,
-      ];
+      const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
       let storagePath = "";
       let lastError: unknown = null;
@@ -2219,7 +2213,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       for (const candidate of candidatePaths) {
         const { error: uploadError } = await supabase.storage
           .from(QUOTE_ATTACHMENTS_BUCKET)
-          .upload(candidate, file, { upsert: true, contentType: file.type });
+          .upload(candidate, file, {
+            upsert: true,
+            contentType: file.type,
+            cacheControl: "31536000, immutable",
+          });
         if (!uploadError) {
           storagePath = candidate;
           lastError = null;
