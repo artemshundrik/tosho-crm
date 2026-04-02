@@ -1,18 +1,37 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const AVATAR_SIGN_TTL_SECONDS = 60 * 60 * 24 * 7;
-const AVATAR_CACHE_KEY = "avatar-url-cache-v1";
-const avatarResolvedCache = new Map<string, string | null>();
+const AVATAR_CACHE_SKEW_MS = 5 * 60 * 1000;
+const AVATAR_CACHE_KEY = "avatar-url-cache-v2";
+type AvatarCacheEntry = {
+  value: string | null;
+  expiresAt: number | null;
+};
+const avatarResolvedCache = new Map<string, AvatarCacheEntry>();
 const avatarInflightCache = new Map<string, Promise<string | null>>();
+
+function isExpired(entry?: AvatarCacheEntry | null) {
+  if (!entry) return true;
+  return entry.expiresAt !== null && entry.expiresAt <= Date.now();
+}
 
 function loadCacheFromSessionStorage() {
   if (typeof window === "undefined") return;
   try {
     const raw = window.sessionStorage.getItem(AVATAR_CACHE_KEY);
     if (!raw) return;
-    const parsed = JSON.parse(raw) as Record<string, string | null>;
+    const parsed = JSON.parse(raw) as Record<string, AvatarCacheEntry | string | null>;
     for (const [key, value] of Object.entries(parsed)) {
-      avatarResolvedCache.set(key, value);
+      if (typeof value === "string" || value === null) {
+        avatarResolvedCache.set(key, { value, expiresAt: null });
+        continue;
+      }
+      if (value && typeof value === "object") {
+        avatarResolvedCache.set(key, {
+          value: "value" in value ? value.value ?? null : null,
+          expiresAt: "expiresAt" in value && typeof value.expiresAt === "number" ? value.expiresAt : null,
+        });
+      }
     }
   } catch {
     // ignore malformed cache
@@ -80,8 +99,22 @@ function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   return !/^(https?:)?\/\//i.test(normalizedUrl) && !normalizedUrl.startsWith("data:") && !normalizedUrl.startsWith("blob:");
 }
 
-function setResolvedAvatar(rawUrl: string, resolved: string | null) {
-  avatarResolvedCache.set(normalizeAvatarKey(rawUrl), resolved);
+function getCachedResolvedAvatar(rawUrl: string | null | undefined) {
+  if (!rawUrl) return null;
+  const key = normalizeAvatarKey(rawUrl);
+  if (!key) return null;
+  const entry = avatarResolvedCache.get(key);
+  if (!entry) return null;
+  if (isExpired(entry)) {
+    avatarResolvedCache.delete(key);
+    persistCacheToSessionStorage();
+    return null;
+  }
+  return entry.value ?? null;
+}
+
+function setResolvedAvatar(rawUrl: string, resolved: string | null, expiresAt: number | null = null) {
+  avatarResolvedCache.set(normalizeAvatarKey(rawUrl), { value: resolved, expiresAt });
   persistCacheToSessionStorage();
 }
 
@@ -95,8 +128,9 @@ export async function resolveAvatarDisplayUrl(
   const normalizedRawUrl = normalizeAvatarKey(rawUrl);
   if (!normalizedRawUrl) return null;
 
-  if (!options?.forceRefresh && avatarResolvedCache.has(normalizedRawUrl)) {
-    return avatarResolvedCache.get(normalizedRawUrl) ?? null;
+  if (!options?.forceRefresh) {
+    const cached = getCachedResolvedAvatar(normalizedRawUrl);
+    if (cached !== null) return cached;
   }
   const inflight = !options?.forceRefresh ? avatarInflightCache.get(normalizedRawUrl) : null;
   if (inflight) return inflight;
@@ -104,7 +138,7 @@ export async function resolveAvatarDisplayUrl(
   const promise = (async () => {
     const objectPath = extractObjectPath(normalizedRawUrl, bucket);
     if (!objectPath || !shouldResolveFromStorage(normalizedRawUrl, bucket)) {
-      setResolvedAvatar(normalizedRawUrl, normalizedRawUrl);
+      setResolvedAvatar(normalizedRawUrl, normalizedRawUrl, null);
       return normalizedRawUrl;
     }
 
@@ -112,9 +146,13 @@ export async function resolveAvatarDisplayUrl(
       .from(bucket)
       .createSignedUrl(objectPath, AVATAR_SIGN_TTL_SECONDS);
 
-    const resolved = error || !data?.signedUrl ? normalizedRawUrl : data.signedUrl;
-    setResolvedAvatar(normalizedRawUrl, resolved);
-    return resolved;
+    if (error || !data?.signedUrl) {
+      return normalizedRawUrl;
+    }
+
+    const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
+    setResolvedAvatar(normalizedRawUrl, data.signedUrl, expiresAt);
+    return data.signedUrl;
   })();
 
   avatarInflightCache.set(normalizedRawUrl, promise);
@@ -126,8 +164,5 @@ export async function resolveAvatarDisplayUrl(
 }
 
 export function getCachedAvatarDisplayUrl(rawUrl: string | null | undefined): string | null {
-  if (!rawUrl) return null;
-  const normalizedRawUrl = normalizeAvatarKey(rawUrl);
-  if (!normalizedRawUrl) return null;
-  return avatarResolvedCache.get(normalizedRawUrl) ?? null;
+  return getCachedResolvedAvatar(rawUrl);
 }

@@ -182,8 +182,8 @@ export function ProfilePage() {
             };
             resolvedBirthDate = directoryEntry.birthDate || metaBirthDate;
             resolvedPhone = directoryEntry.phone || metaPhone;
-            resolvedAvatarUrl = directoryEntry.avatarUrl || resolvedAvatarUrl;
             resolvedAvatarPath = directoryEntry.avatarPath || null;
+            resolvedAvatarUrl = directoryEntry.avatarPath || directoryEntry.avatarUrl || resolvedAvatarUrl;
             resolvedStartDate = directoryEntry.startDate || "";
             resolvedProbationEndDate = directoryEntry.probationEndDate || "";
             resolvedEmploymentStatus = directoryEntry.employmentStatus;
@@ -202,7 +202,11 @@ export function ProfilePage() {
           resolvedJobRole = (membership?.job_role as string) || null;
         }
 
-        const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, resolvedAvatarUrl, AVATAR_BUCKET);
+        const displayAvatarUrl = await resolveAvatarDisplayUrl(
+          supabase,
+          resolvedAvatarPath || resolvedAvatarUrl,
+          AVATAR_BUCKET
+        );
         setAvatarUrl(displayAvatarUrl);
         setAvatarStoragePath(resolvedAvatarPath);
         setFirstName(resolvedProfileName.firstName);

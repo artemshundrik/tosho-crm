@@ -130,7 +130,7 @@ export function useWorkspacePresenceState({
   const [selfDirectoryDisplayName, setSelfDirectoryDisplayName] = useState<string | null>(null);
   const [selfDirectoryAvatarUrl, setSelfDirectoryAvatarUrl] = useState<string | null>(null);
   const [directoryEntriesByUserId, setDirectoryEntriesByUserId] = useState<
-    Record<string, { displayName: string; avatarUrl: string | null }>
+    Record<string, { displayName: string; avatarUrl: string | null; avatarPath: string | null }>
   >({});
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const entityContext = useMemo(() => parseEntityFromPath(pathname), [pathname]);
@@ -159,7 +159,7 @@ export function useWorkspacePresenceState({
         const entry = await getCurrentWorkspaceMemberDirectoryEntry();
         if (!active) return;
         setSelfDirectoryDisplayName(entry?.displayName ?? null);
-        setSelfDirectoryAvatarUrl(entry?.avatarUrl ?? null);
+        setSelfDirectoryAvatarUrl(entry?.avatarPath ?? entry?.avatarUrl ?? null);
       } catch {
         if (!active) return;
         setSelfDirectoryDisplayName(null);
@@ -190,7 +190,14 @@ export function useWorkspacePresenceState({
         if (!active) return;
         setDirectoryEntriesByUserId(
           Object.fromEntries(
-            rows.map((row) => [row.userId, { displayName: row.label, avatarUrl: row.avatarDisplayUrl }])
+            rows.map((row) => [
+              row.userId,
+              {
+                displayName: row.label,
+                avatarUrl: row.avatarDisplayUrl,
+                avatarPath: row.avatarPath ?? null,
+              },
+            ])
           )
         );
       } catch {
@@ -510,7 +517,11 @@ export function useWorkspacePresenceState({
           (directoryEntry?.displayName ?? realtime?.display_name ?? dbRow?.display_name ?? fallbackName)?.trim() ||
           fallbackName,
         avatarUrl:
-          directoryEntry?.avatarUrl ?? realtime?.avatar_url ?? dbRow?.avatar_url ?? (uid === userId ? selfAvatarUrl : null),
+          directoryEntry?.avatarPath ??
+          directoryEntry?.avatarUrl ??
+          realtime?.avatar_url ??
+          dbRow?.avatar_url ??
+          (uid === userId ? selfAvatarUrl : null),
         currentPath: realtime?.current_path ?? dbRow?.current_path ?? null,
         currentLabel: realtime?.current_label ?? dbRow?.current_label ?? null,
         entityType: realtime?.entity_type ?? dbRow?.entity_type ?? null,

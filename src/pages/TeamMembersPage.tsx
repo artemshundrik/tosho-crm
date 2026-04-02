@@ -647,7 +647,7 @@ export function TeamMembersPage() {
           const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
           acc[id] = {
             label: baseMember?.displayName || emailFallback,
-            avatarUrl: baseMember?.avatarUrl ?? null,
+            avatarUrl: baseMember?.avatarPath ?? baseMember?.avatarUrl ?? null,
           };
           return acc;
         }, {});
@@ -665,7 +665,7 @@ export function TeamMembersPage() {
 
           acc[id] = {
             label: baseMember?.displayName || emailFallback,
-            avatarUrl: baseMember?.avatarUrl ?? null,
+            avatarUrl: baseMember?.avatarPath ?? baseMember?.avatarUrl ?? null,
           };
           return acc;
         }, {});
@@ -1145,7 +1145,7 @@ export function TeamMembersPage() {
             firstName,
             lastName,
             fullName,
-            avatarUrl: currentDirectoryRow?.avatarUrl ?? null,
+            avatarUrl: currentDirectoryRow?.avatarPath ?? currentDirectoryRow?.avatarUrl ?? null,
             avatarPath: currentDirectoryRow?.avatarPath ?? null,
             birthDate,
             phone,
@@ -1534,7 +1534,7 @@ export function TeamMembersPage() {
           firstName: currentMeta.firstName,
           lastName: currentMeta.lastName,
           fullName: currentMeta.fullName,
-          avatarUrl: currentDirectoryRow?.avatarUrl ?? null,
+          avatarUrl: currentDirectoryRow?.avatarPath ?? currentDirectoryRow?.avatarUrl ?? null,
           avatarPath: currentDirectoryRow?.avatarPath ?? null,
           birthDate: currentMeta.birthDate,
           phone: currentMeta.phone,

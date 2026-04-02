@@ -103,7 +103,8 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           else rawRole = "viewer";
         }
 
-        const rawAvatarUrl = directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null;
+        const rawAvatarUrl =
+          directoryEntry?.avatarPath || directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null;
         const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
 
         const nextData: UserState = {
