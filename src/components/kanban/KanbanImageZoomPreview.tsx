@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type KanbanImageZoomPreviewProps = {
@@ -18,6 +19,7 @@ export function KanbanImageZoomPreview({
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
     left: 0,
@@ -84,29 +86,43 @@ export function KanbanImageZoomPreview({
     <div
       ref={anchorRef}
       onMouseEnter={() => {
+        setShouldLoad(true);
         updatePlacement();
         setIsOpen(true);
       }}
       onMouseLeave={() => setIsOpen(false)}
+      onFocus={() => {
+        setShouldLoad(true);
+        updatePlacement();
+        setIsOpen(true);
+      }}
+      onBlur={() => setIsOpen(false)}
       className={cn(
         "relative h-14 w-14 shrink-0 overflow-visible rounded-[10px] border border-border/60 bg-muted/25",
         className
       )}
+      tabIndex={0}
     >
       <div className="h-full w-full overflow-hidden rounded-[10px]">
-        <img
-          src={imageUrl}
-          alt={alt}
-          className={cn("h-full w-full object-contain", imageClassName)}
-          loading="lazy"
-          onLoad={(event) => {
-            const { naturalWidth, naturalHeight } = event.currentTarget;
-            if (!naturalWidth || !naturalHeight) return;
-            setPreviewAspectRatio(naturalWidth / naturalHeight);
-          }}
-        />
+        {shouldLoad ? (
+          <img
+            src={imageUrl}
+            alt={alt}
+            className={cn("h-full w-full object-contain", imageClassName)}
+            loading="lazy"
+            onLoad={(event) => {
+              const { naturalWidth, naturalHeight } = event.currentTarget;
+              if (!naturalWidth || !naturalHeight) return;
+              setPreviewAspectRatio(naturalWidth / naturalHeight);
+            }}
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+            <ImageIcon className="h-4 w-4" />
+          </div>
+        )}
       </div>
-      {isOpen && typeof document !== "undefined"
+      {isOpen && shouldLoad && typeof document !== "undefined"
         ? createPortal(
             <div
               aria-hidden="true"

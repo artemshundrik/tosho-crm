@@ -99,7 +99,9 @@ export function AvatarBase({
   loading = "lazy",
   referrerPolicy,
 }: AvatarBaseProps) {
+  const avatarRef = React.useRef<HTMLSpanElement | null>(null);
   const [errored, setErrored] = React.useState(false);
+  const [shouldResolve, setShouldResolve] = React.useState(() => loading === "eager");
   const [resolvedSrc, setResolvedSrc] = React.useState<string | null>(() => {
     if (!src) return null;
     return getCachedAvatarDisplayUrl(src) ?? getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET);
@@ -117,7 +119,35 @@ export function AvatarBase({
   React.useEffect(() => {
     setErrored(false);
     refreshAttemptedForSrcRef.current = null;
+    setShouldResolve(loading === "eager");
   }, [src]);
+
+  React.useEffect(() => {
+    if (!src || shouldResolve || loading === "eager") return;
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      setShouldResolve(true);
+      return;
+    }
+
+    const node = avatarRef.current;
+    if (!node) {
+      setShouldResolve(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldResolve(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "160px" }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, shouldResolve, src]);
 
   React.useEffect(() => {
     let active = true;
@@ -136,7 +166,14 @@ export function AvatarBase({
       };
     }
 
-    setResolvedSrc(getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET));
+    const immediate = getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET);
+    setResolvedSrc(immediate);
+    if (!shouldResolve && !immediate) {
+      return () => {
+        active = false;
+      };
+    }
+
     const run = async () => {
       const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET);
       if (active) setResolvedSrc(next);
@@ -145,7 +182,7 @@ export function AvatarBase({
     return () => {
       active = false;
     };
-  }, [src]);
+  }, [shouldResolve, src]);
 
   const computedSize = size ?? VARIANT_SIZES[variant];
   const initials = getInitials(name, fallback);
@@ -175,12 +212,15 @@ export function AvatarBase({
 
   return (
     <Avatar
+      ref={avatarRef}
       className={cn(
         "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
         shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
         className
       )}
       style={{ width: computedSize, height: computedSize }}
+      onMouseEnter={() => setShouldResolve(true)}
+      onFocusCapture={() => setShouldResolve(true)}
     >
       {showImage ? (
         <AvatarImage
