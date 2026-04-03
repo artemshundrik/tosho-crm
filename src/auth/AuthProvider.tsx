@@ -19,6 +19,45 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const isMissingRelationError = (message?: string | null) => {
+  const normalized = (message ?? "").toLowerCase();
+  return normalized.includes("does not exist") || normalized.includes("relation");
+};
+
+async function resolveOperationalTeamId(userId: string, workspaceId: string | null) {
+  const attempts = [
+    () =>
+      supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle<{ team_id?: string | null }>(),
+    () =>
+      supabase
+        .schema("tosho")
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle<{ team_id?: string | null }>(),
+  ];
+
+  for (const run of attempts) {
+    const { data, error } = await run();
+    if (!error && data?.team_id) {
+      return data.team_id;
+    }
+    if (error && !isMissingRelationError(error.message)) {
+      throw error;
+    }
+  }
+
+  return workspaceId;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -62,7 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setTeamId(workspaceId);
+    const operationalTeamId = await resolveOperationalTeamId(effectiveUserId, workspaceId);
+    setTeamId(operationalTeamId);
     setRole(roleValue);
     setAccessRole(accessRoleValue);
     setJobRole(jobRoleValue);

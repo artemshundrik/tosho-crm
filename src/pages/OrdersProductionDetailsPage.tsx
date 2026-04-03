@@ -17,6 +17,7 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
+import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -54,7 +55,14 @@ const renderDocBadge = (label: string, ready: boolean) => (
   </Badge>
 );
 
-const renderDesignAssetList = (title: string, assets: OrderDesignAsset[]) => (
+const renderDesignAssetList = (
+  title: string,
+  assets: OrderDesignAsset[],
+  options: {
+    openingAssetId: string | null;
+    onOpenAsset: (asset: OrderDesignAsset) => void;
+  }
+) => (
   <div className="rounded-lg border border-border/60 bg-muted/[0.04] p-3">
     <div className="flex items-center justify-between gap-2">
       <div className="text-sm font-semibold text-foreground">{title}</div>
@@ -78,18 +86,18 @@ const renderDesignAssetList = (title: string, assets: OrderDesignAsset[]) => (
                 {asset.createdAt ? ` • ${formatOrderDate(asset.createdAt)}` : ""}
               </div>
             </div>
-            {asset.url ? (
-              <Button size="sm" variant="outline" asChild>
-                <a href={asset.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                  Відкрити
-                </a>
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" disabled>
-                Немає URL
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => options.onOpenAsset(asset)}
+              disabled={
+                options.openingAssetId === asset.id ||
+                (!asset.url && !(asset.kind === "file" && asset.storageBucket && asset.storagePath))
+              }
+            >
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+              {options.openingAssetId === asset.id ? "Відкриваємо..." : "Відкрити"}
+            </Button>
           </div>
         ))}
       </div>
@@ -383,6 +391,7 @@ export default function OrdersProductionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teamId || !id) return;
@@ -451,6 +460,29 @@ export default function OrdersProductionDetailsPage() {
       setError(statusError instanceof Error ? statusError.message : "Не вдалося оновити статуси.");
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  const handleOpenDesignAsset = async (asset: OrderDesignAsset) => {
+    if (asset.kind === "link") {
+      if (asset.url) window.open(asset.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!asset.storageBucket || !asset.storagePath) return;
+
+    setOpeningAssetId(asset.id);
+    try {
+      const { data, error: signedError } = await supabase.storage
+        .from(asset.storageBucket)
+        .createSignedUrl(asset.storagePath, 60 * 60);
+      if (signedError) throw signedError;
+      const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
+      if (!signedUrl) throw new Error("Не вдалося сформувати посилання на файл.");
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch (openError) {
+      console.error("Failed to open design asset", openError);
+    } finally {
+      setOpeningAssetId((current) => (current === asset.id ? null : current));
     }
   };
 
@@ -756,8 +788,14 @@ export default function OrdersProductionDetailsPage() {
           Затверджені матеріали для виробництва
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
-          {renderDesignAssetList("Візуал", record.approvedVisualizationAssets)}
-          {renderDesignAssetList("Макет", record.approvedLayoutAssets)}
+          {renderDesignAssetList("Візуал", record.approvedVisualizationAssets, {
+            openingAssetId,
+            onOpenAsset: (asset) => void handleOpenDesignAsset(asset),
+          })}
+          {renderDesignAssetList("Макет", record.approvedLayoutAssets, {
+            openingAssetId,
+            onOpenAsset: (asset) => void handleOpenDesignAsset(asset),
+          })}
         </div>
       </Card>
 

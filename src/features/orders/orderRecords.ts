@@ -69,6 +69,8 @@ export type OrderDesignAsset = {
   url: string | null;
   mimeType?: string | null;
   createdAt?: string | null;
+  storageBucket?: string | null;
+  storagePath?: string | null;
 };
 
 const getRunUnitPrice = (run: QuoteRun) => {
@@ -128,18 +130,15 @@ const parseOrderDesignAssets = async (
     if (outputKind !== kind) continue;
     const storageBucket = typeof entry.storage_bucket === "string" ? entry.storage_bucket : "";
     const storagePath = typeof entry.storage_path === "string" ? entry.storage_path : "";
-    let signedUrl: string | null = null;
-    if (storageBucket && storagePath) {
-      const { data } = await supabase.storage.from(storageBucket).createSignedUrl(storagePath, 60 * 60 * 24 * 7);
-      signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
-    }
     assets.push({
       id,
       kind: "file",
       label: (typeof entry.file_name === "string" && entry.file_name.trim()) || "Файл",
-      url: signedUrl,
+      url: null,
       mimeType: typeof entry.mime_type === "string" ? entry.mime_type : null,
       createdAt: typeof entry.created_at === "string" ? entry.created_at : null,
+      storageBucket: storageBucket || null,
+      storagePath: storagePath || null,
     });
   }
 
