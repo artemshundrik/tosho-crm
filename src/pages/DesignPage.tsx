@@ -1272,9 +1272,40 @@ export default function DesignPage() {
           } as DesignTask;
         });
 
-      // Fetch quote details for number and customer
+      // Fetch quote details only when metadata does not already contain enough info.
+      const quoteIdsNeedingQuoteLookup = Array.from(
+        new Set(
+          parsedRaw
+            .filter(
+              (task) =>
+                !!task.quoteId &&
+                isUuid(task.quoteId) &&
+                (!task.quoteNumber ||
+                  !task.customerName ||
+                  !task.quoteManagerUserId ||
+                  !task.customerId ||
+                  !task.partyType ||
+                  !task.customerLogoUrl)
+            )
+            .map((task) => task.quoteId)
+        )
+      );
+      const quoteIdsNeedingFirstItemLookup = Array.from(
+        new Set(
+          parsedRaw
+            .filter(
+              (task) =>
+                !!task.quoteId &&
+                isUuid(task.quoteId) &&
+                (!task.productName || !task.productImageUrl || !(task as { productQtyLabel?: string | null }).productQtyLabel)
+            )
+            .map((task) => task.quoteId)
+        )
+      );
       const quoteIds = Array.from(
-        new Set(parsedRaw.map((t) => t.quoteId).filter((quoteId): quoteId is string => !!quoteId && isUuid(quoteId)))
+        new Set(
+          parsedRaw.map((t) => t.quoteId).filter((quoteId): quoteId is string => !!quoteId && isUuid(quoteId))
+        )
       );
       let quoteMap = new Map<string, {
         number: string | null;
@@ -1293,21 +1324,37 @@ export default function DesignPage() {
           .schema("tosho")
           .from("quotes")
           .select("id, number, customer_id, customer_name, customer_logo_url, title, assigned_to")
-          .in("id", quoteIds);
+          .in("id", quoteIdsNeedingQuoteLookup.length > 0 ? quoteIdsNeedingQuoteLookup : quoteIds);
         if (quoteError) throw quoteError;
 
         const customerIds = Array.from(
           new Set([
-            ...(quoteRows ?? []).map((q) => q.customer_id).filter(Boolean),
+            ...(quoteRows ?? [])
+              .filter((q) => {
+                const parsedTask = parsedRaw.find((task) => task.quoteId === q.id);
+                return !parsedTask?.customerName || !parsedTask?.customerLogoUrl;
+              })
+              .map((q) => q.customer_id)
+              .filter(Boolean),
             ...parsedRaw
-              .filter((task) => task.customerType !== "lead" && task.customerId)
+              .filter(
+                (task) =>
+                  task.customerType !== "lead" &&
+                  task.customerId &&
+                  (!task.customerName || !task.customerLogoUrl)
+              )
               .map((task) => task.customerId as string),
           ] as string[])
         );
         const leadIds = Array.from(
           new Set(
             parsedRaw
-              .filter((task) => task.customerType === "lead" && task.customerId)
+              .filter(
+                (task) =>
+                  task.customerType === "lead" &&
+                  task.customerId &&
+                  (!task.customerName || !task.customerLogoUrl)
+              )
               .map((task) => task.customerId as string)
           )
         );
@@ -1364,14 +1411,6 @@ export default function DesignPage() {
           ])
         );
 
-        const { data: quoteItems, error: quoteItemsError } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .select("quote_id, position, name, qty, unit, attachment, catalog_model_id")
-          .in("quote_id", quoteIds)
-          .order("position", { ascending: true });
-        if (quoteItemsError) throw quoteItemsError;
-
         const firstItemByQuoteId = new Map<
           string,
           {
@@ -1383,20 +1422,30 @@ export default function DesignPage() {
             catalog_model_id?: string | null;
           }
         >();
-        (quoteItems ?? []).forEach((item) => {
-          const quoteId = typeof item.quote_id === "string" ? item.quote_id : null;
-          if (!quoteId || productNameByQuoteId.has(quoteId)) return;
-          const name = typeof item.name === "string" ? item.name.trim() : "";
-          productNameByQuoteId.set(quoteId, name || null);
-          productQtyByQuoteId.set(
-            quoteId,
-            formatQtyLabel(
-              typeof item.qty === "number" ? item.qty : item.qty ? Number(item.qty) : null,
-              typeof item.unit === "string" ? item.unit : null
-            )
-          );
-          firstItemByQuoteId.set(quoteId, item);
-        });
+        if (quoteIdsNeedingFirstItemLookup.length > 0) {
+          const { data: quoteItems, error: quoteItemsError } = await supabase
+            .schema("tosho")
+            .from("quote_items")
+            .select("quote_id, position, name, qty, unit, attachment, catalog_model_id")
+            .in("quote_id", quoteIdsNeedingFirstItemLookup)
+            .order("position", { ascending: true });
+          if (quoteItemsError) throw quoteItemsError;
+
+          (quoteItems ?? []).forEach((item) => {
+            const quoteId = typeof item.quote_id === "string" ? item.quote_id : null;
+            if (!quoteId || productNameByQuoteId.has(quoteId)) return;
+            const name = typeof item.name === "string" ? item.name.trim() : "";
+            productNameByQuoteId.set(quoteId, name || null);
+            productQtyByQuoteId.set(
+              quoteId,
+              formatQtyLabel(
+                typeof item.qty === "number" ? item.qty : item.qty ? Number(item.qty) : null,
+                typeof item.unit === "string" ? item.unit : null
+              )
+            );
+            firstItemByQuoteId.set(quoteId, item);
+          });
+        }
 
         const modelIds = Array.from(
           new Set(

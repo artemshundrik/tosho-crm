@@ -621,6 +621,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [comments, setComments] = useState<QuoteComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
   const [commentText, setCommentText] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
   const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
@@ -644,6 +645,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [activityLoadedAll, setActivityLoadedAll] = useState(false);
+  const activityTabLoadedQuoteRef = useRef<string | null>(null);
+  const filesTabLoadedQuoteRef = useRef<string | null>(null);
 
   const [filesCustomerOpen, setFilesCustomerOpen] = useState(true);
   const [filesDocsOpen, setFilesDocsOpen] = useState(true);
@@ -3503,12 +3506,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!quoteId) return;
     setItemsLoaded(items.length > 0);
     setRunsLoaded(runs.length > 0);
+    activityTabLoadedQuoteRef.current = null;
+    setHistory([]);
+    setHistoryError(null);
+    setActivityRows([]);
+    setActivityError(null);
+    setActivityLoadedAll(false);
+    filesTabLoadedQuoteRef.current = null;
     void loadQuote();
     void loadItems();
     void loadRuns();
-    void loadAttachments();
     void loadComments();
-    void loadActivityLog();
     void loadDesignTask();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, teamId]);
@@ -3537,15 +3545,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTaskCandidates([]);
       return;
     }
+    if (!attachDesignTaskDialogOpen) return;
     void loadDesignTaskCandidates();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quote?.id, quoteId, teamId, designTask?.id]);
+  }, [attachDesignTaskDialogOpen, quote?.id, quoteId, teamId, designTask?.id]);
 
   useEffect(() => {
-    if (!quote || quote.id !== quoteId || error) return;
-    void loadHistory();
+    if (detailsTab !== "files") return;
+    if (!quoteId || filesTabLoadedQuoteRef.current === quoteId) return;
+    filesTabLoadedQuoteRef.current = quoteId;
+    void loadAttachments();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quote?.id, quoteId, error]);
+  }, [detailsTab, quoteId]);
+
+  useEffect(() => {
+    if (detailsTab !== "activity") return;
+    if (!quote || quote.id !== quoteId || error) return;
+    if (activityTabLoadedQuoteRef.current === quoteId) return;
+    activityTabLoadedQuoteRef.current = quoteId;
+    void loadHistory();
+    void loadActivityLog();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailsTab, quote?.id, quoteId, error]);
 
   useEffect(() => {
     if (attachments.length === 0 || memberById.size === 0) return;
@@ -6583,7 +6604,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
 
-              <Tabs defaultValue="comments" className="w-full">
+              <Tabs value={detailsTab} onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")} className="w-full">
                 <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="comments"
