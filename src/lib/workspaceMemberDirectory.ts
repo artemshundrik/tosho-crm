@@ -7,6 +7,8 @@ import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employme
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const workspaceDirectoryCache = new Map<string, WorkspaceMemberDirectoryRow[]>();
 const workspaceDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDirectoryRow[]>>();
+const workspaceDisplayDirectoryCache = new Map<string, WorkspaceMemberDisplayRow[]>();
+const workspaceDisplayDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDisplayRow[]>>();
 let currentWorkspaceMemberDirectoryEntryCache: WorkspaceMemberDirectoryRow | null | undefined = undefined;
 let unifiedViewUnsupported = false;
 export const WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT = "workspace-member-directory-updated";
@@ -244,6 +246,7 @@ function updateCachedWorkspaceMemberProfile(
         : row
     )
   );
+  workspaceDisplayDirectoryCache.delete(workspaceId);
 
   if (currentWorkspaceMemberDirectoryEntryCache?.workspaceId === workspaceId && currentWorkspaceMemberDirectoryEntryCache.userId === userId) {
     currentWorkspaceMemberDirectoryEntryCache = {
@@ -575,19 +578,36 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
 }
 
 export async function listWorkspaceMembersForDisplay(workspaceId: string): Promise<WorkspaceMemberDisplayRow[]> {
-  const rows = await listWorkspaceMemberDirectory(workspaceId);
-  const resolvedEntries = await Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      label: row.displayName || row.email?.split("@")[0]?.trim() || row.userId,
-      avatarDisplayUrl: await resolveAvatarDisplayUrl(
-        supabase,
-        getCanonicalAvatarReference({ avatarUrl: row.avatarUrl, avatarPath: row.avatarPath }, AVATAR_BUCKET),
-        AVATAR_BUCKET
-      ),
-    }))
-  );
-  return resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));
+  if (workspaceDisplayDirectoryCache.has(workspaceId)) {
+    return workspaceDisplayDirectoryCache.get(workspaceId) ?? [];
+  }
+  const existing = workspaceDisplayDirectoryInFlight.get(workspaceId);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const rows = await listWorkspaceMemberDirectory(workspaceId);
+    const resolvedEntries = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        label: row.displayName || row.email?.split("@")[0]?.trim() || row.userId,
+        avatarDisplayUrl: await resolveAvatarDisplayUrl(
+          supabase,
+          getCanonicalAvatarReference({ avatarUrl: row.avatarUrl, avatarPath: row.avatarPath }, AVATAR_BUCKET),
+          AVATAR_BUCKET
+        ),
+      }))
+    );
+    const resolved = resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));
+    workspaceDisplayDirectoryCache.set(workspaceId, resolved);
+    return resolved;
+  })();
+
+  workspaceDisplayDirectoryInFlight.set(workspaceId, promise);
+  try {
+    return await promise;
+  } finally {
+    workspaceDisplayDirectoryInFlight.delete(workspaceId);
+  }
 }
 
 export async function getCurrentWorkspaceMemberDirectoryEntry() {

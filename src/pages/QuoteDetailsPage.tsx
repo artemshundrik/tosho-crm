@@ -74,6 +74,7 @@ import {
   setStatus,
   updateQuote,
   listQuoteSetMemberships,
+  listCatalogModelsByIds,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
@@ -2949,11 +2950,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               .in("id", kindIds)
           : Promise.resolve({ data: [], error: null }),
         modelIds.length
-          ? supabase
-              .schema("tosho")
-              .from("catalog_models")
-              .select("id,kind_id,name,image_url")
-              .in("id", modelIds)
+          ? listCatalogModelsByIds(modelIds).then((map) => ({
+              data: Array.from(map.values()).map((row) => ({
+                id: row.id,
+                kind_id: "",
+                name: row.name ?? "",
+                image_url: row.image_url ?? null,
+              })),
+              error: null,
+            }))
           : Promise.resolve({ data: [], error: null }),
         methodIds.length
           ? supabase

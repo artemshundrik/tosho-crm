@@ -56,6 +56,7 @@ import {
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { listCatalogModelsByIds } from "@/lib/toshoApi";
 import { normalizeCustomerLogoUrl as normalizeLogoUrl } from "@/lib/customerLogo";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
@@ -1454,13 +1455,8 @@ export default function DesignTaskPage() {
 
         let itemPreviewUrl: string | null = null;
         if (item?.catalog_model_id) {
-          const { data: modelRow } = await supabase
-            .schema("tosho")
-            .from("catalog_models")
-            .select("image_url")
-            .eq("id", item.catalog_model_id as string)
-            .maybeSingle();
-          itemPreviewUrl = (modelRow as { image_url?: string | null } | null)?.image_url ?? null;
+          const modelRows = await listCatalogModelsByIds([item.catalog_model_id as string]);
+          itemPreviewUrl = modelRows.get(item.catalog_model_id as string)?.image_url ?? null;
         }
         // Keep product image independent from design visualizations.
 

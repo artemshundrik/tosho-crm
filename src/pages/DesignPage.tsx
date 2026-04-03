@@ -67,7 +67,7 @@ import {
 } from "@/lib/designTaskType";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
-import { listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
+import { listCatalogModelsByIds, listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
   listCustomerLeadLogoDirectory,
   normalizeCustomerLogoUrl as normalizeLogoUrl,
@@ -1460,25 +1460,12 @@ export default function DesignPage() {
         );
         const modelImageById = new Map<string, string>();
         if (modelIds.length > 0) {
-          const loadModels = async (withImage: boolean) => {
-            const columns = withImage ? "id,image_url" : "id";
-            return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", modelIds);
-          };
-          let { data: modelRows, error: modelError } = await loadModels(true);
-          if (
-            modelError &&
-            /column/i.test(modelError.message ?? "") &&
-            /image_url/i.test(modelError.message ?? "")
-          ) {
-            ({ data: modelRows, error: modelError } = await loadModels(false));
-          }
-          if (!modelError) {
-            (((modelRows ?? []) as unknown) as Array<{ id: string; image_url?: string | null }>).forEach((row) => {
-              const imageUrl = row.image_url?.trim();
-              if (!imageUrl) return;
-              modelImageById.set(row.id, imageUrl);
-            });
-          }
+          const modelRows = await listCatalogModelsByIds(modelIds);
+          modelRows.forEach((row, id) => {
+            const imageUrl = row.image_url?.trim();
+            if (!imageUrl) return;
+            modelImageById.set(id, imageUrl);
+          });
         }
 
         firstItemByQuoteId.forEach((item, quoteId) => {

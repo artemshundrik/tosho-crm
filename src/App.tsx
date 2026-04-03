@@ -226,19 +226,6 @@ async function resolveRuntimeLogTeamId(userId?: string | null) {
   if (!normalizedUserId) return null;
 
   try {
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("team_id")
-      .eq("user_id", normalizedUserId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle<{ team_id?: string | null }>();
-    if (!error && data?.team_id) return data.team_id;
-  } catch {
-    // ignore and try workspace fallback
-  }
-
-  try {
     return await resolveWorkspaceId(normalizedUserId);
   } catch {
     return null;

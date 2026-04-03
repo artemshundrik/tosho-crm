@@ -67,6 +67,12 @@ export type QuoteItemPreviewRow = {
   catalog_model_id?: string | null;
 };
 
+export type CatalogModelLookupRow = {
+  id: string;
+  name?: string | null;
+  image_url?: string | null;
+};
+
 const QUOTE_RUN_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate";
 const QUOTE_RUN_LEGACY_SELECT =
@@ -177,6 +183,51 @@ function getQuoteMonthCode(date = new Date()) {
 
 function formatQuoteNumber(monthCode: string, sequence: number) {
   return `TS-${monthCode}-${String(sequence).padStart(4, "0")}`;
+}
+
+const catalogModelLookupCache = new Map<string, CatalogModelLookupRow | null>();
+
+export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<string, CatalogModelLookupRow>> {
+  const normalizedIds = Array.from(new Set(modelIds.map((id) => id.trim()).filter(Boolean)));
+  if (normalizedIds.length === 0) return new Map();
+
+  const missingIds = normalizedIds.filter((id) => !catalogModelLookupCache.has(id));
+  if (missingIds.length > 0) {
+    const loadModels = async (withImage: boolean) => {
+      const columns = withImage ? "id,name,image_url" : "id,name";
+      return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", missingIds);
+    };
+
+    let { data, error } = await loadModels(true);
+    if (error && isMissingColumnLike(error, ["image_url"])) {
+      ({ data, error } = await loadModels(false));
+    }
+    handleError(error);
+
+    const rows = (((data ?? []) as unknown) as CatalogModelLookupRow[]);
+    const seenIds = new Set<string>();
+    rows.forEach((row) => {
+      if (!row?.id) return;
+      seenIds.add(row.id);
+      catalogModelLookupCache.set(row.id, {
+        id: row.id,
+        name: typeof row.name === "string" ? row.name : null,
+        image_url: typeof row.image_url === "string" ? row.image_url : null,
+      });
+    });
+    missingIds.forEach((id) => {
+      if (!seenIds.has(id)) {
+        catalogModelLookupCache.set(id, null);
+      }
+    });
+  }
+
+  const result = new Map<string, CatalogModelLookupRow>();
+  normalizedIds.forEach((id) => {
+    const row = catalogModelLookupCache.get(id);
+    if (row) result.set(id, row);
+  });
+  return result;
 }
 
 async function getNextQuoteSequence(teamId: string, monthCode: string) {
