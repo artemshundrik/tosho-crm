@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { resolveAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -308,8 +308,8 @@ function buildRow(input: {
     fullName: names.fullName,
     displayName,
     initials: getInitialsFromName(displayName, input.email),
-    avatarUrl: input.avatarUrl ?? null,
-    avatarPath: input.avatarPath ?? null,
+    avatarUrl: sanitizeAvatarReference(input.avatarUrl ?? null, AVATAR_BUCKET),
+    avatarPath: sanitizeAvatarReference(input.avatarPath ?? null, AVATAR_BUCKET),
     accessRole: input.accessRole ?? null,
     jobRole: input.jobRole ?? null,
     birthDate: input.birthDate?.trim() || "",

@@ -106,6 +106,35 @@ function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   return Boolean(objectPath && objectPath.includes("/"));
 }
 
+export function sanitizeAvatarReference(rawUrl: string | null | undefined, bucket: string): string | null {
+  if (!rawUrl) return null;
+  const normalizedRawUrl = normalizeAvatarKey(rawUrl);
+  if (!normalizedRawUrl) return null;
+  const lower = normalizedRawUrl.toLowerCase();
+
+  if (lower.includes("/rest/v1/") || lower.includes("?select=") || lower.includes("&select=")) {
+    return null;
+  }
+
+  if (/^(https?:)?\/\//i.test(normalizedRawUrl) || normalizedRawUrl.startsWith("data:") || normalizedRawUrl.startsWith("blob:")) {
+    return normalizedRawUrl;
+  }
+
+  const objectPath = extractObjectPath(normalizedRawUrl, bucket);
+  if (!objectPath) return null;
+  if (!objectPath.startsWith("avatars/")) return null;
+  return normalizedRawUrl;
+}
+
+export function getImmediateAvatarDisplayUrl(rawUrl: string | null | undefined, bucket: string): string | null {
+  const normalizedRawUrl = sanitizeAvatarReference(rawUrl, bucket);
+  if (!normalizedRawUrl) return null;
+  if (shouldResolveFromStorage(normalizedRawUrl, bucket)) {
+    return null;
+  }
+  return normalizedRawUrl;
+}
+
 function getCachedResolvedAvatar(rawUrl: string | null | undefined) {
   if (!rawUrl) return null;
   const key = normalizeAvatarKey(rawUrl);
@@ -131,8 +160,7 @@ export async function resolveAvatarDisplayUrl(
   bucket: string,
   options?: { forceRefresh?: boolean }
 ): Promise<string | null> {
-  if (!rawUrl) return null;
-  const normalizedRawUrl = normalizeAvatarKey(rawUrl);
+  const normalizedRawUrl = sanitizeAvatarReference(rawUrl, bucket);
   if (!normalizedRawUrl) return null;
 
   if (!options?.forceRefresh) {

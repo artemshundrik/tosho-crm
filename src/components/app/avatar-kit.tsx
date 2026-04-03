@@ -2,7 +2,7 @@ import * as React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
-import { getCachedAvatarDisplayUrl, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCachedAvatarDisplayUrl, getImmediateAvatarDisplayUrl, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -102,7 +102,7 @@ export function AvatarBase({
   const [errored, setErrored] = React.useState(false);
   const [resolvedSrc, setResolvedSrc] = React.useState<string | null>(() => {
     if (!src) return null;
-    return getCachedAvatarDisplayUrl(src) ?? src;
+    return getCachedAvatarDisplayUrl(src) ?? getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET);
   });
   const mountedRef = React.useRef(true);
   const refreshAttemptedForSrcRef = React.useRef<string | null>(null);
@@ -136,7 +136,7 @@ export function AvatarBase({
       };
     }
 
-    setResolvedSrc(src);
+    setResolvedSrc(getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET));
     const run = async () => {
       const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET);
       if (active) setResolvedSrc(next);
