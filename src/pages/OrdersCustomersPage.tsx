@@ -770,39 +770,51 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setLeadsError(null);
     try {
-      const leadColumns = [
-        "id",
-        "team_id",
-        "company_name",
-        "legal_name",
-        "ownership_type",
-        "logo_url",
-        "first_name",
-        "last_name",
-        "email",
-        "phone_numbers",
-        "source",
-        "website",
-        "manager",
-        "manager_user_id",
-        "iban",
-        "signatory_name",
-        "signatory_position",
-        "reminder_at",
-        "reminder_comment",
-        "event_name",
-        "event_at",
-        "event_comment",
-        "notes",
-        "created_at",
-        "updated_at",
-      ].join(",");
-      const { data, error: loadError } = await supabase
-        .schema("tosho")
-        .from("leads")
-        .select(leadColumns)
-        .eq("team_id", teamId)
-        .order("company_name", { ascending: true });
+      const runLoadLeads = async (variant: "full" | "no_ownership") => {
+        const leadColumns = [
+          "id",
+          "team_id",
+          "company_name",
+          "legal_name",
+          ...(variant === "full" ? ["ownership_type"] : []),
+          "logo_url",
+          "first_name",
+          "last_name",
+          "email",
+          "phone_numbers",
+          "source",
+          "website",
+          "manager",
+          "manager_user_id",
+          "iban",
+          "signatory_name",
+          "signatory_position",
+          "reminder_at",
+          "reminder_comment",
+          "event_name",
+          "event_at",
+          "event_comment",
+          "notes",
+          "created_at",
+          "updated_at",
+        ].join(",");
+
+        return await supabase
+          .schema("tosho")
+          .from("leads")
+          .select(leadColumns)
+          .eq("team_id", teamId)
+          .order("company_name", { ascending: true });
+      };
+
+      let { data, error: loadError } = await runLoadLeads("full");
+      if (
+        loadError &&
+        /column/i.test(loadError.message ?? "") &&
+        /ownership_type/i.test(loadError.message ?? "")
+      ) {
+        ({ data, error: loadError } = await runLoadLeads("no_ownership"));
+      }
       if (loadError) throw loadError;
       setLeads(((data as unknown) as LeadRow[]) ?? []);
     } catch (err: unknown) {
