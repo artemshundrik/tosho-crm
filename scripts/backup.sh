@@ -23,6 +23,7 @@ BACKUP_ROOT="${BACKUP_ROOT:-./backups}"
 TS="$(date -u +%Y%m%d-%H%M%SZ)"
 WORK_DIR="${BACKUP_ROOT}/${TS}"
 ARCHIVE_PATH="${BACKUP_ROOT}/${TS}.tar.gz"
+LATEST_POINTER_PATH="${BACKUP_ROOT}/.latest-successful-archive"
 
 mkdir -p "${WORK_DIR}/db" "${WORK_DIR}/storage"
 
@@ -65,6 +66,10 @@ if [[ -n "${STORAGE_S3_ENDPOINT:-}" && -n "${STORAGE_S3_ACCESS_KEY_ID:-}" && -n 
     bucket="$(echo "${raw_bucket}" | xargs)"
     [[ -z "${bucket}" ]] && continue
     echo "  - ${bucket}"
+    if ! aws --endpoint-url "${STORAGE_S3_ENDPOINT}" s3 ls "s3://${bucket}" >/dev/null 2>&1; then
+      echo "  - skipping missing or inaccessible bucket: ${bucket}"
+      continue
+    fi
     aws --endpoint-url "${STORAGE_S3_ENDPOINT}" s3 sync "s3://${bucket}" "${WORK_DIR}/storage/${bucket}" --only-show-errors
   done
 else
@@ -77,6 +82,7 @@ tar -czf "${ARCHIVE_PATH}" -C "${BACKUP_ROOT}" "${TS}"
 rm -rf "${WORK_DIR}"
 
 echo "Backup created: ${ARCHIVE_PATH}"
+printf '%s\n' "${ARCHIVE_PATH}" > "${LATEST_POINTER_PATH}"
 
 # Keep newest N archives (default: 30)
 KEEP_ARCHIVES="${KEEP_ARCHIVES:-30}"
