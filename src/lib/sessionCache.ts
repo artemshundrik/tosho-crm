@@ -1,5 +1,5 @@
 const SESSION_CACHE_SCHEMA_KEY = "app_session_cache_schema";
-const SESSION_CACHE_SCHEMA_VERSION = "2026-04-03-memory-v2";
+const SESSION_CACHE_SCHEMA_VERSION = "2026-04-03-storage-v3";
 const HEAVY_SESSION_CACHE_PREFIXES = [
   "design-task-page-cache:",
   "quote-details-cache:",

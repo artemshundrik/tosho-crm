@@ -148,6 +148,8 @@ const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
 const QUOTES_PAGE_SIZE = 100;
+const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
+const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
 };
@@ -384,6 +386,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
+  const quotesKanbanAutoloadLockRef = useRef(false);
+  const quotesKanbanAutoloadTimerRef = useRef<number | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const [dragPlaceholder, setDragPlaceholder] = useState<{
     columnId: string;
@@ -397,6 +401,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [kanbanProductByQuoteId, setKanbanProductByQuoteId] = useState<Record<string, KanbanProductPreview>>(
     () => Object.fromEntries(initialCache?.kanbanProductEntries ?? [])
   );
+  const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => initialFilters?.sortBy ?? "date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => initialFilters?.sortOrder ?? "desc");
@@ -1308,6 +1313,64 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (loading || refreshing || !hasMoreQuotes) return;
     setQuotesFetchLimit((prev) => prev + QUOTES_PAGE_SIZE);
   };
+
+  useEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (!hasMoreQuotes || loading || refreshing) return;
+    if (typeof window === "undefined") return;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (!viewport) return;
+
+    const releaseLock = () => {
+      quotesKanbanAutoloadLockRef.current = false;
+      if (quotesKanbanAutoloadTimerRef.current) {
+        window.clearTimeout(quotesKanbanAutoloadTimerRef.current);
+        quotesKanbanAutoloadTimerRef.current = null;
+      }
+    };
+
+    const queueLoadMore = () => {
+      if (document.visibilityState === "hidden") return;
+      if (quotesKanbanAutoloadLockRef.current) return;
+      quotesKanbanAutoloadLockRef.current = true;
+      setQuotesFetchLimit((current) => current + QUOTES_PAGE_SIZE);
+      quotesKanbanAutoloadTimerRef.current = window.setTimeout(releaseLock, KANBAN_AUTOLOAD_LOCK_MS);
+    };
+
+    const maybeLoadMore = (node: HTMLElement) => {
+      const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+      if (remaining <= KANBAN_AUTOLOAD_THRESHOLD_PX) {
+        queueLoadMore();
+      }
+    };
+
+    const columnBodies = Array.from(
+      viewport.querySelectorAll<HTMLElement>("[data-kanban-column-body='true']")
+    );
+    if (columnBodies.length === 0) return;
+
+    const handleColumnScroll = (event: Event) => {
+      const node = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+      if (!node) return;
+      maybeLoadMore(node);
+    };
+
+    columnBodies.forEach((node) => {
+      node.addEventListener("scroll", handleColumnScroll, { passive: true });
+    });
+
+    window.requestAnimationFrame(() => {
+      columnBodies.forEach((node) => maybeLoadMore(node));
+    });
+
+    return () => {
+      columnBodies.forEach((node) => {
+        node.removeEventListener("scroll", handleColumnScroll);
+      });
+      releaseLock();
+    };
+  }, [hasMoreQuotes, loading, refreshing, viewMode]);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
@@ -2405,12 +2468,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const quoteIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
     if (quoteIds.length === 0) {
       setKanbanProductByQuoteId({});
+      setKanbanPreviewsLoading(false);
       return;
     }
 
     let cancelled = false;
 
     const loadKanbanPreviews = async () => {
+      if (!cancelled) setKanbanPreviewsLoading(true);
       try {
         const itemRows = await listQuoteItemPreviewsForQuotes({ teamId, quoteIds });
         if (cancelled) return;
@@ -2477,10 +2542,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         if (!cancelled) {
           setKanbanProductByQuoteId(nextMap);
+          try {
+            sessionStorage.setItem(
+              cacheKey,
+              JSON.stringify({
+                rows,
+                attachmentCounts,
+                quoteMembershipEntries: Array.from(quoteMembershipByQuoteId.entries()),
+                kanbanProductEntries: Object.entries(nextMap),
+                cachedAt: Date.now(),
+              })
+            );
+          } catch {
+            // ignore cache persistence failures
+          }
+          setKanbanPreviewsLoading(false);
         }
       } catch {
         if (!cancelled) {
           setKanbanProductByQuoteId({});
+          setKanbanPreviewsLoading(false);
         }
       }
     };
@@ -5529,28 +5610,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     </div>
                                   </div>
 
-                                  {productPreview ? (
+                                  {productPreview || kanbanPreviewsLoading ? (
                                     <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
                                       <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                         <Package className="h-3.5 w-3.5" />
                                         Товар
                                       </div>
                                       <div className="flex items-center gap-2.5">
-                                        {productPreview.imageUrl ? (
+                                        {productPreview?.imageUrl ? (
                                           <KanbanImageZoomPreview imageUrl={productPreview.imageUrl} alt={productPreview.itemName} />
                                         ) : (
                                           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
                                             <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                                              <Package className="h-4 w-4" />
+                                              {kanbanPreviewsLoading ? (
+                                                <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />
+                                              ) : (
+                                                <Package className="h-4 w-4" />
+                                              )}
                                             </div>
                                           </div>
                                         )}
                                         <div className="min-w-0">
                                           <div className="truncate text-[14px] font-medium">
-                                            {productPreview.itemName}
+                                            {productPreview?.itemName ?? "Завантаження товару..."}
                                           </div>
                                           <div className="text-[13px] font-normal text-muted-foreground">
-                                            {productPreview.qtyLabel}
+                                            {productPreview?.qtyLabel ?? " "}
                                           </div>
                                         </div>
                                       </div>
@@ -5593,20 +5678,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 })}
             </KanbanBoard>
             </div>
-            {hasMoreQuotes ? (
-              <div className="flex justify-center px-4 pb-4 pt-2 md:px-6">
-                <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>
-                  {refreshing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Завантаження...
-                    </>
-                  ) : (
-                    "Показати ще"
-                  )}
-                </Button>
-              </div>
-            ) : null}
             </>
           )}
         </EstimatesKanbanCanvas>

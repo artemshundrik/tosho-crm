@@ -125,7 +125,9 @@ const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
 const DESIGN_PAGE_SIZE = 100;
-const DESIGN_PAGE_CACHE_LIMIT = 40;
+const DESIGN_PAGE_CACHE_LIMIT = DESIGN_PAGE_SIZE;
+const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
+const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 type DesignPageCachePayload = {
   tasks: DesignTask[];
   cachedAt: number;
@@ -377,6 +379,8 @@ const sanitizeImageReference = (value?: string | null) => {
 };
 
 const LOAD_TASKS_RESOURCE_COOLDOWN_MS = 30_000;
+const DESIGN_PAGE_CACHE_FRESH_MS = 5 * 60 * 1000;
+const DESIGN_PAGE_BACKGROUND_REFRESH_DELAY_MS = 1200;
 
 const isResourceExhaustionLikeError = (error: unknown) => {
   const message = getErrorMessage(error, "").toLowerCase();
@@ -682,6 +686,9 @@ export default function DesignPage() {
           tasks: applyCustomerLogosToTasks(initialCacheRaw.tasks, initialLogoCache.entries),
         }
       : initialCacheRaw;
+  const initialCacheIsFresh = Boolean(
+    initialCache?.tasks?.length && Date.now() - Number(initialCache.cachedAt ?? 0) < DESIGN_PAGE_CACHE_FRESH_MS
+  );
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
   const [refreshing, setRefreshing] = useState(false);
@@ -792,6 +799,8 @@ export default function DesignPage() {
   const currentUserAvatarUrlRef = useRef<string | null>(null);
   const initialLogoEntriesRef = useRef<CustomerOption[]>(initialLogoCache?.entries ?? []);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
+  const tasksKanbanAutoloadLockRef = useRef(false);
+  const tasksKanbanAutoloadTimerRef = useRef<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
@@ -1597,8 +1606,18 @@ export default function DesignPage() {
   ]);
 
   useEffect(() => {
+    if (initialCacheIsFresh && tasks.length > 0) {
+      const timeoutId = window.setTimeout(() => {
+        void loadTasks();
+      }, DESIGN_PAGE_BACKGROUND_REFRESH_DELAY_MS);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+
     void loadTasks({ force: true });
-  }, [loadTasks]);
+  }, [initialCacheIsFresh, loadTasks, tasks.length]);
 
   useEffect(() => {
     if (!effectiveTeamId) return;
@@ -1930,6 +1949,64 @@ export default function DesignPage() {
       resizeObserver?.disconnect();
     };
   }, [viewMode, filteredTasks.length]);
+
+  useEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (!hasMoreTasks || loading || refreshing) return;
+    if (typeof window === "undefined") return;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (!viewport) return;
+
+    const releaseLock = () => {
+      tasksKanbanAutoloadLockRef.current = false;
+      if (tasksKanbanAutoloadTimerRef.current) {
+        window.clearTimeout(tasksKanbanAutoloadTimerRef.current);
+        tasksKanbanAutoloadTimerRef.current = null;
+      }
+    };
+
+    const queueLoadMore = () => {
+      if (document.visibilityState === "hidden") return;
+      if (tasksKanbanAutoloadLockRef.current) return;
+      tasksKanbanAutoloadLockRef.current = true;
+      setTasksFetchLimit((current) => current + DESIGN_PAGE_SIZE);
+      tasksKanbanAutoloadTimerRef.current = window.setTimeout(releaseLock, KANBAN_AUTOLOAD_LOCK_MS);
+    };
+
+    const maybeLoadMore = (node: HTMLElement) => {
+      const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+      if (remaining <= KANBAN_AUTOLOAD_THRESHOLD_PX) {
+        queueLoadMore();
+      }
+    };
+
+    const columnBodies = Array.from(
+      viewport.querySelectorAll<HTMLElement>("[data-kanban-column-body='true']")
+    );
+    if (columnBodies.length === 0) return;
+
+    const handleColumnScroll = (event: Event) => {
+      const node = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+      if (!node) return;
+      maybeLoadMore(node);
+    };
+
+    columnBodies.forEach((node) => {
+      node.addEventListener("scroll", handleColumnScroll, { passive: true });
+    });
+
+    window.requestAnimationFrame(() => {
+      columnBodies.forEach((node) => maybeLoadMore(node));
+    });
+
+    return () => {
+      columnBodies.forEach((node) => {
+        node.removeEventListener("scroll", handleColumnScroll);
+      });
+      releaseLock();
+    };
+  }, [hasMoreTasks, loading, refreshing, viewMode]);
 
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
@@ -4838,21 +4915,6 @@ export default function DesignPage() {
             : "Завантаження задач..."}
         </div>
       )}
-
-      {hasMoreTasks ? (
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-w-[220px]"
-            disabled={loading || refreshing}
-            onClick={() => setTasksFetchLimit((current) => current + DESIGN_PAGE_SIZE)}
-          >
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Показати ще задачі
-          </Button>
-        </div>
-      ) : null}
 
       <Dialog
         open={createDialogOpen}

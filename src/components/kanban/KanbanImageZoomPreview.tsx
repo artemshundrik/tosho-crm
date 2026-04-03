@@ -3,6 +3,17 @@ import { createPortal } from "react-dom";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const warmedKanbanImageUrls = new Set<string>();
+
+function findKanbanScrollParent(element: HTMLElement | null): HTMLElement | null {
+  let current = element?.parentElement ?? null;
+  while (current) {
+    if (current.dataset.kanbanColumnBody === "true") return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
 type KanbanImageZoomPreviewProps = {
   imageUrl: string;
   alt: string;
@@ -19,7 +30,7 @@ export function KanbanImageZoomPreview({
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldLoad, setShouldLoad] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(() => warmedKanbanImageUrls.has(imageUrl));
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
     left: 0,
@@ -82,6 +93,51 @@ export function KanbanImageZoomPreview({
     };
   }, [isOpen, updatePlacement]);
 
+  useEffect(() => {
+    if (shouldLoad || typeof window === "undefined") return;
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const scrollParent = findKanbanScrollParent(anchor);
+
+    const rootRect = scrollParent?.getBoundingClientRect() ?? {
+      top: 0,
+      left: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight,
+    };
+
+    const rect = anchor.getBoundingClientRect();
+    const isRoughlyVisible =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom >= rootRect.top - 240 &&
+      rect.right >= rootRect.left &&
+      rect.top <= rootRect.bottom + 240 &&
+      rect.left <= rootRect.right;
+
+    if (isRoughlyVisible) {
+      setShouldLoad(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      {
+        root: scrollParent,
+        rootMargin: "240px 0px",
+        threshold: 0.01,
+      }
+    );
+
+    observer.observe(anchor);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
   return (
     <div
       ref={anchorRef}
@@ -110,7 +166,9 @@ export function KanbanImageZoomPreview({
             alt={alt}
             className={cn("h-full w-full object-contain", imageClassName)}
             loading="lazy"
+            decoding="async"
             onLoad={(event) => {
+              warmedKanbanImageUrls.add(imageUrl);
               const { naturalWidth, naturalHeight } = event.currentTarget;
               if (!naturalWidth || !naturalHeight) return;
               setPreviewAspectRatio(naturalWidth / naturalHeight);
@@ -134,7 +192,13 @@ export function KanbanImageZoomPreview({
                 height: `${previewBounds.height}px`,
               }}
             >
-              <img src={imageUrl} alt="" className="h-full w-full object-contain" loading="lazy" />
+              <img
+                src={imageUrl}
+                alt=""
+                className="h-full w-full object-contain"
+                loading="lazy"
+                decoding="async"
+              />
             </div>,
             document.body
           )
