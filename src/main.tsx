@@ -9,7 +9,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
-      gcTime: 30 * 60_000, // Збільшено до 30 хвилин для збереження кешу між навігаціями
+      gcTime: 10 * 60_000,
       refetchOnWindowFocus: false,
       refetchOnMount: false, // Не оновлювати при монтуванні якщо дані свіжі
     },

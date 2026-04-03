@@ -387,6 +387,81 @@ type DesignTaskPageCachePayload = {
   cachedAt: number;
 };
 
+function sanitizeDesignTaskMetadataForCache(metadata?: Record<string, unknown> | null) {
+  if (!metadata) return undefined;
+  const next: Record<string, unknown> = {};
+  const keys = [
+    "source",
+    "status",
+    "design_task_number",
+    "quote_id",
+    "quote_number",
+    "assignee_user_id",
+    "assigned_at",
+    "manager_user_id",
+    "customer_id",
+    "customer_name",
+    "customer_logo_url",
+    "customer_type",
+    "design_task_type",
+    "methods_count",
+    "has_files",
+    "design_deadline",
+    "deadline",
+    "product_name",
+    "quote_item_name",
+    "item_name",
+  ] as const;
+  keys.forEach((key) => {
+    if (metadata[key] !== undefined) next[key] = metadata[key];
+  });
+  return next;
+}
+
+function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
+  return {
+    id: task.id,
+    quoteId: task.quoteId,
+    title: task.title ?? null,
+    status: task.status,
+    designTaskType: task.designTaskType ?? null,
+    creatorUserId: task.creatorUserId ?? null,
+    assigneeUserId: task.assigneeUserId ?? null,
+    assignedAt: task.assignedAt ?? null,
+    metadata: sanitizeDesignTaskMetadataForCache(task.metadata),
+    methodsCount: task.methodsCount ?? 0,
+    hasFiles: task.hasFiles ?? false,
+    designDeadline: task.designDeadline ?? null,
+    designTaskNumber: task.designTaskNumber ?? null,
+    quoteNumber: task.quoteNumber ?? null,
+    customerName: task.customerName ?? null,
+    customerLogoUrl: task.customerLogoUrl ?? null,
+    quoteManagerUserId: task.quoteManagerUserId ?? null,
+    designBrief: null,
+    createdAt: task.createdAt ?? null,
+  };
+}
+
+function buildDesignTaskPageCachePayload(params: {
+  task: DesignTask;
+  customerAttachmentsLoaded?: boolean;
+  attachments?: AttachmentRow[];
+  designOutputLinks?: DesignOutputLink[];
+  designOutputGroups?: string[];
+}): DesignTaskPageCachePayload {
+  return {
+    task: sanitizeDesignTaskForCache(params.task),
+    quoteItem: null,
+    productPreviewUrl: null,
+    attachments: Array.isArray(params.attachments) ? params.attachments.slice(0, 20) : [],
+    customerAttachmentsLoaded: params.customerAttachmentsLoaded ?? false,
+    designOutputFiles: [],
+    designOutputLinks: Array.isArray(params.designOutputLinks) ? params.designOutputLinks.slice(0, 20) : [],
+    designOutputGroups: Array.isArray(params.designOutputGroups) ? params.designOutputGroups.slice(0, 20) : [],
+    cachedAt: Date.now(),
+  };
+}
+
 const statusLabels = DESIGN_STATUS_LABELS;
 
 const statusColors: Record<DesignStatus, string> = {
@@ -619,7 +694,7 @@ function syncDesignPageCacheTask(
       `design-page-cache:${teamId}`,
       JSON.stringify({
         ...parsed,
-        tasks: nextTasks,
+        tasks: nextTasks.map((row) => sanitizeDesignTaskForCache(row)),
         cachedAt: Date.now(),
       })
     );
@@ -1557,17 +1632,15 @@ export default function DesignTaskPage() {
           try {
             sessionStorage.setItem(
               `design-task-page-cache:${effectiveTeamId}:${id}`,
-              JSON.stringify({
-                task: nextTask,
-                quoteItem: nextQuoteItem,
-                productPreviewUrl: nextProductPreviewUrl,
-                attachments: nextAttachments,
-                customerAttachmentsLoaded: false,
-                designOutputFiles: nextDesignOutputFiles,
-                designOutputLinks: nextDesignOutputLinks,
-                designOutputGroups: nextDesignOutputGroups,
-                cachedAt: Date.now(),
-              } satisfies DesignTaskPageCachePayload)
+              JSON.stringify(
+                buildDesignTaskPageCachePayload({
+                  task: nextTask,
+                  customerAttachmentsLoaded: false,
+                  attachments: nextAttachments,
+                  designOutputLinks: nextDesignOutputLinks,
+                  designOutputGroups: nextDesignOutputGroups,
+                })
+              )
             );
           } catch {
             // ignore cache persistence failures
@@ -1637,15 +1710,13 @@ export default function DesignTaskPage() {
             cacheKey,
             JSON.stringify({
               ...(cached ?? {}),
-              task,
-              quoteItem,
-              productPreviewUrl,
-              attachments: nextCachedAttachments,
-              customerAttachmentsLoaded: true,
-              designOutputFiles,
-              designOutputLinks,
-              designOutputGroups,
-              cachedAt: Date.now(),
+              ...buildDesignTaskPageCachePayload({
+                task,
+                customerAttachmentsLoaded: true,
+                attachments: nextCachedAttachments,
+                designOutputLinks,
+                designOutputGroups,
+              }),
             } satisfies DesignTaskPageCachePayload)
           );
         } catch {
@@ -2651,13 +2722,18 @@ export default function DesignTaskPage() {
   const ensureFileAccessUrl = useCallback(async (file: StorageBackedFile, options?: { forceRefresh?: boolean }) => {
     const key = getStorageFileKey(file);
     if (!key || !file.storage_bucket || !file.storage_path) return null;
-    if (!options?.forceRefresh && fileAccessUrlByKey[key]) return fileAccessUrlByKey[key];
+    const existingUrl = fileAccessUrlByKey[key];
+    if (!options?.forceRefresh && existingUrl) return existingUrl;
 
     const { data: signedData, error: signedError } = await supabase.storage
       .from(file.storage_bucket)
       .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
     const signedUrl = isUsableStorageUrl(signedData?.signedUrl) ? (signedData?.signedUrl ?? null) : null;
     if (signedUrl && !signedError) {
+      if (existingUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(existingUrl);
+        objectUrlRegistryRef.current.delete(existingUrl);
+      }
       setFileAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
       return signedUrl;
     }
@@ -2668,6 +2744,10 @@ export default function DesignTaskPage() {
     if (downloadError || !blobData) return null;
 
     const objectUrl = URL.createObjectURL(blobData);
+    if (existingUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(existingUrl);
+      objectUrlRegistryRef.current.delete(existingUrl);
+    }
     objectUrlRegistryRef.current.add(objectUrl);
     setFileAccessUrlByKey((prev) => ({ ...prev, [key]: objectUrl }));
     return objectUrl;
@@ -3933,17 +4013,14 @@ export default function DesignTaskPage() {
       if (typeof window !== "undefined" && id) {
         sessionStorage.setItem(
           `design-task-page-cache:${effectiveTeamId}:${id}`,
-          JSON.stringify({
-            task: nextTask,
-            quoteItem,
-            productPreviewUrl,
-            attachments: [],
-            customerAttachmentsLoaded: false,
-            designOutputFiles: [],
-            designOutputLinks,
-            designOutputGroups,
-            cachedAt: Date.now(),
-          } satisfies DesignTaskPageCachePayload)
+          JSON.stringify(
+            buildDesignTaskPageCachePayload({
+              task: nextTask,
+              customerAttachmentsLoaded: false,
+              designOutputLinks,
+              designOutputGroups,
+            })
+          )
         );
       }
       syncDesignPageCacheTask(effectiveTeamId, nextTask);

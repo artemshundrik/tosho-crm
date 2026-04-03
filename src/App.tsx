@@ -22,6 +22,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
+import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
 import {
   getCachedCurrentWorkspaceMemberDirectoryEntry,
   getCurrentWorkspaceMemberDirectoryEntry,
@@ -1094,6 +1095,10 @@ export default function App() {
     document.documentElement.classList.add("notranslate");
     document.body.setAttribute("translate", "no");
     document.body.classList.add("notranslate");
+  }, []);
+
+  useEffect(() => {
+    migrateAndPruneSessionCaches();
   }, []);
 
   useEffect(() => {

@@ -125,6 +125,7 @@ const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
 const DESIGN_PAGE_SIZE = 100;
+const DESIGN_PAGE_CACHE_LIMIT = 40;
 type DesignPageCachePayload = {
   tasks: DesignTask[];
   cachedAt: number;
@@ -430,6 +431,81 @@ function writeDesignSessionCache(key: string, value: unknown) {
   } catch {
     // ignore cache persistence failures
   }
+}
+
+function sanitizeDesignTaskMetadataForCache(metadata: DesignTask["metadata"]): DesignTask["metadata"] {
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const next: Record<string, unknown> = {};
+  const stringKeys = [
+    "source",
+    "status",
+    "design_task_number",
+    "quote_id",
+    "quote_number",
+    "assignee_user_id",
+    "assigned_at",
+    "manager_user_id",
+    "customer_id",
+    "customer_name",
+    "customer_logo_url",
+    "design_task_type",
+    "design_deadline",
+    "deadline",
+    "product_name",
+    "quote_item_name",
+    "item_name",
+  ] as const;
+  stringKeys.forEach((key) => {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) {
+      next[key] = value.trim();
+    }
+  });
+  if (metadata.customer_type === "customer" || metadata.customer_type === "lead") {
+    next.customer_type = metadata.customer_type;
+  }
+  if (typeof metadata.methods_count === "number") {
+    next.methods_count = metadata.methods_count;
+  }
+  if (typeof metadata.has_files === "boolean") {
+    next.has_files = metadata.has_files;
+  }
+  return next;
+}
+
+function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
+  return {
+    id: task.id,
+    title: task.title ?? null,
+    status: task.status,
+    quoteId: task.quoteId,
+    quoteNumber: task.quoteNumber ?? null,
+    customerName: task.customerName ?? null,
+    customerLogoUrl: task.customerLogoUrl ?? null,
+    quoteManagerUserId: task.quoteManagerUserId ?? null,
+    assigneeUserId: task.assigneeUserId ?? null,
+    assignedAt: task.assignedAt ?? null,
+    metadata: sanitizeDesignTaskMetadataForCache(task.metadata),
+    methodsCount: task.methodsCount ?? 0,
+    hasFiles: task.hasFiles ?? false,
+    designDeadline: task.designDeadline ?? null,
+    designTaskType: task.designTaskType ?? null,
+    designTaskNumber: task.designTaskNumber ?? null,
+    partyType: task.partyType ?? null,
+    productName: task.productName ?? null,
+    productImageUrl: task.productImageUrl ?? null,
+    productQtyLabel: task.productQtyLabel ?? null,
+    assigneeLabel: task.assigneeLabel ?? null,
+    assigneeAvatarUrl: task.assigneeAvatarUrl ?? null,
+    createdAt: task.createdAt ?? null,
+  };
+}
+
+function buildDesignPageCachePayload(tasks: DesignTask[]): DesignPageCachePayload {
+  return {
+    tasks: tasks.slice(0, DESIGN_PAGE_CACHE_LIMIT).map((task) => sanitizeDesignTaskForCache(task)),
+    cachedAt: Date.now(),
+  };
 }
 
 function resolveTaskCustomerLogo(
@@ -984,10 +1060,7 @@ export default function DesignPage() {
     if (next === tasks) return;
     setTasks(next);
     if (typeof window !== "undefined" && effectiveTeamId) {
-      writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
-        tasks: next,
-        cachedAt: Date.now(),
-      } satisfies DesignPageCachePayload);
+      writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(next));
     }
   }, [customers, effectiveTeamId, tasks]);
 
@@ -1363,10 +1436,7 @@ export default function DesignPage() {
 
       setTasks(parsed);
       if (typeof window !== "undefined" && effectiveTeamId) {
-        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
-          tasks: parsed,
-          cachedAt: Date.now(),
-        } satisfies DesignPageCachePayload);
+        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(parsed));
       }
       try {
         const timerSummaryMap = await getDesignTasksTimerSummaryMap(
@@ -2854,10 +2924,7 @@ export default function DesignPage() {
       setTasks((prev) => {
         const nextTasks = [createdTask, ...prev];
         if (typeof window !== "undefined") {
-          writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
-            tasks: nextTasks,
-            cachedAt: Date.now(),
-          } satisfies DesignPageCachePayload);
+          writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
         }
         return nextTasks;
       });
@@ -3002,10 +3069,7 @@ export default function DesignPage() {
       });
 
       if (typeof window !== "undefined") {
-        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, {
-          tasks: nextTasks,
-          cachedAt: Date.now(),
-        } satisfies DesignPageCachePayload);
+        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
       }
 
       toast.success("Назву задачі оновлено");

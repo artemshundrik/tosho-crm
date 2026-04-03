@@ -194,6 +194,36 @@ type QuoteDetailsCachePayload = {
   quote: QuoteSummaryRow;
   cachedAt: number;
 };
+const QUOTE_ACTIVITY_PAGE_SIZE = 60;
+
+function sanitizeQuoteSummaryForCache(quote: QuoteSummaryRow): QuoteSummaryRow {
+  return {
+    id: quote.id,
+    team_id: quote.team_id ?? null,
+    customer_id: quote.customer_id ?? null,
+    number: quote.number ?? null,
+    status: quote.status ?? null,
+    title: quote.title ?? null,
+    quote_type: quote.quote_type ?? null,
+    print_type: quote.print_type ?? null,
+    delivery_type: quote.delivery_type ?? null,
+    currency: quote.currency ?? null,
+    total: quote.total ?? null,
+    created_at: quote.created_at ?? null,
+    updated_at: quote.updated_at ?? null,
+    created_by: quote.created_by ?? null,
+    customer_name: quote.customer_name ?? null,
+    customer_logo_url: quote.customer_logo_url ?? null,
+    assigned_to: quote.assigned_to ?? null,
+    processing_minutes: quote.processing_minutes ?? null,
+    deadline_at: quote.deadline_at ?? null,
+    customer_deadline_at: quote.customer_deadline_at ?? null,
+    design_deadline_at: quote.design_deadline_at ?? null,
+    deadline_note: quote.deadline_note ?? null,
+    deadline_reminder_offset_minutes: quote.deadline_reminder_offset_minutes ?? null,
+    deadline_reminder_comment: quote.deadline_reminder_comment ?? null,
+  };
+}
 
 const DEFAULT_DEADLINE_TIME = "09:00";
 const DEFAULT_MANAGER_RATE = 10;
@@ -426,7 +456,7 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
     const parsed = JSON.parse(raw) as QuoteDetailsCachePayload;
     if (!parsed.quote || typeof parsed.quote !== "object") return null;
     return {
-      quote: parsed.quote,
+      quote: sanitizeQuoteSummaryForCache(parsed.quote),
       cachedAt: Number(parsed.cachedAt ?? Date.now()),
     };
   } catch {
@@ -613,6 +643,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityLoadedAll, setActivityLoadedAll] = useState(false);
 
   const [filesCustomerOpen, setFilesCustomerOpen] = useState(true);
   const [filesDocsOpen, setFilesDocsOpen] = useState(true);
@@ -727,8 +758,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!key || !attachment.storageBucket || !attachment.storagePath) {
         return attachment.url ?? null;
       }
-      if (!options?.forceRefresh && attachmentAccessUrlByKey[key]) {
-        return attachmentAccessUrlByKey[key];
+      const existingUrl = attachmentAccessUrlByKey[key];
+      if (!options?.forceRefresh && existingUrl) {
+        return existingUrl;
       }
 
       const { data: signedData, error: signedError } = await supabase.storage
@@ -736,6 +768,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .createSignedUrl(attachment.storagePath, 60 * 60);
       const signedUrl = typeof signedData?.signedUrl === "string" ? signedData.signedUrl : null;
       if (signedUrl && !signedError) {
+        if (existingUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(existingUrl);
+          attachmentObjectUrlRegistryRef.current.delete(existingUrl);
+        }
         setAttachmentAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
         return signedUrl;
       }
@@ -746,6 +782,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (downloadError || !blobData) return null;
 
       const objectUrl = URL.createObjectURL(blobData);
+      if (existingUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(existingUrl);
+        attachmentObjectUrlRegistryRef.current.delete(existingUrl);
+      }
       attachmentObjectUrlRegistryRef.current.add(objectUrl);
       setAttachmentAccessUrlByKey((prev) => ({ ...prev, [key]: objectUrl }));
       return objectUrl;
@@ -2362,7 +2402,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           sessionStorage.setItem(
             `quote-details-cache:${teamId}:${quoteId}`,
             JSON.stringify({
-              quote: summary,
+              quote: sanitizeQuoteSummaryForCache(summary),
               cachedAt: Date.now(),
             } satisfies QuoteDetailsCachePayload)
           );
@@ -3227,7 +3267,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
-  const loadActivityLog = async () => {
+  const loadActivityLog = async (options?: { full?: boolean }) => {
     setActivityLoading(true);
     setActivityError(null);
     try {
@@ -3240,12 +3280,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (teamId) {
         query = query.eq("team_id", teamId);
       }
+      if (!options?.full) {
+        query = query.limit(QUOTE_ACTIVITY_PAGE_SIZE);
+      }
       const { data, error } = await query;
       if (error) throw error;
-      setActivityRows((data as ActivityRow[]) ?? []);
+      const rows = (data as ActivityRow[]) ?? [];
+      setActivityRows(rows);
+      setActivityLoadedAll(options?.full ?? rows.length < QUOTE_ACTIVITY_PAGE_SIZE);
     } catch (e: unknown) {
       setActivityError(getErrorMessage(e, "Не вдалося завантажити активність."));
       setActivityRows([]);
+      setActivityLoadedAll(false);
     } finally {
       setActivityLoading(false);
     }
@@ -6976,6 +7022,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               </div>
                             </div>
                           ))}
+                          {!activityLoadedAll ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full"
+                              disabled={activityLoading}
+                              onClick={() => void loadActivityLog({ full: true })}
+                            >
+                              {activityLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Завантажити всю активність
+                            </Button>
+                          ) : null}
                         </div>
                       </>
                     )}
