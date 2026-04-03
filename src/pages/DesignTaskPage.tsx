@@ -380,6 +380,7 @@ type DesignTaskPageCachePayload = {
   quoteItem: QuoteItemRow | null;
   productPreviewUrl: string | null;
   attachments: AttachmentRow[];
+  customerAttachmentsLoaded?: boolean;
   designOutputFiles: DesignOutputFile[];
   designOutputLinks: DesignOutputLink[];
   designOutputGroups: string[];
@@ -400,6 +401,7 @@ const statusColors: Record<DesignStatus, string> = {
 
 const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
+const DESIGN_TASK_HISTORY_PAGE_SIZE = 50;
 
 const CAPACITY_BADGE_CLASS_BY_LEVEL = {
   low: "border-success-soft-border bg-success-soft text-success-foreground",
@@ -751,6 +753,11 @@ export default function DesignTaskPage() {
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(() => initialCache?.quoteItem ?? null);
   const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(() => initialCache?.productPreviewUrl ?? null);
   const [attachments, setAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
+  const [customerAttachmentsLoaded, setCustomerAttachmentsLoaded] = useState<boolean>(
+    () => initialCache?.customerAttachmentsLoaded ?? false
+  );
+  const [customerAttachmentsLoading, setCustomerAttachmentsLoading] = useState(false);
+  const [customerAttachmentsError, setCustomerAttachmentsError] = useState<string | null>(null);
   const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>(() => initialCache?.designOutputFiles ?? []);
   const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>(() => initialCache?.designOutputLinks ?? []);
   const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
@@ -774,6 +781,7 @@ export default function DesignTaskPage() {
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoadedAll, setHistoryLoadedAll] = useState(false);
   const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
   const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
   const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
@@ -1381,18 +1389,6 @@ export default function DesignTaskPage() {
         }
         // Keep product image independent from design visualizations.
 
-        // customer attachments (only for quote-linked tasks)
-        const { data: files } = isUuid(quoteId)
-          ? await supabase
-              .schema("tosho")
-              .from("quote_attachments")
-              .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
-              .eq("quote_id", quoteId)
-          : { data: [] };
-
-        const attachmentRows = (files as AttachmentRow[] | null) ?? [];
-        const attachmentsWithUrls = attachmentRows.map((file) => ({ ...file, signed_url: null }));
-
         const rawStandaloneBriefFiles = Array.isArray(meta.standalone_brief_files)
           ? meta.standalone_brief_files
           : [];
@@ -1512,7 +1508,7 @@ export default function DesignTaskPage() {
           metadata: meta,
           methodsCount: meta.methods_count ?? (item?.methods?.length ?? 0),
           hasFiles:
-            typeof meta.has_files === "boolean" ? meta.has_files : (files?.length ?? 0) > 0,
+            typeof meta.has_files === "boolean" ? meta.has_files : parsedStandaloneBriefFiles.length > 0,
           designDeadline:
             (typeof meta.design_deadline === "string" ? meta.design_deadline : null) ??
             (typeof meta.deadline === "string" ? meta.deadline : null),
@@ -1540,13 +1536,10 @@ export default function DesignTaskPage() {
         const designOutputKeys = new Set(
           designFilesWithUrls.map((file) => `${file.storage_bucket}:${file.storage_path}`)
         );
-        const customerOnlyAttachments = attachmentsWithUrls.filter(
-          (file) => !designOutputKeys.has(`${file.storage_bucket}:${file.storage_path}`)
-        );
 
         const nextQuoteItem = item ?? null;
         const nextProductPreviewUrl = itemPreviewUrl;
-        const nextAttachments = [...standaloneBriefFilesWithUrls, ...customerOnlyAttachments];
+        const nextAttachments = [...standaloneBriefFilesWithUrls];
         const nextDesignOutputFiles = designFilesWithUrls;
         const nextDesignOutputLinks = parsedDesignLinks;
         const nextDesignOutputGroups = parsedOutputGroups;
@@ -1555,6 +1548,8 @@ export default function DesignTaskPage() {
         setQuoteItem(nextQuoteItem);
         setProductPreviewUrl(nextProductPreviewUrl);
         setAttachments(nextAttachments);
+        setCustomerAttachmentsLoaded(false);
+        setCustomerAttachmentsError(null);
         setDesignOutputFiles(nextDesignOutputFiles);
         setDesignOutputLinks(nextDesignOutputLinks);
         setDesignOutputGroups(nextDesignOutputGroups);
@@ -1567,6 +1562,7 @@ export default function DesignTaskPage() {
                 quoteItem: nextQuoteItem,
                 productPreviewUrl: nextProductPreviewUrl,
                 attachments: nextAttachments,
+                customerAttachmentsLoaded: false,
                 designOutputFiles: nextDesignOutputFiles,
                 designOutputLinks: nextDesignOutputLinks,
                 designOutputGroups: nextDesignOutputGroups,
@@ -1587,7 +1583,95 @@ export default function DesignTaskPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId, id]);
 
-  const loadHistory = async (taskId: string) => {
+  const loadCustomerAttachments = useCallback(async (options?: { force?: boolean }) => {
+    if (!effectiveTeamId || !task || !isUuid(task.quoteId)) return;
+    if (customerAttachmentsLoading) return;
+    if (customerAttachmentsLoaded && !options?.force) return;
+
+    setCustomerAttachmentsLoading(true);
+    setCustomerAttachmentsError(null);
+    try {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+        .eq("quote_id", task.quoteId);
+      if (error) throw error;
+
+      const attachmentRows = ((data as AttachmentRow[] | null) ?? []).map((file) => ({ ...file, signed_url: null }));
+      const designOutputKeys = new Set(
+        designOutputFiles.map((file) => `${file.storage_bucket}:${file.storage_path}`)
+      );
+      const customerOnlyAttachments = attachmentRows.filter(
+        (file) => !designOutputKeys.has(`${file.storage_bucket}:${file.storage_path}`)
+      );
+      const standaloneKeys = new Set(
+        (Array.isArray(task.metadata?.standalone_brief_files) ? task.metadata.standalone_brief_files : [])
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            const entry = row as Record<string, unknown>;
+            if (typeof entry.storage_bucket !== "string" || typeof entry.storage_path !== "string") return null;
+            return `${entry.storage_bucket}:${entry.storage_path}`;
+          })
+          .filter((value): value is string => !!value)
+      );
+
+      setAttachments((prev) => {
+        const standaloneAttachments = prev.filter((file) =>
+          standaloneKeys.has(`${file.storage_bucket}:${file.storage_path}`)
+        );
+        return [...standaloneAttachments, ...customerOnlyAttachments];
+      });
+      setCustomerAttachmentsLoaded(true);
+
+      if (typeof window !== "undefined" && id) {
+        const cacheKey = `design-task-page-cache:${effectiveTeamId}:${id}`;
+        try {
+          const cachedRaw = sessionStorage.getItem(cacheKey);
+          const cached = cachedRaw ? (JSON.parse(cachedRaw) as Partial<DesignTaskPageCachePayload>) : null;
+          const nextCachedAttachments = [
+            ...attachments.filter((file) => standaloneKeys.has(`${file.storage_bucket}:${file.storage_path}`)),
+            ...customerOnlyAttachments,
+          ];
+          sessionStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              ...(cached ?? {}),
+              task,
+              quoteItem,
+              productPreviewUrl,
+              attachments: nextCachedAttachments,
+              customerAttachmentsLoaded: true,
+              designOutputFiles,
+              designOutputLinks,
+              designOutputGroups,
+              cachedAt: Date.now(),
+            } satisfies DesignTaskPageCachePayload)
+          );
+        } catch {
+          // ignore cache persistence failures
+        }
+      }
+    } catch (e: unknown) {
+      setCustomerAttachmentsError(getErrorMessage(e, "Не вдалося завантажити файли замовника"));
+    } finally {
+      setCustomerAttachmentsLoading(false);
+    }
+  }, [
+    attachments,
+    customerAttachmentsLoaded,
+    customerAttachmentsLoading,
+    designOutputFiles,
+    designOutputGroups,
+    designOutputLinks,
+    effectiveTeamId,
+    id,
+    productPreviewUrl,
+    quoteItem,
+    task,
+  ]);
+
+  const loadHistory = async (taskId: string, options?: { full?: boolean }) => {
     if (!effectiveTeamId) return;
     setHistoryLoading(true);
     setHistoryError(null);
@@ -1607,6 +1691,10 @@ export default function DesignTaskPage() {
         .eq("entity_id", taskId)
         .order("created_at", { ascending: false });
 
+      if (!options?.full) {
+        eventsQuery.limit(DESIGN_TASK_HISTORY_PAGE_SIZE);
+      }
+
       const [{ data: createdRow, error: createdError }, { data: eventRows, error: eventsError }] = await Promise.all([
         createdQuery,
         eventsQuery,
@@ -1620,9 +1708,11 @@ export default function DesignTaskPage() {
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setHistoryRows(rows);
+      setHistoryLoadedAll(options?.full ?? ((eventRows as ActivityRow[] | null)?.length ?? 0) < DESIGN_TASK_HISTORY_PAGE_SIZE);
     } catch (e: unknown) {
       setHistoryRows([]);
       setHistoryError(getErrorMessage(e, "Не вдалося завантажити історію задачі."));
+      setHistoryLoadedAll(false);
     } finally {
       setHistoryLoading(false);
     }
@@ -2929,6 +3019,9 @@ export default function DesignTaskPage() {
       }
 
       setAttachments((prev) => [...uploadedAttachments, ...prev]);
+      if (isUuid(task.quoteId)) {
+        setCustomerAttachmentsLoaded(true);
+      }
 
       try {
         const actorLabel = userId ? getMemberLabel(userId) : "System";
@@ -3408,15 +3501,19 @@ export default function DesignTaskPage() {
           : null;
       const customerName = normalizePartyMatch(task.customerName ?? null);
 
-      const { data, error } = await supabase
+      const quotesQuery = supabase
         .schema("tosho")
         .from("quotes")
         .select("id,number,status,customer_id,customer_name,customer_logo_url,created_at,title")
         .eq("team_id", effectiveTeamId)
         .order("created_at", { ascending: false });
+
+      const { data, error } = customerId
+        ? await quotesQuery.eq("customer_id", customerId)
+        : await quotesQuery;
       if (error) throw error;
 
-      const nextCandidates = (((data ?? []) as Array<{
+      const rowsSource = ((data ?? []) as Array<{
         id: string;
         number?: string | null;
         status?: string | null;
@@ -3425,7 +3522,9 @@ export default function DesignTaskPage() {
         customer_logo_url?: string | null;
         created_at?: string | null;
         title?: string | null;
-      }>)
+      }>);
+
+      const nextCandidates = (rowsSource
         .filter((row) => row.id !== task.quoteId)
         .filter((row) => {
           if (customerId && row.customer_id) return row.customer_id === customerId;
@@ -3839,6 +3938,7 @@ export default function DesignTaskPage() {
             quoteItem,
             productPreviewUrl,
             attachments: [],
+            customerAttachmentsLoaded: false,
             designOutputFiles: [],
             designOutputLinks,
             designOutputGroups,
@@ -6427,11 +6527,49 @@ export default function DesignTaskPage() {
               </div>
             </div>
             {attachments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
-                Немає вкладень
-              </div>
+              isLinkedQuote && !customerAttachmentsLoaded ? (
+                <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground space-y-3">
+                  <div>Файли замовника ще не завантажені.</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    disabled={customerAttachmentsLoading}
+                    onClick={() => void loadCustomerAttachments()}
+                  >
+                    {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Завантажити файли замовника
+                  </Button>
+                  {customerAttachmentsError ? (
+                    <div className="text-xs text-destructive">{customerAttachmentsError}</div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                  Немає вкладень
+                </div>
+              )
             ) : (
               <div className="space-y-2.5">
+                {isLinkedQuote && !customerAttachmentsLoaded ? (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                    <span>Файли замовника не завантажені. Зараз показані лише файли з ТЗ.</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2.5"
+                      disabled={customerAttachmentsLoading}
+                      onClick={() => void loadCustomerAttachments()}
+                    >
+                      {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Завантажити"}
+                    </Button>
+                  </div>
+                ) : null}
+                {customerAttachmentsError ? (
+                  <div className="text-xs text-destructive">{customerAttachmentsError}</div>
+                ) : null}
                 {attachments.map((file) => {
                   const extension = getFileExtension(file.file_name);
                   return (
@@ -6636,6 +6774,23 @@ export default function DesignTaskPage() {
                     </div>
                   </div>
                 ))}
+                {!historyLoadedAll ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={historyLoading || !task?.id}
+                    onClick={() => {
+                      if (task?.id) {
+                        void loadHistory(task.id, { full: true });
+                      }
+                    }}
+                  >
+                    {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Завантажити всю історію
+                  </Button>
+                ) : null}
               </div>
             )}
           </div>

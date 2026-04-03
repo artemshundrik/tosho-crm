@@ -22,7 +22,6 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
-import { OverviewPage } from "@/pages/OverviewPage";
 import {
   getCachedCurrentWorkspaceMemberDirectoryEntry,
   getCurrentWorkspaceMemberDirectoryEntry,
@@ -99,6 +98,9 @@ const FinancePoolDetailsPage = lazyWithRetry(() =>
   import("./pages/FinancePoolDetailsPage").then((module) => ({
     default: module.FinancePoolDetailsPage,
   }))
+);
+const OverviewPage = lazyWithRetry(() =>
+  import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
 const ResetPasswordPage = lazyWithRetry(() => import("./pages/ResetPasswordPage"));
 const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPage"));

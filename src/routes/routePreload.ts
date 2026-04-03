@@ -1,37 +1,45 @@
 type RouteImporter = () => Promise<unknown>;
 
-const routeImporters: Array<[RegExp, RouteImporter]> = [
-  [/^\/overview$/, () => import("../pages/OverviewPage")],
-  [/^\/finance$/, () => import("../pages/FinancePage")],
-  [/^\/finance\/invoices$/, () => import("../pages/FinanceInvoicesPage")],
-  [/^\/finance\/expense-invoices$/, () => import("../pages/FinanceExpenseInvoicesPage")],
-  [/^\/finance\/acts$/, () => import("../pages/FinanceActsPage")],
-  [/^\/activity$/, () => import("../pages/ActivityPage")],
-  [/^\/notifications$/, () => import("../pages/NotificationsPage")],
-  [/^\/settings\/members$/, () => import("../pages/TeamMembersPage")],
-  [/^\/profile$/, () => import("../pages/ProfilePage")],
-  [/^\/admin$/, () => import("../pages/AdminPage")],
-  [/^\/admin\/runtime-errors$/, () => import("../pages/RuntimeErrorsPage")],
-  [/^\/orders\/estimates$/, () => import("../pages/OrdersEstimatesPage")],
-  [/^\/orders\/estimates\/[^/]+$/, () => import("../pages/OrdersEstimateDetailsPage")],
-  [/^\/orders\/customers$/, () => import("../pages/OrdersCustomersPage")],
-  [/^\/orders\/production$/, () => import("../pages/OrdersProductionPage")],
-  [/^\/orders\/ready-to-ship$/, () => import("../pages/OrdersReadyToShipPage")],
-  [/^\/catalog\/products$/, () => import("../features/catalog/ProductCatalogPage")],
-  [/^\/logistics$/, () => import("../pages/LogisticsPage")],
-  [/^\/design$/, () => import("../pages/DesignPage")],
-  [/^\/design\/[^/]+$/, () => import("../pages/DesignTaskPage")],
-  [/^\/contractors$/, () => import("../pages/ContractorsPage")],
+type RoutePreloadEntry = {
+  pattern: RegExp;
+  importer: RouteImporter;
+  heavy?: boolean;
+};
+
+const routeImporters: RoutePreloadEntry[] = [
+  { pattern: /^\/overview$/, importer: () => import("../pages/OverviewPage") },
+  { pattern: /^\/finance$/, importer: () => import("../pages/FinancePage") },
+  { pattern: /^\/finance\/invoices$/, importer: () => import("../pages/FinanceInvoicesPage") },
+  { pattern: /^\/finance\/expense-invoices$/, importer: () => import("../pages/FinanceExpenseInvoicesPage") },
+  { pattern: /^\/finance\/acts$/, importer: () => import("../pages/FinanceActsPage") },
+  { pattern: /^\/activity$/, importer: () => import("../pages/ActivityPage") },
+  { pattern: /^\/notifications$/, importer: () => import("../pages/NotificationsPage") },
+  { pattern: /^\/settings\/members$/, importer: () => import("../pages/TeamMembersPage") },
+  { pattern: /^\/profile$/, importer: () => import("../pages/ProfilePage") },
+  { pattern: /^\/admin$/, importer: () => import("../pages/AdminPage") },
+  { pattern: /^\/admin\/runtime-errors$/, importer: () => import("../pages/RuntimeErrorsPage") },
+  { pattern: /^\/orders\/estimates$/, importer: () => import("../pages/OrdersEstimatesPage"), heavy: true },
+  { pattern: /^\/orders\/estimates\/[^/]+$/, importer: () => import("../pages/OrdersEstimateDetailsPage"), heavy: true },
+  { pattern: /^\/orders\/customers$/, importer: () => import("../pages/OrdersCustomersPage"), heavy: true },
+  { pattern: /^\/orders\/production$/, importer: () => import("../pages/OrdersProductionPage"), heavy: true },
+  { pattern: /^\/orders\/ready-to-ship$/, importer: () => import("../pages/OrdersReadyToShipPage"), heavy: true },
+  { pattern: /^\/catalog\/products$/, importer: () => import("../features/catalog/ProductCatalogPage"), heavy: true },
+  { pattern: /^\/logistics$/, importer: () => import("../pages/LogisticsPage"), heavy: true },
+  { pattern: /^\/design$/, importer: () => import("../pages/DesignPage"), heavy: true },
+  { pattern: /^\/design\/[^/]+$/, importer: () => import("../pages/DesignTaskPage"), heavy: true },
+  { pattern: /^\/contractors$/, importer: () => import("../pages/ContractorsPage"), heavy: true },
 ];
 
 const prefetched = new Set<string>();
+const ALLOW_HEAVY_ROUTE_PRELOAD = false;
 
 export function preloadRoute(pathname: string) {
   if (prefetched.has(pathname)) return;
-  const match = routeImporters.find(([pattern]) => pattern.test(pathname));
+  const match = routeImporters.find((entry) => entry.pattern.test(pathname));
   if (!match) return;
+  if (match.heavy && !ALLOW_HEAVY_ROUTE_PRELOAD) return;
   prefetched.add(pathname);
-  void match[1]().catch((error) => {
+  void match.importer().catch((error) => {
     prefetched.delete(pathname);
     console.warn("Route preload failed", pathname, error);
   });

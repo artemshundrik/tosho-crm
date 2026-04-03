@@ -124,6 +124,7 @@ const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
+const DESIGN_PAGE_SIZE = 100;
 type DesignPageCachePayload = {
   tasks: DesignTask[];
   cachedAt: number;
@@ -581,6 +582,8 @@ export default function DesignPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
+  const [tasksFetchLimit, setTasksFetchLimit] = useState(DESIGN_PAGE_SIZE);
+  const [hasMoreTasks, setHasMoreTasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<DesignStatus | null>(null);
@@ -1021,15 +1024,26 @@ export default function DesignPage() {
     }
     setError(null);
     try {
+      const fetchLimit = tasksFetchLimit + 1;
       const { data, error: fetchError } = await supabase
         .from("activity_log")
         .select("id,entity_id,metadata,title,created_at")
         .eq("team_id", effectiveTeamId)
         .eq("action", "design_task")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(fetchLimit);
       if (fetchError) throw fetchError;
+      const fetchedRows = ((data ?? []) as Array<{
+        id: string;
+        entity_id?: string | null;
+        metadata?: Record<string, unknown> | null;
+        title?: string | null;
+        created_at: string;
+      }>);
+      const limitedRows = fetchedRows.slice(0, tasksFetchLimit);
+      setHasMoreTasks(fetchedRows.length > tasksFetchLimit);
       const parsedRaw =
-        data?.map((row) => {
+        limitedRows.map((row) => {
           const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
           const metadataQuoteId =
             typeof metadata.quote_id === "string" && metadata.quote_id.trim()
@@ -1110,7 +1124,7 @@ export default function DesignPage() {
             designDeadline: metadata.design_deadline ?? metadata.deadline ?? null,
             createdAt: row.created_at as string,
           } as DesignTask;
-        }) ?? [];
+        });
 
       // Fetch quote details for number and customer
       const quoteIds = Array.from(
@@ -1370,6 +1384,7 @@ export default function DesignPage() {
       }
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити задачі дизайну");
+      setHasMoreTasks(false);
       if (tasks.length > 0) {
         console.warn("Failed to refresh design tasks", e);
         toast.error(message);
@@ -1389,6 +1404,7 @@ export default function DesignPage() {
     memberAvatarById,
     memberById,
     tasks.length,
+    tasksFetchLimit,
     userId,
   ]);
 
@@ -1431,17 +1447,28 @@ export default function DesignPage() {
       setCompletedByAssignee({});
       return;
     }
+    if (tasks.length === 0) {
+      setCompletedByAssignee({});
+      return;
+    }
 
     let active = true;
     const loadCompletedSummary = async () => {
       setCompletedSummaryLoading(true);
       try {
         const since = getCompletedPeriodStart(completedPeriod).toISOString();
+        const taskIds = tasks.map((task) => task.id).filter(Boolean);
+        if (taskIds.length === 0) {
+          if (active) setCompletedByAssignee({});
+          return;
+        }
+
         const { data, error: fetchError } = await supabase
           .from("activity_log")
           .select("entity_id,metadata,created_at")
           .eq("team_id", effectiveTeamId)
           .eq("action", "design_task_status")
+          .in("entity_id", taskIds)
           .gte("created_at", since);
         if (fetchError) throw fetchError;
 
@@ -3522,6 +3549,7 @@ export default function DesignPage() {
               <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
               <span className="ml-1 text-muted-foreground">знайдено</span>
             </div>
+            {hasMoreTasks ? <div className="text-xs text-muted-foreground">Показано перші {tasks.length}</div> : null}
           </div>
         </div>
       </div>
@@ -3535,6 +3563,7 @@ export default function DesignPage() {
       designerFilterOptions,
       filteredTasks.length,
       getMemberAvatar,
+      hasMoreTasks,
       hasActiveFilters,
       isManagerUser,
       linkedTasksCount,
@@ -4625,6 +4654,21 @@ export default function DesignPage() {
             : "Завантаження задач..."}
         </div>
       )}
+
+      {hasMoreTasks ? (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-[220px]"
+            disabled={loading || refreshing}
+            onClick={() => setTasksFetchLimit((current) => current + DESIGN_PAGE_SIZE)}
+          >
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Показати ще задачі
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog
         open={createDialogOpen}
