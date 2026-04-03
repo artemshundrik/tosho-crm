@@ -359,6 +359,18 @@ const parseDateOnly = (value: string) => {
   return new Date(value);
 };
 
+const LOAD_TASKS_RESOURCE_COOLDOWN_MS = 30_000;
+
+const isResourceExhaustionLikeError = (error: unknown) => {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("insufficient resources") ||
+    message.includes("networkerror") ||
+    message.includes("load failed")
+  );
+};
+
 function readDesignPageCache(teamId: string): DesignPageCachePayload | null {
   if (typeof window === "undefined" || !teamId) return null;
   try {
@@ -752,6 +764,9 @@ export default function DesignPage() {
   const [completedByAssignee, setCompletedByAssignee] = useState<Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }>>({});
   const [, setCompletedSummaryLoading] = useState(false);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
+  const loadTasksInFlightRef = useRef(false);
+  const loadTasksCooldownUntilRef = useRef(0);
+  const resourceErrorToastShownRef = useRef(false);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
@@ -1088,8 +1103,14 @@ export default function DesignPage() {
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (options?: { force?: boolean }) => {
     if (!effectiveTeamId) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden" && !options?.force) return;
+    if (loadTasksInFlightRef.current) return;
+    const now = Date.now();
+    if (!options?.force && loadTasksCooldownUntilRef.current > now) return;
+
+    loadTasksInFlightRef.current = true;
     if (tasks.length > 0) {
       setRefreshing(true);
     } else {
@@ -1452,16 +1473,30 @@ export default function DesignPage() {
         console.warn("Failed to load timer summaries", timerError);
         setTimerSummaryByTaskId({});
       }
+      loadTasksCooldownUntilRef.current = 0;
+      resourceErrorToastShownRef.current = false;
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити задачі дизайну");
       setHasMoreTasks(false);
-      if (tasks.length > 0) {
+      if (isResourceExhaustionLikeError(e)) {
+        loadTasksCooldownUntilRef.current = Date.now() + LOAD_TASKS_RESOURCE_COOLDOWN_MS;
+        if (tasks.length > 0) {
+          console.warn("Paused design task refresh after resource exhaustion", e);
+          if (!resourceErrorToastShownRef.current) {
+            toast.error("Вкладка перевантажена. Оновлення задач тимчасово призупинено на 30 секунд.");
+            resourceErrorToastShownRef.current = true;
+          }
+        } else {
+          setError("Браузер перевантажений. Спробуйте перезавантажити вкладку.");
+        }
+      } else if (tasks.length > 0) {
         console.warn("Failed to refresh design tasks", e);
         toast.error(message);
       } else {
         setError(message);
       }
     } finally {
+      loadTasksInFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -1479,7 +1514,7 @@ export default function DesignPage() {
   ]);
 
   useEffect(() => {
-    void loadTasks();
+    void loadTasks({ force: true });
   }, [loadTasks]);
 
   useEffect(() => {
@@ -1503,6 +1538,7 @@ export default function DesignPage() {
     const handleCustomersUpdated = (event: Event) => {
       const customEvent = event as CustomEvent<{ teamId?: string }>;
       if (customEvent.detail?.teamId !== effectiveTeamId) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       void loadTasks();
     };
 
@@ -1517,6 +1553,7 @@ export default function DesignPage() {
       setCompletedByAssignee({});
       return;
     }
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (tasks.length === 0) {
       setCompletedByAssignee({});
       return;

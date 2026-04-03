@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const AVATAR_SIGN_TTL_SECONDS = 60 * 60 * 24 * 7;
 const AVATAR_CACHE_SKEW_MS = 5 * 60 * 1000;
 const AVATAR_CACHE_KEY = "avatar-url-cache-v2";
+const AVATAR_FAILURE_TTL_MS = 60 * 60 * 1000;
 type AvatarCacheEntry = {
   value: string | null;
   expiresAt: number | null;
@@ -94,7 +95,9 @@ function isSupabaseStorageUrl(url: string, bucket: string) {
 function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   const normalizedUrl = normalizeAvatarKey(rawUrl);
   if (!normalizedUrl) return false;
-  if (isSupabaseStorageUrl(normalizedUrl, bucket)) return true;
+  if (normalizedUrl.includes(`/storage/v1/object/public/${bucket}/`)) return false;
+  if (normalizedUrl.includes(`/storage/v1/object/sign/${bucket}/`)) return false;
+  if (normalizedUrl.includes(`/storage/v1/object/${bucket}/`)) return true;
   if (/^(https?:)?\/\//i.test(normalizedUrl) || normalizedUrl.startsWith("data:") || normalizedUrl.startsWith("blob:")) {
     return false;
   }
@@ -151,7 +154,8 @@ export async function resolveAvatarDisplayUrl(
       .createSignedUrl(objectPath, AVATAR_SIGN_TTL_SECONDS);
 
     if (error || !data?.signedUrl) {
-      return normalizedRawUrl;
+      setResolvedAvatar(normalizedRawUrl, null, Date.now() + AVATAR_FAILURE_TTL_MS);
+      return null;
     }
 
     const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
