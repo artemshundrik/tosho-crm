@@ -715,14 +715,45 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setCustomersError(null);
     try {
+      const customerColumns = [
+        "id",
+        "team_id",
+        "name",
+        "legal_name",
+        "manager",
+        "manager_user_id",
+        "ownership_type",
+        "vat_rate",
+        "tax_id",
+        "website",
+        "iban",
+        "logo_url",
+        "legal_entities",
+        "contact_name",
+        "contact_position",
+        "contact_phone",
+        "contact_email",
+        "contact_birthday",
+        "contacts",
+        "signatory_name",
+        "signatory_position",
+        "reminder_at",
+        "reminder_comment",
+        "event_name",
+        "event_at",
+        "event_comment",
+        "notes",
+        "created_at",
+        "updated_at",
+      ].join(",");
       const { data, error: loadError } = await supabase
         .schema("tosho")
         .from("customers")
-        .select("*")
+        .select(customerColumns)
         .eq("team_id", teamId)
         .order("name", { ascending: true });
       if (loadError) throw loadError;
-      setRows((data as CustomerRow[]) ?? []);
+      setRows(((data as unknown) as CustomerRow[]) ?? []);
     } catch (err: unknown) {
       setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
     } finally {
@@ -739,14 +770,41 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setLeadsError(null);
     try {
+      const leadColumns = [
+        "id",
+        "team_id",
+        "company_name",
+        "legal_name",
+        "ownership_type",
+        "logo_url",
+        "first_name",
+        "last_name",
+        "email",
+        "phone_numbers",
+        "source",
+        "website",
+        "manager",
+        "manager_user_id",
+        "iban",
+        "signatory_name",
+        "signatory_position",
+        "reminder_at",
+        "reminder_comment",
+        "event_name",
+        "event_at",
+        "event_comment",
+        "notes",
+        "created_at",
+        "updated_at",
+      ].join(",");
       const { data, error: loadError } = await supabase
         .schema("tosho")
         .from("leads")
-        .select("*")
+        .select(leadColumns)
         .eq("team_id", teamId)
         .order("company_name", { ascending: true });
       if (loadError) throw loadError;
-      setLeads((data as LeadRow[]) ?? []);
+      setLeads(((data as unknown) as LeadRow[]) ?? []);
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Не вдалося завантажити ліди.");
       if (message.includes("relation") && message.includes("leads")) {

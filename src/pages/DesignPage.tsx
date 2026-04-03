@@ -784,6 +784,13 @@ export default function DesignPage() {
   const loadTasksInFlightRef = useRef(false);
   const loadTasksCooldownUntilRef = useRef(0);
   const resourceErrorToastShownRef = useRef(false);
+  const tasksLengthRef = useRef(0);
+  const customersRef = useRef<CustomerOption[]>([]);
+  const memberByIdRef = useRef<Record<string, string>>({});
+  const memberAvatarByIdRef = useRef<Record<string, string | null>>({});
+  const currentUserDisplayNameRef = useRef("");
+  const currentUserAvatarUrlRef = useRef<string | null>(null);
+  const initialLogoEntriesRef = useRef<CustomerOption[]>(initialLogoCache?.entries ?? []);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
@@ -802,6 +809,27 @@ export default function DesignPage() {
     const raw = session?.user?.user_metadata?.avatar_url;
     return typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }, [session?.user?.user_metadata]);
+  useEffect(() => {
+    tasksLengthRef.current = tasks.length;
+  }, [tasks.length]);
+  useEffect(() => {
+    customersRef.current = customers;
+  }, [customers]);
+  useEffect(() => {
+    memberByIdRef.current = memberById;
+  }, [memberById]);
+  useEffect(() => {
+    memberAvatarByIdRef.current = memberAvatarById;
+  }, [memberAvatarById]);
+  useEffect(() => {
+    currentUserDisplayNameRef.current = currentUserDisplayName;
+  }, [currentUserDisplayName]);
+  useEffect(() => {
+    currentUserAvatarUrlRef.current = currentUserAvatarUrl;
+  }, [currentUserAvatarUrl]);
+  useEffect(() => {
+    initialLogoEntriesRef.current = initialLogoCache?.entries ?? [];
+  }, [initialLogoCache?.entries]);
   const updateCreateDeadlineDate = useCallback((date?: Date) => {
     if (!date) {
       setCreateDeadline(undefined);
@@ -1128,7 +1156,7 @@ export default function DesignPage() {
     if (!options?.force && loadTasksCooldownUntilRef.current > now) return;
 
     loadTasksInFlightRef.current = true;
-    if (tasks.length > 0) {
+    if (tasksLengthRef.current > 0) {
       setRefreshing(true);
     } else {
       setLoading(true);
@@ -1457,21 +1485,21 @@ export default function DesignPage() {
         assigneeLabel:
           t.assigneeLabel ??
           (t.assigneeUserId
-            ? (t.assigneeUserId === userId && currentUserDisplayName
-                ? currentUserDisplayName
-                : (memberById[t.assigneeUserId] ?? null))
+                ? (t.assigneeUserId === userId && currentUserDisplayNameRef.current
+                ? currentUserDisplayNameRef.current
+                : (memberByIdRef.current[t.assigneeUserId] ?? null))
             : null),
         assigneeAvatarUrl:
           sanitizeImageReference(t.assigneeAvatarUrl) ??
           (t.assigneeUserId
-            ? (t.assigneeUserId === userId && currentUserAvatarUrl
-                ? sanitizeImageReference(currentUserAvatarUrl)
-                : sanitizeImageReference(memberAvatarById[t.assigneeUserId] ?? null))
+            ? (t.assigneeUserId === userId && currentUserAvatarUrlRef.current
+                ? sanitizeImageReference(currentUserAvatarUrlRef.current)
+                : sanitizeImageReference(memberAvatarByIdRef.current[t.assigneeUserId] ?? null))
             : null),
       }));
       const parsed = applyCustomerLogosToTasks(
         parsedBase,
-        customers.length > 0 ? customers : (initialLogoCache?.entries ?? [])
+        customersRef.current.length > 0 ? customersRef.current : initialLogoEntriesRef.current
       );
 
       setTasks(parsed);
@@ -1499,7 +1527,7 @@ export default function DesignPage() {
       setHasMoreTasks(false);
       if (isResourceExhaustionLikeError(e)) {
         loadTasksCooldownUntilRef.current = Date.now() + LOAD_TASKS_RESOURCE_COOLDOWN_MS;
-        if (tasks.length > 0) {
+        if (tasksLengthRef.current > 0) {
           console.warn("Paused design task refresh after resource exhaustion", e);
           if (!resourceErrorToastShownRef.current) {
             toast.error("Вкладка перевантажена. Оновлення задач тимчасово призупинено на 30 секунд.");
@@ -1508,7 +1536,7 @@ export default function DesignPage() {
         } else {
           setError("Браузер перевантажений. Спробуйте перезавантажити вкладку.");
         }
-      } else if (tasks.length > 0) {
+      } else if (tasksLengthRef.current > 0) {
         console.warn("Failed to refresh design tasks", e);
         toast.error(message);
       } else {
@@ -1520,14 +1548,7 @@ export default function DesignPage() {
       setRefreshing(false);
     }
   }, [
-    currentUserAvatarUrl,
-    currentUserDisplayName,
-    customers,
     effectiveTeamId,
-    initialLogoCache?.entries,
-    memberAvatarById,
-    memberById,
-    tasks.length,
     tasksFetchLimit,
     userId,
   ]);
