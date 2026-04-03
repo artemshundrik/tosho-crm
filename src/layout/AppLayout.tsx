@@ -106,9 +106,8 @@ type MatchMeta = {
 
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
-const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
-const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
-const REMINDER_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const FALLBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const REMINDER_POLL_INTERVAL_MS = 10 * 60 * 1000;
 
 function isDocumentVisible() {
   if (typeof document === "undefined") return true;
@@ -1077,10 +1076,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   useEffect(() => {
     if (!userId) return;
+    if (!realtimeDisabled) return;
     const intervalId = window.setInterval(() => {
       if (!isDocumentVisible()) return;
       void loadNotifications();
-    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
+    }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
 
@@ -1234,10 +1234,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   useEffect(() => {
     if (!teamId || !userId) return;
+    if (!realtimeDisabled) return;
     const intervalId = window.setInterval(() => {
       if (!isDocumentVisible()) return;
       void loadActivityUnread();
-    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
+    }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadActivityUnread, realtimeDisabled, teamId, userId]);
 

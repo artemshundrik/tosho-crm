@@ -324,14 +324,14 @@ export function OverviewPage() {
         .eq("team_id", teamId)
         .eq("action", "design_task")
         .order("created_at", { ascending: false })
-        .limit(120);
+        .limit(60);
 
       const activityPromise = supabase
         .from("activity_log")
         .select("id,title,action,actor_name,user_id,entity_type,href,created_at")
         .eq("team_id", teamId)
         .order("created_at", { ascending: false })
-        .limit(8);
+        .limit(6);
 
       const [
         quoteCountsRows,
@@ -433,10 +433,9 @@ export function OverviewPage() {
         }),
       };
     },
-    cacheTTL: 60 * 1000,
+    cacheTTL: 10 * 60 * 1000,
     showSkeletonOnStale: false,
-    backgroundRefetch: true,
-    refetchInterval: 3 * 60 * 1000,
+    backgroundRefetch: false,
   });
 
   const safeData = data ?? createEmptyOverviewData();

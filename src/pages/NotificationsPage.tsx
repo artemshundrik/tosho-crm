@@ -43,8 +43,7 @@ type PreviewTone = "info" | "success" | "warning";
 
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
-const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
-const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+const FALLBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
 
 function isDocumentVisible() {
   if (typeof document === "undefined") return true;
@@ -232,10 +231,11 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!userId) return;
+    if (!realtimeDisabled) return;
     const intervalId = window.setInterval(() => {
       if (!isDocumentVisible()) return;
       void loadNotifications(false);
-    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
+    }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
 
