@@ -7,6 +7,7 @@ type ListQuotesParams = {
   teamId: string;
   search?: string;
   status?: string;
+  limit?: number;
 };
 
 export type QuoteListRow = {
@@ -193,7 +194,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 }
 
 export async function listQuotes(params: ListQuotesParams) {
-  const { teamId, search, status } = params;
+  const { teamId, search, status, limit } = params;
   const q = search?.trim() ?? "";
 
   const listFromQuotes = async () => {
@@ -269,6 +270,10 @@ export async function listQuotes(params: ListQuotesParams) {
 
       if (status && status !== "all") {
         query = query.eq("status", status);
+      }
+
+      if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+        query = query.limit(limit);
       }
 
       const result = await query;

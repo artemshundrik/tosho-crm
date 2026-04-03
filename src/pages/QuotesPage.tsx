@@ -145,6 +145,7 @@ const ALL_MANAGERS_FILTER = "__all__";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
+const QUOTES_PAGE_SIZE = 100;
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
 };
@@ -318,6 +319,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const initialFilters = readQuotesPageFiltersState(teamId);
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
+  const [quotesFetchLimit, setQuotesFetchLimit] = useState(QUOTES_PAGE_SIZE);
+  const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -488,6 +491,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [currentUserId, setCurrentUserId] = useState<string>();
   const [currentUserManagerLabel, setCurrentUserManagerLabel] = useState("");
   const quotesLoadRequestIdRef = useRef(0);
+  const fetchedQuoteMembershipIdsRef = useRef<Set<string>>(new Set());
+  const inflightQuoteMembershipIdsRef = useRef<Set<string>>(new Set());
   const cacheKey = `quotes-page-cache:${teamId}`;
 
   // Get current user ID
@@ -1099,7 +1104,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     setError(null);
     try {
-      const data = await listQuotes({ teamId, search, status });
+      const data = await listQuotes({ teamId, search, status, limit: quotesFetchLimit });
 
       const missingCustomerIds = Array.from(
         new Set(
@@ -1145,21 +1150,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ),
         };
       });
-      const ids = mergedRows.map((row) => row.id).filter(Boolean);
-      const [membershipMap] = await Promise.all([
-        (async () => {
-          if (ids.length === 0) return new Map<string, QuoteSetMembershipInfo>();
-          try {
-            return await listQuoteSetMemberships(teamId, ids);
-          } catch {
-            return new Map<string, QuoteSetMembershipInfo>();
-          }
-        })(),
-      ]);
-
       if (requestId !== quotesLoadRequestIdRef.current) return;
+      setHasMoreQuotes(data.length >= quotesFetchLimit);
       setRows(mergedRows);
-      setQuoteMembershipByQuoteId(membershipMap);
+      setQuoteMembershipByQuoteId(new Map());
+      fetchedQuoteMembershipIdsRef.current = new Set();
+      inflightQuoteMembershipIdsRef.current = new Set();
       setAttachmentCounts({});
 
       try {
@@ -1168,7 +1164,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           JSON.stringify({
             rows: mergedRows,
             attachmentCounts: {},
-            quoteMembershipEntries: Array.from(membershipMap.entries()),
+            quoteMembershipEntries: [],
             kanbanProductEntries: [],
             cachedAt: Date.now(),
           })
@@ -1179,9 +1175,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     } catch (e: unknown) {
       if (requestId !== quotesLoadRequestIdRef.current) return;
       setError(getErrorMessage(e, "Не вдалося завантажити список."));
+      setHasMoreQuotes(false);
       setRows([]);
       setAttachmentCounts({});
       setQuoteMembershipByQuoteId(new Map());
+      fetchedQuoteMembershipIdsRef.current = new Set();
+      inflightQuoteMembershipIdsRef.current = new Set();
       setKanbanProductByQuoteId({});
     } finally {
       if (requestId === quotesLoadRequestIdRef.current) {
@@ -1256,6 +1255,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setRows([]);
     setAttachmentCounts({});
     setQuoteMembershipByQuoteId(new Map());
+    fetchedQuoteMembershipIdsRef.current = new Set();
+    inflightQuoteMembershipIdsRef.current = new Set();
     setKanbanProductByQuoteId({});
     setLoading(true);
   }, [cacheKey, teamId]);
@@ -1268,7 +1269,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }, delay);
     return () => window.clearTimeout(id);
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, status, search]);
+  }, [teamId, status, search, quotesFetchLimit]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1300,6 +1301,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
   void handleRowStatusChange;
+
+  const handleLoadMoreQuotes = () => {
+    if (loading || refreshing || !hasMoreQuotes) return;
+    setQuotesFetchLimit((prev) => prev + QUOTES_PAGE_SIZE);
+  };
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
@@ -2373,6 +2379,52 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsItems,
   });
   const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
+
+  useEffect(() => {
+    const relevantIds = Array.from(
+      new Set([
+        ...(contentView !== "sets" ? filteredAndSortedRows.map((row) => row.id).filter(Boolean) : []),
+        ...selectedRows.map((row) => row.id).filter(Boolean),
+        ...(quickAddTargetQuote?.id ? [quickAddTargetQuote.id] : []),
+      ])
+    );
+
+    if (relevantIds.length === 0) return;
+
+    const missingIds = relevantIds.filter(
+      (id) =>
+        !fetchedQuoteMembershipIdsRef.current.has(id) &&
+        !inflightQuoteMembershipIdsRef.current.has(id)
+    );
+    if (missingIds.length === 0) return;
+
+    missingIds.forEach((id) => inflightQuoteMembershipIdsRef.current.add(id));
+    let cancelled = false;
+
+    const loadMembership = async () => {
+      try {
+        const membershipMap = await listQuoteSetMemberships(teamId, missingIds);
+        if (cancelled) return;
+
+        missingIds.forEach((id) => fetchedQuoteMembershipIdsRef.current.add(id));
+        setQuoteMembershipByQuoteId((prev) => {
+          const next = new Map(prev);
+          membershipMap.forEach((value, key) => {
+            next.set(key, value);
+          });
+          return next;
+        });
+      } finally {
+        missingIds.forEach((id) => inflightQuoteMembershipIdsRef.current.delete(id));
+      }
+    };
+
+    void loadMembership();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentView, filteredAndSortedRows, quickAddTargetQuote, selectedRows, teamId]);
 
   useEffect(() => {
     if (viewMode !== "kanban") return;
@@ -5271,6 +5323,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </TableBody>
               </Table>
             </div>
+            {hasMoreQuotes ? (
+              <div className="flex justify-center px-4 pb-4 pt-2 md:px-6">
+                <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>
+                  {refreshing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Завантаження...
+                    </>
+                  ) : (
+                    "Показати ще"
+                  )}
+                </Button>
+              </div>
+            ) : null}
             </>
           )}
         </EstimatesTableCanvas>
@@ -5301,6 +5367,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           ) : (
+            <>
             <div
               ref={desktopKanbanViewportRef}
               className="min-h-0 overflow-hidden"
@@ -5569,6 +5636,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 })}
             </KanbanBoard>
             </div>
+            {hasMoreQuotes ? (
+              <div className="flex justify-center px-4 pb-4 pt-2 md:px-6">
+                <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>
+                  {refreshing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Завантаження...
+                    </>
+                  ) : (
+                    "Показати ще"
+                  )}
+                </Button>
+              </div>
+            ) : null}
+            </>
           )}
         </EstimatesKanbanCanvas>
       ))}
