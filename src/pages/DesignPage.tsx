@@ -57,6 +57,7 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
+import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -173,15 +174,6 @@ const isUuid = (value?: string | null) =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
-const getQuoteMonthCode = (value?: string | null) => {
-  const date = value ? new Date(value) : new Date();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear()).slice(-2);
-  return `${month}${year}`;
-};
-
-const formatDesignTaskNumber = (monthCode: string, sequence: number) => `TS-${monthCode}-${String(Math.max(1, sequence)).padStart(4, "0")}`;
-
 const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: string | null; designTaskNumber?: string | null }>) => {
   const counters = new Map<string, number>();
   const map = new Map<string, string>();
@@ -196,7 +188,7 @@ const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: 
       map.set(task.id, task.designTaskNumber);
       return;
     }
-    const monthCode = getQuoteMonthCode(task.createdAt ?? null);
+    const monthCode = getDesignTaskMonthCode(task.createdAt ?? null);
     const next = (counters.get(monthCode) ?? 0) + 1;
     counters.set(monthCode, next);
     map.set(task.id, formatDesignTaskNumber(monthCode, next));
@@ -1502,22 +1494,6 @@ export default function DesignPage() {
     if (task.designTaskNumber) return task.designTaskNumber;
     if (isUuid(task.quoteId) && task.quoteNumber) return task.quoteNumber;
     return task.quoteId.slice(0, 8);
-  };
-
-  const getNextDesignTaskNumber = async (teamId: string, createdAtIso: string) => {
-    const date = new Date(createdAtIso);
-    const monthCode = getQuoteMonthCode(createdAtIso);
-    const monthStartIso = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
-    const nextMonthStartIso = new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString();
-    const { count, error } = await supabase
-      .from("activity_log")
-      .select("id", { count: "exact", head: true })
-      .eq("team_id", teamId)
-      .eq("action", "design_task")
-      .gte("created_at", monthStartIso)
-      .lt("created_at", nextMonthStartIso);
-    if (error) throw error;
-    return formatDesignTaskNumber(monthCode, (count ?? 0) + 1);
   };
 
   const allTasksCount = tasks.length;

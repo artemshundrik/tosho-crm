@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
@@ -2614,24 +2615,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     } finally {
       setAttachingDesignTaskId(null);
     }
-  };
-
-  const getNextDesignTaskNumber = async (teamIdValue: string, createdAtIso: string) => {
-    const date = new Date(createdAtIso);
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = String(date.getFullYear()).slice(-2);
-    const monthCode = `${month}${year}`;
-    const monthStartIso = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
-    const nextMonthStartIso = new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString();
-    const { count, error } = await supabase
-      .from("activity_log")
-      .select("id", { count: "exact", head: true })
-      .eq("team_id", teamIdValue)
-      .eq("action", "design_task")
-      .gte("created_at", monthStartIso)
-      .lt("created_at", nextMonthStartIso);
-    if (error) throw error;
-    return `TS-${monthCode}-${String((count ?? 0) + 1).padStart(4, "0")}`;
   };
 
   const createDesignTask = async (override?: {

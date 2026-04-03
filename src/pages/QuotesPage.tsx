@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import {
@@ -1643,21 +1644,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ? (memberById.get(currentUserId)?.label as string)
             : "System";
         const createdAtIso = new Date().toISOString();
-        const createdAtDate = new Date(createdAtIso);
-        const createdAtMonth = String(createdAtDate.getMonth() + 1).padStart(2, "0");
-        const createdAtYear = String(createdAtDate.getFullYear()).slice(-2);
-        const monthCode = `${createdAtMonth}${createdAtYear}`;
-        const monthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth(), 1).toISOString();
-        const nextMonthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth() + 1, 1).toISOString();
-        const { count: taskCount, error: taskCountError } = await supabase
-          .from("activity_log")
-          .select("id", { count: "exact", head: true })
-          .eq("team_id", teamId)
-          .eq("action", "design_task")
-          .gte("created_at", monthStartIso)
-          .lt("created_at", nextMonthStartIso);
-        if (taskCountError) throw taskCountError;
-        const designTaskNumber = `TS-${monthCode}-${String((taskCount ?? 0) + 1).padStart(4, "0")}`;
+        const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
         createdDesignTaskNumber = designTaskNumber;
         const modelName = packageItemName ?? model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
@@ -2182,21 +2169,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         ? (memberById.get(currentUserId)?.label as string)
         : "System";
     const createdAtIso = new Date().toISOString();
-    const createdAtDate = new Date(createdAtIso);
-    const createdAtMonth = String(createdAtDate.getMonth() + 1).padStart(2, "0");
-    const createdAtYear = String(createdAtDate.getFullYear()).slice(-2);
-    const monthCode = `${createdAtMonth}${createdAtYear}`;
-    const monthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth(), 1).toISOString();
-    const nextMonthStartIso = new Date(createdAtDate.getFullYear(), createdAtDate.getMonth() + 1, 1).toISOString();
-    const { count: taskCount, error: taskCountError } = await supabase
-      .from("activity_log")
-      .select("id", { count: "exact", head: true })
-      .eq("team_id", teamId)
-      .eq("action", "design_task")
-      .gte("created_at", monthStartIso)
-      .lt("created_at", nextMonthStartIso);
-    if (taskCountError) throw taskCountError;
-    const designTaskNumber = `TS-${monthCode}-${String((taskCount ?? 0) + 1).padStart(4, "0")}`;
+    const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
     const assignedAt = params.assigneeUserId ? new Date().toISOString() : null;
 
     const { data: designTaskRow, error: designTaskError } = await supabase
