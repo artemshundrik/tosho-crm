@@ -55,6 +55,17 @@ export type QuoteRun = {
   vat_rate: number;
 };
 
+export type QuoteItemPreviewRow = {
+  id: string;
+  quote_id?: string | null;
+  position?: number | null;
+  name?: string | null;
+  qty?: number | null;
+  unit?: string | null;
+  attachment?: unknown;
+  catalog_model_id?: string | null;
+};
+
 const QUOTE_RUN_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate";
 const QUOTE_RUN_LEGACY_SELECT =
@@ -194,49 +205,49 @@ export async function listQuotes(params: ListQuotesParams) {
     }> = [
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes,design_brief",
-        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes", "design_brief"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
+        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,design_brief",
-        optionalColumns: ["customer_name", "customer_logo_url", "design_brief"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+        optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
         optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes"],
         searchableColumns: [...baseSearchableColumns, "customer_name"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
         optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,design_brief,processing_minutes",
-        optionalColumns: ["design_brief", "processing_minutes"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
+        optionalColumns: ["processing_minutes"],
         searchableColumns: [...baseSearchableColumns, "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,design_brief",
-        optionalColumns: ["design_brief"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
+        optionalColumns: [],
         searchableColumns: [...baseSearchableColumns, "design_brief"],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
         optionalColumns: ["processing_minutes"],
         searchableColumns: [...baseSearchableColumns],
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,comment,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
         optionalColumns: [],
         searchableColumns: [...baseSearchableColumns],
       },
@@ -839,6 +850,23 @@ export async function getQuoteSummary(quoteId: string) {
         (fallback.deadline_reminder_comment as string | null | undefined) ?? null,
     } as QuoteSummaryRow;
   }
+}
+
+export async function listQuotesByIds(teamId: string, quoteIds: string[]): Promise<QuoteListRow[]> {
+  const uniqueQuoteIds = Array.from(new Set(quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select(
+      "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url"
+    )
+    .eq("team_id", teamId)
+    .in("id", uniqueQuoteIds);
+
+  handleError(error);
+  return ((data ?? []) as unknown) as QuoteListRow[];
 }
 
 export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
@@ -1621,6 +1649,47 @@ export async function listQuoteItemsForQuotes(params: {
   }
   handleError(error);
   return ((data ?? []) as unknown) as QuoteItemExportRow[];
+}
+
+export async function listQuoteItemPreviewsForQuotes(params: {
+  teamId: string;
+  quoteIds: string[];
+}): Promise<QuoteItemPreviewRow[]> {
+  const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return [];
+
+  const readRows = async (withTeamFilter: boolean) => {
+    type QuoteItemsQuery = {
+      eq: (column: string, value: string) => QuoteItemsQuery;
+      in: (column: string, values: string[]) => QuoteItemsQuery;
+      order: (column: string, options: { ascending: boolean }) => QuoteItemsQuery;
+      then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+    };
+    type QuoteItemsTable = {
+      select: (columns: string) => QuoteItemsQuery;
+    };
+
+    const quoteItemsTable = supabase.schema("tosho").from("quote_items") as unknown as QuoteItemsTable;
+    let query = quoteItemsTable
+      .select("id,quote_id,position,name,qty,unit,attachment,catalog_model_id")
+      .in("quote_id", uniqueQuoteIds)
+      .order("quote_id", { ascending: true })
+      .order("position", { ascending: true });
+
+    if (withTeamFilter) {
+      query = query.eq("team_id", params.teamId);
+    }
+
+    return await query;
+  };
+
+  let { data, error } = await readRows(true);
+  if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+    ({ data, error } = await readRows(false));
+  }
+
+  handleError(error);
+  return ((data ?? []) as unknown) as QuoteItemPreviewRow[];
 }
 
 export async function listQuoteSetItems(teamId: string, quoteSetId: string): Promise<QuoteSetItemRow[]> {

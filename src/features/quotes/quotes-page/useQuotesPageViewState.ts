@@ -78,7 +78,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
 
     if (q) {
       filtered = filtered.filter((row) => {
-        const hay = [row.number, row.comment, row.title, row.customer_name, row.quote_type]
+        const hay = [row.number, row.title, row.customer_name, row.quote_type]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();

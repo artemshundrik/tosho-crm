@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   getQuoteRuns,
   listQuoteItemsForQuotes,
+  listQuotesByIds,
   listQuotes,
   type QuoteItemExportRow,
   type QuoteListRow,
@@ -408,7 +409,13 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       .eq("action", "design_task")
       .order("created_at", { ascending: false }),
     uniqueCustomerIds.length > 0
-      ? supabase.schema("tosho").from("customers").select("*").in("id", uniqueCustomerIds)
+      ? supabase
+          .schema("tosho")
+          .from("customers")
+          .select(
+            "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,signatory_name,signatory_position,legal_entities"
+          )
+          .in("id", uniqueCustomerIds)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     (async () => {
       if (!userId) return [];
@@ -419,8 +426,18 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     (async () => {
       if (leadLookupNames.length === 0) return [] as LeadRecord[];
       const [byCompany, byLegal] = await Promise.all([
-        supabase.schema("tosho").from("leads").select("*").eq("team_id", teamId).in("company_name", leadLookupNames),
-        supabase.schema("tosho").from("leads").select("*").eq("team_id", teamId).in("legal_name", leadLookupNames),
+        supabase
+          .schema("tosho")
+          .from("leads")
+          .select("id,company_name,legal_name,logo_url,email,phone_numbers,signatory_name,signatory_position")
+          .eq("team_id", teamId)
+          .in("company_name", leadLookupNames),
+        supabase
+          .schema("tosho")
+          .from("leads")
+          .select("id,company_name,legal_name,logo_url,email,phone_numbers,signatory_name,signatory_position")
+          .eq("team_id", teamId)
+          .in("legal_name", leadLookupNames),
       ]);
       const merged = [
         ...(((byCompany.data ?? []) as unknown) as LeadRecord[]),
@@ -698,7 +715,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
     const storedQuoteIds = Array.from(new Set(storedOrders.map((order) => order.quote_id ?? "").filter(Boolean)));
     const [orderItems, linkedQuotes, linkedQuoteRuns, designTaskRows, approvedQuoteDerivedOrders] = await Promise.all([
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
-      storedQuoteIds.length > 0 ? listQuotes({ teamId }).then((rows) => rows.filter((row) => storedQuoteIds.includes(row.id))) : [],
+      storedQuoteIds.length > 0 ? listQuotesByIds(teamId, storedQuoteIds) : [],
       Promise.all(storedQuoteIds.map(async (quoteId) => ({ quoteId, runs: await getQuoteRuns(quoteId, teamId) }))),
       storedQuoteIds.length > 0
         ? supabase
@@ -709,7 +726,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       approvedQuoteDerivedOrdersPromise,
-    ]);
+    ] as const);
     const itemsByOrderId = new Map<string, DerivedOrderItem[]>();
     orderItems.forEach((item) => {
       const orderId = item.order_id ?? "";

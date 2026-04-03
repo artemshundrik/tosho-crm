@@ -28,6 +28,7 @@ import {
   listQuoteSetMemberships,
   findQuoteSetsByExactComposition,
   listCustomerQuotes,
+  listQuoteItemPreviewsForQuotes,
   listQuoteItemsForQuotes,
   updateQuoteSetName,
   deleteQuoteSet,
@@ -49,6 +50,7 @@ import {
   type QuoteSetMembershipInfo,
   type CustomerQuoteRow,
   type QuoteItemExportRow,
+  type QuoteItemPreviewRow,
   type TeamMemberRow,
   type CustomerRow,
   type LeadSearchRow,
@@ -1144,7 +1146,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         };
       });
       const ids = mergedRows.map((row) => row.id).filter(Boolean);
-      const [membershipMap, counts, productMap] = await Promise.all([
+      const [membershipMap] = await Promise.all([
         (async () => {
           if (ids.length === 0) return new Map<string, QuoteSetMembershipInfo>();
           try {
@@ -1153,123 +1155,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             return new Map<string, QuoteSetMembershipInfo>();
           }
         })(),
-        (async () => {
-          if (ids.length === 0) return {} as Record<string, number>;
-          try {
-            const { data: attachmentRows, error: attachmentsError } = await supabase
-              .schema("tosho")
-              .from("quote_attachments")
-              .select("quote_id")
-              .in("quote_id", ids);
-            if (attachmentsError) throw attachmentsError;
-            const nextCounts: Record<string, number> = {};
-            (attachmentRows ?? []).forEach((row) => {
-              const quoteId = row.quote_id as string | undefined;
-              if (!quoteId) return;
-              nextCounts[quoteId] = (nextCounts[quoteId] ?? 0) + 1;
-            });
-            return nextCounts;
-          } catch {
-            return {} as Record<string, number>;
-          }
-        })(),
-        (async () => {
-          if (ids.length === 0) return {} as Record<string, KanbanProductPreview>;
-          try {
-            const itemRows = await listQuoteItemsForQuotes({ teamId, quoteIds: ids });
-            const countByQuoteId: Record<string, number> = {};
-            const firstItemByQuoteId = new Map<string, QuoteItemExportRow>();
-
-            itemRows.forEach((row) => {
-              const quoteId = row.quote_id?.trim();
-              if (!quoteId) return;
-              countByQuoteId[quoteId] = (countByQuoteId[quoteId] ?? 0) + 1;
-              if (!firstItemByQuoteId.has(quoteId)) {
-                firstItemByQuoteId.set(quoteId, row);
-              }
-            });
-
-            const modelIds = Array.from(
-              new Set(
-                Array.from(firstItemByQuoteId.values())
-                  .map((row) => row.catalog_model_id?.trim() ?? "")
-                  .filter(Boolean)
-              )
-            );
-            const modelImageById = new Map<string, string>();
-            if (modelIds.length > 0) {
-              const loadModels = async (withImage: boolean) => {
-                const columns = withImage ? "id,image_url" : "id";
-                return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", modelIds);
-              };
-              let { data: modelRows, error: modelError } = await loadModels(true);
-              if (
-                modelError &&
-                /column/i.test(modelError.message ?? "") &&
-                /image_url/i.test(modelError.message ?? "")
-              ) {
-                ({ data: modelRows, error: modelError } = await loadModels(false));
-              }
-              if (!modelError) {
-                (((modelRows ?? []) as unknown) as Array<{ id: string; image_url?: string | null }>).forEach((row) => {
-                  const imageUrl = row.image_url?.trim();
-                  if (!imageUrl) return;
-                  modelImageById.set(row.id, imageUrl);
-                });
-              }
-            }
-
-            const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
-              const qtyValue = Number(qty ?? 0);
-              if (!Number.isFinite(qtyValue) || qtyValue <= 0) return "Не вказано";
-              const qtyLabel = Number.isInteger(qtyValue) ? String(qtyValue) : qtyValue.toLocaleString("uk-UA");
-              return `${qtyLabel} ${normalizeUnitLabel(unit)}`;
-            };
-
-            const nextMap: Record<string, KanbanProductPreview> = {};
-            ids.forEach((quoteId) => {
-              const firstItem = firstItemByQuoteId.get(quoteId);
-              const itemCount = countByQuoteId[quoteId] ?? 0;
-              if (!firstItem || itemCount === 0) return;
-
-              const attachmentImage =
-                firstItem.attachment &&
-                typeof firstItem.attachment === "object" &&
-                typeof (firstItem.attachment as Record<string, unknown>).url === "string"
-                  ? String((firstItem.attachment as Record<string, unknown>).url)
-                  : null;
-              const catalogImage = firstItem.catalog_model_id
-                ? modelImageById.get(firstItem.catalog_model_id) ?? null
-                : null;
-              nextMap[quoteId] = {
-                itemCount,
-                itemName: firstItem.name?.trim() || "Товар без назви",
-                qtyLabel: formatQtyLabel(firstItem.qty, firstItem.unit),
-                imageUrl: attachmentImage || catalogImage,
-              };
-            });
-
-            return nextMap;
-          } catch {
-            return {} as Record<string, KanbanProductPreview>;
-          }
-        })(),
       ]);
 
       if (requestId !== quotesLoadRequestIdRef.current) return;
       setRows(mergedRows);
       setQuoteMembershipByQuoteId(membershipMap);
-      setAttachmentCounts(counts);
-      setKanbanProductByQuoteId(productMap);
+      setAttachmentCounts({});
 
       try {
         sessionStorage.setItem(
           cacheKey,
           JSON.stringify({
             rows: mergedRows,
-            attachmentCounts: counts,
+            attachmentCounts: {},
             quoteMembershipEntries: Array.from(membershipMap.entries()),
-            kanbanProductEntries: Object.entries(productMap),
+            kanbanProductEntries: [],
             cachedAt: Date.now(),
           })
         );
@@ -2473,6 +2373,111 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsItems,
   });
   const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
+
+  useEffect(() => {
+    if (viewMode !== "kanban") return;
+    const quoteIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
+    if (quoteIds.length === 0) {
+      setKanbanProductByQuoteId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadKanbanPreviews = async () => {
+      try {
+        const itemRows = await listQuoteItemPreviewsForQuotes({ teamId, quoteIds });
+        if (cancelled) return;
+
+        const countByQuoteId: Record<string, number> = {};
+        const firstItemByQuoteId = new Map<string, QuoteItemPreviewRow>();
+
+        itemRows.forEach((row) => {
+          const quoteId = row.quote_id?.trim();
+          if (!quoteId) return;
+          countByQuoteId[quoteId] = (countByQuoteId[quoteId] ?? 0) + 1;
+          if (!firstItemByQuoteId.has(quoteId)) {
+            firstItemByQuoteId.set(quoteId, row);
+          }
+        });
+
+        const modelIds = Array.from(
+          new Set(
+            Array.from(firstItemByQuoteId.values())
+              .map((row) => row.catalog_model_id?.trim() ?? "")
+              .filter(Boolean)
+          )
+        );
+        const modelImageById = new Map<string, string>();
+        if (modelIds.length > 0) {
+          const loadModels = async (withImage: boolean) => {
+            const columns = withImage ? "id,image_url" : "id";
+            return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", modelIds);
+          };
+          let { data: modelRows, error: modelError } = await loadModels(true);
+          if (
+            modelError &&
+            /column/i.test(modelError.message ?? "") &&
+            /image_url/i.test(modelError.message ?? "")
+          ) {
+            ({ data: modelRows, error: modelError } = await loadModels(false));
+          }
+          if (!modelError) {
+            (((modelRows ?? []) as unknown) as Array<{ id: string; image_url?: string | null }>).forEach((row) => {
+              const imageUrl = row.image_url?.trim();
+              if (!imageUrl) return;
+              modelImageById.set(row.id, imageUrl);
+            });
+          }
+        }
+
+        const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
+          const qtyValue = Number(qty ?? 0);
+          if (!Number.isFinite(qtyValue) || qtyValue <= 0) return "Не вказано";
+          const qtyLabel = Number.isInteger(qtyValue) ? String(qtyValue) : qtyValue.toLocaleString("uk-UA");
+          return `${qtyLabel} ${normalizeUnitLabel(unit)}`;
+        };
+
+        const nextMap: Record<string, KanbanProductPreview> = {};
+        quoteIds.forEach((quoteId) => {
+          const firstItem = firstItemByQuoteId.get(quoteId);
+          const itemCount = countByQuoteId[quoteId] ?? 0;
+          if (!firstItem || itemCount === 0) return;
+
+          const attachmentImage =
+            firstItem.attachment &&
+            typeof firstItem.attachment === "object" &&
+            typeof (firstItem.attachment as Record<string, unknown>).url === "string"
+              ? String((firstItem.attachment as Record<string, unknown>).url)
+              : null;
+          const catalogImage = firstItem.catalog_model_id
+            ? modelImageById.get(firstItem.catalog_model_id) ?? null
+            : null;
+
+          nextMap[quoteId] = {
+            itemCount,
+            itemName: firstItem.name?.trim() || "Товар без назви",
+            qtyLabel: formatQtyLabel(firstItem.qty, firstItem.unit),
+            imageUrl: attachmentImage || catalogImage,
+          };
+        });
+
+        if (!cancelled) {
+          setKanbanProductByQuoteId(nextMap);
+        }
+      } catch {
+        if (!cancelled) {
+          setKanbanProductByQuoteId({});
+        }
+      }
+    };
+
+    void loadKanbanPreviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredAndSortedRows, teamId, viewMode]);
 
   const bulkAddAvailableSets = useMemo(() => {
     if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
