@@ -84,6 +84,56 @@ function extractObjectPath(url: string, bucket: string): string | null {
   return decodeURIComponent(pathPart);
 }
 
+function extractObjectPathCandidates(url: string, bucket: string): string[] {
+  const normalizedUrl = normalizeAvatarKey(url);
+  if (!normalizedUrl) return [];
+
+  const directCandidates = new Set<string>();
+  const markers = [
+    `/storage/v1/object/public/${bucket}/`,
+    `/storage/v1/object/sign/${bucket}/`,
+    `/storage/v1/object/${bucket}/`,
+  ];
+
+  for (const marker of markers) {
+    const markerIndex = normalizedUrl.indexOf(marker);
+    if (markerIndex === -1) continue;
+    const tail = normalizedUrl.slice(markerIndex + marker.length);
+    const pathPart = decodeURIComponent((tail.split("?")[0] ?? "").replace(/^\/+/, ""));
+    if (!pathPart) continue;
+    directCandidates.add(pathPart);
+    if (pathPart.startsWith(`${bucket}/`)) {
+      directCandidates.add(pathPart.slice(bucket.length + 1));
+    } else {
+      directCandidates.add(`${bucket}/${pathPart}`);
+    }
+  }
+
+  if (directCandidates.size > 0) {
+    return Array.from(directCandidates).filter(Boolean);
+  }
+
+  if (/^(https?:)?\/\//i.test(normalizedUrl) || normalizedUrl.startsWith("data:") || normalizedUrl.startsWith("blob:")) {
+    return [];
+  }
+
+  const pathPart = decodeURIComponent((normalizedUrl.replace(/^\/+/, "").split("?")[0] ?? "").trim());
+  if (!pathPart) return [];
+  if (pathPart.startsWith(`${bucket}/`)) {
+    return [pathPart, pathPart.slice(bucket.length + 1)].filter(Boolean);
+  }
+  return [pathPart, `${bucket}/${pathPart}`];
+}
+
+function isDirectAvatarHttpUrl(value: string) {
+  return (
+    /^(https?:)?\/\//i.test(value) &&
+    !/\/rest\/v1\//i.test(value) &&
+    !/\/storage\/v1\/object\//i.test(value) &&
+    !/[?&]select=/i.test(value)
+  );
+}
+
 function isSupabaseStorageUrl(url: string, bucket: string) {
   return (
     url.includes(`/storage/v1/object/public/${bucket}/`) ||
@@ -95,8 +145,8 @@ function isSupabaseStorageUrl(url: string, bucket: string) {
 function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   const normalizedUrl = normalizeAvatarKey(rawUrl);
   if (!normalizedUrl) return false;
-  if (normalizedUrl.includes(`/storage/v1/object/public/${bucket}/`)) return false;
-  if (normalizedUrl.includes(`/storage/v1/object/sign/${bucket}/`)) return false;
+  if (normalizedUrl.includes(`/storage/v1/object/public/${bucket}/`)) return true;
+  if (normalizedUrl.includes(`/storage/v1/object/sign/${bucket}/`)) return true;
   if (normalizedUrl.includes(`/storage/v1/object/${bucket}/`)) return true;
   if (/^(https?:)?\/\//i.test(normalizedUrl) || normalizedUrl.startsWith("data:") || normalizedUrl.startsWith("blob:")) {
     return false;
@@ -116,14 +166,29 @@ export function sanitizeAvatarReference(rawUrl: string | null | undefined, bucke
     return null;
   }
 
-  if (/^(https?:)?\/\//i.test(normalizedRawUrl) || normalizedRawUrl.startsWith("data:") || normalizedRawUrl.startsWith("blob:")) {
+  if (isDirectAvatarHttpUrl(normalizedRawUrl) || normalizedRawUrl.startsWith("data:") || normalizedRawUrl.startsWith("blob:")) {
     return normalizedRawUrl;
   }
 
   const objectPath = extractObjectPath(normalizedRawUrl, bucket);
   if (!objectPath) return null;
-  if (!objectPath.startsWith("avatars/")) return null;
+  if (!objectPath.includes("/")) return null;
   return normalizedRawUrl;
+}
+
+export function getCanonicalAvatarReference(
+  params: { avatarUrl?: string | null; avatarPath?: string | null },
+  bucket: string
+): string | null {
+  const directUrl = sanitizeAvatarReference(params.avatarUrl ?? null, bucket);
+  if (directUrl && isDirectAvatarHttpUrl(directUrl)) {
+    return directUrl;
+  }
+
+  const path = sanitizeAvatarReference(params.avatarPath ?? null, bucket);
+  if (path) return path;
+
+  return directUrl;
 }
 
 export function getImmediateAvatarDisplayUrl(rawUrl: string | null | undefined, bucket: string): string | null {
@@ -177,18 +242,25 @@ export async function resolveAvatarDisplayUrl(
       return normalizedRawUrl;
     }
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(objectPath, AVATAR_SIGN_TTL_SECONDS);
+    const candidatePaths = extractObjectPathCandidates(normalizedRawUrl, bucket);
+    for (const candidatePath of candidatePaths) {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(candidatePath, AVATAR_SIGN_TTL_SECONDS);
 
-    if (error || !data?.signedUrl) {
+      if (error || !data?.signedUrl) {
+        continue;
+      }
+
+      const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
+      setResolvedAvatar(normalizedRawUrl, data.signedUrl, expiresAt);
+      return data.signedUrl;
+    }
+
+    {
       setResolvedAvatar(normalizedRawUrl, null, Date.now() + AVATAR_FAILURE_TTL_MS);
       return null;
     }
-
-    const expiresAt = Date.now() + AVATAR_SIGN_TTL_SECONDS * 1000 - AVATAR_CACHE_SKEW_MS;
-    setResolvedAvatar(normalizedRawUrl, data.signedUrl, expiresAt);
-    return data.signedUrl;
   })();
 
   avatarInflightCache.set(normalizedRawUrl, promise);

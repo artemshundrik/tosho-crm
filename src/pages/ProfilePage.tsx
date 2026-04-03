@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName, toFullName } from "@/lib/userName";
 import {
   formatEmploymentDate,
@@ -182,7 +182,10 @@ export function ProfilePage() {
             resolvedBirthDate = directoryEntry.birthDate || metaBirthDate;
             resolvedPhone = directoryEntry.phone || metaPhone;
             resolvedAvatarPath = directoryEntry.avatarPath || null;
-            resolvedAvatarUrl = directoryEntry.avatarPath || directoryEntry.avatarUrl || resolvedAvatarUrl;
+            resolvedAvatarUrl = getCanonicalAvatarReference(
+              { avatarUrl: directoryEntry.avatarUrl || resolvedAvatarUrl, avatarPath: directoryEntry.avatarPath || null },
+              AVATAR_BUCKET
+            );
             resolvedStartDate = directoryEntry.startDate || "";
             resolvedProbationEndDate = directoryEntry.probationEndDate || "";
             resolvedEmploymentStatus = directoryEntry.employmentStatus;

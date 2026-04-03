@@ -359,6 +359,23 @@ const parseDateOnly = (value: string) => {
   return new Date(value);
 };
 
+const sanitizeImageReference = (value?: string | null) => {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  const lower = normalized.toLowerCase();
+  if (
+    lower.includes("/rest/v1/") ||
+    lower.includes("?select=") ||
+    lower.includes("&select=") ||
+    lower.includes("status=eq.") ||
+    lower.includes("order=") ||
+    lower.includes("&limit=")
+  ) {
+    return null;
+  }
+  return normalized;
+};
+
 const LOAD_TASKS_RESOURCE_COOLDOWN_MS = 30_000;
 
 const isResourceExhaustionLikeError = (error: unknown) => {
@@ -1187,7 +1204,7 @@ export default function DesignPage() {
                 : null,
             customerLogoUrl:
               typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
-                ? metadata.customer_logo_url.trim()
+                ? sanitizeImageReference(metadata.customer_logo_url)
                 : null,
             partyType:
               typeof metadata.customer_type === "string"
@@ -1203,7 +1220,7 @@ export default function DesignPage() {
                 : null,
             assigneeAvatarUrl:
               typeof metadata.assignee_avatar_url === "string" && metadata.assignee_avatar_url.trim()
-                ? metadata.assignee_avatar_url.trim()
+                ? sanitizeImageReference(metadata.assignee_avatar_url)
                 : null,
             productName:
               typeof metadata.product_name === "string" && metadata.product_name.trim()
@@ -1301,8 +1318,10 @@ export default function DesignPage() {
                 (typeof q.customer_name === "string" && q.customer_name.trim() ? q.customer_name.trim() : null) ??
                 (typeof q.title === "string" && q.title.trim() ? q.title.trim() : null),
               customerLogoUrl:
-                normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null) ??
-                normalizeLogoUrl(typeof q.customer_logo_url === "string" ? q.customer_logo_url : null),
+                sanitizeImageReference(
+                  normalizeLogoUrl(customerMap.get(q.customer_id as string)?.logoUrl ?? null) ??
+                    normalizeLogoUrl(typeof q.customer_logo_url === "string" ? q.customer_logo_url : null)
+                ),
               partyType: q.customer_id ? "customer" : "lead",
               managerUserId:
                 typeof q.assigned_to === "string" && q.assigned_to.trim() ? q.assigned_to.trim() : null,
@@ -1383,7 +1402,7 @@ export default function DesignPage() {
             item.attachment &&
             typeof item.attachment === "object" &&
             typeof (item.attachment as Record<string, unknown>).url === "string"
-              ? String((item.attachment as Record<string, unknown>).url)
+              ? sanitizeImageReference(String((item.attachment as Record<string, unknown>).url))
               : null;
           const catalogImage =
             typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
@@ -1414,12 +1433,12 @@ export default function DesignPage() {
           null,
         customerLogoUrl:
           (t.customerId
-            ? normalizeLogoUrl(customerMap.get(t.customerId)?.logoUrl ?? null) ??
-              normalizeLogoUrl(leadMap.get(t.customerId)?.logoUrl ?? null) ??
+            ? sanitizeImageReference(normalizeLogoUrl(customerMap.get(t.customerId)?.logoUrl ?? null)) ??
+              sanitizeImageReference(normalizeLogoUrl(leadMap.get(t.customerId)?.logoUrl ?? null)) ??
               null
             : null) ??
-          normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null) ??
-          normalizeLogoUrl(t.customerLogoUrl) ??
+          sanitizeImageReference(normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null)) ??
+          sanitizeImageReference(normalizeLogoUrl(t.customerLogoUrl)) ??
           null,
         partyType:
           t.partyType ??
@@ -1433,7 +1452,7 @@ export default function DesignPage() {
           null,
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
-        productImageUrl: productImageByQuoteId.get(t.quoteId) ?? null,
+        productImageUrl: sanitizeImageReference(productImageByQuoteId.get(t.quoteId) ?? null),
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
         assigneeLabel:
           t.assigneeLabel ??
@@ -1443,11 +1462,11 @@ export default function DesignPage() {
                 : (memberById[t.assigneeUserId] ?? null))
             : null),
         assigneeAvatarUrl:
-          t.assigneeAvatarUrl ??
+          sanitizeImageReference(t.assigneeAvatarUrl) ??
           (t.assigneeUserId
             ? (t.assigneeUserId === userId && currentUserAvatarUrl
-                ? currentUserAvatarUrl
-                : (memberAvatarById[t.assigneeUserId] ?? null))
+                ? sanitizeImageReference(currentUserAvatarUrl)
+                : sanitizeImageReference(memberAvatarById[t.assigneeUserId] ?? null))
             : null),
       }));
       const parsed = applyCustomerLogosToTasks(
@@ -2928,7 +2947,7 @@ export default function DesignPage() {
             : null,
         assigneeAvatarUrl:
           typeof metadata.assignee_avatar_url === "string" && metadata.assignee_avatar_url.trim()
-            ? metadata.assignee_avatar_url.trim()
+            ? sanitizeImageReference(metadata.assignee_avatar_url)
             : null,
         metadata,
         designTaskNumber:
@@ -2939,7 +2958,7 @@ export default function DesignPage() {
         customerName: typeof metadata.customer_name === "string" ? (metadata.customer_name as string) : null,
         customerLogoUrl:
           typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
-            ? normalizeLogoUrl(metadata.customer_logo_url as string)
+            ? sanitizeImageReference(normalizeLogoUrl(metadata.customer_logo_url as string))
             : null,
         customerId:
           typeof metadata.customer_id === "string" && metadata.customer_id.trim()

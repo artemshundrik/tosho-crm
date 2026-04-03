@@ -6,6 +6,7 @@ import {
   isRealtimeDisabledForSession,
   supabase,
 } from "@/lib/supabaseClient";
+import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry, listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -167,7 +168,12 @@ export function useWorkspacePresenceState({
         const entry = await getCurrentWorkspaceMemberDirectoryEntry();
         if (!active) return;
         setSelfDirectoryDisplayName(entry?.displayName ?? null);
-        setSelfDirectoryAvatarUrl(entry?.avatarPath ?? entry?.avatarUrl ?? null);
+        setSelfDirectoryAvatarUrl(
+          getCanonicalAvatarReference(
+            { avatarUrl: entry?.avatarUrl ?? null, avatarPath: entry?.avatarPath ?? null },
+            "avatars"
+          )
+        );
       } catch {
         if (!active) return;
         setSelfDirectoryDisplayName(null);
@@ -527,11 +533,17 @@ export function useWorkspacePresenceState({
           (directoryEntry?.displayName ?? realtime?.display_name ?? dbRow?.display_name ?? fallbackName)?.trim() ||
           fallbackName,
         avatarUrl:
-          directoryEntry?.avatarPath ??
-          directoryEntry?.avatarUrl ??
-          realtime?.avatar_url ??
-          dbRow?.avatar_url ??
-          (uid === userId ? selfAvatarUrl : null),
+          getCanonicalAvatarReference(
+            {
+              avatarUrl:
+                directoryEntry?.avatarUrl ??
+                realtime?.avatar_url ??
+                dbRow?.avatar_url ??
+                (uid === userId ? selfAvatarUrl : null),
+              avatarPath: directoryEntry?.avatarPath ?? null,
+            },
+            "avatars"
+          ),
         currentPath: realtime?.current_path ?? dbRow?.current_path ?? null,
         currentLabel: realtime?.current_label ?? dbRow?.current_label ?? null,
         entityType: realtime?.entity_type ?? dbRow?.entity_type ?? null,

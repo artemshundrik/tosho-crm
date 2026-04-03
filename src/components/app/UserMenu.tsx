@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
 
@@ -103,8 +103,13 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           else rawRole = "viewer";
         }
 
-        const rawAvatarUrl =
-          directoryEntry?.avatarPath || directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null;
+        const rawAvatarUrl = getCanonicalAvatarReference(
+          {
+            avatarUrl: directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null,
+            avatarPath: directoryEntry?.avatarPath || null,
+          },
+          AVATAR_BUCKET
+        );
         const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
 
         const nextData: UserState = {

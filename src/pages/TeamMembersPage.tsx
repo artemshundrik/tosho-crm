@@ -20,6 +20,7 @@ import {
   Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,13 @@ import {
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
+
+function getMemberAvatarSource(
+  profile: { avatarUrl: string | null } | null | undefined,
+  member: { avatar_url?: string | null } | null | undefined
+) {
+  return getCanonicalAvatarReference({ avatarUrl: profile?.avatarUrl ?? member?.avatar_url ?? null }, AVATAR_BUCKET);
+}
 
 // --- TYPES ---
 type Member = {
@@ -658,7 +666,10 @@ export function TeamMembersPage() {
           const emailFallback = baseMember?.email?.split("@")[0]?.trim() || baseMember?.email || id;
           acc[id] = {
             label: baseMember?.displayName || emailFallback,
-            avatarUrl: baseMember?.avatarPath ?? baseMember?.avatarUrl ?? null,
+            avatarUrl: getCanonicalAvatarReference(
+              { avatarUrl: baseMember?.avatarUrl ?? null, avatarPath: baseMember?.avatarPath ?? null },
+              AVATAR_BUCKET
+            ),
           };
           return acc;
         }, {});
@@ -676,7 +687,10 @@ export function TeamMembersPage() {
 
           acc[id] = {
             label: baseMember?.displayName || emailFallback,
-            avatarUrl: baseMember?.avatarPath ?? baseMember?.avatarUrl ?? null,
+            avatarUrl: getCanonicalAvatarReference(
+              { avatarUrl: baseMember?.avatarUrl ?? null, avatarPath: baseMember?.avatarPath ?? null },
+              AVATAR_BUCKET
+            ),
           };
           return acc;
         }, {});
@@ -2309,7 +2323,7 @@ export function TeamMembersPage() {
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="relative shrink-0">
                           <AvatarBase
-                            src={profile?.avatarUrl ?? m.avatar_url ?? null}
+                            src={getMemberAvatarSource(profile, m)}
                             name={displayName}
                             fallback={initials}
                             size={44}
@@ -2513,7 +2527,7 @@ export function TeamMembersPage() {
                           <div className="flex items-center gap-3">
                             <div className="relative shrink-0">
                               <AvatarBase
-                                src={profile?.avatarUrl ?? m.avatar_url ?? null}
+                                src={getMemberAvatarSource(profile, m)}
                                 name={displayName}
                                 fallback={initials}
                                 size={48}
@@ -3146,7 +3160,7 @@ export function TeamMembersPage() {
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex items-center gap-4">
                   <AvatarBase
-                    src={selectedProfile?.avatarUrl ?? editProfileMember?.avatar_url ?? null}
+                    src={getMemberAvatarSource(selectedProfile, editProfileMember ?? undefined)}
                     name={selectedDisplayName}
                     fallback={selectedInitials}
                     size={64}

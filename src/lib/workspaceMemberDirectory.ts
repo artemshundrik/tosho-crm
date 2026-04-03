@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
-import { resolveAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference, resolveAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -580,7 +580,11 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
     rows.map(async (row) => ({
       ...row,
       label: row.displayName || row.email?.split("@")[0]?.trim() || row.userId,
-      avatarDisplayUrl: await resolveAvatarDisplayUrl(supabase, row.avatarPath ?? row.avatarUrl, AVATAR_BUCKET),
+      avatarDisplayUrl: await resolveAvatarDisplayUrl(
+        supabase,
+        getCanonicalAvatarReference({ avatarUrl: row.avatarUrl, avatarPath: row.avatarPath }, AVATAR_BUCKET),
+        AVATAR_BUCKET
+      ),
     }))
   );
   return resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));

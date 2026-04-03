@@ -72,6 +72,14 @@ const QUOTE_RUN_SELECT =
 const QUOTE_RUN_LEGACY_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost";
 
+function escapePostgrestIlikeTerm(value: string) {
+  return value
+    .trim()
+    .replace(/[(),]/g, " ")
+    .replace(/[%_]/g, (match) => `\\${match}`)
+    .replace(/\s+/g, " ");
+}
+
 export type QuoteStatusRow = {
   id: string;
   quote_id: string;
@@ -196,6 +204,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 export async function listQuotes(params: ListQuotesParams) {
   const { teamId, search, status, limit } = params;
   const q = search?.trim() ?? "";
+  const escapedSearch = escapePostgrestIlikeTerm(q);
 
   const listFromQuotes = async () => {
     const baseSearchableColumns = ["number", "comment", "title"] as const;
@@ -206,8 +215,8 @@ export async function listQuotes(params: ListQuotesParams) {
     }> = [
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
-        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+        optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name", "design_brief"],
       },
       {
@@ -218,8 +227,8 @@ export async function listQuotes(params: ListQuotesParams) {
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url,processing_minutes",
-        optionalColumns: ["customer_name", "customer_logo_url", "processing_minutes"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,customer_name,customer_logo_url",
+        optionalColumns: ["customer_name", "customer_logo_url"],
         searchableColumns: [...baseSearchableColumns, "customer_name"],
       },
       {
@@ -230,8 +239,8 @@ export async function listQuotes(params: ListQuotesParams) {
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
-        optionalColumns: ["processing_minutes"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
+        optionalColumns: [],
         searchableColumns: [...baseSearchableColumns, "design_brief"],
       },
       {
@@ -242,8 +251,8 @@ export async function listQuotes(params: ListQuotesParams) {
       },
       {
         columns:
-          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note,processing_minutes",
-        optionalColumns: ["processing_minutes"],
+          "id,team_id,customer_id,number,status,title,quote_type,print_type,delivery_type,currency,total,created_at,updated_at,created_by,assigned_to,deadline_at,deadline_note",
+        optionalColumns: [],
         searchableColumns: [...baseSearchableColumns],
       },
       {
@@ -263,8 +272,8 @@ export async function listQuotes(params: ListQuotesParams) {
         .eq("team_id", teamId)
         .order("created_at", { ascending: false });
 
-      if (q.length > 0) {
-        const searchFilters = variant.searchableColumns.map((column) => `${column}.ilike.%${q}%`);
+      if (escapedSearch.length > 0) {
+        const searchFilters = variant.searchableColumns.map((column) => `${column}.ilike.%${escapedSearch}%`);
         query = query.or(searchFilters.join(","));
       }
 
@@ -416,6 +425,7 @@ export async function listQuotes(params: ListQuotesParams) {
 
 export async function listCustomersBySearch(teamId: string, search: string) {
   const q = search.trim();
+  const escapedSearch = escapePostgrestIlikeTerm(q);
   const runQuery = async (variant: "full" | "no_logo" | "base") => {
     const columns =
       variant === "full"
@@ -431,8 +441,8 @@ export async function listCustomersBySearch(teamId: string, search: string) {
       .order("name", { ascending: true })
       .limit(20);
 
-    if (q.length > 0) {
-      query = query.or(`name.ilike.%${q}%,legal_name.ilike.%${q}%`);
+    if (escapedSearch.length > 0) {
+      query = query.or(`name.ilike.%${escapedSearch}%,legal_name.ilike.%${escapedSearch}%`);
     }
     return await query;
   };
@@ -456,6 +466,7 @@ export async function listCustomersBySearch(teamId: string, search: string) {
 
 export async function listLeadsBySearch(teamId: string, search: string) {
   const q = search.trim();
+  const escapedSearch = escapePostgrestIlikeTerm(q);
   const runQuery = async (variant: "full" | "base") => {
     let query = supabase
       .schema("tosho")
@@ -469,9 +480,9 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       .order("company_name", { ascending: true })
       .limit(20);
 
-    if (q.length > 0) {
+    if (escapedSearch.length > 0) {
       query = query.or(
-        `company_name.ilike.%${q}%,legal_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`
+        `company_name.ilike.%${escapedSearch}%,legal_name.ilike.%${escapedSearch}%,first_name.ilike.%${escapedSearch}%,last_name.ilike.%${escapedSearch}%`
       );
     }
     return await query;
