@@ -43,6 +43,13 @@ type PreviewTone = "info" | "success" | "warning";
 
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
+const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
+const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+
+function isDocumentVisible() {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible";
+}
 
 function getInAppNotificationDuration(tone?: PreviewTone) {
   if (tone === "warning") return IN_APP_WARNING_NOTIFICATION_TOAST_MS;
@@ -226,8 +233,9 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!userId) return;
     const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void loadNotifications(false);
-    }, realtimeDisabled ? 30_000 : 90_000);
+    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
 

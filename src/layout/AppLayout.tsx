@@ -106,6 +106,14 @@ type MatchMeta = {
 
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
+const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
+const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+const REMINDER_POLL_INTERVAL_MS = 5 * 60 * 1000;
+
+function isDocumentVisible() {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible";
+}
 
 function getInAppNotificationDuration(tone?: NotificationItem["tone"]) {
   if (tone === "warning") return IN_APP_WARNING_NOTIFICATION_TOAST_MS;
@@ -1070,8 +1078,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   useEffect(() => {
     if (!userId) return;
     const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void loadNotifications();
-    }, realtimeDisabled ? 30_000 : 90_000);
+    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
 
@@ -1209,8 +1218,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
     void run();
     const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void run();
-    }, 60 * 1000);
+    }, REMINDER_POLL_INTERVAL_MS);
 
     return () => {
       disposed = true;
@@ -1225,8 +1235,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   useEffect(() => {
     if (!teamId || !userId) return;
     const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void loadActivityUnread();
-    }, realtimeDisabled ? 30_000 : 90_000);
+    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadActivityUnread, realtimeDisabled, teamId, userId]);
 

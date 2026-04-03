@@ -629,6 +629,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteAttachmentOpen, setDeleteAttachmentOpen] = useState(false);
   const [deleteAttachmentTarget, setDeleteAttachmentTarget] = useState<QuoteAttachment | null>(null);
+  const [attachmentAccessUrlByKey, setAttachmentAccessUrlByKey] = useState<Record<string, string>>({});
+  const attachmentObjectUrlRegistryRef = useRef<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
   const [mentionLabelOverrides, setMentionLabelOverrides] = useState<Record<string, string>>({});
   const [designTask, setDesignTask] = useState<{
@@ -713,6 +715,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createOrderSubmitting, setCreateOrderSubmitting] = useState(false);
   const [createOrderError, setCreateOrderError] = useState<string | null>(null);
 
+  const getAttachmentStorageKey = useCallback((attachment: Pick<QuoteAttachment, "storageBucket" | "storagePath">) => {
+    if (!attachment.storageBucket || !attachment.storagePath) return null;
+    return `${attachment.storageBucket}:${attachment.storagePath}`;
+  }, []);
+
+  const ensureAttachmentAccessUrl = useCallback(
+    async (attachment: QuoteAttachment, options?: { forceRefresh?: boolean }) => {
+      const key = getAttachmentStorageKey(attachment);
+      if (!key || !attachment.storageBucket || !attachment.storagePath) {
+        return attachment.url ?? null;
+      }
+      if (!options?.forceRefresh && attachmentAccessUrlByKey[key]) {
+        return attachmentAccessUrlByKey[key];
+      }
+
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(attachment.storageBucket)
+        .createSignedUrl(attachment.storagePath, 60 * 60);
+      const signedUrl = typeof signedData?.signedUrl === "string" ? signedData.signedUrl : null;
+      if (signedUrl && !signedError) {
+        setAttachmentAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
+        return signedUrl;
+      }
+
+      const { data: blobData, error: downloadError } = await supabase.storage
+        .from(attachment.storageBucket)
+        .download(attachment.storagePath);
+      if (downloadError || !blobData) return null;
+
+      const objectUrl = URL.createObjectURL(blobData);
+      attachmentObjectUrlRegistryRef.current.add(objectUrl);
+      setAttachmentAccessUrlByKey((prev) => ({ ...prev, [key]: objectUrl }));
+      return objectUrl;
+    },
+    [attachmentAccessUrlByKey, getAttachmentStorageKey]
+  );
+
   const downloadFileToDevice = useCallback(async (url: string, filename?: string) => {
     try {
       const response = await fetch(url);
@@ -733,6 +772,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         description: getErrorMessage(error, "Спробуйте ще раз."),
       });
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      attachmentObjectUrlRegistryRef.current.forEach((url) => URL.revokeObjectURL(url));
+      attachmentObjectUrlRegistryRef.current.clear();
+    };
   }, []);
 
   const quoteManagerUserId = quote?.assigned_to?.trim() || null;
@@ -3251,30 +3297,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (error) throw error;
 
       const rows = data ?? [];
-      const mapped = await Promise.all(
-        rows.map(async (row) => {
-          let url: string | undefined;
-          if (row.storage_bucket && row.storage_path) {
-            const { data: signed } = await supabase.storage
-              .from(row.storage_bucket)
-              .createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
-            url = signed?.signedUrl;
-          }
-          return {
-            id: row.id,
-            name: row.file_name ?? "Файл",
-            size: formatFileSize(row.file_size),
-            created_at: row.created_at ?? new Date().toISOString(),
-            url,
-            uploadedBy: row.uploaded_by ?? null,
-            uploadedByLabel:
-              memberById.get(row.uploaded_by ?? "") ??
-              (row.uploaded_by ? "Невідомий користувач" : undefined),
-            storageBucket: row.storage_bucket ?? null,
-            storagePath: row.storage_path ?? null,
-          } satisfies QuoteAttachment;
-        })
-      );
+      const mapped = rows.map((row) => ({
+        id: row.id,
+        name: row.file_name ?? "Файл",
+        size: formatFileSize(row.file_size),
+        created_at: row.created_at ?? new Date().toISOString(),
+        uploadedBy: row.uploaded_by ?? null,
+        uploadedByLabel:
+          memberById.get(row.uploaded_by ?? "") ??
+          (row.uploaded_by ? "Невідомий користувач" : undefined),
+        storageBucket: row.storage_bucket ?? null,
+        storagePath: row.storage_path ?? null,
+      } satisfies QuoteAttachment));
       const isDesignVisualization = (file: QuoteAttachment) =>
         (file.storagePath ?? "").includes("design-outputs/");
       setAttachments(mapped.filter((file) => !isDesignVisualization(file)));
@@ -6281,7 +6315,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleDesignVisualizations.map((file) => {
                         const extension = getFileExtension(file.name);
-                        const previewImage = Boolean(file.url) && canPreviewImage(extension);
+                        const previewImage = canPreviewImage(extension) && Boolean(file.storageBucket && file.storagePath);
                         const isSelectedVisualization =
                           (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
                           (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName);
@@ -6291,19 +6325,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               type="button"
                               className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:hover:scale-100"
                               onClick={() => {
-                                if (previewImage && file.url) {
-                                  setVisualizationPreview(file);
-                                }
+                                if (!previewImage) return;
+                                void ensureAttachmentAccessUrl(file).then((url) => {
+                                  if (!url) return;
+                                  setVisualizationPreview({ ...file, url });
+                                });
                               }}
-                              disabled={!previewImage || !file.url}
-                              aria-label={previewImage && file.url ? `Переглянути ${file.name}` : file.name}
+                              disabled={!previewImage}
+                              aria-label={previewImage ? `Переглянути ${file.name}` : file.name}
                             >
-                              {previewImage && file.url ? (
-                                <KanbanImageZoomPreview
-                                  imageUrl={file.url ?? ""}
-                                  alt={file.name}
-                                  className="h-40 w-full rounded-lg object-cover"
-                                />
+                              {previewImage ? (
+                                <div className="text-xs text-muted-foreground">{extension}</div>
                               ) : (
                                 <div className="text-xs text-muted-foreground">{extension}</div>
                               )}
@@ -6325,11 +6357,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               ) : null}
                             </div>
                             <div className="mt-3 flex items-center gap-2">
-                              {file.url ? (
+                              {file.storageBucket && file.storagePath ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => void downloadFileToDevice(file.url!, file.name)}
+                                  onClick={() => {
+                                    void ensureAttachmentAccessUrl(file).then((url) => {
+                                      if (url) {
+                                        void downloadFileToDevice(url, file.name);
+                                      }
+                                    });
+                                  }}
                                 >
                                   Завантажити
                                 </Button>
@@ -6821,11 +6859,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         size="icon"
                                         className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                                         onClick={() => {
-                                          if (file.url) {
-                                            void downloadFileToDevice(file.url, file.name);
-                                          }
+                                          void ensureAttachmentAccessUrl(file).then((url) => {
+                                            if (url) {
+                                              void downloadFileToDevice(url, file.name);
+                                            }
+                                          });
                                         }}
-                                        disabled={!file.url}
+                                        disabled={!file.storageBucket || !file.storagePath}
                                       >
                                         <Download className="h-4 w-4" />
                                       </Button>

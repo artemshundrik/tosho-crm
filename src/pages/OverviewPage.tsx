@@ -295,7 +295,7 @@ export function OverviewPage() {
         const { count, error } = await supabase
           .schema("tosho")
           .from("quotes")
-          .select("id", { head: true, count: "exact" })
+          .select("id", { head: true, count: "planned" })
           .eq("team_id", teamId)
           .eq("status", status);
         if (error) throw error;
@@ -305,7 +305,7 @@ export function OverviewPage() {
       const totalQuotesPromise = supabase
         .schema("tosho")
         .from("quotes")
-        .select("id", { head: true, count: "exact" })
+        .select("id", { head: true, count: "planned" })
         .eq("team_id", teamId);
 
       const myQuotesPromise =
@@ -313,7 +313,7 @@ export function OverviewPage() {
           ? supabase
               .schema("tosho")
               .from("quotes")
-              .select("id", { head: true, count: "exact" })
+              .select("id", { head: true, count: "planned" })
               .eq("team_id", teamId)
               .eq("assigned_to", userId)
           : Promise.resolve({ count: 0, error: null } as { count: number | null; error: null });

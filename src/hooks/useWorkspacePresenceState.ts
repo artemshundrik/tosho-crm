@@ -70,6 +70,14 @@ type UseWorkspacePresenceStateOptions = {
 const ONLINE_WINDOW_MS = 45 * 1000;
 const IDLE_WINDOW_MS = 5 * 60 * 1000;
 const DB_HISTORY_WINDOW_MS = 30 * 60 * 1000;
+const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
+const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+const PRESENCE_UPSERT_INTERVAL_MS = 60 * 1000;
+
+function isDocumentVisible() {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible";
+}
 
 function isSchemaObjectMissing(message?: string | null) {
   const normalized = (message ?? "").toLowerCase();
@@ -384,8 +392,9 @@ export function useWorkspacePresenceState({
 
     void loadDbRows();
     const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void loadDbRows();
-    }, realtimeDisabled ? 30_000 : 90_000);
+    }, realtimeDisabled ? FALLBACK_POLL_INTERVAL_MS : ACTIVE_POLL_INTERVAL_MS);
 
     if (realtimeDisabled) {
       return () => {
@@ -489,8 +498,9 @@ export function useWorkspacePresenceState({
     void upsertPresenceRow();
     if (!teamId || !userId || dbUnavailable) return;
     const id = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
       void upsertPresenceRow();
-    }, 20_000);
+    }, PRESENCE_UPSERT_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [dbUnavailable, teamId, upsertPresenceRow, userId]);
 

@@ -402,12 +402,15 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
 
   const [itemRows, activityRows, customersResult, membersResult, leadsResult, quoteRunsResult] = await Promise.all([
     listQuoteItemsForQuotes({ teamId, quoteIds }),
-    supabase
-      .from("activity_log")
-      .select("entity_id,metadata,created_at")
-      .eq("team_id", teamId)
-      .eq("action", "design_task")
-      .order("created_at", { ascending: false }),
+    quoteIds.length > 0
+      ? supabase
+          .from("activity_log")
+          .select("entity_id,metadata,created_at")
+          .eq("team_id", teamId)
+          .eq("action", "design_task")
+          .in("entity_id", quoteIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
     uniqueCustomerIds.length > 0
       ? supabase
           .schema("tosho")
@@ -723,6 +726,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .select("entity_id,metadata")
             .eq("team_id", teamId)
             .eq("action", "design_task")
+            .in("entity_id", storedQuoteIds)
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
       approvedQuoteDerivedOrdersPromise,
