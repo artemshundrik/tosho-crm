@@ -75,7 +75,10 @@ function extractObjectPath(url: string, bucket: string): string | null {
     return null;
   }
 
-  const pathPart = normalizedUrl.replace(/^\/+/, "").split("?")[0] ?? "";
+  let pathPart = normalizedUrl.replace(/^\/+/, "").split("?")[0] ?? "";
+  if (pathPart.startsWith(`${bucket}/`)) {
+    pathPart = pathPart.slice(bucket.length + 1);
+  }
   if (!pathPart) return null;
   return decodeURIComponent(pathPart);
 }
@@ -92,7 +95,12 @@ function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   const normalizedUrl = normalizeAvatarKey(rawUrl);
   if (!normalizedUrl) return false;
   if (isSupabaseStorageUrl(normalizedUrl, bucket)) return true;
-  return !/^(https?:)?\/\//i.test(normalizedUrl) && !normalizedUrl.startsWith("data:") && !normalizedUrl.startsWith("blob:");
+  if (/^(https?:)?\/\//i.test(normalizedUrl) || normalizedUrl.startsWith("data:") || normalizedUrl.startsWith("blob:")) {
+    return false;
+  }
+
+  const objectPath = extractObjectPath(normalizedUrl, bucket);
+  return Boolean(objectPath && objectPath.includes("/"));
 }
 
 function getCachedResolvedAvatar(rawUrl: string | null | undefined) {

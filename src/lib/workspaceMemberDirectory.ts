@@ -333,8 +333,8 @@ async function listFromUnifiedView(workspaceId: string) {
   }
 
   const unifiedViewVariants = [
-    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count",
-    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count",
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
     "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone",
     "workspace_id,user_id,email,first_name,last_name,full_name,access_role,job_role",
     "workspace_id,user_id,access_role,job_role",
