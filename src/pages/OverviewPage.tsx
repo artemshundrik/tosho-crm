@@ -324,7 +324,7 @@ export function OverviewPage() {
         .eq("team_id", teamId)
         .eq("action", "design_task")
         .order("created_at", { ascending: false })
-        .limit(400);
+        .limit(120);
 
       const activityPromise = supabase
         .from("activity_log")
@@ -436,7 +436,7 @@ export function OverviewPage() {
     cacheTTL: 60 * 1000,
     showSkeletonOnStale: false,
     backgroundRefetch: true,
-    refetchInterval: 60 * 1000,
+    refetchInterval: 3 * 60 * 1000,
   });
 
   const safeData = data ?? createEmptyOverviewData();

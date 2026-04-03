@@ -881,6 +881,13 @@ export default function DesignPage() {
   };
   const getTaskAssigneeAvatar = (task: DesignTask) =>
     task.assigneeAvatarUrl?.trim() || getMemberAvatar(task.assigneeUserId);
+  const completedSummaryTaskDeps = useMemo(
+    () =>
+      tasks
+        .map((task) => `${task.id}:${task.assigneeUserId ?? ""}:${task.designTaskType ?? ""}`)
+        .join("|"),
+    [tasks]
+  );
   const getAllowedStatusTransitions = (task: DesignTask) =>
     DESIGN_COLUMNS.filter((column) =>
       canChangeDesignStatus({
@@ -1662,7 +1669,7 @@ export default function DesignPage() {
     return () => {
       active = false;
     };
-  }, [completedPeriod, effectiveTeamId, tasks]);
+  }, [completedPeriod, completedSummaryTaskDeps, effectiveTeamId, tasks]);
 
   const getTaskDisplayNumber = (task: DesignTask) => {
     if (task.designTaskNumber) return task.designTaskNumber;

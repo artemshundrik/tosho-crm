@@ -139,7 +139,7 @@ export function usePageData<T>({
       if (showSkeletonOnStale) {
         // Показуємо skeleton і завантажуємо
         loadData(false);
-      } else if (backgroundRefetch) {
+      } else if (backgroundRefetch && (typeof document === "undefined" || document.visibilityState !== "hidden")) {
         // Показуємо кеш, оновлюємо в фоні
         loadData(true);
       }
@@ -154,6 +154,7 @@ export function usePageData<T>({
     if (!cached) return; // Не запускаємо якщо немає кешу
 
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       // Оновлюємо тільки якщо кеш застарів
       if (isStaleRef.current) {
         loadData(true);
