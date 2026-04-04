@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "migrate:avatars": "node scripts/migrate-avatar-storage.mjs",
+    "migrate:avatar-variants": "node scripts/migrate-avatar-variants.mjs",
     "generate:vapid": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {

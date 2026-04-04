@@ -140,15 +140,12 @@ for (const row of profileRows) {
     continue;
   }
 
-  const { data: publicUrlData } = supabase.storage.from(CANONICAL_BUCKET).getPublicUrl(targetPath);
-  const publicUrl = publicUrlData.publicUrl;
-
   const { error: profileError } = await supabase
     .schema("tosho")
     .from("team_member_profiles")
     .update({
       avatar_path: targetPath,
-      avatar_url: publicUrl,
+      avatar_url: null,
     })
     .eq("workspace_id", row.workspace_id)
     .eq("user_id", row.user_id);
@@ -161,7 +158,8 @@ for (const row of profileRows) {
 
   const { error: authError } = await supabase.auth.admin.updateUserById(row.user_id, {
     user_metadata: {
-      avatar_url: publicUrl,
+      avatar_path: targetPath,
+      avatar_url: null,
     },
   });
 

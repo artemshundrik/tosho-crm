@@ -56,6 +56,7 @@ import {
 import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import {
@@ -815,8 +816,13 @@ export default function DesignPage() {
   }, [session?.user]);
   const isManagerUser = useMemo(() => isQuoteManagerJobRole(jobRole), [jobRole]);
   const currentUserAvatarUrl = useMemo(() => {
-    const raw = session?.user?.user_metadata?.avatar_url;
-    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+    return getCanonicalAvatarReference(
+      {
+        avatarUrl: (session?.user?.user_metadata?.avatar_url as string | undefined) ?? null,
+        avatarPath: (session?.user?.user_metadata?.avatar_path as string | undefined) ?? null,
+      },
+      "avatars"
+    );
   }, [session?.user?.user_metadata]);
   useEffect(() => {
     tasksLengthRef.current = tasks.length;

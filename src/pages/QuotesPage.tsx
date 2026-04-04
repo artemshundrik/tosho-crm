@@ -863,8 +863,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           avatarUrl: row.avatarDisplayUrl,
           jobRole: row.jobRole,
         }));
+        const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
+        const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
         if (active) {
           setTeamMembers(data);
+          setWorkspaceMemberLabelById(nextLabels);
+          setWorkspaceMemberAvatarById(nextAvatars);
           setTeamMembersLoaded(true);
           try {
             sessionStorage.setItem(`quotes-page-members:${teamId}`, JSON.stringify(data));
@@ -874,6 +878,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       } catch {
         if (active) {
+          setWorkspaceMemberLabelById({});
+          setWorkspaceMemberAvatarById({});
           setTeamMembersLoaded(true);
         }
       }
@@ -883,47 +889,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       active = false;
     };
   }, [currentUserId, teamId]);
-
-  useEffect(() => {
-    let active = true;
-    const loadWorkspaceMembers = async () => {
-      if (!currentUserId) {
-        if (active) {
-          setWorkspaceMemberLabelById({});
-          setWorkspaceMemberAvatarById({});
-        }
-        return;
-      }
-      try {
-        const workspaceId = await resolveWorkspaceId(currentUserId);
-        if (!workspaceId) {
-          if (active) {
-            setWorkspaceMemberLabelById({});
-            setWorkspaceMemberAvatarById({});
-          }
-          return;
-        }
-        const rows = await listWorkspaceMembersForDisplay(workspaceId);
-        const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
-        const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
-
-        if (active) {
-          setWorkspaceMemberLabelById(nextLabels);
-          setWorkspaceMemberAvatarById(nextAvatars);
-        }
-      } catch {
-        if (active) {
-          setWorkspaceMemberLabelById({});
-          setWorkspaceMemberAvatarById({});
-        }
-      }
-    };
-
-    void loadWorkspaceMembers();
-    return () => {
-      active = false;
-    };
-  }, [currentUserId]);
 
   useEffect(() => {
     if (!createOpen && !editDialogOpen) return;

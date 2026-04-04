@@ -2,7 +2,7 @@ import * as React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
-import { getCachedAvatarDisplayUrl, getImmediateAvatarDisplayUrl, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCachedAvatarDisplayUrl, getImmediateAvatarDisplayUrl, resolveAvatarDisplayUrl, type AvatarAssetVariant } from "@/lib/avatarUrl";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -37,6 +37,7 @@ type AvatarBaseProps = {
   name?: string;
   fallback?: string;
   variant?: AvatarVariant;
+  assetVariant?: AvatarAssetVariant;
   size?: number;
   shape?: AvatarShape;
   className?: string;
@@ -90,6 +91,7 @@ export function AvatarBase({
   name,
   fallback,
   variant = "sm",
+  assetVariant = "xs",
   size,
   shape = "circle",
   className,
@@ -104,7 +106,7 @@ export function AvatarBase({
   const [shouldResolve, setShouldResolve] = React.useState(() => loading === "eager");
   const [resolvedSrc, setResolvedSrc] = React.useState<string | null>(() => {
     if (!src) return null;
-    return getCachedAvatarDisplayUrl(src) ?? getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET);
+    return getCachedAvatarDisplayUrl(src, assetVariant) ?? getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET, assetVariant);
   });
   const mountedRef = React.useRef(true);
   const refreshAttemptedForSrcRef = React.useRef<string | null>(null);
@@ -115,6 +117,8 @@ export function AvatarBase({
       mountedRef.current = false;
     };
   }, []);
+
+  const computedSize = size ?? VARIANT_SIZES[variant];
 
   React.useEffect(() => {
     setErrored(false);
@@ -158,7 +162,7 @@ export function AvatarBase({
       };
     }
 
-    const cached = getCachedAvatarDisplayUrl(src);
+    const cached = getCachedAvatarDisplayUrl(src, assetVariant);
     if (cached) {
       setResolvedSrc(cached);
       return () => {
@@ -166,7 +170,7 @@ export function AvatarBase({
       };
     }
 
-    const immediate = getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET);
+    const immediate = getImmediateAvatarDisplayUrl(src, AVATAR_BUCKET, assetVariant);
     setResolvedSrc(immediate);
     if (!shouldResolve && !immediate) {
       return () => {
@@ -175,16 +179,15 @@ export function AvatarBase({
     }
 
     const run = async () => {
-      const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET);
+      const next = await resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET, { assetVariant });
       if (active) setResolvedSrc(next);
     };
     void run();
     return () => {
       active = false;
     };
-  }, [shouldResolve, src]);
+  }, [assetVariant, computedSize, shouldResolve, src]);
 
-  const computedSize = size ?? VARIANT_SIZES[variant];
   const initials = getInitials(name, fallback);
   const showImage = Boolean(resolvedSrc) && !errored;
   const handleImageError = React.useCallback(() => {
@@ -199,7 +202,7 @@ export function AvatarBase({
     }
 
     refreshAttemptedForSrcRef.current = src;
-    void resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET, { forceRefresh: true }).then((nextUrl) => {
+    void resolveAvatarDisplayUrl(supabase, src, AVATAR_BUCKET, { forceRefresh: true, assetVariant, preferOriginal: true }).then((nextUrl) => {
       if (!mountedRef.current) return;
       if (nextUrl && nextUrl !== resolvedSrc) {
         setResolvedSrc(nextUrl);
@@ -208,7 +211,7 @@ export function AvatarBase({
       }
       setErrored(true);
     });
-  }, [resolvedSrc, src]);
+  }, [assetVariant, computedSize, resolvedSrc, src]);
 
   return (
     <Avatar

@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
-import { getCanonicalAvatarReference, resolveAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference, getImmediateAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -177,47 +177,6 @@ function normalizeModuleAccess(value: unknown) {
   };
 }
 
-async function fetchTeamProfileSupplements(workspaceId: string, userIds: string[]) {
-  const uniqueUserIds = Array.from(new Set(userIds.map((value) => value.trim()).filter(Boolean)));
-  if (uniqueUserIds.length === 0) {
-    return new Map<string, Pick<TeamProfileRow, "manager_user_id" | "module_access">>();
-  }
-
-  const profileVariants = [
-    "workspace_id,user_id,manager_user_id,module_access",
-    "workspace_id,user_id,module_access",
-    "workspace_id,user_id,manager_user_id",
-    "workspace_id,user_id",
-  ];
-
-  let rows: Array<Pick<TeamProfileRow, "user_id" | "manager_user_id" | "module_access">> = [];
-  let lastError: unknown = null;
-
-  for (const columns of profileVariants) {
-    const result = await supabase
-      .schema("tosho")
-      .from("team_member_profiles")
-      .select(columns)
-      .eq("workspace_id", workspaceId)
-      .in("user_id", uniqueUserIds);
-
-    lastError = result.error;
-    if (!result.error) {
-      rows =
-        ((result.data as unknown) as Array<Pick<TeamProfileRow, "user_id" | "manager_user_id" | "module_access">> | null) ??
-        [];
-      break;
-    }
-    if (!isMissingColumn(result.error) && !isMissingSchemaObject(result.error)) break;
-  }
-
-  if (lastError && !isMissingSchemaObject(lastError) && !isMissingColumn(lastError)) {
-    throw lastError;
-  }
-
-  return new Map(rows.map((row) => [row.user_id, row]));
-}
-
 function notifyWorkspaceMemberDirectoryUpdated(workspaceId: string, userId: string) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
@@ -369,20 +328,7 @@ async function listFromUnifiedView(workspaceId: string) {
     throw error;
   }
 
-  const rawRows = ((data as DirectoryViewRow[] | null) ?? []);
-  const needsSupplement = rawRows.some((row) => row.module_access === undefined || row.manager_user_id === undefined);
-  const supplementByUserId = needsSupplement
-    ? await fetchTeamProfileSupplements(
-        workspaceId,
-        rawRows.map((row) => row.user_id)
-      )
-    : new Map<string, Pick<TeamProfileRow, "manager_user_id" | "module_access">>();
-
-  return rawRows.map((row) => {
-    const supplement = supplementByUserId.get(row.user_id);
-    const managerUserId = row.manager_user_id !== undefined ? row.manager_user_id : supplement?.manager_user_id;
-    const moduleAccess = row.module_access !== undefined ? row.module_access : supplement?.module_access;
-    return (
+  return (((data as DirectoryViewRow[] | null) ?? [])).map((row) =>
     buildRow({
       workspaceId: row.workspace_id,
       userId: row.user_id,
@@ -404,11 +350,10 @@ async function listFromUnifiedView(workspaceId: string) {
       probationReviewedAt: row.probation_reviewed_at ?? null,
       probationReviewedBy: row.probation_reviewed_by ?? null,
       probationExtensionCount: row.probation_extension_count ?? null,
-      managerUserId: managerUserId ?? null,
-      moduleAccess,
+      managerUserId: row.manager_user_id ?? null,
+      moduleAccess: row.module_access,
     })
-    );
-  });
+  );
 }
 
 async function listFromFallback(workspaceId: string) {
@@ -586,17 +531,17 @@ export async function listWorkspaceMembersForDisplay(workspaceId: string): Promi
 
   const promise = (async () => {
     const rows = await listWorkspaceMemberDirectory(workspaceId);
-    const resolvedEntries = await Promise.all(
-      rows.map(async (row) => ({
+    const resolvedEntries = rows.map((row) => {
+      const avatarReference = getCanonicalAvatarReference(
+        { avatarUrl: row.avatarUrl, avatarPath: row.avatarPath },
+        AVATAR_BUCKET
+      );
+      return {
         ...row,
         label: row.displayName || row.email?.split("@")[0]?.trim() || row.userId,
-        avatarDisplayUrl: await resolveAvatarDisplayUrl(
-          supabase,
-          getCanonicalAvatarReference({ avatarUrl: row.avatarUrl, avatarPath: row.avatarPath }, AVATAR_BUCKET),
-          AVATAR_BUCKET
-        ),
-      }))
-    );
+        avatarDisplayUrl: getImmediateAvatarDisplayUrl(avatarReference, AVATAR_BUCKET) ?? avatarReference,
+      };
+    });
     const resolved = resolvedEntries.sort((a, b) => a.label.localeCompare(b.label, "uk"));
     workspaceDisplayDirectoryCache.set(workspaceId, resolved);
     return resolved;

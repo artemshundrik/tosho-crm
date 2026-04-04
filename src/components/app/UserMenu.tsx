@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
-import { getCanonicalAvatarReference, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
 
@@ -106,18 +106,16 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
         const rawAvatarUrl = getCanonicalAvatarReference(
           {
             avatarUrl: directoryEntry?.avatarUrl || (user.user_metadata?.avatar_url as string | undefined) || null,
-            avatarPath: directoryEntry?.avatarPath || null,
+            avatarPath: directoryEntry?.avatarPath || (user.user_metadata?.avatar_path as string | undefined) || null,
           },
           AVATAR_BUCKET
         );
-        const avatarUrl = await resolveAvatarDisplayUrl(supabase, rawAvatarUrl, AVATAR_BUCKET);
-
         const nextData: UserState = {
           name: directoryEntry?.displayName || resolvedName.displayName,
           accessRole: accessRoleLabel,
           jobRole: jobRoleLabel,
           initials: directoryEntry?.initials || initials,
-          avatarUrl,
+          avatarUrl: rawAvatarUrl,
           roleKey: rawRole
         };
         cachedUserData = nextData;
@@ -129,10 +127,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   }, []);
 
   useEffect(() => {
-    const handleAvatarUpdated = async (event: Event) => {
+    const handleAvatarUpdated = (event: Event) => {
       const customEvent = event as CustomEvent<{ avatarUrl?: string }>;
-      const rawAvatar = customEvent.detail?.avatarUrl ?? null;
-      const nextAvatar = await resolveAvatarDisplayUrl(supabase, rawAvatar, AVATAR_BUCKET);
+      const nextAvatar = customEvent.detail?.avatarUrl ?? null;
       setUserData((prev) => {
         const next = { ...prev, avatarUrl: nextAvatar };
         cachedUserData = next;

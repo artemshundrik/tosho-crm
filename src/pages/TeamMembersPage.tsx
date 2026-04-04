@@ -67,7 +67,6 @@ import {
 } from "@/components/ui/controlStyles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import {
   addMonthsToDateOnly,
@@ -695,18 +694,15 @@ export function TeamMembersPage() {
           return acc;
         }, {});
 
-        await Promise.all(
-          Object.entries(nextMap).map(async ([id, profile]) => {
-            nextMap[id] = {
-              ...profile,
-              avatarUrl: await resolveAvatarDisplayUrl(supabase, profile.avatarUrl, AVATAR_BUCKET),
-            };
-          })
-        );
-
         const { data: currentUserData } = await supabase.auth.getUser();
         const currentUserId = currentUserData.user?.id ?? null;
-        const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
+        const currentUserAvatar = getCanonicalAvatarReference(
+          {
+            avatarUrl: (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null,
+            avatarPath: (currentUserData.user?.user_metadata?.avatar_path as string | undefined) || null,
+          },
+          AVATAR_BUCKET
+        );
         if (currentUserId && currentUserAvatar) {
           const resolvedName = buildUserNameFromMetadata(
             currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
@@ -725,7 +721,13 @@ export function TeamMembersPage() {
         try {
           const { data: currentUserData } = await supabase.auth.getUser();
           const currentUserId = currentUserData.user?.id ?? null;
-          const currentUserAvatar = (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null;
+          const currentUserAvatar = getCanonicalAvatarReference(
+            {
+              avatarUrl: (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null,
+              avatarPath: (currentUserData.user?.user_metadata?.avatar_path as string | undefined) || null,
+            },
+            AVATAR_BUCKET
+          );
           const currentUserLabel = buildUserNameFromMetadata(
             currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
             currentUserData.user?.email
@@ -2326,6 +2328,7 @@ export function TeamMembersPage() {
                             src={getMemberAvatarSource(profile, m)}
                             name={displayName}
                             fallback={initials}
+                            assetVariant="md"
                             size={44}
                             shape="circle"
                             className="border-border bg-muted/50"
@@ -2530,6 +2533,7 @@ export function TeamMembersPage() {
                                 src={getMemberAvatarSource(profile, m)}
                                 name={displayName}
                                 fallback={initials}
+                                assetVariant="md"
                                 size={48}
                                 shape="circle"
                                 className="border-border bg-muted/50"

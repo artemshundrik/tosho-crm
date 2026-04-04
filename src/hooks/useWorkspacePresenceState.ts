@@ -157,7 +157,13 @@ export function useWorkspacePresenceState({
   const selfAvatarUrl = useMemo(() => {
     if (selfAvatarOverride) return selfAvatarOverride;
     if (selfDirectoryAvatarUrl) return selfDirectoryAvatarUrl;
-    return (session?.user?.user_metadata?.avatar_url as string | undefined) ?? null;
+    return getCanonicalAvatarReference(
+      {
+        avatarUrl: (session?.user?.user_metadata?.avatar_url as string | undefined) ?? null,
+        avatarPath: (session?.user?.user_metadata?.avatar_path as string | undefined) ?? null,
+      },
+      "avatars"
+    );
   }, [selfAvatarOverride, selfDirectoryAvatarUrl, session?.user?.user_metadata]);
 
   useEffect(() => {

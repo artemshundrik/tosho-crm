@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { getCanonicalAvatarReference, resolveAvatarDisplayUrl } from "@/lib/avatarUrl";
+import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName, toFullName } from "@/lib/userName";
 import {
   formatEmploymentDate,
@@ -26,6 +26,9 @@ import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile }
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
+const AVATAR_XS_SIZE = 40;
+const AVATAR_MD_SIZE = 64;
+const AVATAR_HERO_SIZE = 192;
 
 type ProfileCache = {
   userId: string | null;
@@ -161,8 +164,10 @@ export function ProfilePage() {
         const resolvedWorkspaceId = await resolveWorkspaceId(user.id);
         let resolvedAccessRole = "member";
         let resolvedJobRole: string | null = null;
-        let resolvedAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
-        let resolvedAvatarPath: string | null = null;
+        const metadataAvatarUrl = (user.user_metadata?.avatar_url as string | undefined) || null;
+        const metadataAvatarPath = (user.user_metadata?.avatar_path as string | undefined) || null;
+        let resolvedAvatarUrl = metadataAvatarUrl;
+        let resolvedAvatarPath: string | null = metadataAvatarPath;
         let resolvedProfileName = resolvedName;
         let resolvedBirthDate = metaBirthDate;
         let resolvedPhone = metaPhone;
@@ -204,12 +209,14 @@ export function ProfilePage() {
           resolvedJobRole = (membership?.job_role as string) || null;
         }
 
-        const displayAvatarUrl = await resolveAvatarDisplayUrl(
-          supabase,
-          resolvedAvatarPath || resolvedAvatarUrl,
+        const canonicalAvatarRef = getCanonicalAvatarReference(
+          {
+            avatarUrl: resolvedAvatarUrl,
+            avatarPath: resolvedAvatarPath,
+          },
           AVATAR_BUCKET
         );
-        setAvatarUrl(displayAvatarUrl);
+        setAvatarUrl(canonicalAvatarRef);
         setAvatarStoragePath(resolvedAvatarPath);
         setFirstName(resolvedProfileName.firstName);
         setLastName(resolvedProfileName.lastName);
@@ -238,7 +245,7 @@ export function ProfilePage() {
           accessRole: resolvedAccessRole,
           jobRole: resolvedJobRole,
           initials: i,
-          avatarUrl: displayAvatarUrl,
+          avatarUrl: canonicalAvatarRef,
           phone: resolvedPhone,
           startDate: resolvedStartDate,
           probationEndDate: resolvedProbationEndDate,
@@ -287,7 +294,7 @@ export function ProfilePage() {
     setCroppedAreaPixels(areaPixels);
   };
 
-  const getCroppedBlob = async (imageSrc: string, cropArea: Area): Promise<Blob | null> => {
+  const getCroppedBlob = async (imageSrc: string, cropArea: Area, outputSize: number): Promise<Blob | null> => {
     const image = new Image();
     image.src = imageSrc;
     await new Promise((resolve, reject) => {
@@ -296,11 +303,13 @@ export function ProfilePage() {
     });
 
     const canvas = document.createElement("canvas");
-    const size = 512;
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = outputSize;
+    canvas.height = outputSize;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
@@ -313,30 +322,74 @@ export function ProfilePage() {
       cropArea.height * scaleY,
       0,
       0,
-      size,
-      size
+      outputSize,
+      outputSize
     );
 
-    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png", 0.92));
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        canvas.toBlob((fallbackBlob) => resolve(fallbackBlob), "image/png");
+      }, "image/webp", 0.86);
+    });
   };
 
-  const uploadAvatarBlob = async (blob: Blob) => {
+  const getAvatarVariantPaths = (basePath: string) => {
+    const normalizedBase = basePath.replace(/\/+$/, "");
+    return {
+      xs: `${normalizedBase}/xs.webp`,
+      md: `${normalizedBase}/md.webp`,
+      hero: `${normalizedBase}/hero.webp`,
+    };
+  };
+
+  const getAvatarCleanupPaths = (path: string | null | undefined) => {
+    if (!path) return [] as string[];
+    if (/\/(xs|md|hero|sm|lg)\.[^/.]+$/i.test(path)) {
+      const basePath = path.replace(/\/(xs|md|hero|sm|lg)\.[^/.]+$/i, "");
+      const variants = getAvatarVariantPaths(basePath);
+      return [variants.xs, variants.md, variants.hero];
+    }
+    return [path];
+  };
+
+  const uploadAvatarBlob = async () => {
     if (!userId) return;
+    if (!avatarDraftUrl || !croppedAreaPixels) return;
     setAvatarUploading(true);
     try {
-      const uploadedPath = `avatars/${userId}/current.png`;
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(uploadedPath, blob, {
-          upsert: true,
-          contentType: blob.type || "image/png",
-          cacheControl: STORAGE_CACHE_CONTROL,
-        });
+      const xsBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_XS_SIZE);
+      const mdBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_MD_SIZE);
+      const heroBlob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels, AVATAR_HERO_SIZE);
+      if (!xsBlob || !mdBlob || !heroBlob) {
+        throw new Error("Не вдалося підготувати аватар.");
+      }
 
-      if (uploadError) throw uploadError;
+      const basePath = `avatars/${userId}/${Date.now()}`;
+      const variantPaths = getAvatarVariantPaths(basePath);
+      for (const entry of [
+        { path: variantPaths.xs, blob: xsBlob },
+        { path: variantPaths.md, blob: mdBlob },
+        { path: variantPaths.hero, blob: heroBlob },
+      ]) {
+        const { error: uploadError } = await supabase.storage
+          .from(AVATAR_BUCKET)
+          .upload(entry.path, entry.blob, {
+            upsert: true,
+            contentType: entry.blob.type || "image/webp",
+            cacheControl: STORAGE_CACHE_CONTROL,
+          });
 
-      const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(uploadedPath);
-      const publicUrl = data.publicUrl;
+        if (uploadError) throw uploadError;
+      }
+
+      const canonicalAvatarRef = getCanonicalAvatarReference(
+        { avatarUrl: null, avatarPath: variantPaths.hero },
+        AVATAR_BUCKET
+      );
 
       const workspaceId = await resolveWorkspaceId(userId);
       if (workspaceId) {
@@ -346,8 +399,8 @@ export function ProfilePage() {
           firstName,
           lastName,
           fullName: toFullName(firstName.trim(), lastName.trim()) || fullName.trim(),
-          avatarUrl: publicUrl,
-          avatarPath: uploadedPath,
+          avatarUrl: null,
+          avatarPath: variantPaths.hero,
           birthDate,
           phone,
           updatedBy: userId,
@@ -355,18 +408,28 @@ export function ProfilePage() {
       }
 
       const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: publicUrl },
+        data: { avatar_url: null, avatar_path: variantPaths.hero },
       });
 
       if (updateError) throw updateError;
       await supabase.auth.refreshSession();
-      const displayAvatarUrl = await resolveAvatarDisplayUrl(supabase, publicUrl, AVATAR_BUCKET);
-      setAvatarUrl(displayAvatarUrl);
-      setAvatarStoragePath(uploadedPath);
+
+      const previousAvatarPath = avatarStoragePath;
+      const previousCleanupPaths = getAvatarCleanupPaths(previousAvatarPath).filter(
+        (path) => path !== variantPaths.xs && path !== variantPaths.md && path !== variantPaths.hero
+      );
+      if (previousCleanupPaths.length > 0) {
+        void supabase.storage.from(AVATAR_BUCKET).remove(previousCleanupPaths).catch(() => {
+          // ignore cleanup failures for old avatars
+        });
+      }
+
+      setAvatarUrl(canonicalAvatarRef);
+      setAvatarStoragePath(variantPaths.hero);
       setAvatarDraftUrl(null);
-      commitCache({ avatarUrl: displayAvatarUrl });
+      commitCache({ avatarUrl: canonicalAvatarRef });
       window.dispatchEvent(
-        new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: displayAvatarUrl } })
+        new CustomEvent("profile:avatar-updated", { detail: { avatarUrl: canonicalAvatarRef } })
       );
       toast.success("Аватар оновлено");
     } catch (error: unknown) {
@@ -380,9 +443,7 @@ export function ProfilePage() {
 
   const handleCropSave = async () => {
     if (!avatarDraftUrl || !croppedAreaPixels) return;
-    const blob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels);
-    if (!blob) return;
-    await uploadAvatarBlob(blob);
+    await uploadAvatarBlob();
   };
 
   const handleCropCancel = () => {
@@ -409,7 +470,7 @@ export function ProfilePage() {
             firstName: nextFirstName,
             lastName: nextLastName,
             fullName: nextFullName,
-            avatarUrl,
+            avatarUrl: avatarStoragePath ? null : avatarUrl,
             avatarPath: avatarStoragePath,
             birthDate,
             phone,
@@ -424,7 +485,8 @@ export function ProfilePage() {
           full_name: nextFullName || null,
           birth_date: birthDate || null,
           phone: phone || null,
-          avatar_url: avatarUrl,
+          avatar_url: avatarStoragePath ? null : avatarUrl,
+          avatar_path: avatarStoragePath || null,
         }
       });
 
@@ -517,6 +579,7 @@ export function ProfilePage() {
                   src={avatarUrl}
                   name={displayName || "Користувач"}
                   fallback={initials}
+                  assetVariant="hero"
                   size={120}
                   shape="circle"
                   className="border-[5px] border-card bg-card text-foreground ring-1 ring-black/5"
