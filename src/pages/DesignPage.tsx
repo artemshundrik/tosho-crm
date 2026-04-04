@@ -125,8 +125,11 @@ const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
-const DESIGN_PAGE_SIZE = 100;
-const DESIGN_PAGE_CACHE_LIMIT = DESIGN_PAGE_SIZE;
+const DESIGN_LIST_PAGE_SIZE = 50;
+const DESIGN_LIST_PAGE_INCREMENT = 50;
+const DESIGN_KANBAN_INITIAL_PAGE_SIZE = 120;
+const DESIGN_KANBAN_PAGE_INCREMENT = 60;
+const DESIGN_PAGE_CACHE_LIMIT = DESIGN_KANBAN_INITIAL_PAGE_SIZE;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 type DesignPageCachePayload = {
@@ -695,7 +698,9 @@ export default function DesignPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
-  const [tasksFetchLimit, setTasksFetchLimit] = useState(DESIGN_PAGE_SIZE);
+  const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
+    (initialFilters?.viewMode ?? "kanban") === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE
+  );
   const [hasMoreTasks, setHasMoreTasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -793,6 +798,7 @@ export default function DesignPage() {
   const loadTasksCooldownUntilRef = useRef(0);
   const resourceErrorToastShownRef = useRef(false);
   const tasksLengthRef = useRef(0);
+  const tasksRef = useRef<DesignTask[]>(initialCache?.tasks ?? []);
   const customersRef = useRef<CustomerOption[]>([]);
   const memberByIdRef = useRef<Record<string, string>>({});
   const memberAvatarByIdRef = useRef<Record<string, string | null>>({});
@@ -826,7 +832,8 @@ export default function DesignPage() {
   }, [session?.user?.user_metadata]);
   useEffect(() => {
     tasksLengthRef.current = tasks.length;
-  }, [tasks.length]);
+    tasksRef.current = tasks;
+  }, [tasks]);
   useEffect(() => {
     customersRef.current = customers;
   }, [customers]);
@@ -895,7 +902,7 @@ export default function DesignPage() {
     return getMemberLabel(task.assigneeUserId);
   };
   const getTaskAssigneeAvatar = (task: DesignTask) =>
-    task.assigneeAvatarUrl?.trim() || getMemberAvatar(task.assigneeUserId);
+    getMemberAvatar(task.assigneeUserId) || task.assigneeAvatarUrl?.trim() || null;
   const completedSummaryTaskDeps = useMemo(
     () =>
       tasks
@@ -1170,12 +1177,18 @@ export default function DesignPage() {
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
-  const loadTasks = useCallback(async (options?: { force?: boolean }) => {
+  const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean }) => {
     if (!effectiveTeamId) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden" && !options?.force) return;
     if (loadTasksInFlightRef.current) return;
     const now = Date.now();
     if (!options?.force && loadTasksCooldownUntilRef.current > now) return;
+
+    const append = !!options?.append;
+    const pageSize = append
+      ? (viewMode === "kanban" ? DESIGN_KANBAN_PAGE_INCREMENT : DESIGN_LIST_PAGE_INCREMENT)
+      : tasksFetchLimit;
+    const offset = append ? tasksLengthRef.current : 0;
 
     loadTasksInFlightRef.current = true;
     if (tasksLengthRef.current > 0) {
@@ -1185,14 +1198,14 @@ export default function DesignPage() {
     }
     setError(null);
     try {
-      const fetchLimit = tasksFetchLimit + 1;
+      const fetchLimit = pageSize + 1;
       const { data, error: fetchError } = await supabase
         .from("activity_log")
         .select("id,entity_id,metadata,title,created_at")
         .eq("team_id", effectiveTeamId)
         .eq("action", "design_task")
         .order("created_at", { ascending: false })
-        .limit(fetchLimit);
+        .range(offset, offset + fetchLimit - 1);
       if (fetchError) throw fetchError;
       const fetchedRows = ((data ?? []) as Array<{
         id: string;
@@ -1201,8 +1214,8 @@ export default function DesignPage() {
         title?: string | null;
         created_at: string;
       }>);
-      const limitedRows = fetchedRows.slice(0, tasksFetchLimit);
-      setHasMoreTasks(fetchedRows.length > tasksFetchLimit);
+      const limitedRows = fetchedRows.slice(0, pageSize);
+      setHasMoreTasks(fetchedRows.length > pageSize);
       const parsedRaw =
         limitedRows.map((row) => {
           const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
@@ -1548,21 +1561,27 @@ export default function DesignPage() {
                 : (memberByIdRef.current[t.assigneeUserId] ?? null))
             : null),
         assigneeAvatarUrl:
-          sanitizeImageReference(t.assigneeAvatarUrl) ??
           (t.assigneeUserId
             ? (t.assigneeUserId === userId && currentUserAvatarUrlRef.current
                 ? sanitizeImageReference(currentUserAvatarUrlRef.current)
                 : sanitizeImageReference(memberAvatarByIdRef.current[t.assigneeUserId] ?? null))
-            : null),
+            : null) ??
+          sanitizeImageReference(t.assigneeAvatarUrl),
       }));
       const parsed = applyCustomerLogosToTasks(
         parsedBase,
         customersRef.current.length > 0 ? customersRef.current : initialLogoEntriesRef.current
       );
+      const nextTasks = append
+        ? [
+            ...tasksRef.current,
+            ...parsed.filter((task) => !tasksRef.current.some((existing) => existing.id === task.id)),
+          ]
+        : parsed;
 
-      setTasks(parsed);
+      setTasks(nextTasks);
       if (typeof window !== "undefined" && effectiveTeamId) {
-        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(parsed));
+        writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
       }
       try {
         const timerSummaryMap = await getDesignTasksTimerSummaryMap(
@@ -1573,10 +1592,10 @@ export default function DesignPage() {
         timerSummaryMap.forEach((summary, taskId) => {
           timerSummaryObj[taskId] = summary;
         });
-        setTimerSummaryByTaskId(timerSummaryObj);
+        setTimerSummaryByTaskId((current) => (append ? { ...current, ...timerSummaryObj } : timerSummaryObj));
       } catch (timerError) {
         console.warn("Failed to load timer summaries", timerError);
-        setTimerSummaryByTaskId({});
+        if (!append) setTimerSummaryByTaskId({});
       }
       loadTasksCooldownUntilRef.current = 0;
       resourceErrorToastShownRef.current = false;
@@ -1609,6 +1628,7 @@ export default function DesignPage() {
     effectiveTeamId,
     tasksFetchLimit,
     userId,
+    viewMode,
   ]);
 
   useEffect(() => {
@@ -1916,6 +1936,10 @@ export default function DesignPage() {
   }, [timerSummaryByTaskId]);
 
   useEffect(() => {
+    setTasksFetchLimit(viewMode === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE);
+  }, [effectiveTeamId, viewMode]);
+
+  useEffect(() => {
     if (viewMode !== "kanban") return;
     if (typeof window === "undefined") return;
 
@@ -1976,12 +2000,14 @@ export default function DesignPage() {
       if (document.visibilityState === "hidden") return;
       if (tasksKanbanAutoloadLockRef.current) return;
       tasksKanbanAutoloadLockRef.current = true;
-      setTasksFetchLimit((current) => current + DESIGN_PAGE_SIZE);
+      void loadTasks({ append: true });
       tasksKanbanAutoloadTimerRef.current = window.setTimeout(releaseLock, KANBAN_AUTOLOAD_LOCK_MS);
     };
 
     const maybeLoadMore = (node: HTMLElement) => {
-      const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+      const overflow = node.scrollHeight - node.clientHeight;
+      if (overflow <= KANBAN_AUTOLOAD_THRESHOLD_PX) return;
+      const remaining = overflow - node.scrollTop;
       if (remaining <= KANBAN_AUTOLOAD_THRESHOLD_PX) {
         queueLoadMore();
       }
@@ -2002,17 +2028,18 @@ export default function DesignPage() {
       node.addEventListener("scroll", handleColumnScroll, { passive: true });
     });
 
-    window.requestAnimationFrame(() => {
-      columnBodies.forEach((node) => maybeLoadMore(node));
-    });
-
     return () => {
       columnBodies.forEach((node) => {
         node.removeEventListener("scroll", handleColumnScroll);
       });
       releaseLock();
     };
-  }, [hasMoreTasks, loading, refreshing, viewMode]);
+  }, [hasMoreTasks, loading, refreshing, viewMode, loadTasks]);
+
+  const handleLoadMoreTasks = useCallback(() => {
+    if (loading || refreshing || !hasMoreTasks) return;
+    void loadTasks({ append: true });
+  }, [hasMoreTasks, loading, refreshing, loadTasks]);
 
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
@@ -3812,11 +3839,10 @@ export default function DesignPage() {
                 <FilterX className="h-4 w-4" />
               </Button>
             ) : null}
-            <div className="text-sm font-semibold text-foreground">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
-              <span className="ml-1 text-muted-foreground">знайдено</span>
+              {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
-            {hasMoreTasks ? <div className="text-xs text-muted-foreground">Показано перші {tasks.length}</div> : null}
           </div>
         </div>
       </div>
@@ -4921,6 +4947,14 @@ export default function DesignPage() {
             : "Завантаження задач..."}
         </div>
       )}
+
+      {viewMode !== "kanban" && hasMoreTasks && !loading && !membersLoading ? (
+        <div className="flex items-center justify-center pb-2">
+          <Button variant="outline" onClick={handleLoadMoreTasks} disabled={refreshing}>
+            {refreshing ? "Оновлення..." : `Показати ще ${DESIGN_LIST_PAGE_INCREMENT}`}
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog
         open={createDialogOpen}

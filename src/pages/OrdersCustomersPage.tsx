@@ -42,7 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
+import { Building2, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 type CustomerRow = {
@@ -194,8 +194,11 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const ALL_MANAGERS_FILTER = "__all__";
+const CUSTOMERS_PAGE_SIZE = 50;
 const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+const escapePostgrestTerm = (value: string) => value.replace(/[%_,]/g, (char) => `\\${char}`);
 
 type CustomersPageCachePayload = {
   activeTab: "customers" | "leads";
@@ -280,13 +283,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
-  const [, setCustomersRefreshing] = useState(false);
+  const [customersRefreshing, setCustomersRefreshing] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
+  const [customersTotal, setCustomersTotal] = useState(0);
+  const [customersHasMore, setCustomersHasMore] = useState(false);
 
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
-  const [, setLeadsRefreshing] = useState(false);
+  const [leadsRefreshing, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
+  const [leadsTotal, setLeadsTotal] = useState(0);
+  const [leadsHasMore, setLeadsHasMore] = useState(false);
   const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -335,6 +342,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
   const [handledDeepLink, setHandledDeepLink] = useState<string | null>(null);
   const previousPathnameRef = useRef(location.pathname);
+  const rowsRef = useRef<CustomerRow[]>([]);
+  const leadsRef = useRef<LeadRow[]>([]);
 
   const defaultManagerName = useMemo(() => {
     const resolved = buildUserNameFromMetadata(
@@ -411,106 +420,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
     [resolveManagerMember]
   );
 
-  const customerManagerOptions = useMemo(() => {
-    const values = new Set<string>();
-    rows.forEach((row) => {
-      const value = resolveManagerLabel(row.manager_user_id, row.manager);
-      if (value) values.add(value);
-    });
-    return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
-  }, [resolveManagerLabel, rows]);
+  const customerManagerOptions = useMemo(
+    () => teamMembers.map((member) => member.label).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" })),
+    [teamMembers]
+  );
 
-  const leadManagerOptions = useMemo(() => {
-    const values = new Set<string>();
-    leads.forEach((lead) => {
-      const value = resolveManagerLabel(lead.manager_user_id, lead.manager);
-      if (value) values.add(value);
-    });
-    return Array.from(values).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
-  }, [leads, resolveManagerLabel]);
+  const leadManagerOptions = customerManagerOptions;
   const currentManagerLabel = useMemo(() => {
     const fromMember = userId ? memberById.get(userId)?.label?.trim() : "";
     if (fromMember) return fromMember;
     return defaultManagerName.trim();
   }, [defaultManagerName, memberById, userId]);
   const isManagerUser = useMemo(() => isQuoteManagerJobRole(jobRole), [jobRole]);
-  const isOwnedByCurrentManager = useCallback(
-    (managerUserId?: string | null, manager?: string | null) => {
-      if (!isManagerUser) return true;
-      if (!userId) return false;
-      if (managerUserId?.trim()) return managerUserId.trim() === userId;
-      const resolved = resolveManagerMember(managerUserId, manager);
-      if (resolved?.userId?.trim()) return resolved.userId.trim() === userId;
-      const managerLabel = resolveManagerLabel(managerUserId, manager);
-      return !!managerLabel && !!currentManagerLabel && managerLabel === currentManagerLabel;
-    },
-    [currentManagerLabel, isManagerUser, resolveManagerLabel, resolveManagerMember, userId]
-  );
+  const filteredRows = rows;
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let next = rows.filter((row) => {
-      if (!isOwnedByCurrentManager(row.manager_user_id, row.manager)) return false;
-      const name = row.name?.toLowerCase() ?? "";
-      const legal = row.legal_name?.toLowerCase() ?? "";
-      const manager = resolveManagerLabel(row.manager_user_id, row.manager).toLowerCase();
-      const legalEntitiesBlob = parseCustomerLegalEntities(row)
-        .map((entity) => [entity.ownershipType, entity.legalName, entity.taxId, entity.iban].filter(Boolean).join(" "))
-        .join(" ")
-        .toLowerCase();
-      const contacts = parseCustomerContacts(row);
-      const contactBlob = contacts
-        .map((contact) => [contact.name, contact.position, contact.phone, contact.email].filter(Boolean).join(" "))
-        .join(" ")
-        .toLowerCase();
-      return (
-        !q ||
-        name.includes(q) ||
-        legal.includes(q) ||
-        manager.includes(q) ||
-        legalEntitiesBlob.includes(q) ||
-        contactBlob.includes(q)
-      );
-    });
-
-    if (!isManagerUser && customerManagerFilter !== ALL_MANAGERS_FILTER) {
-      next = next.filter((row) => resolveManagerLabel(row.manager_user_id, row.manager) === customerManagerFilter);
-    }
-
-    return next;
-  }, [customerManagerFilter, isManagerUser, isOwnedByCurrentManager, resolveManagerLabel, rows, search]);
-
-  const filteredLeads = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let next = leads.filter((lead) => {
-      if (!isOwnedByCurrentManager(lead.manager_user_id, lead.manager)) return false;
-      const company = lead.company_name?.toLowerCase() ?? "";
-      const legal = lead.legal_name?.toLowerCase() ?? "";
-      const first = lead.first_name?.toLowerCase() ?? "";
-      const last = lead.last_name?.toLowerCase() ?? "";
-      const email = lead.email?.toLowerCase() ?? "";
-      const source = lead.source?.toLowerCase() ?? "";
-      const manager = resolveManagerLabel(lead.manager_user_id, lead.manager).toLowerCase();
-      const phones = (lead.phone_numbers ?? []).join(" ").toLowerCase();
-      return (
-        !q ||
-        company.includes(q) ||
-        legal.includes(q) ||
-        first.includes(q) ||
-        last.includes(q) ||
-        email.includes(q) ||
-        source.includes(q) ||
-        manager.includes(q) ||
-        phones.includes(q)
-      );
-    });
-
-    if (!isManagerUser && leadManagerFilter !== ALL_MANAGERS_FILTER) {
-      next = next.filter((lead) => resolveManagerLabel(lead.manager_user_id, lead.manager) === leadManagerFilter);
-    }
-
-    return next;
-  }, [isManagerUser, isOwnedByCurrentManager, leadManagerFilter, leads, resolveManagerLabel, search]);
+  const filteredLeads = leads;
   const calculationQuotes = useMemo(
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
@@ -519,6 +443,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() === "approved"),
     [linkedQuotes]
   );
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useEffect(() => {
+    leadsRef.current = leads;
+  }, [leads]);
 
   const renderManagerCell = (managerUserId?: string | null, manager?: string | null) => {
     const managerLabel = resolveManagerLabel(managerUserId, manager);
@@ -707,8 +639,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadDeleteDialogOpen(true);
   };
 
-  const loadCustomers = async () => {
-    if (rows.length > 0) {
+  const loadCustomers = useCallback(async (options?: { append?: boolean }) => {
+    const append = !!options?.append;
+    const offset = append ? rowsRef.current.length : 0;
+    if (append || rowsRef.current.length > 0) {
       setCustomersRefreshing(true);
     } else {
       setCustomersLoading(true);
@@ -746,24 +680,55 @@ function CustomersPage({ teamId }: { teamId: string }) {
         "created_at",
         "updated_at",
       ].join(",");
-      const { data, error: loadError } = await supabase
+      let query = supabase
         .schema("tosho")
         .from("customers")
-        .select(customerColumns)
+        .select(customerColumns, { count: "exact" })
         .eq("team_id", teamId)
         .order("name", { ascending: true });
+
+      if (isManagerUser && userId) {
+        query = query.eq("manager_user_id", userId);
+      } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
+        const selectedManager = memberByLabel.get(customerManagerFilter);
+        if (selectedManager?.userId) {
+          query = query.or(`manager_user_id.eq.${selectedManager.userId},manager.eq.${customerManagerFilter}`);
+        } else {
+          query = query.eq("manager", customerManagerFilter);
+        }
+      }
+
+      const normalizedSearch = search.trim();
+      if (normalizedSearch) {
+        const escaped = escapePostgrestTerm(normalizedSearch);
+        query = query.or(
+          `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
+        );
+      }
+
+      const { data, error: loadError, count } = await query.range(offset, offset + CUSTOMERS_PAGE_SIZE - 1);
       if (loadError) throw loadError;
-      setRows(((data as unknown) as CustomerRow[]) ?? []);
+      const nextRows = ((data as unknown) as CustomerRow[]) ?? [];
+      setCustomersTotal(count ?? nextRows.length);
+      setCustomersHasMore(offset + nextRows.length < (count ?? nextRows.length));
+      setRows((current) => (append ? [...current, ...nextRows.filter((row) => !current.some((item) => item.id === row.id))] : nextRows));
     } catch (err: unknown) {
       setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
+      if (!append) {
+        setRows([]);
+        setCustomersTotal(0);
+        setCustomersHasMore(false);
+      }
     } finally {
       setCustomersLoading(false);
       setCustomersRefreshing(false);
     }
-  };
+  }, [customerManagerFilter, isManagerUser, memberByLabel, search, teamId, userId]);
 
-  const loadLeads = async () => {
-    if (leads.length > 0) {
+  const loadLeads = useCallback(async (options?: { append?: boolean }) => {
+    const append = !!options?.append;
+    const offset = append ? leadsRef.current.length : 0;
+    if (append || leadsRef.current.length > 0) {
       setLeadsRefreshing(true);
     } else {
       setLeadsLoading(true);
@@ -799,24 +764,48 @@ function CustomersPage({ teamId }: { teamId: string }) {
           "updated_at",
         ].join(",");
 
-        return await supabase
+        let query = supabase
           .schema("tosho")
           .from("leads")
-          .select(leadColumns)
+          .select(leadColumns, { count: "exact" })
           .eq("team_id", teamId)
           .order("company_name", { ascending: true });
+
+        if (isManagerUser && userId) {
+          query = query.eq("manager_user_id", userId);
+        } else if (leadManagerFilter !== ALL_MANAGERS_FILTER) {
+          const selectedManager = memberByLabel.get(leadManagerFilter);
+          if (selectedManager?.userId) {
+            query = query.or(`manager_user_id.eq.${selectedManager.userId},manager.eq.${leadManagerFilter}`);
+          } else {
+            query = query.eq("manager", leadManagerFilter);
+          }
+        }
+
+        const normalizedSearch = search.trim();
+        if (normalizedSearch) {
+          const escaped = escapePostgrestTerm(normalizedSearch);
+          query = query.or(
+            `company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,source.ilike.%${escaped}%,manager.ilike.%${escaped}%,website.ilike.%${escaped}%`
+          );
+        }
+
+        return await query.range(offset, offset + CUSTOMERS_PAGE_SIZE - 1);
       };
 
-      let { data, error: loadError } = await runLoadLeads("full");
+      let { data, error: loadError, count } = await runLoadLeads("full");
       if (
         loadError &&
         /column/i.test(loadError.message ?? "") &&
         /ownership_type/i.test(loadError.message ?? "")
       ) {
-        ({ data, error: loadError } = await runLoadLeads("no_ownership"));
+        ({ data, error: loadError, count } = await runLoadLeads("no_ownership"));
       }
       if (loadError) throw loadError;
-      setLeads(((data as unknown) as LeadRow[]) ?? []);
+      const nextLeads = ((data as unknown) as LeadRow[]) ?? [];
+      setLeadsTotal(count ?? nextLeads.length);
+      setLeadsHasMore(offset + nextLeads.length < (count ?? nextLeads.length));
+      setLeads((current) => (append ? [...current, ...nextLeads.filter((lead) => !current.some((item) => item.id === lead.id))] : nextLeads));
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Не вдалося завантажити ліди.");
       if (message.includes("relation") && message.includes("leads")) {
@@ -824,11 +813,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
       } else {
         setLeadsError(message);
       }
+      if (!append) {
+        setLeads([]);
+        setLeadsTotal(0);
+        setLeadsHasMore(false);
+      }
     } finally {
       setLeadsLoading(false);
       setLeadsRefreshing(false);
     }
-  };
+  }, [isManagerUser, leadManagerFilter, memberByLabel, search, teamId, userId]);
 
   const loadTeamMembers = async () => {
     try {
@@ -844,6 +838,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   };
 
+  const handleLoadMoreCustomers = useCallback(() => {
+    if (customersLoading || customersRefreshing || !customersHasMore) return;
+    void loadCustomers({ append: true });
+  }, [customersHasMore, customersLoading, customersRefreshing, loadCustomers]);
+
+  const handleLoadMoreLeads = useCallback(() => {
+    if (leadsLoading || leadsRefreshing || !leadsHasMore) return;
+    void loadLeads({ append: true });
+  }, [leadsHasMore, leadsLoading, leadsRefreshing, loadLeads]);
+
   useEffect(() => {
     writeCustomersPageCache(teamId, {
       activeTab,
@@ -858,11 +862,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
   }, [teamId]);
 
   useEffect(() => {
-    void loadCustomers();
-    void loadLeads();
     void loadTeamMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, userId]);
+
+  useEffect(() => {
+    const delay = search.trim() ? 250 : 0;
+    const timeoutId = window.setTimeout(() => {
+      void loadCustomers();
+      void loadLeads();
+    }, delay);
+    return () => window.clearTimeout(timeoutId);
+  }, [customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search]);
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
@@ -1307,7 +1317,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Building2 className="h-4 w-4" />
             Замовники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{rows.length}</span>
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{customersTotal}</span>
           </Button>
           <Button
             variant="segmented"
@@ -1318,7 +1328,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Users className="h-4 w-4" />
             Ліди
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{leads.length}</span>
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{leadsTotal}</span>
           </Button>
         </div>
         <Button
@@ -1382,9 +1392,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </SelectContent>
           </Select>
         )}
-        <div className="text-sm font-semibold text-foreground sm:ml-auto">
-          {activeTab === "customers" ? filteredRows.length : filteredLeads.length}
-          <span className="ml-1 text-muted-foreground">знайдено</span>
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground sm:ml-auto">
+          <span className="tabular-nums">{activeTab === "customers" ? customersTotal : leadsTotal}</span>
+          {(activeTab === "customers" ? (customersLoading || customersRefreshing) : (leadsLoading || leadsRefreshing)) ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          ) : null}
         </div>
       </div>
     </div>
@@ -1394,17 +1406,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
     customerManagerOptions,
     currentManagerLabel,
     defaultManagerName,
-    filteredLeads.length,
-    filteredRows.length,
+    customersLoading,
+    customersRefreshing,
+    customersTotal,
     isManagerUser,
     leadManagerFilter,
     leadManagerOptions,
-    leads.length,
+    leadsLoading,
+    leadsRefreshing,
+    leadsTotal,
     memberById,
     openCreate,
     openCreateLead,
     renderManagerFilterValue,
-    rows.length,
     search,
     userId,
   ]);
@@ -1644,6 +1658,20 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     </TableBody>
                   </Table>
                 </div>
+                {customersHasMore ? (
+                  <div className="flex items-center justify-center pt-4">
+                    <Button variant="outline" onClick={handleLoadMoreCustomers} disabled={customersRefreshing}>
+                      {customersRefreshing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Оновлення...
+                        </>
+                      ) : (
+                        `Показати ще ${CUSTOMERS_PAGE_SIZE}`
+                      )}
+                    </Button>
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -1814,6 +1842,20 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     </TableBody>
                   </Table>
                 </div>
+                {leadsHasMore ? (
+                  <div className="flex items-center justify-center pt-4">
+                    <Button variant="outline" onClick={handleLoadMoreLeads} disabled={leadsRefreshing}>
+                      {leadsRefreshing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Оновлення...
+                        </>
+                      ) : (
+                        `Показати ще ${CUSTOMERS_PAGE_SIZE}`
+                      )}
+                    </Button>
+                  </div>
+                ) : null}
               </>
             )}
           </div>

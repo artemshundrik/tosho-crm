@@ -8,6 +8,13 @@ export type CustomerLeadLogoDirectoryEntry = {
   logoUrl: string | null;
 };
 
+const CUSTOMER_LOGO_DIRECTORY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type CustomerLeadLogoDirectoryCachePayload = {
+  entries: CustomerLeadLogoDirectoryEntry[];
+  cachedAt: number;
+};
+
 export function normalizeCustomerLogoUrl(value?: string | null) {
   const normalized = value?.trim() ?? "";
   if (!normalized) return null;
@@ -15,7 +22,49 @@ export function normalizeCustomerLogoUrl(value?: string | null) {
   return normalized;
 }
 
-export async function listCustomerLeadLogoDirectory(teamId: string): Promise<CustomerLeadLogoDirectoryEntry[]> {
+function readCustomerLeadLogoDirectoryCache(teamId: string): CustomerLeadLogoDirectoryCachePayload | null {
+  if (typeof window === "undefined" || !teamId) return null;
+  try {
+    const raw = sessionStorage.getItem(`customer-lead-logo-directory:${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CustomerLeadLogoDirectoryCachePayload;
+    if (!Array.isArray(parsed.entries)) return null;
+    return {
+      entries: parsed.entries,
+      cachedAt: Number(parsed.cachedAt ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCustomerLeadLogoDirectoryCache(teamId: string, entries: CustomerLeadLogoDirectoryEntry[]) {
+  if (typeof window === "undefined" || !teamId) return;
+  try {
+    sessionStorage.setItem(
+      `customer-lead-logo-directory:${teamId}`,
+      JSON.stringify({
+        entries,
+        cachedAt: Date.now(),
+      } satisfies CustomerLeadLogoDirectoryCachePayload)
+    );
+  } catch {
+    // ignore cache persistence failures
+  }
+}
+
+export async function listCustomerLeadLogoDirectory(
+  teamId: string,
+  options?: { force?: boolean; maxAgeMs?: number }
+): Promise<CustomerLeadLogoDirectoryEntry[]> {
+  const maxAgeMs = options?.maxAgeMs ?? CUSTOMER_LOGO_DIRECTORY_CACHE_TTL_MS;
+  if (!options?.force) {
+    const cached = readCustomerLeadLogoDirectoryCache(teamId);
+    if (cached && Date.now() - cached.cachedAt < maxAgeMs) {
+      return cached.entries;
+    }
+  }
+
   const [customersRes, leadsRes] = await Promise.all([
     supabase
       .schema("tosho")
@@ -54,5 +103,7 @@ export async function listCustomerLeadLogoDirectory(teamId: string): Promise<Cus
         })))
     : [];
 
-  return [...customerEntries, ...leadEntries].sort((a, b) => a.label.localeCompare(b.label, "uk"));
+  const entries = [...customerEntries, ...leadEntries].sort((a, b) => a.label.localeCompare(b.label, "uk"));
+  writeCustomerLeadLogoDirectoryCache(teamId, entries);
+  return entries;
 }

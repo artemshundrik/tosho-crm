@@ -147,7 +147,10 @@ const ALL_MANAGERS_FILTER = "__all__";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
-const QUOTES_PAGE_SIZE = 100;
+const QUOTES_TABLE_PAGE_SIZE = 50;
+const QUOTES_TABLE_PAGE_INCREMENT = 50;
+const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
+const QUOTES_KANBAN_PAGE_INCREMENT = 60;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 type QuotePartyOption = CustomerRow & {
@@ -321,9 +324,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const initialFilters = readQuotesPageFiltersState(teamId);
+  const initialViewMode: "table" | "kanban" = (() => {
+    if (initialFilters?.viewMode) return initialFilters.viewMode;
+    const saved = localStorage.getItem("quotes_view_mode");
+    return saved === "kanban" ? "kanban" : "table";
+  })();
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
-  const [quotesFetchLimit, setQuotesFetchLimit] = useState(QUOTES_PAGE_SIZE);
+  const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
+  const [quotesFetchLimit, setQuotesFetchLimit] = useState(() =>
+    initialViewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE
+  );
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
@@ -378,11 +389,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
-    if (initialFilters?.viewMode) return initialFilters.viewMode;
-    const saved = localStorage.getItem("quotes_view_mode");
-    return saved === "kanban" ? "kanban" : "table";
-  });
+  const [viewMode, setViewMode] = useState<"table" | "kanban">(() => initialViewMode);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
@@ -426,6 +433,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">(
     () => initialFilters?.quoteListMode ?? "flat"
   );
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
 
   const toPrintApplications = (rawMethods: unknown): NewQuoteFormData["printApplications"] => {
     if (!Array.isArray(rawMethods)) return [];
@@ -1066,9 +1077,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     };
   }, [createOpen, editDialogOpen, teamId]);
 
-  const loadQuotes = async () => {
+  const loadQuotes = useCallback(async (options?: { append?: boolean }) => {
+    if (!teamId) return;
     const requestId = ++quotesLoadRequestIdRef.current;
-    const isBlockingLoad = rows.length === 0;
+    const append = !!options?.append;
+    const basePageSize = append
+      ? (viewMode === "kanban" ? QUOTES_KANBAN_PAGE_INCREMENT : QUOTES_TABLE_PAGE_INCREMENT)
+      : quotesFetchLimit;
+    const pageSize = Math.max(1, basePageSize);
+    const offset = append ? rowsRef.current.length : 0;
+    const isBlockingLoad = !append && rowsRef.current.length === 0;
     if (isBlockingLoad) {
       setLoading(true);
     } else {
@@ -1076,11 +1094,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     setError(null);
     try {
-      const data = await listQuotes({ teamId, search, status, limit: quotesFetchLimit });
+      const data = await listQuotes({ teamId, search, status, limit: pageSize + 1, offset });
+      const visibleData = data.slice(0, pageSize);
+      const nextHasMore = data.length > pageSize;
 
       const missingCustomerIds = Array.from(
         new Set(
-          data
+          visibleData
             .filter((row) => row.customer_id && !row.customer_name)
             .map((row) => row.customer_id as string)
         )
@@ -1110,8 +1130,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       }
 
-      const previousById = new Map(rows.map((row) => [row.id, row]));
-      const mergedRows = data.map((row) => {
+      const previousRows = rowsRef.current;
+      const previousById = new Map(previousRows.map((row) => [row.id, row]));
+      const nextPageRows = visibleData.map((row) => {
         const prev = previousById.get(row.id);
         const customerMeta = row.customer_id ? customerMetaById.get(row.customer_id) : undefined;
         return {
@@ -1122,8 +1143,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ),
         };
       });
+      const mergedRows = append
+        ? [
+            ...previousRows,
+            ...nextPageRows.filter((row) => !previousById.has(row.id)),
+          ]
+        : nextPageRows;
       if (requestId !== quotesLoadRequestIdRef.current) return;
-      setHasMoreQuotes(data.length >= quotesFetchLimit);
+      setHasMoreQuotes(nextHasMore);
       setRows(mergedRows);
       setQuoteMembershipByQuoteId(new Map());
       fetchedQuoteMembershipIdsRef.current = new Set();
@@ -1160,7 +1187,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         setRefreshing(false);
       }
     }
-  };
+  }, [cacheKey, quotesFetchLimit, search, status, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1217,6 +1244,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setQuoteMembershipByQuoteId(new Map(cached.quoteMembershipEntries ?? []));
       setKanbanProductByQuoteId(Object.fromEntries(cached.kanbanProductEntries ?? []));
       setLoading(false);
+      rowsRef.current = cached.rows;
       return;
     }
     try {
@@ -1225,6 +1253,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       // ignore storage errors
     }
     setRows([]);
+    rowsRef.current = [];
     setAttachmentCounts({});
     setQuoteMembershipByQuoteId(new Map());
     fetchedQuoteMembershipIdsRef.current = new Set();
@@ -1241,7 +1270,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }, delay);
     return () => window.clearTimeout(id);
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, status, search, quotesFetchLimit]);
+  }, [teamId, status, search, quotesFetchLimit, loadQuotes]);
+
+  useEffect(() => {
+    setQuotesFetchLimit(viewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE);
+  }, [search, status, teamId, viewMode]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -1276,7 +1309,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const handleLoadMoreQuotes = () => {
     if (loading || refreshing || !hasMoreQuotes) return;
-    setQuotesFetchLimit((prev) => prev + QUOTES_PAGE_SIZE);
+    void loadQuotes({ append: true });
   };
 
   useEffect(() => {
@@ -1299,12 +1332,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (document.visibilityState === "hidden") return;
       if (quotesKanbanAutoloadLockRef.current) return;
       quotesKanbanAutoloadLockRef.current = true;
-      setQuotesFetchLimit((current) => current + QUOTES_PAGE_SIZE);
+      void loadQuotes({ append: true });
       quotesKanbanAutoloadTimerRef.current = window.setTimeout(releaseLock, KANBAN_AUTOLOAD_LOCK_MS);
     };
 
     const maybeLoadMore = (node: HTMLElement) => {
-      const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+      const overflow = node.scrollHeight - node.clientHeight;
+      if (overflow <= KANBAN_AUTOLOAD_THRESHOLD_PX) return;
+      const remaining = overflow - node.scrollTop;
       if (remaining <= KANBAN_AUTOLOAD_THRESHOLD_PX) {
         queueLoadMore();
       }
@@ -1325,17 +1360,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       node.addEventListener("scroll", handleColumnScroll, { passive: true });
     });
 
-    window.requestAnimationFrame(() => {
-      columnBodies.forEach((node) => maybeLoadMore(node));
-    });
-
     return () => {
       columnBodies.forEach((node) => {
         node.removeEventListener("scroll", handleColumnScroll);
       });
       releaseLock();
     };
-  }, [hasMoreQuotes, loading, refreshing, viewMode]);
+  }, [hasMoreQuotes, loading, refreshing, viewMode, loadQuotes]);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
@@ -4353,9 +4384,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <FilterX className="h-4 w-4" />
               </Button>
             ) : null}
-            <div className="text-sm font-semibold text-foreground">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
-              <span className="ml-1 text-muted-foreground">знайдено</span>
+              {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
           </div>
         </div>

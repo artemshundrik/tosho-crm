@@ -57,7 +57,10 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
-import { normalizeCustomerLogoUrl as normalizeLogoUrl } from "@/lib/customerLogo";
+import {
+  listCustomerLeadLogoDirectory,
+  normalizeCustomerLogoUrl as normalizeLogoUrl,
+} from "@/lib/customerLogo";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -241,6 +244,14 @@ const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
 
 const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
 const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
+
+const normalizePartyLabel = (value?: string | null) => {
+  const raw = (value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.replace(/[`"'’«»]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+};
+
+const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
 
 function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
   if (!textarea) return;
@@ -1259,178 +1270,49 @@ export default function DesignTaskPage() {
           metadataCustomerTypeRaw === "lead" || metadataCustomerTypeRaw === "customer"
             ? metadataCustomerTypeRaw
             : null;
-        if (quote?.customer_id) {
-          let customerQuery = await supabase
-            .schema("tosho")
-            .from("customers")
-            .select("name, legal_name, logo_url")
-            .eq("id", quote.customer_id as string)
-            .maybeSingle();
+        const logoDirectory = effectiveTeamId ? await listCustomerLeadLogoDirectory(effectiveTeamId) : [];
+        const entryByTypedId = new Map(
+          logoDirectory.map((entry) => [`${entry.entityType}:${entry.id}`, entry] as const)
+        );
+        const entryByLabel = new Map<string, (typeof logoDirectory)[number]>();
+        const entryByCompactLabel = new Map<string, (typeof logoDirectory)[number]>();
+        logoDirectory.forEach((entry) => {
+          [entry.label, entry.legalName].forEach((label) => {
+            const normalized = normalizePartyLabel(label);
+            const compact = compactPartyLabel(label);
+            if (normalized && !entryByLabel.has(normalized)) entryByLabel.set(normalized, entry);
+            if (compact && !entryByCompactLabel.has(compact)) entryByCompactLabel.set(compact, entry);
+          });
+        });
 
-          if (
-            customerQuery.error &&
-            /column/i.test(customerQuery.error.message ?? "") &&
-            /logo_url/i.test(customerQuery.error.message ?? "")
-          ) {
-            customerQuery = await supabase
-              .schema("tosho")
-              .from("customers")
-              .select("name, legal_name")
-              .eq("id", quote.customer_id as string)
-              .maybeSingle();
-          }
+        const directEntry =
+          (quote?.customer_id ? entryByTypedId.get(`customer:${quote.customer_id}`) : null) ??
+          (metadataCustomerId && metadataCustomerType ? entryByTypedId.get(`${metadataCustomerType}:${metadataCustomerId}`) : null) ??
+          null;
 
-          const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = cust?.name ?? cust?.legal_name ?? customerName;
-          customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
-        } else if (metadataCustomerId && metadataCustomerType === "customer") {
-          let customerQuery = await supabase
-            .schema("tosho")
-            .from("customers")
-            .select("name, legal_name, logo_url")
-            .eq("id", metadataCustomerId)
-            .maybeSingle();
-          if (
-            customerQuery.error &&
-            /column/i.test(customerQuery.error.message ?? "") &&
-            /logo_url/i.test(customerQuery.error.message ?? "")
-          ) {
-            customerQuery = await supabase
-              .schema("tosho")
-              .from("customers")
-              .select("name, legal_name")
-              .eq("id", metadataCustomerId)
-              .maybeSingle();
-          }
-          const cust = customerQuery.data as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = cust?.name ?? cust?.legal_name ?? customerName;
-          customerLogoUrl = normalizeLogoUrl(cust?.logo_url ?? null) ?? customerLogoUrl;
-        } else if (metadataCustomerId && metadataCustomerType === "lead") {
-          let leadQuery = await supabase
-            .schema("tosho")
-            .from("leads")
-            .select("company_name,legal_name,logo_url")
-            .eq("team_id", effectiveTeamId)
-            .eq("id", metadataCustomerId)
-            .maybeSingle();
-          if (
-            leadQuery.error &&
-            /column/i.test(leadQuery.error.message ?? "") &&
-            /logo_url/i.test(leadQuery.error.message ?? "")
-          ) {
-            leadQuery = await supabase
-              .schema("tosho")
-              .from("leads")
-              .select("company_name,legal_name")
-              .eq("team_id", effectiveTeamId)
-              .eq("id", metadataCustomerId)
-              .maybeSingle();
-          }
-          const leadRow = leadQuery.data as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
-          customerName = leadRow?.company_name ?? leadRow?.legal_name ?? customerName;
-          customerLogoUrl = normalizeLogoUrl(leadRow?.logo_url ?? null) ?? customerLogoUrl;
+        if (directEntry) {
+          customerName = directEntry.label || directEntry.legalName || customerName;
+          customerLogoUrl = directEntry.logoUrl ?? customerLogoUrl;
         } else {
-          const leadLookupName = (customerName ?? quote?.title ?? "").trim();
-          if (leadLookupName) {
-            const loadCustomerExact = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
-              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
-              const [byName, byLegal] = await Promise.all([
-                supabase
-                  .schema("tosho")
-                  .from("customers")
-                  .select(columns)
-                  .eq("team_id", effectiveTeamId)
-                  .ilike("name", leadLookupName)
-                  .limit(1)
-                  .maybeSingle(),
-                supabase
-                  .schema("tosho")
-                  .from("customers")
-                  .select(columns)
-                  .eq("team_id", effectiveTeamId)
-                  .ilike("legal_name", leadLookupName)
-                  .limit(1)
-                  .maybeSingle(),
-              ]);
-              return (byName.data as Record<string, unknown> | null) ?? (byLegal.data as Record<string, unknown> | null) ?? null;
-            };
-            const loadCustomerByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
-              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
-              const columns = withLogo ? "name,legal_name,logo_url" : "name,legal_name";
-              const { data: customerRows } = await supabase
-                .schema("tosho")
-                .from("customers")
-                .select(columns)
-                .eq("team_id", effectiveTeamId)
-                .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
-                .limit(1);
-              return ((customerRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
-            };
-            const loadLeadExact = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
-              const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
-              const [byCompany, byLegal] = await Promise.all([
-                supabase
-                  .schema("tosho")
-                  .from("leads")
-                  .select(columns)
-                  .eq("team_id", effectiveTeamId)
-                  .ilike("company_name", leadLookupName)
-                  .limit(1)
-                  .maybeSingle(),
-                supabase
-                  .schema("tosho")
-                  .from("leads")
-                  .select(columns)
-                  .eq("team_id", effectiveTeamId)
-                  .ilike("legal_name", leadLookupName)
-                  .limit(1)
-                  .maybeSingle(),
-              ]);
-              return (byCompany.data as Record<string, unknown> | null) ?? (byLegal.data as Record<string, unknown> | null) ?? null;
-            };
-            const loadLeadByContains = async (withLogo: boolean): Promise<Record<string, unknown> | null> => {
-              const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
-              const escaped = leadLookupName.replace(/[%_]/g, (match) => `\\${match}`);
-              const { data: leadRows } = await supabase
-                .schema("tosho")
-                .from("leads")
-                .select(columns)
-                .eq("team_id", effectiveTeamId)
-                .or(`company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
-                .limit(1);
-              return ((leadRows as unknown as Array<Record<string, unknown>> | null) ?? [])[0] ?? null;
-            };
-
-            let customerFallback = await loadCustomerExact(true);
-            if (!customerFallback) {
-              customerFallback = await loadCustomerExact(false);
-            }
-            if (!customerFallback) {
-              customerFallback = await loadCustomerByContains(true);
-            }
-            if (!customerFallback) {
-              customerFallback = await loadCustomerByContains(false);
-            }
-            if (customerFallback) {
-              const customerRow = customerFallback as { name?: string | null; legal_name?: string | null; logo_url?: string | null };
-              customerName = customerName ?? customerRow.name ?? customerRow.legal_name ?? null;
-              customerLogoUrl = normalizeLogoUrl(customerRow.logo_url ?? null) ?? customerLogoUrl;
-            } else {
-              let lead = await loadLeadExact(true);
-              if (!lead) {
-                lead = await loadLeadExact(false);
-              }
-              if (!lead) {
-                lead = await loadLeadByContains(true);
-              }
-              if (!lead) {
-                lead = await loadLeadByContains(false);
-              }
-              if (lead) {
-                const leadRow = lead as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null };
-                customerName = customerName ?? leadRow.company_name ?? leadRow.legal_name ?? null;
-                customerLogoUrl = normalizeLogoUrl(leadRow.logo_url ?? null) ?? customerLogoUrl;
-              }
+          const lookupName = (customerName ?? quote?.title ?? "").trim();
+          if (lookupName) {
+            const normalizedLookup = normalizePartyLabel(lookupName);
+            const compactLookup = compactPartyLabel(lookupName);
+            const matchedEntry =
+              entryByLabel.get(normalizedLookup) ??
+              entryByCompactLabel.get(compactLookup) ??
+              logoDirectory.find((entry) => {
+                const label = normalizePartyLabel(entry.label);
+                const legalName = normalizePartyLabel(entry.legalName);
+                return (
+                  (!!normalizedLookup && !!label && label.includes(normalizedLookup)) ||
+                  (!!normalizedLookup && !!legalName && legalName.includes(normalizedLookup))
+                );
+              }) ??
+              null;
+            if (matchedEntry) {
+              customerName = customerName ?? matchedEntry.label ?? matchedEntry.legalName ?? null;
+              customerLogoUrl = matchedEntry.logoUrl ?? customerLogoUrl;
             }
           }
         }

@@ -8,6 +8,7 @@ type ListQuotesParams = {
   search?: string;
   status?: string;
   limit?: number;
+  offset?: number;
 };
 
 export type QuoteListRow = {
@@ -253,7 +254,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 }
 
 export async function listQuotes(params: ListQuotesParams) {
-  const { teamId, search, status, limit } = params;
+  const { teamId, search, status, limit, offset } = params;
   const q = search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
 
@@ -321,6 +322,7 @@ export async function listQuotes(params: ListQuotesParams) {
         .from("quotes")
         .select(variant.columns)
         .eq("team_id", teamId)
+        .order("updated_at", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (escapedSearch.length > 0) {
@@ -333,7 +335,8 @@ export async function listQuotes(params: ListQuotesParams) {
       }
 
       if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
-        query = query.limit(limit);
+        const safeOffset = typeof offset === "number" && Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+        query = query.range(safeOffset, safeOffset + Math.floor(limit) - 1);
       }
 
       const result = await query;
