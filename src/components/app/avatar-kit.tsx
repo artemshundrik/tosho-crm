@@ -287,15 +287,31 @@ export function EntityAvatar({
   fallbackClassName,
 }: EntityAvatarProps) {
   const tone = getEntityAvatarTone(name ?? fallback ?? "");
-  const hasLogo = Boolean(src?.trim());
+  const normalizedSrc = src?.trim() || null;
+  const [errored, setErrored] = React.useState(false);
+  const hasLogo = Boolean(normalizedSrc) && !errored;
+
+  React.useEffect(() => {
+    setErrored(false);
+  }, [normalizedSrc]);
+
   return (
-    <AvatarBase
-      src={src}
-      name={name ?? undefined}
-      fallback={fallback}
-      size={size}
-      className={cn("shrink-0", hasLogo ? "border-border/60" : tone.shell, className)}
-      fallbackClassName={cn("text-xs font-semibold", tone.fallback, fallbackClassName)}
-    />
+    <Avatar
+      className={cn("shrink-0 border shadow-sm", hasLogo ? "border-border/60 bg-muted/20" : cn("border-border/40", tone.shell), className)}
+      style={{ width: size, height: size }}
+    >
+      {hasLogo ? (
+        <AvatarImage
+          src={normalizedSrc ?? ""}
+          alt={name ?? "Logo"}
+          className="object-cover"
+          loading="lazy"
+          onError={() => setErrored(true)}
+        />
+      ) : null}
+      <AvatarFallback className={cn("text-xs font-semibold", tone.fallback, fallbackClassName)}>
+        {getInitials(name ?? undefined, fallback)}
+      </AvatarFallback>
+    </Avatar>
   );
 }
