@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
+import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 export type AttachmentPreviewVariant = "original" | "thumb" | "preview";
 
@@ -18,6 +20,10 @@ const SERVER_PREVIEW_RETRY_ATTEMPTS = 8;
 
 const RASTER_PREVIEW_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 const SERVER_PREVIEW_EXTENSIONS = new Set(["pdf", "tif", "tiff"]);
+
+if (typeof window !== "undefined") {
+  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+}
 
 function splitStoragePath(storagePath: string) {
   const match = storagePath.match(/^(.*?)(\.[^.]+)?$/);
@@ -62,6 +68,13 @@ export function isRasterPreviewableFile(file: Pick<File, "type" | "name">) {
   return RASTER_PREVIEW_EXTENSIONS.has(extension);
 }
 
+export function isPdfPreviewableFile(file: Pick<File, "type" | "name">) {
+  const mime = file.type?.toLowerCase?.() ?? "";
+  if (mime === "application/pdf") return true;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return extension === "pdf";
+}
+
 async function loadImageElement(file: File) {
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -100,6 +113,39 @@ async function renderImageVariantBlob(file: File, maxSize: number) {
   });
 }
 
+async function renderPdfVariantBlob(file: File, maxSize: number) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const pdf = await getDocument({ data: bytes }).promise;
+  const page = await pdf.getPage(1);
+  const initialViewport = page.getViewport({ scale: 1 });
+  const scale = Math.min(1, maxSize / Math.max(initialViewport.width, initialViewport.height));
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(viewport.width));
+  canvas.height = Math.max(1, Math.round(viewport.height));
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    await pdf.destroy();
+    return null;
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  await page.render({
+    canvas,
+    canvasContext: context,
+    viewport,
+  }).promise;
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((nextBlob) => resolve(nextBlob), "image/webp", 0.88);
+  });
+  await pdf.destroy();
+  return blob;
+}
+
 export async function uploadAttachmentWithVariants({
   bucket,
   storagePath,
@@ -113,7 +159,7 @@ export async function uploadAttachmentWithVariants({
   });
   if (uploadError) throw uploadError;
 
-  if (typeof document === "undefined" || !isRasterPreviewableFile(file)) {
+  if (typeof document === "undefined" || (!isRasterPreviewableFile(file) && !isPdfPreviewableFile(file))) {
     const mime = file.type?.toLowerCase?.() ?? "";
     const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
     const needsServerPreview =
@@ -132,7 +178,9 @@ export async function uploadAttachmentWithVariants({
   await Promise.all(
     variants.map(async ({ variant, maxSize }) => {
       try {
-        const blob = await renderImageVariantBlob(file, maxSize);
+        const blob = isPdfPreviewableFile(file)
+          ? await renderPdfVariantBlob(file, maxSize)
+          : await renderImageVariantBlob(file, maxSize);
         if (!blob) return;
         const variantPath = getAttachmentVariantPath(storagePath, variant);
         const { error } = await supabase.storage.from(bucket).upload(variantPath, blob, {
