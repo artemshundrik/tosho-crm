@@ -94,6 +94,7 @@ type ObservabilitySnapshotRow = {
   quote_attachments_today: number | null;
   design_tasks_today: number | null;
   design_task_attachments_today: number | null;
+  design_output_uploads_today: number | null;
   design_output_selection_today: number | null;
   attachment_possible_orphan_original_count: number | null;
   attachment_possible_orphan_original_bytes: number | null;
@@ -636,6 +637,7 @@ export default function AdminObservabilityPage() {
         quote_attachments_today,
         design_tasks_today,
         design_task_attachments_today,
+        design_output_uploads_today,
         design_output_selection_today,
         attachment_possible_orphan_original_count,
         attachment_possible_orphan_original_bytes,
@@ -1127,14 +1129,15 @@ export default function AdminObservabilityPage() {
                 />
                 <MetricCard
                   icon={Sparkles}
-                  title="Живі дії за день"
+                  title="Логовані дії за день"
                   value={formatCompactCount(
                     numberOrZero(latest.quote_attachments_today) +
                       numberOrZero(latest.design_tasks_today) +
                       numberOrZero(latest.design_task_attachments_today) +
+                      numberOrZero(latest.design_output_uploads_today) +
                       numberOrZero(latest.design_output_selection_today)
                   )}
-                  hint={`Quotes files: ${formatCompactCount(latest.quote_attachments_today)} · Design tasks: ${formatCompactCount(latest.design_tasks_today)}`}
+                  hint={`Tasks: ${formatCompactCount(latest.design_tasks_today)} · Task files: ${formatCompactCount(latest.design_task_attachments_today)} · Output files: ${formatCompactCount(latest.design_output_uploads_today)} · Output selections: ${formatCompactCount(latest.design_output_selection_today)} · Quote files: ${formatCompactCount(latest.quote_attachments_today)}`}
                 />
                 <MetricCard
                   icon={HardDrive}

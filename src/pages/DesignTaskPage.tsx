@@ -639,9 +639,6 @@ const getSelectedDesignOutputFileIdsFromMetadata = (
   return legacy ? [legacy] : [];
 };
 
-const buildPdfPreviewUrl = (src: string) =>
-  `${src}#page=1&zoom=page-fit&view=FitV&navpanes=0&scrollbar=0&pagemode=none`;
-
 const canPreviewImage = (extension?: string | null) =>
   !!extension && ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "SVG"].includes(extension);
 
@@ -2994,6 +2991,31 @@ export default function DesignTaskPage() {
         }
       } catch (syncError: unknown) {
         console.warn("Failed to sync design file to quote visualizations", syncError);
+      }
+      try {
+        const actorLabel = userId ? getMemberLabel(userId) : "System";
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_output_upload",
+          title: `Додано файлів до ${uploadTargetKind === "visualization" ? "візуалів" : "макетів"}: ${uploaded.length}`,
+          metadata: {
+            source: "design_output_upload",
+            output_kind: uploadTargetKind,
+            uploaded_files: uploaded.map((file) => ({
+              id: file.id,
+              file_name: file.file_name,
+              storage_bucket: file.storage_bucket,
+              storage_path: file.storage_path,
+            })),
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design output upload", logError);
       }
       toast.success(`Додано файлів: ${uploaded.length}`);
     } catch (e: unknown) {
@@ -7440,13 +7462,11 @@ export default function DesignTaskPage() {
                 className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
               />
             ) : filePreview?.kind === "pdf" ? (
-              <div className="overflow-hidden overscroll-contain rounded-lg border border-border/50 bg-background">
-                <iframe
-                  src={buildPdfPreviewUrl(filePreview.url)}
-                  title={filePreview.name}
-                  className="pointer-events-none h-[72vh] w-full bg-background"
-                />
-              </div>
+              <img
+                src={filePreview.url}
+                alt={filePreview.name}
+                className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+              />
             ) : null}
           </div>
           <DialogFooter>

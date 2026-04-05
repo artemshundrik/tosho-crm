@@ -14,6 +14,7 @@ create table if not exists tosho.admin_observability_snapshots (
   quote_attachments_today integer not null default 0,
   design_tasks_today integer not null default 0,
   design_task_attachments_today integer not null default 0,
+  design_output_uploads_today integer not null default 0,
   design_output_selection_today integer not null default 0,
   attachment_possible_orphan_original_count integer not null default 0,
   attachment_possible_orphan_original_bytes bigint not null default 0,
@@ -43,6 +44,7 @@ alter table tosho.admin_observability_snapshots
   add column if not exists attachment_missing_variants_count integer not null default 0,
   add column if not exists attachment_safe_reclaimable_count integer not null default 0,
   add column if not exists attachment_safe_reclaimable_bytes bigint not null default 0,
+  add column if not exists design_output_uploads_today integer not null default 0,
   add column if not exists attachment_orphan_top_folders jsonb not null default '[]'::jsonb,
   add column if not exists attachment_orphan_by_extension jsonb not null default '[]'::jsonb;
 
@@ -73,6 +75,9 @@ declare
   actor_id uuid := auth.uid();
   actor_role text;
   effective_team_id uuid;
+  local_today date := (timezone('Europe/Kiev', now()))::date;
+  local_day_start timestamptz := ((timezone('Europe/Kiev', now()))::date::timestamp at time zone 'Europe/Kiev');
+  local_day_end timestamptz := (((timezone('Europe/Kiev', now()))::date + 1)::timestamp at time zone 'Europe/Kiev');
   stats_record record;
   db_size_bytes bigint := 0;
   attachments_bytes bigint := 0;
@@ -82,6 +87,7 @@ declare
   quote_attachments_today_value integer := 0;
   design_tasks_today_value integer := 0;
   design_task_attachments_today_value integer := 0;
+  design_output_uploads_today_value integer := 0;
   design_output_selection_today_value integer := 0;
   attachment_possible_orphan_original_count_value integer := 0;
   attachment_possible_orphan_original_bytes_value bigint := 0;
@@ -160,8 +166,8 @@ begin
     count(*)
   into storage_today_bytes_value, storage_today_objects_value
   from storage.objects o
-  where o.created_at >= current_date
-    and o.created_at < current_date + interval '1 day';
+  where o.created_at >= local_day_start
+    and o.created_at < local_day_end;
 
   select coalesce(jsonb_agg(row_to_json(bucket_row) order by bucket_row.bytes desc), '[]'::jsonb)
   into bucket_sizes_json
@@ -182,41 +188,64 @@ begin
       coalesce(sum(coalesce((o.metadata->>'size')::bigint, 0)), 0) as bytes,
       count(*)::integer as object_count
     from storage.objects o
-    where o.created_at >= current_date
-      and o.created_at < current_date + interval '1 day'
+    where o.created_at >= local_day_start
+      and o.created_at < local_day_end
     group by o.bucket_id
   ) as day_row;
 
   select count(*)::integer
   into quote_attachments_today_value
-  from tosho.quote_attachments qa
-  where qa.team_id = effective_team_id
-    and qa.created_at >= current_date
-    and qa.created_at < current_date + interval '1 day';
+  from storage.objects o
+  where o.bucket_id = 'attachments'
+    and o.name like 'teams/' || effective_team_id::text || '/quote-attachments/%'
+    and lower(o.name) not like '%__thumb.%'
+    and lower(o.name) not like '%__preview.%'
+    and o.created_at >= local_day_start
+    and o.created_at < local_day_end;
 
   select count(*)::integer
   into design_tasks_today_value
   from public.activity_log al
   where al.team_id = effective_team_id
-    and al.action = 'design_task_created'
-    and al.created_at >= current_date
-    and al.created_at < current_date + interval '1 day';
+    and (
+      al.action = 'design_task_created'
+      or (
+        al.action = 'design_task'
+        and coalesce(al.metadata->>'source', '') in ('design_task_created_manual', 'design_task_created')
+      )
+    )
+    and al.created_at >= local_day_start
+    and al.created_at < local_day_end;
+
+  select coalesce(sum(
+    1
+  ), 0)::integer
+  into design_task_attachments_today_value
+  from storage.objects o
+  where o.bucket_id = 'attachments'
+    and o.name like 'teams/' || effective_team_id::text || '/design-brief-files/%'
+    and lower(o.name) not like '%__thumb.%'
+    and lower(o.name) not like '%__preview.%'
+    and o.created_at >= local_day_start
+    and o.created_at < local_day_end;
 
   select count(*)::integer
-  into design_task_attachments_today_value
-  from public.activity_log al
-  where al.team_id = effective_team_id
-    and al.action = 'design_task_attachment_added'
-    and al.created_at >= current_date
-    and al.created_at < current_date + interval '1 day';
+  into design_output_uploads_today_value
+  from storage.objects o
+  where o.bucket_id = 'attachments'
+    and o.name like 'teams/' || effective_team_id::text || '/design-outputs/%'
+    and lower(o.name) not like '%__thumb.%'
+    and lower(o.name) not like '%__preview.%'
+    and o.created_at >= local_day_start
+    and o.created_at < local_day_end;
 
   select count(*)::integer
   into design_output_selection_today_value
   from public.activity_log al
   where al.team_id = effective_team_id
-    and al.action = 'design_output_selection_updated'
-    and al.created_at >= current_date
-    and al.created_at < current_date + interval '1 day';
+    and al.action = 'design_output_selection'
+    and al.created_at >= local_day_start
+    and al.created_at < local_day_end;
 
   with referenced_from_quotes as (
     select
@@ -500,6 +529,7 @@ begin
     quote_attachments_today,
     design_tasks_today,
     design_task_attachments_today,
+    design_output_uploads_today,
     design_output_selection_today,
     attachment_possible_orphan_original_count,
     attachment_possible_orphan_original_bytes,
@@ -519,7 +549,7 @@ begin
   ) values (
     p_team_id,
     timezone('utc', now()),
-    current_date,
+    local_today,
     actor_id,
     coalesce(db_size_bytes, 0),
     coalesce(attachments_bytes, 0),
@@ -529,6 +559,7 @@ begin
     coalesce(quote_attachments_today_value, 0),
     coalesce(design_tasks_today_value, 0),
     coalesce(design_task_attachments_today_value, 0),
+    coalesce(design_output_uploads_today_value, 0),
     coalesce(design_output_selection_today_value, 0),
     coalesce(attachment_possible_orphan_original_count_value, 0),
     coalesce(attachment_possible_orphan_original_bytes_value, 0),
@@ -573,6 +604,7 @@ begin
     quote_attachments_today = excluded.quote_attachments_today,
     design_tasks_today = excluded.design_tasks_today,
     design_task_attachments_today = excluded.design_task_attachments_today,
+    design_output_uploads_today = excluded.design_output_uploads_today,
     design_output_selection_today = excluded.design_output_selection_today,
     attachment_possible_orphan_original_count = excluded.attachment_possible_orphan_original_count,
     attachment_possible_orphan_original_bytes = excluded.attachment_possible_orphan_original_bytes,

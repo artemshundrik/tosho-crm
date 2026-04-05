@@ -40,10 +40,10 @@ const migrationLimit = Number(process.env.ATTACHMENT_PREVIEW_MIGRATION_LIMIT || 
 const silentMode = process.env.ATTACHMENT_PREVIEW_MIGRATION_SILENT === "1";
 const failureLogLimit = Number(process.env.ATTACHMENT_PREVIEW_MIGRATION_FAILURE_LOG_LIMIT || "20");
 
-function getVariantPath(storagePath, variant) {
+function getVariantPath(storagePath, variant, extension) {
   const match = storagePath.match(/^(.*?)(\.[^.]+)?$/);
   const basename = match?.[1] ?? storagePath;
-  return `${basename}__${variant}.png`;
+  return `${basename}__${variant}.${extension}`;
 }
 
 function canonicalizeStoragePath(storagePath) {
@@ -178,9 +178,9 @@ async function migrateOne({ bucket, storagePath }) {
 const inputPath = path.join(tempDir, path.basename(storagePath));
   try {
     await fs.writeFile(inputPath, Buffer.from(await blob.arrayBuffer()));
-    const { previewBuffer, thumbBuffer, contentType } = await renderFirstPagePreviewFiles(inputPath);
-    const previewPath = getVariantPath(storagePath, "preview");
-    const thumbPath = getVariantPath(storagePath, "thumb");
+    const { previewBuffer, thumbBuffer, contentType, extension } = await renderFirstPagePreviewFiles(inputPath);
+    const previewPath = getVariantPath(storagePath, "preview", extension);
+    const thumbPath = getVariantPath(storagePath, "thumb", extension);
     const [{ error: previewError }, { error: thumbError }] = await Promise.all([
       supabase.storage.from(bucket).upload(previewPath, previewBuffer, {
         upsert: true,
@@ -203,6 +203,11 @@ const inputPath = path.join(tempDir, path.basename(storagePath));
         `thumb-upload-failed:${thumbPath}:${thumbError instanceof Error ? thumbError.message : JSON.stringify(thumbError)}`
       );
     }
+    const staleVariantPaths = [
+      getVariantPath(storagePath, "preview", extension === "webp" ? "png" : "webp"),
+      getVariantPath(storagePath, "thumb", extension === "webp" ? "png" : "webp"),
+    ];
+    await supabase.storage.from(bucket).remove(staleVariantPaths);
     return { previewPath, thumbPath };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });

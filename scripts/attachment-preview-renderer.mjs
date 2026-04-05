@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import sharp from "sharp";
 
 const COMMAND_TIMEOUT_MS = 60_000;
 const PREVIEW_MAX_SIZE = 960;
@@ -84,6 +85,12 @@ async function renderWithSips(sips, inputPath, previewPath) {
 }
 
 async function convertPngToWebp({ magick, convert }, inputPath, outputPath) {
+  try {
+    await sharp(inputPath).webp({ quality: 84 }).toFile(outputPath);
+    return true;
+  } catch {
+    // Fall through to external tools if sharp cannot decode the file.
+  }
   if (magick) {
     await runCommand(magick, [inputPath, "-quality", "84", outputPath]);
     return true;

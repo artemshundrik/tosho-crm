@@ -1,6 +1,4 @@
 import { supabase } from "@/lib/supabaseClient";
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 export type AttachmentPreviewVariant = "original" | "thumb" | "preview";
 
@@ -20,10 +18,7 @@ const SERVER_PREVIEW_RETRY_ATTEMPTS = 8;
 
 const RASTER_PREVIEW_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 const SERVER_PREVIEW_EXTENSIONS = new Set(["pdf", "tif", "tiff"]);
-
-if (typeof window !== "undefined") {
-  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-}
+let pdfRuntimePromise: Promise<{ getDocument: typeof import("pdfjs-dist")["getDocument"] }> | null = null;
 
 function splitStoragePath(storagePath: string) {
   const match = storagePath.match(/^(.*?)(\.[^.]+)?$/);
@@ -114,6 +109,17 @@ async function renderImageVariantBlob(file: File, maxSize: number) {
 }
 
 async function renderPdfVariantBlob(file: File, maxSize: number) {
+  if (!pdfRuntimePromise) {
+    pdfRuntimePromise = Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+    ]).then(([pdfjs, workerModule]) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+      return { getDocument: pdfjs.getDocument };
+    });
+  }
+
+  const { getDocument } = await pdfRuntimePromise;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdf = await getDocument({ data: bytes }).promise;
   const page = await pdf.getPage(1);
