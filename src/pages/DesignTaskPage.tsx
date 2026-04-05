@@ -2747,9 +2747,7 @@ export default function DesignTaskPage() {
       await openStorageFileInNewTab(file);
       return;
     }
-    const url =
-      (await ensureFileAccessUrl(file, { variant: kind === "image" ? "preview" : "original" })) ??
-      (kind === "image" ? await ensureFileAccessUrl(file, { variant: "original" }) : null);
+    const url = await ensureFileAccessUrl(file, { variant: "preview" });
     if (!url) {
       toast.error("Не вдалося відкрити превʼю файлу");
       return;

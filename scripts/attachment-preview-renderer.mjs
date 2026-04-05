@@ -4,6 +4,8 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const COMMAND_TIMEOUT_MS = 60_000;
+const PREVIEW_MAX_SIZE = 960;
+const THUMB_MAX_SIZE = 160;
 
 async function runCommand(command, args) {
   return await new Promise((resolve, reject) => {
@@ -53,11 +55,11 @@ async function findGeneratedPreviewPng(outputDir) {
 }
 
 function getOutputPrefix(outputPath) {
-  return outputPath.replace(/\.png$/i, "");
+  return outputPath.replace(/\.[^.]+$/i, "");
 }
 
 async function renderWithQuickLook(qlmanage, inputPath, previewPath, tempDir) {
-  await runCommand(qlmanage, ["-t", "-s", "1280", "-o", tempDir, inputPath]);
+  await runCommand(qlmanage, ["-t", "-s", String(PREVIEW_MAX_SIZE), "-o", tempDir, inputPath]);
   const generated = await findGeneratedPreviewPng(tempDir);
   if (!generated) {
     throw new Error("QuickLook did not generate preview png");
@@ -68,30 +70,42 @@ async function renderWithQuickLook(qlmanage, inputPath, previewPath, tempDir) {
 }
 
 async function renderWithPdfToPpm(pdftoppm, inputPath, previewPath) {
-  await runCommand(pdftoppm, ["-f", "1", "-singlefile", "-scale-to", "1280", "-png", inputPath, getOutputPrefix(previewPath)]);
+  await runCommand(pdftoppm, ["-f", "1", "-singlefile", "-scale-to", String(PREVIEW_MAX_SIZE), "-png", inputPath, getOutputPrefix(previewPath)]);
 }
 
 async function renderWithImageMagick(command, inputPath, previewPath) {
   const source = /\.(pdf|tif|tiff)$/i.test(inputPath) ? `${inputPath}[0]` : inputPath;
-  await runCommand(command, [source, "-resize", "1280x1280>", previewPath]);
+  await runCommand(command, [source, "-resize", `${PREVIEW_MAX_SIZE}x${PREVIEW_MAX_SIZE}>`, previewPath]);
 }
 
 async function renderWithSips(sips, inputPath, previewPath) {
   await runCommand(sips, [inputPath, "-s", "format", "png", "--out", previewPath]);
-  await runCommand(sips, ["-Z", "1280", previewPath, "--out", previewPath]);
+  await runCommand(sips, ["-Z", String(PREVIEW_MAX_SIZE), previewPath, "--out", previewPath]);
+}
+
+async function convertPngToWebp({ magick, convert }, inputPath, outputPath) {
+  if (magick) {
+    await runCommand(magick, [inputPath, "-quality", "84", outputPath]);
+    return true;
+  }
+  if (convert) {
+    await runCommand(convert, [inputPath, "-quality", "84", outputPath]);
+    return true;
+  }
+  return false;
 }
 
 async function buildThumbnail({ magick, convert, sips }, previewPath, thumbPath) {
   if (magick) {
-    await runCommand(magick, [previewPath, "-resize", "160x160>", thumbPath]);
+    await runCommand(magick, [previewPath, "-resize", `${THUMB_MAX_SIZE}x${THUMB_MAX_SIZE}>`, thumbPath]);
     return;
   }
   if (convert) {
-    await runCommand(convert, [previewPath, "-resize", "160x160>", thumbPath]);
+    await runCommand(convert, [previewPath, "-resize", `${THUMB_MAX_SIZE}x${THUMB_MAX_SIZE}>`, thumbPath]);
     return;
   }
   if (sips) {
-    await runCommand(sips, ["-Z", "160", previewPath, "--out", thumbPath]);
+    await runCommand(sips, ["-Z", String(THUMB_MAX_SIZE), previewPath, "--out", thumbPath]);
     return;
   }
   throw new Error("No supported thumbnail renderer found in environment");
@@ -101,6 +115,8 @@ export async function renderRasterPreviewFiles(inputPath) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "attachment-raster-preview-"));
   const previewPath = path.join(tempDir, "preview.png");
   const thumbPath = path.join(tempDir, "thumb.png");
+  const previewWebpPath = path.join(tempDir, "preview.webp");
+  const thumbWebpPath = path.join(tempDir, "thumb.webp");
 
   try {
     const qlmanage = await findExecutable("qlmanage");
@@ -122,15 +138,20 @@ export async function renderRasterPreviewFiles(inputPath) {
 
     await buildThumbnail({ magick, convert, sips }, previewPath, thumbPath);
 
+    const useWebp =
+      (await convertPngToWebp({ magick, convert }, previewPath, previewWebpPath)) &&
+      (await convertPngToWebp({ magick, convert }, thumbPath, thumbWebpPath));
+
     const [previewBuffer, thumbBuffer] = await Promise.all([
-      fs.readFile(previewPath),
-      fs.readFile(thumbPath),
+      fs.readFile(useWebp ? previewWebpPath : previewPath),
+      fs.readFile(useWebp ? thumbWebpPath : thumbPath),
     ]);
 
     return {
       previewBuffer,
       thumbBuffer,
-      contentType: "image/png",
+      contentType: useWebp ? "image/webp" : "image/png",
+      extension: useWebp ? "webp" : "png",
     };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -141,6 +162,8 @@ export async function renderFirstPagePreviewFiles(inputPath) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "attachment-preview-"));
   const previewPath = path.join(tempDir, "preview.png");
   const thumbPath = path.join(tempDir, "thumb.png");
+  const previewWebpPath = path.join(tempDir, "preview.webp");
+  const thumbWebpPath = path.join(tempDir, "thumb.webp");
 
   try {
     const qlmanage = await findExecutable("qlmanage");
@@ -182,15 +205,20 @@ export async function renderFirstPagePreviewFiles(inputPath) {
 
     await buildThumbnail({ magick, convert, sips }, previewPath, thumbPath);
 
+    const useWebp =
+      (await convertPngToWebp({ magick, convert }, previewPath, previewWebpPath)) &&
+      (await convertPngToWebp({ magick, convert }, thumbPath, thumbWebpPath));
+
     const [previewBuffer, thumbBuffer] = await Promise.all([
-      fs.readFile(previewPath),
-      fs.readFile(thumbPath),
+      fs.readFile(useWebp ? previewWebpPath : previewPath),
+      fs.readFile(useWebp ? thumbWebpPath : thumbPath),
     ]);
 
     return {
       previewBuffer,
       thumbBuffer,
-      contentType: "image/png",
+      contentType: useWebp ? "image/webp" : "image/png",
+      extension: useWebp ? "webp" : "png",
     };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });

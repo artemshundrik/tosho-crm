@@ -28,10 +28,10 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-function getVariantPath(storagePath: string, variant: "thumb" | "preview") {
+function getVariantPath(storagePath: string, variant: "thumb" | "preview", extension: string) {
   const match = storagePath.match(/^(.*?)(\.[^.]+)?$/);
   const basename = match?.[1] ?? storagePath;
-  return `${basename}__${variant}.png`;
+  return `${basename}__${variant}.${extension}`;
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -92,10 +92,10 @@ export const handler = async (event: HttpEvent) => {
   const inputPath = path.join(tempDir, path.basename(storagePath));
   try {
     await fs.writeFile(inputPath, Buffer.from(await fileBlob.arrayBuffer()));
-    const { previewBuffer, thumbBuffer, contentType } = await renderFirstPagePreviewFiles(inputPath);
+    const { previewBuffer, thumbBuffer, contentType, extension } = await renderFirstPagePreviewFiles(inputPath);
 
-    const previewPath = getVariantPath(storagePath, "preview");
-    const thumbPath = getVariantPath(storagePath, "thumb");
+    const previewPath = getVariantPath(storagePath, "preview", extension);
+    const thumbPath = getVariantPath(storagePath, "thumb", extension);
 
     const [{ error: previewError }, { error: thumbError }] = await Promise.all([
       adminClient.storage.from(bucket).upload(previewPath, previewBuffer, {

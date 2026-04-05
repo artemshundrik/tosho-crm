@@ -84,13 +84,7 @@ export function StorageObjectImage({
     const load = async () => {
       const nextUrl = await getSignedAttachmentUrl(bucket, path, variant);
       if (!active) return;
-      if (nextUrl) {
-        setSrc(nextUrl);
-        return;
-      }
-      const originalUrl = await getSignedAttachmentUrl(bucket, path, "original");
-      if (!active) return;
-      setSrc(originalUrl);
+      setSrc(nextUrl ?? null);
     };
 
     void load();
@@ -112,9 +106,7 @@ export function StorageObjectImage({
 
   const ensureHoverSrc = useCallback(async () => {
     if (!hoverPreview || hoverSrc || hoverFailed || !bucket || !path) return;
-    const nextUrl =
-      (await getSignedAttachmentUrl(bucket, path, "preview")) ??
-      (await getSignedAttachmentUrl(bucket, path, "original"));
+    const nextUrl = await getSignedAttachmentUrl(bucket, path, "preview");
     if (nextUrl) {
       setHoverSrc(nextUrl);
       return;
@@ -150,11 +142,9 @@ export function StorageObjectImage({
           loading="lazy"
           decoding="async"
           onError={() => {
-            if (failedVariant || !bucket || !path || variant === "original") return;
+            if (failedVariant) return;
             setFailedVariant(true);
-            void getSignedAttachmentUrl(bucket, path, "original").then((originalUrl) => {
-              setSrc(originalUrl);
-            });
+            setSrc(null);
           }}
           onLoad={(event) => {
             const { naturalWidth, naturalHeight } = event.currentTarget;
