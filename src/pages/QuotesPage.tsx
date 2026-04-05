@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -3179,6 +3179,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   useEffect(() => {
     localStorage.setItem("quotes_view_mode", viewMode);
+  }, [viewMode]);
+
+  useLayoutEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (typeof window === "undefined") return;
+
+    const scrollingElement = document.scrollingElement;
+    scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (viewport) {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    }
   }, [viewMode]);
 
   useEffect(() => {
