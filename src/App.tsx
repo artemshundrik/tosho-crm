@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { Suspense, lazy, useEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -746,7 +746,7 @@ function ScrollToTop() {
   const location = useLocation();
   const navigationType = useNavigationType();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (navigationType === "POP") return;
 
     if (location.hash) {

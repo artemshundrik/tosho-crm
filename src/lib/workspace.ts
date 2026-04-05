@@ -4,6 +4,10 @@ const WORKSPACE_RPC_CANDIDATES = ["my_workspace_id", "current_workspace_id"] as 
 const workspaceIdCache = new Map<string, string | null>();
 const workspaceMembershipCache = new Map<string, { accessRole: string | null; jobRole: string | null } | null>();
 
+type WorkspaceLookupOptions = {
+  forceRefresh?: boolean;
+};
+
 const isMissingFunctionError = (message: string) => {
   const normalized = message.toLowerCase();
   return (
@@ -34,8 +38,20 @@ const isMissingRelationError = (message?: string | null) => {
   );
 };
 
-export async function resolveWorkspaceId(userId?: string | null): Promise<string | null> {
-  if (userId && workspaceIdCache.has(userId)) {
+export function invalidateWorkspaceResolution(userId?: string | null, workspaceId?: string | null) {
+  if (userId) {
+    workspaceIdCache.delete(userId);
+  }
+  if (userId && workspaceId) {
+    workspaceMembershipCache.delete(`${workspaceId}:${userId}`);
+  }
+}
+
+export async function resolveWorkspaceId(
+  userId?: string | null,
+  options?: WorkspaceLookupOptions
+): Promise<string | null> {
+  if (!options?.forceRefresh && userId && workspaceIdCache.has(userId)) {
     return workspaceIdCache.get(userId) ?? null;
   }
 
@@ -88,12 +104,13 @@ export async function resolveWorkspaceId(userId?: string | null): Promise<string
 
 export async function resolveWorkspaceMembership(
   workspaceId?: string | null,
-  userId?: string | null
+  userId?: string | null,
+  options?: WorkspaceLookupOptions
 ): Promise<{ accessRole: string | null; jobRole: string | null } | null> {
   if (!workspaceId || !userId) return null;
 
   const cacheKey = `${workspaceId}:${userId}`;
-  if (workspaceMembershipCache.has(cacheKey)) {
+  if (!options?.forceRefresh && workspaceMembershipCache.has(cacheKey)) {
     return workspaceMembershipCache.get(cacheKey) ?? null;
   }
 

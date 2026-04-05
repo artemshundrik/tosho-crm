@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
+import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
 import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
 
 type AuthState = {
@@ -80,20 +80,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userIdRef.current = userId;
   }, [userId]);
 
-  const refreshTeamContext = useCallback(async (targetUserId?: string | null) => {
+  const refreshTeamContext = useCallback(async (targetUserId?: string | null, options?: { forceRefresh?: boolean }) => {
     const effectiveUserId = targetUserId ?? userId;
     if (!effectiveUserId) {
       resetTeamContext();
       return;
     }
 
-    const workspaceId = await resolveWorkspaceId(effectiveUserId);
+    if (options?.forceRefresh) {
+      invalidateWorkspaceResolution(effectiveUserId);
+    }
+
+    const workspaceId = await resolveWorkspaceId(effectiveUserId, options);
 
     let roleValue: TeamRole = null;
     let accessRoleValue: AccessRole = null;
     let jobRoleValue: JobRole = null;
     if (workspaceId) {
-      const membership = await resolveWorkspaceMembership(workspaceId, effectiveUserId);
+      const membership = await resolveWorkspaceMembership(workspaceId, effectiveUserId, options);
       if (membership) {
         accessRoleValue = (membership.accessRole as AccessRole) ?? null;
         jobRoleValue = (membership.jobRole as JobRole) ?? null;
@@ -122,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data.session ?? null;
         setSession(nextSession);
         if (nextSession?.user?.id) {
-          void refreshTeamContext(nextSession.user.id).catch((error) => {
+          void refreshTeamContext(nextSession.user.id, { forceRefresh: true }).catch((error) => {
             console.error("Failed to initialize team context", error);
             if (mounted) {
               resetTeamContext();
@@ -170,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Keep UI stable for any auth event affecting the same user
       // (token refresh, session sync, user profile updates, etc).
       if (nextUserId === userIdRef.current) {
-        void refreshTeamContext(nextUserId).catch((error) => {
+        void refreshTeamContext(nextUserId, { forceRefresh: true }).catch((error) => {
           console.error("Failed to refresh auth context", error);
         });
         return;
@@ -180,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       void (async () => {
         try {
-          await refreshTeamContext(nextUserId);
+          await refreshTeamContext(nextUserId, { forceRefresh: true });
         } catch (error) {
           console.error("Failed to switch auth context", error);
           if (mounted) {
@@ -197,6 +201,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, [refreshTeamContext, resetTeamContext]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const refreshAccess = () => {
+      void refreshTeamContext(userId, { forceRefresh: true }).catch((error) => {
+        console.error("Failed to refresh auth context on visibility change", error);
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshAccess();
+      }
+    };
+
+    window.addEventListener("focus", refreshAccess);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", refreshAccess);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshTeamContext, userId]);
 
   const permissions = useMemo(
     () => buildPermissions({ role, accessRole, jobRole }),
