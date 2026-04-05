@@ -10,6 +10,12 @@
     "preview": "vite preview",
     "migrate:avatars": "node scripts/migrate-avatar-storage.mjs",
     "migrate:avatar-variants": "node scripts/migrate-avatar-variants.mjs",
+    "migrate:attachment-previews": "node scripts/migrate-attachment-previews.mjs",
+    "migrate:raster-attachment-variants": "node scripts/migrate-raster-attachment-variants.mjs",
+    "audit:attachments": "node scripts/audit-attachment-storage.mjs",
+    "cleanup:attachments": "node scripts/cleanup-attachment-storage.mjs",
+    "export:orphan-attachments": "node scripts/export-orphan-attachment-originals.mjs",
+    "export:orphan-attachment-summary": "node scripts/export-orphan-attachment-summary.mjs",
     "generate:vapid": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {

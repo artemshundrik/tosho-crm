@@ -73,7 +73,8 @@ const IDLE_WINDOW_MS = 5 * 60 * 1000;
 const DB_HISTORY_WINDOW_MS = 30 * 60 * 1000;
 const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
 const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
-const PRESENCE_UPSERT_INTERVAL_MS = 60 * 1000;
+const REALTIME_BACKED_DB_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const FALLBACK_DB_SYNC_INTERVAL_MS = 60 * 1000;
 
 function isDocumentVisible() {
   if (typeof document === "undefined") return true;
@@ -509,12 +510,13 @@ export function useWorkspacePresenceState({
   useEffect(() => {
     void upsertPresenceRow();
     if (!teamId || !userId || dbUnavailable) return;
+    const intervalMs = realtimeDisabled ? FALLBACK_DB_SYNC_INTERVAL_MS : REALTIME_BACKED_DB_SYNC_INTERVAL_MS;
     const id = window.setInterval(() => {
       if (!isDocumentVisible()) return;
       void upsertPresenceRow();
-    }, PRESENCE_UPSERT_INTERVAL_MS);
+    }, intervalMs);
     return () => window.clearInterval(id);
-  }, [dbUnavailable, teamId, upsertPresenceRow, userId]);
+  }, [dbUnavailable, realtimeDisabled, teamId, upsertPresenceRow, userId]);
 
   const entries = useMemo<WorkspacePresenceEntry[]>(() => {
     const allUserIds = new Set<string>([

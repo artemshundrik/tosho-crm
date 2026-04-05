@@ -108,6 +108,7 @@ const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPag
 const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 const RuntimeErrorsPage = lazyWithRetry(() => import("./pages/RuntimeErrorsPage"));
+const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
 
 function RouteSuspense({
   children,
@@ -266,6 +267,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
+    { pattern: "/admin/observability", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/observability") },
     { pattern: "/admin/runtime-errors", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/runtime-errors") },
     { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
     { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
@@ -1063,6 +1065,21 @@ function AppRoutes() {
             <RouteSuspense shell>
               <AdminPage />
             </RouteSuspense>
+          }
+        />
+        <Route
+          path="admin/observability"
+          element={
+            <PermissionGate
+              allowed={permissions.isSuperAdmin || permissions.isAdmin}
+              requirement="access_role: owner/admin"
+              accessRole={accessRole}
+              jobRole={jobRole}
+            >
+              <RouteSuspense shell>
+                <AdminObservabilityPage />
+              </RouteSuspense>
+            </PermissionGate>
           }
         />
         <Route

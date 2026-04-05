@@ -2,37 +2,34 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getSignedAttachmentUrl, type AttachmentPreviewVariant } from "@/lib/attachmentPreview";
 
-const warmedKanbanImageUrls = new Set<string>();
-
-function findKanbanScrollParent(element: HTMLElement | null): HTMLElement | null {
-  let current = element?.parentElement ?? null;
-  while (current) {
-    if (current.dataset.kanbanColumnBody === "true") return current;
-    current = current.parentElement;
-  }
-  return null;
-}
-
-type KanbanImageZoomPreviewProps = {
-  imageUrl: string;
-  zoomImageUrl?: string;
+type StorageObjectImageProps = {
+  bucket?: string | null;
+  path?: string | null;
   alt: string;
+  variant?: AttachmentPreviewVariant;
   className?: string;
   imageClassName?: string;
+  hoverPreview?: boolean;
 };
 
-export function KanbanImageZoomPreview({
-  imageUrl,
-  zoomImageUrl,
+export function StorageObjectImage({
+  bucket,
+  path,
   alt,
+  variant = "thumb",
   className,
   imageClassName,
-}: KanbanImageZoomPreviewProps) {
+  hoverPreview = false,
+}: StorageObjectImageProps) {
   const anchorRef = useRef<HTMLDivElement | null>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const [failedVariant, setFailedVariant] = useState(false);
+  const [hoverSrc, setHoverSrc] = useState<string | null>(null);
+  const [hoverFailed, setHoverFailed] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
-  const [isOpen, setIsOpen] = useState(false);
-  const [shouldLoad, setShouldLoad] = useState(() => warmedKanbanImageUrls.has(imageUrl));
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
     left: 0,
@@ -44,20 +41,14 @@ export function KanbanImageZoomPreview({
   const previewMaxWidth = 420;
   const previewGap = 10;
   const viewportPadding = 12;
-  const previewWidth = Math.max(
-    120,
-    Math.min(previewMaxWidth, Math.round(previewHeight * previewAspectRatio))
-  );
+  const previewWidth = Math.max(120, Math.min(previewMaxWidth, Math.round(previewHeight * previewAspectRatio)));
 
   const updatePlacement = useCallback(() => {
     const anchor = anchorRef.current;
     if (!anchor || typeof window === "undefined") return;
 
     const rect = anchor.getBoundingClientRect();
-    const availableRight = Math.max(
-      0,
-      window.innerWidth - rect.right - viewportPadding - previewGap
-    );
+    const availableRight = Math.max(0, window.innerWidth - rect.right - viewportPadding - previewGap);
     const availableLeft = Math.max(0, rect.left - viewportPadding - previewGap);
 
     const shouldOpenLeft = availableRight < previewWidth && availableLeft > availableRight;
@@ -85,7 +76,31 @@ export function KanbanImageZoomPreview({
   }, [previewWidth]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    let active = true;
+    setSrc(null);
+    setFailedVariant(false);
+    if (!bucket || !path) return;
+
+    const load = async () => {
+      const nextUrl = await getSignedAttachmentUrl(bucket, path, variant);
+      if (!active) return;
+      if (nextUrl) {
+        setSrc(nextUrl);
+        return;
+      }
+      const originalUrl = await getSignedAttachmentUrl(bucket, path, "original");
+      if (!active) return;
+      setSrc(originalUrl);
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [bucket, path, variant]);
+
+  useEffect(() => {
+    if (!hoverOpen) return;
     const handleViewportChange = () => updatePlacement();
     window.addEventListener("scroll", handleViewportChange, true);
     window.addEventListener("resize", handleViewportChange);
@@ -93,96 +108,64 @@ export function KanbanImageZoomPreview({
       window.removeEventListener("scroll", handleViewportChange, true);
       window.removeEventListener("resize", handleViewportChange);
     };
-  }, [isOpen, updatePlacement]);
+  }, [hoverOpen, updatePlacement]);
 
-  useEffect(() => {
-    if (shouldLoad || typeof window === "undefined") return;
-    const anchor = anchorRef.current;
-    if (!anchor) return;
-    const scrollParent = findKanbanScrollParent(anchor);
-
-    const rootRect = scrollParent?.getBoundingClientRect() ?? {
-      top: 0,
-      left: 0,
-      right: window.innerWidth,
-      bottom: window.innerHeight,
-    };
-
-    const rect = anchor.getBoundingClientRect();
-    const isRoughlyVisible =
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.bottom >= rootRect.top - 240 &&
-      rect.right >= rootRect.left &&
-      rect.top <= rootRect.bottom + 240 &&
-      rect.left <= rootRect.right;
-
-    if (isRoughlyVisible) {
-      setShouldLoad(true);
+  const ensureHoverSrc = useCallback(async () => {
+    if (!hoverPreview || hoverSrc || hoverFailed || !bucket || !path) return;
+    const nextUrl =
+      (await getSignedAttachmentUrl(bucket, path, "preview")) ??
+      (await getSignedAttachmentUrl(bucket, path, "original"));
+    if (nextUrl) {
+      setHoverSrc(nextUrl);
       return;
     }
-
-    const observer = new window.IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        setShouldLoad(true);
-        observer.disconnect();
-      },
-      {
-        root: scrollParent,
-        rootMargin: "240px 0px",
-        threshold: 0.01,
-      }
-    );
-
-    observer.observe(anchor);
-    return () => observer.disconnect();
-  }, [shouldLoad]);
+    setHoverFailed(true);
+  }, [bucket, hoverFailed, hoverPreview, hoverSrc, path]);
 
   return (
     <div
       ref={anchorRef}
+      className={cn("grid place-items-center overflow-hidden bg-muted/20", className)}
       onMouseEnter={() => {
-        setShouldLoad(true);
+        if (!hoverPreview) return;
+        void ensureHoverSrc();
         updatePlacement();
-        setIsOpen(true);
+        setHoverOpen(true);
       }}
-      onMouseLeave={() => setIsOpen(false)}
+      onMouseLeave={() => setHoverOpen(false)}
       onFocus={() => {
-        setShouldLoad(true);
+        if (!hoverPreview) return;
+        void ensureHoverSrc();
         updatePlacement();
-        setIsOpen(true);
+        setHoverOpen(true);
       }}
-      onBlur={() => setIsOpen(false)}
-      className={cn(
-        "relative h-14 w-14 shrink-0 overflow-visible rounded-[10px] border border-border/60 bg-muted/25",
-        className
-      )}
-      tabIndex={0}
+      onBlur={() => setHoverOpen(false)}
+      tabIndex={hoverPreview ? 0 : undefined}
     >
-      <div className="h-full w-full overflow-hidden rounded-[10px]">
-        {shouldLoad ? (
-          <img
-            src={imageUrl}
-            alt={alt}
-            className={cn("h-full w-full object-contain", imageClassName)}
-            loading="lazy"
-            decoding="async"
-            onLoad={(event) => {
-              warmedKanbanImageUrls.add(imageUrl);
-              const { naturalWidth, naturalHeight } = event.currentTarget;
-              if (!naturalWidth || !naturalHeight) return;
-              setPreviewAspectRatio(naturalWidth / naturalHeight);
-            }}
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-            <ImageIcon className="h-4 w-4" />
-          </div>
-        )}
-      </div>
-      {isOpen && shouldLoad && typeof document !== "undefined"
+      {src ? (
+        <img
+          src={src}
+          alt={alt}
+          className={cn("h-full w-full object-contain", imageClassName)}
+          loading="lazy"
+          decoding="async"
+          onError={() => {
+            if (failedVariant || !bucket || !path || variant === "original") return;
+            setFailedVariant(true);
+            void getSignedAttachmentUrl(bucket, path, "original").then((originalUrl) => {
+              setSrc(originalUrl);
+            });
+          }}
+          onLoad={(event) => {
+            const { naturalWidth, naturalHeight } = event.currentTarget;
+            if (!naturalWidth || !naturalHeight) return;
+            setPreviewAspectRatio(naturalWidth / naturalHeight);
+          }}
+        />
+      ) : (
+        <ImageIcon className="h-4 w-4 text-muted-foreground/60" />
+      )}
+      {hoverOpen && hoverSrc && typeof document !== "undefined"
         ? createPortal(
             <div
               aria-hidden="true"
@@ -195,7 +178,7 @@ export function KanbanImageZoomPreview({
               }}
             >
               <img
-                src={zoomImageUrl ?? imageUrl}
+                src={hoverSrc}
                 alt=""
                 className="h-full w-full object-contain"
                 loading="lazy"

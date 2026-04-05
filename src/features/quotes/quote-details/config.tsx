@@ -84,6 +84,9 @@ export const canPreviewImage = (extension?: string | null) =>
 
 export const canPreviewPdf = (extension?: string | null) => extension === "PDF";
 
+export const canPreviewDocumentThumb = (extension?: string | null) =>
+  !!extension && ["PDF", "TIF", "TIFF"].includes(extension);
+
 export const formatCurrencyCompact = (value: number, currency?: string | null) =>
   new Intl.NumberFormat("uk-UA", {
     style: "currency",

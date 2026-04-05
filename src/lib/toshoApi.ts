@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -1129,7 +1130,41 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRow[]> 
 export async function deleteQuote(quoteId: string, teamId?: string | null) {
   const schema = supabase.schema("tosho");
 
+  const listQuoteAttachments = async (withTeam: boolean) => {
+    let query = schema
+      .from("quote_attachments")
+      .select("storage_bucket,storage_path")
+      .eq("quote_id", quoteId);
+    if (withTeam && teamId) {
+      query = query.eq("team_id", teamId);
+    }
+    const { data, error } = await query;
+    handleError(error);
+    return Array.isArray(data) ? data : [];
+  };
+
+  const deleteAttachmentStorage = async (withTeam: boolean) => {
+    const attachments = await listQuoteAttachments(withTeam);
+    await Promise.all(
+      attachments
+        .filter(
+          (attachment) =>
+            typeof attachment.storage_bucket === "string" &&
+            attachment.storage_bucket &&
+            typeof attachment.storage_path === "string" &&
+            attachment.storage_path
+        )
+        .map((attachment) =>
+          removeAttachmentWithVariants(
+            attachment.storage_bucket as string,
+            attachment.storage_path as string
+          )
+        )
+    );
+  };
+
   const deleteChildren = async (withTeam: boolean) => {
+    await deleteAttachmentStorage(withTeam);
     const tables = ["quote_items", "quote_comments", "quote_attachments", "quote_status_history"];
     for (const table of tables) {
       const q = schema.from(table).delete().eq("quote_id", quoteId);
@@ -1145,6 +1180,7 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
   };
 
   try {
+    await deleteAttachmentStorage(true);
     await deleteQuoteRow(true);
   } catch (error: unknown) {
     const message = getErrorMessage(error).toLowerCase();

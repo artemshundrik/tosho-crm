@@ -55,12 +55,20 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
 import {
   listCustomerLeadLogoDirectory,
   normalizeCustomerLogoUrl as normalizeLogoUrl,
 } from "@/lib/customerLogo";
+import {
+  getAttachmentVariantPath,
+  getSignedAttachmentUrl,
+  removeAttachmentWithVariants,
+  uploadAttachmentWithVariants,
+  type AttachmentPreviewVariant,
+} from "@/lib/attachmentPreview";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -204,6 +212,44 @@ type DesignTaskComment = {
   created_by: string;
 };
 
+function collectDesignTaskStorageFiles(metadata: Record<string, unknown> | null | undefined) {
+  const collected = new Map<string, { bucket: string; path: string }>();
+
+  const pushFile = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const bucket =
+      typeof (value as { storage_bucket?: unknown }).storage_bucket === "string"
+        ? (value as { storage_bucket: string }).storage_bucket
+        : null;
+    const path =
+      typeof (value as { storage_path?: unknown }).storage_path === "string"
+        ? (value as { storage_path: string }).storage_path
+        : null;
+    if (!bucket || !path) return;
+    collected.set(`${bucket}:${path}`, { bucket, path });
+  };
+
+  const standaloneBriefFiles = Array.isArray(metadata?.standalone_brief_files) ? metadata.standalone_brief_files : [];
+  const designOutputFiles = Array.isArray(metadata?.design_output_files) ? metadata.design_output_files : [];
+
+  standaloneBriefFiles.forEach(pushFile);
+  designOutputFiles.forEach(pushFile);
+  pushFile({
+    storage_bucket: metadata?.selected_design_output_storage_bucket,
+    storage_path: metadata?.selected_design_output_storage_path,
+  });
+  pushFile({
+    storage_bucket: metadata?.selected_visual_output_storage_bucket,
+    storage_path: metadata?.selected_visual_output_storage_path,
+  });
+  pushFile({
+    storage_bucket: metadata?.selected_layout_output_storage_bucket,
+    storage_path: metadata?.selected_layout_output_storage_path,
+  });
+
+  return Array.from(collected.values());
+}
+
 type MentionContext = {
   start: number;
   end: number;
@@ -226,6 +272,8 @@ type FilePreviewState = {
   name: string;
   url: string;
   kind: "image" | "pdf";
+  storageBucket?: string | null;
+  storagePath?: string | null;
 };
 
 type GroupedDesignOutputs = {
@@ -591,6 +639,16 @@ const getSelectedDesignOutputFileIdsFromMetadata = (
 
 const buildPdfPreviewUrl = (src: string) =>
   `${src}#page=1&zoom=page-fit&view=FitV&navpanes=0&scrollbar=0&pagemode=none`;
+
+const canPreviewImage = (extension?: string | null) =>
+  !!extension && ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "SVG"].includes(extension);
+
+const canPreviewPdf = (extension?: string | null) => extension === "PDF";
+
+const canPreviewTiff = (extension?: string | null) => extension === "TIF" || extension === "TIFF";
+
+const canRenderStoragePreview = (extension?: string | null) =>
+  canPreviewImage(extension) || canPreviewPdf(extension) || canPreviewTiff(extension);
 
 const isUsableStorageUrl = (value?: string | null) => {
   if (!value) return false;
@@ -2592,29 +2650,37 @@ export default function DesignTaskPage() {
     [historyRows]
   );
 
-  const getStorageFileKey = useCallback((file: Pick<StorageBackedFile, "storage_bucket" | "storage_path">) => {
+  const getStorageFileKey = useCallback((
+    file: Pick<StorageBackedFile, "storage_bucket" | "storage_path">,
+    variant: AttachmentPreviewVariant = "original"
+  ) => {
     if (!file.storage_bucket || !file.storage_path) return null;
-    return `${file.storage_bucket}:${file.storage_path}`;
+    return `${file.storage_bucket}:${getAttachmentVariantPath(file.storage_path, variant)}`;
   }, []);
 
-  const ensureFileAccessUrl = useCallback(async (file: StorageBackedFile, options?: { forceRefresh?: boolean }) => {
-    const key = getStorageFileKey(file);
+  const ensureFileAccessUrl = useCallback(async (
+    file: StorageBackedFile,
+    options?: { forceRefresh?: boolean; variant?: AttachmentPreviewVariant }
+  ) => {
+    const variant = options?.variant ?? "original";
+    const key = getStorageFileKey(file, variant);
     if (!key || !file.storage_bucket || !file.storage_path) return null;
     const existingUrl = fileAccessUrlByKey[key];
     if (!options?.forceRefresh && existingUrl) return existingUrl;
 
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from(file.storage_bucket)
-      .createSignedUrl(file.storage_path, 60 * 60 * 24 * 7);
-    const signedUrl = isUsableStorageUrl(signedData?.signedUrl) ? (signedData?.signedUrl ?? null) : null;
-    if (signedUrl && !signedError) {
+    const signedUrl = await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, variant, 60 * 60 * 24 * 7);
+    if (isUsableStorageUrl(signedUrl)) {
+      if (typeof signedUrl !== "string") return null;
+      const resolvedUrl = signedUrl;
       if (existingUrl?.startsWith("blob:")) {
         URL.revokeObjectURL(existingUrl);
         objectUrlRegistryRef.current.delete(existingUrl);
       }
-      setFileAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
-      return signedUrl;
+      setFileAccessUrlByKey((prev) => ({ ...prev, [key]: resolvedUrl }));
+      return resolvedUrl;
     }
+
+    if (variant !== "original") return null;
 
     const { data: blobData, error: downloadError } = await supabase.storage
       .from(file.storage_bucket)
@@ -2668,6 +2734,34 @@ export default function DesignTaskPage() {
     }
     await downloadFileToDevice(url, file.file_name);
   }, [downloadFileToDevice, ensureFileAccessUrl]);
+
+  const openStorageFilePreview = useCallback(async (file: StorageBackedFile & { file_name?: string | null }) => {
+    const extension = getFileExtension(file.file_name);
+    const kind =
+      canPreviewImage(extension) || canPreviewTiff(extension)
+        ? "image"
+        : canPreviewPdf(extension)
+          ? "pdf"
+          : null;
+    if (!kind) {
+      await openStorageFileInNewTab(file);
+      return;
+    }
+    const url =
+      (await ensureFileAccessUrl(file, { variant: kind === "image" ? "preview" : "original" })) ??
+      (kind === "image" ? await ensureFileAccessUrl(file, { variant: "original" }) : null);
+    if (!url) {
+      toast.error("Не вдалося відкрити превʼю файлу");
+      return;
+    }
+    setFilePreview({
+      name: file.file_name ?? "Файл",
+      url,
+      kind,
+      storageBucket: file.storage_bucket ?? null,
+      storagePath: file.storage_path ?? null,
+    });
+  }, [ensureFileAccessUrl, openStorageFileInNewTab]);
 
   useEffect(() => {
     const objectUrls = objectUrlRegistryRef.current;
@@ -2849,14 +2943,18 @@ export default function DesignTaskPage() {
         let storagePath = "";
         let lastError: unknown = null;
         for (const candidate of candidatePaths) {
-          const { error: uploadError } = await supabase.storage
-            .from(DESIGN_OUTPUT_BUCKET)
-            .upload(candidate, file, { upsert: true, contentType: file.type, cacheControl: STORAGE_CACHE_CONTROL });
-          if (!uploadError) {
+          try {
+            await uploadAttachmentWithVariants({
+              bucket: DESIGN_OUTPUT_BUCKET,
+              storagePath: candidate,
+              file,
+              cacheControl: STORAGE_CACHE_CONTROL,
+            });
             storagePath = candidate;
             break;
+          } catch (uploadError) {
+            lastError = uploadError;
           }
-          lastError = uploadError;
         }
         if (!storagePath) throw lastError ?? new Error(`Не вдалося завантажити файл ${file.name}`);
 
@@ -2915,10 +3013,12 @@ export default function DesignTaskPage() {
           ? `teams/${effectiveTeamId}/quote-attachments/${task.quoteId}/${baseName}`
           : `teams/${effectiveTeamId}/design-brief-files/${task.id}/${baseName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from(DESIGN_OUTPUT_BUCKET)
-          .upload(storagePath, file, { upsert: true, contentType: file.type, cacheControl: STORAGE_CACHE_CONTROL });
-        if (uploadError) throw uploadError;
+        await uploadAttachmentWithVariants({
+          bucket: DESIGN_OUTPUT_BUCKET,
+          storagePath,
+          file,
+          cacheControl: STORAGE_CACHE_CONTROL,
+        });
 
         const nextAttachment: AttachmentRow = {
           id: crypto.randomUUID(),
@@ -3033,10 +3133,7 @@ export default function DesignTaskPage() {
     setAttachmentDeletingId(attachmentId);
     try {
       if (target.storage_bucket && target.storage_path) {
-        const { error: storageError } = await supabase.storage
-          .from(target.storage_bucket)
-          .remove([target.storage_path]);
-        if (storageError) throw storageError;
+        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
       }
 
       if (isUuid(task.quoteId)) {
@@ -3237,7 +3334,7 @@ export default function DesignTaskPage() {
         if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
       }
       if (target.storage_bucket && target.storage_path) {
-        await supabase.storage.from(target.storage_bucket).remove([target.storage_path]);
+        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
       }
       toast.success("Файл видалено");
     } catch (e: unknown) {
@@ -4805,6 +4902,22 @@ export default function DesignTaskPage() {
     if (!ensureCanEdit()) return;
     setDeletingTask(true);
     try {
+      const storageFiles = collectDesignTaskStorageFiles(task.metadata);
+      await Promise.all(storageFiles.map((file) => removeAttachmentWithVariants(file.bucket, file.path)));
+
+      if (isUuid(task.quoteId) && storageFiles.length > 0) {
+        const { error: quoteAttachmentDeleteError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .delete()
+          .eq("quote_id", task.quoteId)
+          .in(
+            "storage_path",
+            storageFiles.map((file) => file.path)
+          );
+        if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
+      }
+
       const { error: taskDeleteError } = await supabase
         .from("activity_log")
         .delete()
@@ -5283,13 +5396,25 @@ export default function DesignTaskPage() {
                   <div className="space-y-2">
                     {group.files.map((file) => {
                       const ext = getFileExtension(file.file_name);
+                      const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path);
                       return (
                         <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex items-start gap-2.5">
-                              <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                                {ext}
-                              </div>
+                              {previewableFile ? (
+                                <StorageObjectImage
+                                  bucket={file.storage_bucket}
+                                  path={file.storage_path}
+                                  alt={file.file_name ?? "Файл"}
+                                  variant="thumb"
+                                  hoverPreview
+                                  className="h-11 w-11 shrink-0 rounded-md border border-border/60 bg-muted/30"
+                                />
+                              ) : (
+                                <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
+                                  {ext}
+                                </div>
+                              )}
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium" title={file.file_name}>
                                   {file.file_name}
@@ -5341,7 +5466,7 @@ export default function DesignTaskPage() {
                               </label>
                               {file.storage_bucket && file.storage_path ? (
                                 <>
-                                  <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFileInNewTab(file)}>
+                                  <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                   <Button size="icon" variant="ghost" aria-label="Завантажити файл" onClick={() => void downloadStorageBackedFile(file)}>
@@ -6527,13 +6652,25 @@ export default function DesignTaskPage() {
                 ) : null}
                 {attachments.map((file) => {
                   const extension = getFileExtension(file.file_name);
+                  const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
                   return (
                     <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex items-start gap-2.5">
-                          <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                            {extension}
-                          </div>
+                          {previewableImage ? (
+                            <StorageObjectImage
+                              bucket={file.storage_bucket}
+                              path={file.storage_path}
+                              alt={file.file_name ?? "Файл"}
+                              variant="thumb"
+                              hoverPreview
+                              className="h-11 w-11 shrink-0 rounded-md border border-border/60"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground">
+                              {extension}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium" title={file.file_name ?? ""}>
                               {file.file_name ?? "Файл"}
@@ -6567,7 +6704,7 @@ export default function DesignTaskPage() {
                                     size="icon"
                                 variant="ghost"
                                 aria-label="Переглянути файл"
-                                onClick={() => void openStorageFileInNewTab(file)}
+                                onClick={() => void openStorageFilePreview(file)}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -7307,15 +7444,31 @@ export default function DesignTaskPage() {
           <DialogFooter>
             {filePreview?.url ? (
               <>
-                <Button type="button" variant="outline" asChild>
-                  <a href={filePreview.url} target="_blank" rel="noopener noreferrer">
-                    Відкрити окремо
-                  </a>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    const url =
+                      filePreview.storageBucket && filePreview.storagePath
+                        ? await getSignedAttachmentUrl(filePreview.storageBucket, filePreview.storagePath, "original", 60 * 60 * 24 * 7)
+                        : filePreview.url;
+                    if (!url) return;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Відкрити окремо
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => void downloadFileToDevice(filePreview.url, filePreview.name)}
+                  onClick={async () => {
+                    const url =
+                      filePreview.storageBucket && filePreview.storagePath
+                        ? await getSignedAttachmentUrl(filePreview.storageBucket, filePreview.storagePath, "original", 60 * 60 * 24 * 7)
+                        : filePreview.url;
+                    if (!url) return;
+                    await downloadFileToDevice(url, filePreview.name);
+                  }}
                 >
                   Завантажити
                 </Button>

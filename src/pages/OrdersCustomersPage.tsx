@@ -1659,7 +1659,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   </Table>
                 </div>
                 {customersHasMore ? (
-                  <div className="flex items-center justify-center pt-4">
+                  <div className="flex items-center justify-center px-4 pb-6 pt-4 md:px-6">
                     <Button variant="outline" onClick={handleLoadMoreCustomers} disabled={customersRefreshing}>
                       {customersRefreshing ? (
                         <>
@@ -1843,7 +1843,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   </Table>
                 </div>
                 {leadsHasMore ? (
-                  <div className="flex items-center justify-center pt-4">
+                  <div className="flex items-center justify-center px-4 pb-6 pt-4 md:px-6">
                     <Button variant="outline" onClick={handleLoadMoreLeads} disabled={leadsRefreshing}>
                       {leadsRefreshing ? (
                         <>

@@ -103,6 +103,7 @@ export async function resolveWorkspaceMembership(
     .select("access_role,job_role")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
+    .limit(1)
     .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
 
   if (!viewResult.error) {
@@ -133,6 +134,7 @@ export async function resolveWorkspaceMembership(
       .select("access_role,job_role")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userId)
+      .limit(1)
       .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
 
     if (!result.error) {

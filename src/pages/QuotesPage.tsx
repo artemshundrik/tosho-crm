@@ -71,6 +71,7 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { getSignedAttachmentUrl, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { 
   Search,
   X,
@@ -204,6 +205,7 @@ type CommercialQuoteSection = {
   createdAt: string;
   visualizations: Array<{
     url: string;
+    thumbUrl?: string;
     name: string;
   }>;
   items: CommercialItemRow[];
@@ -2051,19 +2053,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let lastError: unknown = null;
 
       for (const candidate of candidatePaths) {
-        const { error: uploadError } = await supabase.storage
-          .from(QUOTE_ATTACHMENTS_BUCKET)
-          .upload(candidate, file, {
-            upsert: true,
-            contentType: file.type,
+        try {
+          await uploadAttachmentWithVariants({
+            bucket: QUOTE_ATTACHMENTS_BUCKET,
+            storagePath: candidate,
+            file,
             cacheControl: "31536000, immutable",
           });
-        if (!uploadError) {
           storagePath = candidate;
           lastError = null;
           break;
+        } catch (uploadError) {
+          lastError = uploadError;
         }
-        lastError = uploadError;
       }
 
       if (!storagePath) {
@@ -2152,19 +2154,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let lastError: unknown = null;
 
       for (const candidate of candidatePaths) {
-        const { error: uploadError } = await supabase.storage
-          .from(QUOTE_ATTACHMENTS_BUCKET)
-          .upload(candidate, file, {
-            upsert: true,
-            contentType: file.type,
+        try {
+          await uploadAttachmentWithVariants({
+            bucket: QUOTE_ATTACHMENTS_BUCKET,
+            storagePath: candidate,
+            file,
             cacheControl: "31536000, immutable",
           });
-        if (!uploadError) {
           storagePath = candidate;
           lastError = null;
           break;
+        } catch (uploadError) {
+          lastError = uploadError;
         }
-        lastError = uploadError;
       }
 
       if (!storagePath) {
@@ -2784,7 +2786,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         row.label ?? "",
       ])
     );
-    const visualizationsByQuoteId = new Map<string, Array<{ url: string; name: string }>>();
+    const visualizationsByQuoteId = new Map<string, Array<{ url: string; thumbUrl?: string; name: string }>>();
     const typedVisualizations = ((visualizationRows ?? []) as unknown) as Array<{
       quote_id?: string | null;
       file_name?: string | null;
@@ -2802,21 +2804,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!isDesignVisualization) continue;
       const mimeType = row.mime_type?.toLowerCase() ?? "";
       const fileName = row.file_name?.toLowerCase() ?? "";
-      const isImage =
-        mimeType.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif|bmp|svg)$/i.test(fileName);
-      if (!isImage) continue;
+      const canRenderPreview =
+        mimeType.startsWith("image/") ||
+        mimeType === "application/pdf" ||
+        mimeType === "image/tiff" ||
+        /\.(png|jpg|jpeg|webp|gif|bmp|svg|pdf|tif|tiff)$/i.test(fileName);
+      if (!canRenderPreview) continue;
 
-      const signed = await supabase.storage
-        .from(row.storage_bucket)
-        .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
       const signedUrl =
-        signed.data?.signedUrl ??
+        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "preview", 60 * 60 * 24 * 7)) ??
+        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "original", 60 * 60 * 24 * 7)) ??
         supabase.storage.from(row.storage_bucket).getPublicUrl(storagePath).data.publicUrl;
       if (!signedUrl) continue;
+      const thumbUrl =
+        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "thumb", 60 * 60 * 24 * 7)) ?? signedUrl;
       const list = visualizationsByQuoteId.get(quoteId) ?? [];
       if (!list.some((item) => item.url === signedUrl)) {
         list.push({
           url: signedUrl,
+          thumbUrl,
           name: row.file_name ?? "visualization",
         });
       }
@@ -6085,7 +6091,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           {section.visualizations.map((visual, idx) => (
                             <KanbanImageZoomPreview
                               key={`${section.quoteId}-visual-${idx}`}
-                              imageUrl={visual.url}
+                              imageUrl={visual.thumbUrl ?? visual.url}
+                              zoomImageUrl={visual.url}
                               alt={visual.name || `${section.quoteNumber} visual ${idx + 1}`}
                               className="h-24 w-40 rounded-md border border-border/60 bg-muted/20"
                             />

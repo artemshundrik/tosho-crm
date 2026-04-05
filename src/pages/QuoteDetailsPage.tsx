@@ -32,6 +32,12 @@ import {
 import { cn } from "@/lib/utils";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import {
+  getSignedAttachmentUrl,
+  removeAttachmentWithVariants,
+  uploadAttachmentWithVariants,
+  type AttachmentPreviewVariant,
+} from "@/lib/attachmentPreview";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
@@ -56,6 +62,7 @@ import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
@@ -141,6 +148,7 @@ import {
   STATUS_NEXT_ACTION,
   STATUS_OPTIONS,
   buildMentionAlias,
+  canPreviewDocumentThumb,
   canPreviewImage,
   createLocalId,
   extractMentionKeys,
@@ -751,14 +759,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createOrderSubmitting, setCreateOrderSubmitting] = useState(false);
   const [createOrderError, setCreateOrderError] = useState<string | null>(null);
 
-  const getAttachmentStorageKey = useCallback((attachment: Pick<QuoteAttachment, "storageBucket" | "storagePath">) => {
+  const getAttachmentStorageKey = useCallback((
+    attachment: Pick<QuoteAttachment, "storageBucket" | "storagePath">,
+    variant: AttachmentPreviewVariant = "original"
+  ) => {
     if (!attachment.storageBucket || !attachment.storagePath) return null;
-    return `${attachment.storageBucket}:${attachment.storagePath}`;
+    return `${attachment.storageBucket}:${attachment.storagePath}:${variant}`;
   }, []);
 
   const ensureAttachmentAccessUrl = useCallback(
-    async (attachment: QuoteAttachment, options?: { forceRefresh?: boolean }) => {
-      const key = getAttachmentStorageKey(attachment);
+    async (attachment: QuoteAttachment, options?: { forceRefresh?: boolean; variant?: AttachmentPreviewVariant }) => {
+      const variant = options?.variant ?? "original";
+      const key = getAttachmentStorageKey(attachment, variant);
       if (!key || !attachment.storageBucket || !attachment.storagePath) {
         return attachment.url ?? null;
       }
@@ -767,11 +779,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         return existingUrl;
       }
 
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from(attachment.storageBucket)
-        .createSignedUrl(attachment.storagePath, 60 * 60);
-      const signedUrl = typeof signedData?.signedUrl === "string" ? signedData.signedUrl : null;
-      if (signedUrl && !signedError) {
+      const signedUrl = await getSignedAttachmentUrl(attachment.storageBucket, attachment.storagePath, variant, 60 * 60);
+      if (typeof signedUrl === "string" && signedUrl) {
         if (existingUrl?.startsWith("blob:")) {
           URL.revokeObjectURL(existingUrl);
           attachmentObjectUrlRegistryRef.current.delete(existingUrl);
@@ -779,6 +788,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         setAttachmentAccessUrlByKey((prev) => ({ ...prev, [key]: signedUrl }));
         return signedUrl;
       }
+
+      if (variant !== "original") return null;
 
       const { data: blobData, error: downloadError } = await supabase.storage
         .from(attachment.storageBucket)
@@ -3398,19 +3409,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         let storagePath = "";
         let lastError: unknown = null;
         for (const candidate of candidatePaths) {
-          const { error: uploadError } = await supabase.storage
-            .from(ITEM_VISUAL_BUCKET)
-            .upload(candidate, file, {
-              upsert: true,
-              contentType: file.type,
+          try {
+            await uploadAttachmentWithVariants({
+              bucket: ITEM_VISUAL_BUCKET,
+              storagePath: candidate,
+              file,
               cacheControl: "31536000, immutable",
             });
-          if (!uploadError) {
             storagePath = candidate;
             lastError = null;
             break;
+          } catch (uploadError) {
+            lastError = uploadError;
           }
-          lastError = uploadError;
         }
 
         if (!storagePath) {
@@ -3481,10 +3492,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAttachmentsDeleteError(null);
     try {
       if (attachment.storageBucket && attachment.storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from(attachment.storageBucket)
-          .remove([attachment.storagePath]);
-        if (storageError) throw storageError;
+        await removeAttachmentWithVariants(attachment.storageBucket, attachment.storagePath);
       }
 
       const { error } = await supabase
@@ -4387,29 +4395,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       let path = "";
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
-        const { error: uploadError } = await supabase.storage
-          .from(ITEM_VISUAL_BUCKET)
-          .upload(candidate, file, {
-            upsert: true,
-            contentType: file.type,
+        try {
+          await uploadAttachmentWithVariants({
+            bucket: ITEM_VISUAL_BUCKET,
+            storagePath: candidate,
+            file,
             cacheControl: "31536000, immutable",
           });
-        if (!uploadError) {
           path = candidate;
           lastError = null;
           break;
+        } catch (uploadError) {
+          lastError = uploadError;
         }
-        lastError = uploadError;
       }
       if (!path) {
         throw lastError ?? new Error("Не вдалося завантажити файл");
       }
 
-      const { data: signed, error: signedError } = await supabase.storage
-        .from(ITEM_VISUAL_BUCKET)
-        .createSignedUrl(path, 60 * 60 * 24 * 7);
-      if (signedError) throw signedError;
-      const publicUrl = signed.signedUrl;
+      const publicUrl = await getSignedAttachmentUrl(ITEM_VISUAL_BUCKET, path, "original", 60 * 60 * 24 * 7);
+      if (!publicUrl) throw new Error("Не вдалося підготувати доступ до файлу");
 
       const { data: attachmentRow, error: attachError } = await supabase
         .schema("tosho")
@@ -6370,7 +6375,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleDesignVisualizations.map((file) => {
                         const extension = getFileExtension(file.name);
-                        const previewImage = canPreviewImage(extension) && Boolean(file.storageBucket && file.storagePath);
+                        const previewImage =
+                          (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
+                          Boolean(file.storageBucket && file.storagePath);
                         const isSelectedVisualization =
                           (selectedDesignOutputStoragePath && file.storagePath === selectedDesignOutputStoragePath) ||
                           (selectedDesignOutputFileName && file.name === selectedDesignOutputFileName);
@@ -6381,7 +6388,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:hover:scale-100"
                               onClick={() => {
                                 if (!previewImage) return;
-                                void ensureAttachmentAccessUrl(file).then((url) => {
+                                void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
                                   if (!url) return;
                                   setVisualizationPreview({ ...file, url });
                                 });
@@ -6390,7 +6397,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               aria-label={previewImage ? `Переглянути ${file.name}` : file.name}
                             >
                               {previewImage ? (
-                                <div className="text-xs text-muted-foreground">{extension}</div>
+                                <StorageObjectImage
+                                  bucket={file.storageBucket}
+                                  path={file.storagePath}
+                                  alt={file.name}
+                                  variant="thumb"
+                                  className="h-full w-full"
+                                />
                               ) : (
                                 <div className="text-xs text-muted-foreground">{extension}</div>
                               )}
@@ -7659,7 +7672,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => void downloadFileToDevice(visualizationPreview.url!, visualizationPreview.name)}
+              onClick={() => {
+                void ensureAttachmentAccessUrl(visualizationPreview, { variant: "original" }).then((url) => {
+                  if (!url) return;
+                  void downloadFileToDevice(url, visualizationPreview.name);
+                });
+              }}
             >
               Завантажити
             </Button>

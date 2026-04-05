@@ -57,6 +57,7 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
+import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import {
@@ -181,6 +182,44 @@ const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+function collectDesignTaskStorageFiles(metadata: Record<string, unknown> | null | undefined) {
+  const collected = new Map<string, { bucket: string; path: string }>();
+
+  const pushFile = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const bucket =
+      typeof (value as { storage_bucket?: unknown }).storage_bucket === "string"
+        ? (value as { storage_bucket: string }).storage_bucket
+        : null;
+    const path =
+      typeof (value as { storage_path?: unknown }).storage_path === "string"
+        ? (value as { storage_path: string }).storage_path
+        : null;
+    if (!bucket || !path) return;
+    collected.set(`${bucket}:${path}`, { bucket, path });
+  };
+
+  const standaloneBriefFiles = Array.isArray(metadata?.standalone_brief_files) ? metadata.standalone_brief_files : [];
+  const designOutputFiles = Array.isArray(metadata?.design_output_files) ? metadata.design_output_files : [];
+
+  standaloneBriefFiles.forEach(pushFile);
+  designOutputFiles.forEach(pushFile);
+  pushFile({
+    storage_bucket: metadata?.selected_design_output_storage_bucket,
+    storage_path: metadata?.selected_design_output_storage_path,
+  });
+  pushFile({
+    storage_bucket: metadata?.selected_visual_output_storage_bucket,
+    storage_path: metadata?.selected_visual_output_storage_path,
+  });
+  pushFile({
+    storage_bucket: metadata?.selected_layout_output_storage_bucket,
+    storage_path: metadata?.selected_layout_output_storage_path,
+  });
+
+  return Array.from(collected.values());
+}
 
 const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: string | null; designTaskNumber?: string | null }>) => {
   const counters = new Map<string, number>();
@@ -3212,6 +3251,22 @@ export default function DesignPage() {
     const targetTask = taskToDelete;
     setDeletingTaskId(targetTask.id);
     try {
+      const storageFiles = collectDesignTaskStorageFiles(targetTask.metadata);
+      await Promise.all(storageFiles.map((file) => removeAttachmentWithVariants(file.bucket, file.path)));
+
+      if (isUuid(targetTask.quoteId) && storageFiles.length > 0) {
+        const { error: quoteAttachmentDeleteError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .delete()
+          .eq("quote_id", targetTask.quoteId)
+          .in(
+            "storage_path",
+            storageFiles.map((file) => file.path)
+          );
+        if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
+      }
+
       const { error: taskDeleteError } = await supabase
         .from("activity_log")
         .delete()
@@ -4949,7 +5004,7 @@ export default function DesignPage() {
       )}
 
       {viewMode !== "kanban" && hasMoreTasks && !loading && !membersLoading ? (
-        <div className="flex items-center justify-center pb-2">
+        <div className="flex items-center justify-center px-4 pb-6 pt-2 md:px-6">
           <Button variant="outline" onClick={handleLoadMoreTasks} disabled={refreshing}>
             {refreshing ? "Оновлення..." : `Показати ще ${DESIGN_LIST_PAGE_INCREMENT}`}
           </Button>

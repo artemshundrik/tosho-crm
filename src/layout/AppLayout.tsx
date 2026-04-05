@@ -3,6 +3,7 @@ import React, { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  BarChart3,
   Building2,
   Calculator,
   Factory,
@@ -306,6 +307,7 @@ const ROUTES = {
   notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
+  observability: "/admin/observability",
   runtimeErrors: "/admin/runtime-errors",
 } as const;
 
@@ -340,6 +342,7 @@ const baseSidebarLinks: SidebarLink[] = [
   // Акаунт
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert, moduleKey: "team" },
+  { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
   { label: "Технічні помилки", to: ROUTES.runtimeErrors, group: "account", icon: ShieldAlert },
 ];
 
@@ -553,6 +556,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Активність",
       breadcrumbTo: ROUTES.activity,
     };
+  if (pathname.startsWith(ROUTES.observability))
+    return {
+      title: "Admin Observability",
+      subtitle: "Щоденні snapshots по базі, storage і важких SQL-шляхах.",
+      breadcrumbLabel: "Observability",
+      breadcrumbTo: ROUTES.observability,
+      showPageHeader: false,
+    };
   if (pathname.startsWith(ROUTES.runtimeErrors))
     return {
       title: "Технічні помилки",
@@ -674,6 +685,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         if (link.to === ROUTES.runtimeErrors && !permissions.isSuperAdmin) {
           return false;
         }
+        if (link.to === ROUTES.observability && !(permissions.isSuperAdmin || permissions.isAdmin)) {
+          return false;
+        }
         if (link.moduleKey) {
           if (currentModuleAccess === undefined) {
             return false;
@@ -682,7 +696,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         }
         return true;
       }),
-    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isSuperAdmin]
+    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
