@@ -65,8 +65,10 @@ import {
 import {
   getAttachmentVariantPath,
   getSignedAttachmentUrl,
+  isServerPreviewableStoragePath,
   removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
+  waitForSignedAttachmentUrl,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
@@ -2668,7 +2670,15 @@ export default function DesignTaskPage() {
     const existingUrl = fileAccessUrlByKey[key];
     if (!options?.forceRefresh && existingUrl) return existingUrl;
 
-    const signedUrl = await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, variant, 60 * 60 * 24 * 7);
+    const signedUrl =
+      variant !== "original" && isServerPreviewableStoragePath(file.storage_path)
+        ? await waitForSignedAttachmentUrl(file.storage_bucket, file.storage_path, variant, {
+            attempts: 8,
+            delayMs: 1500,
+            ttlSeconds: 60 * 60 * 24 * 7,
+            queueServerPreview: true,
+          })
+        : await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, variant, 60 * 60 * 24 * 7);
     if (isUsableStorageUrl(signedUrl)) {
       if (typeof signedUrl !== "string") return null;
       const resolvedUrl = signedUrl;

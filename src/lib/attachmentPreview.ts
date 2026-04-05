@@ -13,8 +13,11 @@ const SIGNED_URL_CACHE = new Map<string, string>();
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const THUMB_MAX_SIZE = 160;
 const PREVIEW_MAX_SIZE = 960;
+const SERVER_PREVIEW_RETRY_DELAY_MS = 1500;
+const SERVER_PREVIEW_RETRY_ATTEMPTS = 8;
 
 const RASTER_PREVIEW_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
+const SERVER_PREVIEW_EXTENSIONS = new Set(["pdf", "tif", "tiff"]);
 
 function splitStoragePath(storagePath: string) {
   const match = storagePath.match(/^(.*?)(\.[^.]+)?$/);
@@ -42,6 +45,14 @@ export function getAttachmentVariantCacheKey(
   variant: AttachmentPreviewVariant
 ) {
   return `${bucket}:${getAttachmentVariantPath(storagePath, variant)}`;
+}
+
+export function getFileExtensionFromStoragePath(storagePath: string) {
+  return storagePath.split(".").pop()?.toLowerCase() ?? "";
+}
+
+export function isServerPreviewableStoragePath(storagePath: string) {
+  return SERVER_PREVIEW_EXTENSIONS.has(getFileExtensionFromStoragePath(storagePath));
 }
 
 export function isRasterPreviewableFile(file: Pick<File, "type" | "name">) {
@@ -188,4 +199,33 @@ async function requestServerAttachmentPreview(bucket: string, storagePath: strin
   } catch (error) {
     console.warn("Failed to queue server attachment preview generation", error);
   }
+}
+
+export async function ensureServerAttachmentPreviewQueued(bucket: string, storagePath: string) {
+  if (!isServerPreviewableStoragePath(storagePath)) return;
+  await requestServerAttachmentPreview(bucket, storagePath);
+}
+
+export async function waitForSignedAttachmentUrl(
+  bucket: string,
+  storagePath: string,
+  variant: AttachmentPreviewVariant,
+  options?: { attempts?: number; delayMs?: number; ttlSeconds?: number; queueServerPreview?: boolean }
+) {
+  const attempts = Math.max(1, options?.attempts ?? SERVER_PREVIEW_RETRY_ATTEMPTS);
+  const delayMs = Math.max(250, options?.delayMs ?? SERVER_PREVIEW_RETRY_DELAY_MS);
+  const ttlSeconds = options?.ttlSeconds ?? SIGNED_URL_TTL_SECONDS;
+
+  if (options?.queueServerPreview && variant !== "original" && isServerPreviewableStoragePath(storagePath)) {
+    await ensureServerAttachmentPreviewQueued(bucket, storagePath);
+  }
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const signedUrl = await getSignedAttachmentUrl(bucket, storagePath, variant, ttlSeconds);
+    if (signedUrl) return signedUrl;
+    if (attempt === attempts - 1) break;
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+
+  return null;
 }

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSignedAttachmentUrl, type AttachmentPreviewVariant } from "@/lib/attachmentPreview";
+import {
+  getSignedAttachmentUrl,
+  isServerPreviewableStoragePath,
+  waitForSignedAttachmentUrl,
+  type AttachmentPreviewVariant,
+} from "@/lib/attachmentPreview";
 
 type StorageObjectImageProps = {
   bucket?: string | null;
@@ -82,7 +87,10 @@ export function StorageObjectImage({
     if (!bucket || !path) return;
 
     const load = async () => {
-      const nextUrl = await getSignedAttachmentUrl(bucket, path, variant);
+      const nextUrl =
+        variant !== "original" && isServerPreviewableStoragePath(path)
+          ? await waitForSignedAttachmentUrl(bucket, path, variant, { queueServerPreview: true })
+          : await getSignedAttachmentUrl(bucket, path, variant);
       if (!active) return;
       setSrc(nextUrl ?? null);
     };
@@ -106,7 +114,9 @@ export function StorageObjectImage({
 
   const ensureHoverSrc = useCallback(async () => {
     if (!hoverPreview || hoverSrc || hoverFailed || !bucket || !path) return;
-    const nextUrl = await getSignedAttachmentUrl(bucket, path, "preview");
+    const nextUrl = isServerPreviewableStoragePath(path)
+      ? await waitForSignedAttachmentUrl(bucket, path, "preview", { queueServerPreview: true })
+      : await getSignedAttachmentUrl(bucket, path, "preview");
     if (nextUrl) {
       setHoverSrc(nextUrl);
       return;
