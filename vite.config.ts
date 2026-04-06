@@ -1,4 +1,5 @@
 import path from "path";
+import { readFileSync } from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -7,6 +8,9 @@ const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const ALLOWED_HOSTS = new Set(["v9ky.in.ua", "r-cup.com.ua", "sfck.com.ua"]);
 const MINFIN_MB_URL = "https://minfin.com.ua/ua/currency/mb/";
+const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as {
+  version?: string;
+};
 
 function parseDecimal(value: string) {
   const normalized = value.replace(",", ".").trim();
@@ -88,10 +92,37 @@ async function loadMinfinRates() {
   };
 }
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command }) => {
+  const builtAt = new Date().toISOString();
+  const appVersion = {
+    version: packageJson.version ?? "0.0.0",
+    buildId: `${packageJson.version ?? "0.0.0"}-${Date.now().toString(36)}`,
+    builtAt,
+  };
+
+  return ({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: "app-version-manifest",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.split("?")[0] !== "/version.json") return next();
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.end(JSON.stringify(appVersion));
+        });
+      },
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "version.json",
+          source: JSON.stringify(appVersion, null, 2),
+        });
+      },
+    },
     command === "serve"
       ? {
           name: "dev-fetch-v9ky-standings",
@@ -192,4 +223,8 @@ export default defineConfig(({ command }) => ({
       "@": path.resolve(__dirname, "src"),
     },
   },
-}));
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
+});
+});

@@ -19,6 +19,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
+import { AppVersionWatcher } from "@/components/app/AppVersionWatcher";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
@@ -1148,6 +1149,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <AppVersionWatcher />
       <AppRuntimeBoundary>
         <AppRoutes />
       </AppRuntimeBoundary>
