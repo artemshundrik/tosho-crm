@@ -20,6 +20,7 @@ type KanbanImageZoomPreviewProps = {
   alt: string;
   className?: string;
   imageClassName?: string;
+  loadStrategy?: "visible" | "interaction";
 };
 
 export function KanbanImageZoomPreview({
@@ -28,11 +29,14 @@ export function KanbanImageZoomPreview({
   alt,
   className,
   imageClassName,
+  loadStrategy = "visible",
 }: KanbanImageZoomPreviewProps) {
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldLoad, setShouldLoad] = useState(() => warmedKanbanImageUrls.has(imageUrl));
+  const [shouldLoad, setShouldLoad] = useState(
+    () => loadStrategy === "visible" && warmedKanbanImageUrls.has(imageUrl)
+  );
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
     left: 0,
@@ -96,6 +100,7 @@ export function KanbanImageZoomPreview({
   }, [isOpen, updatePlacement]);
 
   useEffect(() => {
+    if (loadStrategy !== "visible") return;
     if (shouldLoad || typeof window === "undefined") return;
     const anchor = anchorRef.current;
     if (!anchor) return;
@@ -138,7 +143,11 @@ export function KanbanImageZoomPreview({
 
     observer.observe(anchor);
     return () => observer.disconnect();
-  }, [shouldLoad]);
+  }, [loadStrategy, shouldLoad]);
+
+  useEffect(() => {
+    setShouldLoad(loadStrategy === "visible" && warmedKanbanImageUrls.has(imageUrl));
+  }, [imageUrl, loadStrategy]);
 
   return (
     <div
@@ -155,6 +164,7 @@ export function KanbanImageZoomPreview({
         setIsOpen(true);
       }}
       onBlur={() => setIsOpen(false)}
+      onPointerDown={() => setShouldLoad(true)}
       className={cn(
         "relative h-14 w-14 shrink-0 overflow-visible rounded-[10px] border border-border/60 bg-muted/25",
         className

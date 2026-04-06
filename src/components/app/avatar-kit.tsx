@@ -287,7 +287,8 @@ export function EntityAvatar({
   fallbackClassName,
 }: EntityAvatarProps) {
   const tone = getEntityAvatarTone(name ?? fallback ?? "");
-  const normalizedSrc = src?.trim() || null;
+  const rawSrc = src?.trim() || null;
+  const normalizedSrc = rawSrc && rawSrc.toLowerCase().startsWith("data:") ? null : rawSrc;
   const [errored, setErrored] = React.useState(false);
   const hasLogo = Boolean(normalizedSrc) && !errored;
 

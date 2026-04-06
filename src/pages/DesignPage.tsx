@@ -3722,7 +3722,11 @@ export default function DesignPage() {
             </div>
             <div className="flex items-center gap-2.5">
               {task.productImageUrl ? (
-                <KanbanImageZoomPreview imageUrl={task.productImageUrl} alt={task.productName} />
+                <KanbanImageZoomPreview
+                  imageUrl={task.productImageUrl}
+                  alt={task.productName}
+                  loadStrategy="interaction"
+                />
               ) : (
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
                   <div className="grid h-full w-full place-items-center text-muted-foreground/60">

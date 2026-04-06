@@ -5699,7 +5699,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </div>
                                       <div className="flex items-center gap-2.5">
                                         {productPreview?.imageUrl ? (
-                                          <KanbanImageZoomPreview imageUrl={productPreview.imageUrl} alt={productPreview.itemName} />
+                                          <KanbanImageZoomPreview
+                                            imageUrl={productPreview.imageUrl}
+                                            alt={productPreview.itemName}
+                                            loadStrategy="interaction"
+                                          />
                                         ) : (
                                           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
                                             <div className="grid h-full w-full place-items-center text-muted-foreground/60">
