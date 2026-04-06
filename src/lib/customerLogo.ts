@@ -9,17 +9,189 @@ export type CustomerLeadLogoDirectoryEntry = {
 };
 
 const CUSTOMER_LOGO_DIRECTORY_CACHE_TTL_MS = 10 * 60 * 1000;
+const CUSTOMER_LOGO_BUCKET = "public-assets";
+const CUSTOMER_LOGO_SIZE = 128;
 
 type CustomerLeadLogoDirectoryCachePayload = {
   entries: CustomerLeadLogoDirectoryEntry[];
   cachedAt: number;
 };
 
+export function isInlineCustomerLogoDataUrl(value?: string | null) {
+  return (value?.trim().toLowerCase() ?? "").startsWith("data:image/");
+}
+
 export function normalizeCustomerLogoUrl(value?: string | null) {
   const normalized = value?.trim() ?? "";
   if (!normalized) return null;
+  if (isInlineCustomerLogoDataUrl(normalized)) return null;
   if (/\/rest\/v1\//i.test(normalized)) return null;
   return normalized;
+}
+
+export function shouldFallbackToOriginalCustomerLogoUrl(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error && "message" in error && typeof (error as { message?: unknown }).message === "string"
+        ? ((error as { message?: string }).message ?? "")
+        : "";
+  return /\((403|429)\)/.test(message);
+}
+
+function getPublicStorageUrl(bucket: string, path: string) {
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+function sanitizeStorageSegment(value: string) {
+  return value.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "logo";
+}
+
+function getContentTypeExtension(contentType: string) {
+  const normalized = contentType.toLowerCase();
+  if (normalized.includes("png")) return "png";
+  if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+  if (normalized.includes("webp")) return "webp";
+  if (normalized.includes("gif")) return "gif";
+  if (normalized.includes("bmp")) return "bmp";
+  if (normalized.includes("svg")) return "svg";
+  return "img";
+}
+
+async function loadImageFromBlob(blob: Blob) {
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Не вдалося декодувати логотип."));
+      img.src = objectUrl;
+    });
+    return image;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function renderCustomerLogoBlob(blob: Blob, size = CUSTOMER_LOGO_SIZE) {
+  const image = await loadImageFromBlob(blob);
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!width || !height) {
+    throw new Error("Не вдалося визначити розмір логотипа.");
+  }
+
+  const sourceSize = Math.min(width, height);
+  const sourceX = Math.max(0, Math.round((width - sourceSize) / 2));
+  const sourceY = Math.max(0, Math.round((height - sourceSize) / 2));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Не вдалося підготувати canvas для логотипа.");
+  }
+
+  context.clearRect(0, 0, size, size);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+
+  const output = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((nextBlob) => resolve(nextBlob), "image/webp", 0.9);
+  });
+  if (!output) {
+    throw new Error("Не вдалося згенерувати WebP-лого.");
+  }
+  return output;
+}
+
+export function getManagedCustomerLogoStoragePath(url?: string | null) {
+  const normalized = normalizeCustomerLogoUrl(url);
+  if (!normalized) return null;
+
+  try {
+    const parsed = new URL(normalized);
+    const marker = `/storage/v1/object/public/${CUSTOMER_LOGO_BUCKET}/`;
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    const path = parsed.pathname.slice(markerIndex + marker.length);
+    if (!/\/customer-logos\//i.test(path)) return null;
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+}
+
+export async function removeManagedCustomerLogoByUrl(url?: string | null) {
+  const storagePath = getManagedCustomerLogoStoragePath(url);
+  if (!storagePath) return;
+  await supabase.storage.from(CUSTOMER_LOGO_BUCKET).remove([storagePath]);
+}
+
+export async function ingestCustomerLogoFromUrl(params: {
+  teamId: string;
+  sourceUrl: string;
+  entityType: "customer" | "lead";
+  entityId?: string | null;
+  preferredName?: string | null;
+}) {
+  const normalizedSourceUrl = normalizeCustomerLogoUrl(params.sourceUrl);
+  if (!normalizedSourceUrl) {
+    throw new Error("Вкажіть прямий URL на зображення логотипа.");
+  }
+  if (getManagedCustomerLogoStoragePath(normalizedSourceUrl)) {
+    return {
+      logoUrl: normalizedSourceUrl,
+      storagePath: getManagedCustomerLogoStoragePath(normalizedSourceUrl),
+    };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(normalizedSourceUrl, { mode: "cors", cache: "no-store" });
+  } catch {
+    throw new Error("Не вдалося завантажити логотип за URL. Перевірте посилання або CORS на стороні джерела.");
+  }
+
+  if (!response.ok) {
+    throw new Error(`Не вдалося завантажити логотип за URL (${response.status}).`);
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("URL логотипа має вести напряму на зображення.");
+  }
+
+  const sourceBlob = await response.blob();
+  const optimizedBlob = await renderCustomerLogoBlob(sourceBlob);
+  const nameSeed =
+    sanitizeStorageSegment(params.preferredName ?? "") ||
+    sanitizeStorageSegment(
+      (() => {
+        try {
+          return new URL(normalizedSourceUrl).pathname.split("/").pop() ?? "";
+        } catch {
+          return "";
+        }
+      })()
+    ) ||
+    `logo.${getContentTypeExtension(contentType)}`;
+  const ownerKey = sanitizeStorageSegment(params.entityId ?? crypto.randomUUID());
+  const storagePath = `teams/${params.teamId}/customer-logos/${params.entityType}/${ownerKey}/${Date.now()}-${nameSeed}.webp`;
+
+  const { error } = await supabase.storage.from(CUSTOMER_LOGO_BUCKET).upload(storagePath, optimizedBlob, {
+    upsert: true,
+    contentType: "image/webp",
+    cacheControl: "31536000, immutable",
+  });
+  if (error) throw error;
+
+  return {
+    logoUrl: getPublicStorageUrl(CUSTOMER_LOGO_BUCKET, storagePath),
+    storagePath,
+  };
 }
 
 function readCustomerLeadLogoDirectoryCache(teamId: string): CustomerLeadLogoDirectoryCachePayload | null {

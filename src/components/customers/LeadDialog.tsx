@@ -20,6 +20,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
@@ -156,6 +157,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const [quickMode, setQuickMode] = React.useState(true);
   const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
     "basic"
+  );
+  const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
+  const hasInvalidLogoUrl = React.useMemo(
+    () => Boolean(form.logoUrl.trim()) && !normalizedLogoUrl,
+    [form.logoUrl, normalizedLogoUrl]
   );
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const currentOwnership = ownershipOptions.find((option) => option.value === form.ownershipType);
@@ -298,16 +304,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               <Chip
                 size="md"
                 icon={<ImageIcon className="h-4 w-4" />}
-                active={!!form.logoUrl.trim()}
+                active={!!normalizedLogoUrl}
               >
-                {form.logoUrl.trim() ? "Лого додано" : "Лого"}
+                {hasInvalidLogoUrl ? "Лого невалідне" : normalizedLogoUrl ? "Лого додано" : "Лого"}
               </Chip>
             </PopoverTrigger>
             <PopoverContent className="w-[320px] p-3" align="start">
               <div className="flex items-center gap-3">
-                {form.logoUrl.trim() ? (
+                {normalizedLogoUrl ? (
                   <img
-                    src={form.logoUrl.trim()}
+                    src={normalizedLogoUrl}
                     alt={form.companyName || "logo"}
                     className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
                     onError={(e) => {
@@ -327,6 +333,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   className="h-9"
                 />
               </div>
+              {hasInvalidLogoUrl ? (
+                <div className="mt-2 text-xs text-destructive">
+                  Вкажіть звичайний URL. `data:image/...;base64,...` більше не підтримується.
+                </div>
+              ) : null}
+              {normalizedLogoUrl ? (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  При збереженні зовнішній URL буде оптимізовано до компактного WebP і перенесено у ваш storage.
+                </div>
+              ) : null}
               {form.logoUrl.trim() ? (
                 <Button
                   variant="ghost"

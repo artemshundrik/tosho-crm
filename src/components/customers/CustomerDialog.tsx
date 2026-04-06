@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
@@ -186,6 +187,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "history">(
     "basic"
   );
+  const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
+  const hasInvalidLogoUrl = React.useMemo(
+    () => Boolean(form.logoUrl.trim()) && !normalizedLogoUrl,
+    [form.logoUrl, normalizedLogoUrl]
+  );
 
   const reminderDateValue = React.useMemo(
     () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
@@ -320,16 +326,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <Chip
                 size="md"
                 icon={<ImageIcon className="h-4 w-4" />}
-                active={!!form.logoUrl.trim()}
+                active={!!normalizedLogoUrl}
               >
-                {form.logoUrl.trim() ? "Лого додано" : "Лого"}
+                {hasInvalidLogoUrl ? "Лого невалідне" : normalizedLogoUrl ? "Лого додано" : "Лого"}
               </Chip>
             </PopoverTrigger>
             <PopoverContent className="w-[320px] p-3" align="start">
               <div className="flex items-center gap-3">
-                {form.logoUrl.trim() ? (
+                {normalizedLogoUrl ? (
                   <img
-                    src={form.logoUrl.trim()}
+                    src={normalizedLogoUrl}
                     alt={form.name || "logo"}
                     className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
                     onError={(e) => {
@@ -349,6 +355,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   className="h-9"
                 />
               </div>
+              {hasInvalidLogoUrl ? (
+                <div className="mt-2 text-xs text-destructive">
+                  Вкажіть звичайний URL. `data:image/...;base64,...` більше не підтримується.
+                </div>
+              ) : null}
+              {normalizedLogoUrl ? (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  При збереженні зовнішній URL буде оптимізовано до компактного WebP і перенесено у ваш storage.
+                </div>
+              ) : null}
               {form.logoUrl.trim() ? (
                 <Button
                   variant="ghost"

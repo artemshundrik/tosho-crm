@@ -8,6 +8,11 @@ import {
   getPrimaryCustomerLegalEntity,
   serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
+import {
+  ingestCustomerLogoFromUrl,
+  normalizeCustomerLogoUrl,
+  shouldFallbackToOriginalCustomerLogoUrl,
+} from "@/lib/customerLogo";
 
 type MemberOption = {
   id: string;
@@ -154,9 +159,35 @@ export const useCustomerLeadCreate = ({
       setCustomerError("Вкажіть назву компанії.");
       return;
     }
+    const normalizedLogoUrl = normalizeCustomerLogoUrl(customerForm.logoUrl);
+    if (customerForm.logoUrl.trim() && !normalizedLogoUrl) {
+      setCustomerError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
+      return;
+    }
 
     setCustomerSaving(true);
     setCustomerError(null);
+
+    let optimizedLogoUrl = normalizedLogoUrl;
+    try {
+      if (normalizedLogoUrl) {
+        const optimized = await ingestCustomerLogoFromUrl({
+          teamId,
+          sourceUrl: normalizedLogoUrl,
+          entityType: "customer",
+          preferredName: customerForm.name.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      }
+    } catch (error: unknown) {
+      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
+        optimizedLogoUrl = normalizedLogoUrl;
+      } else {
+        setCustomerSaving(false);
+        setCustomerError(resolveErrorMessage(error, "Не вдалося підготувати логотип замовника."));
+        return;
+      }
+    }
 
     const managerValue = customerForm.manager.trim();
     const selectedManagerLabel = customerForm.managerId
@@ -171,6 +202,14 @@ export const useCustomerLeadCreate = ({
         birthday: contact.birthday.trim(),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
+    if (!contacts.some((contact) => contact.phone)) {
+      setCustomerError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
+      return;
+    }
+    if (!contacts.some((contact) => contact.email)) {
+      setCustomerError("Для замовника обовʼязково вкажіть email.");
+      return;
+    }
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(customerForm.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(customerForm.legalEntities);
@@ -185,7 +224,7 @@ export const useCustomerLeadCreate = ({
       tax_id: primaryLegalEntity?.tax_id ?? null,
       website: customerForm.website.trim() || null,
       iban: primaryLegalEntity?.iban ?? null,
-      logo_url: customerForm.logoUrl.trim() || null,
+      logo_url: optimizedLogoUrl,
       contacts: contacts.length > 0 ? contacts : null,
       contact_name: primaryContact?.name || null,
       contact_position: primaryContact?.position || null,
@@ -266,6 +305,11 @@ export const useCustomerLeadCreate = ({
       setLeadError("Вкажіть джерело.");
       return;
     }
+    const normalizedLogoUrl = normalizeCustomerLogoUrl(leadForm.logoUrl);
+    if (leadForm.logoUrl.trim() && !normalizedLogoUrl) {
+      setLeadError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
+      return;
+    }
     const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
     if (phones.length === 0) {
       setLeadError("Вкажіть хоча б один номер телефону.");
@@ -275,12 +319,33 @@ export const useCustomerLeadCreate = ({
     setLeadSaving(true);
     setLeadError(null);
 
+    let optimizedLogoUrl = normalizedLogoUrl;
+    try {
+      if (normalizedLogoUrl) {
+        const optimized = await ingestCustomerLogoFromUrl({
+          teamId,
+          sourceUrl: normalizedLogoUrl,
+          entityType: "lead",
+          preferredName: leadForm.companyName.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      }
+    } catch (error: unknown) {
+      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
+        optimizedLogoUrl = normalizedLogoUrl;
+      } else {
+        setLeadSaving(false);
+        setLeadError(resolveErrorMessage(error, "Не вдалося підготувати логотип ліда."));
+        return;
+      }
+    }
+
     const basePayload: Record<string, unknown> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
-      logo_url: leadForm.logoUrl.trim() || null,
+      logo_url: optimizedLogoUrl,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
       email: leadForm.email.trim() || null,

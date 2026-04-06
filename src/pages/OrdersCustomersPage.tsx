@@ -24,6 +24,12 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
+  ingestCustomerLogoFromUrl,
+  normalizeCustomerLogoUrl,
+  removeManagedCustomerLogoByUrl,
+  shouldFallbackToOriginalCustomerLogoUrl,
+} from "@/lib/customerLogo";
+import {
   createEmptyCustomerLegalEntity,
   formatCustomerLegalEntitySummary,
   formatCustomerLegalEntityTitle,
@@ -596,7 +602,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       manager: resolveManagerLabel(row.manager_user_id, row.manager),
       managerId: row.manager_user_id ?? "",
       website: row.website ?? "",
-      logoUrl: row.logo_url ?? "",
+      logoUrl: normalizeCustomerLogoUrl(row.logo_url) ?? "",
       legalEntities: parseCustomerLegalEntities(row),
       contacts,
       reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
@@ -630,7 +636,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       companyName: lead.company_name ?? "",
       legalName: lead.legal_name ?? "",
       ownershipType: lead.ownership_type ?? "",
-      logoUrl: lead.logo_url ?? "",
+      logoUrl: normalizeCustomerLogoUrl(lead.logo_url) ?? "",
       firstName: lead.first_name ?? "",
       lastName: lead.last_name ?? "",
       email: lead.email ?? "",
@@ -1081,6 +1087,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return;
     }
 
+    const normalizedLogoUrl = normalizeCustomerLogoUrl(form.logoUrl);
+    if (form.logoUrl.trim() && !normalizedLogoUrl) {
+      setFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
+      return;
+    }
+
     setSaving(true);
     setFormError(null);
 
@@ -1098,13 +1110,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
 
-    if (!contacts.some((contact) => contact.phone)) {
+    if (!editingId && !contacts.some((contact) => contact.phone)) {
       setSaving(false);
       setFormError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
       return;
     }
 
-    if (!contacts.some((contact) => contact.email)) {
+    if (!editingId && !contacts.some((contact) => contact.email)) {
       setSaving(false);
       setFormError("Для замовника обовʼязково вкажіть email.");
       return;
@@ -1113,6 +1125,31 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
+    let optimizedLogoUrl = normalizedLogoUrl;
+    const previousLogoUrl =
+      editingId ? rows.find((row) => row.id === editingId)?.logo_url ?? null : null;
+
+    try {
+      if (normalizedLogoUrl) {
+        const optimized = await ingestCustomerLogoFromUrl({
+          teamId,
+          sourceUrl: normalizedLogoUrl,
+          entityType: "customer",
+          entityId: editingId,
+          preferredName: form.name.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      }
+    } catch (error: unknown) {
+      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
+        optimizedLogoUrl = normalizedLogoUrl;
+      } else {
+        setSaving(false);
+        setFormError(getErrorMessage(error, "Не вдалося підготувати логотип замовника."));
+        return;
+      }
+    }
+
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: form.name.trim(),
@@ -1126,7 +1163,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       tax_id: primaryLegalEntity?.tax_id ?? null,
       website: form.website.trim() || null,
       iban: primaryLegalEntity?.iban ?? null,
-      logo_url: form.logoUrl.trim() || null,
+      logo_url: optimizedLogoUrl,
       legal_entities: legalEntities.length > 0 ? legalEntities : null,
       contacts: contacts.length > 0 ? contacts : null,
       contact_name: primaryContact?.name || null,
@@ -1223,6 +1260,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
         }
       }
 
+      if (editingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
+        void removeManagedCustomerLogoByUrl(previousLogoUrl);
+      }
+
       setDialogOpen(false);
       resetForm();
       await loadCustomers();
@@ -1250,6 +1291,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return;
     }
 
+    const normalizedLogoUrl = normalizeCustomerLogoUrl(leadForm.logoUrl);
+    if (leadForm.logoUrl.trim() && !normalizedLogoUrl) {
+      setLeadFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
+      return;
+    }
+
     const phones = leadForm.phones.map((phone) => phone.trim()).filter(Boolean);
     if (phones.length === 0) {
       setLeadFormError("Вкажіть хоча б один номер телефону.");
@@ -1258,6 +1305,31 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
     setLeadSaving(true);
     setLeadFormError(null);
+
+    let optimizedLogoUrl = normalizedLogoUrl;
+    const previousLogoUrl =
+      leadEditingId ? leads.find((lead) => lead.id === leadEditingId)?.logo_url ?? null : null;
+
+    try {
+      if (normalizedLogoUrl) {
+        const optimized = await ingestCustomerLogoFromUrl({
+          teamId,
+          sourceUrl: normalizedLogoUrl,
+          entityType: "lead",
+          entityId: leadEditingId,
+          preferredName: leadForm.companyName.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      }
+    } catch (error: unknown) {
+      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
+        optimizedLogoUrl = normalizedLogoUrl;
+      } else {
+        setLeadSaving(false);
+        setLeadFormError(getErrorMessage(error, "Не вдалося підготувати логотип ліда."));
+        return;
+      }
+    }
 
     const managerValue = leadForm.manager.trim();
     const selectedManagerLabel = leadForm.managerId
@@ -1268,7 +1340,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
-      logo_url: leadForm.logoUrl.trim() || null,
+      logo_url: optimizedLogoUrl,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
       email: leadForm.email.trim() || null,
@@ -1370,6 +1442,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
             throw insertError;
           }
         }
+      }
+
+      if (leadEditingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
+        void removeManagedCustomerLogoByUrl(previousLogoUrl);
       }
 
       setLeadDialogOpen(false);
