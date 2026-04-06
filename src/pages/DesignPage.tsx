@@ -130,6 +130,7 @@ const DESIGN_LIST_PAGE_SIZE = 50;
 const DESIGN_LIST_PAGE_INCREMENT = 50;
 const DESIGN_KANBAN_INITIAL_PAGE_SIZE = 120;
 const DESIGN_KANBAN_PAGE_INCREMENT = 60;
+const DESIGN_SEARCH_FETCH_PAGE_SIZE = 500;
 const DESIGN_PAGE_CACHE_LIMIT = DESIGN_KANBAN_INITIAL_PAGE_SIZE;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
@@ -174,6 +175,7 @@ const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
   return (
     normalizedAccess === "owner" ||
     normalizedAccess === "admin" ||
+    normalizedJob === "seo" ||
     normalizedJob === "manager" ||
     normalizedJob === "менеджер"
   );
@@ -1216,7 +1218,7 @@ export default function DesignPage() {
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
-  const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean }) => {
+  const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean }) => {
     if (!effectiveTeamId) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden" && !options?.force) return;
     if (loadTasksInFlightRef.current) return;
@@ -1224,9 +1226,12 @@ export default function DesignPage() {
     if (!options?.force && loadTasksCooldownUntilRef.current > now) return;
 
     const append = !!options?.append;
+    const fetchAll = !!options?.fetchAll && !append;
     const pageSize = append
       ? (viewMode === "kanban" ? DESIGN_KANBAN_PAGE_INCREMENT : DESIGN_LIST_PAGE_INCREMENT)
-      : tasksFetchLimit;
+      : fetchAll
+        ? DESIGN_SEARCH_FETCH_PAGE_SIZE
+        : tasksFetchLimit;
     const offset = append ? tasksLengthRef.current : 0;
 
     loadTasksInFlightRef.current = true;
@@ -1237,24 +1242,44 @@ export default function DesignPage() {
     }
     setError(null);
     try {
-      const fetchLimit = pageSize + 1;
-      const { data, error: fetchError } = await supabase
-        .from("activity_log")
-        .select("id,entity_id,metadata,title,created_at")
-        .eq("team_id", effectiveTeamId)
-        .eq("action", "design_task")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + fetchLimit - 1);
-      if (fetchError) throw fetchError;
-      const fetchedRows = ((data ?? []) as Array<{
+      const fetchedRows: Array<{
         id: string;
         entity_id?: string | null;
         metadata?: Record<string, unknown> | null;
         title?: string | null;
         created_at: string;
-      }>);
-      const limitedRows = fetchedRows.slice(0, pageSize);
-      setHasMoreTasks(fetchedRows.length > pageSize);
+      }> = [];
+      let nextOffset = offset;
+      let nextHasMoreTasks = false;
+
+      while (true) {
+        const fetchLimit = pageSize + 1;
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("id,entity_id,metadata,title,created_at")
+          .eq("team_id", effectiveTeamId)
+          .eq("action", "design_task")
+          .order("created_at", { ascending: false })
+          .range(nextOffset, nextOffset + fetchLimit - 1);
+        if (fetchError) throw fetchError;
+
+        const pageRows = (data ?? []) as Array<{
+          id: string;
+          entity_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+          title?: string | null;
+          created_at: string;
+        }>;
+        const limitedPageRows = pageRows.slice(0, pageSize);
+        fetchedRows.push(...limitedPageRows);
+
+        nextHasMoreTasks = pageRows.length > pageSize;
+        if (!fetchAll || !nextHasMoreTasks) break;
+        nextOffset += pageSize;
+      }
+
+      const limitedRows = fetchedRows;
+      setHasMoreTasks(fetchAll ? false : nextHasMoreTasks);
       const parsedRaw =
         limitedRows.map((row) => {
           const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
@@ -1685,6 +1710,14 @@ export default function DesignPage() {
   }, [initialCacheIsFresh, loadTasks, tasks.length]);
 
   useEffect(() => {
+    if (!search.trim()) return;
+    if (!effectiveTeamId) return;
+    if (loading || refreshing) return;
+    if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
+    void loadTasks({ force: true, fetchAll: true });
+  }, [effectiveTeamId, hasMoreTasks, loadTasks, loading, refreshing, search, tasks.length]);
+
+  useEffect(() => {
     if (!effectiveTeamId) return;
     const handlePageCacheUpdate = (event: Event) => {
       const customEvent = event as CustomEvent<{ teamId?: string }>;
@@ -1885,6 +1918,29 @@ export default function DesignPage() {
   }, [currentUserDisplayName, getMemberAvatar, memberById, userId]);
 
   const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
+
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+    if (
+      effectiveDesignerFilter === ALL_DESIGNERS_FILTER &&
+      (isManagerUser || managerFilter === ALL_MANAGERS_FILTER)
+    ) {
+      return;
+    }
+    if (loading || refreshing) return;
+    if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
+    void loadTasks({ force: true, fetchAll: true });
+  }, [
+    effectiveDesignerFilter,
+    effectiveTeamId,
+    hasMoreTasks,
+    isManagerUser,
+    loadTasks,
+    loading,
+    managerFilter,
+    refreshing,
+    tasks.length,
+  ]);
 
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();

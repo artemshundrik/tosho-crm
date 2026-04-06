@@ -14,7 +14,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
-import { isQuoteManagerJobRole } from "@/lib/permissions";
+import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import {
   formatPrintProductSummary,
@@ -152,8 +152,16 @@ const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
 const QUOTES_KANBAN_PAGE_INCREMENT = 60;
+const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
+
+const isManagerFilterMember = (member: Pick<TeamMemberRow, "accessRole" | "jobRole">) =>
+  isQuoteManagerJobRole(member.jobRole) ||
+  normalizeJobRole(member.jobRole) === "seo" ||
+  normalizeAccessRole(member.accessRole) === "owner" ||
+  normalizeAccessRole(member.accessRole) === "admin";
+
 type QuotePartyOption = CustomerRow & {
   entityType?: "customer" | "lead";
 };
@@ -692,6 +700,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     row.customer_id ? "Замовник" : "Лід";
   const managerFilterOptions = useMemo(() => {
     const options = new Map<string, string>();
+    const managerMembers = teamMembers.filter((member) => isManagerFilterMember(member));
+    const filterSource = managerMembers.length > 0 ? managerMembers : teamMembers;
+
+    filterSource.forEach((member) => {
+      if (!member.id?.trim()) return;
+      options.set(member.id.trim(), member.label?.trim() || member.id.trim());
+    });
+
     visibleRows.forEach((row) => {
       const assigned = row.assigned_to?.trim();
       if (!assigned) return;
@@ -701,7 +717,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return Array.from(options.entries())
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" }));
-  }, [getManagerLabel, visibleRows]);
+  }, [getManagerLabel, teamMembers, visibleRows]);
   const filteredRowsByManager = useMemo(() => {
     if (managerFilter === ALL_MANAGERS_FILTER) return visibleRows;
     return visibleRows.filter((row) => (row.assigned_to?.trim() ?? "") === managerFilter);
@@ -881,6 +897,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           id: row.userId,
           label: row.label,
           avatarUrl: row.avatarDisplayUrl,
+          accessRole: row.accessRole,
           jobRole: row.jobRole,
         }));
         const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
@@ -1083,14 +1100,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     };
   }, [createOpen, editDialogOpen, teamId]);
 
-  const loadQuotes = useCallback(async (options?: { append?: boolean }) => {
+  const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
     if (!teamId) return;
     const requestId = ++quotesLoadRequestIdRef.current;
     const append = !!options?.append;
+    const fetchAll = !!options?.fetchAll && !append;
     const basePageSize = append
       ? (viewMode === "kanban" ? QUOTES_KANBAN_PAGE_INCREMENT : QUOTES_TABLE_PAGE_INCREMENT)
       : quotesFetchLimit;
-    const pageSize = Math.max(1, basePageSize);
+    const pageSize = Math.max(1, fetchAll ? QUOTES_SEARCH_FETCH_PAGE_SIZE : basePageSize);
     const offset = append ? rowsRef.current.length : 0;
     const isBlockingLoad = !append && rowsRef.current.length === 0;
     if (isBlockingLoad) {
@@ -1100,9 +1118,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
     setError(null);
     try {
-      const data = await listQuotes({ teamId, search, status, limit: pageSize + 1, offset });
-      const visibleData = data.slice(0, pageSize);
-      const nextHasMore = data.length > pageSize;
+      const fetchedRows: QuoteListRow[] = [];
+      let nextOffset = offset;
+      let nextHasMore = false;
+
+      while (true) {
+        const data = await listQuotes({ teamId, search, status, limit: pageSize + 1, offset: nextOffset });
+        const visibleData = data.slice(0, pageSize);
+        fetchedRows.push(...visibleData);
+        nextHasMore = data.length > pageSize;
+        if (!fetchAll || !nextHasMore) break;
+        nextOffset += pageSize;
+      }
+
+      const visibleData = fetchedRows;
 
       const missingCustomerIds = Array.from(
         new Set(
@@ -1156,7 +1185,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ]
         : nextPageRows;
       if (requestId !== quotesLoadRequestIdRef.current) return;
-      setHasMoreQuotes(nextHasMore);
+      setHasMoreQuotes(fetchAll ? false : nextHasMore);
       setRows(mergedRows);
       setQuoteMembershipByQuoteId(new Map());
       fetchedQuoteMembershipIdsRef.current = new Set();
@@ -1277,6 +1306,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return () => window.clearTimeout(id);
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, status, search, quotesFetchLimit, loadQuotes]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    if (!search.trim()) return;
+    if (loading || refreshing) return;
+    if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
+    void loadQuotes({ fetchAll: true });
+  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    if (managerFilter === ALL_MANAGERS_FILTER) return;
+    if (loading || refreshing) return;
+    if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
+    void loadQuotes({ fetchAll: true });
+  }, [hasMoreQuotes, loadQuotes, loading, managerFilter, refreshing, rows.length, teamId]);
 
   useEffect(() => {
     setQuotesFetchLimit(viewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE);

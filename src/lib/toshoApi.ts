@@ -106,6 +106,7 @@ export type TeamMemberRow = {
   id: string;
   label: string;
   avatarUrl?: string | null;
+  accessRole?: string | null;
   jobRole?: string | null;
 };
 

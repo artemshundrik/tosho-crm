@@ -195,6 +195,13 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const ALL_MANAGERS_FILTER = "__all__";
 const CUSTOMERS_PAGE_SIZE = 50;
+const CUSTOMERS_SEARCH_FETCH_PAGE_SIZE = 500;
+const isManagerFilterMember = (member: Pick<WorkspaceMemberDisplayRow, "accessRole" | "jobRole">) =>
+  isQuoteManagerJobRole(member.jobRole) ||
+  (member.jobRole ?? "").trim().toLowerCase() === "seo" ||
+  (member.accessRole ?? "").trim().toLowerCase() === "owner" ||
+  (member.accessRole ?? "").trim().toLowerCase() === "admin";
+
 const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -420,10 +427,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
     [resolveManagerMember]
   );
 
-  const customerManagerOptions = useMemo(
-    () => teamMembers.map((member) => member.label).sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" })),
-    [teamMembers]
-  );
+  const customerManagerOptions = useMemo(() => {
+    const managerMembers = teamMembers.filter((member) => isManagerFilterMember(member));
+    const filterSource = managerMembers.length > 0 ? managerMembers : teamMembers;
+    return filterSource
+      .map((member) => member.label)
+      .sort((a, b) => a.localeCompare(b, "uk", { sensitivity: "base" }));
+  }, [teamMembers]);
 
   const leadManagerOptions = customerManagerOptions;
   const currentManagerLabel = useMemo(() => {
@@ -639,8 +649,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadDeleteDialogOpen(true);
   };
 
-  const loadCustomers = useCallback(async (options?: { append?: boolean }) => {
+  const loadCustomers = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
     const append = !!options?.append;
+    const fetchAll = !!options?.fetchAll && !append;
     const offset = append ? rowsRef.current.length : 0;
     if (append || rowsRef.current.length > 0) {
       setCustomersRefreshing(true);
@@ -706,11 +717,23 @@ function CustomersPage({ teamId }: { teamId: string }) {
         );
       }
 
-      const { data, error: loadError, count } = await query.range(offset, offset + CUSTOMERS_PAGE_SIZE - 1);
-      if (loadError) throw loadError;
-      const nextRows = ((data as unknown) as CustomerRow[]) ?? [];
-      setCustomersTotal(count ?? nextRows.length);
-      setCustomersHasMore(offset + nextRows.length < (count ?? nextRows.length));
+      const nextRows: CustomerRow[] = [];
+      let nextOffset = offset;
+      let totalCount: number | null = null;
+
+      while (true) {
+        const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+        const { data, error: loadError, count } = await query.range(nextOffset, nextOffset + pageSize - 1);
+        if (loadError) throw loadError;
+        const pageRows = ((data as unknown) as CustomerRow[]) ?? [];
+        nextRows.push(...pageRows);
+        totalCount = count ?? totalCount;
+        if (!fetchAll || pageRows.length < pageSize) break;
+        nextOffset += pageSize;
+      }
+
+      setCustomersTotal(totalCount ?? nextRows.length);
+      setCustomersHasMore(fetchAll ? false : offset + nextRows.length < (totalCount ?? nextRows.length));
       setRows((current) => (append ? [...current, ...nextRows.filter((row) => !current.some((item) => item.id === row.id))] : nextRows));
     } catch (err: unknown) {
       setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
@@ -725,8 +748,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   }, [customerManagerFilter, isManagerUser, memberByLabel, search, teamId, userId]);
 
-  const loadLeads = useCallback(async (options?: { append?: boolean }) => {
+  const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
     const append = !!options?.append;
+    const fetchAll = !!options?.fetchAll && !append;
     const offset = append ? leadsRef.current.length : 0;
     if (append || leadsRef.current.length > 0) {
       setLeadsRefreshing(true);
@@ -735,7 +759,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setLeadsError(null);
     try {
-      const runLoadLeads = async (variant: "full" | "no_ownership") => {
+      const runLoadLeads = async (
+        variant: "full" | "no_ownership",
+        rangeOffset: number,
+        pageSize: number
+      ) => {
         const leadColumns = [
           "id",
           "team_id",
@@ -790,21 +818,36 @@ function CustomersPage({ teamId }: { teamId: string }) {
           );
         }
 
-        return await query.range(offset, offset + CUSTOMERS_PAGE_SIZE - 1);
+        return await query.range(rangeOffset, rangeOffset + pageSize - 1);
       };
 
-      let { data, error: loadError, count } = await runLoadLeads("full");
-      if (
-        loadError &&
-        /column/i.test(loadError.message ?? "") &&
-        /ownership_type/i.test(loadError.message ?? "")
-      ) {
-        ({ data, error: loadError, count } = await runLoadLeads("no_ownership"));
+      const nextLeads: LeadRow[] = [];
+      let nextOffset = offset;
+      let totalCount: number | null = null;
+      let variant: "full" | "no_ownership" = "full";
+
+      while (true) {
+        const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+        let { data, error: loadError, count } = await runLoadLeads(variant, nextOffset, pageSize);
+        if (
+          loadError &&
+          variant === "full" &&
+          /column/i.test(loadError.message ?? "") &&
+          /ownership_type/i.test(loadError.message ?? "")
+        ) {
+          variant = "no_ownership";
+          ({ data, error: loadError, count } = await runLoadLeads(variant, nextOffset, pageSize));
+        }
+        if (loadError) throw loadError;
+        const pageRows = ((data as unknown) as LeadRow[]) ?? [];
+        nextLeads.push(...pageRows);
+        totalCount = count ?? totalCount;
+        if (!fetchAll || pageRows.length < pageSize) break;
+        nextOffset += pageSize;
       }
-      if (loadError) throw loadError;
-      const nextLeads = ((data as unknown) as LeadRow[]) ?? [];
-      setLeadsTotal(count ?? nextLeads.length);
-      setLeadsHasMore(offset + nextLeads.length < (count ?? nextLeads.length));
+
+      setLeadsTotal(totalCount ?? nextLeads.length);
+      setLeadsHasMore(fetchAll ? false : offset + nextLeads.length < (totalCount ?? nextLeads.length));
       setLeads((current) => (append ? [...current, ...nextLeads.filter((lead) => !current.some((item) => item.id === lead.id))] : nextLeads));
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Не вдалося завантажити ліди.");
@@ -873,6 +916,64 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }, delay);
     return () => window.clearTimeout(timeoutId);
   }, [customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search]);
+
+  useEffect(() => {
+    if (!search.trim()) return;
+    if (activeTab === "customers") {
+      if (customersLoading || customersRefreshing) return;
+      if (!customersHasMore && rows.length < CUSTOMERS_PAGE_SIZE) return;
+      void loadCustomers({ fetchAll: true });
+      return;
+    }
+
+    if (leadsLoading || leadsRefreshing) return;
+    if (!leadsHasMore && leads.length < CUSTOMERS_PAGE_SIZE) return;
+    void loadLeads({ fetchAll: true });
+  }, [
+    activeTab,
+    customersHasMore,
+    customersLoading,
+    customersRefreshing,
+    leads.length,
+    leadsHasMore,
+    leadsLoading,
+    leadsRefreshing,
+    loadCustomers,
+    loadLeads,
+    rows.length,
+    search,
+  ]);
+
+  useEffect(() => {
+    const activeManagerFilter =
+      activeTab === "customers" ? customerManagerFilter : leadManagerFilter;
+    if (activeManagerFilter === ALL_MANAGERS_FILTER) return;
+
+    if (activeTab === "customers") {
+      if (customersLoading || customersRefreshing) return;
+      if (!customersHasMore && rows.length < CUSTOMERS_PAGE_SIZE) return;
+      void loadCustomers({ fetchAll: true });
+      return;
+    }
+
+    if (leadsLoading || leadsRefreshing) return;
+    if (!leadsHasMore && leads.length < CUSTOMERS_PAGE_SIZE) return;
+    void loadLeads({ fetchAll: true });
+  }, [
+    activeTab,
+    customerManagerFilter,
+    customersHasMore,
+    customersLoading,
+    customersRefreshing,
+    leadManagerFilter,
+    leads.length,
+    leadsHasMore,
+    leadsLoading,
+    leadsRefreshing,
+    loadCustomers,
+    loadLeads,
+    rows.length,
+  ]);
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
