@@ -39,6 +39,13 @@ export type CatalogModel = {
 
 export type CatalogModelMetadata = {
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  imageAsset?: {
+    bucket: string;
+    path: string;
+    originalUrl?: string | null;
+    previewUrl?: string | null;
+    thumbUrl?: string | null;
+  } | null;
 };
 
 /**

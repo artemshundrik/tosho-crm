@@ -8,6 +8,11 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import {
+  getAttachmentVariantPath,
+  removeAttachmentWithVariants,
+  uploadAttachmentWithVariants,
+} from "@/lib/attachmentPreview";
 import type {
   CatalogModel,
   CatalogModelMetadata,
@@ -19,6 +24,8 @@ import type {
 } from "@/types/catalog";
 import { createLocalId, createNextTier, readImageFile } from "@/utils/catalogUtils";
 import { DEFAULT_PRICE } from "@/constants/catalog";
+
+const CATALOG_IMAGE_BUCKET = "public-assets";
 
 const syncKindModelCounts = (catalog: CatalogType[]) =>
   catalog.map((type) => ({
@@ -49,6 +56,15 @@ export function useModelEditor({
   const isInlineImageDataUrl = (value?: string | null) =>
     typeof value === "string" && value.trim().toLowerCase().startsWith("data:");
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === "object" && error !== null) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message) return message;
+    }
+    return fallback;
+  };
+
   // Dialog state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -67,6 +83,7 @@ export function useModelEditor({
   const [draftTiers, setDraftTiers] = useState<CatalogPriceTier[]>([]);
   const [draftMethodIds, setDraftMethodIds] = useState<string[]>([]);
   const [draftImageUrl, setDraftImageUrl] = useState("");
+  const [draftImageFile, setDraftImageFile] = useState<File | null>(null);
   const [draftMetadata, setDraftMetadata] = useState<CatalogModelMetadata>({});
   const [imageUploadMode, setImageUploadMode] = useState<ImageUploadMode>("url");
 
@@ -108,6 +125,65 @@ export function useModelEditor({
     [teamId]
   );
 
+  const getPublicStorageUrl = (bucket: string, path: string) =>
+    supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+
+  const sanitizeFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
+
+  const getCatalogAssetPayload = (storagePath: string) => {
+    const originalUrl = getPublicStorageUrl(CATALOG_IMAGE_BUCKET, storagePath);
+    const previewUrl = getPublicStorageUrl(
+      CATALOG_IMAGE_BUCKET,
+      getAttachmentVariantPath(storagePath, "preview")
+    );
+    const thumbUrl = getPublicStorageUrl(
+      CATALOG_IMAGE_BUCKET,
+      getAttachmentVariantPath(storagePath, "thumb")
+    );
+
+    return {
+      imageUrl: previewUrl,
+      imageAsset: {
+        bucket: CATALOG_IMAGE_BUCKET,
+        path: storagePath,
+        originalUrl,
+        previewUrl,
+        thumbUrl,
+      },
+    };
+  };
+
+  const loadFullModelMedia = useCallback(
+    async (modelId: string) => {
+      if (!teamId || !modelId) return null;
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_models")
+        .select("id,image_url,metadata")
+        .eq("id", modelId)
+        .eq("team_id", teamId)
+        .limit(1);
+
+      if (error) throw error;
+      return data?.[0] ?? null;
+    },
+    [teamId]
+  );
+
+  const handleDraftImageUrlChange = (value: string) => {
+    setDraftImageFile(null);
+    setDraftImageUrl(value);
+  };
+
+  const handleImageUploadModeChange = (mode: ImageUploadMode) => {
+    setImageUploadMode(mode);
+    if (mode === "url" && draftImageFile) {
+      setDraftImageFile(null);
+      setDraftImageUrl("");
+    }
+  };
+
   /**
    * Opens drawer for creating a new model
    */
@@ -121,7 +197,9 @@ export function useModelEditor({
     setDraftTiers([]);
     setDraftMethodIds([]);
     setDraftImageUrl("");
+    setDraftImageFile(null);
     setDraftMetadata({});
+    setImageUploadMode("url");
     setDrawerOpen(true);
   };
 
@@ -158,13 +236,28 @@ export function useModelEditor({
       }
     }
 
+    let fullImageUrl = model.imageUrl || "";
+    let fullMetadata = model.metadata ?? {};
+
+    try {
+      const fullModel = await loadFullModelMedia(model.id);
+      if (fullModel) {
+        fullImageUrl = fullModel.image_url ?? fullImageUrl;
+        fullMetadata = (fullModel.metadata as CatalogModelMetadata | null) ?? fullMetadata;
+      }
+    } catch (error) {
+      console.error("load full model media failed", error);
+    }
+
     setEditingModelId(model.id);
     setDraftTypeId(item.typeId);
     setDraftKindId(item.kindId);
     setDraftName(model.name);
     setDraftMethodIds(model.methodIds ?? []);
-    setDraftImageUrl(model.imageUrl || "");
-    setDraftMetadata(model.metadata ?? {});
+    setDraftImageUrl(fullImageUrl);
+    setDraftImageFile(null);
+    setDraftMetadata(fullMetadata);
+    setImageUploadMode("url");
 
     if (model.priceTiers && model.priceTiers.length > 0) {
       setDraftPriceMode("tiers");
@@ -544,11 +637,7 @@ export function useModelEditor({
     const file = e.target.files?.[0];
     if (file) {
       const dataUrl = await readImageFile(file);
-      if (isInlineImageDataUrl(dataUrl)) {
-        toast.error("Завантаження base64-картинок у каталог вимкнено. Використайте звичайний URL.");
-        e.target.value = "";
-        return;
-      }
+      setDraftImageFile(file);
       setDraftImageUrl(dataUrl);
     }
   };
@@ -560,19 +649,27 @@ export function useModelEditor({
     if (!teamId || savingModel) return;
     
     const name = draftName.trim();
-    if (!name || !draftTypeId || !draftKindId) return;
+    if (!name) {
+      toast.error("Вкажіть назву моделі.");
+      return;
+    }
+    if (!draftTypeId) {
+      toast.error("Оберіть тип товару.");
+      return;
+    }
+    if (!draftKindId) {
+      toast.error("Оберіть вид товару.");
+      return;
+    }
     
     setSavingModel(true);
 
     const modelId = editingModelId ?? createLocalId();
     const fixedPrice = Math.max(0, Number(draftFixedPrice) || 0);
     const normalizedImageUrl = draftImageUrl.trim();
-
-    if (isInlineImageDataUrl(normalizedImageUrl)) {
-      toast.error("Base64-картинки не можна зберігати в каталозі. Приберіть data URL і вкажіть звичайний URL.");
-      setSavingModel(false);
-      return;
-    }
+    const existingImageAsset = draftMetadata.imageAsset ?? null;
+    const nextMetadata: CatalogModelMetadata = { ...(draftMetadata ?? {}) };
+    delete nextMetadata.imageAsset;
 
     const nextModel: CatalogModel = {
       id: modelId,
@@ -581,11 +678,14 @@ export function useModelEditor({
       priceTiers: draftPriceMode === "tiers" ? draftTiers : undefined,
       methodIds: draftMethodIds,
       imageUrl: normalizedImageUrl || undefined,
-      metadata: Object.keys(draftMetadata ?? {}).length > 0 ? draftMetadata : undefined,
+      metadata: Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined,
     };
 
     try {
       let persistedModelId = modelId;
+      let currentImageUrl =
+        !draftImageFile && !isInlineImageDataUrl(normalizedImageUrl) ? normalizedImageUrl || null : null;
+      let currentMetadata: CatalogModelMetadata = { ...nextMetadata };
       
       if (editingModelId) {
         const { error } = await supabase
@@ -594,8 +694,8 @@ export function useModelEditor({
           .update({
             name: nextModel.name,
             price: nextModel.price ?? null,
-            image_url: nextModel.imageUrl ?? null,
-            metadata: nextModel.metadata ?? null,
+            image_url: currentImageUrl,
+            metadata: Object.keys(currentMetadata).length > 0 ? currentMetadata : null,
             kind_id: draftKindId,
           })
           .eq("id", editingModelId)
@@ -611,14 +711,87 @@ export function useModelEditor({
             kind_id: draftKindId,
             name: nextModel.name,
             price: nextModel.price ?? null,
-            image_url: nextModel.imageUrl ?? null,
-            metadata: nextModel.metadata ?? null,
+            image_url: currentImageUrl,
+            metadata: Object.keys(currentMetadata).length > 0 ? currentMetadata : null,
           })
           .select("id")
           .single();
           
         if (error || !data) throw error;
         persistedModelId = data.id as string;
+      }
+
+      let uploadedAssetPath: string | null = null;
+      if (draftImageFile) {
+        const safeName = sanitizeFileName(draftImageFile.name);
+        const storagePath = `catalog-models/${teamId}/${persistedModelId}/${Date.now()}-${safeName}`;
+
+        try {
+          await uploadAttachmentWithVariants({
+            bucket: CATALOG_IMAGE_BUCKET,
+            storagePath,
+            file: draftImageFile,
+            cacheControl: "31536000, immutable",
+          });
+          uploadedAssetPath = storagePath;
+        } catch (uploadError) {
+          if (!editingModelId) {
+            await supabase
+              .schema("tosho")
+              .from("catalog_models")
+              .delete()
+              .eq("id", persistedModelId)
+              .eq("team_id", teamId);
+          }
+          throw uploadError;
+        }
+
+        const assetPayload = getCatalogAssetPayload(storagePath);
+        currentImageUrl = assetPayload.imageUrl;
+        currentMetadata = {
+          ...nextMetadata,
+          imageAsset: assetPayload.imageAsset,
+        };
+
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .update({
+            image_url: currentImageUrl,
+            metadata: currentMetadata,
+          })
+          .eq("id", persistedModelId)
+          .eq("team_id", teamId);
+
+        if (error) {
+          await removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, storagePath);
+          if (!editingModelId) {
+            await supabase
+              .schema("tosho")
+              .from("catalog_models")
+              .delete()
+              .eq("id", persistedModelId)
+              .eq("team_id", teamId);
+          }
+          throw error;
+        }
+      } else if (!currentImageUrl && existingImageAsset?.bucket && existingImageAsset.path) {
+        currentMetadata = {
+          ...nextMetadata,
+          imageAsset: null,
+        };
+
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .update({
+            image_url: null,
+            metadata: currentMetadata,
+          })
+          .eq("id", persistedModelId)
+          .eq("team_id", teamId);
+
+        if (error) throw error;
       }
 
       // Update price tiers
@@ -681,15 +854,48 @@ export function useModelEditor({
             ...type,
             kinds: type.kinds.map((kind) => {
               if (kind.id !== draftKindId) return kind;
-              return { ...kind, models: [...kind.models, { ...nextModel, id: persistedModelId }] };
+              return {
+                ...kind,
+                models: [
+                  ...kind.models,
+                  {
+                    ...nextModel,
+                    id: persistedModelId,
+                    imageUrl: currentImageUrl ?? undefined,
+                    metadata: Object.keys(currentMetadata).length > 0 ? currentMetadata : undefined,
+                  },
+                ],
+              };
             }),
           };
         }));
       });
 
+      if (
+        existingImageAsset?.bucket &&
+        existingImageAsset.path &&
+        existingImageAsset.path !== uploadedAssetPath &&
+        (draftImageFile || !currentImageUrl)
+      ) {
+        void removeAttachmentWithVariants(existingImageAsset.bucket, existingImageAsset.path);
+      }
+
       setDrawerOpen(false);
+      setDraftImageFile(null);
+      toast.success(editingModelId ? "Номенклатуру оновлено." : "Номенклатуру створено.");
     } catch (error) {
       console.error("save model failed", error);
+      const message = getErrorMessage(error, "Не вдалося зберегти номенклатуру.");
+      const normalized = message.toLowerCase();
+      if (normalized.includes("catalog_models_kind_id_name_key") || normalized.includes("duplicate key")) {
+        toast.error("У цьому виді вже є номенклатура з такою назвою.");
+        return;
+      }
+      if (normalized.includes("foreign key") || normalized.includes("catalog_models_kind_id_fkey")) {
+        toast.error("Обраний вид товару більше не існує. Оновіть сторінку та спробуйте ще раз.");
+        return;
+      }
+      toast.error(message);
     } finally {
       setSavingModel(false);
     }
@@ -708,6 +914,14 @@ export function useModelEditor({
    */
   const handleDeleteModel = async () => {
     if (!teamId || !modelToDelete) return;
+
+    let imageAssetToRemove: CatalogModelMetadata["imageAsset"] | null = null;
+    try {
+      const model = await loadFullModelMedia(modelToDelete);
+      imageAssetToRemove = ((model?.metadata as CatalogModelMetadata | null)?.imageAsset ?? null);
+    } catch (error) {
+      console.error("load model media before delete failed", error);
+    }
     
     const { error } = await supabase
       .schema("tosho")
@@ -734,6 +948,10 @@ export function useModelEditor({
     setDeleteDialogOpen(false);
     setDrawerOpen(false);
     setModelToDelete(null);
+
+    if (imageAssetToRemove?.bucket && imageAssetToRemove.path) {
+      void removeAttachmentWithVariants(imageAssetToRemove.bucket, imageAssetToRemove.path);
+    }
   };
 
   /**
@@ -888,11 +1106,11 @@ export function useModelEditor({
     draftMethodIds,
     setDraftMethodIds,
     draftImageUrl,
-    setDraftImageUrl,
+    setDraftImageUrl: handleDraftImageUrlChange,
     draftMetadata,
     setDraftMetadata,
     imageUploadMode,
-    setImageUploadMode,
+    setImageUploadMode: handleImageUploadModeChange,
     newMethodName,
     setNewMethodName,
     newMethodPrice,

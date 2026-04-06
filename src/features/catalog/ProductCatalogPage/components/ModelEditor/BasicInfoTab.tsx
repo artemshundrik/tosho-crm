@@ -120,17 +120,22 @@ export function BasicInfoTab({
                 className="bg-background/60 border-border/60"
               />
             ) : (
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={onImageFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                <div className="border-2 border-dashed border-border/60 rounded-lg p-4 text-center hover:border-primary/40 hover:bg-muted/20 transition-colors cursor-pointer">
-                  <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
-                  <p className="text-xs text-muted-foreground">Клікніть або перетягніть фото</p>
+              <div className="space-y-2">
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onImageFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="border-2 border-dashed border-border/60 rounded-lg p-4 text-center hover:border-primary/40 hover:bg-muted/20 transition-colors cursor-pointer">
+                    <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
+                    <p className="text-xs text-muted-foreground">Клікніть або перетягніть фото</p>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Файл буде завантажено в CRM storage, оригінал збережеться, а прев'ю та мініатюра згенеруються автоматично.
+                </p>
               </div>
             )}
           </div>
