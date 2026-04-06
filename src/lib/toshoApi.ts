@@ -75,6 +75,10 @@ export type CatalogModelLookupRow = {
   image_url?: string | null;
 };
 
+export type CatalogModelMetadataLookup = {
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+};
+
 const QUOTE_RUN_SELECT =
   "id,quote_id,quote_item_id,quantity,unit_price_model,unit_price_print,logistics_cost,desired_manager_income,manager_rate,fixed_cost_rate,vat_rate";
 const QUOTE_RUN_LEGACY_SELECT =
@@ -188,6 +192,7 @@ function formatQuoteNumber(monthCode: string, sequence: number) {
 }
 
 const catalogModelLookupCache = new Map<string, CatalogModelLookupRow | null>();
+const catalogModelMetadataCache = new Map<string, CatalogModelMetadataLookup | null>();
 
 export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<string, CatalogModelLookupRow>> {
   const normalizedIds = Array.from(new Set(modelIds.map((id) => id.trim()).filter(Boolean)));
@@ -230,6 +235,30 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
     if (row) result.set(id, row);
   });
   return result;
+}
+
+export async function getCatalogModelMetadata(modelId: string): Promise<CatalogModelMetadataLookup | null> {
+  const normalizedId = modelId.trim();
+  if (!normalizedId) return null;
+
+  if (!catalogModelMetadataCache.has(normalizedId)) {
+    const { data: rows, error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .select("metadata")
+      .eq("id", normalizedId)
+      .limit(1);
+    handleError(error);
+    const data = ((rows ?? []) as Array<{ metadata?: unknown }>)[0] ?? null;
+
+    const metadata =
+      data?.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+        ? (data.metadata as CatalogModelMetadataLookup)
+        : null;
+    catalogModelMetadataCache.set(normalizedId, metadata);
+  }
+
+  return catalogModelMetadataCache.get(normalizedId) ?? null;
 }
 
 async function getNextQuoteSequence(teamId: string, monthCode: string) {

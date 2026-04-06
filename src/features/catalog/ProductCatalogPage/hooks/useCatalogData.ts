@@ -55,7 +55,14 @@ export function useCatalogData(teamId: string | null) {
     (
       baseCatalog: CatalogType[],
       payload: {
-        models: Array<{ id: string; kind_id: string; name: string; price: number | null; image_url: string | null; metadata: unknown }>;
+        models: Array<{
+          id: string;
+          kind_id: string;
+          name: string;
+          price: number | null;
+          image_url: string | null;
+          configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+        }>;
         modelMethods: Array<{ model_id: string; method_id: string }>;
         tiers: Array<{ id: string; model_id: string; min_qty: number; max_qty: number | null; price: number }>;
         targetKindIds?: Set<string> | null;
@@ -88,10 +95,7 @@ export function useCatalogData(teamId: string | null) {
           name: row.name,
           price: row.price ?? undefined,
           imageUrl: row.image_url ?? undefined,
-          metadata:
-            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-              ? (row.metadata as CatalogModel["metadata"])
-              : undefined,
+          metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
           methodIds: methodIdsByModel.get(row.id) ?? [],
           priceTiers: tiersByModel.get(row.id),
         });
@@ -117,7 +121,7 @@ export function useCatalogData(teamId: string | null) {
       let modelsQuery = supabase
         .schema("tosho")
         .from("catalog_models")
-        .select("id,kind_id,name,price,image_url,metadata")
+        .select("id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset")
         .eq("team_id", teamId)
         .order("name", { ascending: true });
 
@@ -147,7 +151,7 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
-          metadata: unknown;
+          configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
         }>,
         modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
         tiers: [],

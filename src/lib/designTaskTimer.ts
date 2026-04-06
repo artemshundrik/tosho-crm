@@ -112,13 +112,14 @@ export async function startDesignTaskTimer(params: {
   taskId: string;
   userId: string;
 }) {
-  const { data: activeRow, error: activeError } = await supabase
+  const { data: activeRows, error: activeError } = await supabase
     .from("design_task_timer_sessions")
     .select("id")
     .eq("team_id", params.teamId)
     .eq("design_task_id", params.taskId)
     .is("paused_at", null)
-    .maybeSingle();
+    .limit(1);
+  const activeRow = ((activeRows ?? []) as Array<{ id?: string | null }>)[0] ?? null;
   if (activeError) throw activeError;
   if (activeRow) {
     throw new Error("Таймер вже запущено.");
@@ -138,15 +139,15 @@ export async function pauseDesignTaskTimer(params: {
   teamId: string;
   taskId: string;
 }) {
-  const { data: activeRow, error: activeError } = await supabase
+  const { data: activeRows, error: activeError } = await supabase
     .from("design_task_timer_sessions")
     .select("id,paused_at")
     .eq("team_id", params.teamId)
     .eq("design_task_id", params.taskId)
     .is("paused_at", null)
     .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  const activeRow = ((activeRows ?? []) as Array<{ id?: string | null; paused_at?: string | null }>)[0] ?? null;
   if (activeError) throw activeError;
   if (!activeRow?.id) return false;
 

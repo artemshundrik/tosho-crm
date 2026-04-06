@@ -7,6 +7,7 @@
 
 import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 import type {
   CatalogModel,
   CatalogModelMetadata,
@@ -45,6 +46,9 @@ export function useModelEditor({
   selectedKindId,
   allModelsWithContext,
 }: UseModelEditorProps) {
+  const isInlineImageDataUrl = (value?: string | null) =>
+    typeof value === "string" && value.trim().toLowerCase().startsWith("data:");
+
   // Dialog state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -540,6 +544,11 @@ export function useModelEditor({
     const file = e.target.files?.[0];
     if (file) {
       const dataUrl = await readImageFile(file);
+      if (isInlineImageDataUrl(dataUrl)) {
+        toast.error("Завантаження base64-картинок у каталог вимкнено. Використайте звичайний URL.");
+        e.target.value = "";
+        return;
+      }
       setDraftImageUrl(dataUrl);
     }
   };
@@ -557,6 +566,13 @@ export function useModelEditor({
 
     const modelId = editingModelId ?? createLocalId();
     const fixedPrice = Math.max(0, Number(draftFixedPrice) || 0);
+    const normalizedImageUrl = draftImageUrl.trim();
+
+    if (isInlineImageDataUrl(normalizedImageUrl)) {
+      toast.error("Base64-картинки не можна зберігати в каталозі. Приберіть data URL і вкажіть звичайний URL.");
+      setSavingModel(false);
+      return;
+    }
 
     const nextModel: CatalogModel = {
       id: modelId,
@@ -564,7 +580,7 @@ export function useModelEditor({
       price: draftPriceMode === "tiers" ? (draftTiers[0]?.price ?? fixedPrice) : fixedPrice,
       priceTiers: draftPriceMode === "tiers" ? draftTiers : undefined,
       methodIds: draftMethodIds,
-      imageUrl: draftImageUrl || undefined,
+      imageUrl: normalizedImageUrl || undefined,
       metadata: Object.keys(draftMetadata ?? {}).length > 0 ? draftMetadata : undefined,
     };
 

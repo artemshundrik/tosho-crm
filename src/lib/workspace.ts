@@ -67,13 +67,13 @@ export async function resolveWorkspaceId(
 
   if (!userId) return null;
 
-  const { data: fromView, error: viewError } = await supabase
+  const { data: fromViewRows, error: viewError } = await supabase
     .schema("tosho")
     .from("memberships_view")
     .select("workspace_id")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle<{ workspace_id?: string | null }>();
+    .limit(1);
+  const fromView = ((fromViewRows ?? []) as Array<{ workspace_id?: string | null }>)[0] ?? null;
 
   if (!viewError && fromView?.workspace_id) {
     workspaceIdCache.set(userId, fromView.workspace_id);
@@ -83,13 +83,13 @@ export async function resolveWorkspaceId(
   const membershipTables = ["memberships", "workspace_memberships"] as const;
   for (const schemaName of membershipSchemas) {
     for (const tableName of membershipTables) {
-      const { data, error } = await supabase
+      const { data: rows, error } = await supabase
         .schema(schemaName)
         .from(tableName)
         .select("workspace_id")
         .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle<{ workspace_id?: string | null }>();
+        .limit(1);
+      const data = ((rows ?? []) as Array<{ workspace_id?: string | null }>)[0] ?? null;
 
       if (!error && data?.workspace_id) {
         workspaceIdCache.set(userId, data.workspace_id);
@@ -120,13 +120,13 @@ export async function resolveWorkspaceMembership(
     .select("access_role,job_role")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+    .limit(1);
+  const viewRow = ((viewResult.data ?? []) as Array<{ access_role?: string | null; job_role?: string | null }>)[0] ?? null;
 
   if (!viewResult.error) {
     const resolved = {
-      accessRole: viewResult.data?.access_role ?? null,
-      jobRole: viewResult.data?.job_role ?? null,
+      accessRole: viewRow?.access_role ?? null,
+      jobRole: viewRow?.job_role ?? null,
     };
     workspaceMembershipCache.set(cacheKey, resolved);
     return resolved;
@@ -151,13 +151,13 @@ export async function resolveWorkspaceMembership(
       .select("access_role,job_role")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+      .limit(1);
+    const row = ((result.data ?? []) as Array<{ access_role?: string | null; job_role?: string | null }>)[0] ?? null;
 
     if (!result.error) {
       const resolved = {
-        accessRole: result.data?.access_role ?? null,
-        jobRole: result.data?.job_role ?? null,
+        accessRole: row?.access_role ?? null,
+        jobRole: row?.job_role ?? null,
       };
       workspaceMembershipCache.set(cacheKey, resolved);
       return resolved;

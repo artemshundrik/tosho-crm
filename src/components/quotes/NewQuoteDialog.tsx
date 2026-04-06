@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
 import { DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
+import { getCatalogModelMetadata } from "@/lib/toshoApi";
 import { formatUserShortName } from "@/lib/userName";
 import {
   createEmptyPrintPackageConfig,
@@ -575,7 +576,38 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     () => selectedKind?.models.find((model) => model.id === modelId),
     [selectedKind, modelId]
   );
-  const activeConfiguratorPreset = selectedModel?.metadata?.configuratorPreset ?? null;
+  const [selectedModelMetadata, setSelectedModelMetadata] = React.useState<CatalogType["kinds"][number]["models"][number]["metadata"] | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!open || !modelId) {
+      setSelectedModelMetadata(null);
+      return;
+    }
+
+    const seedMetadata = selectedModel?.metadata ?? null;
+    setSelectedModelMetadata(seedMetadata);
+
+    void (async () => {
+      try {
+        const metadata = await getCatalogModelMetadata(modelId);
+        if (!cancelled) {
+          setSelectedModelMetadata(metadata);
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedModelMetadata(seedMetadata);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [modelId, open, selectedModel]);
+
+  const activeConfiguratorPreset =
+    selectedModelMetadata?.configuratorPreset ?? selectedModel?.metadata?.configuratorPreset ?? null;
   const isPrintPackageMode = activeConfiguratorPreset !== null;
   const configuratorProductOptions = React.useMemo<ConfiguratorProductOption[]>(() => {
     return catalogTypes.flatMap((type) =>

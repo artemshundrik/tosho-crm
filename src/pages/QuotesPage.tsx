@@ -165,6 +165,13 @@ type CatalogModel = {
   price?: number;
   metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
 };
+type CatalogModelRow = {
+  id: string;
+  kind_id: string;
+  name: string;
+  price?: number | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+};
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 type CatalogKind = {
   id: string;
@@ -972,7 +979,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ? await supabase
               .schema("tosho")
               .from("catalog_models")
-              .select("id,kind_id,name,price,metadata")
+              .select("id,kind_id,name,price,configuratorPreset:metadata->>configuratorPreset")
               .eq("team_id", teamId)
               .in("kind_id", kindIds)
               .order("name", { ascending: true })
@@ -1009,16 +1016,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         });
 
         const modelsByKind = new Map<string, CatalogModel[]>();
-        (modelRows ?? []).forEach((row) => {
+        ((modelRows ?? []) as CatalogModelRow[]).forEach((row) => {
           const list = modelsByKind.get(row.kind_id) ?? [];
           list.push({
             id: row.id,
             name: row.name,
             price: row.price ?? undefined,
-            metadata:
-              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as CatalogModel["metadata"])
-                : undefined,
+            metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
           });
           modelsByKind.set(row.kind_id, list);
         });
