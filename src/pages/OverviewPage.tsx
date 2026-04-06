@@ -203,17 +203,17 @@ const parseDesignTask = (row: {
   id: string;
   entity_id?: string | null;
   title?: string | null;
-  metadata?: unknown;
+  quote_id?: string | null;
+  quote_number?: string | null;
+  status?: string | null;
+  assignee_user_id?: string | null;
   created_at?: string | null;
 }): DesignTaskRow => {
-  const metadata = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
-  const quoteIdFromMeta = typeof metadata.quote_id === "string" && metadata.quote_id ? metadata.quote_id : null;
-  const quoteNumber =
-    typeof metadata.quote_number === "string" && metadata.quote_number.trim() ? metadata.quote_number.trim() : null;
-  const statusRaw = typeof metadata.status === "string" ? metadata.status : "new";
+  const quoteIdFromMeta = typeof row.quote_id === "string" && row.quote_id ? row.quote_id : null;
+  const quoteNumber = typeof row.quote_number === "string" && row.quote_number.trim() ? row.quote_number.trim() : null;
+  const statusRaw = typeof row.status === "string" ? row.status : "new";
   const status = (DESIGN_STATUSES.includes(statusRaw as DesignStatus) ? statusRaw : "new") as DesignStatus;
-  const assigneeUserId =
-    typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id ? metadata.assignee_user_id : null;
+  const assigneeUserId = typeof row.assignee_user_id === "string" && row.assignee_user_id ? row.assignee_user_id : null;
 
   return {
     id: row.id,
@@ -320,7 +320,9 @@ export function OverviewPage() {
 
       const designTasksPromise = supabase
         .from("activity_log")
-        .select("id,entity_id,title,metadata,created_at")
+        .select(
+          "id,entity_id,title,quote_id:metadata->>quote_id,quote_number:metadata->>quote_number,status:metadata->>status,assignee_user_id:metadata->>assignee_user_id,created_at"
+        )
         .eq("team_id", teamId)
         .eq("action", "design_task")
         .order("created_at", { ascending: false })
@@ -383,7 +385,10 @@ export function OverviewPage() {
         id: string;
         entity_id?: string | null;
         title?: string | null;
-        metadata?: unknown;
+        quote_id?: string | null;
+        quote_number?: string | null;
+        status?: string | null;
+        assignee_user_id?: string | null;
         created_at?: string | null;
       }> | null) ?? []).map(parseDesignTask);
 

@@ -42,7 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Users } from "lucide-react";
+import { Building2, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Users, X } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 type CustomerRow = {
@@ -289,6 +289,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
+  const customersFullFetchCompletedKeyRef = useRef<string | null>(null);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [customersRefreshing, setCustomersRefreshing] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
@@ -296,6 +297,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [customersHasMore, setCustomersHasMore] = useState(false);
 
   const [leads, setLeads] = useState<LeadRow[]>([]);
+  const leadsFullFetchCompletedKeyRef = useRef<string | null>(null);
   const [leadsLoading, setLeadsLoading] = useState(true);
   const [leadsRefreshing, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
@@ -442,6 +444,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return defaultManagerName.trim();
   }, [defaultManagerName, memberById, userId]);
   const isManagerUser = useMemo(() => isQuoteManagerJobRole(jobRole), [jobRole]);
+  const activeManagerFilter = activeTab === "customers" ? customerManagerFilter : leadManagerFilter;
+  const hasActiveFilters = search.trim().length > 0 || (!isManagerUser && activeManagerFilter !== ALL_MANAGERS_FILTER);
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    if (!isManagerUser) {
+      setCustomerManagerFilter(ALL_MANAGERS_FILTER);
+      setLeadManagerFilter(ALL_MANAGERS_FILTER);
+    }
+  }, [isManagerUser]);
   const filteredRows = rows;
 
   const filteredLeads = leads;
@@ -649,9 +660,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadDeleteDialogOpen(true);
   };
 
-  const loadCustomers = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
+  const loadCustomers = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
     const fetchAll = !!options?.fetchAll && !append;
+    if (fetchAll && options?.fullFetchKey && customersFullFetchCompletedKeyRef.current === options.fullFetchKey) {
+      return;
+    }
     const offset = append ? rowsRef.current.length : 0;
     if (append || rowsRef.current.length > 0) {
       setCustomersRefreshing(true);
@@ -734,6 +748,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       setCustomersTotal(totalCount ?? nextRows.length);
       setCustomersHasMore(fetchAll ? false : offset + nextRows.length < (totalCount ?? nextRows.length));
+      if (!append) {
+        customersFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+      }
       setRows((current) => (append ? [...current, ...nextRows.filter((row) => !current.some((item) => item.id === row.id))] : nextRows));
     } catch (err: unknown) {
       setCustomersError(getErrorMessage(err, "Не вдалося завантажити замовників."));
@@ -748,9 +765,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   }, [customerManagerFilter, isManagerUser, memberByLabel, search, teamId, userId]);
 
-  const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
+  const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
     const fetchAll = !!options?.fetchAll && !append;
+    if (fetchAll && options?.fullFetchKey && leadsFullFetchCompletedKeyRef.current === options.fullFetchKey) {
+      return;
+    }
     const offset = append ? leadsRef.current.length : 0;
     if (append || leadsRef.current.length > 0) {
       setLeadsRefreshing(true);
@@ -848,6 +868,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       setLeadsTotal(totalCount ?? nextLeads.length);
       setLeadsHasMore(fetchAll ? false : offset + nextLeads.length < (totalCount ?? nextLeads.length));
+      if (!append) {
+        leadsFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+      }
       setLeads((current) => (append ? [...current, ...nextLeads.filter((lead) => !current.some((item) => item.id === lead.id))] : nextLeads));
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Не вдалося завантажити ліди.");
@@ -922,13 +945,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
     if (activeTab === "customers") {
       if (customersLoading || customersRefreshing) return;
       if (!customersHasMore && rows.length < CUSTOMERS_PAGE_SIZE) return;
-      void loadCustomers({ fetchAll: true });
+      void loadCustomers({
+        fetchAll: true,
+        fullFetchKey: `search:customers:${teamId}:${search.trim().toLowerCase()}:${customerManagerFilter}`,
+      });
       return;
     }
 
     if (leadsLoading || leadsRefreshing) return;
     if (!leadsHasMore && leads.length < CUSTOMERS_PAGE_SIZE) return;
-    void loadLeads({ fetchAll: true });
+    void loadLeads({
+      fetchAll: true,
+      fullFetchKey: `search:leads:${teamId}:${search.trim().toLowerCase()}:${leadManagerFilter}`,
+    });
   }, [
     activeTab,
     customersHasMore,
@@ -952,13 +981,19 @@ function CustomersPage({ teamId }: { teamId: string }) {
     if (activeTab === "customers") {
       if (customersLoading || customersRefreshing) return;
       if (!customersHasMore && rows.length < CUSTOMERS_PAGE_SIZE) return;
-      void loadCustomers({ fetchAll: true });
+      void loadCustomers({
+        fetchAll: true,
+        fullFetchKey: `manager:customers:${teamId}:${customerManagerFilter}`,
+      });
       return;
     }
 
     if (leadsLoading || leadsRefreshing) return;
     if (!leadsHasMore && leads.length < CUSTOMERS_PAGE_SIZE) return;
-    void loadLeads({ fetchAll: true });
+    void loadLeads({
+      fetchAll: true,
+      fullFetchKey: `manager:leads:${teamId}:${leadManagerFilter}`,
+    });
   }, [
     activeTab,
     customerManagerFilter,
@@ -1448,8 +1483,20 @@ function CustomersPage({ teamId }: { teamId: string }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
-            className={cn(TOOLBAR_CONTROL, "pl-9")}
+            className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
           />
+          {search ? (
+            <Button
+              type="button"
+              variant="control"
+              size="iconSm"
+              aria-label="Очистити пошук"
+              className="absolute right-2 top-1/2 -translate-y-1/2"
+              onClick={() => setSearch("")}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
         {isManagerUser ? (
           <div
@@ -1494,6 +1541,18 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </Select>
         )}
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground sm:ml-auto">
+          {hasActiveFilters ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearFilters}
+              className="h-8 w-8 shrink-0 text-muted-foreground"
+              title="Скинути фільтри"
+              aria-label="Скинути фільтри"
+            >
+              <FilterX className="h-4 w-4" />
+            </Button>
+          ) : null}
           <span className="tabular-nums">{activeTab === "customers" ? customersTotal : leadsTotal}</span>
           {(activeTab === "customers" ? (customersLoading || customersRefreshing) : (leadsLoading || leadsRefreshing)) ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -1520,6 +1579,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     openCreate,
     openCreateLead,
     renderManagerFilterValue,
+    clearFilters,
+    hasActiveFilters,
     search,
     userId,
   ]);

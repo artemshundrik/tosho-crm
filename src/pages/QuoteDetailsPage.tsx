@@ -2468,14 +2468,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           .select("id, metadata, created_at")
           .eq("action", "design_task")
           .eq("team_id", teamId)
+          .filter("metadata->>quote_id", "eq", quoteId)
           .order("created_at", { ascending: false });
         if (fallbackError) throw fallbackError;
-        row = ((fallbackRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>).find(
-          (candidate) => {
-            const metadata = candidate.metadata ?? {};
-            return typeof metadata.quote_id === "string" && metadata.quote_id.trim() === quoteId;
-          }
-        );
+        row = ((fallbackRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>)[0];
       }
       if (!row) {
         setDesignTask(null);

@@ -9,6 +9,8 @@ export type ActivityRow = {
   title: string | null;
   href: string | null;
   metadata?: Record<string, unknown> | null;
+  event_date?: string | null;
+  event_time?: string | null;
   created_at: string;
 };
 
@@ -117,8 +119,10 @@ export function mapActivityRow(row: ActivityRow): ActivityItem {
   const title = row.title?.trim() || `${actor} ${action}`.trim();
   const subtitle = row.entity_type ? `Розділ: ${row.entity_type}` : undefined;
   const metadata = row.metadata ?? null;
-  const eventDate = typeof metadata?.event_date === "string" ? metadata.event_date : null;
-  const eventTime = typeof metadata?.event_time === "string" ? metadata.event_time : null;
+  const eventDate =
+    typeof row.event_date === "string" ? row.event_date : typeof metadata?.event_date === "string" ? metadata.event_date : null;
+  const eventTime =
+    typeof row.event_time === "string" ? row.event_time : typeof metadata?.event_time === "string" ? metadata.event_time : null;
   return {
     id: row.id,
     title,

@@ -849,6 +849,7 @@ export default function DesignPage() {
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const tasksKanbanAutoloadLockRef = useRef(false);
   const tasksKanbanAutoloadTimerRef = useRef<number | null>(null);
+  const fullFetchCompletedKeyRef = useRef<string | null>(null);
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
@@ -1218,7 +1219,7 @@ export default function DesignPage() {
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
 
-  const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean }) => {
+  const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!effectiveTeamId) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden" && !options?.force) return;
     if (loadTasksInFlightRef.current) return;
@@ -1227,6 +1228,9 @@ export default function DesignPage() {
 
     const append = !!options?.append;
     const fetchAll = !!options?.fetchAll && !append;
+    if (fetchAll && options?.fullFetchKey && fullFetchCompletedKeyRef.current === options.fullFetchKey) {
+      return;
+    }
     const pageSize = append
       ? (viewMode === "kanban" ? DESIGN_KANBAN_PAGE_INCREMENT : DESIGN_LIST_PAGE_INCREMENT)
       : fetchAll
@@ -1280,6 +1284,9 @@ export default function DesignPage() {
 
       const limitedRows = fetchedRows;
       setHasMoreTasks(fetchAll ? false : nextHasMoreTasks);
+      if (!append) {
+        fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+      }
       const parsedRaw =
         limitedRows.map((row) => {
           const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
@@ -1696,6 +1703,19 @@ export default function DesignPage() {
   ]);
 
   useEffect(() => {
+    const hasBlockingFilters =
+      search.trim().length > 0 ||
+      statusFilter !== "all" ||
+      designerFilter !== ALL_DESIGNERS_FILTER ||
+      (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER);
+
+    if (hasBlockingFilters) {
+      if (tasks.length === 0) {
+        void loadTasks({ force: true });
+      }
+      return;
+    }
+
     if (initialCacheIsFresh && tasks.length > 0) {
       const timeoutId = window.setTimeout(() => {
         void loadTasks();
@@ -1707,14 +1727,15 @@ export default function DesignPage() {
     }
 
     void loadTasks({ force: true });
-  }, [initialCacheIsFresh, loadTasks, tasks.length]);
+  }, [designerFilter, initialCacheIsFresh, isManagerUser, loadTasks, managerFilter, search, statusFilter, tasks.length]);
 
   useEffect(() => {
+    const searchKey = `search:${effectiveTeamId ?? ""}:${search.trim().toLowerCase()}`;
     if (!search.trim()) return;
     if (!effectiveTeamId) return;
     if (loading || refreshing) return;
     if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
-    void loadTasks({ force: true, fetchAll: true });
+    void loadTasks({ force: true, fetchAll: true, fullFetchKey: searchKey });
   }, [effectiveTeamId, hasMoreTasks, loadTasks, loading, refreshing, search, tasks.length]);
 
   useEffect(() => {
@@ -1920,6 +1941,13 @@ export default function DesignPage() {
   const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
 
   useEffect(() => {
+    const filterKey = [
+      "filters",
+      effectiveTeamId ?? "",
+      effectiveDesignerFilter,
+      managerFilter,
+      isManagerUser ? "manager-user" : "not-manager-user",
+    ].join(":");
     if (!effectiveTeamId) return;
     if (
       effectiveDesignerFilter === ALL_DESIGNERS_FILTER &&
@@ -1929,7 +1957,7 @@ export default function DesignPage() {
     }
     if (loading || refreshing) return;
     if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
-    void loadTasks({ force: true, fetchAll: true });
+    void loadTasks({ force: true, fetchAll: true, fullFetchKey: filterKey });
   }, [
     effectiveDesignerFilter,
     effectiveTeamId,
@@ -3858,7 +3886,7 @@ export default function DesignPage() {
                 <X className="h-4 w-4" />
               </Button>
             ) : null}
-            {(loading || refreshing) && search ? (
+            {(loading || (refreshing && hasMoreTasks)) && search ? (
               <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>

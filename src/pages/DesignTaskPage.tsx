@@ -1185,7 +1185,9 @@ export default function DesignTaskPage() {
       try {
         const { data, error: fetchError } = await supabase
           .from("activity_log")
-          .select("id,entity_id,title,metadata,created_at")
+          .select(
+            "id,entity_id,title,status:metadata->>status,quote_id:metadata->>quote_id,design_task_type:metadata->>design_task_type,assignee_user_id:metadata->>assignee_user_id,assigned_at:metadata->>assigned_at,design_deadline:metadata->>design_deadline,deadline:metadata->>deadline,estimate_minutes:metadata->>estimate_minutes,created_at"
+          )
           .eq("team_id", effectiveTeamId)
           .eq("action", "design_task");
         if (fetchError) throw fetchError;
@@ -1194,29 +1196,38 @@ export default function DesignTaskPage() {
           id: string;
           entity_id?: string | null;
           title?: string | null;
-          metadata?: Record<string, unknown> | null;
+          status?: string | null;
+          quote_id?: string | null;
+          design_task_type?: string | null;
+          assignee_user_id?: string | null;
+          assigned_at?: string | null;
+          design_deadline?: string | null;
+          deadline?: string | null;
+          estimate_minutes?: string | null;
           created_at?: string | null;
         }>).map((row) => {
-          const metadata = row.metadata ?? {};
-          const metadataQuoteId =
-            typeof metadata.quote_id === "string" && metadata.quote_id.trim() ? metadata.quote_id.trim() : null;
+          const metadata: Record<string, unknown> = {};
+          if (typeof row.estimate_minutes === "string" && row.estimate_minutes.trim()) {
+            metadata.estimate_minutes = row.estimate_minutes.trim();
+          }
+          const metadataQuoteId = typeof row.quote_id === "string" && row.quote_id.trim() ? row.quote_id.trim() : null;
           return {
             id: row.id,
             quoteId: metadataQuoteId ?? (typeof row.entity_id === "string" ? row.entity_id : ""),
             title: row.title ?? null,
-            status: (metadata.status as DesignStatus) ?? "new",
-            designTaskType: parseDesignTaskType(metadata.design_task_type),
-            assigneeUserId:
-              typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id.trim()
-                ? metadata.assignee_user_id.trim()
-                : null,
-            assignedAt: typeof metadata.assigned_at === "string" ? metadata.assigned_at : null,
+            status:
+              typeof row.status === "string" && row.status.trim()
+                ? (row.status.trim() as DesignStatus)
+                : "new",
+            designTaskType: parseDesignTaskType(row.design_task_type),
+            assigneeUserId: typeof row.assignee_user_id === "string" && row.assignee_user_id.trim() ? row.assignee_user_id.trim() : null,
+            assignedAt: typeof row.assigned_at === "string" ? row.assigned_at : null,
             metadata,
             designDeadline:
-              typeof metadata.design_deadline === "string"
-                ? metadata.design_deadline
-                : typeof metadata.deadline === "string"
-                  ? metadata.deadline
+              typeof row.design_deadline === "string"
+                ? row.design_deadline
+                : typeof row.deadline === "string"
+                  ? row.deadline
                   : null,
             createdAt: typeof row.created_at === "string" ? row.created_at : null,
           } as DesignTask;

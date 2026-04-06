@@ -51,7 +51,9 @@ export default function ActivityPage() {
       }
       const { data, error } = await supabase
         .from("activity_log")
-        .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, metadata, created_at")
+        .select(
+          "id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, event_date:metadata->>event_date, event_time:metadata->>event_time, created_at"
+        )
         .eq("team_id", teamId)
         .order("created_at", { ascending: false })
         .limit(200);

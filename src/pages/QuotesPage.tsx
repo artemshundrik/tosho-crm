@@ -349,6 +349,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
   const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
+  const fullFetchCompletedKeyRef = useRef<string | null>(null);
   const [quotesFetchLimit, setQuotesFetchLimit] = useState(() =>
     initialViewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE
   );
@@ -1100,8 +1101,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     };
   }, [createOpen, editDialogOpen, teamId]);
 
-  const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean }) => {
+  const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!teamId) return;
+    if (options?.fetchAll && !options?.append && options.fullFetchKey && fullFetchCompletedKeyRef.current === options.fullFetchKey) {
+      return;
+    }
     const requestId = ++quotesLoadRequestIdRef.current;
     const append = !!options?.append;
     const fetchAll = !!options?.fetchAll && !append;
@@ -1186,6 +1190,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         : nextPageRows;
       if (requestId !== quotesLoadRequestIdRef.current) return;
       setHasMoreQuotes(fetchAll ? false : nextHasMore);
+      if (!append) {
+        fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+      }
       setRows(mergedRows);
       setQuoteMembershipByQuoteId(new Map());
       fetchedQuoteMembershipIdsRef.current = new Set();
@@ -1312,7 +1319,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!search.trim()) return;
     if (loading || refreshing) return;
     if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
-    void loadQuotes({ fetchAll: true });
+    void loadQuotes({
+      fetchAll: true,
+      fullFetchKey: `search:${teamId}:${status}:${search.trim().toLowerCase()}`,
+    });
   }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId]);
 
   useEffect(() => {
@@ -1320,7 +1330,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (managerFilter === ALL_MANAGERS_FILTER) return;
     if (loading || refreshing) return;
     if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
-    void loadQuotes({ fetchAll: true });
+    void loadQuotes({
+      fetchAll: true,
+      fullFetchKey: `manager:${teamId}:${status}:${managerFilter}`,
+    });
   }, [hasMoreQuotes, loadQuotes, loading, managerFilter, refreshing, rows.length, teamId]);
 
   useEffect(() => {
