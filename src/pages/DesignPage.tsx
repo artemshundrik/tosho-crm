@@ -57,7 +57,7 @@ import { QuoteDeadlineBadge } from "@/features/quotes/components/QuoteDeadlineBa
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
-import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
+import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import {
