@@ -2991,24 +2991,24 @@ export default function DesignPage() {
     for (const file of params.files) {
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [`teams/${params.teamId}/design-briefs/${params.taskId}/${baseName}`];
+      const candidatePaths = [`teams/${params.teamId}/design-brief-files/${params.taskId}/${baseName}`];
 
       let storagePath = "";
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
-        const { error: uploadError } = await supabase.storage
-          .from(DESIGN_FILES_BUCKET)
-          .upload(candidate, file, {
-            upsert: true,
-            contentType: file.type || undefined,
+        try {
+          await uploadAttachmentWithVariants({
+            bucket: DESIGN_FILES_BUCKET,
+            storagePath: candidate,
+            file,
             cacheControl: STORAGE_CACHE_CONTROL,
           });
-        if (!uploadError) {
           storagePath = candidate;
           lastError = null;
           break;
+        } catch (uploadError) {
+          lastError = uploadError;
         }
-        lastError = uploadError;
       }
 
       if (!storagePath) {
