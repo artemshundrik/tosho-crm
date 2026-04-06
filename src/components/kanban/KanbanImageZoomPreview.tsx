@@ -20,7 +20,7 @@ type KanbanImageZoomPreviewProps = {
   alt: string;
   className?: string;
   imageClassName?: string;
-  loadStrategy?: "visible" | "interaction";
+  loadStrategy?: "eager" | "visible" | "interaction";
 };
 
 export function KanbanImageZoomPreview({
@@ -35,7 +35,7 @@ export function KanbanImageZoomPreview({
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(
-    () => loadStrategy === "visible" && warmedKanbanImageUrls.has(imageUrl)
+    () => loadStrategy === "eager" || warmedKanbanImageUrls.has(imageUrl)
   );
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
@@ -146,7 +146,7 @@ export function KanbanImageZoomPreview({
   }, [loadStrategy, shouldLoad]);
 
   useEffect(() => {
-    setShouldLoad(loadStrategy === "visible" && warmedKanbanImageUrls.has(imageUrl));
+    setShouldLoad(loadStrategy === "eager" || warmedKanbanImageUrls.has(imageUrl));
   }, [imageUrl, loadStrategy]);
 
   return (

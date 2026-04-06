@@ -155,6 +155,9 @@ const QUOTES_KANBAN_PAGE_INCREMENT = 60;
 const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
+const QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT = 5;
+const QUOTES_KANBAN_PREVIEW_SCROLL_STEP_PX = 260;
+const QUOTES_KANBAN_PREVIEW_BATCH_SIZE = 4;
 
 const isManagerFilterMember = (member: Pick<TeamMemberRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
@@ -427,6 +430,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => Object.fromEntries(initialCache?.kanbanProductEntries ?? [])
   );
   const [kanbanPreviewsLoading, setKanbanPreviewsLoading] = useState(false);
+  const [kanbanPreviewVisibleCountByColumn, setKanbanPreviewVisibleCountByColumn] = useState<Record<string, number>>(
+    () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
+  );
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => initialFilters?.sortBy ?? "date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => initialFilters?.sortOrder ?? "desc");
@@ -1378,6 +1384,48 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   useEffect(() => {
     if (viewMode !== "kanban") return;
+    if (typeof window === "undefined") return;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (!viewport) return;
+
+    const columnBodies = Array.from(
+      viewport.querySelectorAll<HTMLElement>("[data-kanban-column-body='true']")
+    );
+    if (columnBodies.length === 0) return;
+
+    const handleColumnScroll = (event: Event) => {
+      const node = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+      if (!node) return;
+      const columnId = node.closest<HTMLElement>("[data-quote-status-column]")?.dataset.quoteStatusColumn;
+      if (columnId) {
+        const additionalBatches = Math.max(
+          0,
+          Math.ceil(Math.max(0, node.scrollTop) / QUOTES_KANBAN_PREVIEW_SCROLL_STEP_PX)
+        );
+        const nextVisibleCount =
+          QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT + additionalBatches * QUOTES_KANBAN_PREVIEW_BATCH_SIZE;
+        setKanbanPreviewVisibleCountByColumn((current) =>
+          (current[columnId] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT) >= nextVisibleCount
+            ? current
+            : { ...current, [columnId]: nextVisibleCount }
+        );
+      }
+    };
+
+    columnBodies.forEach((node) => {
+      node.addEventListener("scroll", handleColumnScroll, { passive: true });
+    });
+
+    return () => {
+      columnBodies.forEach((node) => {
+        node.removeEventListener("scroll", handleColumnScroll);
+      });
+    };
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "kanban") return;
     if (!hasMoreQuotes || loading || refreshing) return;
     if (typeof window === "undefined") return;
 
@@ -1431,6 +1479,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       releaseLock();
     };
   }, [hasMoreQuotes, loading, refreshing, viewMode, loadQuotes]);
+
+  useEffect(() => {
+    setKanbanPreviewVisibleCountByColumn(
+      Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
+    );
+  }, [managerFilter, rows.length, search, status, viewMode]);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
@@ -5502,6 +5556,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   return (
                     <KanbanColumn
                       key={column.id}
+                      data-quote-status-column={column.id}
                       className={cn(
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
@@ -5702,7 +5757,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                           <KanbanImageZoomPreview
                                             imageUrl={productPreview.imageUrl}
                                             alt={productPreview.itemName}
-                                            loadStrategy="interaction"
+                                            loadStrategy={
+                                              index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
+                                                ? "eager"
+                                                : "interaction"
+                                            }
                                           />
                                         ) : (
                                           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
