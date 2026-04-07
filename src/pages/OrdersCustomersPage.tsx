@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormStat
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { listCustomerQuotes } from "@/lib/toshoApi";
+import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
@@ -120,6 +121,15 @@ type QuoteHistoryRow = {
   created_at?: string | null;
 };
 
+type LinkedDesignTaskRow = {
+  id: string;
+  number?: string | null;
+  title?: string | null;
+  status?: string | null;
+  subtitle?: string | null;
+  created_at?: string | null;
+};
+
 const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   name: "",
   position: "",
@@ -205,6 +215,64 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 const ALL_MANAGERS_FILTER = "__all__";
 const CUSTOMERS_PAGE_SIZE = 50;
 const CUSTOMERS_SEARCH_FETCH_PAGE_SIZE = 500;
+const CUSTOMER_COLUMNS = [
+  "id",
+  "team_id",
+  "name",
+  "legal_name",
+  "manager",
+  "manager_user_id",
+  "ownership_type",
+  "vat_rate",
+  "tax_id",
+  "website",
+  "iban",
+  "logo_url",
+  "legal_entities",
+  "contact_name",
+  "contact_position",
+  "contact_phone",
+  "contact_email",
+  "contact_birthday",
+  "contacts",
+  "signatory_name",
+  "signatory_position",
+  "reminder_at",
+  "reminder_comment",
+  "event_name",
+  "event_at",
+  "event_comment",
+  "notes",
+  "created_at",
+  "updated_at",
+].join(",");
+const LEAD_COLUMNS = [
+  "id",
+  "team_id",
+  "company_name",
+  "legal_name",
+  "ownership_type",
+  "logo_url",
+  "first_name",
+  "last_name",
+  "email",
+  "phone_numbers",
+  "source",
+  "website",
+  "manager",
+  "manager_user_id",
+  "iban",
+  "signatory_name",
+  "signatory_position",
+  "reminder_at",
+  "reminder_comment",
+  "event_name",
+  "event_at",
+  "event_comment",
+  "notes",
+  "created_at",
+  "updated_at",
+].join(",");
 const isManagerFilterMember = (member: Pick<WorkspaceMemberDisplayRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
   (member.jobRole ?? "").trim().toLowerCase() === "seo" ||
@@ -224,6 +292,9 @@ type CustomersPageCachePayload = {
 };
 
 const toManagerKey = (value?: string | null) => normalizeManagerKey(value);
+
+const normalizePartyMatch = (value?: string | null) =>
+  (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
 const buildManagerAliases = (member: WorkspaceMemberDisplayRow) => {
   const aliases = new Set<string>();
@@ -284,6 +355,7 @@ function clearLegacyCustomersPageCache(teamId: string) {
 
 function CustomersPage({ teamId }: { teamId: string }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { session, userId, jobRole } = useAuth();
   const initialCache = readCustomersPageCache(teamId);
@@ -359,6 +431,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     notes: "",
   });
   const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
+  const [linkedOrders, setLinkedOrders] = useState<QuoteHistoryRow[]>([]);
+  const [linkedDesignTasks, setLinkedDesignTasks] = useState<LinkedDesignTaskRow[]>([]);
   const [linkedQuotesLoading, setLinkedQuotesLoading] = useState(false);
   const [handledDeepLink, setHandledDeepLink] = useState<string | null>(null);
   const previousPathnameRef = useRef(location.pathname);
@@ -471,10 +545,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
   );
-  const orderQuotes = useMemo(
-    () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() === "approved"),
-    [linkedQuotes]
-  );
+  const orderQuotes = useMemo(() => linkedOrders, [linkedOrders]);
 
   useEffect(() => {
     rowsRef.current = rows;
@@ -583,17 +654,267 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadFormError(null);
   }, [currentManagerLabel, defaultManagerName, userId]);
 
-  const loadCustomerLinkedQuotes = useCallback(async (customerId: string) => {
+  const loadCustomerLinkedEntities = useCallback(async (customer: Pick<CustomerRow, "id" | "name" | "legal_name">) => {
     setLinkedQuotesLoading(true);
     try {
-      const rows = await listCustomerQuotes({ teamId, customerId, limit: 100 });
+      const candidateNames = Array.from(
+        new Set([customer.name ?? "", customer.legal_name ?? ""].map((value) => value.trim()).filter(Boolean))
+      );
+      const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
+      const [quotesById, quotesByName, quotesByTitle] = await Promise.allSettled([
+        listCustomerQuotes({ teamId, customerId: customer.id, limit: 100 }),
+        candidateNames.length > 0
+          ? supabase
+              .schema("tosho")
+              .from("quotes")
+              .select("id,number,status,total,created_at,customer_id,customer_name,title")
+              .eq("team_id", teamId)
+              .in("customer_name", candidateNames)
+              .order("created_at", { ascending: false })
+              .limit(200)
+          : Promise.resolve({ data: [], error: null }),
+        candidateNames.length > 0
+          ? supabase
+              .schema("tosho")
+              .from("quotes")
+              .select("id,number,status,total,created_at,customer_id,customer_name,title")
+              .eq("team_id", teamId)
+              .in("title", candidateNames)
+              .order("created_at", { ascending: false })
+              .limit(200)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      const quoteMap = new Map<string, QuoteHistoryRow>();
+      if (quotesById.status === "fulfilled") {
+        for (const row of quotesById.value as QuoteHistoryRow[]) quoteMap.set(row.id, row);
+      }
+      const mergeNamedQuotes = (rows: Array<{
+        id: string;
+        number?: string | null;
+        status?: string | null;
+        total?: number | null;
+        created_at?: string | null;
+        customer_id?: string | null;
+        customer_name?: string | null;
+        title?: string | null;
+      }>) => {
+        rows.forEach((row) => {
+          if (
+            row.customer_id === customer.id ||
+            normalizedNames.has(normalizePartyMatch(row.customer_name ?? row.title ?? null))
+          ) {
+            quoteMap.set(row.id, row);
+          }
+        });
+      };
+      if (quotesByName.status === "fulfilled") {
+        mergeNamedQuotes((((quotesByName.value.data ?? []) as unknown) as Array<{
+          id: string;
+          number?: string | null;
+          status?: string | null;
+          total?: number | null;
+          created_at?: string | null;
+          customer_id?: string | null;
+          customer_name?: string | null;
+          title?: string | null;
+        }>) ?? []);
+      }
+      if (quotesByTitle.status === "fulfilled") {
+        mergeNamedQuotes((((quotesByTitle.value.data ?? []) as unknown) as Array<{
+          id: string;
+          number?: string | null;
+          status?: string | null;
+          total?: number | null;
+          created_at?: string | null;
+          customer_id?: string | null;
+          customer_name?: string | null;
+          title?: string | null;
+        }>) ?? []);
+      }
+      const rows = Array.from(quoteMap.values()).sort(
+        (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+      );
       setLinkedQuotes(rows as QuoteHistoryRow[]);
+      const quoteIds = rows.map((row) => row.id).filter(Boolean);
+      const [ordersResult, designTasksResult] = await Promise.allSettled([
+        loadDerivedOrders(teamId, userId),
+        supabase
+          .from("activity_log")
+          .select("id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,entity_id,customer_id:metadata->>customer_id,customer_name:metadata->>customer_name,quote_id:metadata->>quote_id")
+          .eq("team_id", teamId)
+          .eq("action", "design_task")
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ]);
+      if (ordersResult.status === "fulfilled") {
+        setLinkedOrders(
+          ordersResult.value
+            .filter(
+              (row) =>
+                row.customerId === customer.id ||
+                quoteIds.includes(row.quoteId) ||
+                normalizedNames.has(normalizePartyMatch(row.customerName))
+            )
+            .map((row) => ({
+              id: row.id,
+              number: row.quoteNumber,
+              status: row.orderStatus,
+              total: row.total,
+              created_at: row.createdAt,
+            }))
+        );
+      } else {
+        console.warn("Failed to load related customer orders", ordersResult.reason);
+        setLinkedOrders([]);
+      }
+      if (designTasksResult.status === "fulfilled") {
+        const taskRows = (((designTasksResult.value.data ?? []) as unknown) as Array<{
+          id: string;
+          title?: string | null;
+          created_at?: string | null;
+          status?: string | null;
+          design_task_number?: string | null;
+          design_task_type?: string | null;
+          customer_id?: string | null;
+          customer_name?: string | null;
+          quote_id?: string | null;
+          entity_id?: string | null;
+        }>) ?? [];
+        setLinkedDesignTasks(
+          taskRows
+            .filter((row) => {
+              const linkedQuoteId = row.quote_id ?? row.entity_id ?? null;
+              return (
+                row.customer_id === customer.id ||
+                (linkedQuoteId ? quoteIds.includes(linkedQuoteId) : false) ||
+                normalizedNames.has(normalizePartyMatch(row.customer_name ?? null))
+              );
+            })
+            .map((row) => ({
+            id: row.id,
+            number: row.design_task_number ?? null,
+            title: row.title ?? "Дизайн-задача",
+            status: row.status ?? "new",
+            subtitle: row.design_task_type ? `Тип: ${row.design_task_type}` : null,
+            created_at: row.created_at ?? null,
+          }))
+        );
+      } else {
+        console.warn("Failed to load related customer design tasks", designTasksResult.reason);
+        setLinkedDesignTasks([]);
+      }
     } catch {
       setLinkedQuotes([]);
+      setLinkedOrders([]);
+      setLinkedDesignTasks([]);
     } finally {
       setLinkedQuotesLoading(false);
     }
-  }, [teamId]);
+  }, [teamId, userId]);
+
+  const loadLeadLinkedEntities = useCallback(async (lead: Pick<LeadRow, "company_name" | "legal_name">) => {
+    const candidateNames = Array.from(
+      new Set([lead.company_name ?? "", lead.legal_name ?? ""].map((value) => value.trim()).filter(Boolean))
+    );
+    const normalizedNames = new Set(candidateNames.map((value) => normalizePartyMatch(value)));
+    setLinkedQuotesLoading(true);
+    try {
+      const quotesQuery = supabase
+        .schema("tosho")
+        .from("quotes")
+        .select("id,number,status,total,created_at,customer_id,customer_name,title")
+        .eq("team_id", teamId)
+        .is("customer_id", null)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      const { data: rawQuotes, error: quotesError } = await quotesQuery;
+      if (quotesError) throw quotesError;
+      const quoteRows = (((rawQuotes ?? []) as unknown) as Array<{
+        id: string;
+        number?: string | null;
+        status?: string | null;
+        total?: number | null;
+        created_at?: string | null;
+        customer_name?: string | null;
+        title?: string | null;
+      }>) ?? [];
+      const matchingQuotes = quoteRows.filter((row) =>
+        normalizedNames.has(normalizePartyMatch(row.customer_name ?? row.title ?? null))
+      );
+      const quoteIds = matchingQuotes.map((row) => row.id).filter(Boolean);
+      setLinkedQuotes(matchingQuotes as QuoteHistoryRow[]);
+      const [ordersResult, designTasksResult] = await Promise.allSettled([
+        loadDerivedOrders(teamId, userId),
+        supabase
+          .from("activity_log")
+          .select("id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,entity_id,customer_name:metadata->>customer_name,quote_id:metadata->>quote_id")
+          .eq("team_id", teamId)
+          .eq("action", "design_task")
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ]);
+      if (ordersResult.status === "fulfilled") {
+        setLinkedOrders(
+          ordersResult.value
+            .filter(
+              (row) =>
+                quoteIds.includes(row.quoteId) ||
+                normalizedNames.has(normalizePartyMatch(row.customerName))
+            )
+            .map((row) => ({
+              id: row.id,
+              number: row.quoteNumber,
+              status: row.orderStatus,
+              total: row.total,
+              created_at: row.createdAt,
+            }))
+        );
+      } else {
+        console.warn("Failed to load related lead orders", ordersResult.reason);
+        setLinkedOrders([]);
+      }
+      if (designTasksResult.status === "fulfilled") {
+        const taskRows = (((designTasksResult.value.data ?? []) as unknown) as Array<{
+          id: string;
+          title?: string | null;
+          created_at?: string | null;
+          status?: string | null;
+          design_task_number?: string | null;
+          design_task_type?: string | null;
+          customer_name?: string | null;
+          quote_id?: string | null;
+          entity_id?: string | null;
+        }>) ?? [];
+        setLinkedDesignTasks(
+          taskRows
+            .filter((row) => {
+              const linkedQuoteId = row.quote_id ?? row.entity_id ?? null;
+              return (
+                (linkedQuoteId ? quoteIds.includes(linkedQuoteId) : false) ||
+                normalizedNames.has(normalizePartyMatch(row.customer_name ?? null))
+              );
+            })
+            .map((row) => ({
+            id: row.id,
+            number: row.design_task_number ?? null,
+            title: row.title ?? "Дизайн-задача",
+            status: row.status ?? "new",
+            subtitle: row.design_task_type ? `Тип: ${row.design_task_type}` : null,
+            created_at: row.created_at ?? null,
+          }))
+        );
+      } else {
+        console.warn("Failed to load related lead design tasks", designTasksResult.reason);
+        setLinkedDesignTasks([]);
+      }
+    } catch {
+      setLinkedQuotes([]);
+      setLinkedOrders([]);
+      setLinkedDesignTasks([]);
+    } finally {
+      setLinkedQuotesLoading(false);
+    }
+  }, [teamId, userId]);
 
   const openCreate = useCallback(() => {
     setEditingId(null);
@@ -624,8 +945,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
     setFormError(null);
     setDialogOpen(true);
-    void loadCustomerLinkedQuotes(row.id);
-  }, [loadCustomerLinkedQuotes, resolveManagerLabel]);
+    void loadCustomerLinkedEntities({ id: row.id, name: row.name, legal_name: row.legal_name });
+  }, [loadCustomerLinkedEntities, resolveManagerLabel]);
 
   const openDelete = (row: CustomerRow) => {
     setDeleteTarget(row);
@@ -669,13 +990,80 @@ function CustomersPage({ teamId }: { teamId: string }) {
     });
     setLeadFormError(null);
     setLeadDialogOpen(true);
-  }, [currentManagerLabel, defaultManagerName, resolveManagerLabel]);
+    void loadLeadLinkedEntities({ company_name: lead.company_name, legal_name: lead.legal_name });
+  }, [currentManagerLabel, defaultManagerName, loadLeadLinkedEntities, resolveManagerLabel]);
 
   const openDeleteLead = (lead: LeadRow) => {
     setLeadDeleteTarget(lead);
     setLeadDeleteError(null);
     setLeadDeleteDialogOpen(true);
   };
+
+  const fetchCustomerById = useCallback(
+    async (customerId: string) => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("customers")
+        .select(CUSTOMER_COLUMNS)
+        .eq("team_id", teamId)
+        .eq("id", customerId)
+        .maybeSingle<CustomerRow>();
+      if (error) throw error;
+      return data ?? null;
+    },
+    [teamId]
+  );
+
+  const fetchCustomerByName = useCallback(
+    async (customerName: string) => {
+      const normalizedCustomerName = normalizePartyMatch(customerName);
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("customers")
+        .select(CUSTOMER_COLUMNS)
+        .eq("team_id", teamId)
+        .or(`name.eq.${customerName},legal_name.eq.${customerName}`)
+        .limit(20);
+      if (error) throw error;
+      return (((data as unknown) as CustomerRow[]) ?? []).find((row) =>
+        [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
+      ) ?? null;
+    },
+    [teamId]
+  );
+
+  const fetchLeadById = useCallback(
+    async (leadId: string) => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("leads")
+        .select(LEAD_COLUMNS)
+        .eq("team_id", teamId)
+        .eq("id", leadId)
+        .maybeSingle<LeadRow>();
+      if (error) throw error;
+      return data ?? null;
+    },
+    [teamId]
+  );
+
+  const fetchLeadByName = useCallback(
+    async (leadName: string) => {
+      const normalizedLeadName = normalizePartyMatch(leadName);
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("leads")
+        .select(LEAD_COLUMNS)
+        .eq("team_id", teamId)
+        .or(`company_name.eq.${leadName},legal_name.eq.${leadName}`)
+        .limit(20);
+      if (error) throw error;
+      return (((data as unknown) as LeadRow[]) ?? []).find((row) =>
+        [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedLeadName)
+      ) ?? null;
+    },
+    [teamId]
+  );
 
   const loadCustomers = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
@@ -691,41 +1079,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setCustomersError(null);
     try {
-      const customerColumns = [
-        "id",
-        "team_id",
-        "name",
-        "legal_name",
-        "manager",
-        "manager_user_id",
-        "ownership_type",
-        "vat_rate",
-        "tax_id",
-        "website",
-        "iban",
-        "logo_url",
-        "legal_entities",
-        "contact_name",
-        "contact_position",
-        "contact_phone",
-        "contact_email",
-        "contact_birthday",
-        "contacts",
-        "signatory_name",
-        "signatory_position",
-        "reminder_at",
-        "reminder_comment",
-        "event_name",
-        "event_at",
-        "event_comment",
-        "notes",
-        "created_at",
-        "updated_at",
-      ].join(",");
       let query = supabase
         .schema("tosho")
         .from("customers")
-        .select(customerColumns, { count: "exact" })
+        .select(CUSTOMER_COLUMNS, { count: "exact" })
         .eq("team_id", teamId)
         .order("name", { ascending: true });
 
@@ -801,38 +1158,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
         rangeOffset: number,
         pageSize: number
       ) => {
-        const leadColumns = [
-          "id",
-          "team_id",
-          "company_name",
-          "legal_name",
-          ...(variant === "full" ? ["ownership_type"] : []),
-          "logo_url",
-          "first_name",
-          "last_name",
-          "email",
-          "phone_numbers",
-          "source",
-          "website",
-          "manager",
-          "manager_user_id",
-          "iban",
-          "signatory_name",
-          "signatory_position",
-          "reminder_at",
-          "reminder_comment",
-          "event_name",
-          "event_at",
-          "event_comment",
-          "notes",
-          "created_at",
-          "updated_at",
-        ].join(",");
-
         let query = supabase
           .schema("tosho")
           .from("leads")
-          .select(leadColumns, { count: "exact" })
+          .select(variant === "full" ? LEAD_COLUMNS : LEAD_COLUMNS.replace("ownership_type,", ""), { count: "exact" })
           .eq("team_id", teamId)
           .order("company_name", { ascending: true });
 
@@ -1048,31 +1377,81 @@ function CustomersPage({ teamId }: { teamId: string }) {
   useEffect(() => {
     const customerId = searchParams.get("customerId")?.trim() ?? "";
     const leadId = searchParams.get("leadId")?.trim() ?? "";
+    const customerName = searchParams.get("customerName")?.trim() ?? "";
+    const leadName = searchParams.get("leadName")?.trim() ?? "";
     const tab = searchParams.get("tab")?.trim() ?? "";
     const linkKey = searchParams.toString();
-    if (!customerId && !leadId) {
+    if (!customerId && !leadId && !customerName && !leadName) {
       if (handledDeepLink !== null) setHandledDeepLink(null);
       return;
     }
     if (handledDeepLink === linkKey) return;
+    let cancelled = false;
 
-    if (leadId) {
-      const lead = leads.find((row) => row.id === leadId);
-      if (!lead) return;
-      setActiveTab("leads");
-      openEditLead(lead);
-      setHandledDeepLink(linkKey);
-      return;
-    }
+    const openDeepLinkedEntity = async () => {
+      if (leadId) {
+        setActiveTab("leads");
+        const localLead = leads.find((row) => row.id === leadId);
+        const lead = localLead ?? (await fetchLeadById(leadId));
+        if (!lead || cancelled) return;
+        openEditLead(lead);
+        setHandledDeepLink(linkKey);
+        return;
+      }
 
-    if (customerId) {
-      const customer = rows.find((row) => row.id === customerId);
-      if (!customer) return;
-      if (tab === "customers" || !tab) setActiveTab("customers");
-      openEdit(customer);
-      setHandledDeepLink(linkKey);
-    }
-  }, [handledDeepLink, leads, openEdit, openEditLead, rows, searchParams]);
+      if (leadName) {
+        setActiveTab("leads");
+        const normalizedLeadName = normalizePartyMatch(leadName);
+        const localLead = leads.find((row) =>
+          [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedLeadName)
+        );
+        const lead = localLead ?? (await fetchLeadByName(leadName));
+        if (!lead || cancelled) return;
+        openEditLead(lead);
+        setHandledDeepLink(linkKey);
+        return;
+      }
+
+      if (customerId) {
+        if (tab === "customers" || !tab) setActiveTab("customers");
+        const localCustomer = rows.find((row) => row.id === customerId);
+        const customer = localCustomer ?? (await fetchCustomerById(customerId));
+        if (!customer || cancelled) return;
+        openEdit(customer);
+        setHandledDeepLink(linkKey);
+        return;
+      }
+
+      if (customerName) {
+        setActiveTab("customers");
+        const normalizedCustomerName = normalizePartyMatch(customerName);
+        const localCustomer = rows.find((row) =>
+          [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
+        );
+        const customer = localCustomer ?? (await fetchCustomerByName(customerName));
+        if (!customer || cancelled) return;
+        openEdit(customer);
+        setHandledDeepLink(linkKey);
+      }
+    };
+
+    void openDeepLinkedEntity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fetchCustomerById,
+    fetchCustomerByName,
+    fetchLeadById,
+    fetchLeadByName,
+    handledDeepLink,
+    leads,
+    openEdit,
+    openEditLead,
+    rows,
+    searchParams,
+  ]);
 
   useEffect(() => {
     if (previousPathnameRef.current === location.pathname) {
@@ -2134,6 +2513,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
           }
           if (!open && editingId) {
             setLinkedQuotes([]);
+            setLinkedOrders([]);
+            setLinkedDesignTasks([]);
             setLinkedQuotesLoading(false);
           }
         }}
@@ -2153,7 +2534,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
         submitLabel={editingId ? "Зберегти" : "Створити замовника"}
         calculations={calculationQuotes}
         orders={orderQuotes}
+        designTasks={linkedDesignTasks}
         linkedLoading={linkedQuotesLoading}
+        onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
+        onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
+        onOpenDesignTask={(id) => navigate(`/design/${id}`)}
         onSubmit={handleSave}
       />
 
@@ -2163,6 +2548,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
           setLeadDialogOpen(open);
           if (!open && !leadEditingId) {
             resetLeadForm();
+          }
+          if (!open && leadEditingId) {
+            setLinkedQuotes([]);
+            setLinkedOrders([]);
+            setLinkedDesignTasks([]);
+            setLinkedQuotesLoading(false);
           }
         }}
         form={leadForm}
@@ -2174,9 +2565,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
         title={leadEditingId ? "Редагувати ліда" : "Новий лід"}
         description={leadEditingId ? undefined : "Додайте всі дані ліда для першого контакту."}
         submitLabel={leadEditingId ? "Зберегти" : "Створити ліда"}
-        calculations={[]}
-        orders={[]}
-        linkedLoading={false}
+        calculations={calculationQuotes}
+        orders={orderQuotes}
+        designTasks={linkedDesignTasks}
+        linkedLoading={linkedQuotesLoading}
+        onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
+        onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
+        onOpenDesignTask={(id) => navigate(`/design/${id}`)}
         onSubmit={handleSaveLead}
       />
 

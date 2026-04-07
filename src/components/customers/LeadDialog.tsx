@@ -24,7 +24,11 @@ import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
+import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
+import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
+import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
+import { PackageCheck, ReceiptText } from "lucide-react";
 
 export type LeadFormState = {
   companyName: string;
@@ -56,8 +60,10 @@ export type LeadFormState = {
 export type LeadLinkedItem = {
   id: string;
   number?: string | null;
+  title?: string | null;
   status?: string | null;
   total?: number | null;
+  subtitle?: string | null;
   created_at?: string | null;
 };
 
@@ -85,7 +91,11 @@ export type LeadDialogProps = {
   onSubmit: () => void;
   calculations?: LeadLinkedItem[];
   orders?: LeadLinkedItem[];
+  designTasks?: LeadLinkedItem[];
   linkedLoading?: boolean;
+  onOpenCalculation?: (id: string) => void;
+  onOpenOrder?: (id: string) => void;
+  onOpenDesignTask?: (id: string) => void;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -135,6 +145,23 @@ const normalizeTime = (value: string) => {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
+const formatLinkedMoney = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: "UAH",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const orderStatusLabels: Record<string, string> = {
+  new: "Нове",
+  awaiting_payment: "Очікує оплату",
+  paid: "Оплачено",
+  not_shipped: "Не відвантажено",
+  shipped: "Відвантажено",
+};
+
 export const LeadDialog: React.FC<LeadDialogProps> = ({
   open,
   onOpenChange,
@@ -150,15 +177,20 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   onSubmit,
   calculations = [],
   orders = [],
+  designTasks = [],
   linkedLoading = false,
+  onOpenCalculation,
+  onOpenOrder,
+  onOpenDesignTask,
 }) => {
+  const relatedTotalCount = calculations.length + orders.length + designTasks.length;
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [quickMode, setQuickMode] = React.useState(true);
-  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "history">(
+  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "related">(
     "basic"
   );
   const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
@@ -245,6 +277,66 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
 
   const formatOwnershipOptionText = (option: NonNullable<LeadDialogProps["ownershipOptions"]>[number]) =>
     option.description ? `${option.label} (${option.description})` : option.label;
+
+  const renderLinkedCard = React.useCallback(
+    (
+      row: LeadLinkedItem,
+      kind: "quote" | "order" | "design",
+      onOpen?: (id: string) => void
+    ) => {
+      const quoteStatusKey = (row.status ?? "new").toLowerCase();
+      const designType = parseDesignTaskType(row.subtitle?.replace(/^Тип:\s*/i, "") ?? null);
+      const DesignTypeIcon = designType ? DESIGN_TASK_TYPE_ICONS[designType] : null;
+      const title = row.number ?? row.title ?? "Без номера";
+      const dateLabel = row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати";
+      const amountLabel = formatLinkedMoney(row.total);
+      const statusLabel =
+        kind === "quote"
+          ? quoteStatusLabels[quoteStatusKey] ?? row.status ?? "Новий"
+          : kind === "design"
+            ? DESIGN_STATUS_LABELS[(quoteStatusKey as keyof typeof DESIGN_STATUS_LABELS) ?? "new"] ?? row.status ?? "Новий"
+            : orderStatusLabels[quoteStatusKey] ?? row.status ?? "Нове";
+
+      return (
+        <button
+          key={row.id}
+          type="button"
+          onClick={() => onOpen?.(row.id)}
+          className="w-full rounded-xl border border-border/50 bg-card px-3 py-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {kind === "quote" ? <ReceiptText className="h-4 w-4 text-muted-foreground" /> : null}
+                {kind === "order" ? <PackageCheck className="h-4 w-4 text-muted-foreground" /> : null}
+                {kind === "design" && DesignTypeIcon ? <DesignTypeIcon className="h-4 w-4 text-muted-foreground" /> : null}
+                <div className="truncate font-medium">{title}</div>
+              </div>
+              {row.title && row.number ? <div className="mt-1 truncate text-xs text-muted-foreground">{row.title}</div> : null}
+            </div>
+            <div
+              className={cn(
+                "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                kind === "quote" ? (quoteStatusClasses[quoteStatusKey] ?? "border-border bg-muted/30 text-muted-foreground") : "border-border bg-muted/30 text-muted-foreground"
+              )}
+            >
+              {statusLabel}
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {kind === "design" && designType ? (
+              <span className="rounded-full border border-border/60 px-2 py-0.5">
+                {DESIGN_TASK_TYPE_LABELS[designType]}
+              </span>
+            ) : null}
+            {amountLabel ? <span className="rounded-full border border-border/60 px-2 py-0.5">{amountLabel}</span> : null}
+            <span className="rounded-full border border-border/60 px-2 py-0.5">{dateLabel}</span>
+          </div>
+        </button>
+      );
+    },
+    []
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -645,7 +737,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
                 <TabsTrigger value="requisites" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Реквізити</TabsTrigger>
                 <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
-                <TabsTrigger value="history" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Історія</TabsTrigger>
+                <TabsTrigger value="related" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+                  Пов'язане
+                  <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    {relatedTotalCount}
+                  </span>
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="basic" className="space-y-3 mt-3">
@@ -959,12 +1056,28 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 </div>
               </TabsContent>
 
-              <TabsContent value="history" className="space-y-3 mt-3">
-                <SectionHeader>Історія</SectionHeader>
+              <TabsContent value="related" className="space-y-3 mt-3">
+                <SectionHeader>Пов'язані сутності</SectionHeader>
                 <Tabs defaultValue="calculations" className="w-full">
             <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
-              <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Прорахунки</TabsTrigger>
-              <TabsTrigger value="orders" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Замовлення</TabsTrigger>
+              <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+                Прорахунки
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  {calculations.length}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="orders" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+                Замовлення
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  {orders.length}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="design" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+                Дизайн
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  {designTasks.length}
+                </span>
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="calculations" className="mt-3">
               {linkedLoading ? (
@@ -973,13 +1086,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
               ) : (
                 <div className="space-y-1.5">
-                  {calculations.map((row) => (
-                    <div key={row.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 text-sm">
-                      <div className="truncate font-medium">{row.number ?? "Без номера"}</div>
-                      <div className="text-xs text-muted-foreground">{row.status ?? "new"}</div>
-                      <div className="text-xs text-muted-foreground">{row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}</div>
-                    </div>
-                  ))}
+                  {calculations.map((row) => renderLinkedCard(row, "quote", onOpenCalculation))}
                 </div>
               )}
             </TabsContent>
@@ -990,13 +1097,18 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
               ) : (
                 <div className="space-y-1.5">
-                  {orders.map((row) => (
-                    <div key={row.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 text-sm">
-                      <div className="truncate font-medium">{row.number ?? "Без номера"}</div>
-                      <div className="text-xs text-muted-foreground">{row.status ?? "approved"}</div>
-                      <div className="text-xs text-muted-foreground">{row.created_at ? new Date(row.created_at).toLocaleDateString("uk-UA") : "без дати"}</div>
-                    </div>
-                  ))}
+                  {orders.map((row) => renderLinkedCard(row, "order", onOpenOrder))}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="design" className="mt-3">
+              {linkedLoading ? (
+                <div className="text-sm text-muted-foreground">Завантаження...</div>
+              ) : designTasks.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Поки немає дизайн-задач.</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {designTasks.map((row) => renderLinkedCard(row, "design", onOpenDesignTask))}
                 </div>
               )}
             </TabsContent>

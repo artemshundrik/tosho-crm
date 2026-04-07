@@ -1,5 +1,6 @@
 export { CustomerDialog } from "./CustomerDialog";
 export { LeadDialog } from "./LeadDialog";
+export { CustomerLeadQuickViewDialog } from "./CustomerLeadQuickViewDialog";
 export { CustomerLeadPicker } from "./CustomerLeadPicker";
 export { useCustomerLeadCreate } from "./useCustomerLeadCreate";
 export {

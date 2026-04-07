@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { CustomerLeadQuickViewDialog } from "@/components/customers";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
@@ -131,6 +132,7 @@ type DesignTask = {
   designDeadline?: string | null;
   designTaskNumber?: string | null;
   quoteNumber?: string | null;
+  customerId?: string | null;
   customerName?: string | null;
   customerLogoUrl?: string | null;
   quoteManagerUserId?: string | null;
@@ -932,6 +934,7 @@ export default function DesignTaskPage() {
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
+  const [partyCardOpen, setPartyCardOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -1549,6 +1552,10 @@ export default function DesignTaskPage() {
           quoteNumber:
             (typeof meta.quote_number === "string" && meta.quote_number.trim() ? meta.quote_number.trim() : null) ??
             (quote?.number as string) ??
+            null,
+          customerId:
+            (typeof meta.customer_id === "string" && meta.customer_id.trim() ? meta.customer_id.trim() : null) ??
+            (quote?.customer_id as string | null | undefined) ??
             null,
           customerName,
           customerLogoUrl,
@@ -5875,7 +5882,11 @@ export default function DesignTaskPage() {
             <div className="grid gap-3 sm:grid-cols-2 text-sm">
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                 <div className="text-xs text-muted-foreground mb-1">Замовник</div>
-                <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPartyCardOpen(true)}
+                  className="flex items-center gap-2.5 rounded-lg border border-transparent px-1 py-1 text-left transition-colors hover:border-border/60 hover:bg-muted/20"
+                >
                   <EntityAvatar
                     src={task.customerLogoUrl ?? null}
                     name={task.customerName ?? undefined}
@@ -5883,7 +5894,7 @@ export default function DesignTaskPage() {
                     size={28}
                   />
                   <div className="font-medium">{task.customerName ?? "Не вказано"}</div>
-                </div>
+                </button>
               </div>
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                 <div className="text-xs text-muted-foreground mb-1">{taskRoleLabel}</div>
@@ -7665,6 +7676,16 @@ export default function DesignTaskPage() {
         saving={renameSaving}
         error={renameError}
         onSubmit={submitRenameDialog}
+      />
+
+      <CustomerLeadQuickViewDialog
+        open={partyCardOpen}
+        onOpenChange={setPartyCardOpen}
+        teamId={effectiveTeamId ?? ""}
+        userId={userId}
+        customerId={task?.customerId ?? null}
+        customerName={task?.customerName ?? null}
+        customerLogoUrl={task?.customerLogoUrl ?? null}
       />
 
       <ConfirmDialog

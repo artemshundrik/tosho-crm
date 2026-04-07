@@ -177,6 +177,7 @@ import {
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { CustomerLeadQuickViewDialog } from "@/components/customers";
 import {
   type CatalogKind,
   type CatalogMethod,
@@ -759,6 +760,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createOrderLoading, setCreateOrderLoading] = useState(false);
   const [createOrderSubmitting, setCreateOrderSubmitting] = useState(false);
   const [createOrderError, setCreateOrderError] = useState<string | null>(null);
+  const [partyCardOpen, setPartyCardOpen] = useState(false);
 
   const getAttachmentStorageKey = useCallback((
     attachment: Pick<QuoteAttachment, "storageBucket" | "storagePath">,
@@ -7121,20 +7123,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <div>
                 <div className="flex items-center gap-4 py-3">
-                  <EntityAvatar
-                    src={quote.customer_logo_url ?? null}
-                    name={quote.customer_name ?? "Замовник / Лід"}
-                    fallback={getInitials(quote.customer_name)}
-                    size={44}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium text-muted-foreground">
-                      {quote.customer_id ? "Замовник" : "Лід"}
+                  <button
+                    type="button"
+                    onClick={() => setPartyCardOpen(true)}
+                    className="flex min-w-0 flex-1 items-center gap-4 rounded-xl border border-transparent py-1 text-left transition-colors hover:border-border/60 hover:bg-muted/20"
+                  >
+                    <EntityAvatar
+                      src={quote.customer_logo_url ?? null}
+                      name={quote.customer_name ?? "Замовник / Лід"}
+                      fallback={getInitials(quote.customer_name)}
+                      size={44}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {quote.customer_id ? "Замовник" : "Лід"}
+                      </div>
+                      <div className="mt-0.5 truncate text-base font-semibold text-foreground">
+                        {quote.customer_name ?? "Не вказано"}
+                      </div>
                     </div>
-                    <div className="mt-0.5 truncate text-base font-semibold text-foreground">
-                      {quote.customer_name ?? "Не вказано"}
-                    </div>
-                  </div>
+                  </button>
                 </div>
 
                 <dl className="mt-1 space-y-0.5">
@@ -8264,6 +8272,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CustomerLeadQuickViewDialog
+        open={partyCardOpen}
+        onOpenChange={setPartyCardOpen}
+        teamId={quote?.team_id ?? ""}
+        userId={userId}
+        customerId={quote?.customer_id ?? null}
+        customerName={quote?.customer_name ?? null}
+        customerLogoUrl={quote?.customer_logo_url ?? null}
+      />
 
       <Dialog
         open={createOrderDialogOpen}
