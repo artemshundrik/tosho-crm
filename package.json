@@ -14,6 +14,7 @@
     "migrate:catalog-images": "node scripts/migrate-catalog-model-images.mjs",
     "migrate:raster-attachment-variants": "node scripts/migrate-raster-attachment-variants.mjs",
     "audit:attachments": "node scripts/audit-attachment-storage.mjs",
+    "audit:catalog-images": "node scripts/audit-catalog-model-images.mjs",
     "cleanup:attachments": "node scripts/cleanup-attachment-storage.mjs",
     "export:orphan-attachments": "node scripts/export-orphan-attachment-originals.mjs",
     "export:orphan-attachment-summary": "node scripts/export-orphan-attachment-summary.mjs",
