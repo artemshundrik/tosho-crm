@@ -560,6 +560,66 @@ function TeamMembersRouteGate({
   );
 }
 
+function ModuleRouteGate({
+  accessRole,
+  jobRole,
+  isSuperAdmin,
+  moduleKey,
+  moduleLabel,
+  children,
+}: {
+  accessRole: string | null;
+  jobRole: string | null;
+  isSuperAdmin: boolean;
+  moduleKey: string;
+  moduleLabel: string;
+  children: React.ReactNode;
+}) {
+  const [hasModuleAccess, setHasModuleAccess] = useState<boolean>(() => {
+    if (isSuperAdmin) return true;
+    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess?.[moduleKey] === true;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncAccess = async () => {
+      if (isSuperAdmin) {
+        if (!cancelled) setHasModuleAccess(true);
+        return;
+      }
+
+      const entry = await getCurrentWorkspaceMemberDirectoryEntry();
+      if (!cancelled) {
+        setHasModuleAccess(entry?.moduleAccess?.[moduleKey] === true);
+      }
+    };
+
+    void syncAccess();
+
+    const handleUpdate = () => {
+      void syncAccess();
+    };
+
+    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
+    };
+  }, [isSuperAdmin, moduleKey]);
+
+  return (
+    <PermissionGate
+      allowed={isSuperAdmin || hasModuleAccess}
+      requirement={`картка доступів: ${moduleLabel} або access_role: owner (Super Admin)`}
+      accessRole={accessRole}
+      jobRole={jobRole}
+    >
+      {children}
+    </PermissionGate>
+  );
+}
+
 function RuntimeErrorsRouteGate({
   accessRole,
   jobRole,
@@ -993,9 +1053,17 @@ function AppRoutes() {
         <Route
           path="contractors"
           element={
-            <RouteSuspense shell>
-              <ContractorsPage />
-            </RouteSuspense>
+            <ModuleRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              isSuperAdmin={permissions.isSuperAdmin}
+              moduleKey="contractors"
+              moduleLabel="Підрядники та постачальники"
+            >
+              <RouteSuspense shell>
+                <ContractorsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route

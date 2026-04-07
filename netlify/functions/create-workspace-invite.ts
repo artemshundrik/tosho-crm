@@ -608,7 +608,7 @@ export const handler = async (event: HttpEvent) => {
             design: Boolean(payload.moduleAccess.design),
             logistics: Boolean(payload.moduleAccess.logistics),
             catalog: Boolean(payload.moduleAccess.catalog),
-            contractors: Boolean(payload.moduleAccess.contractors),
+            contractors: (targetMembership.access_role ?? null) === "owner" ? true : Boolean(payload.moduleAccess.contractors),
             team: Boolean(payload.moduleAccess.team),
           }
         : {
@@ -618,7 +618,7 @@ export const handler = async (event: HttpEvent) => {
             design: true,
             logistics: false,
             catalog: false,
-            contractors: false,
+            contractors: (targetMembership.access_role ?? null) === "owner",
             team: false,
           };
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();

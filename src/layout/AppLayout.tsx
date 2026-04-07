@@ -332,7 +332,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck, moduleKey: "logistics" },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
   {
-    label: "Підрядники та Постачальники",
+    label: "Підрядники та постачальники",
     to: ROUTES.contractors,
     group: "operations",
     icon: Users,
@@ -436,10 +436,11 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.contractors))
     return {
-      title: "Підрядники та Постачальники",
-      subtitle: "База партнерів, постачальників, договорів та взаємодії.",
-      breadcrumbLabel: "Підрядники та Постачальники",
+      title: "Підрядники",
+      subtitle: "",
+      breadcrumbLabel: "Підрядники",
       breadcrumbTo: ROUTES.contractors,
+      showPageHeader: false,
     };
 
   if (pathname === ROUTES.analyticsTeam)
@@ -689,6 +690,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           return false;
         }
         if (link.moduleKey) {
+          if (link.moduleKey === "contractors" && permissions.isSuperAdmin) {
+            return true;
+          }
           if (currentModuleAccess === undefined) {
             return false;
           }

@@ -262,7 +262,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   design: "Дизайн",
   logistics: "Логістика",
   catalog: "Каталог",
-  contractors: "Підрядники",
+  contractors: "Підрядники та постачальники",
   team: "Управління командою",
 };
 
@@ -345,6 +345,16 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
+  };
+}
+
+function normalizeMemberModuleAccessForRole(
+  moduleAccess: MemberProfileMeta["moduleAccess"],
+  accessRole: string | null | undefined
+): MemberProfileMeta["moduleAccess"] {
+  return {
+    ...moduleAccess,
+    contractors: accessRole === "owner" ? true : moduleAccess.contractors,
   };
 }
 
@@ -534,7 +544,7 @@ export function TeamMembersPage() {
     setEditProfileStartDate(meta?.startDate ?? "");
     setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
     setEditProfileManagerUserId(meta?.managerUserId ?? "");
-    setEditProfileModuleAccess(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS);
+    setEditProfileModuleAccess(normalizeMemberModuleAccessForRole(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS, member.access_role));
   }, [memberMetaByUserId]);
 
   useEffect(() => {
@@ -1127,7 +1137,7 @@ export function TeamMembersPage() {
       const startDate = editProfileStartDate.trim();
       const probationEndDate = editProfileProbationEndDate.trim();
       const managerUserId = editProfileManagerUserId.trim();
-      const moduleAccess = editProfileModuleAccess;
+      const moduleAccess = normalizeMemberModuleAccessForRole(editProfileModuleAccess, editProfileMember.access_role);
       const currentEmploymentStatus = normalizeEmploymentStatus(currentMeta.employmentStatus, currentMeta.probationEndDate);
       const nextEmploymentStatus =
         currentEmploymentStatus === "rejected" || currentEmploymentStatus === "inactive"
@@ -3391,8 +3401,12 @@ export function TeamMembersPage() {
                         className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
                       >
                         <Checkbox
-                          checked={editProfileModuleAccess[key]}
-                          disabled={!canManage}
+                          checked={
+                            key === "contractors" && (editProfileMember?.access_role ?? null) === "owner"
+                              ? true
+                              : editProfileModuleAccess[key]
+                          }
+                          disabled={!canManage || (key === "contractors" && (editProfileMember?.access_role ?? null) === "owner")}
                           onCheckedChange={(checked) =>
                             setEditProfileModuleAccess((prev) => ({
                               ...prev,
