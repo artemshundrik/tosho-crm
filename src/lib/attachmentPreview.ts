@@ -12,7 +12,7 @@ type UploadAttachmentWithVariantsParams = {
 const SIGNED_URL_CACHE = new Map<string, string>();
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const THUMB_MAX_SIZE = 160;
-const PREVIEW_MAX_SIZE = 960;
+const PREVIEW_MAX_SIZE = 640;
 const SERVER_PREVIEW_RETRY_DELAY_MS = 1500;
 const SERVER_PREVIEW_RETRY_ATTEMPTS = 8;
 

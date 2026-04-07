@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState } from "@/components/customers";
+import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { listCustomerQuotes } from "@/lib/toshoApi";
@@ -24,10 +24,11 @@ import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
+  getCustomerLogoImportErrorMessage,
+  ingestCustomerLogoFromFile,
   ingestCustomerLogoFromUrl,
   normalizeCustomerLogoUrl,
   removeManagedCustomerLogoByUrl,
-  shouldFallbackToOriginalCustomerLogoUrl,
 } from "@/lib/customerLogo";
 import {
   createEmptyCustomerLegalEntity,
@@ -133,6 +134,8 @@ const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerF
   managerId,
   website: "",
   logoUrl: "",
+  logoFile: null,
+  logoUploadMode: "url",
   legalEntities: [createEmptyCustomerLegalEntity()],
   contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
   reminderDate: "",
@@ -329,11 +332,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadDeleteTarget, setLeadDeleteTarget] = useState<LeadRow | null>(null);
   const [leadDeleteBusy, setLeadDeleteBusy] = useState(false);
   const [leadDeleteError, setLeadDeleteError] = useState<string | null>(null);
-  const [leadForm, setLeadForm] = useState({
+  const [leadForm, setLeadForm] = useState<LeadFormState>({
     companyName: "",
     legalName: "",
     ownershipType: "",
     logoUrl: "",
+    logoFile: null,
+    logoUploadMode: "url",
     firstName: "",
     lastName: "",
     email: "",
@@ -554,6 +559,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       legalName: "",
       ownershipType: "",
       logoUrl: "",
+      logoFile: null,
+      logoUploadMode: "url",
       firstName: "",
       lastName: "",
       email: "",
@@ -603,6 +610,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       managerId: row.manager_user_id ?? "",
       website: row.website ?? "",
       logoUrl: normalizeCustomerLogoUrl(row.logo_url) ?? "",
+      logoFile: null,
+      logoUploadMode: "url",
       legalEntities: parseCustomerLegalEntities(row),
       contacts,
       reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
@@ -637,6 +646,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       legalName: lead.legal_name ?? "",
       ownershipType: lead.ownership_type ?? "",
       logoUrl: normalizeCustomerLogoUrl(lead.logo_url) ?? "",
+      logoFile: null,
+      logoUploadMode: "url",
       firstName: lead.first_name ?? "",
       lastName: lead.last_name ?? "",
       email: lead.email ?? "",
@@ -1088,7 +1099,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     const normalizedLogoUrl = normalizeCustomerLogoUrl(form.logoUrl);
-    if (form.logoUrl.trim() && !normalizedLogoUrl) {
+    if (form.logoUploadMode === "url" && form.logoUrl.trim() && !normalizedLogoUrl) {
       setFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
       return;
     }
@@ -1125,12 +1136,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
-    let optimizedLogoUrl = normalizedLogoUrl;
+    let optimizedLogoUrl: string | null = null;
     const previousLogoUrl =
       editingId ? rows.find((row) => row.id === editingId)?.logo_url ?? null : null;
 
     try {
-      if (normalizedLogoUrl) {
+      if (form.logoUploadMode === "file" && form.logoFile) {
+        const optimized = await ingestCustomerLogoFromFile({
+          teamId,
+          file: form.logoFile,
+          entityType: "customer",
+          entityId: editingId,
+          preferredName: form.name.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      } else if (normalizedLogoUrl) {
         const optimized = await ingestCustomerLogoFromUrl({
           teamId,
           sourceUrl: normalizedLogoUrl,
@@ -1139,15 +1159,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
           preferredName: form.name.trim(),
         });
         optimizedLogoUrl = optimized.logoUrl;
+      } else {
+        optimizedLogoUrl = null;
       }
     } catch (error: unknown) {
-      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
-        optimizedLogoUrl = normalizedLogoUrl;
-      } else {
-        setSaving(false);
-        setFormError(getErrorMessage(error, "Не вдалося підготувати логотип замовника."));
-        return;
-      }
+      setSaving(false);
+      setFormError(getCustomerLogoImportErrorMessage(error, "логотип"));
+      return;
     }
 
     const payload: Record<string, unknown> = {
@@ -1292,7 +1310,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     const normalizedLogoUrl = normalizeCustomerLogoUrl(leadForm.logoUrl);
-    if (leadForm.logoUrl.trim() && !normalizedLogoUrl) {
+    if (leadForm.logoUploadMode === "url" && leadForm.logoUrl.trim() && !normalizedLogoUrl) {
       setLeadFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
       return;
     }
@@ -1306,12 +1324,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadSaving(true);
     setLeadFormError(null);
 
-    let optimizedLogoUrl = normalizedLogoUrl;
+    let optimizedLogoUrl: string | null = null;
     const previousLogoUrl =
       leadEditingId ? leads.find((lead) => lead.id === leadEditingId)?.logo_url ?? null : null;
 
     try {
-      if (normalizedLogoUrl) {
+      if (leadForm.logoUploadMode === "file" && leadForm.logoFile) {
+        const optimized = await ingestCustomerLogoFromFile({
+          teamId,
+          file: leadForm.logoFile,
+          entityType: "lead",
+          entityId: leadEditingId,
+          preferredName: leadForm.companyName.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      } else if (normalizedLogoUrl) {
         const optimized = await ingestCustomerLogoFromUrl({
           teamId,
           sourceUrl: normalizedLogoUrl,
@@ -1320,15 +1347,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
           preferredName: leadForm.companyName.trim(),
         });
         optimizedLogoUrl = optimized.logoUrl;
+      } else {
+        optimizedLogoUrl = null;
       }
     } catch (error: unknown) {
-      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
-        optimizedLogoUrl = normalizedLogoUrl;
-      } else {
-        setLeadSaving(false);
-        setLeadFormError(getErrorMessage(error, "Не вдалося підготувати логотип ліда."));
-        return;
-      }
+      setLeadSaving(false);
+      setLeadFormError(getCustomerLogoImportErrorMessage(error, "логотип"));
+      return;
     }
 
     const managerValue = leadForm.manager.trim();

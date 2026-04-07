@@ -17,6 +17,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import type { ImageUploadMode } from "@/types/catalog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
@@ -59,6 +60,8 @@ export type CustomerFormState = {
   managerId: string;
   website: string;
   logoUrl: string;
+  logoFile: File | null;
+  logoUploadMode: ImageUploadMode;
   legalEntities: CustomerLegalEntity[];
   contacts: CustomerContact[];
   reminderDate: string;
@@ -188,10 +191,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     "basic"
   );
   const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
+  const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
   const hasInvalidLogoUrl = React.useMemo(
-    () => Boolean(form.logoUrl.trim()) && !normalizedLogoUrl,
-    [form.logoUrl, normalizedLogoUrl]
+    () => form.logoUploadMode === "url" && Boolean(form.logoUrl.trim()) && !normalizedLogoUrl,
+    [form.logoUploadMode, form.logoUrl, normalizedLogoUrl]
   );
+  const displayedLogoUrl = form.logoUploadMode === "file" ? logoPreviewUrl : normalizedLogoUrl;
 
   const reminderDateValue = React.useMemo(
     () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
@@ -228,6 +233,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
       setEventDateOpen(false);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (!form.logoFile) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(form.logoFile);
+    setLogoPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [form.logoFile]);
 
   React.useEffect(() => {
     if (form.legalEntities.length === 0) {
@@ -326,16 +341,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <Chip
                 size="md"
                 icon={<ImageIcon className="h-4 w-4" />}
-                active={!!normalizedLogoUrl}
+                active={!!displayedLogoUrl}
               >
-                {hasInvalidLogoUrl ? "Лого невалідне" : normalizedLogoUrl ? "Лого додано" : "Лого"}
+                {hasInvalidLogoUrl ? "Лого невалідне" : displayedLogoUrl ? "Лого додано" : "Лого"}
               </Chip>
             </PopoverTrigger>
             <PopoverContent className="w-[320px] p-3" align="start">
               <div className="flex items-center gap-3">
-                {normalizedLogoUrl ? (
+                {displayedLogoUrl ? (
                   <img
-                    src={normalizedLogoUrl}
+                    src={displayedLogoUrl}
                     alt={form.name || "logo"}
                     className="h-12 w-12 rounded-full object-cover border border-border/60 bg-muted/20"
                     onError={(e) => {
@@ -348,29 +363,74 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     {getInitials(form.name)}
                   </div>
                 )}
-                <Input
-                  value={form.logoUrl}
-                  onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value }))}
-                  placeholder="Посилання на логотип"
-                  className="h-9"
-                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="inline-flex items-center gap-1 rounded-md bg-muted p-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.logoUploadMode === "url" ? "secondary" : "ghost"}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "url", logoFile: null }))}
+                    >
+                      URL
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.logoUploadMode === "file" ? "secondary" : "ghost"}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setForm((prev) => ({ ...prev, logoUploadMode: "file", logoUrl: "" }))}
+                    >
+                      Файл
+                    </Button>
+                  </div>
+                  {form.logoUploadMode === "url" ? (
+                    <Input
+                      value={form.logoUrl}
+                      onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value, logoFile: null }))}
+                      placeholder="Посилання на логотип"
+                      className="h-9"
+                    />
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setForm((prev) => ({ ...prev, logoFile: file, logoUrl: "" }));
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      <div className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                        {form.logoFile ? form.logoFile.name : "Оберіть файл логотипа"}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               {hasInvalidLogoUrl ? (
                 <div className="mt-2 text-xs text-destructive">
                   Вкажіть звичайний URL. `data:image/...;base64,...` більше не підтримується.
                 </div>
               ) : null}
-              {normalizedLogoUrl ? (
+              {form.logoUploadMode === "url" && normalizedLogoUrl ? (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  При збереженні зовнішній URL буде оптимізовано до компактного WebP і перенесено у ваш storage.
+                  При збереженні CRM спробує завантажити картинку, конвертує її у WebP `128x128` і збереже у storage.
                 </div>
               ) : null}
-              {form.logoUrl.trim() ? (
+              {form.logoUploadMode === "file" ? (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Файл буде конвертовано у WebP `128x128` і збережено у storage.
+                </div>
+              ) : null}
+              {(form.logoUrl.trim() || form.logoFile) ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="mt-2 h-8 px-2 text-xs"
-                  onClick={() => setForm((prev) => ({ ...prev, logoUrl: "" }))}
+                  onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoFile: null }))}
                 >
                   Очистити
                 </Button>

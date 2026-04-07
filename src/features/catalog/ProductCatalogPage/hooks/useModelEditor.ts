@@ -130,6 +130,83 @@ export function useModelEditor({
 
   const sanitizeFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
 
+  const getCatalogImportErrorMessage = (error: unknown) => {
+    const message = getErrorMessage(error, "Не вдалося підготувати фото моделі.");
+    if (/(404|responded with 404|source responded with 404)/i.test(message)) {
+      return "За цим посиланням фото не знайдено. Перевірте URL або завантажте файл.";
+    }
+    if (/\((403|429)\)/.test(message)) {
+      return "Сайт із цим фото не дав завантажити картинку. Вставте пряме посилання на зображення або використайте файл.";
+    }
+    if (/did not return an image/i.test(message)) {
+      return "Потрібне пряме посилання саме на картинку, а не на сторінку чи файл іншого типу.";
+    }
+    if (/вести напряму на зображення/i.test(message)) {
+      return "Потрібне пряме посилання саме на картинку, а не на сторінку сайту.";
+    }
+    if (/cors/i.test(message.toLowerCase())) {
+      return "Сайт із цим фото блокує завантаження картинки. Спробуйте інше посилання або завантажте файл.";
+    }
+    return message;
+  };
+
+  const isManagedCatalogImageUrl = (value?: string | null, asset?: CatalogModelMetadata["imageAsset"] | null) => {
+    const normalized = value?.trim() ?? "";
+    if (!normalized) return false;
+    if (asset) {
+      if ([asset.originalUrl, asset.previewUrl, asset.thumbUrl].includes(normalized)) return true;
+    }
+    return (
+      normalized.includes("/storage/v1/object/public/public-assets/") &&
+      normalized.includes("/catalog-models/")
+    );
+  };
+
+  const importCatalogImageFromUrl = useCallback(
+    async (params: { sourceUrl: string; persistedModelId: string }) => {
+      const sourceUrl = params.sourceUrl.trim();
+      const fileNameFromUrl = (() => {
+        try {
+          return new URL(sourceUrl).pathname.split("/").pop() ?? "catalog-image";
+        } catch {
+          return "catalog-image";
+        }
+      })();
+      const safeName = sanitizeFileName(fileNameFromUrl.replace(/\?.*$/, "") || "catalog-image");
+      const storagePath = `catalog-models/${teamId}/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error("Не вдалося підтвердити сесію для імпорту фото моделі.");
+      }
+
+      const response = await fetch("/.netlify/functions/catalog-image-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bucket: CATALOG_IMAGE_BUCKET,
+          storagePath,
+          sourceUrl,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || `Не вдалося завантажити фото моделі за URL (${response.status}).`);
+      }
+
+      return {
+        storagePath,
+        assetPayload: getCatalogAssetPayload(storagePath),
+      };
+    },
+    [teamId]
+  );
+
   const getCatalogAssetPayload = (storagePath: string) => {
     const originalUrl = getPublicStorageUrl(CATALOG_IMAGE_BUCKET, storagePath);
     const previewUrl = getPublicStorageUrl(
@@ -684,7 +761,11 @@ export function useModelEditor({
     try {
       let persistedModelId = modelId;
       let currentImageUrl =
-        !draftImageFile && !isInlineImageDataUrl(normalizedImageUrl) ? normalizedImageUrl || null : null;
+        !draftImageFile &&
+        !isInlineImageDataUrl(normalizedImageUrl) &&
+        isManagedCatalogImageUrl(normalizedImageUrl, existingImageAsset)
+          ? normalizedImageUrl || null
+          : null;
       let currentMetadata: CatalogModelMetadata = { ...nextMetadata };
       
       if (editingModelId) {
@@ -722,18 +803,42 @@ export function useModelEditor({
       }
 
       let uploadedAssetPath: string | null = null;
-      if (draftImageFile) {
-        const safeName = sanitizeFileName(draftImageFile.name);
-        const storagePath = `catalog-models/${teamId}/${persistedModelId}/${Date.now()}-${safeName}`;
+      const shouldImportImageFromUrl =
+        !draftImageFile &&
+        Boolean(normalizedImageUrl) &&
+        !isInlineImageDataUrl(normalizedImageUrl) &&
+        !isManagedCatalogImageUrl(normalizedImageUrl, existingImageAsset);
 
+      if (draftImageFile || shouldImportImageFromUrl) {
         try {
-          await uploadAttachmentWithVariants({
-            bucket: CATALOG_IMAGE_BUCKET,
-            storagePath,
-            file: draftImageFile,
-            cacheControl: "31536000, immutable",
-          });
-          uploadedAssetPath = storagePath;
+          if (draftImageFile) {
+            const safeName = sanitizeFileName(draftImageFile.name);
+            const storagePath = `catalog-models/${teamId}/${persistedModelId}/${Date.now()}-${safeName}`;
+            await uploadAttachmentWithVariants({
+              bucket: CATALOG_IMAGE_BUCKET,
+              storagePath,
+              file: draftImageFile,
+              cacheControl: "31536000, immutable",
+            });
+            uploadedAssetPath = storagePath;
+            const assetPayload = getCatalogAssetPayload(storagePath);
+            currentImageUrl = assetPayload.imageUrl;
+            currentMetadata = {
+              ...nextMetadata,
+              imageAsset: assetPayload.imageAsset,
+            };
+          } else if (shouldImportImageFromUrl) {
+            const imported = await importCatalogImageFromUrl({
+              sourceUrl: normalizedImageUrl,
+              persistedModelId,
+            });
+            uploadedAssetPath = imported.storagePath;
+            currentImageUrl = imported.assetPayload.imageUrl;
+            currentMetadata = {
+              ...nextMetadata,
+              imageAsset: imported.assetPayload.imageAsset,
+            };
+          }
         } catch (uploadError) {
           if (!editingModelId) {
             await supabase
@@ -746,13 +851,6 @@ export function useModelEditor({
           throw uploadError;
         }
 
-        const assetPayload = getCatalogAssetPayload(storagePath);
-        currentImageUrl = assetPayload.imageUrl;
-        currentMetadata = {
-          ...nextMetadata,
-          imageAsset: assetPayload.imageAsset,
-        };
-
         const { error } = await supabase
           .schema("tosho")
           .from("catalog_models")
@@ -764,7 +862,9 @@ export function useModelEditor({
           .eq("team_id", teamId);
 
         if (error) {
-          await removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, storagePath);
+          if (uploadedAssetPath) {
+            await removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, uploadedAssetPath);
+          }
           if (!editingModelId) {
             await supabase
               .schema("tosho")
@@ -895,7 +995,7 @@ export function useModelEditor({
         toast.error("Обраний вид товару більше не існує. Оновіть сторінку та спробуйте ще раз.");
         return;
       }
-      toast.error(message);
+      toast.error(getCatalogImportErrorMessage(error));
     } finally {
       setSavingModel(false);
     }

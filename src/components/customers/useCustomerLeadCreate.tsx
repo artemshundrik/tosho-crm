@@ -9,9 +9,10 @@ import {
   serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
 import {
+  getCustomerLogoImportErrorMessage,
+  ingestCustomerLogoFromFile,
   ingestCustomerLogoFromUrl,
   normalizeCustomerLogoUrl,
-  shouldFallbackToOriginalCustomerLogoUrl,
 } from "@/lib/customerLogo";
 
 type MemberOption = {
@@ -57,6 +58,8 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   managerId: "",
   website: "",
   logoUrl: "",
+  logoFile: null,
+  logoUploadMode: "url",
   legalEntities: [createEmptyCustomerLegalEntity()],
   contacts: [{ name: "", position: "", phone: "", email: "", birthday: "" }],
   reminderDate: "",
@@ -79,6 +82,8 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   source: "",
   website: "",
   logoUrl: "",
+  logoFile: null,
+  logoUploadMode: "url",
   manager: defaultManagerLabel,
   managerId: "",
   iban: "",
@@ -160,7 +165,7 @@ export const useCustomerLeadCreate = ({
       return;
     }
     const normalizedLogoUrl = normalizeCustomerLogoUrl(customerForm.logoUrl);
-    if (customerForm.logoUrl.trim() && !normalizedLogoUrl) {
+    if (customerForm.logoUploadMode === "url" && customerForm.logoUrl.trim() && !normalizedLogoUrl) {
       setCustomerError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
       return;
     }
@@ -168,9 +173,17 @@ export const useCustomerLeadCreate = ({
     setCustomerSaving(true);
     setCustomerError(null);
 
-    let optimizedLogoUrl = normalizedLogoUrl;
+    let optimizedLogoUrl: string | null = null;
     try {
-      if (normalizedLogoUrl) {
+      if (customerForm.logoUploadMode === "file" && customerForm.logoFile) {
+        const optimized = await ingestCustomerLogoFromFile({
+          teamId,
+          file: customerForm.logoFile,
+          entityType: "customer",
+          preferredName: customerForm.name.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      } else if (normalizedLogoUrl) {
         const optimized = await ingestCustomerLogoFromUrl({
           teamId,
           sourceUrl: normalizedLogoUrl,
@@ -178,15 +191,13 @@ export const useCustomerLeadCreate = ({
           preferredName: customerForm.name.trim(),
         });
         optimizedLogoUrl = optimized.logoUrl;
+      } else {
+        optimizedLogoUrl = null;
       }
     } catch (error: unknown) {
-      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
-        optimizedLogoUrl = normalizedLogoUrl;
-      } else {
-        setCustomerSaving(false);
-        setCustomerError(resolveErrorMessage(error, "Не вдалося підготувати логотип замовника."));
-        return;
-      }
+      setCustomerSaving(false);
+      setCustomerError(getCustomerLogoImportErrorMessage(error, "логотип"));
+      return;
     }
 
     const managerValue = customerForm.manager.trim();
@@ -306,7 +317,7 @@ export const useCustomerLeadCreate = ({
       return;
     }
     const normalizedLogoUrl = normalizeCustomerLogoUrl(leadForm.logoUrl);
-    if (leadForm.logoUrl.trim() && !normalizedLogoUrl) {
+    if (leadForm.logoUploadMode === "url" && leadForm.logoUrl.trim() && !normalizedLogoUrl) {
       setLeadError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
       return;
     }
@@ -319,9 +330,17 @@ export const useCustomerLeadCreate = ({
     setLeadSaving(true);
     setLeadError(null);
 
-    let optimizedLogoUrl = normalizedLogoUrl;
+    let optimizedLogoUrl: string | null = null;
     try {
-      if (normalizedLogoUrl) {
+      if (leadForm.logoUploadMode === "file" && leadForm.logoFile) {
+        const optimized = await ingestCustomerLogoFromFile({
+          teamId,
+          file: leadForm.logoFile,
+          entityType: "lead",
+          preferredName: leadForm.companyName.trim(),
+        });
+        optimizedLogoUrl = optimized.logoUrl;
+      } else if (normalizedLogoUrl) {
         const optimized = await ingestCustomerLogoFromUrl({
           teamId,
           sourceUrl: normalizedLogoUrl,
@@ -329,15 +348,13 @@ export const useCustomerLeadCreate = ({
           preferredName: leadForm.companyName.trim(),
         });
         optimizedLogoUrl = optimized.logoUrl;
+      } else {
+        optimizedLogoUrl = null;
       }
     } catch (error: unknown) {
-      if (normalizedLogoUrl && shouldFallbackToOriginalCustomerLogoUrl(error)) {
-        optimizedLogoUrl = normalizedLogoUrl;
-      } else {
-        setLeadSaving(false);
-        setLeadError(resolveErrorMessage(error, "Не вдалося підготувати логотип ліда."));
-        return;
-      }
+      setLeadSaving(false);
+      setLeadError(getCustomerLogoImportErrorMessage(error, "логотип"));
+      return;
     }
 
     const basePayload: Record<string, unknown> = {

@@ -39,6 +39,26 @@ export function shouldFallbackToOriginalCustomerLogoUrl(error: unknown) {
   return /\((403|429)\)/.test(message);
 }
 
+export function getCustomerLogoImportErrorMessage(error: unknown, entityLabel = "логотип") {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error && "message" in error && typeof (error as { message?: unknown }).message === "string"
+        ? ((error as { message?: string }).message ?? "")
+        : "";
+
+  if (/\((403|429)\)/.test(message)) {
+    return `Сайт із цим ${entityLabel} не дав завантажити картинку. Встав пряме посилання на зображення або завантаж файл.`;
+  }
+  if (/cors/i.test(message)) {
+    return `Сайт із цим ${entityLabel} блокує завантаження картинки. Спробуй пряме посилання на зображення або завантаж файл.`;
+  }
+  if (/вести напряму на зображення/i.test(message)) {
+    return "Потрібне пряме посилання саме на картинку, а не на сторінку сайту.";
+  }
+  return `Не вдалося підготувати ${entityLabel}. Спробуй інше посилання або завантаж файл.`;
+}
+
 function getPublicStorageUrl(bucket: string, path: string) {
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
@@ -180,6 +200,36 @@ export async function ingestCustomerLogoFromUrl(params: {
     `logo.${getContentTypeExtension(contentType)}`;
   const ownerKey = sanitizeStorageSegment(params.entityId ?? crypto.randomUUID());
   const storagePath = `teams/${params.teamId}/customer-logos/${params.entityType}/${ownerKey}/${Date.now()}-${nameSeed}.webp`;
+
+  const { error } = await supabase.storage.from(CUSTOMER_LOGO_BUCKET).upload(storagePath, optimizedBlob, {
+    upsert: true,
+    contentType: "image/webp",
+    cacheControl: "31536000, immutable",
+  });
+  if (error) throw error;
+
+  return {
+    logoUrl: getPublicStorageUrl(CUSTOMER_LOGO_BUCKET, storagePath),
+    storagePath,
+  };
+}
+
+export async function ingestCustomerLogoFromFile(params: {
+  teamId: string;
+  file: File;
+  entityType: "customer" | "lead";
+  entityId?: string | null;
+  preferredName?: string | null;
+}) {
+  const contentType = params.file.type?.toLowerCase() ?? "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("Потрібно вибрати файл зображення.");
+  }
+
+  const optimizedBlob = await renderCustomerLogoBlob(params.file);
+  const ownerKey = sanitizeStorageSegment(params.entityId ?? crypto.randomUUID());
+  const fileNameSeed = sanitizeStorageSegment(params.preferredName ?? params.file.name.replace(/\.[^.]+$/, ""));
+  const storagePath = `teams/${params.teamId}/customer-logos/${params.entityType}/${ownerKey}/${Date.now()}-${fileNameSeed}.webp`;
 
   const { error } = await supabase.storage.from(CUSTOMER_LOGO_BUCKET).upload(storagePath, optimizedBlob, {
     upsert: true,

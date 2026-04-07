@@ -11,6 +11,7 @@
     "migrate:avatars": "node scripts/migrate-avatar-storage.mjs",
     "migrate:avatar-variants": "node scripts/migrate-avatar-variants.mjs",
     "migrate:attachment-previews": "node scripts/migrate-attachment-previews.mjs",
+    "migrate:catalog-images": "node scripts/migrate-catalog-model-images.mjs",
     "migrate:raster-attachment-variants": "node scripts/migrate-raster-attachment-variants.mjs",
     "audit:attachments": "node scripts/audit-attachment-storage.mjs",
     "cleanup:attachments": "node scripts/cleanup-attachment-storage.mjs",
