@@ -173,7 +173,7 @@ export function useModelEditor({
         }
       })();
       const safeName = sanitizeFileName(fileNameFromUrl.replace(/\?.*$/, "") || "catalog-image");
-      const storagePath = `catalog-models/${teamId}/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+      const storagePath = `teams/${teamId}/catalog-models/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -813,7 +813,7 @@ export function useModelEditor({
         try {
           if (draftImageFile) {
             const safeName = sanitizeFileName(draftImageFile.name);
-            const storagePath = `catalog-models/${teamId}/${persistedModelId}/${Date.now()}-${safeName}`;
+            const storagePath = `teams/${teamId}/catalog-models/${persistedModelId}/${Date.now()}-${safeName}`;
             await uploadAttachmentWithVariants({
               bucket: CATALOG_IMAGE_BUCKET,
               storagePath,

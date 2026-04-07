@@ -169,7 +169,7 @@ async function migrateOne(row) {
     }
   })();
   const safeName = sanitizeStorageSegment(fileNameFromUrl.replace(/\?.*$/, "") || row.name || "catalog-image");
-  const storagePath = `catalog-models/${row.team_id}/${row.id}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+  const storagePath = `teams/${row.team_id}/catalog-models/${row.id}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
   const thumbBuffer = await renderVariant(fetched.buffer, THUMB_SIZE);
   const previewBuffer = await renderVariant(fetched.buffer, PREVIEW_SIZE);
   const previewPath = getVariantPath(storagePath, "preview");
