@@ -297,6 +297,7 @@ type QuoteItem = {
   resolvedModelId?: string;
   resolvedModelName?: string;
   resolvedModelImageUrl?: string;
+  resolvedModelThumbUrl?: string;
   resolvedMethodNames?: Record<string, string>;
 };
 type QuoteComment = {
@@ -2967,6 +2968,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 kind_id: "",
                 name: row.name ?? "",
                 image_url: row.image_url ?? null,
+                thumb_url: row.thumb_url ?? null,
               })),
               error: null,
             }))
@@ -2990,6 +2992,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         kind_id: string;
         name: string;
         image_url: string | null;
+        thumb_url: string | null;
       }>;
       const typeIds = Array.from(new Set(kindRows.map((row) => row.type_id).filter(Boolean)));
 
@@ -3098,6 +3101,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             resolvedModelId: resolvedModel?.id ?? undefined,
             resolvedModelName: resolvedModel?.name ?? undefined,
             resolvedModelImageUrl: resolvedModel?.image_url ?? undefined,
+            resolvedModelThumbUrl: resolvedModel?.thumb_url ?? undefined,
             resolvedMethodNames,
           };
         })
@@ -5264,18 +5268,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         : item.printHeightMm
                         ? `${item.printHeightMm} мм`
                         : null;
-                    const catalogImage = item.resolvedModelImageUrl ?? getModelImage(
+                    const catalogZoomImage = item.resolvedModelImageUrl ?? getModelImage(
                       catalogTypes,
                       resolvedTypeId,
                       resolvedKindId,
                       resolvedModelId
                     );
+                    const catalogImage = item.resolvedModelThumbUrl ?? catalogZoomImage;
                     const attachmentImage =
                       !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
                         ? item.attachment.url
                         : null;
                     const productPreview = catalogImage || attachmentImage
-                      ? { type: "image" as const, url: catalogImage ?? attachmentImage ?? "" }
+                      ? {
+                          type: "image" as const,
+                          url: catalogImage ?? attachmentImage ?? "",
+                          zoomUrl: catalogZoomImage ?? attachmentImage ?? catalogImage ?? "",
+                        }
                       : null;
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
@@ -5372,6 +5381,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-muted/20">
                                 <KanbanImageZoomPreview
                                   imageUrl={productPreview.url}
+                                  zoomImageUrl={productPreview.zoomUrl}
                                   alt={modelLabel ?? "Товар"}
                                   className="h-16 w-16 rounded-xl object-cover"
                                 />

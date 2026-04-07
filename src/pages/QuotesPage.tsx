@@ -246,6 +246,7 @@ type KanbanProductPreview = {
   itemName: string;
   qtyLabel: string;
   imageUrl: string | null;
+  zoomImageUrl?: string | null;
 };
 
 type QuotesPageCachePayload = {
@@ -2613,13 +2614,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               .filter(Boolean)
           )
         );
-        const modelImageById = new Map<string, string>();
+        const modelImageById = new Map<string, { imageUrl: string; zoomImageUrl?: string | null }>();
         if (modelIds.length > 0) {
           const modelRows = await listCatalogModelsByIds(modelIds);
           modelRows.forEach((row, id) => {
-            const imageUrl = row.image_url?.trim();
+            const zoomImageUrl = row.image_url?.trim() || null;
+            const imageUrl = row.thumb_url?.trim() || zoomImageUrl;
             if (!imageUrl) return;
-            modelImageById.set(id, imageUrl);
+            modelImageById.set(id, { imageUrl, zoomImageUrl });
           });
         }
 
@@ -2650,7 +2652,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             itemCount,
             itemName: firstItem.name?.trim() || "Товар без назви",
             qtyLabel: formatQtyLabel(firstItem.qty, firstItem.unit),
-            imageUrl: attachmentImage || catalogImage,
+            imageUrl: attachmentImage || catalogImage?.imageUrl || null,
+            zoomImageUrl: attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
           };
         });
 
@@ -5756,6 +5759,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         {productPreview?.imageUrl ? (
                                           <KanbanImageZoomPreview
                                             imageUrl={productPreview.imageUrl}
+                                            zoomImageUrl={productPreview.zoomImageUrl ?? undefined}
                                             alt={productPreview.itemName}
                                             loadStrategy={
                                               index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)

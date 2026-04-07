@@ -441,6 +441,7 @@ type DesignTaskPageCachePayload = {
   task: DesignTask;
   quoteItem: QuoteItemRow | null;
   productPreviewUrl: string | null;
+  productZoomPreviewUrl: string | null;
   attachments: AttachmentRow[];
   customerAttachmentsLoaded?: boolean;
   designOutputFiles: DesignOutputFile[];
@@ -506,6 +507,9 @@ function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
 
 function buildDesignTaskPageCachePayload(params: {
   task: DesignTask;
+  quoteItem?: QuoteItemRow | null;
+  productPreviewUrl?: string | null;
+  productZoomPreviewUrl?: string | null;
   customerAttachmentsLoaded?: boolean;
   attachments?: AttachmentRow[];
   designOutputLinks?: DesignOutputLink[];
@@ -513,8 +517,9 @@ function buildDesignTaskPageCachePayload(params: {
 }): DesignTaskPageCachePayload {
   return {
     task: sanitizeDesignTaskForCache(params.task),
-    quoteItem: null,
-    productPreviewUrl: null,
+    quoteItem: params.quoteItem ?? null,
+    productPreviewUrl: params.productPreviewUrl ?? null,
+    productZoomPreviewUrl: params.productZoomPreviewUrl ?? null,
     attachments: Array.isArray(params.attachments) ? params.attachments.slice(0, 20) : [],
     customerAttachmentsLoaded: params.customerAttachmentsLoaded ?? false,
     designOutputFiles: [],
@@ -720,6 +725,8 @@ function readDesignTaskPageCache(teamId: string, taskId: string): DesignTaskPage
       task: parsed.task,
       quoteItem: parsed.quoteItem ?? null,
       productPreviewUrl: typeof parsed.productPreviewUrl === "string" ? parsed.productPreviewUrl : null,
+      productZoomPreviewUrl:
+        typeof parsed.productZoomPreviewUrl === "string" ? parsed.productZoomPreviewUrl : null,
       attachments: [],
       designOutputFiles: [],
       designOutputLinks: Array.isArray(parsed.designOutputLinks) ? parsed.designOutputLinks : [],
@@ -896,6 +903,9 @@ export default function DesignTaskPage() {
   const [renameError, setRenameError] = useState<string | null>(null);
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(() => initialCache?.quoteItem ?? null);
   const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(() => initialCache?.productPreviewUrl ?? null);
+  const [productZoomPreviewUrl, setProductZoomPreviewUrl] = useState<string | null>(
+    () => initialCache?.productZoomPreviewUrl ?? null
+  );
   const [attachments, setAttachments] = useState<AttachmentRow[]>(() => initialCache?.attachments ?? []);
   const [customerAttachmentsLoaded, setCustomerAttachmentsLoaded] = useState<boolean>(
     () => initialCache?.customerAttachmentsLoaded ?? false
@@ -1404,9 +1414,12 @@ export default function DesignTaskPage() {
           : { data: null };
 
         let itemPreviewUrl: string | null = null;
+        let itemZoomPreviewUrl: string | null = null;
         if (item?.catalog_model_id) {
           const modelRows = await listCatalogModelsByIds([item.catalog_model_id as string]);
-          itemPreviewUrl = modelRows.get(item.catalog_model_id as string)?.image_url ?? null;
+          const modelRow = modelRows.get(item.catalog_model_id as string);
+          itemPreviewUrl = modelRow?.thumb_url ?? modelRow?.image_url ?? null;
+          itemZoomPreviewUrl = modelRow?.image_url ?? modelRow?.thumb_url ?? null;
         }
         // Keep product image independent from design visualizations.
 
@@ -1560,6 +1573,7 @@ export default function DesignTaskPage() {
 
         const nextQuoteItem = item ?? null;
         const nextProductPreviewUrl = itemPreviewUrl;
+        const nextProductZoomPreviewUrl = itemZoomPreviewUrl;
         const nextAttachments = [...standaloneBriefFilesWithUrls];
         const nextDesignOutputFiles = designFilesWithUrls;
         const nextDesignOutputLinks = parsedDesignLinks;
@@ -1568,6 +1582,7 @@ export default function DesignTaskPage() {
         setTask(nextTask);
         setQuoteItem(nextQuoteItem);
         setProductPreviewUrl(nextProductPreviewUrl);
+        setProductZoomPreviewUrl(nextProductZoomPreviewUrl);
         setAttachments(nextAttachments);
         setCustomerAttachmentsLoaded(false);
         setCustomerAttachmentsError(null);
@@ -1581,6 +1596,9 @@ export default function DesignTaskPage() {
               JSON.stringify(
                 buildDesignTaskPageCachePayload({
                   task: nextTask,
+                  quoteItem: nextQuoteItem,
+                  productPreviewUrl: nextProductPreviewUrl,
+                  productZoomPreviewUrl: nextProductZoomPreviewUrl,
                   customerAttachmentsLoaded: false,
                   attachments: nextAttachments,
                   designOutputLinks: nextDesignOutputLinks,
@@ -1658,6 +1676,9 @@ export default function DesignTaskPage() {
               ...(cached ?? {}),
               ...buildDesignTaskPageCachePayload({
                 task,
+                quoteItem,
+                productPreviewUrl,
+                productZoomPreviewUrl,
                 customerAttachmentsLoaded: true,
                 attachments: nextCachedAttachments,
                 designOutputLinks,
@@ -1684,6 +1705,7 @@ export default function DesignTaskPage() {
     effectiveTeamId,
     id,
     productPreviewUrl,
+    productZoomPreviewUrl,
     quoteItem,
     task,
   ]);
@@ -4032,6 +4054,9 @@ export default function DesignTaskPage() {
           JSON.stringify(
             buildDesignTaskPageCachePayload({
               task: nextTask,
+              quoteItem,
+              productPreviewUrl,
+              productZoomPreviewUrl,
               customerAttachmentsLoaded: false,
               designOutputLinks,
               designOutputGroups,
@@ -5929,6 +5954,7 @@ export default function DesignTaskPage() {
                     {productPreviewUrl ? (
                       <KanbanImageZoomPreview
                         imageUrl={productPreviewUrl}
+                        zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl}
                         alt={quoteItem?.name ?? "Товар"}
                         className="h-10 w-10 rounded-md border border-border/60 bg-muted/30"
                       />

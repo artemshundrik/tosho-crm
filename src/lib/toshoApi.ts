@@ -73,6 +73,7 @@ export type CatalogModelLookupRow = {
   id: string;
   name?: string | null;
   image_url?: string | null;
+  thumb_url?: string | null;
 };
 
 export type CatalogModelMetadataLookup = {
@@ -202,7 +203,7 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
   const missingIds = normalizedIds.filter((id) => !catalogModelLookupCache.has(id));
   if (missingIds.length > 0) {
     const loadModels = async (withImage: boolean) => {
-      const columns = withImage ? "id,name,image_url" : "id,name";
+      const columns = withImage ? "id,name,image_url,thumb_url:metadata->imageAsset->>thumbUrl" : "id,name";
       return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", missingIds);
     };
 
@@ -221,6 +222,7 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
         id: row.id,
         name: typeof row.name === "string" ? row.name : null,
         image_url: typeof row.image_url === "string" ? row.image_url : null,
+        thumb_url: typeof row.thumb_url === "string" ? row.thumb_url : null,
       });
     });
     missingIds.forEach((id) => {

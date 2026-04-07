@@ -102,6 +102,7 @@ type DesignTask = {
   partyType?: "customer" | "lead" | null;
   productName?: string | null;
   productImageUrl?: string | null;
+  productZoomImageUrl?: string | null;
   productQtyLabel?: string | null;
   assigneeLabel?: string | null;
   assigneeAvatarUrl?: string | null;
@@ -1418,6 +1419,7 @@ export default function DesignPage() {
       const productNameByQuoteId = new Map<string, string | null>();
       const productImageByQuoteId = new Map<string, string | null>();
       const productQtyByQuoteId = new Map<string, string | null>();
+      const productZoomImageByQuoteId = new Map<string, string | null>();
       if (quoteIds.length > 0) {
         const { data: quoteRows, error: quoteError } = await supabase
           .schema("tosho")
@@ -1557,13 +1559,14 @@ export default function DesignPage() {
               .filter(Boolean)
           )
         );
-        const modelImageById = new Map<string, string>();
+        const modelImageById = new Map<string, { imageUrl: string; zoomImageUrl?: string | null }>();
         if (modelIds.length > 0) {
           const modelRows = await listCatalogModelsByIds(modelIds);
           modelRows.forEach((row, id) => {
-            const imageUrl = row.image_url?.trim();
+            const zoomImageUrl = row.image_url?.trim() || null;
+            const imageUrl = row.thumb_url?.trim() || zoomImageUrl;
             if (!imageUrl) return;
-            modelImageById.set(id, imageUrl);
+            modelImageById.set(id, { imageUrl, zoomImageUrl });
           });
         }
 
@@ -1578,7 +1581,11 @@ export default function DesignPage() {
             typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()
               ? modelImageById.get(item.catalog_model_id.trim()) ?? null
               : null;
-          productImageByQuoteId.set(quoteId, attachmentImage || catalogImage || null);
+          productImageByQuoteId.set(quoteId, attachmentImage || catalogImage?.imageUrl || null);
+          productZoomImageByQuoteId.set(
+            quoteId,
+            attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null
+          );
         });
       }
 
@@ -1623,6 +1630,7 @@ export default function DesignPage() {
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
         productImageUrl: sanitizeImageReference(productImageByQuoteId.get(t.quoteId) ?? null),
+        productZoomImageUrl: sanitizeImageReference(productZoomImageByQuoteId.get(t.quoteId) ?? null),
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
         assigneeLabel:
           t.assigneeLabel ??
@@ -3724,6 +3732,7 @@ export default function DesignPage() {
               {task.productImageUrl ? (
                 <KanbanImageZoomPreview
                   imageUrl={task.productImageUrl}
+                  zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}
                   alt={task.productName}
                   loadStrategy="interaction"
                 />
