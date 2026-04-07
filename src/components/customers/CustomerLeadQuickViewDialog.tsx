@@ -145,6 +145,12 @@ const normalizePartyMatch = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .replace(/[«»"'`]/g, "");
 
+const normalizeMemberKey = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
 const getInitials = (value?: string | null) => {
   const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "??";
@@ -210,6 +216,7 @@ export function CustomerLeadQuickViewDialog({
   const [orders, setOrders] = React.useState<RelatedOrderRow[]>([]);
   const [designTasks, setDesignTasks] = React.useState<RelatedDesignRow[]>([]);
   const [memberAvatarById, setMemberAvatarById] = React.useState<Record<string, string | null>>({});
+  const [memberAvatarByLabel, setMemberAvatarByLabel] = React.useState<Record<string, string | null>>({});
 
   React.useEffect(() => {
     if (!open || !userId) return;
@@ -227,8 +234,18 @@ export function CustomerLeadQuickViewDialog({
             return acc;
           }, {})
         );
+        setMemberAvatarByLabel(
+          rows.reduce<Record<string, string | null>>((acc, row) => {
+            const normalizedLabel = normalizeMemberKey(row.label);
+            if (normalizedLabel) acc[normalizedLabel] = row.avatarDisplayUrl ?? row.avatarUrl ?? null;
+            return acc;
+          }, {})
+        );
       } catch {
-        if (!cancelled) setMemberAvatarById({});
+        if (!cancelled) {
+          setMemberAvatarById({});
+          setMemberAvatarByLabel({});
+        }
       }
     };
 
@@ -445,7 +462,9 @@ export function CustomerLeadQuickViewDialog({
   const primaryLegalEntity = customer ? parseCustomerLegalEntities(customer)[0] ?? null : null;
   const managerLabel = customer?.manager ?? lead?.manager ?? null;
   const managerUserId = customer?.manager_user_id ?? lead?.manager_user_id ?? null;
-  const managerAvatarUrl = managerUserId ? memberAvatarById[managerUserId] ?? null : null;
+  const managerAvatarUrl =
+    (managerUserId ? memberAvatarById[managerUserId] ?? null : null) ??
+    (managerLabel ? memberAvatarByLabel[normalizeMemberKey(managerLabel)] ?? null : null);
 
   const renderRelationCard = React.useCallback(
     (
