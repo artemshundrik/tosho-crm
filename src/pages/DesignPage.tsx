@@ -2766,23 +2766,6 @@ export default function DesignPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
-        if (previousStatus === "in_progress" && next !== "in_progress") {
-          await logDesignTaskActivity({
-            teamId: effectiveTeamId,
-            designTaskId: task.id,
-            quoteId: task.quoteId,
-            userId,
-            actorName: actorLabel,
-            action: "design_task_timer",
-            title: "Таймер зупинено автоматично",
-            metadata: {
-              source: "design_task_timer",
-              timer_action: "auto_pause_on_status_change",
-              from_status: previousStatus,
-              to_status: next,
-            },
-          });
-        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -2937,23 +2920,6 @@ export default function DesignPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
-        if (previousAssignee !== nextAssigneeUserId) {
-          await logDesignTaskActivity({
-            teamId: effectiveTeamId,
-            designTaskId: task.id,
-            quoteId: task.quoteId,
-            userId,
-            actorName: actorLabel,
-            action: "design_task_timer",
-            title: "Таймер зупинено автоматично",
-            metadata: {
-              source: "design_task_timer",
-              timer_action: "auto_pause_on_reassign",
-              from_assignee_user_id: previousAssignee,
-              to_assignee_user_id: nextAssigneeUserId,
-            },
-          });
-        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,

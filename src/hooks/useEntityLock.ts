@@ -49,8 +49,8 @@ export function useEntityLock({
   userId,
   userLabel,
   enabled = true,
-  heartbeatMs = 15000,
-  ttlSeconds = 45,
+  heartbeatMs = 60000,
+  ttlSeconds = 180,
 }: UseEntityLockParams): UseEntityLockState {
   const [state, setState] = useState<UseEntityLockState>({
     loading: !!enabled,

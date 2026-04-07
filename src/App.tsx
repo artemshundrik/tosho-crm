@@ -13,7 +13,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabaseClient";
-import { logActivity } from "@/lib/activityLogger";
+import { logRuntimeError } from "@/lib/runtimeErrorLogger";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { useAuth } from "@/auth/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -328,12 +328,10 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
       const teamId = await resolveRuntimeLogTeamId(userId);
       if (!teamId || !userId) return;
 
-      await logActivity({
+      await logRuntimeError({
         teamId,
         userId,
-        action: "app_runtime_error",
-        entityType: "app_runtime_error",
-        entityId: path,
+        source: params.source,
         title: `${params.source}: ${message.slice(0, 180)}`,
         href: path,
         metadata: {

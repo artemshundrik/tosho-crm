@@ -21,6 +21,13 @@ create index if not exists entity_locks_team_entity_idx
 create index if not exists entity_locks_expires_idx
   on tosho.entity_locks (expires_at);
 
+alter table if exists tosho.entity_locks set (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_vacuum_threshold = 20,
+  autovacuum_analyze_scale_factor = 0.02,
+  autovacuum_analyze_threshold = 20
+);
+
 alter table tosho.entity_locks enable row level security;
 
 do $$
@@ -100,9 +107,14 @@ language plpgsql
 as $$
 declare
   v_now timestamptz := now();
-  v_expiry timestamptz := now() + make_interval(secs => greatest(coalesce(p_ttl_seconds, 45), 10));
+  v_ttl_seconds integer := greatest(coalesce(p_ttl_seconds, 180), 30);
+  v_expiry timestamptz := v_now + make_interval(secs => v_ttl_seconds);
+  v_refresh_threshold timestamptz := v_now + make_interval(secs => greatest(least(v_ttl_seconds / 2, 60), 15));
   v_row tosho.entity_locks%rowtype;
 begin
+  delete from tosho.entity_locks
+  where expires_at < v_now - interval '5 minutes';
+
   insert into tosho.entity_locks (
     team_id,
     entity_type,
@@ -139,6 +151,12 @@ begin
     return;
   end if;
 
+  if v_row.locked_by = p_user_id and v_row.expires_at > v_refresh_threshold then
+    return query
+    select true, v_row.locked_by, v_row.locked_by_name, v_row.expires_at;
+    return;
+  end if;
+
   if v_row.locked_by = p_user_id or v_row.expires_at <= v_now then
     update tosho.entity_locks
     set locked_by = p_user_id,
@@ -156,6 +174,23 @@ begin
 
   return query
   select false, v_row.locked_by, v_row.locked_by_name, v_row.expires_at;
+end;
+$$;
+
+create or replace function public.cleanup_entity_locks(
+  p_older_than_seconds integer default 300
+)
+returns integer
+language plpgsql
+as $$
+declare
+  v_deleted integer := 0;
+begin
+  delete from tosho.entity_locks
+  where expires_at < now() - make_interval(secs => greatest(coalesce(p_older_than_seconds, 300), 0));
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
 end;
 $$;
 

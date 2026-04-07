@@ -20,6 +20,7 @@ type RuntimeErrorRow = {
   created_at: string;
   user_id: string | null;
   actor_name: string | null;
+  source?: string | null;
   title: string | null;
   href: string | null;
   metadata: Record<string, unknown> | null;
@@ -63,10 +64,10 @@ export default function RuntimeErrorsPage() {
 
     try {
       const { data, error: fetchError } = await supabase
-        .from("activity_log")
-        .select("id,created_at,user_id,actor_name,title,href,metadata")
+        .schema("tosho")
+        .from("runtime_errors")
+        .select("id,created_at,user_id,actor_name,source,title,href,metadata")
         .eq("team_id", teamId)
-        .eq("action", "app_runtime_error")
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -89,7 +90,7 @@ export default function RuntimeErrorsPage() {
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const source = normalizeText(row.metadata?.source);
+      const source = normalizeText(row.source) || normalizeText(row.metadata?.source);
       if (sourceFilter !== "all" && source !== sourceFilter) return false;
       if (!query) return true;
 
@@ -193,7 +194,10 @@ export default function RuntimeErrorsPage() {
                 <TableBody>
                   {filteredRows.map((row) => {
                     const isExpanded = expandedId === row.id;
-                    const source = normalizeText(row.metadata?.source) as Exclude<RuntimeErrorSource, "all"> | "";
+                    const source =
+                      (normalizeText(row.source) || normalizeText(row.metadata?.source)) as
+                        | Exclude<RuntimeErrorSource, "all">
+                        | "";
                     const message = normalizeText(row.metadata?.message) || normalizeText(row.title) || "Без тексту помилки";
                     const path = normalizeText(row.metadata?.path) || normalizeText(row.href) || "—";
                     const userAgent = normalizeText(row.metadata?.user_agent);

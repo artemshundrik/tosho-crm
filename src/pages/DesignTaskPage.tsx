@@ -1735,6 +1735,7 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId)
         .eq("entity_type", "design_task")
         .eq("entity_id", taskId)
+        .neq("action", "design_task_timer")
         .order("created_at", { ascending: false });
 
       if (!options?.full) {
@@ -3783,22 +3784,6 @@ export default function DesignTaskPage() {
         userId,
       });
       await loadTimerSummary(task.id);
-
-      const actorLabel = getMemberLabel(userId);
-      await logDesignTaskActivity({
-        teamId: effectiveTeamId,
-        designTaskId: task.id,
-        quoteId: task.quoteId,
-        userId,
-        actorName: actorLabel,
-        action: "design_task_timer",
-        title: "Запустив таймер",
-        metadata: {
-          source: "design_task_timer",
-          timer_action: "start",
-        },
-      });
-      await loadHistory(task.id);
       toast.success("Таймер запущено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося запустити таймер"));
@@ -3818,21 +3803,6 @@ export default function DesignTaskPage() {
       });
       await loadTimerSummary(task.id);
       if (wasPaused && !options?.silent) {
-        const actorLabel = userId ? getMemberLabel(userId) : "System";
-        await logDesignTaskActivity({
-          teamId: effectiveTeamId,
-          designTaskId: task.id,
-          quoteId: task.quoteId,
-          userId,
-          actorName: actorLabel,
-          action: "design_task_timer",
-          title: "Поставив таймер на паузу",
-          metadata: {
-            source: "design_task_timer",
-            timer_action: "pause",
-          },
-        });
-        await loadHistory(task.id);
         toast.success("Таймер на паузі");
       }
       return wasPaused;
@@ -3933,23 +3903,6 @@ export default function DesignTaskPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
-        if (previousStatus === "in_progress" && nextStatus !== "in_progress") {
-          await logDesignTaskActivity({
-            teamId: effectiveTeamId,
-            designTaskId: task.id,
-            quoteId: task.quoteId,
-            userId,
-            actorName: actorLabel,
-            action: "design_task_timer",
-            title: "Таймер зупинено автоматично",
-            metadata: {
-              source: "design_task_timer",
-              timer_action: "auto_pause_on_status_change",
-              from_status: previousStatus,
-              to_status: nextStatus,
-            },
-          });
-        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -4514,23 +4467,6 @@ export default function DesignTaskPage() {
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
       try {
-        if (previousAssignee !== nextAssigneeUserId) {
-          await logDesignTaskActivity({
-            teamId: effectiveTeamId,
-            designTaskId: task.id,
-            quoteId: task.quoteId,
-            userId,
-            actorName: actorLabel,
-            action: "design_task_timer",
-            title: "Таймер зупинено автоматично",
-            metadata: {
-              source: "design_task_timer",
-              timer_action: "auto_pause_on_reassign",
-              from_assignee_user_id: previousAssignee,
-              to_assignee_user_id: nextAssigneeUserId,
-            },
-          });
-        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
@@ -4765,23 +4701,6 @@ export default function DesignTaskPage() {
 
       const actorLabel = getMemberLabel(userId);
       try {
-        if (previousAssignee && previousAssignee !== userId) {
-          await logDesignTaskActivity({
-            teamId: effectiveTeamId,
-            designTaskId: task.id,
-            quoteId: task.quoteId,
-            userId,
-            actorName: actorLabel,
-            action: "design_task_timer",
-            title: "Таймер зупинено автоматично",
-            metadata: {
-              source: "design_task_timer",
-              timer_action: "auto_pause_on_takeover",
-              from_assignee_user_id: previousAssignee,
-              to_assignee_user_id: userId,
-            },
-          });
-        }
         if (options?.estimateMinutes != null) {
           await logDesignTaskActivity({
             teamId: effectiveTeamId,
