@@ -38,8 +38,10 @@ import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } 
 import {
   CalendarIcon,
   Image as ImageIcon,
+  Loader2,
   PlusCircle,
   Trash2,
+  Unlink,
   User,
   UserPlus,
   PackageCheck,
@@ -123,6 +125,12 @@ export type CustomerDialogProps = {
   onOpenCalculation?: (id: string) => void;
   onOpenOrder?: (id: string) => void;
   onOpenDesignTask?: (id: string) => void;
+  isDropboxLinked?: boolean;
+  dropboxAction?: "open" | "create" | "attach" | "detach" | null;
+  onOpenClientFiles?: () => void;
+  onCreateDropboxFolder?: () => void;
+  onAttachDropboxFolder?: () => void;
+  onDetachDropboxFolder?: () => void;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -210,6 +218,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   onOpenCalculation,
   onOpenOrder,
   onOpenDesignTask,
+  isDropboxLinked = false,
+  dropboxAction = null,
+  onOpenClientFiles,
+  onCreateDropboxFolder,
+  onAttachDropboxFolder,
+  onDetachDropboxFolder,
 }) => {
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const primaryLegalEntity = form.legalEntities[0] ?? createEmptyCustomerLegalEntity();
@@ -427,6 +441,44 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           </DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
+
+        {isDropboxLinked && onOpenClientFiles ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onOpenClientFiles} disabled={dropboxAction !== null}>
+              {dropboxAction === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Відкрити папку Dropbox
+            </Button>
+            {onDetachDropboxFolder ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-10 px-0 shrink-0"
+                onClick={onDetachDropboxFolder}
+                disabled={dropboxAction !== null}
+                title="Відв'язати папку Dropbox"
+                aria-label="Відв'язати папку Dropbox"
+              >
+                {dropboxAction === "detach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
+              </Button>
+            ) : null}
+          </div>
+        ) : (!isDropboxLinked && (onCreateDropboxFolder || onAttachDropboxFolder)) ? (
+          <div className="flex flex-wrap gap-2">
+            {onCreateDropboxFolder ? (
+              <Button type="button" variant="outline" size="sm" onClick={onCreateDropboxFolder} disabled={dropboxAction !== null}>
+                {dropboxAction === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Створити папку Dropbox
+              </Button>
+            ) : null}
+            {onAttachDropboxFolder ? (
+              <Button type="button" variant="outline" size="sm" onClick={onAttachDropboxFolder} disabled={dropboxAction !== null}>
+                {dropboxAction === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Прив'язати папку Dropbox
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>

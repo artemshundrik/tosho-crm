@@ -50,8 +50,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Users, X } from "lucide-react";
+import { Building2, ExternalLink, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Unlink, Users, X } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
+import { toast } from "sonner";
 
 type CustomerRow = {
   id: string;
@@ -81,6 +82,9 @@ type CustomerRow = {
   event_at?: string | null;
   event_comment?: string | null;
   notes?: string | null;
+  dropbox_client_path?: string | null;
+  dropbox_brand_path?: string | null;
+  dropbox_shared_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -129,6 +133,83 @@ type LinkedDesignTaskRow = {
   subtitle?: string | null;
   created_at?: string | null;
 };
+
+type DropboxManageCreateClientResponse = {
+  ok: boolean;
+  clientPath?: string | null;
+  clientSharedUrl?: string | null;
+  sharedUrl?: string | null;
+  error?: string | null;
+};
+
+type CustomerDropboxLink = {
+  clientPath: string;
+  clientSharedUrl: string;
+};
+
+type CustomerDropboxAction = "open" | "create" | "attach" | "detach";
+
+function getCustomerDropboxStorageKey(teamId: string) {
+  return `customers-dropbox-links:${teamId}`;
+}
+
+function readCustomerDropboxLinks(teamId: string): Record<string, CustomerDropboxLink> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(getCustomerDropboxStorageKey(teamId));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, CustomerDropboxLink>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCustomerDropboxLinks(teamId: string, payload: Record<string, CustomerDropboxLink>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(getCustomerDropboxStorageKey(teamId), JSON.stringify(payload));
+  } catch {
+    // ignore persistence issues
+  }
+}
+
+function normalizeCustomerDropboxPath(path: string) {
+  return path.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function buildCustomerDropboxClientPath(clientFolderName: string) {
+  const normalizedFolderName = normalizeCustomerDropboxPath(clientFolderName);
+  return `Tosho Team Folder/Замовники/${normalizedFolderName}`;
+}
+
+function buildCustomerDropboxBrandPath(clientPath: string) {
+  return `${normalizeCustomerDropboxPath(clientPath)}/Бренд`;
+}
+
+function extractCustomerDropboxLinks(rows: CustomerRow[]) {
+  const links: Record<string, CustomerDropboxLink> = {};
+  rows.forEach((row) => {
+    const clientPath = normalizeCustomerDropboxPath(row.dropbox_client_path ?? "");
+    const sharedUrl = (row.dropbox_shared_url ?? "").trim();
+    if (!row.id || !clientPath || !sharedUrl) return;
+    links[row.id] = {
+      clientPath,
+      clientSharedUrl: sharedUrl,
+    };
+  });
+  return links;
+}
+
+function isMissingCustomerDropboxColumnsError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && typeof (error as { message?: unknown }).message === "string"
+        ? ((error as { message: string }).message)
+        : "";
+  return /column/i.test(message) && /dropbox_(client_path|brand_path|shared_url)/i.test(message);
+}
 
 const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   name: "",
@@ -215,7 +296,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 const ALL_MANAGERS_FILTER = "__all__";
 const CUSTOMERS_PAGE_SIZE = 50;
 const CUSTOMERS_SEARCH_FETCH_PAGE_SIZE = 500;
-const CUSTOMER_COLUMNS = [
+const CUSTOMER_BASE_COLUMNS = [
   "id",
   "team_id",
   "name",
@@ -245,7 +326,14 @@ const CUSTOMER_COLUMNS = [
   "notes",
   "created_at",
   "updated_at",
-].join(",");
+];
+const CUSTOMER_DROPBOX_COLUMNS = [
+  "dropbox_client_path",
+  "dropbox_brand_path",
+  "dropbox_shared_url",
+];
+const CUSTOMER_COLUMNS = [...CUSTOMER_BASE_COLUMNS, ...CUSTOMER_DROPBOX_COLUMNS].join(",");
+const CUSTOMER_COLUMNS_LEGACY = CUSTOMER_BASE_COLUMNS.join(",");
 const LEAD_COLUMNS = [
   "id",
   "team_id",
@@ -430,6 +518,352 @@ function CustomersPage({ teamId }: { teamId: string }) {
     eventComment: "",
     notes: "",
   });
+  const customerDropboxColumnsAvailableRef = useRef<boolean | null>(null);
+  const [customerDropboxLinks, setCustomerDropboxLinks] = useState<Record<string, CustomerDropboxLink>>(() =>
+    readCustomerDropboxLinks(teamId)
+  );
+  const [dropboxActionState, setDropboxActionState] = useState<{
+    customerId: string;
+    action: CustomerDropboxAction;
+  } | null>(null);
+  const [attachDropboxDialogOpen, setAttachDropboxDialogOpen] = useState(false);
+  const [attachDropboxTarget, setAttachDropboxTarget] = useState<{ customerId: string; clientName: string } | null>(null);
+  const [attachDropboxPath, setAttachDropboxPath] = useState("");
+
+  useEffect(() => {
+    setCustomerDropboxLinks(readCustomerDropboxLinks(teamId));
+  }, [teamId]);
+
+  useEffect(() => {
+    writeCustomerDropboxLinks(teamId, customerDropboxLinks);
+  }, [customerDropboxLinks, teamId]);
+
+  useEffect(() => {
+    if (customerDropboxColumnsAvailableRef.current === false) return;
+    setCustomerDropboxLinks((current) => {
+      const next = { ...current };
+      rows.forEach((row) => {
+        delete next[row.id];
+      });
+      return {
+        ...next,
+        ...extractCustomerDropboxLinks(rows),
+      };
+    });
+  }, [rows]);
+
+  const runCustomerSelect = useCallback(
+    async <T extends { error: unknown | null }>(factory: (columns: string) => Promise<T>) => {
+      if (customerDropboxColumnsAvailableRef.current !== false) {
+        const fullResult = await factory(CUSTOMER_COLUMNS);
+        if (!fullResult.error) {
+          customerDropboxColumnsAvailableRef.current = true;
+          return fullResult;
+        }
+        if (!isMissingCustomerDropboxColumnsError(fullResult.error)) {
+          return fullResult;
+        }
+        customerDropboxColumnsAvailableRef.current = false;
+      }
+
+      return await factory(CUSTOMER_COLUMNS_LEGACY);
+    },
+    []
+  );
+
+  const syncCustomerDropboxLinkToDatabase = useCallback(
+    async (customerId: string, link: CustomerDropboxLink | null) => {
+      if (customerDropboxColumnsAvailableRef.current === false) return false;
+
+      const updatePayload = link
+        ? {
+            dropbox_client_path: normalizeCustomerDropboxPath(link.clientPath),
+            dropbox_brand_path: buildCustomerDropboxBrandPath(link.clientPath),
+            dropbox_shared_url: link.clientSharedUrl.trim(),
+          }
+        : {
+            dropbox_client_path: null,
+            dropbox_brand_path: null,
+            dropbox_shared_url: null,
+          };
+
+      const { error } = await supabase
+        .schema("tosho")
+        .from("customers")
+        .update(updatePayload)
+        .eq("id", customerId)
+        .eq("team_id", teamId);
+
+      if (error) {
+        if (isMissingCustomerDropboxColumnsError(error)) {
+          customerDropboxColumnsAvailableRef.current = false;
+          return false;
+        }
+        throw error;
+      }
+
+      customerDropboxColumnsAvailableRef.current = true;
+      setRows((current) =>
+        current.map((row) =>
+          row.id === customerId
+            ? {
+                ...row,
+                ...updatePayload,
+              }
+            : row
+        )
+      );
+      return true;
+    },
+    [teamId]
+  );
+
+  const persistCustomerDropboxLink = useCallback(
+    async (customerId: string, link: CustomerDropboxLink) => {
+      const previous = customerDropboxLinks[customerId];
+      setCustomerDropboxLinks((prev) => ({
+        ...prev,
+        [customerId]: link,
+      }));
+
+      try {
+        await syncCustomerDropboxLinkToDatabase(customerId, link);
+      } catch (error) {
+        setCustomerDropboxLinks((prev) => {
+          const next = { ...prev };
+          if (previous) next[customerId] = previous;
+          else delete next[customerId];
+          return next;
+        });
+        throw error;
+      }
+    },
+    [customerDropboxLinks, syncCustomerDropboxLinkToDatabase]
+  );
+
+  const removeCustomerDropboxLink = useCallback(
+    async (customerId: string) => {
+      const previous = customerDropboxLinks[customerId];
+      setCustomerDropboxLinks((prev) => {
+        const next = { ...prev };
+        delete next[customerId];
+        return next;
+      });
+
+      try {
+        await syncCustomerDropboxLinkToDatabase(customerId, null);
+      } catch (error) {
+        if (previous) {
+          setCustomerDropboxLinks((prev) => ({
+            ...prev,
+            [customerId]: previous,
+          }));
+        }
+        throw error;
+      }
+    },
+    [customerDropboxLinks, syncCustomerDropboxLinkToDatabase]
+  );
+
+  const getConflictingCustomerDropboxLink = useCallback(
+    (customerId: string, targetPath: string) => {
+      const normalizedTarget = normalizeCustomerDropboxPath(targetPath).toLowerCase();
+      return Object.entries(customerDropboxLinks).find(([linkedCustomerId, link]) => {
+        if (linkedCustomerId === customerId) return false;
+        return normalizeCustomerDropboxPath(link.clientPath).toLowerCase() === normalizedTarget;
+      });
+    },
+    [customerDropboxLinks]
+  );
+
+  const ensureCustomerDropboxFolders = useCallback(async (clientName: string) => {
+    const response = await fetch("/.netlify/functions/dropbox-manage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "create-client",
+        clientName,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as DropboxManageCreateClientResponse | null;
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || "Не вдалося підготувати Dropbox-папки замовника.");
+    }
+
+    return payload;
+  }, []);
+
+  const inspectCustomerDropboxFolder = useCallback(async (clientPath: string) => {
+    const response = await fetch(
+      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(normalizeCustomerDropboxPath(clientPath))}`
+    );
+    const payload = (await response.json().catch(() => null)) as DropboxManageCreateClientResponse | null;
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || "Не вдалося отримати Dropbox-папку замовника.");
+    }
+    return payload;
+  }, []);
+
+  const openCustomerDropboxFolder = useCallback(async (customerId: string, clientName: string) => {
+    const normalizedClientName = clientName.trim();
+    if (!normalizedClientName || typeof window === "undefined") return;
+
+    const linked = customerDropboxLinks[customerId];
+    let targetUrl = linked?.clientSharedUrl ?? "";
+    const fallbackPath = `Tosho Team Folder/Замовники/${normalizedClientName}`;
+
+    try {
+      if (!targetUrl) {
+        const clientPath = linked?.clientPath || fallbackPath;
+        const payload = await inspectCustomerDropboxFolder(clientPath);
+        targetUrl = payload.sharedUrl || payload.clientSharedUrl || "";
+        if (targetUrl && clientPath) {
+          await persistCustomerDropboxLink(customerId, {
+            clientPath,
+            clientSharedUrl: targetUrl,
+          });
+        }
+      }
+    } catch (error) {
+      if (!linked?.clientPath || normalizeCustomerDropboxPath(linked.clientPath) === normalizeCustomerDropboxPath(fallbackPath)) {
+        throw error;
+      }
+
+      const payload = await inspectCustomerDropboxFolder(fallbackPath).catch(() => null);
+      const fallbackUrl = payload?.sharedUrl || payload?.clientSharedUrl || "";
+      if (!fallbackUrl) {
+        throw new Error("Прив'язана Dropbox-папка недоступна. Переприв'яжіть її ще раз.");
+      }
+
+      await persistCustomerDropboxLink(customerId, {
+        clientPath: fallbackPath,
+        clientSharedUrl: fallbackUrl,
+      });
+      targetUrl = fallbackUrl;
+    }
+
+    if (!targetUrl) {
+      throw new Error("Не вдалося отримати посилання на папку замовника.");
+    }
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }, [customerDropboxLinks, inspectCustomerDropboxFolder, persistCustomerDropboxLink]);
+
+  const createCustomerDropboxFolder = useCallback(async (customerId: string, clientName: string) => {
+    const normalizedClientName = clientName.trim();
+    if (!normalizedClientName) return;
+    const defaultPath = `Tosho Team Folder/Замовники/${normalizedClientName}`;
+    const conflictingLink = getConflictingCustomerDropboxLink(customerId, defaultPath);
+    if (conflictingLink) {
+      const conflictingCustomer = rows.find((row) => row.id === conflictingLink[0]);
+      throw new Error(
+        `Ця Dropbox-папка вже прив'язана до ${conflictingCustomer?.name ?? conflictingCustomer?.legal_name ?? "іншого замовника"}.`
+      );
+    }
+
+    try {
+      const payload = await ensureCustomerDropboxFolders(normalizedClientName);
+      if (payload.clientPath && payload.clientSharedUrl) {
+        await persistCustomerDropboxLink(customerId, {
+          clientPath: payload.clientPath,
+          clientSharedUrl: payload.clientSharedUrl,
+        });
+      }
+    } catch (error) {
+      const inspected = await inspectCustomerDropboxFolder(defaultPath).catch(() => null);
+      const fallbackUrl = inspected?.sharedUrl || inspected?.clientSharedUrl;
+      if (inspected && fallbackUrl) {
+        await persistCustomerDropboxLink(customerId, {
+          clientPath: defaultPath,
+          clientSharedUrl: fallbackUrl,
+        });
+        return;
+      }
+      throw error;
+    }
+  }, [ensureCustomerDropboxFolders, getConflictingCustomerDropboxLink, inspectCustomerDropboxFolder, persistCustomerDropboxLink, rows]);
+
+  const attachCustomerDropboxFolder = useCallback(async (customerId: string, normalizedPath: string) => {
+    const normalizedTargetPath = normalizeCustomerDropboxPath(normalizedPath);
+    if (!normalizedTargetPath) return;
+
+    const conflictingLink = getConflictingCustomerDropboxLink(customerId, normalizedTargetPath);
+    if (conflictingLink) {
+      const conflictingCustomer = rows.find((row) => row.id === conflictingLink[0]);
+      throw new Error(
+        `Ця Dropbox-папка вже прив'язана до ${conflictingCustomer?.name ?? conflictingCustomer?.legal_name ?? "іншого замовника"}.`
+      );
+    }
+
+    const payload = await inspectCustomerDropboxFolder(normalizedTargetPath);
+    const targetUrl = payload.sharedUrl || payload.clientSharedUrl;
+    if (!targetUrl) {
+      throw new Error("Не вдалося прив'язати Dropbox-папку.");
+    }
+
+    await persistCustomerDropboxLink(customerId, {
+      clientPath: normalizedTargetPath,
+      clientSharedUrl: targetUrl,
+    });
+  }, [getConflictingCustomerDropboxLink, inspectCustomerDropboxFolder, persistCustomerDropboxLink, rows]);
+
+  const runCustomerDropboxAction = useCallback(
+    async (
+      customerId: string,
+      action: CustomerDropboxAction,
+      handler: () => Promise<void>,
+      successMessage?: string
+    ) => {
+      setDropboxActionState({ customerId, action });
+      try {
+        await handler();
+        if (successMessage) toast.success(successMessage);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Помилка Dropbox");
+      } finally {
+        setDropboxActionState((current) =>
+          current?.customerId === customerId && current.action === action ? null : current
+        );
+      }
+    },
+    []
+  );
+
+  const detachCustomerDropboxFolder = useCallback(async (customerId: string) => {
+    await removeCustomerDropboxLink(customerId);
+  }, [removeCustomerDropboxLink]);
+
+  const openAttachDropboxDialog = useCallback((customerId: string, clientName: string) => {
+    const suggestedFolderName = clientName.trim();
+    setAttachDropboxTarget({ customerId, clientName });
+    setAttachDropboxPath(suggestedFolderName);
+    setAttachDropboxDialogOpen(true);
+  }, []);
+
+  const submitAttachDropboxDialog = useCallback(async () => {
+    if (!attachDropboxTarget) return;
+    const normalizedFolderName = normalizeCustomerDropboxPath(attachDropboxPath);
+    if (!normalizedFolderName) {
+      toast.error("Вкажіть назву папки клієнта");
+      return;
+    }
+    const normalizedPath = buildCustomerDropboxClientPath(normalizedFolderName);
+
+    await runCustomerDropboxAction(
+      attachDropboxTarget.customerId,
+      "attach",
+      async () => {
+        await attachCustomerDropboxFolder(attachDropboxTarget.customerId, normalizedPath);
+        setAttachDropboxDialogOpen(false);
+        setAttachDropboxTarget(null);
+        setAttachDropboxPath("");
+      },
+      "Папку Dropbox прив'язано"
+    );
+  }, [attachCustomerDropboxFolder, attachDropboxPath, attachDropboxTarget, runCustomerDropboxAction]);
   const [linkedQuotes, setLinkedQuotes] = useState<QuoteHistoryRow[]>([]);
   const [linkedOrders, setLinkedOrders] = useState<QuoteHistoryRow[]>([]);
   const [linkedDesignTasks, setLinkedDesignTasks] = useState<LinkedDesignTaskRow[]>([]);
@@ -1001,35 +1435,39 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const fetchCustomerById = useCallback(
     async (customerId: string) => {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .select(CUSTOMER_COLUMNS)
-        .eq("team_id", teamId)
-        .eq("id", customerId)
-        .maybeSingle<CustomerRow>();
+      const { data, error } = await runCustomerSelect(async (columns) =>
+        await supabase
+          .schema("tosho")
+          .from("customers")
+          .select(columns)
+          .eq("team_id", teamId)
+          .eq("id", customerId)
+          .maybeSingle<CustomerRow>()
+      );
       if (error) throw error;
       return data ?? null;
     },
-    [teamId]
+    [runCustomerSelect, teamId]
   );
 
   const fetchCustomerByName = useCallback(
     async (customerName: string) => {
       const normalizedCustomerName = normalizePartyMatch(customerName);
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("customers")
-        .select(CUSTOMER_COLUMNS)
-        .eq("team_id", teamId)
-        .or(`name.eq.${customerName},legal_name.eq.${customerName}`)
-        .limit(20);
+      const { data, error } = await runCustomerSelect(async (columns) =>
+        await supabase
+          .schema("tosho")
+          .from("customers")
+          .select(columns)
+          .eq("team_id", teamId)
+          .or(`name.eq.${customerName},legal_name.eq.${customerName}`)
+          .limit(20)
+      );
       if (error) throw error;
       return (((data as unknown) as CustomerRow[]) ?? []).find((row) =>
         [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
       ) ?? null;
     },
-    [teamId]
+    [runCustomerSelect, teamId]
   );
 
   const fetchLeadById = useCallback(
@@ -1079,31 +1517,35 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setCustomersError(null);
     try {
-      let query = supabase
-        .schema("tosho")
-        .from("customers")
-        .select(CUSTOMER_COLUMNS, { count: "exact" })
-        .eq("team_id", teamId)
-        .order("name", { ascending: true });
+      const buildCustomersQuery = (columns: string) => {
+        let query = supabase
+          .schema("tosho")
+          .from("customers")
+          .select(columns, { count: "exact" })
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
 
-      if (isManagerUser && userId) {
-        query = query.eq("manager_user_id", userId);
-      } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
-        const selectedManager = memberByLabel.get(customerManagerFilter);
-        if (selectedManager?.userId) {
-          query = query.or(`manager_user_id.eq.${selectedManager.userId},manager.eq.${customerManagerFilter}`);
-        } else {
-          query = query.eq("manager", customerManagerFilter);
+        if (isManagerUser && userId) {
+          query = query.eq("manager_user_id", userId);
+        } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
+          const selectedManager = memberByLabel.get(customerManagerFilter);
+          if (selectedManager?.userId) {
+            query = query.or(`manager_user_id.eq.${selectedManager.userId},manager.eq.${customerManagerFilter}`);
+          } else {
+            query = query.eq("manager", customerManagerFilter);
+          }
         }
-      }
 
-      const normalizedSearch = search.trim();
-      if (normalizedSearch) {
-        const escaped = escapePostgrestTerm(normalizedSearch);
-        query = query.or(
-          `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
-        );
-      }
+        const normalizedSearch = search.trim();
+        if (normalizedSearch) {
+          const escaped = escapePostgrestTerm(normalizedSearch);
+          query = query.or(
+            `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
+          );
+        }
+
+        return query;
+      };
 
       const nextRows: CustomerRow[] = [];
       let nextOffset = offset;
@@ -1111,7 +1553,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       while (true) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
-        const { data, error: loadError, count } = await query.range(nextOffset, nextOffset + pageSize - 1);
+        const { data, error: loadError, count } = await runCustomerSelect(async (columns) =>
+          await buildCustomersQuery(columns).range(nextOffset, nextOffset + pageSize - 1)
+        );
         if (loadError) throw loadError;
         const pageRows = ((data as unknown) as CustomerRow[]) ?? [];
         nextRows.push(...pageRows);
@@ -1137,7 +1581,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setCustomersLoading(false);
       setCustomersRefreshing(false);
     }
-  }, [customerManagerFilter, isManagerUser, memberByLabel, search, teamId, userId]);
+  }, [customerManagerFilter, isManagerUser, memberByLabel, runCustomerSelect, search, teamId, userId]);
 
   const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
@@ -2118,6 +2562,29 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                                  {customerDropboxLinks[row.id] ? (
+                                    <>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "open", () => openCustomerDropboxFolder(row.id, row.name ?? row.legal_name ?? ""))}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Відкрити папку Dropbox
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "detach", () => detachCustomerDropboxFolder(row.id), "Папку Dropbox відв'язано")}>
+                                        <Unlink className="mr-2 h-4 w-4" />
+                                        Відв'язати папку Dropbox
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "create", () => createCustomerDropboxFolder(row.id, row.name ?? row.legal_name ?? ""), "Папку Dropbox створено")}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Створити папку Dropbox
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openAttachDropboxDialog(row.id, row.name ?? row.legal_name ?? "")}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Прив'язати папку Dropbox
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => openDelete(row)}
@@ -2283,6 +2750,29 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
+                                  {customerDropboxLinks[row.id] ? (
+                                    <>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "open", () => openCustomerDropboxFolder(row.id, row.name ?? row.legal_name ?? ""))}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Відкрити папку Dropbox
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "detach", () => detachCustomerDropboxFolder(row.id), "Папку Dropbox відв'язано")}>
+                                        <Unlink className="mr-2 h-4 w-4" />
+                                        Відв'язати папку Dropbox
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "create", () => createCustomerDropboxFolder(row.id, row.name ?? row.legal_name ?? ""), "Папку Dropbox створено")}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Створити папку Dropbox
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openAttachDropboxDialog(row.id, row.name ?? row.legal_name ?? "")}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Прив'язати папку Dropbox
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => openDelete(row)}
@@ -2539,8 +3029,88 @@ function CustomersPage({ teamId }: { teamId: string }) {
         onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
         onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
         onOpenDesignTask={(id) => navigate(`/design/${id}`)}
+        isDropboxLinked={!!(editingId && customerDropboxLinks[editingId])}
+        dropboxAction={
+          editingId && dropboxActionState?.customerId === editingId ? dropboxActionState.action : null
+        }
+        onOpenClientFiles={
+          editingId && form.name.trim()
+            ? () => void runCustomerDropboxAction(editingId, "open", () => openCustomerDropboxFolder(editingId, form.name.trim()))
+            : undefined
+        }
+        onCreateDropboxFolder={
+          editingId && form.name.trim()
+            ? () => void runCustomerDropboxAction(editingId, "create", () => createCustomerDropboxFolder(editingId, form.name.trim()), "Папку Dropbox створено")
+            : undefined
+        }
+        onAttachDropboxFolder={
+          editingId && form.name.trim()
+            ? () => openAttachDropboxDialog(editingId, form.name.trim())
+            : undefined
+        }
+        onDetachDropboxFolder={
+          editingId && customerDropboxLinks[editingId]
+            ? () => void runCustomerDropboxAction(editingId, "detach", () => detachCustomerDropboxFolder(editingId), "Папку Dropbox відв'язано")
+            : undefined
+        }
         onSubmit={handleSave}
       />
+
+      <Dialog
+        open={attachDropboxDialogOpen}
+        onOpenChange={(open) => {
+          setAttachDropboxDialogOpen(open);
+          if (!open && dropboxActionState?.action !== "attach") {
+            setAttachDropboxTarget(null);
+            setAttachDropboxPath("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Прив'язати папку Dropbox
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Вкажіть тільки назву папки клієнта{attachDropboxTarget?.clientName ? ` для ${attachDropboxTarget.clientName}` : ""}. Шлях `Tosho Team Folder/Замовники/` підставиться автоматично.
+            </div>
+            <div className="grid gap-2">
+              <div className="flex h-10 items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+                Tosho Team Folder/Замовники/
+              </div>
+              <Input
+                value={attachDropboxPath}
+                onChange={(event) => setAttachDropboxPath(event.target.value)}
+                placeholder="LG"
+                className="h-10"
+              />
+              <div className="text-xs text-muted-foreground">
+                Приклад: `LG`
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="pt-2 border-t border-border/50">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAttachDropboxDialogOpen(false);
+                setAttachDropboxTarget(null);
+                setAttachDropboxPath("");
+              }}
+              disabled={dropboxActionState?.action === "attach"}
+            >
+              Скасувати
+            </Button>
+            <Button onClick={() => void submitAttachDropboxDialog()} disabled={dropboxActionState?.action === "attach"}>
+              {dropboxActionState?.action === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Прив'язати папку Dropbox
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <LeadDialog
         open={leadDialogOpen}
