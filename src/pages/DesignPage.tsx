@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -2069,6 +2069,23 @@ export default function DesignPage() {
   useEffect(() => {
     setTasksFetchLimit(viewMode === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE);
   }, [effectiveTeamId, viewMode]);
+
+  useLayoutEffect(() => {
+    if (viewMode !== "kanban") return;
+    if (typeof window === "undefined") return;
+
+    const scrollingElement = document.scrollingElement;
+    scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    const viewport = desktopKanbanViewportRef.current;
+    if (viewport) {
+      viewport.scrollLeft = 0;
+      viewport.scrollTop = 0;
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     if (viewMode !== "kanban") return;
