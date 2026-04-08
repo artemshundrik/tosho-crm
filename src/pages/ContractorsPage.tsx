@@ -47,6 +47,7 @@ import {
 type ContractorRow = {
   id: string;
   team_id?: string | null;
+  kind?: "contractor" | "supplier" | null;
   name?: string | null;
   services?: string | null;
   contact_name?: string | null;
@@ -77,6 +78,7 @@ const ALL_SERVICES_FILTER = "__all__";
 const CONTRACTOR_COLUMNS = [
   "id",
   "team_id",
+  "kind",
   "name",
   "services",
   "contact_name",
@@ -89,6 +91,10 @@ const CONTRACTOR_COLUMNS = [
   "created_at",
   "updated_at",
 ].join(",");
+
+function normalizeKind(value?: string | null): "contractor" | "supplier" {
+  return value === "supplier" ? "supplier" : "contractor";
+}
 
 const EMPTY_FORM: ContractorFormState = {
   name: "",
@@ -278,19 +284,24 @@ export default function ContractorsPage() {
   }, [authLoading, loadContractors]);
 
   const serviceOptions = useMemo(() => {
+    const currentKind = activeTab === "suppliers" ? "supplier" : "contractor";
+
     return Array.from(
       new Set(
         rows
+          .filter((row) => normalizeKind(row.kind) === currentKind)
           .map((row) => row.services?.trim() ?? "")
           .filter(Boolean)
       )
     ).sort((left, right) => left.localeCompare(right, "uk"));
-  }, [rows]);
+  }, [activeTab, rows]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
+    const currentKind = activeTab === "suppliers" ? "supplier" : "contractor";
 
     return rows.filter((row) => {
+      if (normalizeKind(row.kind) !== currentKind) return false;
       const matchesService = serviceFilter === ALL_SERVICES_FILTER || (row.services?.trim() ?? "") === serviceFilter;
       if (!matchesService) return false;
       if (!normalizedSearch) return true;
@@ -310,10 +321,18 @@ export default function ContractorsPage() {
 
       return haystack.includes(normalizedSearch);
     });
-  }, [rows, search, serviceFilter]);
+  }, [activeTab, rows, search, serviceFilter]);
 
   const hasActiveFilters = Boolean(search.trim()) || serviceFilter !== ALL_SERVICES_FILTER;
   const activeTabCount = filteredRows.length;
+  const contractorsCount = useMemo(
+    () => rows.filter((row) => normalizeKind(row.kind) === "contractor").length,
+    [rows]
+  );
+  const suppliersCount = useMemo(
+    () => rows.filter((row) => normalizeKind(row.kind) === "supplier").length,
+    [rows]
+  );
 
   const openCreate = useCallback(() => {
     setEditingRow(null);
@@ -347,7 +366,7 @@ export default function ContractorsPage() {
           >
             <Building2 className="h-4 w-4" />
             Підрядники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{rows.length}</span>
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{contractorsCount}</span>
           </Button>
           <Button
             variant="segmented"
@@ -358,7 +377,7 @@ export default function ContractorsPage() {
           >
             <Building2 className="h-4 w-4" />
             Постачальники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{rows.length}</span>
+            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{suppliersCount}</span>
           </Button>
         </div>
         <Button
@@ -426,7 +445,7 @@ export default function ContractorsPage() {
         </div>
       </div>
     </div>
-  ), [activeTab, activeTabCount, clearFilters, hasActiveFilters, openCreate, refreshing, rows.length, schemaMissing, search, serviceFilter, serviceOptions]);
+  ), [activeTab, activeTabCount, clearFilters, contractorsCount, hasActiveFilters, openCreate, refreshing, schemaMissing, search, serviceFilter, serviceOptions, suppliersCount]);
 
   usePageHeaderActions(headerActions, [headerActions]);
 
@@ -446,6 +465,7 @@ export default function ContractorsPage() {
 
     const payload = {
       team_id: teamId,
+      kind: editingRow?.id ? normalizeKind(editingRow.kind) : (activeTab === "suppliers" ? "supplier" : "contractor"),
       name: form.name.trim(),
       services: form.services.trim() || null,
       contact_name: form.contactName.trim() || null,

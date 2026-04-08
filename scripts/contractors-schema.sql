@@ -4,6 +4,7 @@
 create table if not exists tosho.contractors (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null,
+  kind text not null default 'contractor',
   name text not null,
   services text,
   contact_name text,
@@ -18,6 +19,7 @@ create table if not exists tosho.contractors (
 );
 
 alter table if exists tosho.contractors
+  add column if not exists kind text not null default 'contractor',
   add column if not exists services text,
   add column if not exists contact_name text,
   add column if not exists phone text,
@@ -29,8 +31,22 @@ alter table if exists tosho.contractors
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
+alter table if exists tosho.contractors
+  drop constraint if exists contractors_kind_check;
+
+alter table if exists tosho.contractors
+  add constraint contractors_kind_check
+  check (kind in ('contractor', 'supplier'));
+
+update tosho.contractors
+set kind = 'contractor'
+where kind is null or kind not in ('contractor', 'supplier');
+
 create index if not exists contractors_team_name_idx
   on tosho.contractors (team_id, name);
+
+create index if not exists contractors_team_kind_name_idx
+  on tosho.contractors (team_id, kind, name);
 
 create index if not exists contractors_team_services_idx
   on tosho.contractors (team_id, services);
