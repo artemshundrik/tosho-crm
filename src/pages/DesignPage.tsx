@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
@@ -3564,20 +3565,24 @@ export default function DesignPage() {
             <div className="text-xs font-semibold text-muted-foreground">{isLinkedQuote ? "Прорахунок" : "Задача"}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               {isLinkedQuote ? (
-                <button
-                  className="text-sm font-mono font-semibold hover:underline truncate"
+                <HoverCopyText
+                  value={getTaskDisplayNumber(task)}
+                  textClassName="text-sm font-mono font-semibold hover:underline"
+                  successMessage="Номер прорахунку скопійовано"
+                  copyLabel="Скопіювати номер прорахунку"
                   onClick={(event) => {
                     event.stopPropagation();
                     navigate(`/orders/estimates/${task.quoteId}`);
                   }}
-                  title={getTaskDisplayNumber(task)}
-                >
-                  {getTaskDisplayNumber(task)}
-                </button>
+                />
               ) : (
-                <div className="text-sm font-semibold truncate" title={task.title ?? getTaskDisplayNumber(task)}>
-                  {getTaskDisplayNumber(task)}
-                </div>
+                <HoverCopyText
+                  value={getTaskDisplayNumber(task)}
+                  textClassName="text-sm font-semibold"
+                  successMessage="Номер дизайн-задачі скопійовано"
+                  copyLabel="Скопіювати номер дизайн-задачі"
+                  title={task.title ?? getTaskDisplayNumber(task)}
+                />
               )}
               {isAttachedFromStandalone ? (
                 <Badge variant="outline" className="h-5 px-2 text-[10px]">

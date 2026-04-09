@@ -100,6 +100,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -5578,7 +5579,13 @@ export default function DesignTaskPage() {
         }
         title={
           <div className="flex items-center gap-2">
-            <span>{taskHeaderTitle}</span>
+            <HoverCopyText
+              value={taskHeaderTitle}
+              successMessage="Номер дизайн-задачі скопійовано"
+              copyLabel="Скопіювати номер дизайн-задачі"
+            >
+              {taskHeaderTitle}
+            </HoverCopyText>
             {canEditTaskTitle ? (
               <Button
                 type="button"
@@ -5900,7 +5907,14 @@ export default function DesignTaskPage() {
               {isLinkedQuote ? (
                 <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
                   <div className="text-xs text-muted-foreground mb-1">Прорахунок</div>
-                  <div className="font-mono font-medium">{getTaskDisplayNumber(task)}</div>
+                  <HoverCopyText
+                    value={getTaskDisplayNumber(task)}
+                    textClassName="font-mono font-medium"
+                    successMessage="Номер прорахунку скопійовано"
+                    copyLabel="Скопіювати номер прорахунку"
+                  >
+                    {getTaskDisplayNumber(task)}
+                  </HoverCopyText>
                 </div>
               ) : null}
               <div className="rounded-lg border border-border/50 bg-muted/5 p-3">
@@ -7533,9 +7547,14 @@ export default function DesignTaskPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-mono text-sm font-semibold text-foreground">
+                        <HoverCopyText
+                          value={candidate.number ?? candidate.id.slice(0, 8)}
+                          textClassName="font-mono text-sm font-semibold text-foreground"
+                          successMessage="Номер прорахунку скопійовано"
+                          copyLabel="Скопіювати номер прорахунку"
+                        >
                           {candidate.number ?? candidate.id.slice(0, 8)}
-                        </div>
+                        </HoverCopyText>
                         {candidate.status ? (
                           <Badge variant="outline" className="h-5 px-2 text-[10px]">
                             {candidate.status}

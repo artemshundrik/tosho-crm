@@ -750,7 +750,27 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
 
   if (storedOrders.length > 0) {
     const storedQuoteIds = Array.from(new Set(storedOrders.map((order) => order.quote_id ?? "").filter(Boolean)));
-    const [orderItems, storedQuoteItems, linkedQuotes, linkedQuoteRuns, designTaskRows, approvedQuoteDerivedOrders] = await Promise.all([
+    const storedCustomerIds = Array.from(
+      new Set(storedOrders.map((order) => order.customer_id?.trim?.() ?? "").filter(Boolean))
+    );
+    const storedLeadLookupNames = Array.from(
+      new Set(
+        storedOrders
+          .filter((order) => !(order.customer_id?.trim?.()))
+          .map((order) => (order.customer_name ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+    const [
+      orderItems,
+      storedQuoteItems,
+      linkedQuotes,
+      linkedQuoteRuns,
+      designTaskRows,
+      storedCustomersResult,
+      storedLeadsResult,
+      approvedQuoteDerivedOrders,
+    ] = await Promise.all([
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
       storedQuoteIds.length > 0 ? listQuoteItemsForQuotes({ teamId, quoteIds: storedQuoteIds }) : [],
       storedQuoteIds.length > 0 ? listQuotesByIds(teamId, storedQuoteIds) : [],
@@ -764,8 +784,44 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .in("entity_id", storedQuoteIds)
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      storedCustomerIds.length > 0
+        ? supabase
+            .schema("tosho")
+            .from("customers")
+            .select(
+              "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,signatory_name,signatory_position,legal_entities"
+            )
+            .in("id", storedCustomerIds)
+        : Promise.resolve({ data: [] as unknown[], error: null }),
+      (async () => {
+        if (storedLeadLookupNames.length === 0) return [] as LeadRecord[];
+        const [byCompany, byLegal] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id,company_name,legal_name,logo_url,email,phone_numbers,signatory_name,signatory_position")
+            .eq("team_id", teamId)
+            .in("company_name", storedLeadLookupNames),
+          supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id,company_name,legal_name,logo_url,email,phone_numbers,signatory_name,signatory_position")
+            .eq("team_id", teamId)
+            .in("legal_name", storedLeadLookupNames),
+        ]);
+        const merged = [
+          ...(((byCompany.data ?? []) as unknown) as LeadRecord[]),
+          ...(((byLegal.data ?? []) as unknown) as LeadRecord[]),
+        ];
+        const unique = new Map<string, LeadRecord>();
+        merged.forEach((row) => {
+          if (row?.id) unique.set(row.id, row);
+        });
+        return Array.from(unique.values());
+      })(),
       approvedQuoteDerivedOrdersPromise,
     ] as const);
+    if (storedCustomersResult.error) throw storedCustomersResult.error;
     const storedQuoteItemById = new Map<string, QuoteItemExportRow>();
     const storedCatalogModelIds = new Set<string>();
     (storedQuoteItems ?? []).forEach((item) => {
@@ -796,6 +852,17 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
     });
     const linkedQuoteById = new Map(linkedQuotes.map((quote) => [quote.id, quote]));
     const linkedRunsByQuoteId = new Map(linkedQuoteRuns.map((entry) => [entry.quoteId, entry.runs]));
+    const storedCustomerById = new Map<string, CustomerRecord>();
+    ((((storedCustomersResult.data ?? []) as unknown) as CustomerRecord[]) ?? []).forEach((customer) => {
+      storedCustomerById.set(customer.id, customer);
+    });
+    const storedLeadByLookup = new Map<string, LeadRecord>();
+    storedLeadsResult.forEach((lead) => {
+      const companyKey = normalizeLookupKey(lead.company_name);
+      const legalKey = normalizeLookupKey(lead.legal_name);
+      if (companyKey) storedLeadByLookup.set(companyKey, lead);
+      if (legalKey) storedLeadByLookup.set(legalKey, lead);
+    });
     const designAssetsByQuoteId = new Map<string, { visualization: OrderDesignAsset[]; layout: OrderDesignAsset[] }>();
     for (const row of ((((designTaskRows.data ?? []) as unknown) as Array<{
       entity_id?: string | null;
@@ -864,6 +931,16 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       });
       const computedTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
       const linkedDesignAssets = order.quote_id ? designAssetsByQuoteId.get(order.quote_id) : null;
+      const customer =
+        order.customer_id?.trim?.() ? storedCustomerById.get(order.customer_id.trim()) ?? null : null;
+      const leadLookupName =
+        order.customer_name?.trim?.() ||
+        linkedQuote?.customer_name?.trim?.() ||
+        "";
+      const lead =
+        !customer && leadLookupName
+          ? storedLeadByLookup.get(normalizeLookupKey(leadLookupName)) ?? null
+          : null;
       return {
         id: order.id,
         source: "stored",
@@ -871,7 +948,12 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         quoteNumber: order.quote_number?.trim() || order.quote_id?.slice(0, 8) || order.id.slice(0, 8),
         customerId: order.customer_id?.trim?.() || null,
         customerName: order.customer_name?.trim() || "Контрагент без назви",
-        customerLogoUrl: order.customer_logo_url?.trim?.() || null,
+        customerLogoUrl:
+          customer?.logo_url?.trim?.() ??
+          lead?.logo_url?.trim?.() ??
+          linkedQuote?.customer_logo_url?.trim?.() ??
+          order.customer_logo_url?.trim?.() ??
+          null,
         partyType: order.party_type === "lead" ? "lead" : "customer",
         managerLabel: manager?.label ?? order.manager_label?.trim?.() ?? "Менеджер не призначений",
         managerAvatarUrl: manager?.avatarUrl ?? null,

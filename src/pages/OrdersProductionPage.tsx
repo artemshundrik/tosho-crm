@@ -18,6 +18,7 @@ import {
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -562,7 +563,14 @@ export default function OrdersProductionPage() {
                           >
                             <TableCell className="pl-6 align-top">
                               <div className="space-y-1">
-                                <div className="font-semibold text-foreground">{record.quoteNumber}</div>
+                                <HoverCopyText
+                                  value={record.quoteNumber}
+                                  textClassName="font-semibold text-foreground"
+                                  successMessage="Номер замовлення скопійовано"
+                                  copyLabel="Скопіювати номер замовлення"
+                                >
+                                  {record.quoteNumber}
+                                </HoverCopyText>
                                 <div className="text-xs text-muted-foreground">{formatOrderDate(record.updatedAt)}</div>
                               </div>
                             </TableCell>
@@ -720,7 +728,15 @@ export default function OrdersProductionPage() {
                                       {record.customerName}
                                     </div>
                                     <div className="truncate text-xs text-muted-foreground">
-                                      {record.quoteNumber} • {formatOrderMoney(record.total, record.currency)}
+                                      <HoverCopyText
+                                        value={record.quoteNumber}
+                                        textClassName="font-medium"
+                                        successMessage="Номер замовлення скопійовано"
+                                        copyLabel="Скопіювати номер замовлення"
+                                      >
+                                        {record.quoteNumber}
+                                      </HoverCopyText>{" "}
+                                      • {formatOrderMoney(record.total, record.currency)}
                                     </div>
                                   </div>
                                 </div>

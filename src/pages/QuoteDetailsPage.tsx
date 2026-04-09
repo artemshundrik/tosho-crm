@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -5013,9 +5014,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               <div className="min-w-0">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <div className="truncate text-[17px] font-semibold text-foreground">
+                  <HoverCopyText
+                    value={quote.number ?? quote.id}
+                    textClassName="text-[17px] font-semibold text-foreground"
+                    successMessage="Номер прорахунку скопійовано"
+                    copyLabel="Скопіювати номер прорахунку"
+                  >
                     {quote.number ?? quote.id}
-                  </div>
+                  </HoverCopyText>
                   {(() => {
                     const Icon = quoteTypeIcon(quote.quote_type);
                     return (

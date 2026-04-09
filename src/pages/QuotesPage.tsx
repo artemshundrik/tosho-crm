@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -4972,7 +4973,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                       >
                         <div className="min-w-0">
-                          <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
+                          <HoverCopyText
+                            value={row.number}
+                            textClassName="font-mono font-semibold"
+                            successMessage="Номер прорахунку скопійовано"
+                            copyLabel="Скопіювати номер прорахунку"
+                          >
+                            {row.number ?? "Не вказано"}
+                          </HoverCopyText>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
                             <span className="truncate">
                               {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
@@ -5018,7 +5026,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                       >
                         <div className="min-w-0">
-                          <div className="font-mono font-semibold truncate">{row.number ?? "Не вказано"}</div>
+                          <HoverCopyText
+                            value={row.number}
+                            textClassName="font-mono font-semibold"
+                            successMessage="Номер прорахунку скопійовано"
+                            copyLabel="Скопіювати номер прорахунку"
+                          >
+                            {row.number ?? "Не вказано"}
+                          </HoverCopyText>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
                             <span className="truncate">
                               {row.customer_name ?? "Не вказано"} · {getManagerLabel(row.assigned_to)}
@@ -5068,7 +5083,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="font-mono font-semibold">{row.number ?? "Не вказано"}</div>
+                          <HoverCopyText
+                            value={row.number}
+                            textClassName="font-mono font-semibold"
+                            successMessage="Номер прорахунку скопійовано"
+                            copyLabel="Скопіювати номер прорахунку"
+                          >
+                            {row.number ?? "Не вказано"}
+                          </HoverCopyText>
                           <Badge className={cn("border", statusClasses[normalizedStatus] ?? statusClasses.new)} variant="outline">
                             <StatusIcon className="mr-1 h-3.5 w-3.5" />
                             {formatStatusLabel(normalizedStatus)}
@@ -5305,9 +5327,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   )}
                                 />
                               ) : null}
-                              <span className="group-hover:underline underline-offset-2">
+                              <HoverCopyText
+                                value={row.number}
+                                textClassName="font-mono font-semibold group-hover:underline underline-offset-2"
+                                successMessage="Номер прорахунку скопійовано"
+                                copyLabel="Скопіювати номер прорахунку"
+                              >
                                 {row.number ?? "Не вказано"}
-                              </span>
+                              </HoverCopyText>
                               {!canOpen ? (
                                 <div
                                   className="inline-flex h-5 w-5 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 text-muted-foreground"
@@ -5688,9 +5715,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                           statusColorClass[column.id] ?? "text-muted-foreground/80"
                                         )}
                                       />
-                                      <span className="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
+                                      <HoverCopyText
+                                        value={row.number}
+                                        textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
+                                        successMessage="Номер прорахунку скопійовано"
+                                        copyLabel="Скопіювати номер прорахунку"
+                                      >
                                         {row.number ?? "Не вказано"}
-                                      </span>
+                                      </HoverCopyText>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
@@ -6136,7 +6168,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <TableRow key={item.id}>
                           <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell className="font-mono font-semibold">
-                            {item.quote_number ?? item.quote_id.slice(0, 8)}
+                            <HoverCopyText
+                              value={item.quote_number ?? item.quote_id.slice(0, 8)}
+                              textClassName="font-mono font-semibold"
+                              successMessage="Номер прорахунку скопійовано"
+                              copyLabel="Скопіювати номер прорахунку"
+                            >
+                              {item.quote_number ?? item.quote_id.slice(0, 8)}
+                            </HoverCopyText>
                           </TableCell>
                           <TableCell>
                             <Badge className={cn("border", statusPillClasses(item.quote_status))} variant="outline">

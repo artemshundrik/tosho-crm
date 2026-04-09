@@ -6,6 +6,7 @@ import { EntityAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ORDER_STATUS_SECTIONS } from "@/features/orders/config";
@@ -753,7 +754,14 @@ export default function OrdersProductionDetailsPage() {
             />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-2xl font-semibold text-foreground">{record.quoteNumber}</div>
+                <HoverCopyText
+                  value={record.quoteNumber}
+                  textClassName="text-2xl font-semibold text-foreground"
+                  successMessage="Номер замовлення скопійовано"
+                  copyLabel="Скопіювати номер замовлення"
+                >
+                  {record.quoteNumber}
+                </HoverCopyText>
                 <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
                   {record.partyType === "customer" ? "Замовник" : "Лід"}
                 </Badge>
