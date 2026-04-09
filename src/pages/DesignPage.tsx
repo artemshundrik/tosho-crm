@@ -3717,7 +3717,7 @@ export default function DesignPage() {
                   imageUrl={task.productImageUrl}
                   zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}
                   alt={task.productName}
-                  loadStrategy="interaction"
+                  loadStrategy="eager"
                 />
               ) : (
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
@@ -3739,13 +3739,19 @@ export default function DesignPage() {
         ) : null}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
           <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
-            <AvatarBase
-              src={task.assigneeUserId ? getTaskAssigneeAvatar(task) : null}
-              name={assigneeLabel}
-              fallback={task.assigneeUserId ? getInitials(assigneeLabel) : "БВ"}
-              size={26}
-              className="text-[10px] font-semibold"
-            />
+            {task.assigneeUserId ? (
+              <AvatarBase
+                src={getTaskAssigneeAvatar(task)}
+                name={assigneeLabel}
+                fallback={getInitials(assigneeLabel)}
+                size={26}
+                className="text-[10px] font-semibold"
+              />
+            ) : (
+              <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                <User className="h-3.5 w-3.5" />
+              </div>
+            )}
             <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
           </div>
           {task.designDeadline ? (

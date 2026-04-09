@@ -31,11 +31,12 @@ export function KanbanImageZoomPreview({
   imageClassName,
   loadStrategy = "visible",
 }: KanbanImageZoomPreviewProps) {
+  const isEager = loadStrategy === "eager";
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(
-    () => loadStrategy === "eager" || warmedKanbanImageUrls.has(imageUrl)
+    () => isEager || warmedKanbanImageUrls.has(imageUrl)
   );
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
@@ -146,8 +147,10 @@ export function KanbanImageZoomPreview({
   }, [loadStrategy, shouldLoad]);
 
   useEffect(() => {
-    setShouldLoad(loadStrategy === "eager" || warmedKanbanImageUrls.has(imageUrl));
-  }, [imageUrl, loadStrategy]);
+    setShouldLoad(isEager || warmedKanbanImageUrls.has(imageUrl));
+  }, [imageUrl, isEager]);
+
+  const shouldRenderImage = isEager || shouldLoad;
 
   return (
     <div
@@ -172,12 +175,13 @@ export function KanbanImageZoomPreview({
       tabIndex={0}
     >
       <div className="h-full w-full overflow-hidden rounded-[10px]">
-        {shouldLoad ? (
+        {shouldRenderImage ? (
           <img
             src={imageUrl}
             alt={alt}
             className={cn("h-full w-full object-contain", imageClassName)}
-            loading="lazy"
+            loading={isEager ? "eager" : "lazy"}
+            fetchPriority={isEager ? "high" : "auto"}
             decoding="async"
             onLoad={(event) => {
               warmedKanbanImageUrls.add(imageUrl);
@@ -192,7 +196,7 @@ export function KanbanImageZoomPreview({
           </div>
         )}
       </div>
-      {isOpen && shouldLoad && typeof document !== "undefined"
+      {isOpen && shouldRenderImage && typeof document !== "undefined"
         ? createPortal(
             <div
               aria-hidden="true"

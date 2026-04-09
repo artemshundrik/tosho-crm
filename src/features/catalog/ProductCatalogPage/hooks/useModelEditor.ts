@@ -975,7 +975,7 @@ export function useModelEditor({
         existingImageAsset?.bucket &&
         existingImageAsset.path &&
         existingImageAsset.path !== uploadedAssetPath &&
-        (draftImageFile || !currentImageUrl)
+        (draftImageFile || shouldImportImageFromUrl || !currentImageUrl)
       ) {
         void removeAttachmentWithVariants(existingImageAsset.bucket, existingImageAsset.path);
       }
