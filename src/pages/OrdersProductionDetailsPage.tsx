@@ -160,6 +160,23 @@ const formatContractEndDate = (value?: string | null) => {
   });
 };
 
+const formatSlashDate = (value?: string | null) => {
+  const source = value ? new Date(value) : new Date();
+  const date = Number.isNaN(source.getTime()) ? new Date() : source;
+  return date.toLocaleDateString("uk-UA");
+};
+
+const formatPlainMoney = (value: number) =>
+  new Intl.NumberFormat("uk-UA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+
+const SPEC_VAT_RATE = 20;
+const SPEC_ADVANCE_SHARE = 0.7;
+const SPEC_DEFAULT_WORK_DAYS = 15;
+const SPEC_DEFAULT_DELIVERY_TERMS = "FCA (Incoterms 2020)";
+
 const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentKind) => {
   const title = documentTitleByKind[kind];
   const contractDate = formatContractDateParts(record.updatedAt ?? record.createdAt);
@@ -174,13 +191,36 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
       (item, index) => `
         <tr>
           <td>${index + 1}</td>
-          <td>${escapeHtml(item.name)}</td>
+          <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.unit)}</td>
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="num">${escapeHtml(formatOrderMoney(item.unitPrice, record.currency))}</td>
           <td class="num">${escapeHtml(formatOrderMoney(item.lineTotal, record.currency))}</td>
         </tr>`
     )
+    .join("");
+  const customerBankDetails = "Не вказано";
+  const customerTaxId = "Не вказано";
+  const specificationNumber = record.quoteNumber;
+  const specificationDate = formatSlashDate(record.updatedAt ?? record.createdAt);
+  const totalWithVat = Number(record.total || 0);
+  const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
+  const advanceAmount = totalWithVat * SPEC_ADVANCE_SHARE;
+  const finalAmount = totalWithVat - advanceAmount;
+  const specificationRows = record.items
+    .map((item, index) => {
+      const unitPriceWithVat = Number(item.unitPrice || 0);
+      const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}</td>
+          <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
+          <td class="num">${escapeHtml(`${SPEC_DEFAULT_WORK_DAYS} р.д.`)}</td>
+        </tr>`;
+    })
     .join("");
 
   if (kind === "contract") {
@@ -304,6 +344,128 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
             <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatoryName)}</p>
           </div>
         </div>
+        </div>
+      </body>
+    </html>`;
+  }
+
+  if (kind === "specification") {
+    return `<!doctype html>
+    <html lang="uk">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)} ${escapeHtml(record.quoteNumber)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 0; line-height: 1.45; background: #f3f4f6; }
+          .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; background: rgba(255,255,255,0.96); border-bottom: 1px solid #e5e7eb; backdrop-filter: blur(8px); }
+          .toolbar-title { font-size: 14px; color: #4b5563; }
+          .toolbar-actions { display: flex; gap: 12px; }
+          .toolbar-button { border: 1px solid #d1d5db; background: #ffffff; color: #111827; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+          .toolbar-button.primary { background: #111827; border-color: #111827; color: #ffffff; }
+          .page { max-width: 960px; margin: 24px auto; background: #ffffff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); padding: 36px; }
+          p { margin: 0 0 10px; font-size: 14px; }
+          .center { text-align: center; }
+          .small { font-size: 13px; }
+          .section-title { margin: 18px 0 10px; font-size: 15px; font-weight: 700; }
+          .topline { display: flex; justify-content: space-between; gap: 24px; margin: 14px 0 18px; font-size: 14px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+          th, td { border: 1px solid #111827; padding: 8px 10px; vertical-align: top; font-size: 13px; }
+          th { background: #f8fafc; font-weight: 700; text-align: left; }
+          .num { text-align: right; white-space: nowrap; }
+          .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 24px; }
+          .party-title { font-weight: 700; margin-bottom: 10px; }
+          .signature-line { margin-top: 20px; }
+          ul { margin: 6px 0 10px 18px; padding: 0; }
+          li { margin: 0 0 6px; font-size: 14px; }
+          @media print {
+            body { background: #ffffff; }
+            .toolbar { display: none; }
+            .page { max-width: none; margin: 0; box-shadow: none; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="toolbar">
+          <div class="toolbar-title">СП ${escapeHtml(record.quoteNumber)}</div>
+          <div class="toolbar-actions">
+            <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
+            <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
+          </div>
+        </div>
+        <div class="page">
+          <div class="center small">Додаток № ${escapeHtml(specificationNumber)}</div>
+          <div class="center small">До Договору на виготовлення та поставку рекламно-сувенірної продукції</div>
+          <div class="center small">№${escapeHtml(record.quoteNumber)} від ${escapeHtml(specificationDate)}</div>
+
+          <div class="topline">
+            <div>м. Київ</div>
+            <div>${escapeHtml(specificationDate)} р.</div>
+          </div>
+
+          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, що діє на підставі Статуту, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
+
+          <div class="section-title center">СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width:48px;">№</th>
+                <th>Назва продукції та характеристика</th>
+                <th style="width:110px;">К-ть продукції, шт.</th>
+                <th style="width:120px;">Вартість з ПДВ, грн</th>
+                <th style="width:140px;">Ціна 1 шт без ПДВ, грн</th>
+                <th style="width:120px;">Строки виконання робіт</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${specificationRows}
+              <tr>
+                <td colspan="3"><b>Загальна вартість з ПДВ</b></td>
+                <td class="num"><b>${escapeHtml(formatPlainMoney(totalWithVat))}</b></td>
+                <td colspan="2"></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
+          <ul>
+            <li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, враховуючи ПДВ ${SPEC_VAT_RATE}%.</li>
+            <li>Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.</li>
+            <li>Термін виготовлення продукції складає ${SPEC_DEFAULT_WORK_DAYS} робочих днів з дати затвердження оригінал-макету до друку.</li>
+          </ul>
+
+          <div class="section-title">ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
+          <ul>
+            <li>Оплата продукції здійснюється Замовником у розмірі 70% (${escapeHtml(formatPlainMoney(advanceAmount))} грн з урахуванням ПДВ) від загальної суми та 30% (${escapeHtml(formatPlainMoney(finalAmount))} грн з урахуванням ПДВ) після отримання готової продукції, протягом 3-х робочих днів.</li>
+            <li>Базовий спосіб оплати в CRM: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
+            <li>Доставка продукції здійснюється на умовах ${escapeHtml(SPEC_DEFAULT_DELIVERY_TERMS)}.</li>
+          </ul>
+
+          <div class="section-title">АДРЕСИ І РЕКВІЗИТИ СТОРІН</div>
+          <div class="signature-grid">
+            <div>
+              <div class="party-title">ВИКОНАВЕЦЬ:</div>
+              <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
+              <p>Місцезнаходження: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
+              <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
+              <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
+              <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
+              <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
+              <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
+              <p class="signature-line">Директор</p>
+              <p>__________________________ ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+            </div>
+            <div>
+              <div class="party-title">ЗАМОВНИК:</div>
+              <p>${escapeHtml(customerTitle)}</p>
+              <p>Код ЄДРПОУ / ІПН: ${escapeHtml(customerTaxId)}</p>
+              <p>IBAN / банк: ${escapeHtml(customerBankDetails)}</p>
+              <p>Тел.: ${escapeHtml(record.contactPhone || "Не вказано")}</p>
+              <p>Email: ${escapeHtml(record.contactEmail || "Не вказано")}</p>
+              <p class="signature-line">${escapeHtml(customerSignatoryRole)}</p>
+              <p>______________________ ${escapeHtml(customerSignatoryName)}</p>
+            </div>
+          </div>
         </div>
       </body>
     </html>`;
@@ -769,7 +931,19 @@ export default function OrdersProductionDetailsPage() {
                 <TableCell className="text-center font-medium text-muted-foreground">
                   {item.position || index + 1}
                 </TableCell>
-                <TableCell className="font-medium text-foreground">{item.name}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  <div className="flex items-center gap-3">
+                    {item.thumbUrl || item.imageUrl ? (
+                      <img
+                        src={item.thumbUrl || item.imageUrl || ""}
+                        alt={item.name}
+                        className="h-12 w-12 shrink-0 rounded-lg border border-border/60 object-cover bg-muted/20"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <span>{item.name}</span>
+                  </div>
+                </TableCell>
                 <TableCell className="text-center">{item.unit}</TableCell>
                 <TableCell className="text-right tabular-nums">{item.qty.toLocaleString("uk-UA")}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOrderMoney(item.unitPrice, record.currency)}</TableCell>

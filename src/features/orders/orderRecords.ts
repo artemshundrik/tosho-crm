@@ -7,6 +7,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import {
   getQuoteRuns,
+  listCatalogModelsByIds,
   listQuoteItemsForQuotes,
   listQuotesByIds,
   listQuotes,
@@ -171,6 +172,8 @@ export type DerivedOrderItem = {
   unit: string;
   unitPrice: number;
   lineTotal: number;
+  imageUrl?: string | null;
+  thumbUrl?: string | null;
 };
 
 export type DerivedReadinessStep = {
@@ -267,6 +270,15 @@ type StoredOrderItemRow = {
   unit?: string | null;
   unit_price?: number | null;
   line_total?: number | null;
+};
+
+const parseQuoteItemAttachmentImage = (attachment: unknown) => {
+  if (!attachment || typeof attachment !== "object") return null;
+  const entry = attachment as Record<string, unknown>;
+  const url = typeof entry.url === "string" ? entry.url.trim() : "";
+  const type = typeof entry.type === "string" ? entry.type.trim().toLowerCase() : "";
+  if (!url || !type.startsWith("image/")) return null;
+  return url;
 };
 
 export type OrderCreationDraft = {
@@ -457,9 +469,15 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
   if (customersResult.error) throw customersResult.error;
 
   const itemsByQuoteId = new Map<string, DerivedOrderItem[]>();
+  const quoteItemById = new Map<string, QuoteItemExportRow>();
+  const catalogModelIds = new Set<string>();
   (((itemRows ?? []) as QuoteItemExportRow[]) ?? []).forEach((item) => {
     const quoteId = item.quote_id;
     if (!quoteId) return;
+    quoteItemById.set(item.id, item);
+    if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
+      catalogModelIds.add(item.catalog_model_id.trim());
+    }
     const list = itemsByQuoteId.get(quoteId) ?? [];
     list.push({
       id: item.id,
@@ -469,9 +487,12 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       unit: normalizeUnitLabel(item.unit ?? "шт."),
       unitPrice: Number(item.unit_price ?? 0) || 0,
       lineTotal: Number(item.line_total ?? 0) || 0,
+      imageUrl: null,
+      thumbUrl: null,
     });
     itemsByQuoteId.set(quoteId, list);
   });
+  const catalogModelsById = await listCatalogModelsByIds(Array.from(catalogModelIds));
 
   const runsByQuoteId = new Map<string, QuoteRun[]>();
   quoteRunsResult.forEach((entry) => {
@@ -545,10 +566,22 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const quoteRuns = runsByQuoteId.get(quote.id) ?? [];
     const firstRun = quoteRuns[0] ?? null;
     const items = baseItems.map((item) => {
+      const quoteItem = quoteItemById.get(item.id);
+      const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || "";
+      const catalogModel = catalogModelId ? catalogModelsById.get(catalogModelId) ?? null : null;
+      const attachmentImage = parseQuoteItemAttachmentImage(quoteItem?.attachment);
+      const nextThumbUrl = catalogModel?.thumb_url ?? catalogModel?.image_url ?? attachmentImage ?? null;
+      const nextImageUrl = catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
       const itemRun =
         quoteRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
         (baseItems.length === 1 ? firstRun : null);
-      if (!itemRun) return item;
+      if (!itemRun) {
+        return {
+          ...item,
+          imageUrl: nextImageUrl,
+          thumbUrl: nextThumbUrl,
+        };
+      }
       const runQuantity = Math.max(0, Number(itemRun.quantity) || 0);
       const unitPrice = getRunUnitPrice(itemRun);
       const lineTotal = getRunLineTotal(itemRun);
@@ -557,6 +590,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
         qty: runQuantity > 0 ? runQuantity : item.qty,
         unitPrice: unitPrice > 0 ? unitPrice : item.unitPrice,
         lineTotal: lineTotal > 0 ? lineTotal : item.lineTotal,
+        imageUrl: nextImageUrl,
+        thumbUrl: nextThumbUrl,
       };
     });
     const customer = quote.customer_id ? customerById.get(quote.customer_id) ?? null : null;
@@ -715,8 +750,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
 
   if (storedOrders.length > 0) {
     const storedQuoteIds = Array.from(new Set(storedOrders.map((order) => order.quote_id ?? "").filter(Boolean)));
-    const [orderItems, linkedQuotes, linkedQuoteRuns, designTaskRows, approvedQuoteDerivedOrders] = await Promise.all([
+    const [orderItems, storedQuoteItems, linkedQuotes, linkedQuoteRuns, designTaskRows, approvedQuoteDerivedOrders] = await Promise.all([
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
+      storedQuoteIds.length > 0 ? listQuoteItemsForQuotes({ teamId, quoteIds: storedQuoteIds }) : [],
       storedQuoteIds.length > 0 ? listQuotesByIds(teamId, storedQuoteIds) : [],
       Promise.all(storedQuoteIds.map(async (quoteId) => ({ quoteId, runs: await getQuoteRuns(quoteId, teamId) }))),
       storedQuoteIds.length > 0
@@ -730,6 +766,15 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         : Promise.resolve({ data: [], error: null }),
       approvedQuoteDerivedOrdersPromise,
     ] as const);
+    const storedQuoteItemById = new Map<string, QuoteItemExportRow>();
+    const storedCatalogModelIds = new Set<string>();
+    (storedQuoteItems ?? []).forEach((item) => {
+      storedQuoteItemById.set(item.id, item);
+      if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
+        storedCatalogModelIds.add(item.catalog_model_id.trim());
+      }
+    });
+    const storedCatalogModelsById = await listCatalogModelsByIds(Array.from(storedCatalogModelIds));
     const itemsByOrderId = new Map<string, DerivedOrderItem[]>();
     orderItems.forEach((item) => {
       const orderId = item.order_id ?? "";
@@ -744,6 +789,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         unit: normalizeUnitLabel(item.unit ?? "шт."),
         unitPrice: Number(item.unit_price ?? 0) || 0,
         lineTotal: Number(item.line_total ?? 0) || 0,
+        imageUrl: null,
+        thumbUrl: null,
       });
       itemsByOrderId.set(orderId, list);
     });
@@ -787,11 +834,22 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const linkedRuns = order.quote_id ? linkedRunsByQuoteId.get(order.quote_id) ?? [] : [];
       const firstRun = linkedRuns[0] ?? null;
       const items = baseItems.map((item) => {
-        if (item.lineTotal > 0 || item.unitPrice > 0) return item;
+        const quoteItem = item.quoteItemId ? storedQuoteItemById.get(item.quoteItemId) ?? null : null;
+        const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || "";
+        const catalogModel = catalogModelId ? storedCatalogModelsById.get(catalogModelId) ?? null : null;
+        const attachmentImage = parseQuoteItemAttachmentImage(quoteItem?.attachment);
+        const nextThumbUrl = catalogModel?.thumb_url ?? catalogModel?.image_url ?? attachmentImage ?? null;
+        const nextImageUrl = catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
         const itemRun =
           linkedRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
           (baseItems.length === 1 ? firstRun : null);
-        if (!itemRun) return item;
+        if (!itemRun) {
+          return {
+            ...item,
+            imageUrl: nextImageUrl,
+            thumbUrl: nextThumbUrl,
+          };
+        }
         const runQuantity = Math.max(0, Number(itemRun.quantity) || 0);
         const unitPrice = getRunUnitPrice(itemRun);
         const lineTotal = getRunLineTotal(itemRun);
@@ -800,6 +858,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           qty: runQuantity > 0 ? runQuantity : item.qty,
           unitPrice: unitPrice > 0 ? unitPrice : item.unitPrice,
           lineTotal: lineTotal > 0 ? lineTotal : item.lineTotal,
+          imageUrl: nextImageUrl,
+          thumbUrl: nextThumbUrl,
         };
       });
       const computedTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
