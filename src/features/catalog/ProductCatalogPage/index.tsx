@@ -11,8 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
-import { PageHeader } from "@/components/app/headers/PageHeader";
-import { AlertCircle, FolderKanban } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { exportToCSV } from "@/utils/catalogUtils";
 
 // Hooks
@@ -341,15 +340,10 @@ export default function ProductCatalogPage() {
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 space-y-6">
-      <PageHeader
-        title="Каталог продукції"
-        subtitle="Довідники типів, видів, моделей та методів нанесення."
-        icon={<FolderKanban className="h-5 w-5" />}
-      />
-      <div className="rounded-[var(--radius-section)] border border-border bg-card/60 overflow-hidden">
+    <div className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-[var(--radius-section)] border border-border bg-card/60">
         {/* Main Layout: Sidebar + Content */}
-        <div className="flex h-[calc(100vh-120px)]">
+        <div className="flex h-full min-h-0">
           {/* Compact Sidebar */}
           <CompactSidebar
             catalog={catalog}
@@ -370,7 +364,7 @@ export default function ProductCatalogPage() {
           />
 
           {/* Main Content Area */}
-          <section className="flex-1 flex flex-col overflow-hidden">
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* Search Bar */}
             <SearchBar
               catalog={catalog}
@@ -397,7 +391,7 @@ export default function ProductCatalogPage() {
             />
 
             {/* Models Grid */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <SimpleModelGrid
                 filteredModels={filters.filteredGlobalModels}
                 globalSearch={filters.globalSearch}
