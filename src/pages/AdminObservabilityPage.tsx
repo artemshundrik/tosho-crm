@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import {
@@ -118,6 +118,9 @@ type TrendDatum = {
   attachmentsGb: number;
   storageTodayMb: number;
   previewActions: number;
+  outputFiles: number;
+  quoteFiles: number;
+  taskFiles: number;
 };
 
 type AttachmentAuditReviewRow = {
@@ -140,6 +143,16 @@ type AttachmentAuditReviewRow = {
 };
 
 const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
+const CHART_STROKES = {
+  primary: "hsl(var(--primary))",
+  teal: "hsl(176 64% 36%)",
+  amber: "hsl(38 92% 42%)",
+  violet: "hsl(259 84% 62%)",
+  sky: "hsl(199 89% 48%)",
+} as const;
+
+type ChartRange = "1d" | "7d" | "30d" | "all";
+type OperationsMetricKey = "storageTodayMb" | "outputFiles" | "quoteFiles" | "taskFiles";
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -212,6 +225,12 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function formatSignedCountDelta(value: number) {
+  if (value === 0) return "без змін";
+  if (value > 0) return `на ${value} більше`;
+  return `на ${Math.abs(value)} менше`;
+}
+
 function describeAnomaly(current: number, history: number[], unit: string) {
   const baseline = average(history.filter((value) => value > 0));
   if (!baseline) {
@@ -252,17 +271,95 @@ function describeAnomaly(current: number, history: number[], unit: string) {
 }
 
 function toneClasses(tone: "good" | "warning" | "danger" | "neutral") {
-  if (tone === "good") return "border-emerald-200/80 bg-emerald-50 text-emerald-700";
-  if (tone === "danger") return "border-rose-200/80 bg-rose-50 text-rose-700";
-  if (tone === "warning") return "border-amber-200/80 bg-amber-50 text-amber-700";
+  if (tone === "good") return "border-success-soft-border bg-success-soft text-success-foreground";
+  if (tone === "danger") return "border-danger-soft-border bg-danger-soft text-danger-foreground";
+  if (tone === "warning") return "border-warning-soft-border bg-warning-soft text-warning-foreground";
   return "border-border/70 bg-muted/40 text-muted-foreground";
 }
 
 function statusDotClasses(tone: "good" | "warning" | "danger" | "neutral") {
-  if (tone === "good") return "bg-emerald-500";
-  if (tone === "danger") return "bg-rose-500";
-  if (tone === "warning") return "bg-amber-500";
-  return "bg-slate-400";
+  if (tone === "good") return "bg-success-foreground";
+  if (tone === "danger") return "bg-danger-foreground";
+  if (tone === "warning") return "bg-warning-foreground";
+  return "bg-muted-foreground/70";
+}
+
+function formatAxisNumber(value: number | undefined) {
+  const safeValue = numberOrZero(value);
+  if (safeValue >= 1000) {
+    return new Intl.NumberFormat("uk-UA", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(safeValue);
+  }
+  if (safeValue >= 100) return `${Math.round(safeValue)}`;
+  if (safeValue >= 10) return safeValue.toFixed(0);
+  if (safeValue >= 1) return safeValue.toFixed(1);
+  return safeValue === 0 ? "0" : safeValue.toFixed(2);
+}
+
+function sliceTrendData(data: TrendDatum[], range: ChartRange) {
+  if (range === "all") return data;
+  if (range === "30d") return data.slice(-30);
+  if (range === "7d") return data.slice(-7);
+  return data.slice(-1);
+}
+
+function RangeSegmented({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-[16px] border border-border/70 bg-muted/35 p-1">
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          variant="segmented"
+          size="xs"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className="h-8 rounded-[12px] px-3 text-xs"
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SummaryBucket({
+  tone,
+  title,
+  items,
+  emptyLabel,
+}: {
+  tone: "good" | "warning" | "danger";
+  title: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <div className={cn("rounded-2xl border px-4 py-4", toneClasses(tone))}>
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="mt-3 space-y-2">
+        {items.length ? (
+          items.map((item) => (
+            <div key={item} className="text-sm leading-6">
+              {item}
+            </div>
+          ))
+        ) : (
+          <div className="text-sm leading-6">{emptyLabel}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MetricCard({
@@ -345,50 +442,9 @@ function ExecutiveSummaryCard({
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
-        <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50 px-4 py-4">
-          <div className="text-sm font-semibold text-emerald-800">Добре</div>
-          <div className="mt-3 space-y-2">
-            {good.length ? (
-              good.map((item) => (
-                <div key={item} className="text-sm leading-6 text-emerald-800">
-                  {item}
-                </div>
-              ))
-            ) : (
-              <div className="text-sm leading-6 text-emerald-800">Явних зелених сигналів поки замало.</div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-4">
-          <div className="text-sm font-semibold text-amber-800">Треба перевірити</div>
-          <div className="mt-3 space-y-2">
-            {watch.length ? (
-              watch.map((item) => (
-                <div key={item} className="text-sm leading-6 text-amber-800">
-                  {item}
-                </div>
-              ))
-            ) : (
-              <div className="text-sm leading-6 text-amber-800">Жовтих сигналів зараз немає.</div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-4">
-          <div className="text-sm font-semibold text-rose-800">Погано</div>
-          <div className="mt-3 space-y-2">
-            {bad.length ? (
-              bad.map((item) => (
-                <div key={item} className="text-sm leading-6 text-rose-800">
-                  {item}
-                </div>
-              ))
-            ) : (
-              <div className="text-sm leading-6 text-rose-800">Явних червоних сигналів зараз немає.</div>
-            )}
-          </div>
-        </div>
+        <SummaryBucket tone="good" title="Добре" items={good} emptyLabel="Явних зелених сигналів поки замало." />
+        <SummaryBucket tone="warning" title="Треба перевірити" items={watch} emptyLabel="Жовтих сигналів зараз немає." />
+        <SummaryBucket tone="danger" title="Погано" items={bad} emptyLabel="Явних червоних сигналів зараз немає." />
       </div>
     </section>
   );
@@ -402,6 +458,9 @@ function TrendCard({
   stroke,
   fill,
   formatter,
+  axisFormatter,
+  trailing,
+  valueLabel,
 }: {
   title: string;
   subtitle: string;
@@ -410,7 +469,16 @@ function TrendCard({
   stroke: string;
   fill: string;
   formatter: (value: number | undefined) => string;
+  axisFormatter?: (value: number | undefined) => string;
+  trailing?: ReactNode;
+  valueLabel?: string;
 }) {
+  const latestPoint = data[data.length - 1];
+  const latestValue =
+    latestPoint && typeof latestPoint[dataKey] === "number"
+      ? (latestPoint[dataKey] as number)
+      : undefined;
+
   return (
     <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -418,32 +486,51 @@ function TrendCard({
           <div className="text-sm font-semibold text-foreground">{title}</div>
           <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>
         </div>
+        <div className="flex flex-col items-end gap-2">
+          {valueLabel ? (
+            <div className="rounded-full border border-border/60 bg-muted/25 px-3 py-1 text-xs font-medium text-muted-foreground">
+              {valueLabel}
+            </div>
+          ) : null}
+          {trailing}
+        </div>
       </div>
-      <div className="mt-5 h-56">
+      <div className="mt-5 h-64 rounded-[20px] border border-border/50 bg-[linear-gradient(180deg,hsl(var(--background)/0.4),transparent)] p-3">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 12, right: 12, left: 8, bottom: 6 }}>
             <defs>
               <linearGradient id={`${String(dataKey)}-gradient`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="5%" stopColor={fill} stopOpacity={0.38} />
+                <stop offset="5%" stopColor={fill} stopOpacity={0.26} />
                 <stop offset="95%" stopColor={fill} stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="rgba(148,163,184,0.18)" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "currentColor" }} />
+            <CartesianGrid vertical={false} stroke="hsl(var(--border) / 0.72)" strokeDasharray="4 6" />
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              minTickGap={24}
+              tickMargin={10}
+              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+            />
             <YAxis
               tickLine={false}
               axisLine={false}
-              width={42}
-              tick={{ fontSize: 12, fill: "currentColor" }}
-              tickFormatter={(value: number) => formatter(value)}
+              width={58}
+              tickMargin={10}
+              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+              tickFormatter={(value: number) => (axisFormatter ?? formatter)(value)}
             />
             <Tooltip
-              cursor={{ stroke: "rgba(59,130,246,0.18)", strokeWidth: 1 }}
+              cursor={{ stroke: "hsl(var(--primary) / 0.2)", strokeWidth: 1 }}
               contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                color: "hsl(var(--foreground))",
                 borderRadius: 16,
-                border: "1px solid rgba(148,163,184,0.22)",
-                boxShadow: "0 24px 60px -28px rgba(15,23,42,0.45)",
+                border: "1px solid hsl(var(--border))",
+                boxShadow: "0 24px 60px -28px hsl(var(--foreground) / 0.25)",
               }}
+              labelStyle={{ color: "hsl(var(--muted-foreground))", marginBottom: 6 }}
               formatter={(value: number | undefined) => formatter(value)}
             />
             <Area
@@ -453,10 +540,17 @@ function TrendCard({
               strokeWidth={3}
               fill={`url(#${String(dataKey)}-gradient)`}
               fillOpacity={1}
+              activeDot={{ r: 5, fill: stroke, stroke: "hsl(var(--background))", strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {latestValue !== undefined ? (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+          <div className="text-sm text-muted-foreground">Остання точка</div>
+          <div className="text-sm font-semibold text-foreground">{formatter(latestValue)}</div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -575,6 +669,8 @@ export default function AdminObservabilityPage() {
   const { teamId, userId, loading: authLoading, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "attachments">("overview");
+  const [operationsRange, setOperationsRange] = useState<ChartRange>("7d");
+  const [operationsMetric, setOperationsMetric] = useState<OperationsMetricKey>("storageTodayMb");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -625,35 +721,7 @@ export default function AdminObservabilityPage() {
     const { data, error: fetchError } = await supabase
       .schema("tosho")
       .from("admin_observability_snapshots")
-      .select(`
-        id,
-        captured_at,
-        captured_for_date,
-        database_size_bytes,
-        attachments_bucket_bytes,
-        avatars_bucket_bytes,
-        storage_today_bytes,
-        storage_today_objects,
-        quote_attachments_today,
-        design_tasks_today,
-        design_task_attachments_today,
-        design_output_uploads_today,
-        design_output_selection_today,
-        attachment_possible_orphan_original_count,
-        attachment_possible_orphan_original_bytes,
-        attachment_missing_variants_count,
-        attachment_safe_reclaimable_count,
-        attachment_safe_reclaimable_bytes,
-        database_stats,
-        top_tables,
-        dead_tuple_tables,
-        bucket_sizes,
-        storage_today_breakdown,
-        attachment_orphan_top_folders,
-        attachment_orphan_by_extension,
-        top_activity_log_queries,
-        top_quote_attachment_queries
-      `)
+      .select("*")
       .eq("team_id", workspaceId)
       .order("captured_for_date", { ascending: false })
       .limit(30);
@@ -844,9 +912,60 @@ export default function AdminObservabilityPage() {
             numberOrZero(row.quote_attachments_today) +
             numberOrZero(row.design_task_attachments_today) +
             numberOrZero(row.design_output_selection_today),
+          outputFiles: numberOrZero(row.design_output_uploads_today),
+          quoteFiles: numberOrZero(row.quote_attachments_today),
+          taskFiles: numberOrZero(row.design_task_attachments_today),
         })),
     [rows]
   );
+  const operationsTrendData = useMemo(() => sliceTrendData(trendData, operationsRange), [operationsRange, trendData]);
+  const operationsMetricMeta = useMemo(() => {
+    const config: Record<
+      OperationsMetricKey,
+      {
+        title: string;
+        subtitle: string;
+        stroke: string;
+        fill: string;
+        formatter: (value: number | undefined) => string;
+        axisFormatter: (value: number | undefined) => string;
+      }
+    > = {
+      storageTodayMb: {
+        title: "Storage за день",
+        subtitle: "Головний індикатор хвиль upload-ів, генерацій прев'ю та важких робочих днів.",
+        stroke: CHART_STROKES.amber,
+        fill: CHART_STROKES.amber,
+        formatter: (value) => `${numberOrZero(value).toFixed(numberOrZero(value) >= 100 ? 0 : 1)} MB`,
+        axisFormatter: formatAxisNumber,
+      },
+      outputFiles: {
+        title: "Output files",
+        subtitle: "Скільки фінальних або проміжних дизайн-output файлів залили за snapshot-день.",
+        stroke: CHART_STROKES.primary,
+        fill: CHART_STROKES.primary,
+        formatter: (value) => `${Math.round(numberOrZero(value))} файлів`,
+        axisFormatter: (value) => `${Math.round(numberOrZero(value))}`,
+      },
+      quoteFiles: {
+        title: "Quote files",
+        subtitle: "Скільки файлів додали в прорахунки за день. Добре ловить хвилі важких КП і ТЗ.",
+        stroke: CHART_STROKES.sky,
+        fill: CHART_STROKES.sky,
+        formatter: (value) => `${Math.round(numberOrZero(value))} файлів`,
+        axisFormatter: (value) => `${Math.round(numberOrZero(value))}`,
+      },
+      taskFiles: {
+        title: "Task files",
+        subtitle: "Вкладення в дизайн-задачі за день. Корисно, коли команда активно обмінюється матеріалами.",
+        stroke: CHART_STROKES.violet,
+        fill: CHART_STROKES.violet,
+        formatter: (value) => `${Math.round(numberOrZero(value))} файлів`,
+        axisFormatter: (value) => `${Math.round(numberOrZero(value))}`,
+      },
+    };
+    return config[operationsMetric];
+  }, [operationsMetric]);
 
   const dbHealth = useMemo(() => {
     if (!latest) return null;
@@ -1001,6 +1120,30 @@ export default function AdminObservabilityPage() {
         },
       ]
     : [];
+  const operationalPriorityRows = latest
+    ? [
+        {
+          title: "1. Storage за сьогодні",
+          description: `Головний індикатор хвиль upload-ів, генерацій прев'ю і важких дизайн-днів. Зараз: ${formatBytes(latest.storage_today_bytes)} у ${formatCompactCount(latest.storage_today_objects)} objects.`,
+        },
+        {
+          title: "2. Attachment hygiene",
+          description: `Дивимось на orphan originals і missing variants. Зараз: ${formatCompactCount(attachmentOrphanCount)} possible orphan originals і ${formatCompactCount(attachmentMissingVariants)} missing variants.`,
+        },
+        {
+          title: "3. Ріст бази і dead tuples",
+          description: "Це уже health-рівень. Важливо, але не треба дивитися на нього щогодини, якщо немає інциденту.",
+        },
+      ]
+    : [];
+  const latestVsPrevious = latest && previousRows[0]
+    ? {
+        storageBytesDelta: numberOrZero(latest.storage_today_bytes) - numberOrZero(previousRows[0].storage_today_bytes),
+        designUploadsDelta: numberOrZero(latest.design_output_uploads_today) - numberOrZero(previousRows[0].design_output_uploads_today),
+        quoteFilesDelta: numberOrZero(latest.quote_attachments_today) - numberOrZero(previousRows[0].quote_attachments_today),
+        taskFilesDelta: numberOrZero(latest.design_task_attachments_today) - numberOrZero(previousRows[0].design_task_attachments_today),
+      }
+    : null;
 
   if (authLoading) {
     return <AppPageLoader title="Завантаження" subtitle="Перевіряємо доступ до observability dashboard." />;
@@ -1009,7 +1152,7 @@ export default function AdminObservabilityPage() {
   return (
     <PageCanvas>
       <PageCanvasBody className="space-y-6 px-5 py-3 pb-20 md:pb-6">
-        <section className="overflow-hidden rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] p-5 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_28%),linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.94))]">
+        <section className="overflow-hidden rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_34%),radial-gradient(circle_at_top_right,hsl(var(--success-foreground)/0.12),transparent_28%),linear-gradient(180deg,hsl(var(--card)/0.98),hsl(var(--muted)/0.45))] p-5 shadow-sm">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
@@ -1075,9 +1218,9 @@ export default function AdminObservabilityPage() {
         ) : (
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments")} className="w-full">
             {refreshError ? (
-              <section className="mb-6 rounded-[24px] border border-amber-300/60 bg-amber-50/80 p-4 shadow-sm">
+              <section className="mb-6 rounded-[24px] border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-warning-foreground" />
                   <div className="space-y-1">
                     <div className="text-sm font-semibold text-foreground">Останній snapshot залишився доступним, але оновлення не завершилось.</div>
                     <div className="text-sm text-muted-foreground">{refreshError}</div>
@@ -1156,27 +1299,127 @@ export default function AdminObservabilityPage() {
                 />
               </section>
 
+              {latestVsPrevious ? (
+                <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+                  <div className="text-sm font-semibold text-foreground">Сьогодні проти попереднього snapshot</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Коротка динаміка без технічного шуму: що саме сьогодні стало інтенсивнішим або слабшим.
+                  </div>
+                  <div className="mt-5 grid gap-3 xl:grid-cols-4">
+                    {[
+                      {
+                        key: "storage-delta",
+                        title: "Storage за день",
+                        value: `${latestVsPrevious.storageBytesDelta >= 0 ? "+" : "-"}${formatBytes(Math.abs(latestVsPrevious.storageBytesDelta))}`,
+                        hint: latestVsPrevious.storageBytesDelta >= 0 ? "проти попереднього snapshot" : "нижче попереднього snapshot",
+                      },
+                      {
+                        key: "design-upload-delta",
+                        title: "Output files",
+                        value: formatSignedCountDelta(latestVsPrevious.designUploadsDelta),
+                        hint: "різниця по design output uploads",
+                      },
+                      {
+                        key: "quote-files-delta",
+                        title: "Quote files",
+                        value: formatSignedCountDelta(latestVsPrevious.quoteFilesDelta),
+                        hint: "різниця по quote attachments",
+                      },
+                      {
+                        key: "task-files-delta",
+                        title: "Task files",
+                        value: formatSignedCountDelta(latestVsPrevious.taskFilesDelta),
+                        hint: "різниця по design task attachments",
+                      },
+                    ].map((item) => (
+                      <div key={item.key} className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+                        <div className="text-sm font-medium text-muted-foreground">{item.title}</div>
+                        <div className="mt-2 text-2xl font-semibold text-foreground">{item.value}</div>
+                        <div className="mt-1 text-sm text-muted-foreground">{item.hint}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Операційна динаміка</div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      Перемикай метрику і період, щоб без шуму дивитися upload-хвилі, output files, quote files і task files.
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 xl:items-end">
+                    <RangeSegmented
+                      value={operationsMetric}
+                      onChange={(next) => setOperationsMetric(next as OperationsMetricKey)}
+                      options={[
+                        { value: "storageTodayMb", label: "Storage" },
+                        { value: "outputFiles", label: "Output files" },
+                        { value: "quoteFiles", label: "Quote files" },
+                        { value: "taskFiles", label: "Task files" },
+                      ]}
+                    />
+                    <RangeSegmented
+                      value={operationsRange}
+                      onChange={(next) => setOperationsRange(next as ChartRange)}
+                      options={[
+                        { value: "1d", label: "1 день" },
+                        { value: "7d", label: "7 днів" },
+                        { value: "30d", label: "30 днів" },
+                        { value: "all", label: "Всі" },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <TrendCard
+                    title={operationsMetricMeta.title}
+                    subtitle={operationsMetricMeta.subtitle}
+                    data={operationsTrendData}
+                    dataKey={operationsMetric}
+                    stroke={operationsMetricMeta.stroke}
+                    fill={operationsMetricMeta.fill}
+                    formatter={operationsMetricMeta.formatter}
+                    axisFormatter={operationsMetricMeta.axisFormatter}
+                    valueLabel={
+                      operationsRange === "1d"
+                        ? "Останній snapshot"
+                        : operationsRange === "7d"
+                          ? "Останні 7 днів"
+                          : operationsRange === "30d"
+                            ? "Останні 30 днів"
+                            : "Вся історія"
+                    }
+                  />
+                </div>
+              </section>
+
               <section className="grid gap-4 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
                 <TrendCard
                   title="Ріст бази по днях"
                   subtitle="Корисно ловити нездоровий ріст і дивитися, чи не накопичуються системні таблиці."
                   data={trendData}
                   dataKey="dbMb"
-                  stroke="#2563eb"
-                  fill="#60a5fa"
+                  stroke={CHART_STROKES.primary}
+                  fill={CHART_STROKES.primary}
                   formatter={(value) => {
                     const safeValue = numberOrZero(value);
                     return `${safeValue.toFixed(safeValue >= 100 ? 0 : 1)} MB`;
                   }}
+                  axisFormatter={formatAxisNumber}
                 />
                 <TrendCard
                   title="Ріст attachments bucket"
                   subtitle="Це не billing egress, а внутрішній розмір bucket. По ньому добре видно накопичення файлів."
                   data={trendData}
                   dataKey="attachmentsGb"
-                  stroke="#0f766e"
-                  fill="#2dd4bf"
+                  stroke={CHART_STROKES.teal}
+                  fill={CHART_STROKES.teal}
                   formatter={(value) => `${numberOrZero(value).toFixed(2)} GB`}
+                  axisFormatter={formatAxisNumber}
                 />
               </section>
 
@@ -1186,32 +1429,30 @@ export default function AdminObservabilityPage() {
                   subtitle="Проксі для масових міграцій, генерацій прев'ю і великих хвиль upload-ів."
                   data={trendData}
                   dataKey="storageTodayMb"
-                  stroke="#b45309"
-                  fill="#f59e0b"
+                  stroke={CHART_STROKES.amber}
+                  fill={CHART_STROKES.amber}
                   formatter={(value) => {
                     const safeValue = numberOrZero(value);
                     return `${safeValue.toFixed(safeValue >= 100 ? 0 : 1)} MB`;
                   }}
+                  axisFormatter={formatAxisNumber}
                 />
                 <StatusOverviewCard rows={systemStatusRows} />
               </section>
 
               <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
-                <div className="text-sm font-semibold text-foreground">Що дивитися щодня</div>
+                <div className="text-sm font-semibold text-foreground">Що справді важливо щодня</div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  Цього достатньо для щоденного контролю без технічного шуму.
+                  Це скорочений список без зайвого шуму. Не все на цій сторінці варте однакової уваги.
                 </div>
                 <div className="mt-5 space-y-3">
-                  {[
-                    "Storage vs Pro limit: чи не підлазимо до ліміту.",
-                    "Нові storage bytes за день: чи не було аномального стрибка.",
-                    "Ріст бази: чи не росте база нездорово.",
-                    "Preview-покриття вкладень: якщо помічаєш биті прев'ю, перевіряємо orphan review.",
-                    "Стан системи зараз: швидкий світлофор по найважливішому.",
-                  ].map((item) => (
-                    <div key={item} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+                  {operationalPriorityRows.map((item) => (
+                    <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
                       <div className="mt-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
-                      <div className="text-sm leading-6 text-foreground">{item}</div>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{item.title}</div>
+                        <div className="mt-1 text-sm leading-6 text-muted-foreground">{item.description}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1276,15 +1517,15 @@ export default function AdminObservabilityPage() {
                   <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
                     <div className="text-sm font-semibold text-foreground">Як цим користуватись</div>
                     <div className="mt-4 grid gap-3 xl:grid-cols-3">
-                      <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+                      <div className="rounded-2xl border border-success-soft-border bg-success-soft px-4 py-3 text-sm leading-6 text-success-foreground">
                         <div className="font-semibold">Можна видаляти</div>
                         <div className="mt-1">Сутності вже нема. Відкриваєш або скачуєш файл, швидко перевіряєш вміст, і можна чистити.</div>
                       </div>
-                      <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                      <div className="rounded-2xl border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm leading-6 text-warning-foreground">
                         <div className="font-semibold">Треба перевірити</div>
                         <div className="mt-1">Сутність жива. Відкрий файл, потім перейди в задачу або прорахунок і звір, чи файл ще потрібен.</div>
                       </div>
-                      <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-800">
+                      <div className="rounded-2xl border border-danger-soft-border bg-danger-soft px-4 py-3 text-sm leading-6 text-danger-foreground">
                         <div className="font-semibold">Невідоме джерело</div>
                         <div className="mt-1">Не видаляти з цього екрана автоматично. Це окремий ручний розбір.</div>
                       </div>
@@ -1296,19 +1537,19 @@ export default function AdminObservabilityPage() {
                       title: "Можна видаляти",
                       subtitle: "Сутність уже видалена. Тут найімовірніші історичні хвости в storage.",
                       rows: attachmentDeleteReadyRows,
-                      toneClass: "border-emerald-200/80 bg-emerald-50 text-emerald-700",
+                      toneClass: "border-success-soft-border bg-success-soft text-success-foreground",
                     },
                     {
                       title: "Треба перевірити",
                       subtitle: "Сутність ще існує. Перш ніж чистити, треба звірити файл із задачею або прорахунком.",
                       rows: attachmentNeedsReviewRows,
-                      toneClass: "border-amber-200/80 bg-amber-50 text-amber-700",
+                      toneClass: "border-warning-soft-border bg-warning-soft text-warning-foreground",
                     },
                     {
                       title: "Невідоме джерело",
                       subtitle: "Audit не впізнав джерело. Це окремий ручний review без автоматичних рішень.",
                       rows: attachmentUnknownRows,
-                      toneClass: "border-rose-200/80 bg-rose-50 text-rose-700",
+                      toneClass: "border-danger-soft-border bg-danger-soft text-danger-foreground",
                     },
                   ].map((section) => (
                     <section key={section.title} className="rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
@@ -1463,6 +1704,7 @@ export default function AdminObservabilityPage() {
             </TabsContent>
           </Tabs>
         )}
+
       </PageCanvasBody>
     </PageCanvas>
   );

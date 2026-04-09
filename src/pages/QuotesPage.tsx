@@ -5764,7 +5764,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                             loadStrategy={
                                               index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
                                                 ? "eager"
-                                                : "interaction"
+                                                : "visible"
                                             }
                                           />
                                         ) : (
