@@ -4,7 +4,6 @@ import { Activity as ActivityIcon, ArrowRight, Clock3, FileText, LayoutGrid, Pal
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -444,22 +443,6 @@ export function OverviewPage() {
   });
 
   const safeData = data ?? createEmptyOverviewData();
-
-  const headerActions = useMemo(
-    () => (
-      <>
-        <Button asChild variant="secondary">
-          <Link to="/design">Дизайн</Link>
-        </Button>
-        <Button asChild>
-          <Link to="/orders/estimates">Прорахунки</Link>
-        </Button>
-      </>
-    ),
-    []
-  );
-
-  usePageHeaderActions(headerActions, []);
 
   const topStats = useMemo(() => {
     if (isManagerView) {

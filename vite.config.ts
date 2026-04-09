@@ -99,6 +99,31 @@ export default defineConfig(({ command }) => {
     buildId: `${packageJson.version ?? "0.0.0"}-${Date.now().toString(36)}`,
     builtAt,
   };
+  const manualChunks = (id: string) => {
+    if (!id.includes("node_modules")) return undefined;
+
+    if (id.includes("pdfjs-dist")) return "vendor-pdf";
+    if (id.includes("recharts") || id.includes("/d3-")) return "vendor-charts";
+    if (id.includes("@supabase/")) return "vendor-supabase";
+    if (id.includes("react-router") || id.includes("@remix-run/router")) return "vendor-router";
+    if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) {
+      return "vendor-react";
+    }
+    if (id.includes("date-fns")) return "vendor-date";
+    if (id.includes("lucide-react")) return "vendor-icons";
+    if (id.includes("@radix-ui/")) return "vendor-radix";
+    if (
+      id.includes("clsx") ||
+      id.includes("tailwind-merge") ||
+      id.includes("class-variance-authority") ||
+      id.includes("cmdk") ||
+      id.includes("sonner")
+    ) {
+      return "vendor-ui";
+    }
+
+    return "vendor-misc";
+  };
 
   return ({
   plugins: [
@@ -218,6 +243,13 @@ export default defineConfig(({ command }) => {
         }
       : undefined,
   ].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks,
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

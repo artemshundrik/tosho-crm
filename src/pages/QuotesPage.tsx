@@ -2933,6 +2933,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       const signedUrl =
         (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "preview", 60 * 60 * 24 * 7)) ??
+        (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "thumb", 60 * 60 * 24 * 7)) ??
         (await getSignedAttachmentUrl(row.storage_bucket, storagePath, "original", 60 * 60 * 24 * 7)) ??
         supabase.storage.from(row.storage_bucket).getPublicUrl(storagePath).data.publicUrl;
       if (!signedUrl) continue;

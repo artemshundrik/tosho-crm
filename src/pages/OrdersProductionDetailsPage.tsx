@@ -18,6 +18,7 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
+import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import {
@@ -40,6 +41,17 @@ const getInitials = (value?: string | null) => {
   const first = parts[0]?.[0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
   return (first + last).toUpperCase() || "?";
+};
+
+const getFileExtension = (name?: string | null) => {
+  const value = (name ?? "").trim();
+  if (!value.includes(".")) return "";
+  return value.split(".").pop()?.trim().toUpperCase() ?? "";
+};
+
+const isPreviewableAsset = (name?: string | null) => {
+  const extension = getFileExtension(name);
+  return ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "PDF", "TIF", "TIFF"].includes(extension);
 };
 
 const renderDocBadge = (label: string, ready: boolean) => (
@@ -635,11 +647,14 @@ export default function OrdersProductionDetailsPage() {
 
     setOpeningAssetId(asset.id);
     try {
-      const { data, error: signedError } = await supabase.storage
-        .from(asset.storageBucket)
-        .createSignedUrl(asset.storagePath, 60 * 60);
-      if (signedError) throw signedError;
-      const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
+      const signedUrl =
+        (await getSignedAttachmentUrl(
+          asset.storageBucket,
+          asset.storagePath,
+          isPreviewableAsset(asset.label) ? "preview" : "original",
+          60 * 60
+        )) ??
+        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "original", 60 * 60));
       if (!signedUrl) throw new Error("Не вдалося сформувати посилання на файл.");
       window.open(signedUrl, "_blank", "noopener,noreferrer");
     } catch (openError) {

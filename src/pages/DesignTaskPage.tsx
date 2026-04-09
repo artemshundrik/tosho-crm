@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -55,7 +55,6 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { CustomerLeadQuickViewDialog } from "@/components/customers";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
@@ -75,7 +74,6 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
-import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
@@ -117,6 +115,13 @@ import {
   normalizeMentionKey,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
+
+const CustomerLeadQuickViewDialog = lazy(() =>
+  import("@/components/customers").then((module) => ({ default: module.CustomerLeadQuickViewDialog }))
+);
+const DesignTaskRenameDialog = lazy(() =>
+  import("@/components/app/DesignTaskRenameDialog").then((module) => ({ default: module.DesignTaskRenameDialog }))
+);
 
 type DesignTask = {
   id: string;
@@ -2766,14 +2771,21 @@ export default function DesignTaskPage() {
     }
   }, []);
 
+  const getPreviewOpenVariant = useCallback((fileName?: string | null): AttachmentPreviewVariant => {
+    const extension = getFileExtension(fileName);
+    const previewable =
+      canPreviewImage(extension) || canPreviewTiff(extension) || canPreviewPdf(extension);
+    return previewable ? "preview" : "original";
+  }, []);
+
   const openStorageFileInNewTab = useCallback(async (file: StorageBackedFile) => {
-    const url = await ensureFileAccessUrl(file);
+    const url = await ensureFileAccessUrl(file, { variant: getPreviewOpenVariant(file.file_name) });
     if (!url) {
       toast.error("Не вдалося відкрити файл");
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
-  }, [ensureFileAccessUrl]);
+  }, [ensureFileAccessUrl, getPreviewOpenVariant]);
 
   const downloadStorageBackedFile = useCallback(async (file: StorageBackedFile) => {
     const url = await ensureFileAccessUrl(file);
@@ -7459,7 +7471,12 @@ export default function DesignTaskPage() {
                   onClick={async () => {
                     const url =
                       filePreview.storageBucket && filePreview.storagePath
-                        ? await getSignedAttachmentUrl(filePreview.storageBucket, filePreview.storagePath, "original", 60 * 60 * 24 * 7)
+                        ? await getSignedAttachmentUrl(
+                            filePreview.storageBucket,
+                            filePreview.storagePath,
+                            getPreviewOpenVariant(filePreview.name),
+                            60 * 60 * 24 * 7
+                          )
                         : filePreview.url;
                     if (!url) return;
                     window.open(url, "_blank", "noopener,noreferrer");
@@ -7603,28 +7620,36 @@ export default function DesignTaskPage() {
         </DialogContent>
       </Dialog>
 
-      <DesignTaskRenameDialog
-        open={renameDialogOpen}
-        onOpenChange={(open) => {
-          setRenameDialogOpen(open);
-          if (!open) setRenameError(null);
-        }}
-        initialValue={task?.title ?? ""}
-        taskLabel={task ? `«${getTaskDisplayNumber(task)}»` : null}
-        saving={renameSaving}
-        error={renameError}
-        onSubmit={submitRenameDialog}
-      />
+      {renameDialogOpen ? (
+        <Suspense fallback={null}>
+          <DesignTaskRenameDialog
+            open={renameDialogOpen}
+            onOpenChange={(open) => {
+              setRenameDialogOpen(open);
+              if (!open) setRenameError(null);
+            }}
+            initialValue={task?.title ?? ""}
+            taskLabel={task ? `«${getTaskDisplayNumber(task)}»` : null}
+            saving={renameSaving}
+            error={renameError}
+            onSubmit={submitRenameDialog}
+          />
+        </Suspense>
+      ) : null}
 
-      <CustomerLeadQuickViewDialog
-        open={partyCardOpen}
-        onOpenChange={setPartyCardOpen}
-        teamId={effectiveTeamId ?? ""}
-        userId={userId}
-        customerId={task?.customerId ?? null}
-        customerName={task?.customerName ?? null}
-        customerLogoUrl={task?.customerLogoUrl ?? null}
-      />
+      {partyCardOpen ? (
+        <Suspense fallback={null}>
+          <CustomerLeadQuickViewDialog
+            open={partyCardOpen}
+            onOpenChange={setPartyCardOpen}
+            teamId={effectiveTeamId ?? ""}
+            userId={userId}
+            customerId={task?.customerId ?? null}
+            customerName={task?.customerName ?? null}
+            customerLogoUrl={task?.customerLogoUrl ?? null}
+          />
+        </Suspense>
+      ) : null}
 
       <ConfirmDialog
         open={deleteDialogOpen}
