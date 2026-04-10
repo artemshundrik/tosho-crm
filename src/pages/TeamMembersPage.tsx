@@ -89,6 +89,7 @@ import {
   upsertWorkspaceMemberProfile,
   type WorkspaceMemberDirectoryRow,
 } from "@/lib/workspaceMemberDirectory";
+import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
@@ -2244,6 +2245,19 @@ export function TeamMembersPage() {
       return isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate);
     }).length;
   }, [members, memberMetaByUserId]);
+  const missingBirthdayCount = useMemo(() => {
+    return members.filter((member) => !memberMetaByUserId[member.user_id]?.birthDate).length;
+  }, [members, memberMetaByUserId]);
+  const missingStartDateCount = useMemo(() => {
+    return members.filter((member) => !memberMetaByUserId[member.user_id]?.startDate).length;
+  }, [members, memberMetaByUserId]);
+  const openAbsenceRangeCount = useMemo(() => {
+    return members.filter((member) => {
+      const meta = memberMetaByUserId[member.user_id];
+      const availabilityStatus = normalizeTeamAvailabilityStatus(meta?.availabilityStatus);
+      return availabilityStatus !== "available" && !!meta?.availabilityStartDate && !meta?.availabilityEndDate;
+    }).length;
+  }, [members, memberMetaByUserId]);
 
   if (showSkeleton) {
     return <ListSkeleton />;
@@ -2267,122 +2281,71 @@ export function TeamMembersPage() {
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
       <Card className="overflow-hidden border border-border bg-card shadow-none">
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.55fr)_390px]">
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold text-foreground">Команда сьогодні</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Швидкий зріз по складу, присутності та тому, що потребує уваги.
-                </div>
+        <div className="p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1 text-xs font-medium text-primary">
+                <Shield className="h-3.5 w-3.5" />
+                Адміністрування команди
+              </div>
+              <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
+                Тут не про щоденний стан команди, а про якість даних, ролі, доступи й HR-контроль
+              </div>
+              <div className="mt-2 text-sm leading-6 text-muted-foreground">
+                Командний дашборд з онлайн-статусами та подіями винесений на окрему сторінку `Команда`. Тут лишається те, що треба адміну: прогалини в профілях, випробувальні та речі, які потребують дії.
               </div>
             </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Усього</div>
-                  <Shield className="h-4 w-4 text-primary/70" />
-                </div>
-                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{members.length}</div>
-                <div className="mt-1 text-sm text-muted-foreground">учасників у команді</div>
+            <div className="grid min-w-[260px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Усього людей</div>
+                <div className="mt-1 text-2xl font-semibold text-foreground">{members.length}</div>
               </div>
-
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Онлайн</div>
-                  <Activity className="h-4 w-4 text-emerald-600/80 dark:text-emerald-400/80" />
-                </div>
-                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{onlineNowCount}</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {onlineNowCount > 0 ? `з ${members.length} активних` : "нікого онлайн"}
-                </div>
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-amber-700/80 dark:text-amber-300/80">Потребують уваги</div>
+                <div className="mt-1 text-2xl font-semibold text-foreground">{needsAttentionCount}</div>
               </div>
-
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Увага</div>
-                  <AlertTriangle className="h-4 w-4 text-amber-600/80 dark:text-amber-400/80" />
-                </div>
-                <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{needsAttentionCount}</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {probationReviewDueCount > 0
-                    ? `${probationReviewDueCount} рішень по випробувальному`
-                    : activeInvitesCount > 0
-                    ? `${activeInvitesCount} інвайтів очікують`
-                    : `перевірити профілі та ролі`}
-                </div>
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+                <div className="text-xs uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">Інвайти</div>
+                <div className="mt-1 text-2xl font-semibold text-foreground">{activeInvitesCount}</div>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-border bg-muted/[0.03] p-5 xl:border-l xl:border-t-0">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-foreground">Найближчі події</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  День народження та річниці в компанії
-                </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Без дня народження</div>
+                <Gift className="h-4 w-4 text-muted-foreground/70" />
               </div>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-foreground/[0.04] text-foreground/70">
-                <Calendar className="h-4 w-4" />
-              </div>
+              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{missingBirthdayCount}</div>
+              <div className="mt-1 text-sm text-muted-foreground">профілів треба доповнити</div>
             </div>
 
-            <div className="mt-5 space-y-2">
-              {upcomingTeamEvents.length > 0 ? (
-                upcomingTeamEvents.map((event) => {
-                  const eventLabel =
-                    event.type === "birthday"
-                      ? "День народження"
-                      : `${event.insight.years} ${event.insight.years === 1 ? "рік" : event.insight.years >= 2 && event.insight.years <= 4 ? "роки" : "років"} в компанії`;
-                  const timingLabel =
-                    event.insight.daysUntil === 0 ? "Сьогодні" : `Через ${event.insight.daysUntil} дн`;
-                  return (
-                    <div
-                      key={`${event.type}:${event.member.user_id}:${event.insight.dateLabel}`}
-                      className="rounded-2xl border border-border/70 bg-background/70 px-3 py-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div
-                            className={cn(
-                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                              event.type === "birthday"
-                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-300"
-                                : "bg-sky-500/10 text-sky-600 dark:text-sky-300"
-                            )}
-                          >
-                            {event.type === "birthday" ? (
-                              <Gift className="h-4 w-4" />
-                            ) : (
-                              <Award className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-foreground">
-                              {getMemberDisplayName(event.member)}
-                            </div>
-                            <div className="mt-0.5 text-xs text-muted-foreground">
-                              {eventLabel}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {event.insight.caption}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 rounded-full border border-border/70 bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-foreground/80">
-                          {timingLabel}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
-                  Додай дати народження та старту в профілі учасників.
-                </div>
-              )}
+            <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Без дати старту</div>
+                <Calendar className="h-4 w-4 text-muted-foreground/70" />
+              </div>
+              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{missingStartDateCount}</div>
+              <div className="mt-1 text-sm text-muted-foreground">не вдасться порахувати стаж</div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Випробувальний</div>
+                <AlertTriangle className="h-4 w-4 text-amber-600/80 dark:text-amber-400/80" />
+              </div>
+              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{probationReviewDueCount}</div>
+              <div className="mt-1 text-sm text-muted-foreground">чекають рішення або рев’ю</div>
+            </div>
+
+            <div className="rounded-2xl border border-warning-soft-border bg-warning-soft/60 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-warning-foreground/80">Відсутність без кінця</div>
+                <Activity className="h-4 w-4 text-warning-foreground/80" />
+              </div>
+              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{openAbsenceRangeCount}</div>
+              <div className="mt-1 text-sm text-muted-foreground">період треба закрити датою</div>
             </div>
           </div>
         </div>
