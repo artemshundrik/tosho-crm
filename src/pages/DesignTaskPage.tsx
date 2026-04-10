@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -47,6 +47,7 @@ import {
   Check,
   Copy,
   PencilLine,
+  X,
   Bold,
   Italic,
   List,
@@ -118,9 +119,6 @@ import {
 
 const CustomerLeadQuickViewDialog = lazy(() =>
   import("@/components/customers").then((module) => ({ default: module.CustomerLeadQuickViewDialog }))
-);
-const DesignTaskRenameDialog = lazy(() =>
-  import("@/components/app/DesignTaskRenameDialog").then((module) => ({ default: module.DesignTaskRenameDialog }))
 );
 
 type DesignTask = {
@@ -906,7 +904,8 @@ export default function DesignTaskPage() {
     [getEntityViewers, id]
   );
   const [task, setTask] = useState<DesignTask | null>(() => initialCache?.task ?? null);
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(() => initialCache?.task?.title ?? "");
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [quoteItem, setQuoteItem] = useState<QuoteItemRow | null>(() => initialCache?.quoteItem ?? null);
@@ -978,6 +977,7 @@ export default function DesignTaskPage() {
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [headerTypePopoverOpen, setHeaderTypePopoverOpen] = useState(false);
   const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
@@ -3986,7 +3986,7 @@ export default function DesignTaskPage() {
     const previousTask = task;
     const previousTitle = previousTask.title?.trim() || "";
     if (previousTitle === normalizedTitle) {
-      setRenameDialogOpen(false);
+      setTitleEditing(false);
       setRenameError(null);
       return;
     }
@@ -4040,7 +4040,7 @@ export default function DesignTaskPage() {
       syncDesignPageCacheTask(effectiveTeamId, nextTask);
 
       toast.success("Назву задачі оновлено");
-      setRenameDialogOpen(false);
+      setTitleEditing(false);
     } catch (e: unknown) {
       setTask(previousTask);
       const message = getErrorMessage(e, "Не вдалося оновити назву задачі");
@@ -5166,6 +5166,17 @@ export default function DesignTaskPage() {
     void loadQuoteCandidates();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachQuoteDialogOpen, task?.id, task?.quoteId, task?.customerName]);
+  useEffect(() => {
+    setTitleDraft(task?.title ?? "");
+  }, [task?.id, task?.title]);
+  useEffect(() => {
+    if (!titleEditing) return;
+    const frame = window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [titleEditing]);
   const canTakeOverForSelf =
     !!task &&
     canSelfAssign &&
@@ -5272,6 +5283,7 @@ export default function DesignTaskPage() {
 
   const isLinkedQuote = isUuid(task.quoteId);
   const taskHeaderTitle = getTaskDisplayNumber(task);
+  const taskHeaderName = task.title?.trim() || "Без назви";
   const taskHeaderSubtitle = isLinkedQuote
     ? `${task.customerName ?? "Замовник"} · ${quoteItem?.name ?? "Позиція"}`
     : `${task.customerName ?? "Замовник"} · Дизайн-задача без прорахунку`;
@@ -5287,10 +5299,27 @@ export default function DesignTaskPage() {
     (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");
   const taskManagerAvatar = taskManagerUserId ? getMemberAvatar(taskManagerUserId) : null;
   const canEditTaskTitle = !!task && !!userId && (task.assigneeUserId === userId || canManageAssignments);
-  const openRenameDialog = () => {
+  const startInlineTitleEdit = () => {
     if (!canEditTaskTitle) return;
     setRenameError(null);
-    setRenameDialogOpen(true);
+    setTitleDraft(task?.title ?? "");
+    setTitleEditing(true);
+  };
+  const cancelInlineTitleEdit = () => {
+    setTitleDraft(task?.title ?? "");
+    setRenameError(null);
+    setTitleEditing(false);
+  };
+  const handleInlineTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void submitRenameDialog(titleDraft);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelInlineTitleEdit();
+    }
   };
 
   const renderDesignOutputSection = (kind: DesignOutputKind) => {
@@ -5590,26 +5619,76 @@ export default function DesignTaskPage() {
           </>
         }
         title={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 leading-none">
             <HoverCopyText
               value={taskHeaderTitle}
+              className="max-w-full"
+              textClassName="font-mono text-[22px] text-primary font-medium tracking-tight leading-none"
+              buttonStyle="overlay"
+              buttonClassName="h-6 w-6 rounded-md"
               successMessage="Номер дизайн-задачі скопійовано"
               copyLabel="Скопіювати номер дизайн-задачі"
             >
               {taskHeaderTitle}
             </HoverCopyText>
+            <span className="text-foreground/45 leading-none">-</span>
+            {titleEditing ? (
+              <div className="flex min-w-[240px] flex-1 flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(event) => {
+                      setTitleDraft(event.target.value);
+                      if (renameError) setRenameError(null);
+                    }}
+                    onKeyDown={handleInlineTitleKeyDown}
+                    disabled={renameSaving || designTaskLockedByOther}
+                    className="h-12 text-2xl font-medium tracking-tight md:h-12"
+                    placeholder="Вкажіть назву задачі"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 shrink-0"
+                    onClick={() => void submitRenameDialog(titleDraft)}
+                    disabled={renameSaving || designTaskLockedByOther}
+                    title="Зберегти назву"
+                  >
+                    {renameSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-12 w-12 shrink-0"
+                    onClick={cancelInlineTitleEdit}
+                    disabled={renameSaving}
+                    title="Скасувати редагування"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                {renameError ? <div className="text-xs text-destructive">{renameError}</div> : null}
+              </div>
+            ) : (
+              <span className="relative -top-[1px] min-w-0 break-words font-medium leading-none">{taskHeaderName}</span>
+            )}
             {canEditTaskTitle ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground"
-                onClick={openRenameDialog}
-                disabled={renameSaving || designTaskLockedByOther}
-                title="Редагувати назву"
-              >
-                <PencilLine className="h-4 w-4" />
-              </Button>
+              !titleEditing ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={startInlineTitleEdit}
+                  disabled={renameSaving || designTaskLockedByOther}
+                  title="Редагувати назву"
+                >
+                  <PencilLine className="h-4 w-4" />
+                </Button>
+              ) : null
             ) : null}
           </div>
         }
@@ -6255,7 +6334,7 @@ export default function DesignTaskPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {canEditTaskTitle ? (
-                    <DropdownMenuItem onClick={openRenameDialog} disabled={renameSaving || designTaskLockedByOther}>
+                    <DropdownMenuItem onClick={startInlineTitleEdit} disabled={renameSaving || designTaskLockedByOther}>
                       Редагувати назву
                     </DropdownMenuItem>
                   ) : null}
@@ -7619,23 +7698,6 @@ export default function DesignTaskPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {renameDialogOpen ? (
-        <Suspense fallback={null}>
-          <DesignTaskRenameDialog
-            open={renameDialogOpen}
-            onOpenChange={(open) => {
-              setRenameDialogOpen(open);
-              if (!open) setRenameError(null);
-            }}
-            initialValue={task?.title ?? ""}
-            taskLabel={task ? `«${getTaskDisplayNumber(task)}»` : null}
-            saving={renameSaving}
-            error={renameError}
-            onSubmit={submitRenameDialog}
-          />
-        </Suspense>
-      ) : null}
 
       {partyCardOpen ? (
         <Suspense fallback={null}>

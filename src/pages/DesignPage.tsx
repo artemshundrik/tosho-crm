@@ -3587,7 +3587,7 @@ export default function DesignPage() {
               {isLinkedQuote ? (
                 <HoverCopyText
                   value={getTaskDisplayNumber(task)}
-                  textClassName="text-sm font-mono font-semibold hover:underline"
+                  textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap hover:underline"
                   successMessage="Номер прорахунку скопійовано"
                   copyLabel="Скопіювати номер прорахунку"
                   onClick={(event) => {
@@ -3598,7 +3598,7 @@ export default function DesignPage() {
               ) : (
                 <HoverCopyText
                   value={getTaskDisplayNumber(task)}
-                  textClassName="text-sm font-semibold"
+                  textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
                   successMessage="Номер дизайн-задачі скопійовано"
                   copyLabel="Скопіювати номер дизайн-задачі"
                   title={task.title ?? getTaskDisplayNumber(task)}
@@ -4865,7 +4865,9 @@ export default function DesignPage() {
                                   title={task.title ?? getTaskDisplayNumber(task)}
                                 >
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(task)}</div>
+                                    <div className="truncate font-mono text-[13px] font-medium tracking-wide text-muted-foreground">
+                                      {getTaskDisplayNumber(task)}
+                                    </div>
                                     <div className="mt-1 truncate text-xs text-muted-foreground">
                                       {task.customerName ?? "Не вказано"}
                                       {task.productName ? ` · ${task.productName}` : ""}

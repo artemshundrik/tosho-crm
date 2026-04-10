@@ -5016,7 +5016,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <HoverCopyText
                     value={quote.number ?? quote.id}
-                    textClassName="text-[17px] font-semibold text-foreground"
+                    textClassName="font-mono text-[17px] font-medium tracking-wide text-foreground"
                     successMessage="Номер прорахунку скопійовано"
                     copyLabel="Скопіювати номер прорахунку"
                   >
