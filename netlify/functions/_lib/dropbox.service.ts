@@ -2,6 +2,7 @@ const DROPBOX_API_BASE_URL = "https://api.dropboxapi.com/2";
 const DROPBOX_CONTENT_API_BASE_URL = "https://content.dropboxapi.com/2";
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 const CLIENTS_ROOT_PATH = "/Tosho Team Folder/Замовники";
+const CLIENT_ORDERS_FOLDER_NAME = "Замовлення";
 
 type DropboxTokenResponse = {
   access_token: string;
@@ -305,27 +306,30 @@ async function createClientFolder(clientName: string) {
   const safeClientName = normalizeDropboxName(clientName, "Client");
   const clientPath = joinDropboxPath(CLIENTS_ROOT_PATH, safeClientName);
   const brandPath = joinDropboxPath(clientPath, "Бренд");
-  const projectsPath = joinDropboxPath(clientPath, "Проєкти");
+  const ordersPath = joinDropboxPath(clientPath, CLIENT_ORDERS_FOLDER_NAME);
 
   await createFolder(clientPath);
   await createFolder(brandPath);
-  await createFolder(projectsPath);
+  await createFolder(ordersPath);
 
   return {
     clientName: safeClientName,
     clientPath,
     brandPath,
-    projectsPath,
+    ordersPath,
   };
 }
 
 async function createProjectFolder(clientPath: string, projectName: string) {
   const normalizedClientPath = normalizeDropboxPath(clientPath);
   const safeProjectName = normalizeDropboxName(projectName, "Project");
-  const projectPath = joinDropboxPath(normalizedClientPath, "Проєкти", safeProjectName);
+  const ordersPath = joinDropboxPath(normalizedClientPath, CLIENT_ORDERS_FOLDER_NAME);
+  await createFolder(ordersPath);
+  const projectPath = joinDropboxPath(ordersPath, safeProjectName);
   await createFolder(projectPath);
   return {
     projectName: safeProjectName,
+    ordersPath,
     projectPath,
   };
 }

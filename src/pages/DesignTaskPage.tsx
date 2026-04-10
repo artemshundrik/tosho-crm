@@ -10,12 +10,13 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +54,11 @@ import {
   List,
   ListOrdered,
   Heading2,
+  Archive,
+  FolderOpen,
+  CloudUpload,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -292,6 +298,14 @@ type GroupedDesignOutputs = {
 };
 
 type DesignOutputKind = "visualization" | "layout";
+type DropboxExportRole = "final" | "archive";
+
+type DropboxExportPlanFile = {
+  file: DesignOutputFile;
+  role: DropboxExportRole;
+  outputKind: DesignOutputKind;
+  archiveVersion?: number;
+};
 
 const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
   visualization: "Візуал",
@@ -308,6 +322,86 @@ const normalizePartyLabel = (value?: string | null) => {
 };
 
 const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
+
+const DROPBOX_ORDERS_ROOT_SUFFIX = "/Замовлення";
+
+function DropboxGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <path
+        fill="currentColor"
+        d="M6.15 3 1.5 6.05l4.65 3.05 4.7-3.05L6.15 3Zm11.7 0-4.7 3.05 4.7 3.05 4.65-3.05L17.85 3ZM1.5 12.2l4.65 3.05 4.7-3.05-4.7-3.05L1.5 12.2Zm11.65-3.05-4.7 3.05 4.7 3.05 4.65-3.05-4.65-3.05ZM6.2 16.2l4.65 3.05 4.7-3.05-2.4-1.55-2.3 1.5-2.3-1.5-2.35 1.55Z"
+      />
+    </svg>
+  );
+}
+
+function sanitizeDropboxNameSegment(value: string, fallback: string) {
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/[<>:"|?*\u0000-\u001f]/g, " ")
+    .replace(/[\\/]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  return normalized || fallback;
+}
+
+function buildDropboxClientFolderPath(clientName: string) {
+  return `Tosho Team Folder/Замовники/${sanitizeDropboxNameSegment(clientName, "Замовник")}`;
+}
+
+function buildDropboxBrandFolderPath(clientPath: string) {
+  return `${clientPath}/Бренд`;
+}
+
+function formatDropboxDate(value?: string | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return formatDropboxDate(null);
+  return date.toISOString().slice(0, 10);
+}
+
+function getDropboxFileExtension(fileName?: string | null) {
+  const trimmed = (fileName ?? "").trim();
+  const dotIndex = trimmed.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === trimmed.length - 1) return "";
+  return trimmed.slice(dotIndex);
+}
+
+function buildDropboxExportFileName(params: {
+  clientLabel: string;
+  outputKind: DesignOutputKind;
+  projectName: string;
+  orderNumber: string;
+  dateLabel: string;
+  extension?: string;
+  archiveVersion?: number;
+}) {
+  const baseParts =
+    params.archiveVersion != null
+      ? [
+          params.clientLabel,
+          "Архів",
+          DESIGN_OUTPUT_KIND_LABELS[params.outputKind],
+          params.projectName,
+          params.orderNumber,
+          params.dateLabel,
+          `v${params.archiveVersion}`,
+        ]
+      : [
+          params.clientLabel,
+          DESIGN_OUTPUT_KIND_LABELS[params.outputKind],
+          params.projectName,
+          params.orderNumber,
+          params.dateLabel,
+        ];
+  const baseName = sanitizeDropboxNameSegment(baseParts.filter(Boolean).join(" - "), "Export");
+  return `${baseName}${params.extension ?? ""}`;
+}
+
+function normalizeDropboxFolderNameDraft(value?: string | null, fallback = "Замовлення") {
+  return sanitizeDropboxNameSegment((value ?? "").trim(), fallback);
+}
 
 function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
   if (!textarea) return;
@@ -938,6 +1032,11 @@ export default function DesignTaskPage() {
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
+  const [dropboxClientPath, setDropboxClientPath] = useState<string | null>(null);
+  const [dropboxFolderDialogOpen, setDropboxFolderDialogOpen] = useState(false);
+  const [dropboxFolderDraft, setDropboxFolderDraft] = useState("");
+  const [dropboxFolderError, setDropboxFolderError] = useState<string | null>(null);
+  const [dropboxExporting, setDropboxExporting] = useState(false);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [partyCardOpen, setPartyCardOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
@@ -1632,6 +1731,48 @@ export default function DesignTaskPage() {
     void load();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId, id]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadDropboxClientPath = async () => {
+      if (!task?.customerId) {
+        if (active) setDropboxClientPath(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .select("dropbox_client_path")
+          .eq("id", task.customerId)
+          .maybeSingle();
+        if (error) {
+          const message = error.message ?? "";
+          if (/column/i.test(message) && /dropbox_client_path/i.test(message)) {
+            if (active) setDropboxClientPath(null);
+            return;
+          }
+          throw error;
+        }
+        if (!active) return;
+        const nextPath =
+          data && typeof (data as { dropbox_client_path?: string | null }).dropbox_client_path === "string"
+            ? (data as { dropbox_client_path: string }).dropbox_client_path.trim()
+            : "";
+        setDropboxClientPath(nextPath || null);
+      } catch (loadError) {
+        console.warn("Failed to load Dropbox client path", loadError);
+        if (active) setDropboxClientPath(null);
+      }
+    };
+
+    void loadDropboxClientPath();
+
+    return () => {
+      active = false;
+    };
+  }, [task?.customerId]);
 
   const loadCustomerAttachments = useCallback(async (options?: { force?: boolean }) => {
     if (!effectiveTeamId || !task || !isUuid(task.quoteId)) return;
@@ -5269,6 +5410,396 @@ export default function DesignTaskPage() {
   const mobileSecondaryActionDisabled =
     !!statusSaving || (mobileSecondaryAction?.next === "client_review" && !canSendToClientNow);
 
+  const dropboxFolderNameDefault = useMemo(
+    () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
+    [quoteItem?.name, task?.title]
+  );
+  const dropboxClientLabel = useMemo(() => {
+    const raw = (task?.customerName ?? "").trim();
+    if (!raw) return "Замовник";
+    const beforeParenthesis = raw.split("(")[0]?.trim();
+    return sanitizeDropboxNameSegment(beforeParenthesis || raw, "Замовник");
+  }, [task?.customerName]);
+  const dropboxOrderNumber = useMemo(
+    () => sanitizeDropboxNameSegment(task?.quoteNumber?.trim() || getTaskDisplayNumber(task), "TS"),
+    [task]
+  );
+  const dropboxDateLabel = useMemo(() => formatDropboxDate(task?.createdAt), [task?.createdAt]);
+
+  const dropboxPlanByKind = useMemo(() => {
+    const buildPlan = (kind: DesignOutputKind) => {
+      const files = designOutputFiles.filter((file) => file.output_kind === kind);
+      const selectedIds = kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+      const selectedSet = new Set(selectedIds);
+      const finalFiles = files.filter((file) => selectedSet.has(file.id));
+      const archiveFiles = files.filter((file) => !selectedSet.has(file.id));
+      return {
+        kind,
+        files,
+        finalFiles,
+        archiveFiles,
+      };
+    };
+
+    return {
+      visualization: buildPlan("visualization"),
+      layout: buildPlan("layout"),
+    };
+  }, [designOutputFiles, selectedLayoutOutputFileIds, selectedVisualizationOutputFileIds]);
+
+  const dropboxExportWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    (["visualization", "layout"] as DesignOutputKind[]).forEach((kind) => {
+      const kindLabel = DESIGN_OUTPUT_KIND_LABELS[kind];
+      const selectedCount = dropboxPlanByKind[kind].finalFiles.length;
+      if (selectedCount > 1) {
+        warnings.push(`У табі «${kindLabel}» вибрано кілька затверджених файлів. Для фіналу потрібен один.`);
+      }
+    });
+    return warnings;
+  }, [dropboxPlanByKind]);
+
+  const dropboxExportPlan = useMemo(() => {
+    const exported: DropboxExportPlanFile[] = [];
+
+    (["visualization", "layout"] as DesignOutputKind[]).forEach((kind) => {
+      const kindPlan = dropboxPlanByKind[kind];
+      kindPlan.finalFiles.slice(0, 1).forEach((file) => {
+        exported.push({
+          file,
+          role: "final",
+          outputKind: kind,
+        });
+      });
+      kindPlan.archiveFiles.forEach((file, index) => {
+        exported.push({
+          file,
+          role: "archive",
+          outputKind: kind,
+          archiveVersion: index + 1,
+        });
+      });
+    });
+
+    return exported;
+  }, [dropboxPlanByKind]);
+
+  const dropboxExportCount = dropboxExportPlan.length;
+  const dropboxCanExport =
+    !!task &&
+    !!dropboxClientPath &&
+    dropboxExportCount > 0 &&
+    dropboxExportWarnings.length === 0 &&
+    !dropboxExporting;
+  const latestDropboxFolderPath =
+    typeof task?.metadata?.dropbox_order_folder_path === "string" && task.metadata.dropbox_order_folder_path.trim()
+      ? task.metadata.dropbox_order_folder_path.trim()
+      : null;
+  const latestDropboxFolderSharedUrl =
+    typeof task?.metadata?.dropbox_order_folder_shared_url === "string" && task.metadata.dropbox_order_folder_shared_url.trim()
+      ? task.metadata.dropbox_order_folder_shared_url.trim()
+      : null;
+
+  const inspectDropboxFolder = useCallback(async (path: string) => {
+    const response = await fetch(
+      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(path)}`
+    );
+    const payload = (await response.json().catch(() => null)) as { sharedUrl?: string | null; error?: string | null } | null;
+    if (!response.ok || !payload) {
+      throw new Error(payload?.error || "Не вдалося отримати Dropbox-папку.");
+    }
+    return payload.sharedUrl?.trim() || "";
+  }, []);
+
+  const openDropboxOrderFolder = useCallback(async () => {
+    const targetUrl = latestDropboxFolderSharedUrl || (latestDropboxFolderPath ? await inspectDropboxFolder(latestDropboxFolderPath) : "");
+    if (!targetUrl) {
+      toast.error("Папка Dropbox ще не підготовлена.");
+      return;
+    }
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }, [inspectDropboxFolder, latestDropboxFolderPath, latestDropboxFolderSharedUrl]);
+
+  const openDropboxExportDialog = useCallback(() => {
+    setDropboxFolderDraft(dropboxFolderNameDefault);
+    setDropboxFolderError(null);
+    setDropboxFolderDialogOpen(true);
+  }, [dropboxFolderNameDefault]);
+
+  const createDropboxClientFolder = useCallback(
+    async (options?: { openExportDialog?: boolean }) => {
+      if (!task?.customerId) {
+        toast.error("Для задачі не визначено замовника.");
+        return;
+      }
+
+      const customerName = (task.customerName ?? "").trim();
+      if (!customerName) {
+        toast.error("Не вдалося визначити назву замовника для Dropbox.");
+        return;
+      }
+
+      if (!ensureCanEdit()) return;
+
+      setDropboxFolderError(null);
+      setDropboxExporting(true);
+      try {
+        const response = await fetch("/.netlify/functions/dropbox-manage", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "create-client",
+            clientName: customerName,
+          }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              ok?: boolean;
+              clientPath?: string | null;
+              brandPath?: string | null;
+              clientSharedUrl?: string | null;
+              error?: string | null;
+            }
+          | null;
+        if (!response.ok || !payload?.ok || !payload.clientPath) {
+          throw new Error(payload?.error || "Не вдалося створити Dropbox-папку замовника.");
+        }
+
+        const nextClientPath = payload.clientPath.trim();
+        const nextBrandPath = (payload.brandPath ?? buildDropboxBrandFolderPath(nextClientPath)).trim();
+        const nextSharedUrl = payload.clientSharedUrl?.trim() || "";
+
+        const updatePayload = {
+          dropbox_client_path: nextClientPath,
+          dropbox_brand_path: nextBrandPath,
+          dropbox_shared_url: nextSharedUrl || null,
+        };
+        const { error: updateError } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .update(updatePayload)
+          .eq("id", task.customerId);
+        if (updateError) {
+          const message = updateError.message ?? "";
+          if (!( /column/i.test(message) && /dropbox_/i.test(message) )) {
+            throw updateError;
+          }
+        }
+
+        setDropboxClientPath(nextClientPath);
+        toast.success("Dropbox-папку замовника створено");
+        if (options?.openExportDialog) {
+          setDropboxFolderDraft(dropboxFolderNameDefault);
+          setDropboxFolderDialogOpen(true);
+        }
+      } catch (error) {
+        const fallbackPath = buildDropboxClientFolderPath(customerName);
+        try {
+          const fallbackUrl = await inspectDropboxFolder(fallbackPath);
+          const { error: updateError } = await supabase
+            .schema("tosho")
+            .from("customers")
+            .update({
+              dropbox_client_path: fallbackPath,
+              dropbox_brand_path: buildDropboxBrandFolderPath(fallbackPath),
+              dropbox_shared_url: fallbackUrl || null,
+            })
+            .eq("id", task.customerId);
+          if (updateError) {
+            const message = updateError.message ?? "";
+            if (!( /column/i.test(message) && /dropbox_/i.test(message) )) {
+              throw updateError;
+            }
+          }
+          setDropboxClientPath(fallbackPath);
+          toast.success("Dropbox-папку замовника підхоплено");
+          if (options?.openExportDialog) {
+            setDropboxFolderDraft(dropboxFolderNameDefault);
+            setDropboxFolderDialogOpen(true);
+          }
+          return;
+        } catch {
+          const message = getErrorMessage(error, "Не вдалося створити Dropbox-папку замовника");
+          setDropboxFolderError(message);
+          toast.error(message);
+        }
+      } finally {
+        setDropboxExporting(false);
+      }
+    },
+    [dropboxFolderNameDefault, ensureCanEdit, inspectDropboxFolder, task?.customerId, task?.customerName]
+  );
+
+  const handleExportToDropbox = useCallback(async () => {
+    if (!task || !effectiveTeamId || !dropboxClientPath) return;
+    if (!ensureCanEdit()) return;
+
+    const normalizedFolderName = normalizeDropboxFolderNameDraft(dropboxFolderDraft);
+    if (!normalizedFolderName) {
+      setDropboxFolderError("Вкажіть назву папки замовлення.");
+      return;
+    }
+    if (dropboxExportWarnings.length > 0) {
+      setDropboxFolderError(dropboxExportWarnings[0]);
+      return;
+    }
+    if (dropboxExportPlan.length === 0) {
+      setDropboxFolderError("Немає файлів для експорту в Dropbox.");
+      return;
+    }
+
+    setDropboxFolderError(null);
+    setDropboxExporting(true);
+
+    try {
+      const projectResponse = await fetch("/.netlify/functions/dropbox-manage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "create-project",
+          clientPath: dropboxClientPath,
+          projectName: normalizedFolderName,
+        }),
+      });
+      const projectPayload = (await projectResponse.json().catch(() => null)) as
+        | { projectPath?: string | null; projectSharedUrl?: string | null; error?: string | null }
+        | null;
+      if (!projectResponse.ok || !projectPayload?.projectPath) {
+        throw new Error(projectPayload?.error || "Не вдалося підготувати Dropbox-папку замовлення.");
+      }
+
+      const projectPath = projectPayload.projectPath.trim();
+      const filesPayload = [];
+      for (const entry of dropboxExportPlan) {
+        const signedUrl = await getSignedAttachmentUrl(
+          entry.file.storage_bucket,
+          entry.file.storage_path,
+          "original",
+          60 * 60 * 24 * 7
+        );
+        if (!signedUrl) {
+          throw new Error(`Не вдалося підготувати файл «${entry.file.file_name}» до експорту.`);
+        }
+        const fileName = buildDropboxExportFileName({
+          clientLabel: dropboxClientLabel,
+          outputKind: entry.outputKind,
+          projectName: normalizedFolderName,
+          orderNumber: dropboxOrderNumber,
+          dateLabel: dropboxDateLabel,
+          extension: getDropboxFileExtension(entry.file.file_name),
+          archiveVersion: entry.role === "archive" ? entry.archiveVersion : undefined,
+        });
+        filesPayload.push({
+          sourceUrl: signedUrl,
+          sourceFileId: entry.file.id,
+          fileName,
+          outputKind: entry.outputKind,
+          role: entry.role,
+          targetPath: `${projectPath}/${entry.role === "final" ? "Фінал" : "Архів"}/${fileName}`,
+        });
+      }
+
+      const exportResponse = await fetch("/.netlify/functions/dropbox-export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectPath,
+          files: filesPayload,
+        }),
+      });
+      const exportPayload = (await exportResponse.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: string | null;
+            projectSharedUrl?: string | null;
+            uploaded?: Array<{
+              sourceFileId?: string | null;
+              fileName?: string | null;
+              outputKind?: string | null;
+              role?: string | null;
+              dropboxPath?: string | null;
+              dropboxSharedUrl?: string | null;
+            }>;
+          }
+        | null;
+      if (!exportResponse.ok || !exportPayload?.ok) {
+        throw new Error(exportPayload?.error || "Не вдалося експортувати файли в Dropbox.");
+      }
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      const nowIso = new Date().toISOString();
+      const nextMetadata = {
+        ...(task.metadata ?? {}),
+        dropbox_order_folder_name: normalizedFolderName,
+        dropbox_order_folder_path: projectPath,
+        dropbox_order_folder_shared_url: exportPayload.projectSharedUrl ?? projectPayload.projectSharedUrl ?? null,
+        dropbox_last_exported_at: nowIso,
+        dropbox_exports: (exportPayload.uploaded ?? []).map((file) => ({
+          source_file_id: file.sourceFileId ?? null,
+          file_name: file.fileName ?? null,
+          output_kind: file.outputKind ?? null,
+          role: file.role ?? null,
+          dropbox_path: file.dropboxPath ?? null,
+          dropbox_shared_url: file.dropboxSharedUrl ?? null,
+          exported_at: nowIso,
+        })),
+      };
+
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      setDropboxFolderDialogOpen(false);
+
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_output_selection",
+        title: `Dropbox: експортовано ${filesPayload.length} файлів у «${normalizedFolderName}»`,
+        metadata: {
+          source: "dropbox_export",
+          dropbox_order_folder_name: normalizedFolderName,
+          dropbox_order_folder_path: projectPath,
+          exported_count: filesPayload.length,
+        },
+      });
+      await loadHistory(task.id);
+      toast.success(`Експортовано в Dropbox: ${filesPayload.length} файлів`);
+    } catch (error) {
+      const message = getErrorMessage(error, "Не вдалося експортувати файли в Dropbox");
+      setDropboxFolderError(message);
+      toast.error(message);
+    } finally {
+      setDropboxExporting(false);
+    }
+  }, [
+    dropboxClientLabel,
+    dropboxClientPath,
+    dropboxDateLabel,
+    dropboxExportPlan,
+    dropboxExportWarnings,
+    dropboxFolderDraft,
+    dropboxOrderNumber,
+    effectiveTeamId,
+    ensureCanEdit,
+    task,
+    userId,
+  ]);
+
   if (loading) {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо дизайн-задачу." />;
   }
@@ -6282,6 +6813,149 @@ export default function DesignTaskPage() {
             <div className="text-xs text-muted-foreground">
               Оберіть зверху групу, а нижче окремо завантажуйте та погоджуйте візуал і макет. Для друку в замовлення мають бути відмічені обидва.
             </div>
+
+            <Card className="overflow-hidden border border-border/60 bg-[linear-gradient(135deg,hsl(var(--primary)/0.10),hsl(var(--background))_42%,hsl(204_94%_94%/0.22))] shadow-[0_20px_56px_-28px_hsl(var(--foreground)/0.28)]">
+              <CardContent className="p-0">
+                <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div className="space-y-5 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary text-primary-foreground shadow-[0_12px_28px_-18px_hsl(var(--primary)/0.7)]">
+                        <DropboxGlyph className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">
+                          Dropbox Export
+                        </div>
+                        <div className="text-xl font-semibold text-foreground">
+                          Фінал і архів для папки замовлення
+                        </div>
+                        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                          Назва папки за замовчуванням береться з назви задачі, але її можна змінити перед експортом. Затверджені
+                          файли йдуть у <span className="font-medium text-foreground">Фінал</span>, усі інші матеріали з табів{" "}
+                          <span className="font-medium text-foreground">Візуал</span> і{" "}
+                          <span className="font-medium text-foreground">Макет</span> автоматично підуть в{" "}
+                          <span className="font-medium text-foreground">Архів</span>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
+                        const plan = dropboxPlanByKind[kind];
+                        const finalFile = plan.finalFiles[0] ?? null;
+                        return (
+                          <div
+                            key={`dropbox-plan-${kind}`}
+                            className="rounded-2xl border border-border/60 bg-card/75 p-4 shadow-[0_16px_36px_-28px_hsl(var(--foreground)/0.22)] backdrop-blur-sm"
+                          >
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                              <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                                {kind === "visualization" ? (
+                                  <ImageIcon className="h-4 w-4 text-sky-600" />
+                                ) : (
+                                  <PencilLine className="h-4 w-4 text-emerald-600" />
+                                )}
+                                {DESIGN_OUTPUT_KIND_LABELS[kind]}
+                              </div>
+                              <Badge variant="outline" className="border-border/60 bg-background/60 text-[10px]">
+                                Архів: {plan.archiveFiles.length}
+                              </Badge>
+                            </div>
+                            {finalFile ? (
+                              <div className="rounded-xl border border-success/20 bg-success/5 p-3">
+                                <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-success-foreground">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Фінал
+                                </div>
+                                <div className="truncate text-sm font-medium text-foreground" title={finalFile.file_name}>
+                                  {finalFile.file_name}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-border/70 bg-background/40 p-3 text-sm text-muted-foreground">
+                                У цьому табі немає затвердженого файла. Усі матеріали підуть тільки в архів.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {dropboxExportWarnings.length > 0 ? (
+                      <div className="rounded-2xl border border-amber-300/60 bg-amber-50/90 p-3 text-sm text-amber-900">
+                        <div className="mb-1 inline-flex items-center gap-2 font-medium">
+                          <AlertTriangle className="h-4 w-4" />
+                          Потрібно уточнення перед експортом
+                        </div>
+                        <div>{dropboxExportWarnings[0]}</div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-col justify-between gap-4 border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--background)/0.72),hsl(var(--muted)/0.42))] p-5 lg:border-l lg:border-t-0">
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Папка замовлення
+                        </div>
+                        <div className="rounded-xl bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">
+                          {dropboxFolderNameDefault}
+                        </div>
+                        <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxFolderNameDefault}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">У фінал</div>
+                          <div className="mt-2 text-2xl font-semibold text-foreground">
+                            {dropboxExportPlan.filter((entry) => entry.role === "final").length}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">В архів</div>
+                          <div className="mt-2 text-2xl font-semibold text-foreground">
+                            {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full gap-2"
+                        disabled={dropboxExporting || (!dropboxCanExport && !!dropboxClientPath)}
+                        onClick={dropboxClientPath ? openDropboxExportDialog : () => void createDropboxClientFolder({ openExportDialog: true })}
+                      >
+                        {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                        {dropboxClientPath ? "Перенести в Dropbox" : "Створити папку Dropbox і продовжити"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2"
+                        disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
+                        onClick={() => void openDropboxOrderFolder()}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        Відкрити папку замовлення
+                      </Button>
+                      {!dropboxClientPath ? (
+                        <div className="text-xs leading-5 text-muted-foreground">
+                          Якщо папка замовника ще не створена, її можна підготувати прямо тут. Після цього відкриється модалка експорту.
+                        </div>
+                      ) : (
+                        <div className="text-xs leading-5 text-muted-foreground">
+                          Експорт підготує папку замовлення, збереже фінальні файли окремо від архіву й запам’ятає шлях у задачі.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Tabs
               value={activeDesignOutputTab}
@@ -7414,6 +8088,104 @@ export default function DesignTaskPage() {
               Скасувати
             </Button>
             <Button onClick={() => void submitEstimateDialog()}>Зберегти естімейт</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dropboxFolderDialogOpen}
+        onOpenChange={(open) => {
+          setDropboxFolderDialogOpen(open);
+          if (!open) setDropboxFolderError(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary text-primary-foreground shadow-[0_12px_28px_-18px_hsl(var(--primary)/0.7)]">
+                <DropboxGlyph className="h-5 w-5" />
+              </span>
+              Підготовка експорту в Dropbox
+            </DialogTitle>
+            <DialogDescription>
+              Назва папки підставлена з задачі автоматично, але її можна змінити перед експортом.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="dropbox-folder-name">Назва папки замовлення</Label>
+              <Input
+                id="dropbox-folder-name"
+                value={dropboxFolderDraft}
+                onChange={(event) => setDropboxFolderDraft(event.target.value)}
+                placeholder="Напр. Віндер - 2.4x0.6"
+              />
+              <div className="text-xs leading-5 text-muted-foreground">
+                Шлях буде створено як{" "}
+                <span className="font-medium text-foreground">
+                  Tosho Team Folder/Замовники/{dropboxClientLabel}/Замовлення/{normalizeDropboxFolderNameDraft(dropboxFolderDraft)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
+                const plan = dropboxPlanByKind[kind];
+                return (
+                  <div key={`dropbox-dialog-${kind}`} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                        {kind === "visualization" ? (
+                          <ImageIcon className="h-4 w-4 text-sky-600" />
+                        ) : (
+                          <PencilLine className="h-4 w-4 text-emerald-600" />
+                        )}
+                        {DESIGN_OUTPUT_KIND_LABELS[kind]}
+                      </div>
+                      <Badge variant="outline">{plan.files.length} файлів</Badge>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-success/20 bg-success/5 p-3">
+                        <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-success-foreground">
+                          Фінал
+                        </div>
+                        <div className="text-sm text-foreground">
+                          {plan.finalFiles[0]?.file_name ?? "Немає затвердженого файла"}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                        <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          <Archive className="h-3.5 w-3.5" />
+                          Архів
+                        </div>
+                        <div className="text-sm text-foreground">
+                          {plan.archiveFiles.length > 0
+                            ? `${plan.archiveFiles.length} ${plan.archiveFiles.length === 1 ? "файл" : "файлів"}`
+                            : "Немає архівних файлів"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {dropboxFolderError ? (
+              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {dropboxFolderError}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDropboxFolderDialogOpen(false)} disabled={dropboxExporting}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void handleExportToDropbox()} disabled={!dropboxCanExport}>
+              {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+              Перенести в Dropbox
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
