@@ -3,6 +3,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAvatarDisplayUrl, getImmediateAvatarDisplayUrl, resolveAvatarDisplayUrl, type AvatarAssetVariant } from "@/lib/avatarUrl";
+import {
+  buildTeamStatusTitle,
+  getTeamAvailabilityAvatarClass,
+  getTeamStatusIndicatorClass,
+  type TeamAvailabilityStatus,
+  type TeamPresenceStatus,
+} from "@/lib/teamAvailability";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -46,6 +53,9 @@ type AvatarBaseProps = {
   fallbackClassName?: string;
   loading?: "eager" | "lazy";
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>["referrerPolicy"];
+  availability?: TeamAvailabilityStatus | null;
+  presence?: TeamPresenceStatus | null;
+  showStatusIndicator?: boolean;
 };
 
 type PlayerAvatarProps = {
@@ -100,6 +110,9 @@ export function AvatarBase({
   fallbackClassName,
   loading = "lazy",
   referrerPolicy,
+  availability,
+  presence,
+  showStatusIndicator = true,
 }: AvatarBaseProps) {
   const avatarRef = React.useRef<HTMLSpanElement | null>(null);
   const [errored, setErrored] = React.useState(false);
@@ -190,6 +203,11 @@ export function AvatarBase({
 
   const initials = getInitials(name, fallback);
   const showImage = Boolean(resolvedSrc) && !errored;
+  const statusTitle = buildTeamStatusTitle({ name, availability, presence });
+  const statusIndicatorClass = getTeamStatusIndicatorClass({ availability, presence });
+  const statusIndicatorSizeClass =
+    computedSize <= 18 ? "h-2 w-2 border" : computedSize <= 28 ? "h-2.5 w-2.5 border" : "h-3 w-3 border";
+  const statusIndicatorEdgeClass = "bottom-0 right-0";
   const handleImageError = React.useCallback(() => {
     if (!src) {
       setErrored(true);
@@ -214,38 +232,51 @@ export function AvatarBase({
   }, [assetVariant, computedSize, resolvedSrc, src]);
 
   return (
-    <Avatar
-      ref={avatarRef}
-      className={cn(
-        "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
-        shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
-        className
-      )}
-      style={{ width: computedSize, height: computedSize }}
-      onMouseEnter={() => setShouldResolve(true)}
-      onFocusCapture={() => setShouldResolve(true)}
-    >
-      {showImage ? (
-        <AvatarImage
-          src={resolvedSrc ?? ""}
-          alt={name || "Avatar"}
-          className={cn("object-cover", imageClassName)}
-          style={imageStyle}
-          loading={loading}
-          referrerPolicy={referrerPolicy}
-          onError={handleImageError}
+    <span className="relative inline-flex shrink-0 align-middle" title={statusTitle || undefined}>
+      <Avatar
+        ref={avatarRef}
+        className={cn(
+          "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
+          shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+          getTeamAvailabilityAvatarClass(availability),
+          className
+        )}
+        style={{ width: computedSize, height: computedSize }}
+        onMouseEnter={() => setShouldResolve(true)}
+        onFocusCapture={() => setShouldResolve(true)}
+      >
+        {showImage ? (
+          <AvatarImage
+            src={resolvedSrc ?? ""}
+            alt={name || "Avatar"}
+            className={cn("object-cover", imageClassName)}
+            style={imageStyle}
+            loading={loading}
+            referrerPolicy={referrerPolicy}
+            onError={handleImageError}
+          />
+        ) : null}
+        <AvatarFallback
+          className={cn(
+            "text-[10px] font-semibold uppercase text-muted-foreground",
+            shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
+            fallbackClassName
+          )}
+        >
+          {initials}
+        </AvatarFallback>
+      </Avatar>
+      {showStatusIndicator && statusIndicatorClass ? (
+        <span
+          className={cn(
+            "absolute z-[1] rounded-full border-background",
+            statusIndicatorSizeClass,
+            statusIndicatorEdgeClass,
+            statusIndicatorClass
+          )}
         />
       ) : null}
-      <AvatarFallback
-        className={cn(
-          "text-[10px] font-semibold uppercase text-muted-foreground",
-          shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
-          fallbackClassName
-        )}
-      >
-        {initials}
-      </AvatarFallback>
-    </Avatar>
+    </span>
   );
 }
 

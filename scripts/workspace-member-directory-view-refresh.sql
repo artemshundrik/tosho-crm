@@ -65,8 +65,10 @@ begin
   access_role_expr := case when memberships_has_access_role then 'mv.access_role' else 'null::text' end;
   job_role_expr := case when memberships_has_job_role then 'mv.job_role' else 'null::text' end;
 
+  execute 'drop view if exists tosho.workspace_member_directory';
+
   execute format($view$
-    create or replace view tosho.workspace_member_directory as
+    create view tosho.workspace_member_directory as
     select
       mv.workspace_id,
       mv.user_id,
@@ -89,7 +91,9 @@ begin
       p.probation_reviewed_by,
       p.probation_extension_count,
       p.manager_user_id,
-      p.module_access
+      p.module_access,
+      p.availability_start_date,
+      p.availability_end_date
     from tosho.memberships_view mv
     left join tosho.team_member_profiles p
       on p.workspace_id = mv.workspace_id

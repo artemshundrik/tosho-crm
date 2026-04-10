@@ -4,6 +4,7 @@ import { Link, matchPath, Outlet, useLocation, useNavigate } from "react-router-
 import {
   Bell,
   BarChart3,
+  BriefcaseBusiness,
   Building2,
   Calculator,
   Factory,
@@ -301,6 +302,7 @@ const ROUTES = {
   logistics: "/logistics",
   design: "/design",
   contractors: "/contractors",
+  team: "/team",
 
   workspaceSettings: "/workspace-settings",
   membersAccess: "/settings/members",
@@ -335,11 +337,12 @@ const baseSidebarLinks: SidebarLink[] = [
     label: "Підрядники та постачальники",
     to: ROUTES.contractors,
     group: "operations",
-    icon: Users,
+    icon: BriefcaseBusiness,
     moduleKey: "contractors",
   },
 
   // Акаунт
+  { label: "Команда", to: ROUTES.team, group: "account", icon: Users },
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
@@ -440,6 +443,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "",
       breadcrumbLabel: "Підрядники",
       breadcrumbTo: ROUTES.contractors,
+      showPageHeader: false,
+    };
+  if (pathname.startsWith(ROUTES.team))
+    return {
+      title: "Команда",
+      subtitle: "Статуси команди, присутність і найближчі події.",
+      breadcrumbLabel: "Команда",
+      breadcrumbTo: ROUTES.team,
       showPageHeader: false,
     };
 

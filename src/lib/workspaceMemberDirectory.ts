@@ -34,6 +34,8 @@ export type WorkspaceMemberDirectoryRow = {
   birthDate: string;
   phone: string;
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
+  availabilityStartDate: string;
+  availabilityEndDate: string;
   startDate: string;
   probationEndDate: string;
   employmentStatus: EmploymentStatus;
@@ -64,6 +66,8 @@ type DirectoryViewRow = {
   birth_date?: string | null;
   phone?: string | null;
   availability_status?: string | null;
+  availability_start_date?: string | null;
+  availability_end_date?: string | null;
   start_date?: string | null;
   probation_end_date?: string | null;
   employment_status?: string | null;
@@ -96,6 +100,8 @@ type TeamProfileRow = {
   birth_date?: string | null;
   phone?: string | null;
   availability_status?: string | null;
+  availability_start_date?: string | null;
+  availability_end_date?: string | null;
   start_date?: string | null;
   probation_end_date?: string | null;
   employment_status?: string | null;
@@ -118,6 +124,8 @@ type UpsertWorkspaceMemberProfileInput = {
   birthDate?: string | null;
   phone?: string | null;
   availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
+  availabilityStartDate?: string | null;
+  availabilityEndDate?: string | null;
   startDate?: string | null;
   probationEndDate?: string | null;
   employmentStatus?: EmploymentStatus | null;
@@ -233,6 +241,8 @@ function buildRow(input: {
   birthDate?: string | null;
   phone?: string | null;
   availabilityStatus?: string | null;
+  availabilityStartDate?: string | null;
+  availabilityEndDate?: string | null;
   startDate?: string | null;
   probationEndDate?: string | null;
   employmentStatus?: string | null;
@@ -277,6 +287,8 @@ function buildRow(input: {
     birthDate: input.birthDate?.trim() || "",
     phone: input.phone?.trim() || "",
     availabilityStatus: normalizeAvailabilityStatus(input.availabilityStatus),
+    availabilityStartDate: input.availabilityStartDate?.trim() || "",
+    availabilityEndDate: input.availabilityEndDate?.trim() || "",
     startDate: input.startDate?.trim() || "",
     probationEndDate: input.probationEndDate?.trim() || "",
     employmentStatus: normalizeEmploymentStatus(input.employmentStatus, input.probationEndDate),
@@ -295,6 +307,8 @@ async function listFromUnifiedView(workspaceId: string) {
   }
 
   const unifiedViewVariants = [
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,availability_start_date,availability_end_date,start_date,probation_end_date,manager_user_id,module_access",
+    "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone,availability_status,availability_start_date,availability_end_date,start_date,probation_end_date,manager_user_id,module_access",
     "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,avatar_path,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
     "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone,availability_status,start_date,probation_end_date,manager_user_id,module_access",
     "workspace_id,user_id,email,first_name,last_name,full_name,avatar_url,access_role,job_role,birth_date,phone",
@@ -343,6 +357,8 @@ async function listFromUnifiedView(workspaceId: string) {
       birthDate: row.birth_date ?? null,
       phone: row.phone ?? null,
       availabilityStatus: row.availability_status ?? null,
+      availabilityStartDate: row.availability_start_date ?? null,
+      availabilityEndDate: row.availability_end_date ?? null,
       startDate: row.start_date ?? null,
       probationEndDate: row.probation_end_date ?? null,
       employmentStatus: row.employment_status ?? null,
@@ -388,6 +404,9 @@ async function listFromFallback(workspaceId: string) {
   let teamProfileError: unknown = null;
 
   const teamProfileVariants = [
+    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,avatar_path,birth_date,phone,availability_status,availability_start_date,availability_end_date,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
+    "workspace_id,user_id,first_name,last_name,full_name,avatar_url,birth_date,phone,availability_status,availability_start_date,availability_end_date,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
+    "workspace_id,user_id,first_name,last_name,full_name,birth_date,phone,availability_status,availability_start_date,availability_end_date,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
     "workspace_id,user_id,first_name,last_name,full_name,avatar_url,avatar_path,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
     "workspace_id,user_id,first_name,last_name,full_name,avatar_url,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
     "workspace_id,user_id,first_name,last_name,full_name,birth_date,phone,availability_status,start_date,probation_end_date,employment_status,probation_review_notified_at,probation_reviewed_at,probation_reviewed_by,probation_extension_count,manager_user_id,module_access",
@@ -431,6 +450,8 @@ async function listFromFallback(workspaceId: string) {
       birthDate: profile?.birth_date ?? null,
       phone: profile?.phone ?? null,
       availabilityStatus: profile?.availability_status ?? null,
+      availabilityStartDate: profile?.availability_start_date ?? null,
+      availabilityEndDate: profile?.availability_end_date ?? null,
       startDate: profile?.start_date ?? null,
       probationEndDate: profile?.probation_end_date ?? null,
       employmentStatus: profile?.employment_status ?? null,
@@ -467,6 +488,8 @@ async function listFromFallback(workspaceId: string) {
           birthDate: currentUserRow.birthDate,
           phone: currentUserRow.phone,
           availabilityStatus: currentUserRow.availabilityStatus,
+          availabilityStartDate: currentUserRow.availabilityStartDate,
+          availabilityEndDate: currentUserRow.availabilityEndDate,
           startDate: currentUserRow.startDate,
           probationEndDate: currentUserRow.probationEndDate,
           employmentStatus: currentUserRow.employmentStatus,
@@ -586,6 +609,10 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
     phone: input.phone === undefined ? undefined : input.phone?.trim() || null,
     availability_status:
       input.availabilityStatus === undefined ? undefined : input.availabilityStatus?.trim() || "available",
+    availability_start_date:
+      input.availabilityStartDate === undefined ? undefined : input.availabilityStartDate?.trim() || null,
+    availability_end_date:
+      input.availabilityEndDate === undefined ? undefined : input.availabilityEndDate?.trim() || null,
     start_date: input.startDate === undefined ? undefined : input.startDate?.trim() || null,
     probation_end_date: input.probationEndDate === undefined ? undefined : input.probationEndDate?.trim() || null,
     employment_status: input.employmentStatus === undefined ? undefined : input.employmentStatus?.trim() || null,
@@ -617,6 +644,8 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
       birth_date: payload.birth_date,
       phone: payload.phone,
       availability_status: payload.availability_status,
+      availability_start_date: payload.availability_start_date,
+      availability_end_date: payload.availability_end_date,
       start_date: payload.start_date,
       probation_end_date: payload.probation_end_date,
       employment_status: payload.employment_status,

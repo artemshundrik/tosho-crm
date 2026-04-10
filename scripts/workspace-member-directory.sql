@@ -13,6 +13,8 @@ create table if not exists tosho.team_member_profiles (
   birth_date date,
   phone text,
   availability_status text not null default 'available',
+  availability_start_date date,
+  availability_end_date date,
   start_date date,
   probation_end_date date,
   manager_user_id uuid,
@@ -25,7 +27,9 @@ create table if not exists tosho.team_member_profiles (
 
 alter table tosho.team_member_profiles
   add column if not exists avatar_url text,
-  add column if not exists avatar_path text;
+  add column if not exists avatar_path text,
+  add column if not exists availability_start_date date,
+  add column if not exists availability_end_date date;
 
 update tosho.team_member_profiles p
 set
@@ -143,7 +147,9 @@ begin
       p.start_date,
       p.probation_end_date,
       p.manager_user_id,
-      p.module_access
+      p.module_access,
+      p.availability_start_date,
+      p.availability_end_date
     from tosho.memberships_view mv
     left join tosho.team_member_profiles p
       on p.workspace_id = mv.workspace_id

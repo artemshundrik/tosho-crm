@@ -60,6 +60,7 @@ import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
+import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -823,6 +824,7 @@ export default function DesignPage() {
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>(
     () => initialMemberCache?.memberAvatarById ?? {}
   );
+  const [memberAvailabilityById, setMemberAvailabilityById] = useState<Record<string, "available" | "vacation" | "sick_leave" | "offline">>({});
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
     () => initialMemberCache?.managerMembers ?? []
   );
@@ -933,6 +935,17 @@ export default function DesignPage() {
     if (id === userId && currentUserAvatarUrl) return currentUserAvatarUrl;
     return memberAvatarById[id] ?? null;
   }, [currentUserAvatarUrl, memberAvatarById, userId]);
+  const getMemberAvailability = useCallback(
+    (id: string | null | undefined) => {
+      if (!id) return "available";
+      return memberAvailabilityById[id] ?? "available";
+    },
+    [memberAvailabilityById]
+  );
+  const onlineMemberIds = useMemo(
+    () => new Set(workspacePresence.onlineEntries.map((entry) => entry.userId)),
+    [workspacePresence.onlineEntries]
+  );
   const getTaskAssigneeLabel = (task: DesignTask) => {
     if (task.assigneeLabel?.trim()) return task.assigneeLabel.trim();
     if (
@@ -999,6 +1012,7 @@ export default function DesignPage() {
         if (!workspaceId) {
           setMemberById({});
           setMemberAvatarById({});
+          setMemberAvailabilityById({});
           setManagerMembers([]);
           setDesignerMembers([]);
           return;
@@ -1007,13 +1021,16 @@ export default function DesignPage() {
 
         const labelById: Record<string, string> = {};
         const avatarById: Record<string, string | null> = {};
+        const availabilityById: Record<string, "available" | "vacation" | "sick_leave" | "offline"> = {};
         rows.forEach((row) => {
           labelById[row.userId] = row.label;
           avatarById[row.userId] = row.avatarDisplayUrl;
+          availabilityById[row.userId] = normalizeTeamAvailabilityStatus(row.availabilityStatus);
         });
 
         setMemberById(labelById);
         setMemberAvatarById(avatarById);
+        setMemberAvailabilityById(availabilityById);
         const designerRows = rows.filter((row) => isDesignerRole(row.jobRole));
 
         // If no one is marked as designer, still allow assignment to any team member.
@@ -1048,6 +1065,7 @@ export default function DesignPage() {
         }
       } catch (e: unknown) {
         console.warn("Failed to load workspace members for design page", e);
+        setMemberAvailabilityById({});
       } finally {
         setMembersLoading(false);
       }
@@ -1884,11 +1902,13 @@ export default function DesignPage() {
           size={18}
           className="shrink-0 border-border/60"
           fallbackClassName="text-[9px] font-semibold"
+          availability={getMemberAvailability(value)}
+          presence={onlineMemberIds.has(value) ? "online" : "offline"}
         />
         <span className="truncate">{label}</span>
       </span>
     );
-  }, [currentUserDisplayName, getMemberAvatar, memberById, userId]);
+  }, [currentUserDisplayName, getMemberAvatar, getMemberAvailability, memberById, onlineMemberIds, userId]);
 
   const renderAssigneeSpotlightValue = (value: string) => {
     if (value === ALL_ASSIGNEE_SPOTLIGHT) return <span>Вся команда</span>;
@@ -3751,6 +3771,8 @@ export default function DesignPage() {
                 fallback={getInitials(assigneeLabel)}
                 size={26}
                 className="text-[10px] font-semibold"
+                availability={getMemberAvailability(task.assigneeUserId)}
+                presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
               />
             ) : (
               <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">

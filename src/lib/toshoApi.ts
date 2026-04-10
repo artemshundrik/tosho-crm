@@ -109,6 +109,7 @@ export type TeamMemberRow = {
   avatarUrl?: string | null;
   accessRole?: string | null;
   jobRole?: string | null;
+  availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
 };
 
 export type CustomerRow = {

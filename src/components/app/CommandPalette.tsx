@@ -24,6 +24,7 @@ import {
   Search,
   Truck,
   User,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,7 @@ function pathToLabel(pathname: string): string {
   if (pathname.startsWith("/finance")) return "Фінанси";
   if (pathname.startsWith("/activity")) return "Активність";
   if (pathname.startsWith("/notifications")) return "Сповіщення";
+  if (pathname.startsWith("/team")) return "Команда";
   if (pathname.startsWith("/settings/members")) return "Управління командою";
   if (pathname.startsWith("/profile")) return "Профіль";
   return "Сторінка";
@@ -214,6 +216,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         keywords: ["notifications", "alerts", "події"],
         to: "/notifications",
         icon: Bell,
+      },
+      {
+        key: "route-team",
+        label: "Команда",
+        keywords: ["команда", "люди", "статуси", "відпустка", "лікарняний", "birthday"],
+        to: "/team",
+        icon: Users,
       },
     ],
     []

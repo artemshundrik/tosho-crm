@@ -13,6 +13,8 @@ create table if not exists tosho.team_member_profiles (
   birth_date date,
   phone text,
   availability_status text not null default 'available',
+  availability_start_date date,
+  availability_end_date date,
   start_date date,
   probation_end_date date,
   manager_user_id uuid,
@@ -25,6 +27,8 @@ create table if not exists tosho.team_member_profiles (
 
 alter table tosho.team_member_profiles
   add column if not exists availability_status text,
+  add column if not exists availability_start_date date,
+  add column if not exists availability_end_date date,
   add column if not exists start_date date,
   add column if not exists probation_end_date date,
   add column if not exists manager_user_id uuid,

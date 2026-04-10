@@ -13,6 +13,7 @@ import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
+import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
@@ -572,6 +573,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
 
   const memberById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
+  const onlineMemberIds = useMemo(
+    () => new Set(workspacePresence.onlineEntries.map((entry) => entry.userId)),
+    [workspacePresence.onlineEntries]
+  );
   const isManagerUser = useMemo(() => {
     return isQuoteManagerJobRole(jobRole);
   }, [jobRole]);
@@ -795,11 +800,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           size={18}
           className="border-border/60 shrink-0"
           fallbackClassName="text-[9px] font-semibold"
+          availability={member?.availabilityStatus ?? null}
+          presence={onlineMemberIds.has(value) ? "online" : "offline"}
         />
         <span className="truncate">{label}</span>
       </span>
     );
-  }, [getManagerLabel, resolveManagerMember]);
+  }, [getManagerLabel, onlineMemberIds, resolveManagerMember]);
 
   const getDateLabels = (value?: string | null) => {
     if (!value) return "Не вказано";
@@ -908,6 +915,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           avatarUrl: row.avatarDisplayUrl,
           accessRole: row.accessRole,
           jobRole: row.jobRole,
+          availabilityStatus: normalizeTeamAvailabilityStatus(row.availabilityStatus),
         }));
         const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
         const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
@@ -5176,6 +5184,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             fallback={row.assigned_to ? getInitials(managerLabel) : "НВ"}
                             size={20}
                             className="text-[9px] font-semibold"
+                            availability={manager?.availabilityStatus ?? null}
+                            presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                           />
                           <span className="truncate">{managerLabel}</span>
                         </div>
@@ -5418,6 +5428,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     }
                                     size={28}
                                     className="text-[10px] font-semibold"
+                                    availability={manager?.availabilityStatus ?? null}
+                                    presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                   />
                                   <span className="truncate">
                                     {managerLabel}
@@ -5831,6 +5843,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
                                         size={26}
                                         className="text-[10px] font-semibold"
+                                        availability={manager?.availabilityStatus ?? null}
+                                        presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                       />
                                       <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
                                     </div>

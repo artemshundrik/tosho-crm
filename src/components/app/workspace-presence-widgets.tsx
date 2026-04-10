@@ -32,6 +32,7 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
               size={size}
               className="border-background shadow-sm"
               fallbackClassName="text-[10px] font-semibold"
+              showStatusIndicator={false}
             />
           </div>
         ))}
@@ -178,6 +179,8 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
                       size={28}
                       className="border-border"
                       fallbackClassName="text-[10px] font-semibold"
+                      availability={entry.availabilityStatus}
+                      presence={entry.online ? "online" : "offline"}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-foreground">
@@ -188,7 +191,6 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
                         {entry.currentLabel ?? entry.currentPath ?? "У CRM"}
                       </div>
                     </div>
-                    <span className={cn("h-2.5 w-2.5 rounded-full", entry.online ? "bg-emerald-400" : "bg-amber-400")} />
                   </div>
                 ))}
               </div>

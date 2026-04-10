@@ -14,6 +14,7 @@ const routeImporters: RoutePreloadEntry[] = [
   { pattern: /^\/finance\/acts$/, importer: () => import("../pages/FinanceActsPage") },
   { pattern: /^\/activity$/, importer: () => import("../pages/ActivityPage") },
   { pattern: /^\/notifications$/, importer: () => import("../pages/NotificationsPage") },
+  { pattern: /^\/team$/, importer: () => import("../pages/TeamPage") },
   { pattern: /^\/settings\/members$/, importer: () => import("../pages/TeamMembersPage") },
   { pattern: /^\/profile$/, importer: () => import("../pages/ProfilePage") },
   { pattern: /^\/admin$/, importer: () => import("../pages/AdminPage") },

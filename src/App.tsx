@@ -58,6 +58,9 @@ const InvitePage = lazyWithRetry(() => import("./pages/InvitePage"));
 const TeamMembersPage = lazyWithRetry(() =>
   import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
 );
+const TeamPage = lazyWithRetry(() =>
+  import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
+);
 const AdminPage = lazyWithRetry(() =>
   import("./pages/AdminPage").then((module) => ({ default: module.AdminPage }))
 );
@@ -941,6 +944,14 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <OverviewPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path="team"
+          element={
+            <RouteSuspense shell>
+              <TeamPage />
             </RouteSuspense>
           }
         />

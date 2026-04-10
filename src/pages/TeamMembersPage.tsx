@@ -119,6 +119,8 @@ type MemberProfileMeta = {
   phone: string;
   managerRate: number;
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
+  availabilityStartDate: string;
+  availabilityEndDate: string;
   startDate: string;
   probationEndDate: string;
   employmentStatus: EmploymentStatus;
@@ -143,6 +145,11 @@ type MemberPresence = {
   currentLabel: string;
   lastSeenAt: string;
   online: boolean;
+};
+
+type QuickAvailabilityDialogState = {
+  member: Member;
+  status: MemberProfileMeta["availabilityStatus"];
 };
 
 type TeamActivityItem = {
@@ -285,6 +292,8 @@ const DEFAULT_MEMBER_META: MemberProfileMeta = {
   phone: "",
   managerRate: DEFAULT_MANAGER_RATE,
   availabilityStatus: "available",
+  availabilityStartDate: "",
+  availabilityEndDate: "",
   startDate: "",
   probationEndDate: "",
   employmentStatus: "active",
@@ -306,6 +315,14 @@ function getJobRoleLabel(role: string | null) {
 
 function normalizeJobRoleInput(role: string | null) {
   return !role || role === "none" ? null : role;
+}
+
+function getTodayDateOnly() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getAccessBadgeClass(role: string | null) {
@@ -502,12 +519,18 @@ export function TeamMembersPage() {
   const [editProfileManagerRate, setEditProfileManagerRate] = useState(String(DEFAULT_MANAGER_RATE));
   const [editProfileAvailabilityStatus, setEditProfileAvailabilityStatus] =
     useState<MemberProfileMeta["availabilityStatus"]>("available");
+  const [editProfileAvailabilityStartDate, setEditProfileAvailabilityStartDate] = useState("");
+  const [editProfileAvailabilityEndDate, setEditProfileAvailabilityEndDate] = useState("");
   const [editProfileStartDate, setEditProfileStartDate] = useState("");
   const [editProfileProbationEndDate, setEditProfileProbationEndDate] = useState("");
   const [editProfileManagerUserId, setEditProfileManagerUserId] = useState("");
   const [editProfileModuleAccess, setEditProfileModuleAccess] =
     useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
   const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [quickAvailabilityDialog, setQuickAvailabilityDialog] = useState<QuickAvailabilityDialogState | null>(null);
+  const [quickAvailabilityStartDate, setQuickAvailabilityStartDate] = useState("");
+  const [quickAvailabilityEndDate, setQuickAvailabilityEndDate] = useState("");
+  const [quickAvailabilityBusy, setQuickAvailabilityBusy] = useState(false);
   const [probationActionBusy, setProbationActionBusy] = useState<"active" | "rejected" | "extend" | null>(null);
   const [pendingProbationDecision, setPendingProbationDecision] = useState<"rejected" | null>(null);
   const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
@@ -541,6 +564,8 @@ export function TeamMembersPage() {
     setEditProfilePhone(meta?.phone ?? "");
     setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
     setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
+    setEditProfileAvailabilityStartDate(meta?.availabilityStartDate ?? "");
+    setEditProfileAvailabilityEndDate(meta?.availabilityEndDate ?? "");
     setEditProfileStartDate(meta?.startDate ?? "");
     setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
     setEditProfileManagerUserId(meta?.managerUserId ?? "");
@@ -790,6 +815,8 @@ export function TeamMembersPage() {
             phone: row.phone,
             managerRate: DEFAULT_MANAGER_RATE,
             availabilityStatus: row.availabilityStatus,
+            availabilityStartDate: row.availabilityStartDate,
+            availabilityEndDate: row.availabilityEndDate,
             startDate: row.startDate,
             probationEndDate: row.probationEndDate,
             employmentStatus: row.employmentStatus,
@@ -1051,6 +1078,36 @@ export function TeamMembersPage() {
     return formatEmploymentDate(dateStr);
   };
 
+  const formatAvailabilityRange = (
+    status: MemberProfileMeta["availabilityStatus"],
+    startDate?: string | null,
+    endDate?: string | null
+  ) => {
+    if (status === "available") return "";
+    const start = startDate?.trim() || "";
+    const end = endDate?.trim() || "";
+    if (start && end) {
+      return start === end
+        ? formatEmploymentDate(start)
+        : `${formatEmploymentDate(start)} - ${formatEmploymentDate(end)}`;
+    }
+    if (end) return `до ${formatEmploymentDate(end)}`;
+    if (start) return `з ${formatEmploymentDate(start)}`;
+    return "";
+  };
+
+  const getEmploymentSummary = (meta?: MemberProfileMeta | null) => {
+    const startLabel = meta?.startDate ? formatEmploymentDate(meta.startDate) : "";
+    const durationLabel = formatEmploymentDuration(meta?.startDate);
+    if (!startLabel && !durationLabel) {
+      return { primary: "Не задано", secondary: "" };
+    }
+    return {
+      primary: startLabel || durationLabel || "Не задано",
+      secondary: startLabel && durationLabel ? durationLabel : "",
+    };
+  };
+
   const formatRelativeTime = (dateStr?: string | null) => {
     if (!dateStr) return "Немає даних";
     const deltaMs = Date.now() - new Date(dateStr).getTime();
@@ -1100,6 +1157,11 @@ export function TeamMembersPage() {
     memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
     editProfileProbationEndDate
   );
+  const selectedAvailabilityRange = formatAvailabilityRange(
+    editProfileAvailabilityStatus,
+    editProfileAvailabilityStartDate,
+    editProfileAvailabilityEndDate
+  );
   const canApproveProbationNow = selectedEmploymentStatus === "probation";
   const canRejectProbationNow = selectedEmploymentStatus === "probation";
   const canExtendProbationNow = selectedEmploymentStatus === "probation" && selectedProbationReviewDue;
@@ -1121,6 +1183,13 @@ export function TeamMembersPage() {
     setParams(nextParams);
   };
 
+  const closeQuickAvailabilityDialog = () => {
+    if (quickAvailabilityBusy) return;
+    setQuickAvailabilityDialog(null);
+    setQuickAvailabilityStartDate("");
+    setQuickAvailabilityEndDate("");
+  };
+
   const saveMemberProfile = async () => {
     if (!editProfileMember || !workspaceId || !canOpenProfileCard) return;
 
@@ -1134,6 +1203,8 @@ export function TeamMembersPage() {
       const phone = editProfilePhone.trim();
       const managerRate = Math.max(0, Number(editProfileManagerRate) || 0);
       const availabilityStatus = editProfileAvailabilityStatus;
+      const availabilityStartDate = availabilityStatus === "available" ? "" : editProfileAvailabilityStartDate.trim();
+      const availabilityEndDate = availabilityStatus === "available" ? "" : editProfileAvailabilityEndDate.trim();
       const startDate = editProfileStartDate.trim();
       const probationEndDate = editProfileProbationEndDate.trim();
       const managerUserId = editProfileManagerUserId.trim();
@@ -1154,6 +1225,14 @@ export function TeamMembersPage() {
         nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewedBy;
       const probationExtensionCount = currentMeta.probationExtensionCount ?? 0;
 
+      if (
+        availabilityStartDate &&
+        availabilityEndDate &&
+        new Date(`${availabilityEndDate}T12:00:00`).getTime() < new Date(`${availabilityStartDate}T12:00:00`).getTime()
+      ) {
+        throw new Error("Кінець відсутності не може бути раніше дати початку");
+      }
+
       if (startDate && probationEndDate && new Date(`${probationEndDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
         throw new Error("Кінець випробувального не може бути раніше дати старту");
       }
@@ -1172,6 +1251,8 @@ export function TeamMembersPage() {
             birthDate,
             phone,
             availabilityStatus,
+            availabilityStartDate,
+            availabilityEndDate,
             startDate,
             probationEndDate,
             employmentStatus: nextEmploymentStatus,
@@ -1206,6 +1287,8 @@ export function TeamMembersPage() {
               birthDate,
               phone,
               availabilityStatus,
+              availabilityStartDate,
+              availabilityEndDate,
               startDate,
               probationEndDate,
               employmentStatus: nextEmploymentStatus,
@@ -1254,6 +1337,8 @@ export function TeamMembersPage() {
           phone,
           managerRate,
           availabilityStatus,
+          availabilityStartDate,
+          availabilityEndDate,
           startDate,
           probationEndDate,
           employmentStatus: nextEmploymentStatus,
@@ -1544,10 +1629,21 @@ export function TeamMembersPage() {
     }
   };
 
-  const updateAvailabilityStatus = async (member: Member, status: MemberProfileMeta["availabilityStatus"]) => {
+  const updateAvailabilityStatus = async (
+    member: Member,
+    status: MemberProfileMeta["availabilityStatus"],
+    options?: {
+      availabilityStartDate?: string;
+      availabilityEndDate?: string;
+    }
+  ) => {
     if (!workspaceId) return;
     try {
       const currentMeta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
+      const availabilityStartDate =
+        status === "available" ? "" : (options?.availabilityStartDate ?? currentMeta.availabilityStartDate ?? "");
+      const availabilityEndDate =
+        status === "available" ? "" : (options?.availabilityEndDate ?? currentMeta.availabilityEndDate ?? "");
       try {
         const currentDirectoryRow = directoryRows.find((row) => row.userId === member.user_id);
         await upsertWorkspaceMemberProfile({
@@ -1561,6 +1657,8 @@ export function TeamMembersPage() {
           birthDate: currentMeta.birthDate,
           phone: currentMeta.phone,
           availabilityStatus: status,
+          availabilityStartDate,
+          availabilityEndDate,
           startDate: currentMeta.startDate,
           probationEndDate: currentMeta.probationEndDate,
           employmentStatus: currentMeta.employmentStatus,
@@ -1595,6 +1693,8 @@ export function TeamMembersPage() {
             birthDate: currentMeta.birthDate,
             phone: currentMeta.phone,
             availabilityStatus: status,
+            availabilityStartDate,
+            availabilityEndDate,
             startDate: currentMeta.startDate,
             probationEndDate: currentMeta.probationEndDate,
             employmentStatus: currentMeta.employmentStatus,
@@ -1617,11 +1717,49 @@ export function TeamMembersPage() {
         [member.user_id]: {
           ...(prev[member.user_id] ?? DEFAULT_MEMBER_META),
           availabilityStatus: status,
+          availabilityStartDate,
+          availabilityEndDate,
         },
       }));
       toast.success(status === "offline" ? "Учасника переведено в неактивний стан" : "Статус учасника оновлено");
     } catch (error: unknown) {
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(error) });
+    }
+  };
+
+  const handleQuickAvailabilitySelection = (member: Member, status: MemberProfileMeta["availabilityStatus"]) => {
+    if (status === "vacation" || status === "sick_leave") {
+      const currentMeta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
+      setQuickAvailabilityDialog({ member, status });
+      setQuickAvailabilityStartDate(currentMeta.availabilityStartDate || getTodayDateOnly());
+      setQuickAvailabilityEndDate(currentMeta.availabilityEndDate || "");
+      return;
+    }
+    void updateAvailabilityStatus(member, status);
+  };
+
+  const saveQuickAvailabilityDialog = async () => {
+    if (!quickAvailabilityDialog) return;
+    if (
+      quickAvailabilityStartDate &&
+      quickAvailabilityEndDate &&
+      new Date(`${quickAvailabilityEndDate}T12:00:00`).getTime() < new Date(`${quickAvailabilityStartDate}T12:00:00`).getTime()
+    ) {
+      toast.error("Кінець відсутності не може бути раніше дати початку");
+      return;
+    }
+
+    setQuickAvailabilityBusy(true);
+    try {
+      await updateAvailabilityStatus(quickAvailabilityDialog.member, quickAvailabilityDialog.status, {
+        availabilityStartDate: quickAvailabilityStartDate.trim(),
+        availabilityEndDate: quickAvailabilityEndDate.trim(),
+      });
+      setQuickAvailabilityDialog(null);
+      setQuickAvailabilityStartDate("");
+      setQuickAvailabilityEndDate("");
+    } finally {
+      setQuickAvailabilityBusy(false);
     }
   };
 
@@ -2323,10 +2461,15 @@ export function TeamMembersPage() {
                 const profile = memberProfilesByUserId[m.user_id];
                 const meta = memberMetaByUserId[m.user_id];
                 const availability = meta?.availabilityStatus ?? "available";
+                const availabilityRange = formatAvailabilityRange(
+                  availability,
+                  meta?.availabilityStartDate,
+                  meta?.availabilityEndDate
+                );
                 const presence = memberPresenceByUserId[m.user_id];
-                const employmentDuration = formatEmploymentDuration(meta?.startDate);
                 const employmentDays = getEmploymentDurationDays(meta?.startDate);
                 const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
+                const employmentSummary = getEmploymentSummary(meta);
                 const displayName = getMemberDisplayName(m);
                 const initials = getInitialsFromName(displayName, m.email ?? null);
                 return (
@@ -2343,12 +2486,8 @@ export function TeamMembersPage() {
                             shape="circle"
                             className="border-border bg-muted/50"
                             fallbackClassName="text-xs font-bold"
-                          />
-                          <span
-                            className={cn(
-                              "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background",
-                              presence?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
-                            )}
+                            availability={availability}
+                            presence={presence?.online ? "online" : "offline"}
                           />
                         </div>
                         <div className="min-w-0">
@@ -2417,7 +2556,7 @@ export function TeamMembersPage() {
                                 onSelect: () =>
                                   void updateAvailabilityStatus(
                                     m,
-                                    availability === "offline" ? "available" : "offline"
+                                  availability === "offline" ? "available" : "offline"
                                   ),
                               }
                             : {
@@ -2450,11 +2589,16 @@ export function TeamMembersPage() {
                       <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", getAvailabilityBadgeClass(availability))}>
                         {getAvailabilityLabel(availability)}
                       </Badge>
+                      {availabilityRange ? (
+                        <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
+                          {availabilityRange}
+                        </Badge>
+                      ) : null}
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground">
                       <div>Народження: {formatBirthDate(meta?.birthDate)}</div>
-                      <div>Почав роботу: {meta?.startDate ? formatEmploymentDate(meta.startDate) : "Не вказано"}</div>
-                      <div>Стаж: {employmentDuration || "Не вказано"}</div>
+                      <div>Робота: {employmentSummary.primary}</div>
+                      {employmentSummary.secondary ? <div>Стаж: {employmentSummary.secondary}</div> : null}
                       {employmentDays !== null && employmentDays >= 0 ? <div>У компанії: {employmentDays} днів</div> : null}
                       {probation ? (
                         <div className="rounded-[var(--radius)] border border-border/70 bg-muted/30 px-2.5 py-2 text-foreground">
@@ -2498,14 +2642,14 @@ export function TeamMembersPage() {
             <Table variant="list" size="md">
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableTextHeaderCell widthClass="w-[30%]" className="pl-6">
+                  <TableTextHeaderCell widthClass="w-[26%]" className="pl-6">
                     Користувач
                   </TableTextHeaderCell>
                   <TableTextHeaderCell>Доступ</TableTextHeaderCell>
                   <TableTextHeaderCell>Роль / Посада</TableTextHeaderCell>
                   <TableTextHeaderCell>Статус</TableTextHeaderCell>
                   <TableTextHeaderCell>Дата народження</TableTextHeaderCell>
-                  <TableTextHeaderCell>Робота / Випробувальний</TableTextHeaderCell>
+                  <TableTextHeaderCell widthClass="w-[18%]">Робота / Випробувальний</TableTextHeaderCell>
                   <TableActionHeaderCell>Дії</TableActionHeaderCell>
                 </TableRow>
               </TableHeader>
@@ -2519,10 +2663,14 @@ export function TeamMembersPage() {
                     const profile = memberProfilesByUserId[m.user_id];
                     const meta = memberMetaByUserId[m.user_id];
                     const availability = meta?.availabilityStatus ?? "available";
+                    const availabilityRange = formatAvailabilityRange(
+                      availability,
+                      meta?.availabilityStartDate,
+                      meta?.availabilityEndDate
+                    );
                     const presence = memberPresenceByUserId[m.user_id];
-                    const employmentDuration = formatEmploymentDuration(meta?.startDate);
+                    const employmentSummary = getEmploymentSummary(meta);
                     const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
-                    const showEmploymentDurationInline = !probation || probation.status === "completed";
                     const displayName = getMemberDisplayName(m);
                     const initials = getInitialsFromName(displayName, m.email ?? null);
                     return (
@@ -2548,12 +2696,8 @@ export function TeamMembersPage() {
                                 shape="circle"
                                 className="border-border bg-muted/50"
                                 fallbackClassName="text-xs font-bold"
-                              />
-                              <span
-                                className={cn(
-                                  "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background",
-                                  presence?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
-                                )}
+                                availability={availability}
+                                presence={presence?.online ? "online" : "offline"}
                               />
                             </div>
                             <div className="flex flex-col">
@@ -2586,12 +2730,12 @@ export function TeamMembersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1.5">
+                          <div className="flex flex-wrap gap-2">
                             {canManage ? (
                               <div onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                                 <AppDropdown
                                   align="start"
-                                  contentClassName="w-44"
+                                  contentClassName="w-52"
                                   trigger={
                                     <Badge
                                       variant="outline"
@@ -2604,11 +2748,22 @@ export function TeamMembersPage() {
                                     </Badge>
                                   }
                                   items={AVAILABILITY_OPTIONS.map((option) => ({
-                                    label:
-                                      option.value === availability
-                                        ? `• ${option.label}`
-                                        : option.label,
-                                    onSelect: () => void updateAvailabilityStatus(m, option.value),
+                                    label: (
+                                      <div className="flex w-full items-center justify-between gap-3">
+                                        <span>{option.label}</span>
+                                        {option.value === availability ? (
+                                          <span
+                                            className={cn(
+                                              "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                              getAvailabilityBadgeClass(option.value)
+                                            )}
+                                          >
+                                            Активний
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ),
+                                    onSelect: () => handleQuickAvailabilitySelection(m, option.value),
                                   }))}
                                 />
                               </div>
@@ -2620,9 +2775,11 @@ export function TeamMembersPage() {
                                 {getAvailabilityLabel(availability)}
                               </Badge>
                             )}
-                            <span className="text-xs text-muted-foreground/70">
-                              {presence?.online ? "зараз онлайн" : formatRelativeTime(presence?.lastSeenAt)}
-                            </span>
+                            {availabilityRange ? (
+                              <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
+                                {availabilityRange}
+                              </Badge>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -2632,19 +2789,26 @@ export function TeamMembersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                              <Calendar className="w-3.5 h-3.5 opacity-70" />
-                              <span>{meta?.startDate ? formatEmploymentDate(meta.startDate) : "Старт не вказано"}</span>
-                              {showEmploymentDurationInline ? (
-                                <>
-                                  <Activity className="h-3.5 w-3.5 opacity-70" />
-                                  <span>{employmentDuration || "Стаж не розраховано"}</span>
-                                </>
+                          <div className="space-y-2">
+                            <div className="space-y-1">
+                              <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                {employmentSummary.primary}
+                              </div>
+                              {employmentSummary.secondary ? (
+                                <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span className="whitespace-nowrap">{employmentSummary.secondary}</span>
+                                </div>
                               ) : null}
                             </div>
                             {probation && probation.status !== "completed" ? (
-                                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <div className="rounded-[var(--radius)] border border-border/60 bg-background px-3 py-2">
+                                  <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    Випробувальний
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                                   <Badge
                                     variant="outline"
                                     className={cn(
@@ -2670,6 +2834,7 @@ export function TeamMembersPage() {
                                       ? `${probation.daysLeft} дн`
                                       : `${Math.abs(probation.daysLeft)} дн тому`}
                                   </span>
+                                </div>
                                 </div>
                             ) : null}
                           </div>
@@ -3152,6 +3317,64 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog
+        open={!!quickAvailabilityDialog}
+        onOpenChange={(open) => {
+          if (!open) closeQuickAvailabilityDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-[460px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
+          <div className="border-b border-border bg-muted/10 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-foreground">
+                {quickAvailabilityDialog ? getAvailabilityLabel(quickAvailabilityDialog.status) : "Статус відсутності"}
+              </DialogTitle>
+              <DialogDescription className="mt-1.5 text-muted-foreground">
+                {quickAvailabilityDialog
+                  ? `Вкажи період для ${getMemberDisplayName(quickAvailabilityDialog.member)}.`
+                  : "Вкажи період відсутності."}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Початок</Label>
+                <Input
+                  type="date"
+                  value={quickAvailabilityStartDate}
+                  onChange={(event) => setQuickAvailabilityStartDate(event.target.value)}
+                  className="h-11"
+                  disabled={quickAvailabilityBusy}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Завершення</Label>
+                <Input
+                  type="date"
+                  value={quickAvailabilityEndDate}
+                  onChange={(event) => setQuickAvailabilityEndDate(event.target.value)}
+                  className="h-11"
+                  disabled={quickAvailabilityBusy}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Можна залишити дату завершення порожньою, якщо повернення ще невідоме.
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeQuickAvailabilityDialog} disabled={quickAvailabilityBusy}>
+                Скасувати
+              </Button>
+              <Button type="button" onClick={() => void saveQuickAvailabilityDialog()} disabled={quickAvailabilityBusy}>
+                {quickAvailabilityBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Зберегти
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={!!editProfileMember}
         onOpenChange={(open) => {
           if (!open && !editProfileBusy) closeEditProfileDialog();
@@ -3234,19 +3457,13 @@ export function TeamMembersPage() {
                   <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
                     <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
-                      Статус роботи
+                      Статус доступності
                     </div>
                     <div className="mt-2 text-base font-semibold text-foreground">
-                      {selectedProbation && selectedProbation.status !== "completed"
-                        ? selectedProbation.statusLabel
-                        : selectedEmploymentDuration || getEmploymentStatusLabel(selectedEmploymentStatus)}
+                      {getAvailabilityLabel(editProfileAvailabilityStatus)}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {selectedProbation && selectedProbation.status !== "completed"
-                        ? selectedProbation.caption
-                        : editProfileStartDate
-                        ? `${formatEmploymentDate(editProfileStartDate)} • ${selectedEmploymentDuration || "Стаж"}`
-                        : "Вкажи дату старту"}
+                      {selectedAvailabilityRange || "Діє без обмеження по датах"}
                     </div>
                   </div>
                 </div>
@@ -3340,6 +3557,33 @@ export function TeamMembersPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    {editProfileAvailabilityStatus !== "available" ? (
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Початок відсутності</Label>
+                          <Input
+                            type="date"
+                            value={editProfileAvailabilityStartDate}
+                            onChange={(event) => setEditProfileAvailabilityStartDate(event.target.value)}
+                            className="h-11"
+                            disabled={!canManage}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Кінець відсутності</Label>
+                          <Input
+                            type="date"
+                            value={editProfileAvailabilityEndDate}
+                            onChange={(event) => setEditProfileAvailabilityEndDate(event.target.value)}
+                            className="h-11"
+                            disabled={!canManage}
+                          />
+                          <div className="text-xs text-muted-foreground">
+                            {selectedAvailabilityRange || "Можна залишити порожнім, якщо дата повернення невідома"}
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-foreground">Менеджер</Label>
                       <Select
