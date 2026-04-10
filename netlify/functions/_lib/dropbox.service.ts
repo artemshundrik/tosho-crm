@@ -82,6 +82,12 @@ function normalizeDropboxName(value: string, fallback: string) {
   return normalized || fallback;
 }
 
+function toAsciiJsonHeader(value: Record<string, unknown>) {
+  return JSON.stringify(value).replace(/[\u007f-\uffff]/g, (character) =>
+    `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+  );
+}
+
 function isPathConflictError(error: unknown) {
   return error instanceof Error && error.message.includes("path/conflict");
 }
@@ -211,7 +217,7 @@ async function dropboxContentUpload<T>(path: string, body: ArrayBuffer | Uint8Ar
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Dropbox-API-Arg": JSON.stringify(apiArg),
+      "Dropbox-API-Arg": toAsciiJsonHeader(apiArg),
       "Dropbox-API-Path-Root": JSON.stringify({
         ".tag": "root",
         root: rootNamespaceId,
