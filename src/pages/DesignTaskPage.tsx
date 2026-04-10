@@ -1736,8 +1736,12 @@ export default function DesignTaskPage() {
     let active = true;
 
     const loadDropboxClientPath = async () => {
+      const metadataPath =
+        typeof task?.metadata?.dropbox_client_path === "string" && task.metadata.dropbox_client_path.trim()
+          ? task.metadata.dropbox_client_path.trim()
+          : "";
       if (!task?.customerId) {
-        if (active) setDropboxClientPath(null);
+        if (active) setDropboxClientPath(metadataPath || null);
         return;
       }
       try {
@@ -1760,10 +1764,10 @@ export default function DesignTaskPage() {
           data && typeof (data as { dropbox_client_path?: string | null }).dropbox_client_path === "string"
             ? (data as { dropbox_client_path: string }).dropbox_client_path.trim()
             : "";
-        setDropboxClientPath(nextPath || null);
+        setDropboxClientPath(nextPath || metadataPath || null);
       } catch (loadError) {
         console.warn("Failed to load Dropbox client path", loadError);
-        if (active) setDropboxClientPath(null);
+        if (active) setDropboxClientPath(metadataPath || null);
       }
     };
 
@@ -1772,7 +1776,7 @@ export default function DesignTaskPage() {
     return () => {
       active = false;
     };
-  }, [task?.customerId]);
+  }, [task?.customerId, task?.metadata]);
 
   const loadCustomerAttachments = useCallback(async (options?: { force?: boolean }) => {
     if (!effectiveTeamId || !task || !isUuid(task.quoteId)) return;
@@ -5528,12 +5532,10 @@ export default function DesignTaskPage() {
 
   const createDropboxClientFolder = useCallback(
     async (options?: { openExportDialog?: boolean }) => {
-      if (!task?.customerId) {
-        toast.error("Для задачі не визначено замовника.");
-        return;
-      }
+      const currentTask = task;
+      if (!currentTask || !effectiveTeamId) return;
 
-      const customerName = (task.customerName ?? "").trim();
+      const customerName = (currentTask.customerName ?? "").trim();
       if (!customerName) {
         toast.error("Не вдалося визначити назву замовника для Dropbox.");
         return;
@@ -5577,19 +5579,35 @@ export default function DesignTaskPage() {
           dropbox_brand_path: nextBrandPath,
           dropbox_shared_url: nextSharedUrl || null,
         };
-        const { error: updateError } = await supabase
-          .schema("tosho")
-          .from("customers")
-          .update(updatePayload)
-          .eq("id", task.customerId);
-        if (updateError) {
-          const message = updateError.message ?? "";
-          if (!( /column/i.test(message) && /dropbox_/i.test(message) )) {
-            throw updateError;
+        if (currentTask.customerId) {
+          const { error: updateError } = await supabase
+            .schema("tosho")
+            .from("customers")
+            .update(updatePayload)
+            .eq("id", currentTask.customerId);
+          if (updateError) {
+            const message = updateError.message ?? "";
+            if (!(/column/i.test(message) && /dropbox_/i.test(message))) {
+              throw updateError;
+            }
           }
         }
 
+        const nextMetadata = {
+          ...(currentTask.metadata ?? {}),
+          dropbox_client_path: nextClientPath,
+          dropbox_brand_path: nextBrandPath,
+          dropbox_client_shared_url: nextSharedUrl || null,
+        };
+        const { error: taskUpdateError } = await supabase
+          .from("activity_log")
+          .update({ metadata: nextMetadata })
+          .eq("id", currentTask.id)
+          .eq("team_id", effectiveTeamId);
+        if (taskUpdateError) throw taskUpdateError;
+
         setDropboxClientPath(nextClientPath);
+        setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
         toast.success("Dropbox-папку замовника створено");
         if (options?.openExportDialog) {
           setDropboxFolderDraft(dropboxFolderNameDefault);
@@ -5599,22 +5617,37 @@ export default function DesignTaskPage() {
         const fallbackPath = buildDropboxClientFolderPath(customerName);
         try {
           const fallbackUrl = await inspectDropboxFolder(fallbackPath);
-          const { error: updateError } = await supabase
-            .schema("tosho")
-            .from("customers")
-            .update({
-              dropbox_client_path: fallbackPath,
-              dropbox_brand_path: buildDropboxBrandFolderPath(fallbackPath),
-              dropbox_shared_url: fallbackUrl || null,
-            })
-            .eq("id", task.customerId);
-          if (updateError) {
-            const message = updateError.message ?? "";
-            if (!( /column/i.test(message) && /dropbox_/i.test(message) )) {
-              throw updateError;
+          if (currentTask.customerId) {
+            const { error: updateError } = await supabase
+              .schema("tosho")
+              .from("customers")
+              .update({
+                dropbox_client_path: fallbackPath,
+                dropbox_brand_path: buildDropboxBrandFolderPath(fallbackPath),
+                dropbox_shared_url: fallbackUrl || null,
+              })
+              .eq("id", currentTask.customerId);
+            if (updateError) {
+              const message = updateError.message ?? "";
+              if (!( /column/i.test(message) && /dropbox_/i.test(message) )) {
+                throw updateError;
+              }
             }
           }
+          const nextMetadata = {
+            ...(currentTask.metadata ?? {}),
+            dropbox_client_path: fallbackPath,
+            dropbox_brand_path: buildDropboxBrandFolderPath(fallbackPath),
+            dropbox_client_shared_url: fallbackUrl || null,
+          };
+          const { error: taskUpdateError } = await supabase
+            .from("activity_log")
+            .update({ metadata: nextMetadata })
+            .eq("id", currentTask.id)
+            .eq("team_id", effectiveTeamId);
+          if (taskUpdateError) throw taskUpdateError;
           setDropboxClientPath(fallbackPath);
+          setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
           toast.success("Dropbox-папку замовника підхоплено");
           if (options?.openExportDialog) {
             setDropboxFolderDraft(dropboxFolderNameDefault);
