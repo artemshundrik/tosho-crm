@@ -393,21 +393,21 @@ function buildDropboxExportFileName(params: {
     params.archiveVersion != null
       ? [
           params.clientLabel,
+          params.orderNumber,
           "Архів",
           DESIGN_OUTPUT_KIND_LABELS[params.outputKind],
           params.projectName,
-          params.orderNumber,
-          params.dateLabel,
           params.exportLabel,
+          params.dateLabel,
           `v${params.archiveVersion}`,
         ]
       : [
           params.clientLabel,
+          params.orderNumber,
           DESIGN_OUTPUT_KIND_LABELS[params.outputKind],
           params.projectName,
-          params.orderNumber,
-          params.dateLabel,
           params.exportLabel,
+          params.dateLabel,
         ];
   const baseName = sanitizeDropboxNameSegment(baseParts.filter(Boolean).join(" - "), "Export");
   return `${baseName}${params.extension ?? ""}`;
