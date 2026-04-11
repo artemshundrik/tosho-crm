@@ -1085,6 +1085,7 @@ export default function DesignTaskPage() {
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [partyCardOpen, setPartyCardOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(5);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyLoadedAll, setHistoryLoadedAll] = useState(false);
@@ -2853,7 +2854,7 @@ export default function DesignTaskPage() {
 
   const historyGroups = useMemo(() => {
     const groups: { label: string; items: DesignTaskHistoryEvent[] }[] = [];
-    for (const event of historyEvents) {
+    for (const event of historyEvents.slice(0, historyVisibleCount)) {
       const label = formatActivityDayLabel(event.created_at);
       const lastGroup = groups[groups.length - 1];
       if (!lastGroup || lastGroup.label !== label) {
@@ -2863,7 +2864,11 @@ export default function DesignTaskPage() {
       }
     }
     return groups;
-  }, [historyEvents]);
+  }, [historyEvents, historyVisibleCount]);
+
+  useEffect(() => {
+    setHistoryVisibleCount(5);
+  }, [task?.id]);
 
   const standaloneComments = useMemo<DesignTaskComment[]>(
     () =>
@@ -6908,6 +6913,7 @@ export default function DesignTaskPage() {
                         imageUrl={productPreviewUrl}
                         zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl}
                         alt={quoteItem?.name ?? "Товар"}
+                        loadStrategy="eager"
                         className="h-10 w-10 rounded-md border border-border/60 bg-muted/30"
                       />
                     ) : (
@@ -7207,6 +7213,43 @@ export default function DesignTaskPage() {
               Оберіть зверху групу, а нижче окремо завантажуйте та погоджуйте візуал і макет. Для друку в замовлення мають бути відмічені обидва.
             </div>
 
+            <Tabs
+              value={activeDesignOutputTab}
+              onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
+              className="w-full"
+            >
+              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-xl bg-muted/30 p-1 shadow-inner">
+                <TabsTrigger value="visualization" className="gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  <span>Візуал</span>
+                  {selectedVisualizationOutputFileIds.length > 0 ? (
+                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      {selectedVisualizationOutputFileIds.length}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+                <TabsTrigger value="layout" className="gap-2">
+                  <PencilLine className="h-4 w-4" />
+                  <span>Макет</span>
+                  {selectedLayoutOutputFileIds.length > 0 ? (
+                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      {selectedLayoutOutputFileIds.length}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="visualization" className="mt-0">
+                {renderDesignOutputSection("visualization")}
+              </TabsContent>
+              <TabsContent value="layout" className="mt-0">
+                {renderDesignOutputSection("layout")}
+              </TabsContent>
+            </Tabs>
+
+            <div className="rounded-lg border border-border/50 bg-muted/5 px-3 py-2 text-xs text-muted-foreground">
+              Рекомендація: для друку додавайте окремо 1) візуал для погодження із замовником і 2) фінальний макет для виробництва.
+            </div>
+
             <Card className="overflow-hidden border border-border/60 bg-[linear-gradient(135deg,hsl(var(--primary)/0.10),hsl(var(--background))_42%,hsl(204_94%_94%/0.22))] shadow-[0_20px_56px_-28px_hsl(var(--foreground)/0.28)]">
               <CardContent className="p-0">
                 <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
@@ -7404,43 +7447,6 @@ export default function DesignTaskPage() {
                 </div>
               </CardContent>
             </Card>
-
-            <Tabs
-              value={activeDesignOutputTab}
-              onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
-              className="w-full"
-            >
-              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-xl bg-muted/30 p-1 shadow-inner">
-                <TabsTrigger value="visualization" className="gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  <span>Візуал</span>
-                  {selectedVisualizationOutputFileIds.length > 0 ? (
-                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
-                      {selectedVisualizationOutputFileIds.length}
-                    </span>
-                  ) : null}
-                </TabsTrigger>
-                <TabsTrigger value="layout" className="gap-2">
-                  <PencilLine className="h-4 w-4" />
-                  <span>Макет</span>
-                  {selectedLayoutOutputFileIds.length > 0 ? (
-                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
-                      {selectedLayoutOutputFileIds.length}
-                    </span>
-                  ) : null}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="visualization" className="mt-0">
-                {renderDesignOutputSection("visualization")}
-              </TabsContent>
-              <TabsContent value="layout" className="mt-0">
-                {renderDesignOutputSection("layout")}
-              </TabsContent>
-            </Tabs>
-
-            <div className="rounded-lg border border-border/50 bg-muted/5 px-3 py-2 text-xs text-muted-foreground">
-              Рекомендація: для друку додавайте окремо 1) візуал для погодження із замовником і 2) фінальний макет для виробництва.
-            </div>
           </div>
         </div>
 
@@ -8034,84 +8040,6 @@ export default function DesignTaskPage() {
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Історія задачі</div>
-            {historyLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Завантаження історії...
-              </div>
-            ) : historyGroups.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Подій ще немає</div>
-            ) : (
-              <div className="space-y-4">
-                {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
-                {historyGroups.map((group) => (
-                  <div key={group.label} className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.label}
-                    </div>
-                    <div className="space-y-3">
-                      {group.items.map((event) => {
-                        const Icon = event.icon;
-                        return (
-                          <div key={event.id} className="flex items-start gap-2.5">
-                            <div
-                              className={cn(
-                                "h-8 w-8 rounded-full border flex items-center justify-center shrink-0",
-                                event.accentClass
-                              )}
-                            >
-                              <Icon className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="text-sm font-medium">{event.title}</div>
-                                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {formatActivityClock(event.created_at)}
-                                </div>
-                              </div>
-                              <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                                <AvatarBase
-                                  src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
-                                  name={event.actorLabel}
-                                  fallback={getInitials(event.actorLabel)}
-                                  size={14}
-                                  className="shrink-0 border-border/70"
-                                />
-                                <span>{event.actorLabel}</span>
-                              </div>
-                              {event.description ? (
-                                <div className="text-xs text-muted-foreground mt-1">{event.description}</div>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {!historyLoadedAll ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={historyLoading || !task?.id}
-                    onClick={() => {
-                      if (task?.id) {
-                        void loadHistory(task.id, { full: true });
-                      }
-                    }}
-                  >
-                    {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Завантажити всю історію
-                  </Button>
-                ) : null}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Коментарі та згадки</div>
             {isLinkedQuote ? (
               <>
@@ -8352,6 +8280,101 @@ export default function DesignTaskPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Історія задачі</div>
+              {historyEvents.length > 0 ? (
+                <div className="text-[11px] text-muted-foreground">
+                  Показано {Math.min(historyVisibleCount, historyEvents.length)} з {historyEvents.length}
+                </div>
+              ) : null}
+            </div>
+            {historyLoading && historyEvents.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Завантаження історії...
+              </div>
+            ) : historyGroups.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Подій ще немає</div>
+            ) : (
+              <div className="space-y-4">
+                {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
+                {historyGroups.map((group) => (
+                  <div key={group.label} className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.label}
+                    </div>
+                    <div className="space-y-3">
+                      {group.items.map((event) => {
+                        const Icon = event.icon;
+                        return (
+                          <div key={event.id} className="flex items-start gap-2.5">
+                            <div
+                              className={cn(
+                                "h-8 w-8 rounded-full border flex items-center justify-center shrink-0",
+                                event.accentClass
+                              )}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-sm font-medium">{event.title}</div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatActivityClock(event.created_at)}
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                                <AvatarBase
+                                  src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
+                                  name={event.actorLabel}
+                                  fallback={getInitials(event.actorLabel)}
+                                  size={14}
+                                  className="shrink-0 border-border/70"
+                                />
+                                <span>{event.actorLabel}</span>
+                              </div>
+                              {event.description ? (
+                                <div className="text-xs text-muted-foreground mt-1">{event.description}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {historyVisibleCount < historyEvents.length ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setHistoryVisibleCount((prev) => prev + 5)}
+                  >
+                    Показати ще 5
+                  </Button>
+                ) : !historyLoadedAll ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={historyLoading || !task?.id}
+                    onClick={() => {
+                      if (task?.id) {
+                        void loadHistory(task.id, { full: true });
+                      }
+                    }}
+                  >
+                    {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Завантажити ще з історії
+                  </Button>
+                ) : null}
+              </div>
             )}
           </div>
         </aside>
