@@ -142,6 +142,36 @@ function getFxSourceText(sourceLabel: string | null, hasRates: boolean) {
 
 const FX_RATES_STORAGE_KEY = "tosho_fx_rates";
 const FX_RATES_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const FX_RATES_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+function parseFxSourceLabel(label: string | null) {
+  if (!label) return null;
+  const match = label.match(/^(\d{2})\.(\d{2})\.(\d{4}),\s*(\d{2}):(\d{2})$/u);
+  if (!match) return null;
+  const [, day, month, year, hours, minutes] = match;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    0,
+    0
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getFxStaleWarning(sourceLabel: string | null) {
+  const parsed = parseFxSourceLabel(sourceLabel);
+  if (!parsed) return null;
+  if (Date.now() - parsed.getTime() <= FX_RATES_STALE_AFTER_MS) return null;
+  return `Дані Мінфіну застаріли (${sourceLabel}). Перевір парсер у /.netlify/functions/fx-rates або саму сторінку джерела.`;
+}
+
+function getFxErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Невідома помилка завантаження курсу.";
+}
 
 async function fetchMinfinFxRates(signal?: AbortSignal) {
   const endpoints = import.meta.env.DEV
@@ -157,7 +187,16 @@ async function fetchMinfinFxRates(signal?: AbortSignal) {
         signal,
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} for ${endpoint}`);
+        let detail = "";
+        try {
+          const payload = await response.json();
+          if (payload && typeof payload === "object" && typeof payload.error === "string" && payload.error.trim()) {
+            detail = payload.error.trim();
+          }
+        } catch {
+          // Ignore invalid error payloads.
+        }
+        throw new Error(detail ? `${detail} (${endpoint})` : `HTTP ${response.status} for ${endpoint}`);
       }
 
       const contentType = response.headers.get("content-type") ?? "";
@@ -894,6 +933,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [, setUsdUahUpdatedAt] = useState<string | null>(null);
   const [usdUahSourceLabel, setUsdUahSourceLabel] = useState<string | null>(null);
   const [usdUahLoading, setUsdUahLoading] = useState(false);
+  const [fxError, setFxError] = useState<string | null>(null);
+  const [fxStaleWarning, setFxStaleWarning] = useState<string | null>(null);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
   const reminderAssigneeKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -940,7 +981,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     };
   }, []);
 
-  const loadUsdUahRate = React.useCallback(async (signal?: AbortSignal) => {
+  const loadUsdUahRate = React.useCallback(async ({ signal, showToast = false }: { signal?: AbortSignal; showToast?: boolean } = {}) => {
     setUsdUahLoading(true);
     try {
       const payload = (await fetchMinfinFxRates(signal)) as Partial<MinfinFxResponse>;
@@ -971,12 +1012,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           ? payload.fetchedAt
           : new Date().toISOString();
       const sourceLabel = typeof payload.updatedAtLabel === "string" ? payload.updatedAtLabel : null;
+      const staleWarning = getFxStaleWarning(sourceLabel);
       setUsdUahRate(nextUsdUahRate);
       setEurUahRate(nextEurUahRate);
       setUsdUahDelta(nextUsdUahDelta);
       setEurUahDelta(nextEurUahDelta);
       setUsdUahUpdatedAt(nowIso);
       setUsdUahSourceLabel(sourceLabel);
+      setFxError(null);
+      setFxStaleWarning(staleWarning);
       try {
         localStorage.setItem(
           FX_RATES_STORAGE_KEY,
@@ -992,9 +1036,26 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       } catch {
         // Ignore storage failures (private mode, quota etc).
       }
+      if (showToast) {
+        if (staleWarning) {
+          toast.warning("Курс оновлено, але дані застарілі", {
+            description: staleWarning,
+          });
+        } else {
+          toast.success("Курс валют оновлено");
+        }
+      }
     } catch (error) {
+      const message = getFxErrorMessage(error);
+      setFxError(message);
+      setFxStaleWarning(null);
       if (import.meta.env.DEV) {
         console.warn("Failed to refresh Minfin rates", error);
+      }
+      if (showToast) {
+        toast.error("Не вдалося оновити курс", {
+          description: message,
+        });
       }
     } finally {
       setUsdUahLoading(false);
@@ -1042,6 +1103,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       }
       if (typeof parsed.sourceLabel === "string" && parsed.sourceLabel) {
         setUsdUahSourceLabel(parsed.sourceLabel);
+        setFxStaleWarning(getFxStaleWarning(parsed.sourceLabel));
       }
     } catch {
       // Ignore invalid local cache.
@@ -1050,7 +1112,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadUsdUahRate(controller.signal);
+    void loadUsdUahRate({ signal: controller.signal });
     const intervalId = window.setInterval(() => {
       void loadUsdUahRate();
     }, 15 * 60 * 1000);
@@ -1752,8 +1814,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     type="button"
                     className="hidden lg:inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-2.5 text-xs transition-colors duration-150 hover:bg-muted/60 hover:border-border cursor-pointer"
                     aria-label="Курси валют"
-                    title="Мінфін міжбанк · продаж"
+                    title={fxError ?? fxStaleWarning ?? "Мінфін міжбанк · продаж"}
                   >
+                    {fxError || fxStaleWarning ? (
+                      <ShieldAlert className="h-3.5 w-3.5 text-danger-foreground" />
+                    ) : null}
                     <span className="font-medium tabular-nums text-foreground/90">
                       🇺🇸 USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
                     </span>
@@ -1772,6 +1837,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     <div className="text-xs text-muted-foreground">
                       {getFxSourceText(usdUahSourceLabel, Boolean(usdUahRate || eurUahRate))}
                     </div>
+                    {fxError ? (
+                      <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger-foreground">
+                        <div className="font-semibold">Курс не оновився</div>
+                        <div className="mt-1">{fxError}</div>
+                        <div className="mt-1 text-[11px] opacity-90">
+                          Перевір `/.netlify/functions/fx-rates`, доступність Мінфіну або парсинг HTML.
+                        </div>
+                      </div>
+                    ) : null}
+                    {!fxError && fxStaleWarning ? (
+                      <div className="rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                        <div className="font-semibold">Потрібна перевірка джерела</div>
+                        <div className="mt-1">{fxStaleWarning}</div>
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
                         <div className="text-[11px] text-muted-foreground">🇺🇸 Долар США</div>
@@ -1815,7 +1895,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       size="sm"
                       variant="outline"
                       className="w-full"
-                      onClick={() => void loadUsdUahRate()}
+                      onClick={() => void loadUsdUahRate({ showToast: true })}
                       disabled={usdUahLoading}
                     >
                       Оновити
