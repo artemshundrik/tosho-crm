@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tosho.crm.backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>source /Users/artem/Projects/tosho-crm/.env.backup &amp;&amp; export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" &amp;&amp; /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh &gt;&gt; /Users/artem/Projects/tosho-crm/backups/backup.log 2&gt;&amp;1</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/artem/Projects/tosho-crm/backups/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/artem/Projects/tosho-crm/backups/launchd.log</string>
+</dict>
+</plist>

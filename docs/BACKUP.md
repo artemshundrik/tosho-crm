@@ -1,8 +1,9 @@
 # Backup and Restore (minimal setup)
 
-This project uses Supabase. Minimal safe backup includes:
-- PostgreSQL dump (daily)
-- Storage buckets backup (daily, optional but recommended)
+This project uses Supabase. Supabase is the source of truth for database backups.
+This repo keeps a separate backup flow only for Storage files:
+- Storage buckets backup as a separate weekly/monthly flow
+- Offsite copy of the Storage archive (Dropbox API)
 - Secrets backup (`.env`, API keys) in a password/secrets manager
 
 ## 1. Requirements
@@ -10,15 +11,15 @@ This project uses Supabase. Minimal safe backup includes:
 - `pg_dump` and `pg_restore` installed (PostgreSQL client tools)
 - `tar`
 - Optional for Storage backup/restore: `aws` CLI
+- `node` for Dropbox upload flow
 
 ## 2. Environment variables
 
 Set these before backup:
 
 ```bash
-export BACKUP_DB_URL='postgresql://...'
 export BACKUP_ROOT='./backups'
-export KEEP_ARCHIVES='30'
+export KEEP_STORAGE_ARCHIVES='8'
 ```
 
 Optional Storage backup:
@@ -30,14 +31,21 @@ export STORAGE_S3_SECRET_ACCESS_KEY='...'
 export STORAGE_BUCKETS='public-assets,fayna-saas'
 ```
 
-## 3. Run backup
+Dropbox offsite upload uses the existing Dropbox API app credentials. They can live
+in `.env.local` or `.env.backup`:
 
 ```bash
-bash scripts/backup.sh
+export DROPBOX_APP_KEY='...'
+export DROPBOX_APP_SECRET='...'
+export DROPBOX_REFRESH_TOKEN='...'
+export DROPBOX_BACKUP_ROOT='/Tosho Team Folder/CRM Backups'
 ```
 
-Output:
-- `backups/YYYYMMDD-HHMMSSZ.tar.gz`
+## 3. Run storage backup
+
+```bash
+bash scripts/backup-storage-and-upload.sh
+```
 
 ## 4. Run restore
 
@@ -125,16 +133,44 @@ launchctl list | grep com.tosho.crm.backup
 tail -n 50 /Users/artem/Projects/tosho-crm/backups/backup.log
 ```
 
-## 7. Offsite copy to Backblaze B2 (recommended)
+## 7. Offsite copy to Dropbox (recommended)
 
-1) Create bucket in B2:
-- Bucket name example: `tosho-crm-backups`
-- Keep private bucket
+This project already includes a Dropbox API integration. Storage backups upload to:
 
-2) Create application key in B2:
-- Allow access only to that bucket
+- `/Tosho Team Folder/CRM Backups/storage/weekly`
+- `/Tosho Team Folder/CRM Backups/storage/monthly`
 
-3) Add B2 vars to `.env.backup`:
+Storage schedule:
+- weekly every Sunday
+- monthly on the 1st day of the month
+
+Retention:
+- Storage weekly: keep 8
+- Storage monthly: keep 6
+- Local Storage archives: keep 8
+
+Add Dropbox vars to `.env.backup` or `.env.local`:
+
+```bash
+cat >> /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
+export DROPBOX_APP_KEY='REPLACE_WITH_DROPBOX_APP_KEY'
+export DROPBOX_APP_SECRET='REPLACE_WITH_DROPBOX_APP_SECRET'
+export DROPBOX_REFRESH_TOKEN='REPLACE_WITH_DROPBOX_REFRESH_TOKEN'
+export DROPBOX_BACKUP_ROOT='/Tosho Team Folder/CRM Backups'
+EOF
+```
+
+Test upload manually:
+
+```bash
+source /Users/artem/Projects/tosho-crm/.env.backup
+cd /Users/artem/Projects/tosho-crm
+node scripts/upload-backups-dropbox.mjs
+```
+
+## 8. Offsite copy to Backblaze B2 (optional fallback)
+
+If you want a second offsite copy outside Dropbox, the old B2 upload path still works:
 
 ```bash
 cat >> /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
@@ -145,18 +181,11 @@ export B2_APPLICATION_KEY='REPLACE_WITH_B2_APP_KEY'
 EOF
 ```
 
-4) Test upload manually:
+## 8. Update LaunchAgent command
 
-```bash
-source /Users/artem/Projects/tosho-crm/.env.backup
-cd /Users/artem/Projects/tosho-crm
-bash scripts/upload-backups.sh
-```
+Use:
 
-5) Update LaunchAgent command:
-- In `~/Library/LaunchAgents/com.tosho.crm.backup.plist` replace:
-  - `/bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-if-needed.sh`
-  - with `/bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-and-upload.sh`
+- `/bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh`
 
 Reload agent:
 
@@ -166,8 +195,10 @@ launchctl load ~/Library/LaunchAgents/com.tosho.crm.backup.plist
 launchctl kickstart -k gui/$(id -u)/com.tosho.crm.backup
 ```
 
-## 8. Minimal operational policy
+## 9. Minimal operational policy
 
-- Run backup daily
-- Keep at least 30 archives
-- Test restore at least once per month on a test database
+- Rely on Supabase for DB backups
+- Run Storage backup weekly/monthly only
+- Keep Storage weekly archives: 8
+- Keep Storage monthly archives: 6
+- Test Storage restore at least once per month on a test location
