@@ -1176,11 +1176,14 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       return customers.map((customer) => ({
         id: customer.id,
         label: customer.name || customer.legal_name || "Без назви",
+        legalName: customer.legal_name ?? null,
         logoUrl: customer.logo_url ?? null,
+        managerLabel: customer.manager?.trim() || null,
+        searchText: [customer.name ?? "", customer.legal_name ?? ""].filter(Boolean).join(" "),
         entityType: customer.entityType ?? "customer",
         disabled: isBlockedForCurrentManager(customer),
         disabledReason: isBlockedForCurrentManager(customer)
-          ? "Можна вибрати тільки свого замовника або ліда"
+          ? `Можна вибрати тільки свого замовника або ліда${customer.manager?.trim() ? `. Менеджер: ${customer.manager.trim()}` : ""}`
           : null,
       }));
     },

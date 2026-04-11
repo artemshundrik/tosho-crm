@@ -1,5 +1,7 @@
 import * as React from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { areCompanyNamesEquivalent } from "@/lib/companyNameSearch";
+import { listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { CustomerDialog, type CustomerFormState } from "./CustomerDialog";
 import { LeadDialog, type LeadFormState } from "./LeadDialog";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
@@ -173,6 +175,35 @@ export const useCustomerLeadCreate = ({
     setCustomerSaving(true);
     setCustomerError(null);
 
+    try {
+      const [customerMatches, leadMatches] = await Promise.all([
+        listCustomersBySearch(teamId, customerForm.name.trim()),
+        listLeadsBySearch(teamId, customerForm.name.trim()).catch(() => []),
+      ]);
+      const existingCustomer = customerMatches.find((row) =>
+        [row.name ?? "", row.legal_name ?? ""].some((value) => areCompanyNamesEquivalent(value, customerForm.name.trim()))
+      );
+      const existingLead = leadMatches.find((row) =>
+        [row.company_name ?? "", row.legal_name ?? ""].some((value) =>
+          areCompanyNamesEquivalent(value, customerForm.name.trim())
+        )
+      );
+      const existingMatch = existingCustomer
+        ? { entityLabel: "замовник", manager: existingCustomer.manager?.trim() ?? "" }
+        : existingLead
+          ? { entityLabel: "лід", manager: existingLead.manager?.trim() ?? "" }
+          : null;
+      if (existingMatch) {
+        setCustomerSaving(false);
+        setCustomerError(
+          `Схожа компанія вже є в CRM як ${existingMatch.entityLabel}${existingMatch.manager ? `. Менеджер: ${existingMatch.manager}` : ""}.`
+        );
+        return;
+      }
+    } catch {
+      // fall through to creation when duplicate precheck is temporarily unavailable
+    }
+
     let optimizedLogoUrl: string | null = null;
     try {
       if (customerForm.logoUploadMode === "file" && customerForm.logoFile) {
@@ -329,6 +360,37 @@ export const useCustomerLeadCreate = ({
 
     setLeadSaving(true);
     setLeadError(null);
+
+    try {
+      const [leadMatches, customerMatches] = await Promise.all([
+        listLeadsBySearch(teamId, leadForm.companyName.trim()),
+        listCustomersBySearch(teamId, leadForm.companyName.trim()).catch(() => []),
+      ]);
+      const existingLead = leadMatches.find((row) =>
+        [row.company_name ?? "", row.legal_name ?? ""].some((value) =>
+          areCompanyNamesEquivalent(value, leadForm.companyName.trim())
+        )
+      );
+      const existingCustomer = customerMatches.find((row) =>
+        [row.name ?? "", row.legal_name ?? ""].some((value) =>
+          areCompanyNamesEquivalent(value, leadForm.companyName.trim())
+        )
+      );
+      const existingMatch = existingLead
+        ? { entityLabel: "лід", manager: existingLead.manager?.trim() ?? "" }
+        : existingCustomer
+          ? { entityLabel: "замовник", manager: existingCustomer.manager?.trim() ?? "" }
+          : null;
+      if (existingMatch) {
+        setLeadSaving(false);
+        setLeadError(
+          `Схожа компанія вже є в CRM як ${existingMatch.entityLabel}${existingMatch.manager ? `. Менеджер: ${existingMatch.manager}` : ""}.`
+        );
+        return;
+      }
+    } catch {
+      // fall through to creation when duplicate precheck is temporarily unavailable
+    }
 
     let optimizedLogoUrl: string | null = null;
     try {

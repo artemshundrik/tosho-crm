@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
-import { listCustomerQuotes } from "@/lib/toshoApi";
+import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -41,6 +41,12 @@ import {
   parseCustomerLegalEntities,
   serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
+import {
+  areCompanyNamesEquivalent,
+  buildCompanySearchVariants,
+  normalizeCompanyNameLooseKey,
+  scoreCompanyNameMatch,
+} from "@/lib/companyNameSearch";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -115,6 +121,13 @@ type LeadRow = {
   notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+type SearchVisibilityMatch = {
+  id: string;
+  label: string;
+  entityType: "customer" | "lead";
+  managerLabel: string;
 };
 
 type QuoteHistoryRow = {
@@ -382,7 +395,7 @@ type CustomersPageCachePayload = {
 const toManagerKey = (value?: string | null) => normalizeManagerKey(value);
 
 const normalizePartyMatch = (value?: string | null) =>
-  (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  normalizeCompanyNameLooseKey(value);
 
 const buildManagerAliases = (member: WorkspaceMemberDisplayRow) => {
   const aliases = new Set<string>();
@@ -456,6 +469,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     () => initialCache?.leadManagerFilter ?? ALL_MANAGERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
+  const [crossManagerMatches, setCrossManagerMatches] = useState<SearchVisibilityMatch[]>([]);
+  const [crossManagerMatchesLoading, setCrossManagerMatchesLoading] = useState(false);
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const customersFullFetchCompletedKeyRef = useRef<string | null>(null);
@@ -975,6 +990,72 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const filteredRows = rows;
 
   const filteredLeads = leads;
+
+  useEffect(() => {
+    if (!isManagerUser || !userId || !teamId || !search.trim()) {
+      setCrossManagerMatches([]);
+      setCrossManagerMatchesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadCrossManagerMatches = async () => {
+      setCrossManagerMatchesLoading(true);
+      try {
+        const [customerMatches, leadMatches] = await Promise.all([
+          listCustomersBySearch(teamId, search),
+          listLeadsBySearch(teamId, search).catch(() => []),
+        ]);
+        if (cancelled) return;
+
+        const nextMatches = [
+          ...customerMatches
+            .filter((row) => (row.manager_user_id?.trim() ?? "") && row.manager_user_id?.trim() !== userId)
+            .map((row) => ({
+              id: row.id,
+              label: row.name?.trim() || row.legal_name?.trim() || "Замовник без назви",
+              entityType: "customer" as const,
+              managerLabel: resolveManagerLabel(row.manager_user_id, row.manager) || "Не вказано",
+              score: scoreCompanyNameMatch(search, [row.name ?? null, row.legal_name ?? null]),
+            })),
+          ...leadMatches
+            .filter((row) => (row.manager_user_id?.trim() ?? "") && row.manager_user_id?.trim() !== userId)
+            .map((row) => ({
+              id: row.id,
+              label:
+                row.company_name?.trim() ||
+                row.legal_name?.trim() ||
+                [row.first_name?.trim(), row.last_name?.trim()].filter(Boolean).join(" ") ||
+                "Лід без назви",
+              entityType: "lead" as const,
+              managerLabel: resolveManagerLabel(row.manager_user_id, row.manager) || "Не вказано",
+              score: scoreCompanyNameMatch(search, [
+                row.company_name ?? null,
+                row.legal_name ?? null,
+                [row.first_name, row.last_name].filter(Boolean).join(" "),
+              ]),
+            })),
+        ]
+          .filter((row) => row.score > 0)
+          .sort((left, right) => right.score - left.score || left.label.localeCompare(right.label, "uk"))
+          .slice(0, 5)
+          .map(({ score, ...row }) => row);
+
+        setCrossManagerMatches(nextMatches);
+      } catch {
+        if (!cancelled) setCrossManagerMatches([]);
+      } finally {
+        if (!cancelled) setCrossManagerMatchesLoading(false);
+      }
+    };
+
+    const timeoutId = window.setTimeout(loadCrossManagerMatches, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isManagerUser, resolveManagerLabel, search, teamId, userId]);
+
   const calculationQuotes = useMemo(
     () => linkedQuotes.filter((row) => (row.status ?? "").toLowerCase() !== "approved"),
     [linkedQuotes]
@@ -1452,22 +1533,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const fetchCustomerByName = useCallback(
     async (customerName: string) => {
-      const normalizedCustomerName = normalizePartyMatch(customerName);
-      const { data, error } = await runCustomerSelect(async (columns) =>
-        await supabase
-          .schema("tosho")
-          .from("customers")
-          .select(columns)
-          .eq("team_id", teamId)
-          .or(`name.eq.${customerName},legal_name.eq.${customerName}`)
-          .limit(20)
-      );
-      if (error) throw error;
-      return (((data as unknown) as CustomerRow[]) ?? []).find((row) =>
-        [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
-      ) ?? null;
+      const matches = await listCustomersBySearch(teamId, customerName);
+      const matchedCustomer =
+        matches.find((row) => areCompanyNamesEquivalent(row.name ?? row.legal_name ?? null, customerName)) ?? matches[0] ?? null;
+      if (!matchedCustomer?.id) return null;
+      return await fetchCustomerById(matchedCustomer.id);
     },
-    [runCustomerSelect, teamId]
+    [fetchCustomerById, teamId]
   );
 
   const fetchLeadById = useCallback(
@@ -1487,20 +1559,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const fetchLeadByName = useCallback(
     async (leadName: string) => {
-      const normalizedLeadName = normalizePartyMatch(leadName);
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("leads")
-        .select(LEAD_COLUMNS)
-        .eq("team_id", teamId)
-        .or(`company_name.eq.${leadName},legal_name.eq.${leadName}`)
-        .limit(20);
-      if (error) throw error;
-      return (((data as unknown) as LeadRow[]) ?? []).find((row) =>
-        [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedLeadName)
-      ) ?? null;
+      const matches = await listLeadsBySearch(teamId, leadName);
+      const matchedLead =
+        matches.find((row) => areCompanyNamesEquivalent(row.company_name ?? row.legal_name ?? null, leadName)) ?? matches[0] ?? null;
+      if (!matchedLead?.id) return null;
+      return await fetchLeadById(matchedLead.id);
     },
-    [teamId]
+    [fetchLeadById, teamId]
   );
 
   const loadCustomers = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
@@ -1517,7 +1582,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setCustomersError(null);
     try {
-      const buildCustomersQuery = (columns: string) => {
+      const buildCustomersQuery = (columns: string, searchTerm?: string | null) => {
         let query = supabase
           .schema("tosho")
           .from("customers")
@@ -1536,7 +1601,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           }
         }
 
-        const normalizedSearch = search.trim();
+        const normalizedSearch = searchTerm?.trim() ?? "";
         if (normalizedSearch) {
           const escaped = escapePostgrestTerm(normalizedSearch);
           query = query.or(
@@ -1550,6 +1615,53 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const nextRows: CustomerRow[] = [];
       let nextOffset = offset;
       let totalCount: number | null = null;
+      const normalizedSearch = search.trim();
+
+      if (normalizedSearch) {
+        const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+        const variants = buildCompanySearchVariants(normalizedSearch);
+        const responses = await Promise.all(
+          variants.map(async (term) => {
+            const { data, error: loadError } = await runCustomerSelect(async (columns) =>
+              await buildCustomersQuery(columns, term).range(0, pageSize - 1)
+            );
+            if (loadError) throw loadError;
+            return ((data as unknown) as CustomerRow[]) ?? [];
+          })
+        );
+
+        const deduped = new Map<string, CustomerRow>();
+        responses.flat().forEach((row) => {
+          if (!deduped.has(row.id)) deduped.set(row.id, row);
+        });
+
+        const rankedRows = Array.from(deduped.values())
+          .map((row) => ({
+            row,
+            score: Math.max(
+              scoreCompanyNameMatch(normalizedSearch, [row.name ?? null, row.legal_name ?? null]),
+              scoreCompanyNameMatch(normalizedSearch, [
+                row.manager ?? null,
+                row.contact_name ?? null,
+                row.contact_phone ?? null,
+                row.contact_email ?? null,
+                row.website ?? null,
+                row.tax_id ?? null,
+              ])
+            ),
+          }))
+          .filter((entry) => entry.score > 0)
+          .sort((left, right) => right.score - left.score || (left.row.name ?? "").localeCompare(right.row.name ?? "", "uk"))
+          .map((entry) => entry.row);
+
+        setCustomersTotal(rankedRows.length);
+        setCustomersHasMore(false);
+        if (!append) {
+          customersFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+        }
+        setRows(rankedRows);
+        return;
+      }
 
       while (true) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
@@ -1600,7 +1712,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const runLoadLeads = async (
         variant: "full" | "no_ownership",
         rangeOffset: number,
-        pageSize: number
+        pageSize: number,
+        searchTerm?: string | null
       ) => {
         let query = supabase
           .schema("tosho")
@@ -1620,7 +1733,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           }
         }
 
-        const normalizedSearch = search.trim();
+        const normalizedSearch = searchTerm?.trim() ?? "";
         if (normalizedSearch) {
           const escaped = escapePostgrestTerm(normalizedSearch);
           query = query.or(
@@ -1635,6 +1748,66 @@ function CustomersPage({ teamId }: { teamId: string }) {
       let nextOffset = offset;
       let totalCount: number | null = null;
       let variant: "full" | "no_ownership" = "full";
+      const normalizedSearch = search.trim();
+
+      if (normalizedSearch) {
+        const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+        const variants = buildCompanySearchVariants(normalizedSearch);
+        const responses = await Promise.all(
+          variants.map(async (term) => {
+            let activeVariant: "full" | "no_ownership" = "full";
+            let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term);
+            if (
+              loadError &&
+              activeVariant === "full" &&
+              /column/i.test(loadError.message ?? "") &&
+              /ownership_type/i.test(loadError.message ?? "")
+            ) {
+              activeVariant = "no_ownership";
+              ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term));
+            }
+            if (loadError) throw loadError;
+            return ((data as unknown) as LeadRow[]) ?? [];
+          })
+        );
+
+        const deduped = new Map<string, LeadRow>();
+        responses.flat().forEach((row) => {
+          if (!deduped.has(row.id)) deduped.set(row.id, row);
+        });
+
+        const rankedLeads = Array.from(deduped.values())
+          .map((row) => ({
+            row,
+            score: Math.max(
+              scoreCompanyNameMatch(normalizedSearch, [
+                row.company_name ?? null,
+                row.legal_name ?? null,
+                [row.first_name, row.last_name].filter(Boolean).join(" "),
+              ]),
+              scoreCompanyNameMatch(normalizedSearch, [
+                row.email ?? null,
+                row.source ?? null,
+                row.manager ?? null,
+                row.website ?? null,
+              ])
+            ),
+          }))
+          .filter((entry) => entry.score > 0)
+          .sort(
+            (left, right) =>
+              right.score - left.score || (left.row.company_name ?? "").localeCompare(right.row.company_name ?? "", "uk")
+          )
+          .map((entry) => entry.row);
+
+        setLeadsTotal(rankedLeads.length);
+        setLeadsHasMore(false);
+        if (!append) {
+          leadsFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+        }
+        setLeads(rankedLeads);
+        return;
+      }
 
       while (true) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
@@ -2514,6 +2687,43 @@ function CustomersPage({ teamId }: { teamId: string }) {
   return (
     <div className="w-full pb-20 md:pb-0 space-y-6">
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
+        {isManagerUser && search.trim() ? (
+          <div className="mb-4 rounded-[var(--radius-xl)] border border-amber-300/70 bg-amber-50/80 p-3">
+            <div className="flex flex-col gap-2">
+              <div>
+                <p className="text-sm font-medium text-amber-950">Схожі компанії в інших менеджерів</p>
+                <p className="text-xs text-amber-900/80">
+                  Ви й далі бачите тільки свої записи, але пошук підсвічує можливі дублікати в команді.
+                </p>
+              </div>
+              {crossManagerMatchesLoading ? (
+                <p className="text-xs text-amber-900/80">Шукаю збіги по команді…</p>
+              ) : crossManagerMatches.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {crossManagerMatches.map((match) => (
+                    <div
+                      key={`${match.entityType}-${match.id}`}
+                      className="min-w-[220px] rounded-[var(--radius-lg)] border border-amber-200 bg-white/80 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-amber-300 bg-amber-100 text-[10px] uppercase tracking-wide text-amber-950"
+                        >
+                          {match.entityType === "lead" ? "Лід" : "Замовник"}
+                        </Badge>
+                        <span className="truncate text-sm font-medium text-foreground">{match.label}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Менеджер: {match.managerLabel}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-amber-900/80">Схожих записів в інших менеджерів не знайдено.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
         <TabsContent value="customers" className="mt-4">
           <div className="overflow-hidden">
             {customersLoading ? (

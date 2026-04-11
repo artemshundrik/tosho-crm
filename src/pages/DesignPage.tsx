@@ -1166,11 +1166,14 @@ export default function DesignPage() {
         const customerOptions: CustomerOption[] = customerRows.map((customer) => ({
           id: customer.id,
           label: customer.name?.trim() || customer.legal_name?.trim() || "Замовник без назви",
+          legalName: customer.legal_name?.trim() || null,
           entityType: "customer",
           logoUrl: normalizeLogoUrl(customer.logo_url ?? null),
+          managerLabel: customer.manager?.trim() || null,
+          searchText: [customer.name ?? "", customer.legal_name ?? ""].filter(Boolean).join(" "),
           disabled: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null),
           disabledReason: !isOwnParty(customer.manager_user_id ?? null, customer.manager ?? null)
-            ? "Можна вибрати тільки свого замовника або ліда"
+            ? `Можна вибрати тільки свого замовника або ліда${customer.manager?.trim() ? `. Менеджер: ${customer.manager.trim()}` : ""}`
             : null,
         }));
 
@@ -1181,11 +1184,21 @@ export default function DesignPage() {
             lead.legal_name?.trim() ||
             [lead.first_name?.trim(), lead.last_name?.trim()].filter(Boolean).join(" ") ||
             "Лід без назви",
+          legalName: lead.legal_name?.trim() || null,
           entityType: "lead",
           logoUrl: normalizeLogoUrl(lead.logo_url ?? null),
+          managerLabel: lead.manager?.trim() || null,
+          searchText: [
+            lead.company_name ?? "",
+            lead.legal_name ?? "",
+            lead.first_name ?? "",
+            lead.last_name ?? "",
+          ]
+            .filter(Boolean)
+            .join(" "),
           disabled: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null),
           disabledReason: !isOwnParty(lead.manager_user_id ?? null, lead.manager ?? null)
-            ? "Можна вибрати тільки свого замовника або ліда"
+            ? `Можна вибрати тільки свого замовника або ліда${lead.manager?.trim() ? `. Менеджер: ${lead.manager.trim()}` : ""}`
             : null,
         }));
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { matchesCompanyNameSearch } from "@/lib/companyNameSearch";
 import { cn } from "@/lib/utils";
 
 export type CustomerLeadOption = {
@@ -12,6 +13,9 @@ export type CustomerLeadOption = {
   label: string;
   entityType: "customer" | "lead";
   logoUrl?: string | null;
+  legalName?: string | null;
+  managerLabel?: string | null;
+  searchText?: string | null;
   disabled?: boolean;
   disabledReason?: string | null;
 };
@@ -55,7 +59,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   align = "start",
   maxVisible = 50,
 }) => {
-  const search = searchValue.trim().toLowerCase();
+  const search = searchValue.trim();
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const [showTopFade, setShowTopFade] = React.useState(false);
   const [showBottomFade, setShowBottomFade] = React.useState(false);
@@ -68,7 +72,11 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   const chipLabelText = selectedLabel.trim();
   const visibleOptions = React.useMemo(() => {
     if (!search) return options.slice(0, maxVisible);
-    return options.filter((option) => option.label.toLowerCase().includes(search)).slice(0, maxVisible);
+    return options
+      .filter((option) =>
+        matchesCompanyNameSearch(search, [option.label, option.legalName ?? null, option.searchText ?? null])
+      )
+      .slice(0, maxVisible);
   }, [maxVisible, options, search]);
   const canCreate = Boolean(searchValue.trim());
   const canScroll = !loading && visibleOptions.length > 0;
@@ -169,6 +177,11 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                       />
                       <span className="min-w-0 flex-1 leading-tight">
                         <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
+                        {option.managerLabel ? (
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                            Менеджер: {option.managerLabel}
+                          </span>
+                        ) : null}
                         <span className="mt-0.5 flex items-center gap-1.5">
                           <span
                             className={cn(

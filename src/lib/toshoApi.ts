@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
+import { buildCompanySearchVariants, scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -513,8 +514,7 @@ export async function listQuotes(params: ListQuotesParams) {
 
 export async function listCustomersBySearch(teamId: string, search: string) {
   const q = search.trim();
-  const escapedSearch = escapePostgrestIlikeTerm(q);
-  const runQuery = async (variant: "full" | "no_logo" | "base") => {
+  const buildQuery = (variant: "full" | "no_logo" | "base") => {
     const columns =
       variant === "full"
         ? "id,name,legal_name,logo_url,manager,manager_user_id"
@@ -528,34 +528,66 @@ export async function listCustomersBySearch(teamId: string, search: string) {
       .eq("team_id", teamId)
       .order("name", { ascending: true })
       .limit(20);
-
-    if (escapedSearch.length > 0) {
-      query = query.or(`name.ilike.%${escapedSearch}%,legal_name.ilike.%${escapedSearch}%`);
-    }
-    return await query;
+    return query;
   };
 
-  let { data, error } = await runQuery("full");
-  const message = getErrorMessage(error);
-  if (error && /column/i.test(message) && /logo_url/i.test(message)) {
-    ({ data, error } = await runQuery("no_logo"));
+  const executeWithFallback = async (term?: string | null) => {
+    const applySearch = async (variant: "full" | "no_logo" | "base") => {
+      let query = buildQuery(variant);
+      if (term?.trim()) {
+        const escapedTerm = escapePostgrestIlikeTerm(term);
+        query = query.or(`name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%`);
+      }
+      return await query;
+    };
+
+    let { data, error } = await applySearch("full");
+    const message = getErrorMessage(error);
+    if (error && /column/i.test(message) && /logo_url/i.test(message)) {
+      ({ data, error } = await applySearch("no_logo"));
+    }
+    const secondMessage = getErrorMessage(error);
+    if (error && /column/i.test(secondMessage) && /(manager|manager_user_id)/i.test(secondMessage)) {
+      ({ data, error } = await applySearch("base"));
+    }
+    return { data, error };
+  };
+
+  if (!q) {
+    const { data, error } = await executeWithFallback();
+    handleError(error);
+    return (data as unknown as CustomerRow[]) ?? [];
   }
-  const secondMessage = getErrorMessage(error);
-  if (
-    error &&
-    /column/i.test(secondMessage) &&
-    /(manager|manager_user_id)/i.test(secondMessage)
-  ) {
-    ({ data, error } = await runQuery("base"));
+
+  const variants = buildCompanySearchVariants(q);
+  const responses = await Promise.all(variants.map(async (term) => ({ term, ...(await executeWithFallback(term)) })));
+  const firstError = responses.find((response) => response.error)?.error ?? null;
+  if (!responses.some((response) => !response.error)) {
+    handleError(firstError);
   }
-  handleError(error);
-  return (data as unknown as CustomerRow[]) ?? [];
+
+  const deduped = new Map<string, CustomerRow>();
+  for (const response of responses) {
+    const rows = (response.data as unknown as CustomerRow[]) ?? [];
+    for (const row of rows) {
+      if (!deduped.has(row.id)) deduped.set(row.id, row);
+    }
+  }
+
+  return Array.from(deduped.values())
+    .map((row) => ({
+      row,
+      score: scoreCompanyNameMatch(q, [row.name ?? null, row.legal_name ?? null]),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || (left.row.name ?? "").localeCompare(right.row.name ?? "", "uk"))
+    .slice(0, 20)
+    .map((entry) => entry.row);
 }
 
 export async function listLeadsBySearch(teamId: string, search: string) {
   const q = search.trim();
-  const escapedSearch = escapePostgrestIlikeTerm(q);
-  const runQuery = async (variant: "full" | "base") => {
+  const buildQuery = (variant: "full" | "base") => {
     let query = supabase
       .schema("tosho")
       .from("leads")
@@ -567,21 +599,65 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       .eq("team_id", teamId)
       .order("company_name", { ascending: true })
       .limit(20);
-
-    if (escapedSearch.length > 0) {
-      query = query.or(
-        `company_name.ilike.%${escapedSearch}%,legal_name.ilike.%${escapedSearch}%,first_name.ilike.%${escapedSearch}%,last_name.ilike.%${escapedSearch}%`
-      );
-    }
-    return await query;
+    return query;
   };
 
-  let { data, error } = await runQuery("full");
-  if (error && /column/i.test(getErrorMessage(error)) && /(manager|manager_user_id)/i.test(getErrorMessage(error))) {
-    ({ data, error } = await runQuery("base"));
+  const executeWithFallback = async (term?: string | null) => {
+    const applySearch = async (variant: "full" | "base") => {
+      let query = buildQuery(variant);
+      if (term?.trim()) {
+        const escapedTerm = escapePostgrestIlikeTerm(term);
+        query = query.or(
+          `company_name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%,first_name.ilike.%${escapedTerm}%,last_name.ilike.%${escapedTerm}%`
+        );
+      }
+      return await query;
+    };
+
+    let { data, error } = await applySearch("full");
+    if (error && /column/i.test(getErrorMessage(error)) && /(manager|manager_user_id)/i.test(getErrorMessage(error))) {
+      ({ data, error } = await applySearch("base"));
+    }
+    return { data, error };
+  };
+
+  if (!q) {
+    const { data, error } = await executeWithFallback();
+    handleError(error);
+    return (data as unknown as LeadSearchRow[]) ?? [];
   }
-  handleError(error);
-  return (data as unknown as LeadSearchRow[]) ?? [];
+
+  const variants = buildCompanySearchVariants(q);
+  const responses = await Promise.all(variants.map(async (term) => ({ term, ...(await executeWithFallback(term)) })));
+  const firstError = responses.find((response) => response.error)?.error ?? null;
+  if (!responses.some((response) => !response.error)) {
+    handleError(firstError);
+  }
+
+  const deduped = new Map<string, LeadSearchRow>();
+  for (const response of responses) {
+    const rows = (response.data as unknown as LeadSearchRow[]) ?? [];
+    for (const row of rows) {
+      if (!deduped.has(row.id)) deduped.set(row.id, row);
+    }
+  }
+
+  return Array.from(deduped.values())
+    .map((row) => ({
+      row,
+      score: scoreCompanyNameMatch(q, [
+        row.company_name ?? null,
+        row.legal_name ?? null,
+        [row.first_name, row.last_name].filter(Boolean).join(" "),
+      ]),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score || (left.row.company_name ?? "").localeCompare(right.row.company_name ?? "", "uk")
+    )
+    .slice(0, 20)
+    .map((entry) => entry.row);
 }
 
 export async function getLeadById(teamId: string, leadId: string) {
