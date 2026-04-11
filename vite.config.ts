@@ -42,6 +42,47 @@ function extractChangeValue(cellHtml: string) {
   return magnitude === null ? null : sign * Math.abs(magnitude);
 }
 
+function stripHtml(html: string) {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, " ")
+    .replace(/<!--[\s\S]*?-->/gu, " ")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;|&#160;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function extractRatesFromText(html: string) {
+  const text = stripHtml(html);
+  const match = text.match(
+    /Купівля\s+([0-9]+(?:[.,][0-9]+)?)\s+([+-][0-9]+(?:[.,][0-9]+)?)\s+([0-9]+(?:[.,][0-9]+)?)\s+([+-][0-9]+(?:[.,][0-9]+)?)\s+Продаж\s+([0-9]+(?:[.,][0-9]+)?)\s+([+-][0-9]+(?:[.,][0-9]+)?)\s+([0-9]+(?:[.,][0-9]+)?)\s+([+-][0-9]+(?:[.,][0-9]+)?)/u
+  );
+  if (!match) return null;
+
+  const usdBuy = parseDecimal(match[1]);
+  const eurBuy = parseDecimal(match[3]);
+  const usdSell = parseDecimal(match[5]);
+  const eurSell = parseDecimal(match[7]);
+  const usdSellChange = parseDecimal(match[6]);
+  const eurSellChange = parseDecimal(match[8]);
+  if (!usdBuy || !eurBuy || !usdSell || !eurSell) return null;
+
+  return {
+    usd: {
+      buy: usdBuy,
+      sell: usdSell,
+      sellChange: usdSellChange,
+    },
+    eur: {
+      buy: eurBuy,
+      sell: eurSell,
+      sellChange: eurSellChange,
+    },
+  };
+}
+
 function extractCurrencyRate(html: string, code: "USD" | "EUR") {
   const row = extractRow(html, code);
   if (!row) return null;
@@ -75,8 +116,9 @@ async function loadMinfinRates() {
   }
 
   const html = await response.text();
-  const usd = extractCurrencyRate(html, "USD");
-  const eur = extractCurrencyRate(html, "EUR");
+  const fallbackRates = extractRatesFromText(html);
+  const usd = extractCurrencyRate(html, "USD") ?? fallbackRates?.usd ?? null;
+  const eur = extractCurrencyRate(html, "EUR") ?? fallbackRates?.eur ?? null;
   if (!usd || !eur) {
     throw new Error("Failed to parse USD/EUR rates from Minfin interbank page");
   }
