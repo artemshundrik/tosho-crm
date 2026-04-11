@@ -448,6 +448,101 @@ const parseDesignOutputMetaFiles = (value: unknown): DesignOutputMetaFile[] => {
     .filter(Boolean) as DesignOutputMetaFile[];
 };
 
+const filterSelectedOutputIds = (value: unknown, removedIds: Set<string>) =>
+  Array.isArray(value)
+    ? value
+        .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+        .filter((entry) => !removedIds.has(entry))
+    : [];
+
+const filterSelectedOutputLabels = (value: unknown, removedIds: Set<string>) => {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([key]) => !removedIds.has(key))
+  );
+};
+
+function removeDesignOutputReferencesFromMetadata(
+  metadata: Record<string, unknown>,
+  storageBucket: string,
+  storagePath: string
+) {
+  const files = parseDesignOutputMetaFiles(metadata.design_output_files);
+  const remainingFiles = files.filter(
+    (file) => !(file.storage_bucket === storageBucket && file.storage_path === storagePath)
+  );
+  if (remainingFiles.length === files.length) return null;
+
+  const removedIds = new Set(
+    files
+      .filter((file) => file.storage_bucket === storageBucket && file.storage_path === storagePath)
+      .map((file) => file.id)
+  );
+  const nextMetadata: Record<string, unknown> = {
+    ...metadata,
+    design_output_files: remainingFiles.map((file) => ({
+      id: file.id,
+      file_name: file.file_name,
+      file_size: file.file_size,
+      mime_type: file.mime_type,
+      storage_bucket: file.storage_bucket,
+      storage_path: file.storage_path,
+      uploaded_by: file.uploaded_by,
+      created_at: file.created_at,
+    })),
+    selected_design_output_file_ids: filterSelectedOutputIds(metadata.selected_design_output_file_ids, removedIds),
+    selected_visual_output_file_ids: filterSelectedOutputIds(metadata.selected_visual_output_file_ids, removedIds),
+    selected_layout_output_file_ids: filterSelectedOutputIds(metadata.selected_layout_output_file_ids, removedIds),
+    selected_visual_output_labels: filterSelectedOutputLabels(metadata.selected_visual_output_labels, removedIds),
+    selected_layout_output_labels: filterSelectedOutputLabels(metadata.selected_layout_output_labels, removedIds),
+  };
+
+  if (
+    metadata.selected_design_output_storage_bucket === storageBucket &&
+    metadata.selected_design_output_storage_path === storagePath
+  ) {
+    nextMetadata.selected_design_output_file_id = null;
+    nextMetadata.selected_design_output_file_name = null;
+    nextMetadata.selected_design_output_storage_bucket = null;
+    nextMetadata.selected_design_output_storage_path = null;
+    nextMetadata.selected_design_output_mime_type = null;
+    nextMetadata.selected_design_output_file_size = null;
+    nextMetadata.selected_design_output_selected_at = null;
+    nextMetadata.selected_design_output_selected_by = null;
+    nextMetadata.selected_design_output_selected_by_label = null;
+  }
+  if (
+    metadata.selected_visual_output_storage_bucket === storageBucket &&
+    metadata.selected_visual_output_storage_path === storagePath
+  ) {
+    nextMetadata.selected_visual_output_file_id = null;
+    nextMetadata.selected_visual_output_file_name = null;
+    nextMetadata.selected_visual_output_storage_bucket = null;
+    nextMetadata.selected_visual_output_storage_path = null;
+    nextMetadata.selected_visual_output_mime_type = null;
+    nextMetadata.selected_visual_output_file_size = null;
+    nextMetadata.selected_visual_output_selected_at = null;
+    nextMetadata.selected_visual_output_selected_by = null;
+    nextMetadata.selected_visual_output_selected_by_label = null;
+  }
+  if (
+    metadata.selected_layout_output_storage_bucket === storageBucket &&
+    metadata.selected_layout_output_storage_path === storagePath
+  ) {
+    nextMetadata.selected_layout_output_file_id = null;
+    nextMetadata.selected_layout_output_file_name = null;
+    nextMetadata.selected_layout_output_storage_bucket = null;
+    nextMetadata.selected_layout_output_storage_path = null;
+    nextMetadata.selected_layout_output_mime_type = null;
+    nextMetadata.selected_layout_output_file_size = null;
+    nextMetadata.selected_layout_output_selected_at = null;
+    nextMetadata.selected_layout_output_selected_by = null;
+    nextMetadata.selected_layout_output_selected_by_label = null;
+  }
+
+  return nextMetadata;
+}
+
 const normalizePartyMatch = (value?: string | null) =>
   (value ?? "")
     .trim()
@@ -3508,6 +3603,32 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .delete()
         .eq("id", attachment.id);
       if (error) throw error;
+
+      if (quoteId && attachment.storageBucket && attachment.storagePath) {
+        const { data: linkedTasks, error: linkedTasksError } = await supabase
+          .from("activity_log")
+          .select("id,metadata")
+          .eq("action", "design_task")
+          .eq("team_id", teamId)
+          .filter("metadata->>quote_id", "eq", quoteId);
+        if (linkedTasksError) throw linkedTasksError;
+
+        for (const row of ((linkedTasks ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>)) {
+          const metadata = parseActivityMetadata(row.metadata);
+          const nextMetadata = removeDesignOutputReferencesFromMetadata(
+            metadata,
+            attachment.storageBucket,
+            attachment.storagePath
+          );
+          if (!nextMetadata) continue;
+          const { error: syncError } = await supabase
+            .from("activity_log")
+            .update({ metadata: nextMetadata })
+            .eq("id", row.id)
+            .eq("team_id", teamId);
+          if (syncError) throw syncError;
+        }
+      }
 
       setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
       setDeleteAttachmentOpen(false);

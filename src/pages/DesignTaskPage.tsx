@@ -1138,6 +1138,7 @@ export default function DesignTaskPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingTask, setDeletingTask] = useState(false);
   const objectUrlRegistryRef = useRef<Set<string>>(new Set());
+  const ghostOutputReconciledTaskIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
@@ -3134,6 +3135,7 @@ export default function DesignTaskPage() {
     metadata: Record<string, unknown>,
     nextSelectedByKind: Record<DesignOutputKind, string[]>,
     actorLabel: string,
+    files = designOutputFiles,
     labelOverrides?: Partial<Record<DesignOutputKind, Record<string, string>>>
   ) => {
     const nextMetadata = { ...metadata };
@@ -3157,7 +3159,7 @@ export default function DesignTaskPage() {
         return acc;
       }, {});
       const primarySelected =
-        designOutputFiles.find((file) => file.id === normalizedSelectedIds[0] && file.output_kind === kind) ?? null;
+        files.find((file) => file.id === normalizedSelectedIds[0] && file.output_kind === kind) ?? null;
       const prefix = kind === "visualization" ? "selected_visual_output" : "selected_layout_output";
       nextMetadata[`${prefix}_file_ids`] = normalizedSelectedIds;
       nextMetadata[`${prefix}_labels`] = nextLabels;
@@ -3172,7 +3174,7 @@ export default function DesignTaskPage() {
       nextMetadata[`${prefix}_selected_by_label`] = normalizedSelectedIds.length > 0 ? actorLabel : null;
     });
 
-    const primarySelected = designOutputFiles.find((file) => file.id === unionSelectedIds[0]) ?? null;
+    const primarySelected = files.find((file) => file.id === unionSelectedIds[0]) ?? null;
     nextMetadata.selected_design_output_file_ids = unionSelectedIds;
     nextMetadata.selected_design_output_file_id = primarySelected?.id ?? null;
     nextMetadata.selected_design_output_file_name = primarySelected?.file_name ?? null;
@@ -3185,6 +3187,89 @@ export default function DesignTaskPage() {
     nextMetadata.selected_design_output_selected_by_label = unionSelectedIds.length > 0 ? actorLabel : null;
     return nextMetadata;
   };
+
+  const reconcileGhostDesignOutputs = useCallback(async () => {
+    if (!task || !effectiveTeamId || !isUuid(task.quoteId) || designOutputFiles.length === 0) return;
+    if (ghostOutputReconciledTaskIdRef.current === task.id) return;
+
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .select("storage_bucket,storage_path")
+      .eq("quote_id", task.quoteId);
+    if (error) throw error;
+
+    const quoteAttachmentKeys = new Set(
+      ((data as Array<{ storage_bucket?: string | null; storage_path?: string | null }> | null) ?? [])
+        .map((row) =>
+          typeof row.storage_bucket === "string" && typeof row.storage_path === "string"
+            ? `${row.storage_bucket}:${row.storage_path}`
+            : null
+        )
+        .filter((value): value is string => Boolean(value))
+    );
+    const ghostFiles = designOutputFiles.filter(
+      (file) =>
+        file.storage_bucket &&
+        file.storage_path &&
+        !quoteAttachmentKeys.has(`${file.storage_bucket}:${file.storage_path}`)
+    );
+    if (ghostFiles.length === 0) {
+      ghostOutputReconciledTaskIdRef.current = task.id;
+      return;
+    }
+
+    const removedIds = new Set(ghostFiles.map((file) => file.id));
+    const nextFiles = designOutputFiles.filter((file) => !removedIds.has(file.id));
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
+      visualization: getSelectedDesignOutputFileIdsFromMetadata(task.metadata ?? {}, "visualization").filter(
+        (id) => !removedIds.has(id)
+      ),
+      layout: getSelectedDesignOutputFileIdsFromMetadata(task.metadata ?? {}, "layout").filter(
+        (id) => !removedIds.has(id)
+      ),
+    };
+    const nextMetadataPatch = buildOutputSelectionMetadata(
+      task.metadata ?? {},
+      nextSelectedByKind,
+      actorLabel,
+      nextFiles
+    );
+
+    await persistDesignOutputs(nextFiles, designOutputLinks, {
+      metadataPatch: nextMetadataPatch,
+    });
+    setDesignOutputFiles(nextFiles);
+    setFileAccessUrlByKey((prev) => {
+      const next = { ...prev };
+      ghostFiles.forEach((file) => {
+        if (!file.storage_bucket || !file.storage_path) return;
+        delete next[`${file.storage_bucket}:${file.storage_path}`];
+        delete next[`${file.storage_bucket}:${getAttachmentVariantPath(file.storage_path, "preview")}`];
+        delete next[`${file.storage_bucket}:${getAttachmentVariantPath(file.storage_path, "thumb")}`];
+      });
+      return next;
+    });
+    ghostOutputReconciledTaskIdRef.current = task.id;
+    toast.warning("Знайдено биті файли у матеріалах", {
+      description: `Прибрано ${ghostFiles.length} запис(и), яких уже немає в quote attachments.`,
+    });
+  }, [
+    buildOutputSelectionMetadata,
+    designOutputFiles,
+    designOutputLinks,
+    effectiveTeamId,
+    persistDesignOutputs,
+    task,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (ghostOutputReconciledTaskIdRef.current && ghostOutputReconciledTaskIdRef.current !== task?.id) {
+      ghostOutputReconciledTaskIdRef.current = null;
+    }
+  }, [task?.id]);
 
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
@@ -3636,6 +3721,12 @@ export default function DesignTaskPage() {
       toast.error(getErrorMessage(e, "Не вдалося видалити посилання"));
     }
   };
+
+  useEffect(() => {
+    void reconcileGhostDesignOutputs().catch((error) => {
+      console.warn("Failed to reconcile ghost design outputs", error);
+    });
+  }, [reconcileGhostDesignOutputs]);
 
   const handleCreateDesignOutputGroup = async () => {
     try {
@@ -6002,6 +6093,7 @@ export default function DesignTaskPage() {
           layout: [...selectedLayoutOutputFileIds],
         },
         actorLabel,
+        undefined,
         {
           visualization: Object.fromEntries(
             selectedVisualizationOutputFileIds
