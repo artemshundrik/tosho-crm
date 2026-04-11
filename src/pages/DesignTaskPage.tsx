@@ -8547,7 +8547,7 @@ export default function DesignTaskPage() {
           if (!open) setDropboxFolderError(null);
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary text-primary-foreground shadow-[0_12px_28px_-18px_hsl(var(--primary)/0.7)]">
@@ -8559,7 +8559,7 @@ export default function DesignTaskPage() {
               Назва папки підставлена з задачі автоматично, але її можна змінити перед експортом.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
             <div className="space-y-1.5">
               <Label htmlFor="dropbox-folder-name">Назва папки замовлення</Label>
               <Input
@@ -8673,7 +8673,7 @@ export default function DesignTaskPage() {
               </div>
             ) : null}
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/60 pt-4">
             <Button variant="outline" onClick={() => setDropboxFolderDialogOpen(false)} disabled={dropboxExporting}>
               Скасувати
             </Button>
