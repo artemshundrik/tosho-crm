@@ -168,19 +168,6 @@ cd /Users/artem/Projects/tosho-crm
 node scripts/upload-backups-dropbox.mjs
 ```
 
-## 8. Offsite copy to Backblaze B2 (optional fallback)
-
-If you want a second offsite copy outside Dropbox, the old B2 upload path still works:
-
-```bash
-cat >> /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
-export B2_S3_ENDPOINT='https://s3.eu-central-003.backblazeb2.com'
-export B2_BUCKET='tosho-crm-backups'
-export B2_KEY_ID='REPLACE_WITH_B2_KEY_ID'
-export B2_APPLICATION_KEY='REPLACE_WITH_B2_APP_KEY'
-EOF
-```
-
 ## 8. Update LaunchAgent command
 
 Use:
