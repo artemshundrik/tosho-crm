@@ -20,7 +20,9 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=900, s-maxage=900, stale-while-revalidate=3600",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
     },
     body: JSON.stringify(body),
   };

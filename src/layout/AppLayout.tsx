@@ -140,6 +140,9 @@ function getFxSourceText(sourceLabel: string | null, hasRates: boolean) {
   return "Ще не оновлено на Мінфіні";
 }
 
+const FX_RATES_STORAGE_KEY = "tosho_fx_rates";
+const FX_RATES_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
 async function fetchMinfinFxRates(signal?: AbortSignal) {
   const endpoints = import.meta.env.DEV
     ? ["/api/fx-rates", "/.netlify/functions/fx-rates"]
@@ -976,7 +979,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       setUsdUahSourceLabel(sourceLabel);
       try {
         localStorage.setItem(
-          "tosho_fx_rates",
+          FX_RATES_STORAGE_KEY,
           JSON.stringify({
             usdUah: nextUsdUahRate,
             eurUah: nextEurUahRate,
@@ -1004,7 +1007,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("tosho_fx_rates");
+      const raw = localStorage.getItem(FX_RATES_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         usdUah?: unknown;
@@ -1014,6 +1017,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         updatedAt?: unknown;
         sourceLabel?: unknown;
       };
+      const cachedAt =
+        typeof parsed.updatedAt === "string" && !Number.isNaN(new Date(parsed.updatedAt).getTime())
+          ? new Date(parsed.updatedAt).getTime()
+          : null;
+      if (cachedAt === null || Date.now() - cachedAt > FX_RATES_MAX_AGE_MS) {
+        localStorage.removeItem(FX_RATES_STORAGE_KEY);
+        return;
+      }
       if (typeof parsed.usdUah === "number" && Number.isFinite(parsed.usdUah) && parsed.usdUah > 0) {
         setUsdUahRate(parsed.usdUah);
       }
