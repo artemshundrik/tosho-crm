@@ -53,10 +53,34 @@ export const handler = async (event: HttpEvent) => {
   if (files.length === 0) return jsonResponse(400, { error: "files are required" });
 
   try {
+    const finalFolderPath = dropboxService.joinDropboxPath(projectPath, "Фінал");
+    const archiveFolderPath = dropboxService.joinDropboxPath(projectPath, "Архів");
     await Promise.all([
-      dropboxService.createFolder(dropboxService.joinDropboxPath(projectPath, "Фінал")),
-      dropboxService.createFolder(dropboxService.joinDropboxPath(projectPath, "Архів")),
+      dropboxService.createFolder(finalFolderPath),
+      dropboxService.createFolder(archiveFolderPath),
     ]);
+
+    const desiredFinalPaths = new Set(
+      files
+        .filter((file) => file.role === "final")
+        .map((file) => file.targetPath?.trim())
+        .filter((value): value is string => !!value)
+    );
+
+    try {
+      const existingFinalEntries = await dropboxService.listFolder(finalFolderPath);
+      const staleFinalEntries = existingFinalEntries.entries.filter((entry) => {
+        if (entry[".tag"] !== "file") return false;
+        const path = typeof entry.path_display === "string" ? entry.path_display.trim() : "";
+        return !!path && !desiredFinalPaths.has(path);
+      });
+      for (const entry of staleFinalEntries) {
+        if (!entry.path_display) continue;
+        await dropboxService.deleteFile(entry.path_display);
+      }
+    } catch {
+      // Do not fail the whole export if final-folder cleanup could not be completed.
+    }
 
     const uploaded = [];
     for (const file of files) {

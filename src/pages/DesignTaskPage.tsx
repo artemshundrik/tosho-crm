@@ -779,6 +779,14 @@ const buildDropboxExportLabelFallback = (fileName?: string | null, fallback = "�
   return cleaned || fallback;
 };
 
+const buildDropboxFinalLabelDefault = (
+  fileName: string | null | undefined,
+  options?: { multiple?: boolean; index?: number }
+) => {
+  if (!options?.multiple) return "";
+  return buildDropboxExportLabelFallback(fileName, `${String((options?.index ?? 0) + 1).padStart(2, "0")}`);
+};
+
 const canPreviewImage = (extension?: string | null) =>
   !!extension && ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "SVG"].includes(extension);
 
@@ -5220,11 +5228,12 @@ export default function DesignTaskPage() {
     (["visualization", "layout"] as DesignOutputKind[]).forEach((kind) => {
       const selectedIds = kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
       const selectedLabels = kind === "visualization" ? selectedVisualizationOutputLabels : selectedLayoutOutputLabels;
+      const multiple = selectedIds.length > 1;
       selectedIds.forEach((fileId, index) => {
         const file = designOutputFiles.find((entry) => entry.id === fileId && entry.output_kind === kind);
         nextDrafts[fileId] =
           selectedLabels[fileId] ??
-          buildDropboxExportLabelFallback(file?.file_name, `${String(index + 1).padStart(2, "0")}`);
+          buildDropboxFinalLabelDefault(file?.file_name, { multiple, index });
       });
     });
     setDropboxFinalLabelDrafts((prev) => {
@@ -5526,8 +5535,9 @@ export default function DesignTaskPage() {
       const selectedSet = new Set(selectedIds);
       const finalFiles = files.filter((file) => selectedSet.has(file.id));
       const archiveFiles = files.filter((file) => !selectedSet.has(file.id));
+      const multipleFinals = finalFiles.length > 1;
       const finalLabels = finalFiles.reduce<Record<string, string>>((acc, file, index) => {
-        const fallback = buildDropboxExportLabelFallback(file.file_name, `${String(index + 1).padStart(2, "0")}`);
+        const fallback = buildDropboxFinalLabelDefault(file.file_name, { multiple: multipleFinals, index });
         const draftValue = toNonEmptyString(dropboxFinalLabelDrafts[file.id]);
         acc[file.id] = draftValue ?? fallback;
         return acc;
@@ -5665,7 +5675,7 @@ export default function DesignTaskPage() {
       messages.push(`оновиться ${addedOrChanged} ${addedOrChanged === 1 ? "файл" : "файли"}`);
     }
     if (removed > 0) {
-      messages.push(`з експорту зникне ${removed} ${removed === 1 ? "файл" : "файли"}`);
+      messages.push(`з папки Фінал буде прибрано ${removed} ${removed === 1 ? "файл" : "файли"}`);
     }
     return messages;
   }, [currentDropboxPlanSignature, dropboxDisplayedFolderName, latestDropboxFolderName, latestDropboxPlanSignature]);
@@ -5994,24 +6004,30 @@ export default function DesignTaskPage() {
         actorLabel,
         {
           visualization: Object.fromEntries(
-            selectedVisualizationOutputFileIds.map((fileId, index) => [
-              fileId,
-              toNonEmptyString(dropboxFinalLabelDrafts[fileId]) ??
-                buildDropboxExportLabelFallback(
-                  designOutputFiles.find((file) => file.id === fileId && file.output_kind === "visualization")?.file_name,
-                  `${String(index + 1).padStart(2, "0")}`
-                ),
-            ])
+            selectedVisualizationOutputFileIds
+              .map((fileId, index) => {
+                const value =
+                  toNonEmptyString(dropboxFinalLabelDrafts[fileId]) ??
+                  buildDropboxFinalLabelDefault(
+                    designOutputFiles.find((file) => file.id === fileId && file.output_kind === "visualization")?.file_name,
+                    { multiple: selectedVisualizationOutputFileIds.length > 1, index }
+                  );
+                return value ? ([fileId, value] as const) : null;
+              })
+              .filter((entry): entry is readonly [string, string] => !!entry)
           ),
           layout: Object.fromEntries(
-            selectedLayoutOutputFileIds.map((fileId, index) => [
-              fileId,
-              toNonEmptyString(dropboxFinalLabelDrafts[fileId]) ??
-                buildDropboxExportLabelFallback(
-                  designOutputFiles.find((file) => file.id === fileId && file.output_kind === "layout")?.file_name,
-                  `${String(index + 1).padStart(2, "0")}`
-                ),
-            ])
+            selectedLayoutOutputFileIds
+              .map((fileId, index) => {
+                const value =
+                  toNonEmptyString(dropboxFinalLabelDrafts[fileId]) ??
+                  buildDropboxFinalLabelDefault(
+                    designOutputFiles.find((file) => file.id === fileId && file.output_kind === "layout")?.file_name,
+                    { multiple: selectedLayoutOutputFileIds.length > 1, index }
+                  );
+                return value ? ([fileId, value] as const) : null;
+              })
+              .filter((entry): entry is readonly [string, string] => !!entry)
           ),
         }
       );
@@ -7222,7 +7238,7 @@ export default function DesignTaskPage() {
                         <div className="font-medium">{dropboxStatusLabel}</div>
                         <div className="mt-1 text-xs opacity-80">
                           {dropboxFolderReachable === false
-                            ? "Папка або посилання більше не резолвиться через Dropbox API. Експорт треба оновити."
+                            ? "CRM більше не може відкрити цю папку або посилання в Dropbox. Експорт треба оновити."
                             : latestDropboxExportedLabel
                               ? `Останній експорт: ${latestDropboxExportedLabel}`
                               : "Після першого експорту тут з’явиться стан синхронізації."}
@@ -8497,7 +8513,7 @@ export default function DesignTaskPage() {
                                 <div className="text-sm font-medium text-foreground">{file.file_name}</div>
                                 <div className="mt-2 space-y-1.5">
                                   <Label htmlFor={`dropbox-final-label-${file.id}`} className="text-xs text-muted-foreground">
-                                    Мітка фіналу
+                                    {plan.finalFiles.length > 1 ? "Мітка фіналу" : "Мітка фіналу, якщо потрібна"}
                                   </Label>
                                   <Input
                                     id={`dropbox-final-label-${file.id}`}
@@ -8508,8 +8524,17 @@ export default function DesignTaskPage() {
                                         [file.id]: event.target.value,
                                       }))
                                     }
-                                    placeholder={`Напр. ${index === 0 ? "лицьова" : `нанесення ${index + 1}`}`}
+                                    placeholder={
+                                      plan.finalFiles.length > 1
+                                        ? `Напр. ${index === 0 ? "лицьова" : `нанесення ${index + 1}`}`
+                                        : "Напр. лицьова або back"
+                                    }
                                   />
+                                  <div className="text-[11px] leading-5 text-muted-foreground">
+                                    {plan.finalFiles.length > 1
+                                      ? "Для кількох фінальних файлів мітка допомагає дати їм різні й читабельні назви в Dropbox."
+                                      : "Якщо поле порожнє, файл піде в Dropbox без додаткового суфікса."}
+                                  </div>
                                 </div>
                               </div>
                             ))}
