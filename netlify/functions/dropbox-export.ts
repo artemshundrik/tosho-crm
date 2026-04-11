@@ -70,7 +70,7 @@ export const handler = async (event: HttpEvent) => {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const metadata = await dropboxService.uploadFile(Buffer.from(arrayBuffer), targetPath);
+      const metadata = await dropboxService.uploadFile(Buffer.from(arrayBuffer), targetPath, { overwrite: true });
       const sharedLink = await dropboxService.getOrCreateSharedLink(targetPath);
       uploaded.push({
         sourceFileId: file.sourceFileId ?? null,

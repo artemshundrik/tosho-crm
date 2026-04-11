@@ -371,12 +371,16 @@ async function getOrCreateSharedLink(dropboxPath: string) {
   return await createSharedLink(dropboxPath);
 }
 
-async function uploadFile(buffer: ArrayBuffer | Uint8Array | Buffer, dropboxPath: string) {
+async function uploadFile(
+  buffer: ArrayBuffer | Uint8Array | Buffer,
+  dropboxPath: string,
+  options?: { overwrite?: boolean }
+) {
   const normalizedPath = normalizeDropboxPath(dropboxPath);
   return await dropboxContentUpload<DropboxMetadata>("/files/upload", buffer, {
     path: normalizedPath,
-    mode: "add",
-    autorename: true,
+    mode: options?.overwrite ? "overwrite" : "add",
+    autorename: !options?.overwrite,
     mute: true,
     strict_conflict: false,
   });

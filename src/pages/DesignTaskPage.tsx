@@ -307,6 +307,16 @@ type DropboxExportPlanFile = {
   archiveVersion?: number;
 };
 
+type DropboxExportMetadataFile = {
+  source_file_id?: string | null;
+  file_name?: string | null;
+  output_kind?: string | null;
+  role?: string | null;
+  dropbox_path?: string | null;
+  dropbox_shared_url?: string | null;
+  exported_at?: string | null;
+};
+
 const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
   visualization: "Візуал",
   layout: "Макет",
@@ -1037,6 +1047,7 @@ export default function DesignTaskPage() {
   const [dropboxFolderDraft, setDropboxFolderDraft] = useState("");
   const [dropboxFolderError, setDropboxFolderError] = useState<string | null>(null);
   const [dropboxExporting, setDropboxExporting] = useState(false);
+  const [dropboxFolderReachable, setDropboxFolderReachable] = useState<boolean | null>(null);
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [partyCardOpen, setPartyCardOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
@@ -5418,12 +5429,17 @@ export default function DesignTaskPage() {
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
     [quoteItem?.name, task?.title]
   );
+  const latestDropboxFolderName =
+    typeof task?.metadata?.dropbox_order_folder_name === "string" && task.metadata.dropbox_order_folder_name.trim()
+      ? normalizeDropboxFolderNameDraft(task.metadata.dropbox_order_folder_name)
+      : null;
   const dropboxClientLabel = useMemo(() => {
     const raw = (task?.customerName ?? "").trim();
     if (!raw) return "Замовник";
     const beforeParenthesis = raw.split("(")[0]?.trim();
     return sanitizeDropboxNameSegment(beforeParenthesis || raw, "Замовник");
   }, [task?.customerName]);
+  const dropboxDisplayedFolderName = latestDropboxFolderName || dropboxFolderNameDefault;
   const dropboxOrderNumber = useMemo(
     () => sanitizeDropboxNameSegment(task?.quoteNumber?.trim() || getTaskDisplayNumber(task), "TS"),
     [task]
@@ -5503,6 +5519,104 @@ export default function DesignTaskPage() {
     typeof task?.metadata?.dropbox_order_folder_shared_url === "string" && task.metadata.dropbox_order_folder_shared_url.trim()
       ? task.metadata.dropbox_order_folder_shared_url.trim()
       : null;
+  const latestDropboxExportedAt =
+    typeof task?.metadata?.dropbox_last_exported_at === "string" && task.metadata.dropbox_last_exported_at.trim()
+      ? task.metadata.dropbox_last_exported_at.trim()
+      : null;
+  const latestDropboxExports = useMemo(() => {
+    const raw = Array.isArray(task?.metadata?.dropbox_exports) ? task.metadata.dropbox_exports : [];
+    return raw
+      .filter((entry): entry is DropboxExportMetadataFile => !!entry && typeof entry === "object")
+      .map((entry) => ({
+        source_file_id: typeof entry.source_file_id === "string" ? entry.source_file_id : null,
+        file_name: typeof entry.file_name === "string" ? entry.file_name : null,
+        output_kind: typeof entry.output_kind === "string" ? entry.output_kind : null,
+        role: typeof entry.role === "string" ? entry.role : null,
+      }))
+      .filter((entry) => entry.source_file_id && entry.file_name && entry.output_kind && entry.role);
+  }, [task?.metadata?.dropbox_exports]);
+  const buildDropboxPlanSignature = useCallback(
+    (folderName: string, entries: DropboxExportPlanFile[]) =>
+      entries
+        .map((entry) =>
+          [
+            entry.file.id,
+            entry.role,
+            entry.outputKind,
+            buildDropboxExportFileName({
+              clientLabel: dropboxClientLabel,
+              outputKind: entry.outputKind,
+              projectName: folderName,
+              orderNumber: dropboxOrderNumber,
+              dateLabel: dropboxDateLabel,
+              extension: getDropboxFileExtension(entry.file.file_name),
+              archiveVersion: entry.role === "archive" ? entry.archiveVersion : undefined,
+            }),
+          ].join("|")
+        )
+        .sort()
+        .join("::"),
+    [dropboxClientLabel, dropboxDateLabel, dropboxOrderNumber]
+  );
+  const latestDropboxPlanSignature = useMemo(
+    () =>
+      latestDropboxExports
+        .map((entry) => [entry.source_file_id, entry.role, entry.output_kind, entry.file_name].join("|"))
+        .sort()
+        .join("::"),
+    [latestDropboxExports]
+  );
+  const currentDropboxPlanSignature = useMemo(
+    () => buildDropboxPlanSignature(dropboxDisplayedFolderName, dropboxExportPlan),
+    [buildDropboxPlanSignature, dropboxDisplayedFolderName, dropboxExportPlan]
+  );
+  const dropboxPlanDiffSummary = useMemo(() => {
+    const currentEntries = new Set(currentDropboxPlanSignature ? currentDropboxPlanSignature.split("::").filter(Boolean) : []);
+    const latestEntries = new Set(latestDropboxPlanSignature ? latestDropboxPlanSignature.split("::").filter(Boolean) : []);
+    let addedOrChanged = 0;
+    let removed = 0;
+    currentEntries.forEach((entry) => {
+      if (!latestEntries.has(entry)) addedOrChanged += 1;
+    });
+    latestEntries.forEach((entry) => {
+      if (!currentEntries.has(entry)) removed += 1;
+    });
+    const messages: string[] = [];
+    if (latestDropboxFolderName && latestDropboxFolderName !== dropboxDisplayedFolderName) {
+      messages.push(`назва папки зміниться на «${dropboxDisplayedFolderName}»`);
+    }
+    if (addedOrChanged > 0) {
+      messages.push(`оновиться ${addedOrChanged} ${addedOrChanged === 1 ? "файл" : "файли"}`);
+    }
+    if (removed > 0) {
+      messages.push(`з експорту зникне ${removed} ${removed === 1 ? "файл" : "файли"}`);
+    }
+    return messages;
+  }, [currentDropboxPlanSignature, dropboxDisplayedFolderName, latestDropboxFolderName, latestDropboxPlanSignature]);
+  const dropboxSyncState = useMemo(() => {
+    const hasExportedState = !!latestDropboxFolderPath && latestDropboxExports.length > 0;
+    if (!hasExportedState) return "not_exported" as const;
+    if (dropboxFolderReachable === false) return "stale" as const;
+    return latestDropboxPlanSignature === currentDropboxPlanSignature ? ("synced" as const) : ("stale" as const);
+  }, [currentDropboxPlanSignature, dropboxFolderReachable, latestDropboxExports.length, latestDropboxFolderPath, latestDropboxPlanSignature]);
+  const dropboxStatusLabel =
+    dropboxSyncState === "synced"
+      ? "У Dropbox актуально"
+      : dropboxSyncState === "stale"
+        ? "Є нові зміни"
+        : "Ще не експортовано";
+  const dropboxStatusToneClass =
+    dropboxSyncState === "synced"
+      ? "border-success/20 bg-success/5 text-success-foreground"
+      : dropboxSyncState === "stale"
+        ? "border-amber-300/50 bg-amber-50/90 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        : "border-border/60 bg-background/70 text-muted-foreground";
+  const latestDropboxExportedLabel = useMemo(() => {
+    if (!latestDropboxExportedAt) return null;
+    const date = new Date(latestDropboxExportedAt);
+    if (Number.isNaN(date.getTime())) return null;
+    return format(date, "dd.MM.yyyy, HH:mm");
+  }, [latestDropboxExportedAt]);
 
   const inspectDropboxFolder = useCallback(async (path: string) => {
     const response = await fetch(
@@ -5515,6 +5629,27 @@ export default function DesignTaskPage() {
     return payload.sharedUrl?.trim() || "";
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    if (!latestDropboxFolderPath) {
+      setDropboxFolderReachable(null);
+      return () => {
+        active = false;
+      };
+    }
+    setDropboxFolderReachable(null);
+    void inspectDropboxFolder(latestDropboxFolderPath)
+      .then(() => {
+        if (active) setDropboxFolderReachable(true);
+      })
+      .catch(() => {
+        if (active) setDropboxFolderReachable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [inspectDropboxFolder, latestDropboxFolderPath]);
+
   const openDropboxOrderFolder = useCallback(async () => {
     const targetUrl = latestDropboxFolderSharedUrl || (latestDropboxFolderPath ? await inspectDropboxFolder(latestDropboxFolderPath) : "");
     if (!targetUrl) {
@@ -5525,10 +5660,10 @@ export default function DesignTaskPage() {
   }, [inspectDropboxFolder, latestDropboxFolderPath, latestDropboxFolderSharedUrl]);
 
   const openDropboxExportDialog = useCallback(() => {
-    setDropboxFolderDraft(dropboxFolderNameDefault);
+    setDropboxFolderDraft(dropboxDisplayedFolderName);
     setDropboxFolderError(null);
     setDropboxFolderDialogOpen(true);
-  }, [dropboxFolderNameDefault]);
+  }, [dropboxDisplayedFolderName]);
 
   const createDropboxClientFolder = useCallback(
     async (options?: { openExportDialog?: boolean }) => {
@@ -5610,7 +5745,7 @@ export default function DesignTaskPage() {
         setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
         toast.success("Dropbox-папку замовника створено");
         if (options?.openExportDialog) {
-          setDropboxFolderDraft(dropboxFolderNameDefault);
+          setDropboxFolderDraft(dropboxDisplayedFolderName);
           setDropboxFolderDialogOpen(true);
         }
       } catch (error) {
@@ -5650,7 +5785,7 @@ export default function DesignTaskPage() {
           setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
           toast.success("Dropbox-папку замовника підхоплено");
           if (options?.openExportDialog) {
-            setDropboxFolderDraft(dropboxFolderNameDefault);
+            setDropboxFolderDraft(dropboxDisplayedFolderName);
             setDropboxFolderDialogOpen(true);
           }
           return;
@@ -5663,7 +5798,7 @@ export default function DesignTaskPage() {
         setDropboxExporting(false);
       }
     },
-    [dropboxFolderNameDefault, ensureCanEdit, inspectDropboxFolder, task?.customerId, task?.customerName]
+    [dropboxDisplayedFolderName, ensureCanEdit, inspectDropboxFolder, task?.customerId, task?.customerName]
   );
 
   const handleExportToDropbox = useCallback(async () => {
@@ -6872,7 +7007,7 @@ export default function DesignTaskPage() {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3">
                       {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
                         const plan = dropboxPlanByKind[kind];
                         const finalFile = plan.finalFiles[0] ?? null;
@@ -6932,11 +7067,11 @@ export default function DesignTaskPage() {
                           Папка замовлення
                         </div>
                         <div className="rounded-xl bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">
-                          {dropboxFolderNameDefault}
+                          {dropboxDisplayedFolderName}
                         </div>
                         <div className="mt-2 text-xs leading-5 text-muted-foreground">
                           <span className="font-medium text-foreground">
-                            {`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxFolderNameDefault}`}
+                            {`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxDisplayedFolderName}`}
                           </span>
                         </div>
                       </div>
@@ -6958,30 +7093,77 @@ export default function DesignTaskPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Button
-                        className="w-full gap-2"
-                        disabled={dropboxExporting || (!dropboxCanExport && !!dropboxClientPath)}
-                        onClick={dropboxClientPath ? openDropboxExportDialog : () => void createDropboxClientFolder({ openExportDialog: true })}
-                      >
-                        {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
-                        {dropboxClientPath ? "Перенести в Dropbox" : "Створити папку Dropbox і продовжити"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full gap-2"
-                        disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
-                        onClick={() => void openDropboxOrderFolder()}
-                      >
-                        <FolderOpen className="h-4 w-4" />
-                        Відкрити папку замовлення
-                      </Button>
+                      <div className={cn("rounded-2xl border px-4 py-3 text-sm", dropboxStatusToneClass)}>
+                        <div className="font-medium">{dropboxStatusLabel}</div>
+                        <div className="mt-1 text-xs opacity-80">
+                          {dropboxFolderReachable === false
+                            ? "Папка або посилання більше не резолвиться через Dropbox API. Експорт треба оновити."
+                            : latestDropboxExportedLabel
+                              ? `Останній експорт: ${latestDropboxExportedLabel}`
+                              : "Після першого експорту тут з’явиться стан синхронізації."}
+                        </div>
+                        {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
+                          <div className="mt-2 text-xs opacity-80">
+                            Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
+                          </div>
+                        ) : null}
+                      </div>
+                      {dropboxClientPath && dropboxSyncState === "synced" ? (
+                        <>
+                          <Button
+                            className="w-full gap-2"
+                            disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
+                            onClick={() => void openDropboxOrderFolder()}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                            Відкрити папку замовлення
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full gap-2"
+                            disabled={dropboxExporting || !dropboxCanExport}
+                            onClick={openDropboxExportDialog}
+                          >
+                            {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                            Оновити в Dropbox
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            className="w-full gap-2"
+                            disabled={dropboxExporting || (!dropboxCanExport && !!dropboxClientPath)}
+                            onClick={dropboxClientPath ? openDropboxExportDialog : () => void createDropboxClientFolder({ openExportDialog: true })}
+                          >
+                            {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                            {dropboxClientPath
+                              ? dropboxSyncState === "stale"
+                                ? "Оновити в Dropbox"
+                                : "Перенести в Dropbox"
+                              : "Створити папку Dropbox і продовжити"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full gap-2"
+                            disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
+                            onClick={() => void openDropboxOrderFolder()}
+                          >
+                            <FolderOpen className="h-4 w-4" />
+                            Відкрити папку замовлення
+                          </Button>
+                        </>
+                      )}
                       {!dropboxClientPath ? (
                         <div className="text-xs leading-5 text-muted-foreground">
                           Якщо папка замовника ще не створена, її можна підготувати прямо тут. Після цього відкриється модалка експорту.
                         </div>
                       ) : (
                         <div className="text-xs leading-5 text-muted-foreground">
-                          Експорт підготує папку замовлення, збереже фінальні файли окремо від архіву й запам’ятає шлях у задачі.
+                          {dropboxSyncState === "synced"
+                            ? "Dropbox вже містить актуальний фінал і архів для цієї задачі. Основна дія тепер — відкрити папку, а оновлення доступне окремо."
+                            : dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0
+                              ? `Оновлення ${dropboxPlanDiffSummary.join(", ")}.`
+                              : "Експорт підготує папку замовлення, збереже фінальні файли окремо від архіву й запам’ятає шлях у задачі."}
                         </div>
                       )}
                     </div>
@@ -8205,6 +8387,12 @@ export default function DesignTaskPage() {
               })}
             </div>
 
+            {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
+              <div className="rounded-2xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
+              </div>
+            ) : null}
+
             {dropboxFolderError ? (
               <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                 {dropboxFolderError}
@@ -8217,7 +8405,7 @@ export default function DesignTaskPage() {
             </Button>
             <Button onClick={() => void handleExportToDropbox()} disabled={!dropboxCanExport}>
               {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
-              Перенести в Dropbox
+              {dropboxSyncState === "synced" ? "Оновити експорт у Dropbox" : dropboxSyncState === "stale" ? "Оновити в Dropbox" : "Перенести в Dropbox"}
             </Button>
           </DialogFooter>
         </DialogContent>
