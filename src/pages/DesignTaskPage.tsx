@@ -5593,6 +5593,11 @@ export default function DesignTaskPage() {
     }
     return messages;
   }, [currentDropboxPlanSignature, dropboxDisplayedFolderName, latestDropboxFolderName, latestDropboxPlanSignature]);
+  const dropboxFolderRenameRequested =
+    !!latestDropboxFolderName && latestDropboxFolderName !== normalizeDropboxFolderNameDraft(dropboxFolderDraft || dropboxDisplayedFolderName);
+  const dropboxOnlyFolderRenameChange =
+    dropboxFolderRenameRequested &&
+    latestDropboxPlanSignature === buildDropboxPlanSignature(normalizeDropboxFolderNameDraft(dropboxFolderDraft || dropboxDisplayedFolderName), dropboxExportPlan);
   const dropboxSyncState = useMemo(() => {
     const hasExportedState = !!latestDropboxFolderPath && latestDropboxExports.length > 0;
     if (!hasExportedState) return "not_exported" as const;
@@ -8387,6 +8392,14 @@ export default function DesignTaskPage() {
               })}
             </div>
 
+            {dropboxFolderRenameRequested ? (
+              <div className="rounded-2xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                {dropboxOnlyFolderRenameChange
+                  ? "Змінена тільки назва папки. При оновленні буде створено нову папку замовлення з цією назвою, а стара папка в Dropbox залишиться без змін."
+                  : "Назву папки змінено. Експорт піде в нову папку замовлення з цією назвою, а попередня папка в Dropbox автоматично не перейменовується."}
+              </div>
+            ) : null}
+
             {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
               <div className="rounded-2xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
                 Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
@@ -8405,7 +8418,13 @@ export default function DesignTaskPage() {
             </Button>
             <Button onClick={() => void handleExportToDropbox()} disabled={!dropboxCanExport}>
               {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
-              {dropboxSyncState === "synced" ? "Оновити експорт у Dropbox" : dropboxSyncState === "stale" ? "Оновити в Dropbox" : "Перенести в Dropbox"}
+              {dropboxFolderRenameRequested
+                ? "Створити нову папку і перенести"
+                : dropboxSyncState === "synced"
+                  ? "Оновити експорт у Dropbox"
+                  : dropboxSyncState === "stale"
+                    ? "Оновити в Dropbox"
+                    : "Перенести в Dropbox"}
             </Button>
           </DialogFooter>
         </DialogContent>
