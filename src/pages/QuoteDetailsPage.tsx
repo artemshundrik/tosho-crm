@@ -7836,18 +7836,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (!open) setVisualizationPreview(null);
       }}
     >
-      <DialogContent className="max-h-[94vh] overflow-hidden sm:max-w-[min(1440px,96vw)]">
+      <DialogContent className="w-fit max-h-[94vh] max-w-[calc(100vw-1.5rem)] overflow-hidden sm:max-w-[calc(100vw-3rem)]">
         <DialogHeader>
           <DialogTitle className="truncate pr-8">
-            {visualizationPreview ? getAttachmentDisplayName(visualizationPreview) : "Візуалізація"}
+            <span className="block max-w-[calc(100vw-6rem)] truncate sm:max-w-[min(72vw,960px)]">
+              {visualizationPreview ? getAttachmentDisplayName(visualizationPreview) : "Візуалізація"}
+            </span>
           </DialogTitle>
         </DialogHeader>
-        <div className="overflow-auto rounded-xl bg-muted/15 p-2 sm:p-3">
+        <div className="flex justify-center overflow-auto rounded-xl bg-muted/15 p-2 sm:p-3">
           {visualizationPreview?.url ? (
             <img
               src={visualizationPreview.url}
               alt={getAttachmentDisplayName(visualizationPreview)}
-              className="mx-auto max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
+              className="block max-h-[80vh] w-auto max-w-[calc(100vw-3rem)] rounded-lg object-contain sm:max-w-[calc(100vw-6rem)]"
             />
           ) : null}
         </div>
