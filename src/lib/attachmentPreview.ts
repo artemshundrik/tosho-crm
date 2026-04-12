@@ -9,15 +9,25 @@ type UploadAttachmentWithVariantsParams = {
   cacheControl?: string;
 };
 
+type UploadedAttachmentResult = {
+  storagePath: string;
+  contentType: string;
+  size: number;
+  optimizedOriginal: boolean;
+};
+
 const SIGNED_URL_CACHE = new Map<string, string>();
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const THUMB_MAX_SIZE = 160;
 const PREVIEW_MAX_SIZE = 640;
 const SERVER_PREVIEW_RETRY_DELAY_MS = 1500;
 const SERVER_PREVIEW_RETRY_ATTEMPTS = 8;
+const OPTIMIZED_ORIGINAL_QUALITY = 0.88;
 
 const RASTER_PREVIEW_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 const SERVER_PREVIEW_EXTENSIONS = new Set(["pdf", "tif", "tiff"]);
+const OPTIMIZABLE_RASTER_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp"]);
+const OPTIMIZABLE_RASTER_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/bmp"]);
 let pdfRuntimePromise: Promise<{ getDocument: typeof import("pdfjs-dist")["getDocument"] }> | null = null;
 
 function splitStoragePath(storagePath: string) {
@@ -32,6 +42,11 @@ export function getAttachmentVariantPath(storagePath: string, variant: Attachmen
   if (variant === "original") return storagePath;
   const { basename } = splitStoragePath(storagePath);
   return `${basename}__${variant}.webp`;
+}
+
+function replaceStoragePathExtension(storagePath: string, extension: string) {
+  const { basename } = splitStoragePath(storagePath);
+  return `${basename}.${extension}`;
 }
 
 export function getAttachmentVariantCandidatePaths(storagePath: string, variant: AttachmentPreviewVariant) {
@@ -52,6 +67,43 @@ export function getFileExtensionFromStoragePath(storagePath: string) {
   return storagePath.split(".").pop()?.toLowerCase() ?? "";
 }
 
+export function getAttachmentDownloadFileName(
+  fileName?: string | null,
+  storagePath?: string | null,
+  mimeType?: string | null
+) {
+  const baseName = (fileName && fileName.trim()) || "file";
+  const storageExtension =
+    typeof storagePath === "string" && storagePath ? getFileExtensionFromStoragePath(storagePath) : "";
+  const normalizedMime = mimeType?.toLowerCase?.() ?? "";
+
+  let targetExtension = storageExtension;
+  if (!targetExtension) {
+    if (normalizedMime === "image/webp") targetExtension = "webp";
+    else if (normalizedMime === "image/png") targetExtension = "png";
+    else if (normalizedMime === "image/jpeg" || normalizedMime === "image/jpg") targetExtension = "jpg";
+    else if (normalizedMime === "image/bmp") targetExtension = "bmp";
+    else if (normalizedMime === "application/pdf") targetExtension = "pdf";
+  }
+
+  if (!targetExtension) return baseName;
+
+  const dot = baseName.lastIndexOf(".");
+  if (dot < 0) return `${baseName}.${targetExtension}`;
+
+  const currentExtension = baseName.slice(dot + 1).toLowerCase();
+  if (currentExtension === targetExtension.toLowerCase()) return baseName;
+  return `${baseName.slice(0, dot)}.${targetExtension}`;
+}
+
+export function getAttachmentDisplayFileName(
+  fileName?: string | null,
+  storagePath?: string | null,
+  mimeType?: string | null
+) {
+  return getAttachmentDownloadFileName(fileName, storagePath, mimeType);
+}
+
 export function isServerPreviewableStoragePath(storagePath: string) {
   return SERVER_PREVIEW_EXTENSIONS.has(getFileExtensionFromStoragePath(storagePath));
 }
@@ -61,6 +113,13 @@ export function isRasterPreviewableFile(file: Pick<File, "type" | "name">) {
   if (mime.startsWith("image/") && mime !== "image/tiff" && mime !== "image/svg+xml") return true;
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   return RASTER_PREVIEW_EXTENSIONS.has(extension);
+}
+
+function shouldOptimizeRasterOriginal(file: Pick<File, "type" | "name">) {
+  const mime = file.type?.toLowerCase?.() ?? "";
+  if (OPTIMIZABLE_RASTER_MIME_TYPES.has(mime)) return true;
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return OPTIMIZABLE_RASTER_EXTENSIONS.has(extension);
 }
 
 export function isPdfPreviewableFile(file: Pick<File, "type" | "name">) {
@@ -105,6 +164,26 @@ async function renderImageVariantBlob(file: File, maxSize: number) {
 
   return await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/webp", 0.86);
+  });
+}
+
+async function renderOptimizedOriginalBlob(file: File) {
+  const image = await loadImageElement(file);
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!width || !height) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, width, height);
+
+  return await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/webp", OPTIMIZED_ORIGINAL_QUALITY);
   });
 }
 
@@ -157,10 +236,18 @@ export async function uploadAttachmentWithVariants({
   storagePath,
   file,
   cacheControl = "31536000, immutable",
-}: UploadAttachmentWithVariantsParams) {
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, file, {
+}: UploadAttachmentWithVariantsParams): Promise<UploadedAttachmentResult> {
+  const optimizedOriginal =
+    typeof document !== "undefined" && shouldOptimizeRasterOriginal(file)
+      ? await renderOptimizedOriginalBlob(file)
+      : null;
+  const originalBlob = optimizedOriginal ?? file;
+  const originalContentType = optimizedOriginal ? "image/webp" : file.type;
+  const originalStoragePath = optimizedOriginal ? replaceStoragePathExtension(storagePath, "webp") : storagePath;
+
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(originalStoragePath, originalBlob, {
     upsert: true,
-    contentType: file.type,
+    contentType: originalContentType,
     cacheControl,
   });
   if (uploadError) throw uploadError;
@@ -171,9 +258,14 @@ export async function uploadAttachmentWithVariants({
     const needsServerPreview =
       mime === "application/pdf" || mime === "image/tiff" || extension === "pdf" || extension === "tif" || extension === "tiff";
     if (needsServerPreview) {
-      void requestServerAttachmentPreview(bucket, storagePath);
+      void requestServerAttachmentPreview(bucket, originalStoragePath);
     }
-    return;
+    return {
+      storagePath: originalStoragePath,
+      contentType: originalContentType,
+      size: originalBlob.size,
+      optimizedOriginal: Boolean(optimizedOriginal),
+    };
   }
 
   const variants: Array<{ variant: AttachmentPreviewVariant; maxSize: number }> = [
@@ -188,7 +280,7 @@ export async function uploadAttachmentWithVariants({
           ? await renderPdfVariantBlob(file, maxSize)
           : await renderImageVariantBlob(file, maxSize);
         if (!blob) return;
-        const variantPath = getAttachmentVariantPath(storagePath, variant);
+        const variantPath = getAttachmentVariantPath(originalStoragePath, variant);
         const { error } = await supabase.storage.from(bucket).upload(variantPath, blob, {
           upsert: true,
           contentType: "image/webp",
@@ -202,6 +294,13 @@ export async function uploadAttachmentWithVariants({
       }
     })
   );
+
+  return {
+    storagePath: originalStoragePath,
+    contentType: originalContentType,
+    size: originalBlob.size,
+    optimizedOriginal: Boolean(optimizedOriginal),
+  };
 }
 
 export async function removeAttachmentWithVariants(bucket: string, storagePath: string) {

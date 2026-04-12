@@ -2183,17 +2183,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
       let storagePath = "";
+      let storedContentType: string | null = file.type || null;
+      let storedSize = file.size;
       let lastError: unknown = null;
 
       for (const candidate of candidatePaths) {
         try {
-          await uploadAttachmentWithVariants({
+          const uploadResult = await uploadAttachmentWithVariants({
             bucket: QUOTE_ATTACHMENTS_BUCKET,
             storagePath: candidate,
             file,
             cacheControl: "31536000, immutable",
           });
-          storagePath = candidate;
+          storagePath = uploadResult.storagePath;
+          storedContentType = uploadResult.contentType || storedContentType;
+          storedSize = uploadResult.size || storedSize;
           lastError = null;
           break;
         } catch (uploadError) {
@@ -2214,8 +2218,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           team_id: teamId,
           quote_id: quoteId,
           file_name: file.name,
-          mime_type: file.type || null,
-          file_size: file.size,
+          mime_type: storedContentType,
+          file_size: storedSize,
           storage_bucket: QUOTE_ATTACHMENTS_BUCKET,
           storage_path: storagePath,
           uploaded_by: uploadedBy,
@@ -2284,17 +2288,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
       let storagePath = "";
+      let storedContentType: string | null = file.type || null;
+      let storedSize = file.size;
       let lastError: unknown = null;
 
       for (const candidate of candidatePaths) {
         try {
-          await uploadAttachmentWithVariants({
+          const uploadResult = await uploadAttachmentWithVariants({
             bucket: QUOTE_ATTACHMENTS_BUCKET,
             storagePath: candidate,
             file,
             cacheControl: "31536000, immutable",
           });
-          storagePath = candidate;
+          storagePath = uploadResult.storagePath;
+          storedContentType = uploadResult.contentType || storedContentType;
+          storedSize = uploadResult.size || storedSize;
           lastError = null;
           break;
         } catch (uploadError) {
@@ -2315,8 +2323,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           team_id: teamId,
           quote_id: quoteId,
           file_name: file.name,
-          mime_type: file.type || null,
-          file_size: file.size,
+          mime_type: storedContentType,
+          file_size: storedSize,
           storage_bucket: QUOTE_ATTACHMENTS_BUCKET,
           storage_path: storagePath,
           uploaded_by: uploadedBy,

@@ -173,6 +173,34 @@ function getFxErrorMessage(error: unknown) {
   return "Невідома помилка завантаження курсу.";
 }
 
+type FxCurrencyCode = "USD" | "EUR";
+
+function FxCurrencyBadge({
+  code,
+  className,
+}: {
+  code: FxCurrencyCode;
+  className?: string;
+}) {
+  const accentClassName = code === "USD"
+    ? "border-info-soft-border bg-info-soft text-info-foreground"
+    : "border-warning-soft-border bg-warning-soft text-warning-foreground";
+  const label = code === "USD" ? "$" : "€";
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold leading-none",
+        accentClassName,
+        className
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 async function fetchMinfinFxRates(signal?: AbortSignal) {
   const endpoints = import.meta.env.DEV
     ? ["/api/fx-rates", "/.netlify/functions/fx-rates"]
@@ -1819,12 +1847,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     {fxError || fxStaleWarning ? (
                       <ShieldAlert className="h-3.5 w-3.5 text-danger-foreground" />
                     ) : null}
-                    <span className="font-medium tabular-nums text-foreground/90">
-                      🇺🇸 USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
+                    <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground/90">
+                      <FxCurrencyBadge code="USD" />
+                      USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
                     </span>
                     <span className="text-muted-foreground">·</span>
-                    <span className="font-medium tabular-nums text-foreground/90">
-                      🇪🇺 EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
+                    <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground/90">
+                      <FxCurrencyBadge code="EUR" />
+                      EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
                     </span>
                   </button>
                 }
@@ -1854,7 +1884,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     ) : null}
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                        <div className="text-[11px] text-muted-foreground">🇺🇸 Долар США</div>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <FxCurrencyBadge code="USD" className="h-4 w-7" />
+                          Долар США
+                        </div>
                         <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
                           <div className="text-[17px] font-semibold tabular-nums text-foreground">
                             {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
@@ -1872,7 +1905,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         </div>
                       </div>
                       <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                        <div className="text-[11px] text-muted-foreground">🇪🇺 Євро</div>
+                        <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <FxCurrencyBadge code="EUR" className="h-4 w-7" />
+                          Євро
+                        </div>
                         <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
                           <div className="text-[17px] font-semibold tabular-nums text-foreground">
                             {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}

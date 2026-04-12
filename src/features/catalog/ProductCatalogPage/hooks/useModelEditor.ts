@@ -194,14 +194,16 @@ export function useModelEditor({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; storagePath?: string } | null;
       if (!response.ok) {
         throw new Error(payload?.error || `Не вдалося завантажити фото моделі за URL (${response.status}).`);
       }
 
+      const resolvedStoragePath = payload?.storagePath?.trim() || storagePath;
+
       return {
-        storagePath,
-        assetPayload: getCatalogAssetPayload(storagePath),
+        storagePath: resolvedStoragePath,
+        assetPayload: getCatalogAssetPayload(resolvedStoragePath),
       };
     },
     [teamId]
@@ -814,14 +816,14 @@ export function useModelEditor({
           if (draftImageFile) {
             const safeName = sanitizeFileName(draftImageFile.name);
             const storagePath = `teams/${teamId}/catalog-models/${persistedModelId}/${Date.now()}-${safeName}`;
-            await uploadAttachmentWithVariants({
+            const uploadResult = await uploadAttachmentWithVariants({
               bucket: CATALOG_IMAGE_BUCKET,
               storagePath,
               file: draftImageFile,
               cacheControl: "31536000, immutable",
             });
-            uploadedAssetPath = storagePath;
-            const assetPayload = getCatalogAssetPayload(storagePath);
+            uploadedAssetPath = uploadResult.storagePath;
+            const assetPayload = getCatalogAssetPayload(uploadResult.storagePath);
             currentImageUrl = assetPayload.imageUrl;
             currentMetadata = {
               ...nextMetadata,

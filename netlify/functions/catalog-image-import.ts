@@ -13,6 +13,8 @@ type RequestBody = {
   sourceUrl?: string;
 };
 
+const OPTIMIZED_ORIGINAL_QUALITY = 88;
+
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -38,6 +40,11 @@ function getVariantPath(storagePath: string, variant: "thumb" | "preview") {
   return `${basename}__${variant}.webp`;
 }
 
+function getOptimizedOriginalPath(storagePath: string) {
+  const { basename } = splitStoragePath(storagePath);
+  return `${basename}.webp`;
+}
+
 function isAllowedImageContentType(contentType: string) {
   const normalized = contentType.toLowerCase();
   return (
@@ -59,6 +66,13 @@ async function renderVariant(buffer: Buffer, maxSize: number) {
       withoutEnlargement: true,
     })
     .webp({ quality: 86 })
+    .toBuffer();
+}
+
+async function renderOptimizedOriginal(buffer: Buffer) {
+  return sharp(buffer)
+    .rotate()
+    .webp({ quality: OPTIMIZED_ORIGINAL_QUALITY })
     .toBuffer();
 }
 
@@ -130,26 +144,29 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const arrayBuffer = await response.arrayBuffer();
-  const originalBuffer = Buffer.from(arrayBuffer);
+  const sourceBuffer = Buffer.from(arrayBuffer);
 
+  let originalBuffer: Buffer;
   let thumbBuffer: Buffer;
   let previewBuffer: Buffer;
+  const originalPath = getOptimizedOriginalPath(storagePath);
   try {
-    thumbBuffer = await renderVariant(originalBuffer, 160);
-    previewBuffer = await renderVariant(originalBuffer, 640);
+    originalBuffer = await renderOptimizedOriginal(sourceBuffer);
+    thumbBuffer = await renderVariant(sourceBuffer, 160);
+    previewBuffer = await renderVariant(sourceBuffer, 640);
   } catch (error) {
     return jsonResponse(500, {
       error: error instanceof Error ? error.message : "Failed to generate image variants",
     });
   }
 
-  const previewPath = getVariantPath(storagePath, "preview");
-  const thumbPath = getVariantPath(storagePath, "thumb");
+  const previewPath = getVariantPath(originalPath, "preview");
+  const thumbPath = getVariantPath(originalPath, "thumb");
 
   const [{ error: originalError }, { error: previewError }, { error: thumbError }] = await Promise.all([
-    adminClient.storage.from(bucket).upload(storagePath, originalBuffer, {
+    adminClient.storage.from(bucket).upload(originalPath, originalBuffer, {
       upsert: true,
-      contentType,
+      contentType: "image/webp",
       cacheControl: "31536000, immutable",
     }),
     adminClient.storage.from(bucket).upload(previewPath, previewBuffer, {
@@ -173,10 +190,10 @@ export const handler = async (event: HttpEvent) => {
   return jsonResponse(200, {
     success: true,
     bucket,
-    storagePath,
+    storagePath: originalPath,
     previewPath,
     thumbPath,
-    contentType,
+    contentType: "image/webp",
     sizeBytes: originalBuffer.length,
   });
 };

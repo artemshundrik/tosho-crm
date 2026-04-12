@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
+  getAttachmentDisplayFileName,
+  getAttachmentDownloadFileName,
   getSignedAttachmentUrl,
   removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
@@ -361,6 +363,7 @@ type QuoteAttachment = {
   size: string;
   created_at: string;
   url?: string;
+  mimeType?: string | null;
   uploadedBy?: string | null;
   uploadedByLabel?: string;
   storageBucket?: string | null;
@@ -928,6 +931,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       });
     }
   }, []);
+
+  const getAttachmentDownloadName = useCallback(
+    (attachment: {
+      name?: string | null;
+      mimeType?: string | null;
+      storagePath?: string | null;
+    }) => getAttachmentDownloadFileName(attachment.name, attachment.storagePath, attachment.mimeType),
+    []
+  );
+
+  const getAttachmentDisplayName = useCallback(
+    (attachment: {
+      name?: string | null;
+      mimeType?: string | null;
+      storagePath?: string | null;
+    }) => getAttachmentDisplayFileName(attachment.name, attachment.storagePath, attachment.mimeType),
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -3426,7 +3447,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         let query = supabase
           .schema("tosho")
           .from("quote_attachments")
-          .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+          .select("id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by")
           .eq("quote_id", quoteId)
           .order("created_at", { ascending: false });
         if (withTeamFilter && teamId) {
@@ -3452,6 +3473,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         name: row.file_name ?? "Файл",
         size: formatFileSize(row.file_size),
         created_at: row.created_at ?? new Date().toISOString(),
+        mimeType: row.mime_type ?? null,
         uploadedBy: row.uploaded_by ?? null,
         uploadedByLabel:
           memberById.get(row.uploaded_by ?? "") ??
@@ -3509,16 +3531,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
 
         let storagePath = "";
+        let storedContentType: string | null = file.type || null;
+        let storedSize = file.size;
         let lastError: unknown = null;
         for (const candidate of candidatePaths) {
           try {
-            await uploadAttachmentWithVariants({
+            const uploadResult = await uploadAttachmentWithVariants({
               bucket: ITEM_VISUAL_BUCKET,
               storagePath: candidate,
               file,
               cacheControl: "31536000, immutable",
             });
-            storagePath = candidate;
+            storagePath = uploadResult.storagePath;
+            storedContentType = uploadResult.contentType || storedContentType;
+            storedSize = uploadResult.size || storedSize;
             lastError = null;
             break;
           } catch (uploadError) {
@@ -3539,8 +3565,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             team_id: teamId,
             quote_id: quoteId,
             file_name: file.name,
-            mime_type: file.type || null,
-            file_size: file.size,
+            mime_type: storedContentType,
+            file_size: storedSize,
             storage_bucket: ITEM_VISUAL_BUCKET,
             storage_path: storagePath,
             uploaded_by: uploadedBy,
@@ -4521,16 +4547,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const candidatePaths = [`teams/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`];
 
       let path = "";
+      let storedContentType: string | null = file.type || null;
+      let storedSize = file.size;
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
         try {
-          await uploadAttachmentWithVariants({
+          const uploadResult = await uploadAttachmentWithVariants({
             bucket: ITEM_VISUAL_BUCKET,
             storagePath: candidate,
             file,
             cacheControl: "31536000, immutable",
           });
-          path = candidate;
+          path = uploadResult.storagePath;
+          storedContentType = uploadResult.contentType || storedContentType;
+          storedSize = uploadResult.size || storedSize;
           lastError = null;
           break;
         } catch (uploadError) {
@@ -4551,8 +4581,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           team_id: effectiveTeamId,
           quote_id: quoteId,
           file_name: file.name,
-          mime_type: file.type || null,
-          file_size: file.size,
+          mime_type: storedContentType,
+          file_size: storedSize,
           storage_bucket: ITEM_VISUAL_BUCKET,
           storage_path: path,
           uploaded_by: uploadedBy,
@@ -6513,7 +6543,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleDesignVisualizations.map((file) => {
-                        const extension = getFileExtension(file.name);
+                        const extension = getFileExtension(getAttachmentDisplayName(file));
                         const previewImage =
                           (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
                           Boolean(file.storageBucket && file.storagePath);
@@ -6533,13 +6563,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 });
                               }}
                               disabled={!previewImage}
-                              aria-label={previewImage ? `Переглянути ${file.name}` : file.name}
+                              aria-label={previewImage ? `Переглянути ${getAttachmentDisplayName(file)}` : getAttachmentDisplayName(file)}
                             >
                               {previewImage ? (
                                 <StorageObjectImage
                                   bucket={file.storageBucket}
                                   path={file.storagePath}
-                                  alt={file.name}
+                                  alt={getAttachmentDisplayName(file)}
                                   variant="thumb"
                                   className="h-full w-full"
                                 />
@@ -6547,12 +6577,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="text-xs text-muted-foreground">{extension}</div>
                               )}
                             </button>
-                            <div className="mt-3 truncate text-sm font-medium text-foreground" title={file.name}>
-                              {file.name}
+                            <div className="mt-3 truncate text-sm font-medium text-foreground" title={getAttachmentDisplayName(file)}>
+                              {getAttachmentDisplayName(file)}
                             </div>
                             <div className="mt-1 flex items-center gap-2">
                               <div className="text-xs text-muted-foreground">
-                                {extension ? extension.toUpperCase() : "Файл"}
+                                {getFileExtension(getAttachmentDisplayName(file))?.toUpperCase() ?? "Файл"}
                               </div>
                               {isSelectedVisualization ? (
                                 <Badge
@@ -6571,7 +6601,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   onClick={() => {
                                     void ensureAttachmentAccessUrl(file).then((url) => {
                                       if (url) {
-                                        void downloadFileToDevice(url, file.name);
+                                        void downloadFileToDevice(
+                                          url,
+                                          getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                                        );
                                       }
                                     });
                                   }}
@@ -7026,7 +7059,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               onDragLeave={handleAttachmentsDragLeave}
                             >
                               {attachments.map((file) => {
-                                const extension = getFileExtension(file.name);
+                                const displayName = getAttachmentDisplayName(file);
+                                const extension = getFileExtension(displayName);
                                 return (
                                   <div
                                     key={file.id}
@@ -7038,8 +7072,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                          <div className="truncate text-sm font-semibold" title={file.name}>
-                                            {file.name}
+                                          <div className="truncate text-sm font-semibold" title={displayName}>
+                                            {displayName}
                                           </div>
                                           {extension && (
                                             <Badge variant="secondary" className="text-[10px] uppercase">
@@ -7068,7 +7102,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         onClick={() => {
                                           void ensureAttachmentAccessUrl(file).then((url) => {
                                             if (url) {
-                                              void downloadFileToDevice(url, file.name);
+                                              void downloadFileToDevice(
+                                                url,
+                                                getAttachmentDownloadFileName(file.name, file.storagePath, file.mimeType)
+                                              );
                                             }
                                           });
                                         }}
@@ -7801,13 +7838,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     >
       <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[min(1100px,92vw)]">
         <DialogHeader>
-          <DialogTitle className="truncate pr-8">{visualizationPreview?.name ?? "Візуалізація"}</DialogTitle>
+          <DialogTitle className="truncate pr-8">
+            {visualizationPreview ? getAttachmentDisplayName(visualizationPreview) : "Візуалізація"}
+          </DialogTitle>
         </DialogHeader>
         <div className="overflow-auto rounded-xl bg-muted/15 p-2">
           {visualizationPreview?.url ? (
             <img
               src={visualizationPreview.url}
-              alt={visualizationPreview.name}
+              alt={getAttachmentDisplayName(visualizationPreview)}
               className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
             />
           ) : null}
@@ -7820,7 +7859,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               onClick={() => {
                 void ensureAttachmentAccessUrl(visualizationPreview, { variant: "original" }).then((url) => {
                   if (!url) return;
-                  void downloadFileToDevice(url, visualizationPreview.name);
+                  void downloadFileToDevice(
+                    url,
+                    getAttachmentDownloadFileName(
+                      visualizationPreview.name,
+                      visualizationPreview.storagePath,
+                      visualizationPreview.mimeType
+                    )
+                  );
                 });
               }}
             >

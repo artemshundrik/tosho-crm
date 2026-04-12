@@ -3111,16 +3111,20 @@ export default function DesignPage() {
       const candidatePaths = [`teams/${params.teamId}/design-brief-files/${params.taskId}/${baseName}`];
 
       let storagePath = "";
+      let storedContentType: string | null = file.type || null;
+      let storedSize = file.size;
       let lastError: unknown = null;
       for (const candidate of candidatePaths) {
         try {
-          await uploadAttachmentWithVariants({
+          const uploadResult = await uploadAttachmentWithVariants({
             bucket: DESIGN_FILES_BUCKET,
             storagePath: candidate,
             file,
             cacheControl: STORAGE_CACHE_CONTROL,
           });
-          storagePath = candidate;
+          storagePath = uploadResult.storagePath;
+          storedContentType = uploadResult.contentType || storedContentType;
+          storedSize = uploadResult.size || storedSize;
           lastError = null;
           break;
         } catch (uploadError) {
@@ -3136,8 +3140,8 @@ export default function DesignPage() {
       uploaded.push({
         id: crypto.randomUUID(),
         file_name: file.name,
-        file_size: file.size,
-        mime_type: file.type || null,
+        file_size: storedSize,
+        mime_type: storedContentType,
         storage_bucket: DESIGN_FILES_BUCKET,
         storage_path: storagePath,
         uploaded_by: params.userId,

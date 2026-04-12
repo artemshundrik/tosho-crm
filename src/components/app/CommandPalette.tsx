@@ -93,7 +93,7 @@ function renderHighlightedText(value: string, query: string, className?: string)
   return (
     <span className={className}>
       {before}
-      <mark className="rounded bg-info-soft px-0.5 text-info-foreground">{match}</mark>
+      <mark className="cmd-highlight rounded px-0.5">{match}</mark>
       {after}
     </span>
   );
@@ -102,13 +102,13 @@ function renderHighlightedText(value: string, query: string, className?: string)
 function getKindBadgeClass(kindLabel: string) {
   switch (kindLabel) {
     case "Замовник":
-      return "border-success-soft-border bg-success-soft text-success-foreground";
+      return "cmd-kind-customer";
     case "Лід":
-      return "border-warning-soft-border bg-warning-soft text-warning-foreground";
+      return "cmd-kind-lead";
     case "Прорахунок":
-      return "border-info-soft-border bg-info-soft text-info-foreground";
+      return "cmd-kind-quote";
     case "Дизайн":
-      return "border-neutral-soft-border bg-neutral-soft text-neutral-foreground";
+      return "cmd-kind-design";
     default:
       return "border-border bg-muted text-muted-foreground";
   }
@@ -663,7 +663,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               ) : null}
               {result.metaLabel && result.managerLabel ? <span className="shrink-0">·</span> : null}
               {result.managerLabel ? (
-                <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-neutral-soft-border bg-neutral-soft px-1.5 py-0.5 text-foreground">
+                <span className="cmd-manager-chip inline-flex min-w-0 items-center gap-1 rounded-full border px-1.5 py-0.5">
                   <AvatarBase
                     src={result.managerAvatarUrl ?? null}
                     name={result.managerLabel}

@@ -86,6 +86,25 @@
     --danger-soft-border: 0 70% 84%;
     --danger-foreground: 0 75% 38%; /* трохи темніший червоний */
 
+    /* --- COMMAND SEARCH TOKENS (LIGHT) --- */
+    --cmd-highlight-bg: 214 95% 90%;
+    --cmd-highlight-foreground: 221 83% 24%;
+    --cmd-manager-chip-bg: 220 14% 96%;
+    --cmd-manager-chip-border: 220 13% 85%;
+    --cmd-manager-chip-foreground: 222 47% 18%;
+    --cmd-kind-customer-bg: 142 58% 91%;
+    --cmd-kind-customer-border: 142 45% 73%;
+    --cmd-kind-customer-foreground: 142 61% 24%;
+    --cmd-kind-lead-bg: 45 92% 89%;
+    --cmd-kind-lead-border: 43 82% 68%;
+    --cmd-kind-lead-foreground: 36 84% 24%;
+    --cmd-kind-quote-bg: 214 96% 91%;
+    --cmd-kind-quote-border: 214 84% 74%;
+    --cmd-kind-quote-foreground: 221 83% 28%;
+    --cmd-kind-design-bg: 280 72% 93%;
+    --cmd-kind-design-border: 280 58% 78%;
+    --cmd-kind-design-foreground: 282 46% 32%;
+
     /* --- ENTITY AVATAR TOKENS (LIGHT) --- */
     --entity-avatar-1-bg: 214 95% 93%;
     --entity-avatar-1-border: 214 90% 86%;
@@ -290,6 +309,25 @@
     --danger-soft: 0 35% 22%;
     --danger-soft-border: 0 35% 30%;
     --danger-foreground: 0 80% 75%;
+
+    /* --- COMMAND SEARCH TOKENS (DARK) --- */
+    --cmd-highlight-bg: 217 54% 26%;
+    --cmd-highlight-foreground: 214 95% 88%;
+    --cmd-manager-chip-bg: 228 7% 17%;
+    --cmd-manager-chip-border: 228 8% 26%;
+    --cmd-manager-chip-foreground: 210 40% 94%;
+    --cmd-kind-customer-bg: 142 30% 22%;
+    --cmd-kind-customer-border: 142 30% 34%;
+    --cmd-kind-customer-foreground: 142 72% 78%;
+    --cmd-kind-lead-bg: 45 24% 22%;
+    --cmd-kind-lead-border: 45 24% 34%;
+    --cmd-kind-lead-foreground: 45 94% 78%;
+    --cmd-kind-quote-bg: 217 48% 24%;
+    --cmd-kind-quote-border: 217 48% 36%;
+    --cmd-kind-quote-foreground: 214 95% 82%;
+    --cmd-kind-design-bg: 280 24% 24%;
+    --cmd-kind-design-border: 280 30% 38%;
+    --cmd-kind-design-foreground: 282 82% 84%;
 
     /* --- ENTITY AVATAR TOKENS (DARK) --- */
     --entity-avatar-1-bg: 217 70% 20%;
@@ -1023,6 +1061,41 @@
   }
   .quote-activity-accent-default {
     @apply bg-muted/40 text-muted-foreground border-border;
+  }
+
+  .cmd-highlight {
+    background-color: hsl(var(--cmd-highlight-bg));
+    color: hsl(var(--cmd-highlight-foreground));
+  }
+
+  .cmd-manager-chip {
+    background-color: hsl(var(--cmd-manager-chip-bg));
+    border-color: hsl(var(--cmd-manager-chip-border));
+    color: hsl(var(--cmd-manager-chip-foreground));
+  }
+
+  .cmd-kind-customer {
+    background-color: hsl(var(--cmd-kind-customer-bg));
+    border-color: hsl(var(--cmd-kind-customer-border));
+    color: hsl(var(--cmd-kind-customer-foreground));
+  }
+
+  .cmd-kind-lead {
+    background-color: hsl(var(--cmd-kind-lead-bg));
+    border-color: hsl(var(--cmd-kind-lead-border));
+    color: hsl(var(--cmd-kind-lead-foreground));
+  }
+
+  .cmd-kind-quote {
+    background-color: hsl(var(--cmd-kind-quote-bg));
+    border-color: hsl(var(--cmd-kind-quote-border));
+    color: hsl(var(--cmd-kind-quote-foreground));
+  }
+
+  .cmd-kind-design {
+    background-color: hsl(var(--cmd-kind-design-bg));
+    border-color: hsl(var(--cmd-kind-design-border));
+    color: hsl(var(--cmd-kind-design-foreground));
   }
 }
 

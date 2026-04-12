@@ -70,6 +70,8 @@ import {
   normalizeCustomerLogoUrl as normalizeLogoUrl,
 } from "@/lib/customerLogo";
 import {
+  getAttachmentDisplayFileName,
+  getAttachmentDownloadFileName,
   getAttachmentVariantPath,
   getSignedAttachmentUrl,
   isServerPreviewableStoragePath,
@@ -165,6 +167,7 @@ type AttachmentRow = {
   id: string;
   file_name: string | null;
   file_size?: number | null;
+  mime_type?: string | null;
   created_at?: string | null;
   storage_bucket: string | null;
   storage_path: string | null;
@@ -198,6 +201,7 @@ type DesignOutputLink = {
 
 type StorageBackedFile = {
   file_name?: string | null;
+  mime_type?: string | null;
   signed_url?: string | null;
   storage_bucket?: string | null;
   storage_path?: string | null;
@@ -286,6 +290,7 @@ type FilePreviewState = {
   name: string;
   url: string;
   kind: "image" | "pdf";
+  mimeType?: string | null;
   storageBucket?: string | null;
   storagePath?: string | null;
 };
@@ -1593,6 +1598,7 @@ export default function DesignTaskPage() {
               id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
               file_name: fileName,
               file_size: entry.file_size == null ? null : Number(entry.file_size),
+              mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
               created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
               storage_bucket: storageBucket,
               storage_path: storagePath,
@@ -2989,7 +2995,10 @@ export default function DesignTaskPage() {
       toast.error("Не вдалося завантажити файл");
       return;
     }
-    await downloadFileToDevice(url, file.file_name);
+    await downloadFileToDevice(
+      url,
+      getAttachmentDownloadFileName(file.file_name, file.storage_path, file.mime_type)
+    );
   }, [downloadFileToDevice, ensureFileAccessUrl]);
 
   const openStorageFilePreview = useCallback(async (file: StorageBackedFile & { file_name?: string | null }) => {
@@ -3010,9 +3019,10 @@ export default function DesignTaskPage() {
       return;
     }
     setFilePreview({
-      name: file.file_name ?? "Файл",
+      name: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
       url,
       kind,
+      mimeType: file.mime_type ?? null,
       storageBucket: file.storage_bucket ?? null,
       storagePath: file.storage_path ?? null,
     });
@@ -3289,16 +3299,20 @@ export default function DesignTaskPage() {
         const candidatePaths = [`teams/${effectiveTeamId}/design-outputs/${task.quoteId}/${baseName}`];
 
         let storagePath = "";
+        let storedContentType: string | null = file.type || null;
+        let storedSize = file.size;
         let lastError: unknown = null;
         for (const candidate of candidatePaths) {
           try {
-            await uploadAttachmentWithVariants({
+            const uploadResult = await uploadAttachmentWithVariants({
               bucket: DESIGN_OUTPUT_BUCKET,
               storagePath: candidate,
               file,
               cacheControl: STORAGE_CACHE_CONTROL,
             });
-            storagePath = candidate;
+            storagePath = uploadResult.storagePath;
+            storedContentType = uploadResult.contentType || storedContentType;
+            storedSize = uploadResult.size || storedSize;
             break;
           } catch (uploadError) {
             lastError = uploadError;
@@ -3309,8 +3323,8 @@ export default function DesignTaskPage() {
         uploaded.push({
           id: crypto.randomUUID(),
           file_name: file.name,
-          file_size: file.size,
-          mime_type: file.type || null,
+          file_size: storedSize,
+          mime_type: storedContentType,
           storage_bucket: DESIGN_OUTPUT_BUCKET,
           storage_path: storagePath,
           uploaded_by: userId,
@@ -3386,7 +3400,7 @@ export default function DesignTaskPage() {
           ? `teams/${effectiveTeamId}/quote-attachments/${task.quoteId}/${baseName}`
           : `teams/${effectiveTeamId}/design-brief-files/${task.id}/${baseName}`;
 
-        await uploadAttachmentWithVariants({
+        const uploadResult = await uploadAttachmentWithVariants({
           bucket: DESIGN_OUTPUT_BUCKET,
           storagePath,
           file,
@@ -3396,10 +3410,10 @@ export default function DesignTaskPage() {
         const nextAttachment: AttachmentRow = {
           id: crypto.randomUUID(),
           file_name: file.name,
-          file_size: file.size,
+          file_size: uploadResult.size,
           created_at: new Date().toISOString(),
           storage_bucket: DESIGN_OUTPUT_BUCKET,
-          storage_path: storagePath,
+          storage_path: uploadResult.storagePath,
           uploaded_by: userId,
           signed_url: null,
         };
@@ -3409,7 +3423,7 @@ export default function DesignTaskPage() {
             team_id: effectiveTeamId,
             quote_id: task.quoteId,
             file_name: nextAttachment.file_name,
-            mime_type: file.type || null,
+            mime_type: uploadResult.contentType || file.type || null,
             file_size: nextAttachment.file_size,
             storage_bucket: nextAttachment.storage_bucket,
             storage_path: nextAttachment.storage_path,
@@ -6358,7 +6372,8 @@ export default function DesignTaskPage() {
                   </div>
                   <div className="space-y-2">
                     {group.files.map((file) => {
-                      const ext = getFileExtension(file.file_name);
+                      const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
+                      const ext = getFileExtension(displayName);
                       const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path);
                       return (
                         <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
@@ -6368,7 +6383,7 @@ export default function DesignTaskPage() {
                                 <StorageObjectImage
                                   bucket={file.storage_bucket}
                                   path={file.storage_path}
-                                  alt={file.file_name ?? "Файл"}
+                                  alt={displayName}
                                   variant="thumb"
                                   hoverPreview
                                   className="h-11 w-11 shrink-0 rounded-md border border-border/60 bg-muted/30"
@@ -6379,8 +6394,8 @@ export default function DesignTaskPage() {
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-medium" title={file.file_name}>
-                                  {file.file_name}
+                                <div className="truncate text-sm font-medium" title={displayName}>
+                                  {displayName}
                                 </div>
                                 {selectedIdSet.has(file.id) ? (
                                   <Badge
@@ -7881,7 +7896,8 @@ export default function DesignTaskPage() {
                   <div className="text-xs text-destructive">{customerAttachmentsError}</div>
                 ) : null}
                 {attachments.map((file) => {
-                  const extension = getFileExtension(file.file_name);
+                  const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
+                  const extension = getFileExtension(displayName);
                   const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
                   return (
                     <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
@@ -7891,7 +7907,7 @@ export default function DesignTaskPage() {
                             <StorageObjectImage
                               bucket={file.storage_bucket}
                               path={file.storage_path}
-                              alt={file.file_name ?? "Файл"}
+                              alt={displayName}
                               variant="thumb"
                               hoverPreview
                               className="h-11 w-11 shrink-0 rounded-md border border-border/60"
@@ -7902,8 +7918,8 @@ export default function DesignTaskPage() {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium" title={file.file_name ?? ""}>
-                              {file.file_name ?? "Файл"}
+                            <div className="truncate text-sm font-medium" title={displayName}>
+                              {displayName}
                             </div>
                             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
                               <span>{formatFileSize(file.file_size)}</span>
@@ -8868,7 +8884,10 @@ export default function DesignTaskPage() {
                         ? await getSignedAttachmentUrl(filePreview.storageBucket, filePreview.storagePath, "original", 60 * 60 * 24 * 7)
                         : filePreview.url;
                     if (!url) return;
-                    await downloadFileToDevice(url, filePreview.name);
+                    await downloadFileToDevice(
+                      url,
+                      getAttachmentDownloadFileName(filePreview.name, filePreview.storagePath, filePreview.mimeType)
+                    );
                   }}
                 >
                   Завантажити
