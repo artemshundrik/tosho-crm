@@ -8834,22 +8834,22 @@ export default function DesignTaskPage() {
           if (!open) setFilePreview(null);
         }}
       >
-        <DialogContent className="max-h-[92vh] overflow-hidden sm:max-w-[min(1100px,92vw)]">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-8">{filePreview?.name ?? "Перегляд файлу"}</DialogTitle>
-          </DialogHeader>
-          <div className="overflow-auto overscroll-contain rounded-xl bg-muted/15 p-2">
+      <DialogContent className="max-h-[94vh] overflow-hidden sm:max-w-[min(1440px,96vw)]">
+        <DialogHeader>
+          <DialogTitle className="truncate pr-8">{filePreview?.name ?? "Перегляд файлу"}</DialogTitle>
+        </DialogHeader>
+          <div className="overflow-auto overscroll-contain rounded-xl bg-muted/15 p-2 sm:p-3">
             {filePreview?.kind === "image" ? (
               <img
                 src={filePreview.url}
                 alt={filePreview.name}
-                className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+                className="mx-auto max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
               />
             ) : filePreview?.kind === "pdf" ? (
               <img
                 src={filePreview.url}
                 alt={filePreview.name}
-                className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+                className="mx-auto max-h-[80vh] w-auto max-w-full rounded-lg object-contain"
               />
             ) : null}
           </div>

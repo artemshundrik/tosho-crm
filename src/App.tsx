@@ -652,6 +652,7 @@ function RuntimeErrorsRouteGate({
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { session, loading: authLoading } = useAuth();
 
   const params = new URLSearchParams(location.search);
   const rawNext = params.get("next") ? decodeURIComponent(params.get("next") as string) : "/overview";
@@ -666,8 +667,14 @@ function LoginPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (authLoading || !session) return;
+    navigate(next, { replace: true });
+  }, [authLoading, navigate, next, session]);
+
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || authLoading) return;
     setError(null);
     setMsg(null);
     setLoading(true);
@@ -694,7 +701,7 @@ function LoginPage() {
           return;
         }
 
-        navigate(next, { replace: true });
+        setMsg("Вхід виконано. Перенаправляю...");
         return;
       }
 
@@ -727,7 +734,7 @@ function LoginPage() {
           <div className="text-sm text-muted-foreground mt-1">
             {isInviteFlow
               ? "Увійди, щоб прийняти запрошення в команду."
-              : "Увійди, щоб бачити матчі, тренування й фінанси (як дозволяє роль)."}
+              : "Увійди, щоб працювати з задачами, прорахунками, дизайнами та файлами."}
           </div>
         </div>
 
@@ -774,10 +781,10 @@ function LoginPage() {
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || authLoading}
             className="w-full"
           >
-            {loading ? "..." : "Увійти"}
+            {loading || authLoading ? "Входимо..." : "Увійти"}
           </Button>
         </form>
 
@@ -786,12 +793,6 @@ function LoginPage() {
             <Link className="underline hover:text-primary transition-colors" to="/reset-password">
               Забув пароль?
             </Link>
-          </div>
-        ) : null}
-
-        {!isInviteFlow ? (
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-            Для інвайтів: <Link className="underline hover:text-primary transition-colors" to="/invite">перейти до /invite</Link>
           </div>
         ) : null}
       </div>
