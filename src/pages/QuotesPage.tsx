@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { Input } from "@/components/ui/input";
@@ -73,6 +73,7 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { getSignedAttachmentUrl, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { 
   Search,
@@ -271,6 +272,7 @@ type QuotesPageFiltersState = {
   quoteSetKindFilter?: "all" | "kp" | "set";
   sortBy?: "date" | "number" | null;
   sortOrder?: "asc" | "desc";
+  cachedAt?: number;
 };
 
 function readQuotesPageCache(teamId: string): QuotesPageCachePayload | null {
@@ -316,7 +318,10 @@ function readQuotesPageFiltersState(teamId: string): QuotesPageFiltersState | nu
     if (!raw) return null;
     const parsed = JSON.parse(raw) as QuotesPageFiltersState;
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    return {
+      ...parsed,
+      cachedAt: Number(parsed.cachedAt ?? 0),
+    };
   } catch {
     return null;
   }
@@ -343,12 +348,14 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
+  const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
   const initialTeamMembers = readQuotesPageMembersCache(teamId);
   const initialFilters = readQuotesPageFiltersState(teamId);
+  const restoredFilters = shouldRestorePageUiState(navigationType, initialFilters?.cachedAt) ? initialFilters : null;
   const initialViewMode: "table" | "kanban" = (() => {
-    if (initialFilters?.viewMode) return initialFilters.viewMode;
+    if (restoredFilters?.viewMode) return restoredFilters.viewMode;
     const saved = localStorage.getItem("quotes_view_mode");
     return saved === "kanban" ? "kanban" : "table";
   })();
@@ -363,11 +370,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState(() => initialFilters?.search ?? "");
-  const [status, setStatusFilter] = useState(() => initialFilters?.status ?? "all");
-  const [managerFilter, setManagerFilter] = useState<string>(() => initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER);
+  const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
+  const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
+  const [managerFilter, setManagerFilter] = useState<string>(() => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER);
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
@@ -437,10 +444,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => Object.fromEntries(KANBAN_COLUMNS.map((column) => [column.id, QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT]))
   );
   const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
-  const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => initialFilters?.sortBy ?? "date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => initialFilters?.sortOrder ?? "desc");
+  const [sortBy, setSortBy] = useState<"date" | "number" | null>(() => restoredFilters?.sortBy ?? "date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => restoredFilters?.sortOrder ?? "desc");
   const [quickFilter, setQuickFilter] = useState<"all" | "new" | "estimated">(
-    () => initialFilters?.quickFilter ?? "all"
+    () => restoredFilters?.quickFilter ?? "all"
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -455,10 +462,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       )
   );
   const [contentView, setContentView] = useState<"quotes" | "sets" | "all">(
-    () => initialFilters?.contentView ?? "quotes"
+    () => restoredFilters?.contentView ?? "quotes"
   );
   const [quoteListMode, setQuoteListMode] = useState<"flat" | "grouped">(
-    () => initialFilters?.quoteListMode ?? "flat"
+    () => restoredFilters?.quoteListMode ?? "flat"
   );
 
   useEffect(() => {
@@ -495,9 +502,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       })
       .filter(Boolean) as NewQuoteFormData["printApplications"];
   };
-  const [quoteSetSearch, setQuoteSetSearch] = useState(() => initialFilters?.quoteSetSearch ?? "");
+  const [quoteSetSearch, setQuoteSetSearch] = useState(() => restoredFilters?.quoteSetSearch ?? "");
   const [quoteSetKindFilter, setQuoteSetKindFilter] = useState<"all" | "kp" | "set">(
-    () => initialFilters?.quoteSetKindFilter ?? "all"
+    () => restoredFilters?.quoteSetKindFilter ?? "all"
   );
   const [quoteSetDetailsOpen, setQuoteSetDetailsOpen] = useState(false);
   const [quoteSetDetailsLoading, setQuoteSetDetailsLoading] = useState(false);
@@ -3289,6 +3296,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         quoteSetKindFilter,
         sortBy,
         sortOrder,
+        cachedAt: Date.now(),
       } satisfies QuotesPageFiltersState)
     );
   }, [

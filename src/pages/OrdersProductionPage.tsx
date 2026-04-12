@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
@@ -31,6 +31,7 @@ import {
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
 import { cn } from "@/lib/utils";
+import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import {
   AlertTriangle,
   Building2,
@@ -58,6 +59,7 @@ type OrdersProductionPageFiltersState = {
   headerFilter?: HeaderFilter;
   managerFilter?: string;
   viewTab?: "queue" | "register";
+  cachedAt?: number;
 };
 
 const HEADER_FILTER_OPTIONS: Array<{ value: HeaderFilter; label: string }> = [
@@ -103,7 +105,10 @@ function readOrdersProductionPageFiltersState(teamId: string): OrdersProductionP
     if (!raw) return null;
     const parsed = JSON.parse(raw) as OrdersProductionPageFiltersState;
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    return {
+      ...parsed,
+      cachedAt: Number(parsed.cachedAt ?? 0),
+    };
   } catch {
     return null;
   }
@@ -125,22 +130,24 @@ const renderDocBadge = (label: string, ready: boolean) => (
 
 export default function OrdersProductionPage() {
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const { teamId, loading: authLoading, session, userId } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const initialCache = readOrdersProductionPageCache(teamId ?? "");
   const initialFilters = readOrdersProductionPageFiltersState(teamId ?? "");
+  const restoredFilters = shouldRestorePageUiState(navigationType, initialFilters?.cachedAt) ? initialFilters : null;
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.records.length > 0));
   const [refreshing, setRefreshing] = useState(false);
   const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<DerivedOrderRecord[]>(() => initialCache?.records ?? []);
-  const [search, setSearch] = useState(() => initialFilters?.search ?? "");
-  const [headerFilter, setHeaderFilter] = useState<HeaderFilter>(() => initialFilters?.headerFilter ?? "all");
+  const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
+  const [headerFilter, setHeaderFilter] = useState<HeaderFilter>(() => restoredFilters?.headerFilter ?? "all");
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER
+    () => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER
   );
-  const [viewTab, setViewTab] = useState<"queue" | "register">(() => initialFilters?.viewTab ?? "register");
+  const [viewTab, setViewTab] = useState<"queue" | "register">(() => restoredFilters?.viewTab ?? "register");
 
   const openRecord = (record: DerivedOrderRecord) => {
     if (record.source === "stored") {
@@ -201,6 +208,7 @@ export default function OrdersProductionPage() {
         headerFilter,
         managerFilter,
         viewTab,
+        cachedAt: Date.now(),
       } satisfies OrdersProductionPageFiltersState)
     );
   }, [teamId, search, headerFilter, managerFilter, viewTab]);

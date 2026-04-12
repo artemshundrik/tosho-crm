@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ import {
   normalizeCompanyNameLooseKey,
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
+import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -390,6 +391,7 @@ type CustomersPageCachePayload = {
   search: string;
   customerManagerFilter: string;
   leadManagerFilter: string;
+  cachedAt?: number;
 };
 
 const toManagerKey = (value?: string | null) => normalizeManagerKey(value);
@@ -430,6 +432,7 @@ function readCustomersPageCache(teamId: string): CustomersPageCachePayload | nul
       customerManagerFilter:
         typeof parsed.customerManagerFilter === "string" ? parsed.customerManagerFilter : ALL_MANAGERS_FILTER,
       leadManagerFilter: typeof parsed.leadManagerFilter === "string" ? parsed.leadManagerFilter : ALL_MANAGERS_FILTER,
+      cachedAt: Number(parsed.cachedAt ?? 0),
     };
   } catch {
     return null;
@@ -457,16 +460,18 @@ function clearLegacyCustomersPageCache(teamId: string) {
 function CustomersPage({ teamId }: { teamId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const [searchParams] = useSearchParams();
   const { session, userId, jobRole } = useAuth();
   const initialCache = readCustomersPageCache(teamId);
-  const [activeTab, setActiveTab] = useState<"customers" | "leads">(() => initialCache?.activeTab ?? "customers");
-  const [search, setSearch] = useState(() => initialCache?.search ?? "");
+  const restoredCache = shouldRestorePageUiState(navigationType, initialCache?.cachedAt) ? initialCache : null;
+  const [activeTab, setActiveTab] = useState<"customers" | "leads">(() => restoredCache?.activeTab ?? "customers");
+  const [search, setSearch] = useState(() => restoredCache?.search ?? "");
   const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(
-    () => initialCache?.customerManagerFilter ?? ALL_MANAGERS_FILTER
+    () => restoredCache?.customerManagerFilter ?? ALL_MANAGERS_FILTER
   );
   const [leadManagerFilter, setLeadManagerFilter] = useState<string>(
-    () => initialCache?.leadManagerFilter ?? ALL_MANAGERS_FILTER
+    () => restoredCache?.leadManagerFilter ?? ALL_MANAGERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
   const [crossManagerMatches, setCrossManagerMatches] = useState<SearchVisibilityMatch[]>([]);
@@ -1883,6 +1888,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       search,
       customerManagerFilter,
       leadManagerFilter,
+      cachedAt: Date.now(),
     } satisfies CustomersPageCachePayload);
   }, [activeTab, customerManagerFilter, leadManagerFilter, search, teamId]);
 

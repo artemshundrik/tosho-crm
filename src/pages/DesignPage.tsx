@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
+import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -165,6 +166,7 @@ type DesignPageFiltersState = {
   timelineZoom?: "day" | "week" | "month";
   assigneeSpotlight?: string;
   completedPeriod?: DesignCompletedPeriod;
+  cachedAt?: number;
 };
 
 const isDesignerRole = (value?: string | null) => {
@@ -463,7 +465,10 @@ function readDesignPageFiltersState(teamId: string): DesignPageFiltersState | nu
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DesignPageFiltersState;
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    return {
+      ...parsed,
+      cachedAt: Number(parsed.cachedAt ?? 0),
+    };
   } catch {
     return null;
   }
@@ -721,12 +726,14 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole } = useAuth();
+  const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
   const initialLogoCache = readDesignCustomerLogoCache(effectiveTeamId ?? "");
   const initialMemberCache = readDesignMemberCache(effectiveTeamId ?? "");
   const initialCacheRaw = readDesignPageCache(effectiveTeamId ?? "");
   const initialFilters = readDesignPageFiltersState(effectiveTeamId ?? "");
+  const restoredFilters = shouldRestorePageUiState(navigationType, initialFilters?.cachedAt) ? initialFilters : null;
   const initialCache =
     initialCacheRaw && initialLogoCache?.entries?.length
       ? {
@@ -743,7 +750,7 @@ export default function DesignPage() {
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
-    (initialFilters?.viewMode ?? "kanban") === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE
+    (restoredFilters?.viewMode ?? "kanban") === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE
   );
   const [hasMoreTasks, setHasMoreTasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -796,29 +803,29 @@ export default function DesignPage() {
     nextAssigneeUserId?: string | null;
     nextStatus?: DesignStatus;
   } | null>(null);
-  const [contentView, setContentView] = useState<DesignContentView>(() => initialFilters?.contentView ?? "all");
-  const [viewMode, setViewMode] = useState<DesignViewMode>(() => initialFilters?.viewMode ?? "kanban");
-  const [search, setSearch] = useState(() => initialFilters?.search ?? "");
+  const [contentView, setContentView] = useState<DesignContentView>(() => restoredFilters?.contentView ?? "all");
+  const [viewMode, setViewMode] = useState<DesignViewMode>(() => restoredFilters?.viewMode ?? "kanban");
+  const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [statusFilter, setStatusFilter] = useState<DesignStatus | "all">(
-    () => initialFilters?.statusFilter ?? "all"
+    () => restoredFilters?.statusFilter ?? "all"
   );
   const [designerFilter, setDesignerFilter] = useState<string>(
-    () => initialFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
+    () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER
+    () => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER
   );
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
-    () => (initialFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
+    () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (initialFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
   );
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
-    () => initialFilters?.timelineZoom ?? "day"
+    () => restoredFilters?.timelineZoom ?? "day"
   );
   const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(
-    () => initialFilters?.assigneeSpotlight ?? ALL_ASSIGNEE_SPOTLIGHT
+    () => restoredFilters?.assigneeSpotlight ?? ALL_ASSIGNEE_SPOTLIGHT
   );
   const [memberById, setMemberById] = useState<Record<string, string>>(() => initialMemberCache?.memberById ?? {});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>(
@@ -834,7 +841,7 @@ export default function DesignPage() {
   const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const [completedPeriod] = useState<DesignCompletedPeriod>(
-    () => initialFilters?.completedPeriod ?? "30d"
+    () => restoredFilters?.completedPeriod ?? "30d"
   );
   const [completedByAssignee, setCompletedByAssignee] = useState<Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }>>({});
   const [, setCompletedSummaryLoading] = useState(false);
@@ -2077,6 +2084,7 @@ export default function DesignPage() {
       timelineZoom,
       assigneeSpotlight,
       completedPeriod,
+      cachedAt: Date.now(),
     } satisfies DesignPageFiltersState);
   }, [
     effectiveTeamId,
