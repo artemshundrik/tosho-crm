@@ -6546,26 +6546,27 @@ export default function DesignTaskPage() {
   };
 
   return (
-    <div className="w-full max-w-none px-0 pb-20 md:pb-0 space-y-4">
+    <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
       <EntityHeader
+        className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
         topBar={
           <>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/design")} className="gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/design")} className="h-8 gap-2 px-2 text-muted-foreground">
               <ArrowLeft className="h-4 w-4" />
               До дошки
             </Button>
-            <Badge variant="outline" className="gap-1 text-xs">
+            <Badge variant="outline" className="h-7 gap-1 rounded-md border-border/50 bg-transparent text-[11px] font-medium text-muted-foreground">
               <Palette className="h-3.5 w-3.5" />
               Дизайн задача
             </Badge>
           </>
         }
         title={
-          <div className="flex flex-wrap items-center gap-2 leading-none">
+          <div className="flex flex-wrap items-center gap-2 leading-tight">
             <HoverCopyText
               value={taskHeaderTitle}
               className="max-w-full"
-              textClassName="font-mono text-[22px] text-primary font-medium tracking-tight leading-none"
+              textClassName="font-mono text-[18px] text-primary font-medium tracking-tight md:text-[20px]"
               buttonStyle="overlay"
               buttonClassName="h-6 w-6 rounded-md"
               successMessage="Номер дизайн-задачі скопійовано"
@@ -6615,7 +6616,7 @@ export default function DesignTaskPage() {
                 {renameError ? <div className="text-xs text-destructive">{renameError}</div> : null}
               </div>
             ) : (
-              <span className="relative -top-[1px] min-w-0 break-words font-medium leading-none">{taskHeaderName}</span>
+              <span className="min-w-0 break-words text-[18px] font-medium tracking-tight md:text-[20px]">{taskHeaderName}</span>
             )}
             {canEditTaskTitle ? (
               !titleEditing ? (
@@ -6821,36 +6822,40 @@ export default function DesignTaskPage() {
       />
 
       {designTaskLockedByOther ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+        <div className="mx-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 sm:mx-5 md:mx-6 dark:text-amber-100 xl:mx-8">
           <span className="font-medium">Режим лише перегляду.</span>{" "}
           ТЗ редагує {designTaskLock.holderName ?? "інший користувач"}.
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)] gap-4">
-        <div className="space-y-4">
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
+      <div className="grid grid-cols-1 gap-8 px-4 sm:px-5 md:px-6 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)] xl:px-8">
+        <div className="space-y-8">
+          <section className="border-b border-border/40 pb-8">
             {/* Section header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Бриф задачі</span>
+            <div className="flex items-center justify-between gap-3 pb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Бриф задачі</span>
               {isLinkedQuote && quantityLabel !== "Не вказано" ? (
                 <Badge variant="outline" className="text-xs font-normal">{quantityLabel}</Badge>
               ) : null}
             </div>
 
             {/* Property rows */}
-            <div className="divide-y divide-border/25">
+            <div className="divide-y divide-border/25 border-y border-border/25">
               {/* Client row */}
-              <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setPartyCardOpen(true)}>
+              <button
+                type="button"
+                onClick={() => setPartyCardOpen(true)}
+                className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
                 <span className="w-24 shrink-0 text-xs text-muted-foreground">Замовник</span>
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={20} />
                   <span className="text-sm font-medium truncate">{task.customerName ?? "Не вказано"}</span>
                 </div>
-              </div>
+              </button>
 
               {/* Manager row */}
-              <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
+              <div className="group flex items-center gap-3 py-3">
                 <span className="w-24 shrink-0 text-xs text-muted-foreground">{taskRoleLabel}</span>
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={20} className="shrink-0 border-border/60" />
@@ -6859,7 +6864,7 @@ export default function DesignTaskPage() {
                 {!designTaskLockedByOther && managerMembers.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" disabled={managerSaving}>
+                      <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground" disabled={managerSaving}>
                         {managerSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Змінити"}
                       </Button>
                     </DropdownMenuTrigger>
@@ -6883,7 +6888,7 @@ export default function DesignTaskPage() {
 
               {/* Position row */}
               {isLinkedQuote ? (
-                <div className="flex items-center gap-3 px-4 py-2.5">
+                <div className="flex items-center gap-3 py-3">
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">Позиція</span>
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     {productPreviewUrl ? (
@@ -6900,7 +6905,7 @@ export default function DesignTaskPage() {
 
               {/* Quote number row */}
               {isLinkedQuote ? (
-                <div className="flex items-center gap-3 px-4 py-2.5">
+                <div className="flex items-center gap-3 py-3">
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">Прорахунок</span>
                   <HoverCopyText value={getTaskDisplayNumber(task)} textClassName="font-mono text-sm font-medium" successMessage="Номер прорахунку скопійовано" copyLabel="Скопіювати номер прорахунку">
                     {getTaskDisplayNumber(task)}
@@ -6909,19 +6914,19 @@ export default function DesignTaskPage() {
               ) : null}
 
               {/* Created row */}
-              <div className="flex items-center gap-3 px-4 py-2.5">
+              <div className="flex items-center gap-3 py-3">
                 <span className="w-24 shrink-0 text-xs text-muted-foreground">Створено</span>
                 <span className="text-sm text-foreground">{formatDate(task.createdAt, true)}</span>
               </div>
             </div>
             {task.status === "changes" ? (
-              <div className="mx-4 my-3 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-foreground">
+              <div className="my-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-foreground">
                 {task.title ?? "Замовник надіслав правки, перевірте деталі та оновіть макет."}
               </div>
             ) : null}
 
             {/* ТЗ section */}
-            <div className="border-t border-border/40 px-4 pt-3 pb-4">
+            <div className="border-t border-border/25 pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">ТЗ для дизайнера</span>
@@ -6962,7 +6967,7 @@ export default function DesignTaskPage() {
                       }
                     }}
                   >
-                    <div className="min-h-[140px] text-sm text-foreground">{renderBriefRichText(briefDraft)}</div>
+                    <div className="min-h-[140px] text-sm leading-7 text-foreground">{renderBriefRichText(briefDraft)}</div>
                   </div>
                 )}
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -6999,7 +7004,7 @@ export default function DesignTaskPage() {
                 </div>
 
                 {briefChangeRequests.length > 0 ? (
-                  <div className="rounded-md border border-border/60 bg-background/50 p-3 space-y-2">
+                  <div className="space-y-2 border-t border-border/25 pt-3">
                     <div className="text-xs text-muted-foreground">Останні правки ({briefChangeRequests.length})</div>
                     <div className="space-y-1.5">
                       {briefChangeRequests.slice(0, 3).map((request) => (
@@ -7015,7 +7020,7 @@ export default function DesignTaskPage() {
                 ) : null}
 
                 {changeRequestOpen ? (
-                  <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-2">
+                  <div className="space-y-2 border-t border-border/25 pt-3">
                     <Textarea
                       value={changeRequestDraft}
                       onChange={(event) => setChangeRequestDraft(event.target.value)}
@@ -7054,7 +7059,7 @@ export default function DesignTaskPage() {
                   {briefVersions.length > 1 ? (
                     <div className="space-y-2 max-h-64 overflow-auto pr-1">
                       {[...briefVersions].reverse().map((version) => (
-                        <div key={version.id} className="rounded-md border border-border/60 bg-background/60 p-3 space-y-1">
+                        <div key={version.id} className="border-l border-border/50 pl-3 space-y-1">
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-sm font-medium">v{version.version}</div>
                             <div className="text-xs text-muted-foreground">{formatDate(version.created_at, true)}</div>
@@ -7073,7 +7078,7 @@ export default function DesignTaskPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-xs text-muted-foreground">
+                    <div className="border-l border-dashed border-border/60 pl-3 py-1 text-xs text-muted-foreground">
                       Історія версій зʼявиться після першого збереження.
                     </div>
                   )}
@@ -7081,18 +7086,175 @@ export default function DesignTaskPage() {
                 ) : null}
               </div>
             </div>
-          </div>
+          </section>
+
+          <section className="border-b border-border/40 pb-8">
+            <div className="flex items-center justify-between gap-3 pb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => void handleUploadTaskAttachments(event.target.files)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                  disabled={attachmentUploading}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  {attachmentUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Додати файл
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {attachments.length === 0 ? (
+                isLinkedQuote && !customerAttachmentsLoaded ? (
+                  <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground space-y-3">
+                    <div>Файли замовника ще не завантажені.</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5"
+                      disabled={customerAttachmentsLoading}
+                      onClick={() => void loadCustomerAttachments()}
+                    >
+                      {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                      Завантажити файли замовника
+                    </Button>
+                    {customerAttachmentsError ? <div className="text-xs text-destructive">{customerAttachmentsError}</div> : null}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                    Немає вкладень
+                  </div>
+                )
+              ) : (
+                <div className="space-y-2.5">
+                  {isLinkedQuote && !customerAttachmentsLoaded ? (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                      <span>Файли замовника не завантажені. Зараз показані лише файли з ТЗ.</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2.5"
+                        disabled={customerAttachmentsLoading}
+                        onClick={() => void loadCustomerAttachments()}
+                      >
+                        {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Завантажити"}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {customerAttachmentsError ? <div className="text-xs text-destructive">{customerAttachmentsError}</div> : null}
+                  {attachments.map((file) => {
+                    const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
+                    const extension = getFileExtension(displayName);
+                    const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
+                    return (
+                      <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex items-start gap-2.5">
+                            {previewableImage ? (
+                              <StorageObjectImage
+                                bucket={file.storage_bucket}
+                                path={file.storage_path}
+                                alt={displayName}
+                                variant="thumb"
+                                hoverPreview
+                                className="h-11 w-11 shrink-0 rounded-md border border-border/60"
+                              />
+                            ) : (
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground">
+                                {extension}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium" title={displayName}>
+                                {displayName}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                <span>{formatFileSize(file.file_size)}</span>
+                                <span>·</span>
+                                <span>{formatDate(file.created_at, true)}</span>
+                                {file.uploaded_by ? (
+                                  <>
+                                    <span>·</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <AvatarBase
+                                        src={getMemberAvatar(file.uploaded_by)}
+                                        name={getMemberLabel(file.uploaded_by)}
+                                        fallback={getInitials(getMemberLabel(file.uploaded_by))}
+                                        size={14}
+                                        className="shrink-0 border-border/70"
+                                      />
+                                      <span>{getMemberLabel(file.uploaded_by)}</span>
+                                    </span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {file.storage_bucket && file.storage_path ? (
+                              <>
+                                <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" aria-label="Завантажити файл" onClick={() => void downloadStorageBackedFile(file)}>
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button size="icon" variant="ghost" disabled>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" disabled>
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            {canDeleteTaskBriefAttachment(file) ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                aria-label="Видалити файл"
+                                disabled={attachmentDeletingId === file.id}
+                                onClick={() => void handleRemoveTaskAttachment(file.id)}
+                              >
+                                {attachmentDeletingId === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
 
           {isLinkedQuote ? (
-            <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
+            <section className="border-b border-border/40 pb-8">
+              <div className="flex items-center justify-between pb-3">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Нанесення</span>
                 {task.methodsCount ? <Badge variant="outline" className="text-xs font-normal">{task.methodsCount} нанес.</Badge> : null}
               </div>
-              <div className="px-4 py-3 space-y-2">
+              <div className="space-y-2">
                 {methods.length > 0 ? (
                   methods.map((method, idx) => (
-                    <div key={idx} className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5 text-sm">
+                    <div key={idx} className="border-b border-border/25 py-2.5 text-sm last:border-b-0">
                       <div className="font-medium text-foreground/90">Метод {idx + 1}: {getMethodLabel(method.method_id ?? null)}</div>
                       <div className="text-xs text-muted-foreground mt-1">
                         {getPrintPositionLabel(method.print_position_id ?? null)} · {method.print_width_mm ?? "—"} × {method.print_height_mm ?? "—"} мм
@@ -7105,17 +7267,17 @@ export default function DesignTaskPage() {
                   </div>
                 )}
               </div>
-            </div>
+            </section>
           ) : null}
 
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border/40">
+          <section className="border-b border-border/40 pb-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Результат дизайнера</span>
               <Badge variant="outline" className="text-xs">
                 {designOutputFiles.length + designOutputLinks.length} матеріалів
               </Badge>
             </div>
-            <div className="px-4 py-3 space-y-3">
+            <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
                 <SelectTrigger className="h-8 w-full text-xs sm:w-auto sm:min-w-[180px]">
@@ -7183,7 +7345,7 @@ export default function DesignTaskPage() {
               onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
               className="w-full"
             >
-              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-xl bg-muted/30 p-1 shadow-inner">
+              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-lg border border-border/40 bg-transparent p-1">
                 <TabsTrigger value="visualization" className="gap-2">
                   <ImageIcon className="h-4 w-4" />
                   <span>Візуал</span>
@@ -7211,19 +7373,19 @@ export default function DesignTaskPage() {
               </TabsContent>
             </Tabs>
 
-            <Card className="overflow-hidden border border-border/60 bg-[linear-gradient(135deg,hsl(var(--primary)/0.10),hsl(var(--background))_42%,hsl(204_94%_94%/0.22))] shadow-[0_20px_56px_-28px_hsl(var(--foreground)/0.28)]">
+            <Card className="overflow-hidden border border-border/50 bg-card/40 shadow-none">
               <CardContent className="p-0">
                 <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
                   <div className="space-y-5 p-5">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary text-primary-foreground shadow-[0_12px_28px_-18px_hsl(var(--primary)/0.7)]">
-                        <DropboxGlyph className="h-6 w-6" />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/20 text-foreground">
+                        <DropboxGlyph className="h-5 w-5" />
                       </div>
                       <div className="space-y-1">
-                        <div className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                           Dropbox Export
                         </div>
-                        <div className="text-xl font-semibold text-foreground">
+                        <div className="text-lg font-semibold text-foreground">
                           Фінал і архів для папки замовлення
                         </div>
                         <p className="text-sm leading-5 text-muted-foreground">
@@ -7238,7 +7400,7 @@ export default function DesignTaskPage() {
                         return (
                           <div
                             key={`dropbox-plan-${kind}`}
-                            className="rounded-2xl border border-border/60 bg-card/75 p-4 shadow-[0_16px_36px_-28px_hsl(var(--foreground)/0.22)] backdrop-blur-sm"
+                            className="rounded-xl border border-border/50 bg-background/30 p-4"
                           >
                             <div className="mb-3 flex items-center justify-between gap-2">
                               <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -7249,19 +7411,19 @@ export default function DesignTaskPage() {
                                 )}
                                 {DESIGN_OUTPUT_KIND_LABELS[kind]}
                               </div>
-                              <Badge variant="outline" className="border-border/60 bg-background/60 text-[10px]">
+                              <Badge variant="outline" className="border-border/60 bg-transparent text-[10px]">
                                 Архів: {plan.archiveFiles.length}
                               </Badge>
                             </div>
                             {plan.finalFiles.length > 0 ? (
-                              <div className="rounded-xl border border-success/20 bg-success/5 p-3">
+                              <div className="rounded-lg border border-success/20 bg-success/5 p-3">
                                 <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-success-foreground">
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                   Фінал: {plan.finalFiles.length}
                                 </div>
                                 <div className="space-y-2">
                                   {plan.finalFiles.map((finalFile) => (
-                                    <div key={`dropbox-summary-${kind}-${finalFile.id}`} className="rounded-lg border border-success/10 bg-background/50 px-3 py-2">
+                                    <div key={`dropbox-summary-${kind}-${finalFile.id}`} className="rounded-lg border border-success/10 bg-background/40 px-3 py-2">
                                       <div className="truncate text-sm font-medium text-foreground" title={finalFile.file_name}>
                                         {finalFile.file_name}
                                       </div>
@@ -7273,7 +7435,7 @@ export default function DesignTaskPage() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border/70 bg-background/40 p-3 text-sm text-muted-foreground">
+                              <div className="rounded-lg border border-dashed border-border/60 bg-transparent p-3 text-sm text-muted-foreground">
                                 У цьому табі немає затвердженого файла. Усі матеріали підуть тільки в архів.
                               </div>
                             )}
@@ -7283,7 +7445,7 @@ export default function DesignTaskPage() {
                     </div>
 
                     {dropboxExportWarnings.length > 0 ? (
-                      <div className="rounded-2xl border border-amber-300/60 bg-amber-50/90 p-3 text-sm text-amber-900">
+                      <div className="rounded-xl border border-amber-300/30 bg-amber-50/10 p-3 text-sm text-amber-200">
                         <div className="mb-1 inline-flex items-center gap-2 font-medium">
                           <AlertTriangle className="h-4 w-4" />
                           Потрібно уточнення перед експортом
@@ -7293,13 +7455,13 @@ export default function DesignTaskPage() {
                     ) : null}
                   </div>
 
-                  <div className="flex flex-col justify-between gap-4 border-t border-border/60 bg-[linear-gradient(180deg,hsl(var(--background)/0.72),hsl(var(--muted)/0.42))] p-5 lg:border-l lg:border-t-0">
+                  <div className="flex flex-col justify-between gap-4 border-t border-border/50 bg-muted/10 p-5 lg:border-l lg:border-t-0">
                     <div className="space-y-4">
-                      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                      <div className="rounded-xl border border-border/50 bg-background/40 p-4">
                         <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                           Папка замовлення
                         </div>
-                        <div className="rounded-xl bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">
+                        <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
                           {dropboxDisplayedFolderName}
                         </div>
                         <div className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -7310,13 +7472,13 @@ export default function DesignTaskPage() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">У фінал</div>
                           <div className="mt-2 text-2xl font-semibold text-foreground">
                             {dropboxExportPlan.filter((entry) => entry.role === "final").length}
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">В архів</div>
                           <div className="mt-2 text-2xl font-semibold text-foreground">
                             {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
@@ -7326,7 +7488,7 @@ export default function DesignTaskPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className={cn("rounded-2xl border px-4 py-3 text-sm", dropboxStatusToneClass)}>
+                      <div className={cn("rounded-xl border px-4 py-3 text-sm", dropboxStatusToneClass)}>
                         <div className="font-medium">{dropboxStatusLabel}</div>
                         <div className="mt-1 text-xs opacity-80">
                           {dropboxFolderReachable === false
@@ -7404,14 +7566,14 @@ export default function DesignTaskPage() {
                 </div>
               </CardContent>
             </Card>
-            </div>{/* end px-4 py-3 space-y-3 wrapper */}
-          </div>
+            </div>
+          </section>
         </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-20 self-start">
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
+        <aside className="space-y-8 self-start xl:sticky xl:top-20">
+          <section className="border-b border-border/40 pb-8">
             {/* Panel header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
+            <div className="flex items-center justify-between pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Виконання</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -7449,9 +7611,9 @@ export default function DesignTaskPage() {
             </div>
 
             {/* Property rows */}
-            <div className="divide-y divide-border/30">
+            <div className="divide-y divide-border/25 border-y border-border/25">
               {/* Assignee row */}
-              <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
+              <div className="group flex items-center gap-3 py-3">
                 <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Виконавець</span>
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   {task.assigneeUserId ? (
@@ -7470,15 +7632,15 @@ export default function DesignTaskPage() {
                   )}
                 </div>
                 {canManageAssignments ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 shrink-0 px-2 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                        disabled={!!assigningMemberId}
-                      >
-                        {assigningMemberId ? <Loader2 className="h-3 w-3 animate-spin" /> : "Змінити"}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground"
+                          disabled={!!assigningMemberId}
+                        >
+                          {assigningMemberId ? <Loader2 className="h-3 w-3 animate-spin" /> : "Змінити"}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
@@ -7518,7 +7680,7 @@ export default function DesignTaskPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : !task.assigneeUserId && canTakeOverForSelf ? (
-                  <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
+                  <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
                     {assigningSelf ? <Loader2 className="h-3 w-3 animate-spin" /> : "Взяти"}
                   </Button>
                 ) : null}
@@ -7526,7 +7688,7 @@ export default function DesignTaskPage() {
 
               {/* Recommendation row (if manager can assign and there's a suggestion) */}
               {canManageAssignments && recommendedDesigner ? (
-                <div className="flex items-center gap-3 px-4 py-2">
+                <div className="flex items-center gap-3 py-2">
                   <span className="w-[76px] shrink-0 text-[10px] text-muted-foreground/60">Рекоменд.</span>
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <AvatarBase
@@ -7552,7 +7714,7 @@ export default function DesignTaskPage() {
               ) : null}
 
               {/* Deadline row */}
-              <div className="group flex items-center gap-3 px-4 py-2.5">
+              <div className="group flex items-center gap-3 py-3">
                 <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Дедлайн</span>
                 <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
                   <PopoverTrigger asChild>
@@ -7590,7 +7752,7 @@ export default function DesignTaskPage() {
                   <button
                     type="button"
                     aria-label="Очистити дедлайн"
-                    className="shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-muted-foreground group-hover:opacity-100"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-opacity hover:text-muted-foreground"
                     disabled={deadlineSaving}
                     onClick={() => void updateTaskDeadline(null)}
                   >
@@ -7600,7 +7762,7 @@ export default function DesignTaskPage() {
               </div>
 
               {/* Timer row */}
-              <div className="flex items-center gap-3 px-4 py-2.5">
+              <div className="flex items-center gap-3 py-3">
                 <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Таймер</span>
                 <span
                   className={cn(
@@ -7634,9 +7796,9 @@ export default function DesignTaskPage() {
                 </div>
               </div>
               {startTimerBlockedReason && !isTimerRunning ? (
-                <div className="px-4 py-2 text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
+                <div className="py-2 text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
               ) : isTimerRunning && timerSummary.activeUserId ? (
-                <div className="px-4 pb-2 text-[11px] text-muted-foreground">
+                <div className="pb-2 text-[11px] text-muted-foreground">
                   Активний · {getMemberLabel(timerSummary.activeUserId)}
                 </div>
               ) : null}
@@ -7644,7 +7806,7 @@ export default function DesignTaskPage() {
 
             {/* Status quick actions */}
             {statusQuickActionsWithoutStart.length > 0 ? (
-              <div className="border-t border-border/40 px-3 py-3 space-y-1.5">
+              <div className="space-y-1.5 pt-4">
                 {statusQuickActionsWithoutStart.map((action) => (
                   <Button
                     key={`${task.status}-${action.next}`}
@@ -7665,189 +7827,14 @@ export default function DesignTaskPage() {
                 ) : null}
               </div>
             ) : null}
-          </div>
+          </section>
 
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/40">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
-              </span>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={attachmentInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(event) => void handleUploadTaskAttachments(event.target.files)}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5"
-                  disabled={attachmentUploading}
-                  onClick={() => attachmentInputRef.current?.click()}
-                >
-                  {attachmentUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  Додати файл
-                </Button>
-              </div>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-            {attachments.length === 0 ? (
-              isLinkedQuote && !customerAttachmentsLoaded ? (
-                <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground space-y-3">
-                  <div>Файли замовника ще не завантажені.</div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5"
-                    disabled={customerAttachmentsLoading}
-                    onClick={() => void loadCustomerAttachments()}
-                  >
-                    {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    Завантажити файли замовника
-                  </Button>
-                  {customerAttachmentsError ? (
-                    <div className="text-xs text-destructive">{customerAttachmentsError}</div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
-                  Немає вкладень
-                </div>
-              )
-            ) : (
-              <div className="space-y-2.5">
-                {isLinkedQuote && !customerAttachmentsLoaded ? (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                    <span>Файли замовника не завантажені. Зараз показані лише файли з ТЗ.</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2.5"
-                      disabled={customerAttachmentsLoading}
-                      onClick={() => void loadCustomerAttachments()}
-                    >
-                      {customerAttachmentsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Завантажити"}
-                    </Button>
-                  </div>
-                ) : null}
-                {customerAttachmentsError ? (
-                  <div className="text-xs text-destructive">{customerAttachmentsError}</div>
-                ) : null}
-                {attachments.map((file) => {
-                  const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
-                  const extension = getFileExtension(displayName);
-                  const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
-                  return (
-                    <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex items-start gap-2.5">
-                          {previewableImage ? (
-                            <StorageObjectImage
-                              bucket={file.storage_bucket}
-                              path={file.storage_path}
-                              alt={displayName}
-                              variant="thumb"
-                              hoverPreview
-                              className="h-11 w-11 shrink-0 rounded-md border border-border/60"
-                            />
-                          ) : (
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground">
-                              {extension}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium" title={displayName}>
-                              {displayName}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
-                              <span>{formatFileSize(file.file_size)}</span>
-                              <span>·</span>
-                              <span>{formatDate(file.created_at, true)}</span>
-                              {file.uploaded_by ? (
-                                <>
-                                  <span>·</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <AvatarBase
-                                      src={getMemberAvatar(file.uploaded_by)}
-                                      name={getMemberLabel(file.uploaded_by)}
-                                      fallback={getInitials(getMemberLabel(file.uploaded_by))}
-                                      size={14}
-                                      className="shrink-0 border-border/70"
-                                    />
-                                    <span>{getMemberLabel(file.uploaded_by)}</span>
-                                  </span>
-                                </>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                              {file.storage_bucket && file.storage_path ? (
-                                <>
-                                  <Button
-                                    size="icon"
-                                variant="ghost"
-                                aria-label="Переглянути файл"
-                                onClick={() => void openStorageFilePreview(file)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label="Завантажити файл"
-                                onClick={() => void downloadStorageBackedFile(file)}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="icon" variant="ghost" disabled>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" disabled>
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                          {canDeleteTaskBriefAttachment(file) ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              aria-label="Видалити файл"
-                              disabled={attachmentDeletingId === file.id}
-                              onClick={() => void handleRemoveTaskAttachment(file.id)}
-                            >
-                              {attachmentDeletingId === file.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            </div>{/* end px-4 py-3 wrapper */}
-          </div>
-
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
-            <div className="px-4 py-3 border-b border-border/40">
+          <section className="border-b border-border/40 pb-8">
+            <div className="pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
             </div>
-            <div className="px-4 py-3 space-y-3">
-            <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
+            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
               {managerMembers.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
@@ -8001,11 +7988,11 @@ export default function DesignTaskPage() {
                 ))}
               </div>
             )}
-            </div>{/* end px-4 py-3 comments wrapper */}
-          </div>
+            </div>
+          </section>
 
-          <div className="rounded-xl border border-border/50 bg-card/70 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
+          <section className="border-b border-border/40 pb-8">
+            <div className="flex items-center justify-between pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Історія задачі</span>
               {historyEvents.length > 0 ? (
                 <span className="text-[11px] text-muted-foreground/60">
@@ -8013,7 +8000,7 @@ export default function DesignTaskPage() {
                 </span>
               ) : null}
             </div>
-            <div className="px-4 py-3 space-y-3">
+            <div className="space-y-3">
             {historyLoading && historyEvents.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -8098,8 +8085,8 @@ export default function DesignTaskPage() {
                 ) : null}
               </div>
             )}
-            </div>{/* end px-4 py-3 history wrapper */}
-          </div>
+            </div>
+          </section>
         </aside>
       </div>
 

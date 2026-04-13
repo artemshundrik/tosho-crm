@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildCompanySearchVariants, matchesCompanyNameSearch, scoreCompanyNameMatch } from "@/lib/companyNameSearch";
+import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { supabase } from "@/lib/supabaseClient";
 import { listCustomersBySearch, listLeadsBySearch, listQuotes } from "@/lib/toshoApi";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -79,6 +80,29 @@ const MAX_RECENTS = 8;
 
 function normalizeText(s: string) {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function buildCommandSearchValue(parts: Array<string | null | undefined>) {
+  const normalizedParts = parts.map((part) => normalizeText(part ?? "")).filter(Boolean);
+  const variantParts = normalizedParts.flatMap((part) => buildCompanySearchVariants(part));
+  return Array.from(new Set([...normalizedParts, ...variantParts])).join(" ");
+}
+
+function sanitizeImageReference(value?: string | null) {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  const lower = normalized.toLowerCase();
+  if (
+    lower.includes("/rest/v1/") ||
+    lower.includes("?select=") ||
+    lower.includes("&select=") ||
+    lower.includes("status=eq.") ||
+    lower.includes("order=") ||
+    lower.includes("&limit=")
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function renderHighlightedText(value: string, query: string, className?: string) {
@@ -149,6 +173,7 @@ function pushRecent(next: { label: string; to: string }) {
 }
 
 function pathToLabel(pathname: string): string {
+  if (pathname.startsWith("/admin/observability")) return "Admin Observability";
   if (pathname.startsWith("/orders/estimates")) return "Прорахунки замовлень";
   if (pathname.startsWith("/orders/customers")) return "Замовники";
   if (pathname.startsWith("/orders/production")) return "Замовлення";
@@ -177,7 +202,7 @@ export type CommandPaletteProps = {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { teamId, userId } = useAuth();
+  const { teamId, userId, permissions } = useAuth();
 
   const [query, setQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -270,8 +295,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         to: "/team",
         icon: Users,
       },
+      ...(permissions.isSuperAdmin || permissions.isAdmin
+        ? [
+            {
+              key: "route-admin-observability",
+              label: "Admin Observability",
+              keywords: ["observability", "admin", "контроль", "панель", "адмін", "метрики", "storage", "orphan files"],
+              to: "/admin/observability",
+              icon: Search,
+            },
+          ]
+        : []),
     ],
-    []
+    [permissions.isAdmin, permissions.isSuperAdmin]
   );
 
   const actions: ActionItem[] = useMemo(
@@ -401,6 +437,59 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     const timeoutId = window.setTimeout(async () => {
       setSearchLoading(true);
       try {
+        const normalizedQuery = normalizeText(trimmedQuery);
+        const loadDesignTaskRows = async () => {
+          const matchedRows: Array<{
+            id?: string | null;
+            title?: string | null;
+            entity_id?: string | null;
+            metadata?: Record<string, unknown> | null;
+          }> = [];
+          const pageSize = 120;
+          const maxRowsToScan = 480;
+          let offset = 0;
+
+          while (offset < maxRowsToScan) {
+            const { data, error } = await supabase
+              .from("activity_log")
+              .select("id,title,entity_id,metadata,created_at")
+              .eq("team_id", teamId)
+              .eq("action", "design_task")
+              .order("created_at", { ascending: false })
+              .range(offset, offset + pageSize - 1);
+
+            if (error) throw error;
+
+            const pageRows = ((data ?? []) as Array<{
+              id?: string | null;
+              title?: string | null;
+              entity_id?: string | null;
+              metadata?: Record<string, unknown> | null;
+            }>).filter((row) => {
+              const metadata = row.metadata ?? {};
+              const taskNumber =
+                typeof metadata.design_task_number === "string" ? metadata.design_task_number.trim() : "";
+              const model =
+                typeof metadata.model === "string" ? metadata.model.trim() : "";
+              const customerName =
+                typeof metadata.customer_name === "string" ? metadata.customer_name.trim() : "";
+              const quoteNumber =
+                typeof metadata.quote_number === "string" ? metadata.quote_number.trim() : "";
+              const quoteTitle =
+                typeof metadata.quote_title === "string" ? metadata.quote_title.trim() : "";
+              const haystack = buildCommandSearchValue([row.title ?? "", taskNumber, model, customerName, quoteNumber, quoteTitle]);
+              return haystack.includes(normalizedQuery);
+            });
+
+            matchedRows.push(...pageRows);
+
+            if (matchedRows.length >= 6 || !data || data.length < pageSize) break;
+            offset += pageSize;
+          }
+
+          return matchedRows.slice(0, 6);
+        };
+
         const queryVariants = buildCompanySearchVariants(trimmedQuery);
         const quoteResponses = await Promise.all(
           queryVariants.map((variant) => listQuotes({ teamId, search: variant, limit: 10 }))
@@ -408,16 +497,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         const [customers, leads, designTaskResponse] = await Promise.all([
           listCustomersBySearch(teamId, trimmedQuery),
           listLeadsBySearch(teamId, trimmedQuery),
-          supabase
-            .from("activity_log")
-            .select("id,title,entity_id,metadata,created_at")
-            .eq("team_id", teamId)
-            .eq("action", "design_task")
-            .order("created_at", { ascending: false })
-            .limit(80),
+          loadDesignTaskRows(),
         ]);
-
-        const normalizedQuery = normalizeText(trimmedQuery);
         const resolveManagerMeta = (managerUserId?: string | null, managerLabel?: string | null) => {
           const byId = managerUserId?.trim() ? memberById.get(managerUserId.trim()) : undefined;
           const byLabel = managerLabel?.trim() ? memberByLabel.get(managerLabel.trim().toLowerCase()) : undefined;
@@ -462,7 +543,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               key: `quote-${quote.id}`,
               label: quoteLabel,
               description: description || "Прорахунок",
-              value: normalizeText([quoteLabel, description, quote.id].filter(Boolean).join(" ")),
+              value: buildCommandSearchValue([quoteLabel, description, quote.id, quote.customer_name, quote.title, quote.number]),
               to: `/orders/estimates/${quote.id}`,
               icon: Calculator,
               logoUrl: quote.customer_logo_url ?? null,
@@ -487,7 +568,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               key: `customer-${customer.id}`,
               label,
               description,
-              value: normalizeText([label, description, customer.id].join(" ")),
+              value: buildCommandSearchValue([label, description, customer.id, customer.name, customer.legal_name]),
               to: `/orders/customers?tab=customers&customerId=${customer.id}`,
               icon: Building2,
               logoUrl: customer.logo_url ?? null,
@@ -523,7 +604,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               key: `lead-${lead.id}`,
               label,
               description,
-              value: normalizeText([label, description, lead.id].join(" ")),
+              value: buildCommandSearchValue([
+                label,
+                description,
+                lead.id,
+                lead.company_name,
+                lead.legal_name,
+                [lead.first_name, lead.last_name].filter(Boolean).join(" "),
+              ]),
               to: `/orders/customers?tab=leads&leadId=${lead.id}`,
               icon: User,
               logoUrl: lead.logo_url ?? null,
@@ -541,20 +629,80 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             });
           });
 
-        const designTaskRows = ((designTaskResponse.data ?? []) as Array<{
-          id?: string | null;
-          title?: string | null;
-          entity_id?: string | null;
-          metadata?: Record<string, unknown> | null;
-        }>).filter((row) => {
-          const metadata = row.metadata ?? {};
-          const taskNumber =
-            typeof metadata.design_task_number === "string" ? metadata.design_task_number.trim() : "";
-          const model =
-            typeof metadata.model === "string" ? metadata.model.trim() : "";
-          const haystack = normalizeText([row.title ?? "", taskNumber, model].join(" "));
-          return haystack.includes(normalizedQuery);
-        });
+        const designTaskRows = designTaskResponse;
+        const designQuoteIds = Array.from(
+          new Set(
+            designTaskRows
+              .map((task) => {
+                const metadata = task.metadata ?? {};
+                return typeof metadata.quote_id === "string" && metadata.quote_id.trim() ? metadata.quote_id.trim() : "";
+              })
+              .filter(Boolean)
+          )
+        );
+        const designCustomerIds = Array.from(
+          new Set(
+            designTaskRows
+              .map((task) => {
+                const metadata = task.metadata ?? {};
+                return typeof metadata.customer_id === "string" && metadata.customer_id.trim() ? metadata.customer_id.trim() : "";
+              })
+              .filter(Boolean)
+          )
+        );
+        const designCustomerTypeById = new Map(
+          designTaskRows.flatMap((task) => {
+            const metadata = task.metadata ?? {};
+            const customerId = typeof metadata.customer_id === "string" && metadata.customer_id.trim() ? metadata.customer_id.trim() : "";
+            const customerType = typeof metadata.customer_type === "string" && metadata.customer_type.trim()
+              ? metadata.customer_type.trim().toLowerCase()
+              : "";
+            return customerId ? [[customerId, customerType]] as const : [];
+          })
+        );
+        const quoteLogoById = new Map<string, string | null>();
+        const customerLogoById = new Map<string, string | null>();
+        const leadLogoById = new Map<string, string | null>();
+
+        if (designQuoteIds.length > 0) {
+          const { data: quoteRows } = await supabase
+            .schema("tosho")
+            .from("quotes")
+            .select("id, customer_logo_url")
+            .in("id", designQuoteIds);
+          ((quoteRows ?? []) as Array<{ id?: string | null; customer_logo_url?: string | null }>).forEach((row) => {
+            if (!row.id) return;
+            quoteLogoById.set(row.id, sanitizeImageReference(normalizeCustomerLogoUrl(row.customer_logo_url ?? null)));
+          });
+        }
+
+        const customerIds = designCustomerIds.filter((id) => designCustomerTypeById.get(id) !== "lead");
+        const leadIds = designCustomerIds.filter((id) => designCustomerTypeById.get(id) === "lead");
+
+        if (customerIds.length > 0) {
+          const { data: customerRows } = await supabase
+            .schema("tosho")
+            .from("customers")
+            .select("id, logo_url")
+            .in("id", customerIds);
+          ((customerRows ?? []) as Array<{ id?: string | null; logo_url?: string | null }>).forEach((row) => {
+            if (!row.id) return;
+            customerLogoById.set(row.id, sanitizeImageReference(normalizeCustomerLogoUrl(row.logo_url ?? null)));
+          });
+        }
+
+        if (leadIds.length > 0) {
+          const { data: leadRows } = await supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id, logo_url")
+            .eq("team_id", teamId)
+            .in("id", leadIds);
+          ((leadRows ?? []) as Array<{ id?: string | null; logo_url?: string | null }>).forEach((row) => {
+            if (!row.id) return;
+            leadLogoById.set(row.id, sanitizeImageReference(normalizeCustomerLogoUrl(row.logo_url ?? null)));
+          });
+        }
 
         designTaskRows.slice(0, 6).forEach((task) => {
           const taskId = task.id ?? task.entity_id ?? "";
@@ -568,13 +716,50 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             typeof metadata.model === "string" && metadata.model.trim()
               ? metadata.model.trim()
               : task.title?.trim() || "Дизайн";
+          const customerName =
+            typeof metadata.customer_name === "string" && metadata.customer_name.trim()
+              ? metadata.customer_name.trim()
+              : "";
+          const quoteNumber =
+            typeof metadata.quote_number === "string" && metadata.quote_number.trim()
+              ? metadata.quote_number.trim()
+              : "";
+          const quoteTitle =
+            typeof metadata.quote_title === "string" && metadata.quote_title.trim()
+              ? metadata.quote_title.trim()
+              : "";
+          const customerId =
+            typeof metadata.customer_id === "string" && metadata.customer_id.trim()
+              ? metadata.customer_id.trim()
+              : "";
+          const customerType =
+            typeof metadata.customer_type === "string" && metadata.customer_type.trim()
+              ? metadata.customer_type.trim().toLowerCase()
+              : "";
+          const quoteId =
+            typeof metadata.quote_id === "string" && metadata.quote_id.trim()
+              ? metadata.quote_id.trim()
+              : "";
+          const customerLogoUrl =
+            (typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
+              ? sanitizeImageReference(normalizeCustomerLogoUrl(metadata.customer_logo_url))
+              : null) ??
+            (customerId
+              ? customerType === "lead"
+                ? (leadLogoById.get(customerId) ?? null)
+                : (customerLogoById.get(customerId) ?? null)
+              : null) ??
+            (quoteId ? (quoteLogoById.get(quoteId) ?? null) : null);
+          const description = [customerName, quoteNumber || quoteTitle || model].filter(Boolean).join(" · ") || model;
           nextResults.push({
             key: `design-${taskId}`,
             label: taskNumber,
-            description: model,
-            value: normalizeText([taskNumber, model, task.title ?? ""].join(" ")),
+            description,
+            value: buildCommandSearchValue([taskNumber, model, task.title ?? "", customerName, quoteNumber, quoteTitle]),
             to: `/design/${taskId}`,
             icon: Palette,
+            logoUrl: customerLogoUrl,
+            avatarName: customerName || model || taskNumber,
             kindLabel: "Дизайн",
             score: 68,
             group: "records",
@@ -746,7 +931,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {recents.map((r) => (
               <CommandItem
                 key={`recent-${r.to}`}
-                value={normalizeText(`${r.label} ${r.to}`)}
+                value={buildCommandSearchValue([r.label, r.to])}
                 onSelect={() => go(r.to)}
               >
                   <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
@@ -767,7 +952,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             return (
               <CommandItem
                 key={a.key}
-                value={normalizeText([a.label, ...a.keywords, a.to].join(" "))}
+                value={buildCommandSearchValue([a.label, ...a.keywords, a.to])}
                 onSelect={() => go(a.to)}
               >
                 <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
@@ -787,7 +972,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             return (
               <CommandItem
                 key={r.key}
-                value={normalizeText([r.label, ...r.keywords, r.to].join(" "))}
+                value={buildCommandSearchValue([r.label, ...r.keywords, r.to])}
                 onSelect={() => go(r.to)}
               >
                 <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
