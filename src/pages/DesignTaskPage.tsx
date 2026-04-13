@@ -38,9 +38,7 @@ import {
   Download,
   Palette,
   UserRound,
-  Building2,
   Image as ImageIcon,
-  Hash,
   MoreVertical,
   ExternalLink,
   Link2,
@@ -7158,10 +7156,10 @@ export default function DesignTaskPage() {
                 {designOutputFiles.length + designOutputLinks.length} матеріалів
               </Badge>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
-                <SelectTrigger className="w-full sm:min-w-[220px] sm:w-auto">
-                  <SelectValue placeholder="Група для завантаження" />
+                <SelectTrigger className="h-8 w-full text-xs sm:w-auto sm:min-w-[180px]">
+                  <SelectValue placeholder="Без групи" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Без групи</SelectItem>
@@ -7183,51 +7181,43 @@ export default function DesignTaskPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="gap-2"
+                className="gap-1.5"
                 disabled={outputUploading || outputSaving}
                 onClick={() => outputInputRef.current?.click()}
               >
-                {outputUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {outputUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 Завантажити {DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind].toLowerCase()}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                disabled={outputSaving || groupingSelectionIds.length === 0}
-                onClick={() => void handleMoveSelectedOutputsToGroup()}
-              >
-                Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="gap-2"
-                disabled={outputSaving}
-                onClick={() => {
-                  setCreateGroupDraft("");
-                  setCreateGroupError(null);
-                  setCreateGroupOpen(true);
-                }}
-              >
-                <Check className="h-4 w-4" />
-                Створити групу
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="gap-2"
-                disabled={outputSaving}
-                onClick={() => openAddDesignLinkModal(uploadTargetKind)}
-              >
-                <Link2 className="h-4 w-4" />
-                Додати посилання
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="gap-1.5" disabled={outputSaving}>
+                    <MoreVertical className="h-3.5 w-3.5" />
+                    Ще
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    disabled={groupingSelectionIds.length === 0}
+                    onClick={() => void handleMoveSelectedOutputsToGroup()}
+                  >
+                    Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setCreateGroupDraft("");
+                      setCreateGroupError(null);
+                      setCreateGroupOpen(true);
+                    }}
+                  >
+                    Створити групу
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAddDesignLinkModal(uploadTargetKind)}>
+                    <Link2 className="h-3.5 w-3.5" />
+                    Додати посилання
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div className="text-xs text-muted-foreground">
-              Оберіть зверху групу, а нижче окремо завантажуйте та погоджуйте візуал і макет. Для друку в замовлення мають бути відмічені обидва.
-            </div>
-
             <Tabs
               value={activeDesignOutputTab}
               onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
@@ -7261,10 +7251,6 @@ export default function DesignTaskPage() {
               </TabsContent>
             </Tabs>
 
-            <div className="rounded-lg border border-border/50 bg-muted/5 px-3 py-2 text-xs text-muted-foreground">
-              Рекомендація: для друку додавайте окремо 1) візуал для погодження із замовником і 2) фінальний макет для виробництва.
-            </div>
-
             <Card className="overflow-hidden border border-border/60 bg-[linear-gradient(135deg,hsl(var(--primary)/0.10),hsl(var(--background))_42%,hsl(204_94%_94%/0.22))] shadow-[0_20px_56px_-28px_hsl(var(--foreground)/0.28)]">
               <CardContent className="p-0">
                 <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
@@ -7280,12 +7266,8 @@ export default function DesignTaskPage() {
                         <div className="text-xl font-semibold text-foreground">
                           Фінал і архів для папки замовлення
                         </div>
-                        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                          Назва папки за замовчуванням береться з назви задачі, але її можна змінити перед експортом. Затверджені
-                          файли йдуть у <span className="font-medium text-foreground">Фінал</span>, усі інші матеріали з табів{" "}
-                          <span className="font-medium text-foreground">Візуал</span> і{" "}
-                          <span className="font-medium text-foreground">Макет</span> автоматично підуть в{" "}
-                          <span className="font-medium text-foreground">Архів</span>.
+                        <p className="text-sm leading-5 text-muted-foreground">
+                          Затверджені файли → <span className="font-medium text-foreground">Фінал</span>, решта → <span className="font-medium text-foreground">Архів</span>.
                         </p>
                       </div>
                     </div>
@@ -7468,7 +7450,7 @@ export default function DesignTaskPage() {
         <aside className="space-y-4 xl:sticky xl:top-20 self-start">
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Швидкі дії</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Виконання</div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -7513,7 +7495,7 @@ export default function DesignTaskPage() {
             </div>
 
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
-              <div className="text-xs text-muted-foreground">Крок 1. Виконавець</div>
+              <div className="text-xs text-muted-foreground">Виконавець</div>
               {task.assigneeUserId ? (
                 <div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/60 px-2.5 py-2">
                   <AvatarBase
@@ -7541,24 +7523,22 @@ export default function DesignTaskPage() {
                 </Button>
               ) : null}
               {canManageAssignments && recommendedDesigner ? (
-                <div className="rounded-md border border-primary/15 bg-primary/5 px-2.5 py-2">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-primary">Рекомендуємо</div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <AvatarBase
-                      src={recommendedDesigner.avatarUrl ?? getMemberAvatar(recommendedDesigner.id)}
-                      name={recommendedDesigner.label}
-                      fallback={getInitials(recommendedDesigner.label)}
-                      size={20}
-                      className="shrink-0 border-border/70"
-                      fallbackClassName="text-[10px] font-semibold"
-                    />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-foreground">{recommendedDesigner.label}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {designerWorkloadById.get(recommendedDesigner.id)?.recommendation ?? "Найменше поточне навантаження"}
-                      </div>
+                <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/10 px-2.5 py-2">
+                  <AvatarBase
+                    src={recommendedDesigner.avatarUrl ?? getMemberAvatar(recommendedDesigner.id)}
+                    name={recommendedDesigner.label}
+                    fallback={getInitials(recommendedDesigner.label)}
+                    size={18}
+                    className="shrink-0 border-border/70"
+                    fallbackClassName="text-[10px] font-semibold"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-foreground">{recommendedDesigner.label}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {designerWorkloadById.get(recommendedDesigner.id)?.recommendation ?? "Найменше навантаження"}
                     </div>
                   </div>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">рекомендовано</span>
                 </div>
               ) : null}
               {canManageAssignments ? (
@@ -7629,42 +7609,6 @@ export default function DesignTaskPage() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              ) : null}
-            </div>
-
-            <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm">
-              <div className="text-xs text-muted-foreground mb-1">Крок 2. Статус задачі</div>
-              <div className="font-medium">{statusLabels[task.status]}</div>
-              {isStatusStartable ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-2 w-full justify-start"
-                  disabled={!canStartWorkNow}
-                  onClick={() => void updateTaskStatus("in_progress")}
-                >
-                  {statusSaving === "in_progress" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {task.status === "changes" ? "Почати правки (В роботі)" : "Почати роботу (В роботі)"}
-                </Button>
-              ) : null}
-              {canSeeMarkReadyAction ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="mt-2 w-full justify-start"
-                    disabled={!!statusSaving || !canMarkReadyNow}
-                    onClick={() => void updateTaskStatus("pm_review")}
-                  >
-                    {statusSaving === "pm_review" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Позначити як дизайн готовий
-                  </Button>
-                  {clientReviewBlockers.length > 0 ? (
-                    <div className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
-                      Для передачі замовнику: {clientReviewBlockers.join(" · ")}
-                    </div>
-                  ) : null}
-                </>
               ) : null}
             </div>
 
@@ -7764,13 +7708,22 @@ export default function DesignTaskPage() {
             </div>
 
             <div className="rounded-lg border border-border/50 bg-muted/5 p-3 text-sm space-y-2">
-              <div className="text-xs text-muted-foreground">Крок 3. Таймер роботи</div>
-              <div className="font-mono text-lg font-semibold tracking-wide">{timerElapsedLabel}</div>
-              <div className="text-xs text-muted-foreground">
-                {isTimerRunning
-                  ? `Таймер активний${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}`
-                  : "Таймер зупинено"}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">Таймер</div>
+                <div
+                  className={cn(
+                    "font-mono text-sm font-semibold tabular-nums",
+                    isTimerRunning ? "text-success-foreground" : "text-foreground"
+                  )}
+                >
+                  {timerElapsedLabel}
+                </div>
               </div>
+              {isTimerRunning && timerSummary.activeUserId ? (
+                <div className="text-[11px] text-muted-foreground">
+                  Активний · {getMemberLabel(timerSummary.activeUserId)}
+                </div>
+              ) : null}
               {startTimerBlockedReason && !isTimerRunning ? (
                 <div className="text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
               ) : null}
@@ -7778,31 +7731,29 @@ export default function DesignTaskPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="flex-1 justify-start"
+                  className="flex-1 gap-1.5"
                   disabled={!canStartTimer || !!timerBusy}
                   title={startTimerBlockedReason ?? undefined}
                   onClick={() => void handleStartTimer()}
                 >
-                  {timerBusy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  Play
+                  {timerBusy === "start" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                  Старт
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="flex-1 justify-start"
+                  className="flex-1 gap-1.5"
                   disabled={!canPauseTimer || !!timerBusy}
                   title={pauseTimerBlockedReason ?? undefined}
                   onClick={() => void handlePauseTimer()}
                 >
-                  {timerBusy === "pause" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
-                  Pause
+                  {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                  Пауза
                 </Button>
               </div>
             </div>
 
-            {statusQuickActionsWithoutStart.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Для цього статусу немає швидких переходів.</div>
-            ) : (
+            {statusQuickActionsWithoutStart.length > 0 ? (
               <div className="space-y-2">
                 {statusQuickActionsWithoutStart.map((action) => (
                   <Button
@@ -7822,7 +7773,7 @@ export default function DesignTaskPage() {
                   </div>
                 ) : null}
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-2">
@@ -7998,153 +7949,100 @@ export default function DesignTaskPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-2">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Інформація</div>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />Замовник</span>
-                <span className="font-medium text-right">{task.customerName ?? "Не вказано"}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1">
-                  <Hash className="h-3.5 w-3.5" />
-                  {isLinkedQuote ? "Прорахунок" : "Контекст"}
-                </span>
-                <span className="font-medium text-right">
-                  {isLinkedQuote ? getTaskDisplayNumber(task) : "Без прорахунку"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />Виконавець</span>
-                <span className="inline-flex items-center gap-1.5 min-w-0">
-                  <AvatarBase
-                    src={getMemberAvatar(task.assigneeUserId)}
-                    name={getMemberLabel(task.assigneeUserId)}
-                    fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-                    size={16}
-                    className="shrink-0 border-border/70"
-                  />
-                  <span className="font-medium text-right truncate max-w-[180px]">{getMemberLabel(task.assigneeUserId)}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />{taskRoleLabel}</span>
-                <span className="inline-flex items-center gap-1.5 min-w-0">
-                  <AvatarBase
-                    src={taskManagerAvatar}
-                    name={taskManagerLabel}
-                    fallback={getInitials(taskManagerLabel)}
-                    size={16}
-                    className="shrink-0 border-border/70"
-                  />
-                  <span className="font-medium text-right truncate max-w-[180px]">{taskManagerLabel}</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Призначено</span>
-                <span className="font-medium text-right">{formatDate(task.assignedAt, true)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Витрачено часу</span>
-                <span className="font-mono font-medium text-right">{timerElapsedLabel}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Створено</span>
-                <span className="font-medium text-right">{formatDate(task.createdAt, true)}</span>
-              </div>
-            </div>
-          </div>
-
           <div className="rounded-xl border border-border/60 bg-card/80 p-4 space-y-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">Коментарі та згадки</div>
+            <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
+              <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
+              {managerMembers.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {managerMembers.slice(0, 6).map((member) => (
+                    <Button
+                      key={member.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => insertMentionIntoComment(member.id)}
+                    >
+                      @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="relative">
+                <Textarea
+                  ref={quoteCommentTextareaRef}
+                  value={quoteCommentDraft}
+                  onChange={(event) => {
+                    const cursor = event.target.selectionStart ?? event.target.value.length;
+                    setQuoteCommentDraft(event.target.value);
+                    syncMentionContext(event.target.value, cursor);
+                  }}
+                  onSelect={(event) => {
+                    const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                    syncMentionContext(event.currentTarget.value, cursor);
+                  }}
+                  onKeyDown={handleQuoteCommentKeyDown}
+                  placeholder={
+                    isLinkedQuote
+                      ? "Наприклад: @tania макети погоджені, можна запускати у виробництво."
+                      : "Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
+                  }
+                  className="min-h-[110px]"
+                />
+                {mentionContext ? (
+                  <div
+                    className={cn(
+                      "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                      mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+                    )}
+                  >
+                    {filteredMentionSuggestions.length > 0 ? (
+                      <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
+                        {filteredMentionSuggestions.map((member, index) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                              index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                            )}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              applyMentionSuggestion(member);
+                            }}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={24}
+                              className="text-[10px] font-semibold"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">{member.label}</div>
+                              <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
+                  {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Надіслати коментар
+                </Button>
+              </div>
+            </div>
             {isLinkedQuote ? (
               <>
-                <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
-                  <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
-                  {managerMembers.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {managerMembers.slice(0, 6).map((member) => (
-                        <Button
-                          key={member.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => insertMentionIntoComment(member.id)}
-                        >
-                          @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="relative">
-                    <Textarea
-                      ref={quoteCommentTextareaRef}
-                      value={quoteCommentDraft}
-                      onChange={(event) => {
-                        const cursor = event.target.selectionStart ?? event.target.value.length;
-                        setQuoteCommentDraft(event.target.value);
-                        syncMentionContext(event.target.value, cursor);
-                      }}
-                      onSelect={(event) => {
-                        const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
-                        syncMentionContext(event.currentTarget.value, cursor);
-                      }}
-                      onKeyDown={handleQuoteCommentKeyDown}
-                      placeholder="Наприклад: @tania макети погоджені, можна запускати у виробництво."
-                      className="min-h-[110px]"
-                    />
-                    {mentionContext ? (
-                      <div
-                        className={cn(
-                          "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
-                          mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
-                        )}
-                      >
-                        {filteredMentionSuggestions.length > 0 ? (
-                          <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
-                            {filteredMentionSuggestions.map((member, index) => (
-                              <button
-                                key={member.id}
-                                type="button"
-                                className={cn(
-                                  "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                                  index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
-                                )}
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  applyMentionSuggestion(member);
-                                }}
-                              >
-                                <AvatarBase
-                                  src={member.avatarUrl}
-                                  name={member.label}
-                                  fallback={getInitials(member.label)}
-                                  size={24}
-                                  className="text-[10px] font-semibold"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">{member.label}</div>
-                                  <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">
-                            {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex justify-end">
-                    <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
-                      {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Надіслати коментар
-                    </Button>
-                  </div>
-                </div>
                 {quoteMentionsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -8182,120 +8080,30 @@ export default function DesignTaskPage() {
                   Відкрити коментарі прорахунку
                 </Button>
               </>
+            ) : standaloneComments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
             ) : (
-              <>
-                <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
-                  <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
-                  {managerMembers.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {managerMembers.slice(0, 6).map((member) => (
-                        <Button
-                          key={member.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => insertMentionIntoComment(member.id)}
-                        >
-                          @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
-                        </Button>
-                      ))}
+              <div className="space-y-2">
+                {standaloneComments.slice(0, 10).map((comment) => (
+                  <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+                    <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                      <AvatarBase
+                        src={getMemberAvatar(comment.created_by)}
+                        name={getMemberLabel(comment.created_by)}
+                        fallback={getInitials(getMemberLabel(comment.created_by))}
+                        size={14}
+                        className="shrink-0 border-border/70"
+                      />
+                      <span>{getMemberLabel(comment.created_by)}</span>
+                      <span>·</span>
+                      <span>{formatDate(comment.created_at, true)}</span>
                     </div>
-                  ) : null}
-                  <div className="relative">
-                    <Textarea
-                      ref={quoteCommentTextareaRef}
-                      value={quoteCommentDraft}
-                      onChange={(event) => {
-                        const cursor = event.target.selectionStart ?? event.target.value.length;
-                        setQuoteCommentDraft(event.target.value);
-                        syncMentionContext(event.target.value, cursor);
-                      }}
-                      onSelect={(event) => {
-                        const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
-                        syncMentionContext(event.currentTarget.value, cursor);
-                      }}
-                      onKeyDown={handleQuoteCommentKeyDown}
-                      placeholder="Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
-                      className="min-h-[110px]"
-                    />
-                    {mentionContext ? (
-                      <div
-                        className={cn(
-                          "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
-                          mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
-                        )}
-                      >
-                        {filteredMentionSuggestions.length > 0 ? (
-                          <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
-                            {filteredMentionSuggestions.map((member, index) => (
-                              <button
-                                key={member.id}
-                                type="button"
-                                className={cn(
-                                  "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                                  index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
-                                )}
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  applyMentionSuggestion(member);
-                                }}
-                              >
-                                <AvatarBase
-                                  src={member.avatarUrl}
-                                  name={member.label}
-                                  fallback={getInitials(member.label)}
-                                  size={24}
-                                  className="text-[10px] font-semibold"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">{member.label}</div>
-                                  <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">
-                            {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
+                    <div className="mt-1 text-sm whitespace-pre-wrap break-words">
+                      {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                    </div>
                   </div>
-                  <div className="flex justify-end">
-                    <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
-                      {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Надіслати коментар
-                    </Button>
-                  </div>
-                </div>
-                {standaloneComments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {standaloneComments.slice(0, 10).map((comment) => (
-                      <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-                        <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                          <AvatarBase
-                            src={getMemberAvatar(comment.created_by)}
-                            name={getMemberLabel(comment.created_by)}
-                            fallback={getInitials(getMemberLabel(comment.created_by))}
-                            size={14}
-                            className="shrink-0 border-border/70"
-                          />
-                          <span>{getMemberLabel(comment.created_by)}</span>
-                          <span>·</span>
-                          <span>{formatDate(comment.created_at, true)}</span>
-                        </div>
-                        <div className="mt-1 text-sm whitespace-pre-wrap break-words">
-                          {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
+                ))}
+              </div>
             )}
           </div>
 
