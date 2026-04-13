@@ -69,7 +69,7 @@ const CommandInput = React.forwardRef<
 
     {/* ✅ rightSlot має бути клікабельний (clear button!) */}
     {rightSlot ? (
-      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+      <div className="absolute inset-y-3 right-3 flex items-center">
         {rightSlot}
       </div>
     ) : null}

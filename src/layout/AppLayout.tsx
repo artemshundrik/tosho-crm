@@ -1819,7 +1819,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
-                className="inline-flex h-9 w-full items-center gap-2 rounded-[var(--radius-lg)] border border-border/70 bg-background/75 px-3.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border hover:bg-muted/35 hover:text-foreground cursor-pointer"
+                className="inline-flex h-9 w-full items-center gap-2 rounded-[var(--radius-lg)] border border-border/70 bg-background/75 pl-3.5 pr-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border hover:bg-muted/35 hover:text-foreground cursor-pointer"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="flex-1 text-left">Пошук...</span>

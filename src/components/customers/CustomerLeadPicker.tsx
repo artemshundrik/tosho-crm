@@ -185,10 +185,10 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                         <span className="mt-0.5 flex items-center gap-1.5">
                           <span
                             className={cn(
-                              "inline-flex h-4.5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-wide",
+                              "inline-flex h-4.5 items-center justify-center rounded-full border px-2 text-[9px] font-semibold uppercase leading-none tracking-wide",
                               option.entityType === "lead"
-                                ? "border-amber-300 bg-amber-100 text-amber-950"
-                                : "border-emerald-300 bg-emerald-100 text-emerald-950"
+                                ? "cmd-kind-lead"
+                                : "cmd-kind-customer"
                             )}
                           >
                             {option.entityType === "lead" ? "Лід" : "Замовник"}

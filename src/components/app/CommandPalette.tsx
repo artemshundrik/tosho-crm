@@ -345,20 +345,24 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const isMac = navigator.platform.toLowerCase().includes("mac");
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTypingField =
+        tag === "input" || tag === "textarea" || target?.getAttribute?.("contenteditable") === "true";
 
-      if (cmdOrCtrl && e.key.toLowerCase() === "k") {
+      if (isMac && e.metaKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        onOpenChange(!open);
+        return;
+      }
+
+      if (!isMac && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "k" && !isTypingField) {
         e.preventDefault();
         onOpenChange(!open);
         return;
       }
 
       if (e.key === "/") {
-        const target = e.target as HTMLElement | null;
-        const tag = target?.tagName?.toLowerCase();
-        const isTypingField =
-          tag === "input" || tag === "textarea" || target?.getAttribute?.("contenteditable") === "true";
-
         if (!isTypingField) {
           e.preventDefault();
           onOpenChange(true);
@@ -898,7 +902,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-[11px]">⌘</span>K
               <span className="opacity-60">/</span>
-              <span>Ctrl+K</span>
+              <span>Shift+K</span>
             </kbd>
           </div>
         }
