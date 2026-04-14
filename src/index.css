@@ -219,8 +219,11 @@
     /* --- APP SHELL TOKENS (LIGHT) --- */
     --app-shell-bg: 220 7% 97%;
     --app-shell-radius: 16px;
-    --page-underlay-bg: 0 0% 99%;
+    --app-main-bg: 0 0% 99%;
+    --page-underlay-bg: var(--app-main-bg);
     --sidebar-surface-bg: 220 8% 97%;
+    --app-structure-divider: 220 9% 85%;
+    --design-task-details-bg: 220 10% 98%;
 
     /* --- KANBAN COLUMN TOKENS (LIGHT) --- */
     --kanban-col-new-bg: 220 14% 98%;
@@ -245,28 +248,28 @@
 
   .dark {
     /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
-    --background: 228 8% 10%; /* Нейтральний темний фон */
+    --background: 220 12% 9.8%; /* Базовий темний нейтральний фон */
     --foreground: 210 40% 98%; /* Білий текст */
 
-    --card: 228 8% 13%; /* +1% від фону — чіткіше розмежування */
+    --card: 220 12% 11.8%;
     --card-foreground: 210 40% 98%;
-    --popover: 228 8% 14%;
+    --popover: 220 12% 12.8%;
     --popover-foreground: 210 40% 98%;
 
-    --secondary: 228 8% 17%;
+    --secondary: 220 11% 14.2%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 228 8% 16%;
+    --muted: 220 11% 14.2%;
     --muted-foreground: 220 10% 68%; /* трохи яскравіший — краща читабельність */
 
-    --accent: 228 8% 16%;
+    --accent: 220 11% 14.2%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 72% 42%; /* яскравіший у темному — помітніший */
     --destructive-foreground: 210 40% 98%;
 
-    --border: 228 9% 22%; /* +2% — видиміші межі в темному */
-    --input: 228 9% 22%;
+    --border: 220 10% 20%;
+    --input: 220 10% 20%;
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
@@ -288,10 +291,10 @@
     /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
-    --skeleton-bg: 228 7% 18%;
+    --skeleton-bg: 220 10% 17%;
 
-    --neutral-soft: 228 7% 17%;
-    --neutral-soft-border: 228 8% 24%;
+    --neutral-soft: 220 11% 15.5%;
+    --neutral-soft-border: 220 10% 22%;
     --neutral-foreground: 220 8% 72%;
 
     --info-soft: 217 70% 20%;
@@ -313,8 +316,8 @@
     /* --- COMMAND SEARCH TOKENS (DARK) --- */
     --cmd-highlight-bg: 217 54% 26%;
     --cmd-highlight-foreground: 214 95% 88%;
-    --cmd-manager-chip-bg: 228 7% 17%;
-    --cmd-manager-chip-border: 228 8% 26%;
+    --cmd-manager-chip-bg: 220 11% 15.5%;
+    --cmd-manager-chip-border: 220 10% 24%;
     --cmd-manager-chip-foreground: 210 40% 94%;
     --cmd-kind-customer-bg: 142 30% 22%;
     --cmd-kind-customer-border: 142 30% 34%;
@@ -441,10 +444,13 @@
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (DARK) --- */
-    --app-shell-bg: 228 8% 10%;
+    --app-shell-bg: 220 12% 9.8%;
     --app-shell-radius: 14px;
-    --page-underlay-bg: 228 8% 12%;
-    --sidebar-surface-bg: 228 10% 8%;
+    --app-main-bg: 220 12% 9.8%;
+    --page-underlay-bg: var(--app-main-bg);
+    --sidebar-surface-bg: 228 12% 8%;
+    --app-structure-divider: 220 12% 14.9%;
+    --design-task-details-bg: 223 11.9% 11.6%;
 
     /* --- KANBAN COLUMN TOKENS (DARK) --- */
     --kanban-col-new-bg: 228 10% 11%;

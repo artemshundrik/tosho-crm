@@ -32,7 +32,9 @@ import {
   Timer,
   Play,
   Pause,
+  CalendarDays,
   CalendarClock,
+  Building2,
   Eye,
   Upload,
   Download,
@@ -57,6 +59,9 @@ import {
   CloudUpload,
   CheckCircle2,
   AlertTriangle,
+  Mail,
+  PhoneCall,
+  Send,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -148,6 +153,12 @@ type DesignTask = {
   quoteManagerUserId?: string | null;
   designBrief?: string | null;
   createdAt?: string | null;
+};
+
+type DesignTaskClientContact = {
+  entityKind: "customer" | "lead" | null;
+  email: string | null;
+  phone: string | null;
 };
 
 type QuoteItemRow = {
@@ -1059,11 +1070,18 @@ export default function DesignTaskPage() {
   );
   const [customerAttachmentsLoading, setCustomerAttachmentsLoading] = useState(false);
   const [customerAttachmentsError, setCustomerAttachmentsError] = useState<string | null>(null);
+  const [clientContact, setClientContact] = useState<DesignTaskClientContact>({
+    entityKind: null,
+    email: null,
+    phone: null,
+  });
+  const [sendingToClientKind, setSendingToClientKind] = useState<`${DesignOutputKind}:${"email" | "telegram" | "viber"}` | null>(null);
   const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>(() => initialCache?.designOutputFiles ?? []);
   const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>(() => initialCache?.designOutputLinks ?? []);
   const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
   const [fileAccessUrlByKey, setFileAccessUrlByKey] = useState<Record<string, string>>({});
   const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
+  const [clientShareSelectionIds, setClientShareSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
   const [memberById, setMemberById] = useState<Record<string, string>>({});
@@ -2602,8 +2620,6 @@ export default function DesignTaskPage() {
     [designerMembers, designerWorkloadById]
   );
 
-  const recommendedDesigner = useMemo(() => sortedDesignerMembers[0] ?? null, [sortedDesignerMembers]);
-
   const requestEstimateDialog = (
     pending: { mode: "assign"; nextAssigneeUserId: string | null } | { mode: "assign_self"; alsoStart: boolean } | { mode: "status"; nextStatus: DesignStatus }
   ) => {
@@ -3769,6 +3785,12 @@ export default function DesignTaskPage() {
 
   const toggleGroupingSelection = (entityKey: string) => {
     setGroupingSelectionIds((prev) =>
+      prev.includes(entityKey) ? prev.filter((id) => id !== entityKey) : [...prev, entityKey]
+    );
+  };
+
+  const toggleClientShareSelection = (entityKey: string) => {
+    setClientShareSelectionIds((prev) =>
       prev.includes(entityKey) ? prev.filter((id) => id !== entityKey) : [...prev, entityKey]
     );
   };
@@ -5318,6 +5340,176 @@ export default function DesignTaskPage() {
   const canSeeMarkReadyAction = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
   const canMarkReadyNow = canSeeMarkReadyAction;
   const canSendToClientNow = clientReviewBlockers.length === 0;
+
+  useEffect(() => {
+    let active = true;
+
+    const loadClientContact = async () => {
+      if (!effectiveTeamId || !task?.customerId) {
+        if (active) {
+          setClientContact({ entityKind: null, email: null, phone: null });
+        }
+        return;
+      }
+
+      const metadata = task.metadata ?? {};
+      const rawEntityKind =
+        typeof metadata.customer_type === "string" && metadata.customer_type.trim()
+          ? metadata.customer_type.trim().toLowerCase()
+          : "customer";
+      const entityKind: "customer" | "lead" = rawEntityKind === "lead" ? "lead" : "customer";
+
+      try {
+        if (entityKind === "lead") {
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("leads")
+            .select("email, phone_numbers")
+            .eq("team_id", effectiveTeamId)
+            .eq("id", task.customerId)
+            .maybeSingle();
+          if (error) throw error;
+          const row = (data ?? null) as { email?: string | null; phone_numbers?: string[] | null } | null;
+          if (!active) return;
+          setClientContact({
+            entityKind,
+            email: row?.email?.trim() || null,
+            phone: row?.phone_numbers?.find((value) => typeof value === "string" && value.trim())?.trim() || null,
+          });
+          return;
+        }
+
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .select("contact_email, contact_phone")
+          .eq("id", task.customerId)
+          .maybeSingle();
+        if (error) throw error;
+        const row = (data ?? null) as { contact_email?: string | null; contact_phone?: string | null } | null;
+        if (!active) return;
+        setClientContact({
+          entityKind,
+          email: row?.contact_email?.trim() || null,
+          phone: row?.contact_phone?.trim() || null,
+        });
+      } catch (contactError) {
+        console.warn("Failed to load design task client contact", contactError);
+        if (active) {
+          setClientContact({ entityKind, email: null, phone: null });
+        }
+      }
+    };
+
+    void loadClientContact();
+    return () => {
+      active = false;
+    };
+  }, [effectiveTeamId, task?.customerId, task?.metadata]);
+
+  const buildSelectedOutputSharePayload = useCallback(
+    async (kind: DesignOutputKind) => {
+      const selectedKeys = new Set(clientShareSelectionIds);
+      const selectedFiles = designOutputFiles.filter(
+        (file) => file.output_kind === kind && selectedKeys.has(`file:${file.id}`)
+      );
+      const selectedLinks = designOutputLinks.filter(
+        (link) => link.output_kind === kind && selectedKeys.has(`link:${link.id}`)
+      );
+      const selectedLabels = [
+        ...selectedFiles.map((file) =>
+          getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type)
+        ),
+        ...selectedLinks.map((link) => link.label),
+      ];
+      const resolvedFileLinks = await Promise.all(
+        selectedFiles.map(async (file) => {
+          if (!file.storage_bucket || !file.storage_path) return null;
+          const url = await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, "original", 60 * 60 * 8);
+          if (!url) return null;
+          return {
+            label: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
+            url,
+          };
+        })
+      );
+
+      return {
+        selectedIds: [...selectedFiles.map((file) => `file:${file.id}`), ...selectedLinks.map((link) => `link:${link.id}`)],
+        selectedFiles,
+        selectedLabels,
+        links: [
+          ...(resolvedFileLinks.filter(Boolean) as Array<{ label: string; url: string }>),
+          ...selectedLinks.map((link) => ({ label: link.label, url: link.url })),
+        ],
+      };
+    },
+    [
+      clientShareSelectionIds,
+      designOutputFiles,
+      designOutputLinks,
+    ]
+  );
+
+  const openClientDraft = useCallback(
+    async (channel: "email" | "telegram" | "viber", kind: DesignOutputKind) => {
+      if (!task) return;
+      if (channel === "email" && !clientContact.email) {
+        toast.error("У замовника не вказаний email.");
+        return;
+      }
+      if ((channel === "viber" || channel === "telegram") && !clientContact.phone && channel === "viber") {
+        toast.error("У замовника не вказаний телефон для Viber.");
+        return;
+      }
+
+      const sendingKey = `${kind}:${channel}` as const;
+      setSendingToClientKind(sendingKey);
+      try {
+        const payload = await buildSelectedOutputSharePayload(kind);
+        if (payload.selectedIds.length === 0) {
+          toast.error(`Немає вибраних ${kind === "visualization" ? "візуалів" : "макетів"} для відправки.`);
+          return;
+        }
+
+        const channelLabel = kind === "visualization" ? "візуали" : "макети";
+        const quoteLabel = task.quoteNumber?.trim() || "без номера";
+        const intro = [
+          "Вітаю!",
+          "",
+          `Надсилаємо ${channelLabel} по прорахунку ${quoteLabel}.`,
+          task.customerName ? `Замовник: ${task.customerName}` : null,
+        ].filter(Boolean);
+        const linkLines =
+          payload.links.length > 0
+            ? ["", `${kind === "visualization" ? "Візуали" : "Макети"}:`, ...payload.links.map((entry, index) => `${index + 1}. ${entry.label}: ${entry.url}`)]
+            : payload.selectedLabels.length > 0
+              ? ["", `${kind === "visualization" ? "Візуали" : "Макети"}:`, ...payload.selectedLabels.map((label: string, index: number) => `${index + 1}. ${label}`)]
+              : [];
+        const text = [...intro, ...linkLines].join("\n");
+
+        if (channel === "email") {
+          const subject = encodeURIComponent(`${kind === "visualization" ? "Візуали" : "Макети"} по прорахунку ${quoteLabel}`);
+          const body = encodeURIComponent(text);
+          window.location.href = `mailto:${encodeURIComponent(clientContact.email || "")}?subject=${subject}&body=${body}`;
+          return;
+        }
+
+        if (channel === "telegram") {
+          window.open(`https://t.me/share/url?url=&text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+          return;
+        }
+
+        window.location.href = `viber://forward?text=${encodeURIComponent(text)}`;
+      } catch (draftError) {
+        console.error("Failed to prepare client draft from design task", draftError);
+        toast.error("Не вдалося підготувати повідомлення для замовника.");
+      } finally {
+        setSendingToClientKind(null);
+      }
+    },
+    [buildSelectedOutputSharePayload, clientContact.email, clientContact.phone, task]
+  );
   useEffect(() => {
     if (requiresVisualizationOutput) {
       setUploadTargetKind((prev) => (prev === "visualization" ? prev : "visualization"));
@@ -5444,6 +5636,25 @@ export default function DesignTaskPage() {
         })),
     ];
   }, [designOutputFiles, designOutputLinks, groupingSelectionIds]);
+  const selectedClientShareItems = useMemo(() => {
+    const selectedKeys = new Set(clientShareSelectionIds);
+    return [
+      ...designOutputFiles
+        .filter((file) => selectedKeys.has(`file:${file.id}`))
+        .map((file) => ({
+          key: `file:${file.id}`,
+          kind: file.output_kind,
+          groupKey: normalizeOutputGroupLabel(file.group_label) ?? "__ungrouped__",
+        })),
+      ...designOutputLinks
+        .filter((link) => selectedKeys.has(`link:${link.id}`))
+        .map((link) => ({
+          key: `link:${link.id}`,
+          kind: link.output_kind,
+          groupKey: normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__",
+        })),
+    ];
+  }, [clientShareSelectionIds, designOutputFiles, designOutputLinks]);
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       Object.entries(memberById)
@@ -5515,14 +5726,6 @@ export default function DesignTaskPage() {
   useEffect(() => {
     setTitleDraft(task?.title ?? "");
   }, [task?.id, task?.title]);
-  useEffect(() => {
-    if (!titleEditing) return;
-    const frame = window.requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [titleEditing]);
   const canTakeOverForSelf =
     !!task &&
     canSelfAssign &&
@@ -5536,7 +5739,6 @@ export default function DesignTaskPage() {
     (!!isAssignedToMe || canManageAssignments);
 
   let primaryActionLabel = "Взяти в роботу";
-  let primaryActionHint: ReactNode = "Призначити задачу на себе.";
   let primaryActionDisabled = true;
   const primaryActionLoading = assigningSelf || statusSaving === "in_progress";
   let primaryActionClick: (() => void) | null = null;
@@ -5544,62 +5746,32 @@ export default function DesignTaskPage() {
   if (task) {
     if (!task.assigneeUserId && isStatusStartable) {
       primaryActionLabel = "Взяти на себе і почати";
-      primaryActionHint = "Крок 1: призначити себе. Крок 2: змінити статус на «В роботі».";
       primaryActionDisabled = !canTakeOverForSelf;
       primaryActionClick = () => {
         void assignTaskToMe({ alsoStart: true });
       };
     } else if (!task.assigneeUserId) {
       primaryActionLabel = "Взяти на себе";
-      primaryActionHint = "Призначити задачу на себе без зміни статусу.";
       primaryActionDisabled = !canTakeOverForSelf;
       primaryActionClick = () => {
         void assignTaskToMe();
       };
     } else if (isAssignedToMe && isStatusStartable) {
       primaryActionLabel = task.status === "changes" ? "Почати правки" : "Почати роботу";
-      primaryActionHint = "Змінити статус на «В роботі».";
       primaryActionDisabled = !canStartWorkNow;
       primaryActionClick = () => {
         void updateTaskStatus("in_progress");
       };
     } else if (isAssignedToMe) {
       primaryActionLabel = "Задача на мені";
-      primaryActionHint = "Виконавець уже встановлений.";
       primaryActionDisabled = true;
       primaryActionClick = null;
     } else if (isAssignedToOther && !canManageAssignments) {
       primaryActionLabel = "Вже призначено";
-      primaryActionHint = (
-        <span className="inline-flex items-center gap-1.5">
-          <span>Виконавець:</span>
-          <AvatarBase
-            src={getMemberAvatar(task.assigneeUserId)}
-            name={getMemberLabel(task.assigneeUserId)}
-            fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-            size={14}
-            className="shrink-0 border-border/70"
-          />
-          <span>{getMemberLabel(task.assigneeUserId)}</span>
-        </span>
-      );
       primaryActionDisabled = true;
       primaryActionClick = null;
     } else if (isAssignedToOther && canManageAssignments) {
       primaryActionLabel = "Призначити себе";
-      primaryActionHint = (
-        <span className="inline-flex items-center gap-1.5">
-          <span>Зараз виконавець:</span>
-          <AvatarBase
-            src={getMemberAvatar(task.assigneeUserId)}
-            name={getMemberLabel(task.assigneeUserId)}
-            fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-            size={14}
-            className="shrink-0 border-border/70"
-          />
-          <span>{getMemberLabel(task.assigneeUserId)}</span>
-        </span>
-      );
       primaryActionDisabled = !canTakeOverForSelf;
       primaryActionClick = () => {
         void assignTaskToMe();
@@ -6225,9 +6397,6 @@ export default function DesignTaskPage() {
   const isLinkedQuote = isUuid(task.quoteId);
   const taskHeaderTitle = getTaskDisplayNumber(task);
   const taskHeaderName = task.title?.trim() || "Без назви";
-  const taskHeaderSubtitle = isLinkedQuote
-    ? `${task.customerName ?? "Замовник"} · ${quoteItem?.name ?? "Позиція"}`
-    : `${task.customerName ?? "Замовник"} · Дизайн-задача без прорахунку`;
   const taskManagerUserId =
     typeof task.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
       ? (task.metadata.manager_user_id as string)
@@ -6245,6 +6414,13 @@ export default function DesignTaskPage() {
     setRenameError(null);
     setTitleDraft(task?.title ?? "");
     setTitleEditing(true);
+    window.setTimeout(() => {
+      const input = titleInputRef.current;
+      if (!input) return;
+      input.focus();
+      const nextValue = input.value ?? "";
+      input.setSelectionRange(nextValue.length, nextValue.length);
+    }, 0);
   };
   const cancelInlineTitleEdit = () => {
     setTitleDraft(task?.title ?? "");
@@ -6267,10 +6443,22 @@ export default function DesignTaskPage() {
     const groupedOutputs = groupedDesignOutputsByKind[kind];
     const selectedIdSet = kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
     const selectedIds = kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+    const selectedShareItems = selectedClientShareItems.filter((item) => item.kind === kind);
+    const selectedShareIds = selectedShareItems.map((item) => item.key);
+    const selectedShareIdSet = new Set(selectedShareIds);
     const requiresThisKind = kind === "visualization" ? requiresVisualizationOutput : requiresLayoutOutput;
     const kindLabel = DESIGN_OUTPUT_KIND_LABELS[kind];
     const kindIcon =
       kind === "visualization" ? <ImageIcon className="h-4 w-4 text-sky-600" /> : <PencilLine className="h-4 w-4 text-emerald-600" />;
+    const canSendSelectedOutputs = selectedShareIds.length > 0;
+    const canSendEmail = canSendSelectedOutputs && Boolean(clientContact.email);
+    const canSendViber = canSendSelectedOutputs && Boolean(clientContact.phone);
+    const sendHint =
+      clientContact.entityKind === "lead"
+        ? "Відправка лідові"
+        : clientContact.entityKind === "customer"
+          ? "Відправка замовнику"
+          : "Контакт ще не визначений";
 
     return (
       <div className="rounded-xl border border-border/60 bg-card/60 p-4 space-y-3">
@@ -6321,6 +6509,81 @@ export default function DesignTaskPage() {
             >
               <Link2 className="h-4 w-4" />
               Додати посилання
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
+                <Badge variant="outline" className="text-[10px]">
+                  Вибрано: {selectedShareIds.length}
+                </Badge>
+              </div>
+              <div className="max-w-2xl text-xs text-muted-foreground">
+                {canSendSelectedOutputs
+                  ? `${sendHint}. Відправка працює окремо від погодження: обери будь-які ${kind === "visualization" ? "візуали" : "макети"} або посилання, які хочеш показати клієнту.`
+                  : `Познач матеріали чекбоксом "Клієнту". Це окремий список для відправки і він не впливає на "Погоджено".`}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
+                Email: {clientContact.email ?? "не вказано"}
+              </span>
+              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
+                Телефон: {clientContact.phone ?? "не вказано"}
+              </span>
+              {selectedShareIds.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-[11px]"
+                  disabled={sendingToClientKind !== null}
+                  onClick={() =>
+                    setClientShareSelectionIds((prev) =>
+                      prev.filter((entry) => !selectedShareIdSet.has(entry))
+                    )
+                  }
+                >
+                  Очистити вибір
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 justify-start gap-3 rounded-xl"
+              disabled={!canSendEmail || sendingToClientKind !== null}
+              onClick={() => void openClientDraft("email", kind)}
+            >
+              {sendingToClientKind === `${kind}:email` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              Email
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 justify-start gap-3 rounded-xl"
+              disabled={!canSendSelectedOutputs || sendingToClientKind !== null}
+              onClick={() => void openClientDraft("telegram", kind)}
+            >
+              {sendingToClientKind === `${kind}:telegram` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Telegram
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 justify-start gap-3 rounded-xl"
+              disabled={!canSendViber || sendingToClientKind !== null}
+              onClick={() => void openClientDraft("viber", kind)}
+            >
+              {sendingToClientKind === `${kind}:viber` ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
+              Viber
             </Button>
           </div>
         </div>
@@ -6395,14 +6658,21 @@ export default function DesignTaskPage() {
                                 <div className="truncate text-sm font-medium" title={displayName}>
                                   {displayName}
                                 </div>
-                                {selectedIdSet.has(file.id) ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="mt-1 h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
-                                  >
-                                    Погоджено замовником
-                                  </Badge>
-                                ) : null}
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {selectedShareIdSet.has(`file:${file.id}`) ? (
+                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[10px] text-primary">
+                                      У добірці для клієнта
+                                    </Badge>
+                                  ) : null}
+                                  {selectedIdSet.has(file.id) ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
+                                    >
+                                      Погоджено замовником
+                                    </Badge>
+                                  ) : null}
+                                </div>
                                 <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
                                   <span>{formatFileSize(file.file_size)}</span>
                                   <span>·</span>
@@ -6430,6 +6700,15 @@ export default function DesignTaskPage() {
                                   aria-label={`Вибрати для групи: ${file.file_name}`}
                                 />
                                 <span>До групи</span>
+                              </label>
+                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                                <Checkbox
+                                  checked={selectedShareIdSet.has(`file:${file.id}`)}
+                                  disabled={outputSaving}
+                                  onCheckedChange={() => toggleClientShareSelection(`file:${file.id}`)}
+                                  aria-label={`Вибрати для відправки клієнту: ${file.file_name}`}
+                                />
+                                <span>Клієнту</span>
                               </label>
                               <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
                                 <Checkbox
@@ -6476,15 +6755,22 @@ export default function DesignTaskPage() {
                     {group.links.map((link) => (
                       <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                         <div className="flex items-center justify-between gap-2">
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="min-w-0 flex-1 truncate text-sm font-medium text-primary hover:underline"
-                            title={link.url}
-                          >
-                            {link.label}
-                          </a>
+                          <div className="min-w-0 flex flex-1 items-center gap-2">
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 truncate text-sm font-medium text-primary hover:underline"
+                              title={link.url}
+                            >
+                              {link.label}
+                            </a>
+                            {selectedShareIdSet.has(`link:${link.id}`) ? (
+                              <Badge variant="outline" className="h-5 shrink-0 border-primary/30 bg-primary/10 text-[10px] text-primary">
+                                У добірці для клієнта
+                              </Badge>
+                            ) : null}
+                          </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
                               <Checkbox
@@ -6494,6 +6780,15 @@ export default function DesignTaskPage() {
                                 aria-label={`Вибрати для групи: ${link.label}`}
                               />
                               <span>До групи</span>
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
+                              <Checkbox
+                                checked={selectedShareIdSet.has(`link:${link.id}`)}
+                                disabled={outputSaving}
+                                onCheckedChange={() => toggleClientShareSelection(`link:${link.id}`)}
+                                aria-label={`Вибрати для відправки клієнту: ${link.label}`}
+                              />
+                              <span>Клієнту</span>
                             </label>
                             <Button size="icon" variant="ghost" asChild>
                               <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
@@ -6547,26 +6842,26 @@ export default function DesignTaskPage() {
 
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
+      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
+        <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
-        topBar={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/design")} className="h-8 gap-2 px-2 text-muted-foreground">
-              <ArrowLeft className="h-4 w-4" />
-              До дошки
-            </Button>
-            <Badge variant="outline" className="h-7 gap-1 rounded-md border-border/50 bg-transparent text-[11px] font-medium text-muted-foreground">
-              <Palette className="h-3.5 w-3.5" />
-              Дизайн задача
-            </Badge>
-          </>
-        }
+        topBar={null}
         title={
-          <div className="flex flex-wrap items-center gap-2 leading-tight">
+          <div className="flex flex-wrap items-baseline gap-2 leading-tight">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/design")}
+              className="h-8 w-8 shrink-0 self-center text-muted-foreground"
+              title="Назад до дошки"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <HoverCopyText
               value={taskHeaderTitle}
               className="max-w-full"
-              textClassName="font-mono text-[18px] text-primary font-medium tracking-tight md:text-[20px]"
+              textClassName="font-mono text-[15px] text-primary font-medium tracking-tight md:text-[16px]"
               buttonStyle="overlay"
               buttonClassName="h-6 w-6 rounded-md"
               successMessage="Номер дизайн-задачі скопійовано"
@@ -6575,70 +6870,43 @@ export default function DesignTaskPage() {
               {taskHeaderTitle}
             </HoverCopyText>
             <span className="text-foreground/45 leading-none">-</span>
-            {titleEditing ? (
-              <div className="flex min-w-[240px] flex-1 flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <Input
-                    ref={titleInputRef}
-                    value={titleDraft}
-                    onChange={(event) => {
-                      setTitleDraft(event.target.value);
-                      if (renameError) setRenameError(null);
-                    }}
-                    onKeyDown={handleInlineTitleKeyDown}
-                    disabled={renameSaving || designTaskLockedByOther}
-                    className="h-12 text-2xl font-medium tracking-tight md:h-12"
-                    placeholder="Вкажіть назву задачі"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-12 w-12 shrink-0"
-                    onClick={() => void submitRenameDialog(titleDraft)}
-                    disabled={renameSaving || designTaskLockedByOther}
-                    title="Зберегти назву"
-                  >
-                    {renameSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-12 w-12 shrink-0"
-                    onClick={cancelInlineTitleEdit}
-                    disabled={renameSaving}
-                    title="Скасувати редагування"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                {renameError ? <div className="text-xs text-destructive">{renameError}</div> : null}
+            {canEditTaskTitle ? (
+              <div className="min-w-0 flex-1">
+                <Input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(event) => {
+                    setTitleDraft(event.target.value);
+                    if (renameError) setRenameError(null);
+                  }}
+                  onFocus={() => setTitleEditing(true)}
+                  onBlur={() => {
+                    if (renameSaving) return;
+                    void submitRenameDialog(titleDraft);
+                  }}
+                  onKeyDown={handleInlineTitleKeyDown}
+                  disabled={renameSaving || designTaskLockedByOther}
+                  className={cn(
+                    "h-auto min-w-0 rounded-none border-transparent bg-transparent px-0 py-0 text-[20px] font-medium tracking-tight shadow-none outline-none ring-0 transition-colors md:text-[20px]",
+                    "cursor-text overflow-visible text-ellipsis whitespace-nowrap hover:border-transparent hover:bg-transparent focus:border-transparent focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0",
+                    titleEditing ? "text-foreground" : "text-foreground hover:text-foreground/90"
+                  )}
+                  placeholder="Вкажіть назву задачі"
+                  title={taskHeaderName}
+                />
+                {renameError ? <div className="mt-1 text-xs text-destructive">{renameError}</div> : null}
               </div>
             ) : (
-              <span className="min-w-0 break-words text-[18px] font-medium tracking-tight md:text-[20px]">{taskHeaderName}</span>
+              <span className="min-w-0 flex-1 truncate text-[20px] font-medium tracking-tight md:text-[20px]" title={taskHeaderName}>
+                {taskHeaderName}
+              </span>
             )}
-            {canEditTaskTitle ? (
-              !titleEditing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground"
-                  onClick={startInlineTitleEdit}
-                  disabled={renameSaving || designTaskLockedByOther}
-                  title="Редагувати назву"
-                >
-                  <PencilLine className="h-4 w-4" />
-                </Button>
-              ) : null
-            ) : null}
           </div>
         }
-        subtitle={taskHeaderSubtitle}
+        subtitle={null}
         viewers={<EntityViewersBar entries={designTaskViewers} label="Переглядають задачу" />}
         meta={
-          <>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Badge className={cn("px-2.5 py-1 text-xs font-semibold", statusColors[task.status])}>
               {statusLabels[task.status]}
             </Badge>
@@ -6793,32 +7061,61 @@ export default function DesignTaskPage() {
               <Clock className="h-3.5 w-3.5" />
               {estimateLabel === "Не вказано" ? "Додати естімейт" : `Естімейт: ${estimateLabel}`}
             </Button>
-          </>
+          </div>
         }
         actions={
-          <>
-            {isLinkedQuote ? (
-              <Button variant="outline" className="gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
-                <ExternalLink className="h-4 w-4" />
-                Відкрити прорахунок
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => setAttachQuoteDialogOpen(true)}
-              >
-                <Link2 className="h-4 w-4" />
-                Привʼязати до прорахунку
-              </Button>
-            )}
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <Button disabled={primaryActionDisabled || designTaskLockedByOther} onClick={primaryActionClick ?? undefined}>
               {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {primaryActionLabel}
             </Button>
-          </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isLinkedQuote ? (
+                  <DropdownMenuItem onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Відкрити прорахунок
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => setAttachQuoteDialogOpen(true)}>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    Привʼязати до прорахунку
+                  </DropdownMenuItem>
+                )}
+                {canEditTaskTitle ? (
+                  <DropdownMenuItem onClick={startInlineTitleEdit} disabled={renameSaving || designTaskLockedByOther}>
+                    Редагувати назву
+                  </DropdownMenuItem>
+                ) : null}
+                {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => (
+                  <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
+                    {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
+                  </DropdownMenuItem>
+                ))}
+                {canSeeMarkReadyAction ? (
+                  <DropdownMenuItem disabled={!!statusSaving || !canMarkReadyNow} onClick={() => void updateTaskStatus("pm_review")}>
+                    Позначити як дизайн готовий
+                  </DropdownMenuItem>
+                ) : null}
+                {canManageAssignments ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={deletingTask} onClick={() => requestDeleteTask()}>
+                      {deletingTask ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Видалити задачу
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         }
-        hint={primaryActionHint}
+        hint={null}
       />
 
       {designTaskLockedByOther ? (
@@ -6828,97 +7125,13 @@ export default function DesignTaskPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-8 px-4 sm:px-5 md:px-6 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)] xl:px-8">
-        <div className="space-y-8">
+      <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
           <section className="border-b border-border/40 pb-8">
-            {/* Section header */}
-            <div className="flex items-center justify-between gap-3 pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Бриф задачі</span>
-              {isLinkedQuote && quantityLabel !== "Не вказано" ? (
+            {isLinkedQuote && quantityLabel !== "Не вказано" ? (
+              <div className="flex justify-end pb-3">
                 <Badge variant="outline" className="text-xs font-normal">{quantityLabel}</Badge>
-              ) : null}
-            </div>
-
-            {/* Property rows */}
-            <div className="divide-y divide-border/25 border-y border-border/25">
-              {/* Client row */}
-              <button
-                type="button"
-                onClick={() => setPartyCardOpen(true)}
-                className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-              >
-                <span className="w-24 shrink-0 text-xs text-muted-foreground">Замовник</span>
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={20} />
-                  <span className="text-sm font-medium truncate">{task.customerName ?? "Не вказано"}</span>
-                </div>
-              </button>
-
-              {/* Manager row */}
-              <div className="group flex items-center gap-3 py-3">
-                <span className="w-24 shrink-0 text-xs text-muted-foreground">{taskRoleLabel}</span>
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={20} className="shrink-0 border-border/60" />
-                  <span className="text-sm font-medium truncate">{taskManagerLabel}</span>
-                </div>
-                {!designTaskLockedByOther && managerMembers.length > 0 ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground" disabled={managerSaving}>
-                        {managerSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Змінити"}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
-                      <DropdownMenuLabel>{`Відповідальний ${taskRoleLabelLower}`}</DropdownMenuLabel>
-                      {managerMembers.map((member) => (
-                        <DropdownMenuItem key={member.id} onClick={() => void applyManager(member.id)} disabled={taskManagerUserId === member.id || managerSaving} className="gap-2">
-                          <AvatarBase src={getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-[10px] font-semibold" />
-                          <span className="truncate">{member.label}</span>
-                          <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", taskManagerUserId === member.id ? "opacity-100" : "opacity-0")} />
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => void applyManager(null)} disabled={!taskManagerUserId || managerSaving}>
-                        <span className="truncate">{`Очистити ${taskRoleLabelLower}`}</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null}
               </div>
-
-              {/* Position row */}
-              {isLinkedQuote ? (
-                <div className="flex items-center gap-3 py-3">
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Позиція</span>
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    {productPreviewUrl ? (
-                      <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30" />
-                    ) : (
-                      <div className="h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center">
-                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                    )}
-                    <span className="text-sm font-medium truncate">{quoteItem?.name ?? "Не вказано"}</span>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Quote number row */}
-              {isLinkedQuote ? (
-                <div className="flex items-center gap-3 py-3">
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Прорахунок</span>
-                  <HoverCopyText value={getTaskDisplayNumber(task)} textClassName="font-mono text-sm font-medium" successMessage="Номер прорахунку скопійовано" copyLabel="Скопіювати номер прорахунку">
-                    {getTaskDisplayNumber(task)}
-                  </HoverCopyText>
-                </div>
-              ) : null}
-
-              {/* Created row */}
-              <div className="flex items-center gap-3 py-3">
-                <span className="w-24 shrink-0 text-xs text-muted-foreground">Створено</span>
-                <span className="text-sm text-foreground">{formatDate(task.createdAt, true)}</span>
-              </div>
-            </div>
+            ) : null}
             {task.status === "changes" ? (
               <div className="my-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-foreground">
                 {task.title ?? "Замовник надіслав правки, перевірте деталі та оновіть макет."}
@@ -7085,6 +7298,168 @@ export default function DesignTaskPage() {
                 </div>
                 ) : null}
               </div>
+            </div>
+          </section>
+
+          <section className="border-b border-border/40 pb-8">
+            <div className="pb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
+                {managerMembers.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {managerMembers.slice(0, 6).map((member) => (
+                      <Button
+                        key={member.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => insertMentionIntoComment(member.id)}
+                      >
+                        @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="relative">
+                  <Textarea
+                    ref={quoteCommentTextareaRef}
+                    value={quoteCommentDraft}
+                    onChange={(event) => {
+                      const cursor = event.target.selectionStart ?? event.target.value.length;
+                      setQuoteCommentDraft(event.target.value);
+                      syncMentionContext(event.target.value, cursor);
+                    }}
+                    onSelect={(event) => {
+                      const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                      syncMentionContext(event.currentTarget.value, cursor);
+                    }}
+                    onKeyDown={handleQuoteCommentKeyDown}
+                    placeholder={
+                      isLinkedQuote
+                        ? "Наприклад: @tania макети погоджені, можна запускати у виробництво."
+                        : "Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
+                    }
+                    className="min-h-[110px]"
+                  />
+                  {mentionContext ? (
+                    <div
+                      className={cn(
+                        "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                        mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+                      )}
+                    >
+                      {filteredMentionSuggestions.length > 0 ? (
+                        <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
+                          {filteredMentionSuggestions.map((member, index) => (
+                            <button
+                              key={member.id}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                                index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+                              )}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                applyMentionSuggestion(member);
+                              }}
+                            >
+                              <AvatarBase
+                                src={member.avatarUrl}
+                                name={member.label}
+                                fallback={getInitials(member.label)}
+                                size={24}
+                                className="text-[10px] font-semibold"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium">{member.label}</div>
+                                <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
+                    {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Надіслати коментар
+                  </Button>
+                </div>
+              </div>
+              {isLinkedQuote ? (
+                <>
+                  {quoteMentionsLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Завантаження згадок...
+                    </div>
+                  ) : quoteMentionsError ? (
+                    <div className="text-sm text-destructive">{quoteMentionsError}</div>
+                  ) : quoteMentionComments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Поки немає згадок у коментарях цього прорахунку.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {quoteMentionComments.slice(0, 5).map((comment) => (
+                        <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+                          <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                            <AvatarBase
+                              src={getMemberAvatar(comment.created_by)}
+                              name={getMemberLabel(comment.created_by)}
+                              fallback={getInitials(getMemberLabel(comment.created_by))}
+                              size={14}
+                              className="shrink-0 border-border/70"
+                            />
+                            <span>{getMemberLabel(comment.created_by)}</span>
+                            <span>·</span>
+                            <span>{formatDate(comment.created_at, true)}</span>
+                          </div>
+                          <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3 break-words">
+                            {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
+                    <ExternalLink className="h-4 w-4" />
+                    Відкрити коментарі прорахунку
+                  </Button>
+                </>
+              ) : standaloneComments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
+              ) : (
+                <div className="space-y-2">
+                  {standaloneComments.slice(0, 10).map((comment) => (
+                    <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+                      <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                        <AvatarBase
+                          src={getMemberAvatar(comment.created_by)}
+                          name={getMemberLabel(comment.created_by)}
+                          fallback={getInitials(getMemberLabel(comment.created_by))}
+                          size={14}
+                          className="shrink-0 border-border/70"
+                        />
+                        <span>{getMemberLabel(comment.created_by)}</span>
+                        <span>·</span>
+                        <span>{formatDate(comment.created_at, true)}</span>
+                      </div>
+                      <div className="mt-1 text-sm whitespace-pre-wrap break-words">
+                        {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -7570,77 +7945,97 @@ export default function DesignTaskPage() {
           </section>
         </div>
 
-        <aside className="space-y-8 self-start xl:sticky xl:top-20">
-          <section className="border-b border-border/40 pb-8">
-            {/* Panel header */}
-            <div className="flex items-center justify-between pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Виконання</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 -mr-1">
-                    <MoreVertical className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canEditTaskTitle ? (
-                    <DropdownMenuItem onClick={startInlineTitleEdit} disabled={renameSaving || designTaskLockedByOther}>
-                      Редагувати назву
-                    </DropdownMenuItem>
+        </div>
+
+        <aside className="self-start xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))]">
+          <div className="space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:px-6 xl:pr-8 xl:pt-6 xl:pb-8">
+          <section>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/85">Деталі</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isLinkedQuote ? (
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      {getTaskDisplayNumber(task)}
+                    </Badge>
                   ) : null}
-                  {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => (
-                    <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
-                      {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
-                    </DropdownMenuItem>
-                  ))}
-                  {canSeeMarkReadyAction ? (
-                    <DropdownMenuItem disabled={!!statusSaving || !canMarkReadyNow} onClick={() => void updateTaskStatus("pm_review")}>
-                      Позначити як дизайн готовий
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canManageAssignments ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={deletingTask} onClick={() => requestDeleteTask()}>
-                        {deletingTask ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                        Видалити задачу
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </div>
+              </div>
             </div>
 
-            {/* Property rows */}
-            <div className="divide-y divide-border/25 border-y border-border/25">
-              {/* Assignee row */}
-              <div className="group flex items-center gap-3 py-3">
-                <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Виконавець</span>
-                <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="mt-4 space-y-1">
+              <button
+                type="button"
+                onClick={() => setPartyCardOpen(true)}
+                className="group flex w-full items-center gap-4 rounded-xl px-0 py-3 text-left transition-colors hover:bg-muted/10 focus-visible:outline-none"
+              >
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Building2 className="h-4 w-4 text-muted-foreground/70" />
+                  Замовник
+                </span>
+                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
+                  <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={24} />
+                  <span className="truncate text-right text-[15px] font-medium">{task.customerName ?? "Не вказано"}</span>
+                  <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition group-hover:opacity-100">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              </button>
+
+              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <UserRound className="h-4 w-4 text-muted-foreground/70" />
+                  {taskRoleLabel}
+                </span>
+                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
+                  <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={24} className="shrink-0 border-border/60" />
+                  <span className="truncate text-right text-[15px] font-medium">{taskManagerLabel}</span>
+                </div>
+                {!designTaskLockedByOther && managerMembers.length > 0 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={managerSaving}>
+                        {managerSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>{`Відповідальний ${taskRoleLabelLower}`}</DropdownMenuLabel>
+                      {managerMembers.map((member) => (
+                        <DropdownMenuItem key={member.id} onClick={() => void applyManager(member.id)} disabled={taskManagerUserId === member.id || managerSaving} className="gap-2">
+                          <AvatarBase src={getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-[10px] font-semibold" />
+                          <span className="truncate">{member.label}</span>
+                          <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", taskManagerUserId === member.id ? "opacity-100" : "opacity-0")} />
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => void applyManager(null)} disabled={!taskManagerUserId || managerSaving}>
+                        <span className="truncate">{`Очистити ${taskRoleLabelLower}`}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </div>
+
+              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Palette className="h-4 w-4 text-muted-foreground/70" />
+                  Дизайнер
+                </span>
+                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
                   {task.assigneeUserId ? (
                     <>
-                      <AvatarBase
-                        src={getMemberAvatar(task.assigneeUserId)}
-                        name={getMemberLabel(task.assigneeUserId)}
-                        fallback={getInitials(getMemberLabel(task.assigneeUserId))}
-                        size={18}
-                        className="shrink-0 border-border/60"
-                      />
-                      <span className="text-sm font-medium truncate">{getMemberLabel(task.assigneeUserId)}</span>
+                      <AvatarBase src={getMemberAvatar(task.assigneeUserId)} name={getMemberLabel(task.assigneeUserId)} fallback={getInitials(getMemberLabel(task.assigneeUserId))} size={24} className="shrink-0 border-border/60" />
+                      <span className="truncate text-right text-[15px] font-medium">{getMemberLabel(task.assigneeUserId)}</span>
                     </>
                   ) : (
-                    <span className="text-sm text-muted-foreground/60 italic">Не призначено</span>
+                    <span className="text-[15px] text-muted-foreground/60 italic">Не призначено</span>
                   )}
                 </div>
                 {canManageAssignments ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground"
-                          disabled={!!assigningMemberId}
-                        >
-                          {assigningMemberId ? <Loader2 className="h-3 w-3 animate-spin" /> : "Змінити"}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningMemberId}>
+                        {assigningMemberId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
@@ -7680,53 +8075,66 @@ export default function DesignTaskPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : !task.assigneeUserId && canTakeOverForSelf ? (
-                  <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
-                    {assigningSelf ? <Loader2 className="h-3 w-3 animate-spin" /> : "Взяти"}
+                  <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
+                    {assigningSelf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                   </Button>
                 ) : null}
               </div>
 
-              {/* Recommendation row (if manager can assign and there's a suggestion) */}
-              {canManageAssignments && recommendedDesigner ? (
-                <div className="flex items-center gap-3 py-2">
-                  <span className="w-[76px] shrink-0 text-[10px] text-muted-foreground/60">Рекоменд.</span>
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <AvatarBase
-                      src={recommendedDesigner.avatarUrl ?? getMemberAvatar(recommendedDesigner.id)}
-                      name={recommendedDesigner.label}
-                      fallback={getInitials(recommendedDesigner.label)}
-                      size={16}
-                      className="shrink-0 border-border/60"
-                      fallbackClassName="text-[10px] font-semibold"
-                    />
-                    <span className="truncate text-xs text-muted-foreground">{recommendedDesigner.label}</span>
+              {isLinkedQuote ? (
+                <div className="flex items-center gap-4 rounded-xl px-0 py-3">
+                  <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground/70" />
+                    Робота
+                  </span>
+                  <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                    {productPreviewUrl ? (
+                      <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30" />
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30">
+                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <span className="truncate text-right text-[15px] font-medium">{quoteItem?.name ?? "Не вказано"}</span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 shrink-0 px-2 text-[11px] text-muted-foreground"
-                    disabled={!!assigningMemberId}
-                    onClick={() => void applyAssignee(recommendedDesigner.id)}
-                  >
-                    Призначити
-                  </Button>
                 </div>
               ) : null}
 
-              {/* Deadline row */}
-              <div className="group flex items-center gap-3 py-3">
-                <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Дедлайн</span>
+              {isLinkedQuote ? (
+                <div className="flex items-center gap-4 rounded-xl px-0 py-3">
+                  <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Copy className="h-4 w-4 text-muted-foreground/70" />
+                    Прорахунок
+                  </span>
+                  <HoverCopyText value={getTaskDisplayNumber(task)} className="ml-auto min-w-0" textClassName="font-mono text-[15px] font-medium text-right" successMessage="Номер прорахунку скопійовано" copyLabel="Скопіювати номер прорахунку">
+                    {getTaskDisplayNumber(task)}
+                  </HoverCopyText>
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-4 rounded-xl px-0 py-3">
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground/70" />
+                  Створено
+                </span>
+                <span className="flex-1 truncate text-right text-[15px] font-medium text-foreground">{formatDate(task.createdAt, true)}</span>
+              </div>
+
+              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <CalendarClock className="h-4 w-4 text-muted-foreground/70" />
+                  Дедлайн
+                </span>
                 <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
                       className={cn(
-                        "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-muted/30 cursor-pointer",
+                        "flex min-w-0 flex-1 items-center justify-end text-right text-[14px] font-medium cursor-pointer",
                         deadlineSaving && "opacity-50 pointer-events-none"
                       )}
                     >
-                      <CalendarClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                      <span className={cn("truncate", task.designDeadline ? deadlineLabel.className : "text-muted-foreground/50 italic")}>
+                      <span className={cn("whitespace-nowrap text-right", task.designDeadline ? deadlineLabel.className : "text-muted-foreground/50 italic")}>
                         {task.designDeadline ? formatDeadlineDateTime(task.designDeadline) : "Не встановлено"}
                       </span>
                     </button>
@@ -7748,71 +8156,44 @@ export default function DesignTaskPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {task.designDeadline ? (
-                  <button
-                    type="button"
-                    aria-label="Очистити дедлайн"
-                    className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-opacity hover:text-muted-foreground"
-                    disabled={deadlineSaving}
-                    onClick={() => void updateTaskDeadline(null)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
+                <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition group-hover:opacity-100">
+                  <PencilLine className="h-3.5 w-3.5" />
+                </span>
               </div>
 
-              {/* Timer row */}
-              <div className="flex items-center gap-3 py-3">
-                <span className="w-[76px] shrink-0 text-xs text-muted-foreground">Таймер</span>
-                <span
-                  className={cn(
-                    "flex-1 font-mono text-sm font-semibold tabular-nums",
-                    isTimerRunning ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"
-                  )}
-                >
+              <div className="group flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
+                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Timer className="h-4 w-4 text-muted-foreground/70" />
+                  Таймер
+                </span>
+                <span className={cn("flex-1 truncate text-right font-mono text-[15px] font-semibold tabular-nums", isTimerRunning ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
                   {timerElapsedLabel}
                 </span>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-md"
-                    disabled={!canStartTimer || !!timerBusy}
-                    title={startTimerBlockedReason ?? "Старт"}
-                    onClick={() => void handleStartTimer()}
-                  >
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-md" disabled={!canStartTimer || !!timerBusy} title={startTimerBlockedReason ?? "Старт"} onClick={() => void handleStartTimer()}>
                     {timerBusy === "start" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-md"
-                    disabled={!canPauseTimer || !!timerBusy}
-                    title={pauseTimerBlockedReason ?? "Пауза"}
-                    onClick={() => void handlePauseTimer()}
-                  >
+                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-md" disabled={!canPauseTimer || !!timerBusy} title={pauseTimerBlockedReason ?? "Пауза"} onClick={() => void handlePauseTimer()}>
                     {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
               </div>
-              {startTimerBlockedReason && !isTimerRunning ? (
-                <div className="py-2 text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
-              ) : isTimerRunning && timerSummary.activeUserId ? (
-                <div className="pb-2 text-[11px] text-muted-foreground">
-                  Активний · {getMemberLabel(timerSummary.activeUserId)}
-                </div>
-              ) : null}
             </div>
 
-            {/* Status quick actions */}
+            {startTimerBlockedReason && !isTimerRunning ? (
+              <div className="mt-3 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
+            ) : isTimerRunning && timerSummary.activeUserId ? (
+              <div className="mt-3 text-[11px] text-muted-foreground">Активний · {getMemberLabel(timerSummary.activeUserId)}</div>
+            ) : null}
+
             {statusQuickActionsWithoutStart.length > 0 ? (
-              <div className="space-y-1.5 pt-4">
+              <div className="mt-5 space-y-1.5">
                 {statusQuickActionsWithoutStart.map((action) => (
                   <Button
                     key={`${task.status}-${action.next}`}
                     variant="outline"
                     size="sm"
-                    className="w-full justify-start h-8 text-sm"
+                    className="h-8 w-full justify-start text-sm"
                     disabled={!!statusSaving || (action.next === "client_review" && !canSendToClientNow)}
                     onClick={() => void updateTaskStatus(action.next)}
                   >
@@ -7821,7 +8202,7 @@ export default function DesignTaskPage() {
                   </Button>
                 ))}
                 {task.status === "pm_review" && clientReviewBlockers.length > 0 ? (
-                  <div className="rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
                     Для передачі замовнику: {clientReviewBlockers.join(" · ")}
                   </div>
                 ) : null}
@@ -7829,171 +8210,9 @@ export default function DesignTaskPage() {
             ) : null}
           </section>
 
-          <section className="border-b border-border/40 pb-8">
-            <div className="pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
-            </div>
-            <div className="space-y-4">
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
-              {managerMembers.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {managerMembers.slice(0, 6).map((member) => (
-                    <Button
-                      key={member.id}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => insertMentionIntoComment(member.id)}
-                    >
-                      @{mentionSuggestions.find((entry) => entry.id === member.id)?.alias ?? member.label}
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-              <div className="relative">
-                <Textarea
-                  ref={quoteCommentTextareaRef}
-                  value={quoteCommentDraft}
-                  onChange={(event) => {
-                    const cursor = event.target.selectionStart ?? event.target.value.length;
-                    setQuoteCommentDraft(event.target.value);
-                    syncMentionContext(event.target.value, cursor);
-                  }}
-                  onSelect={(event) => {
-                    const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
-                    syncMentionContext(event.currentTarget.value, cursor);
-                  }}
-                  onKeyDown={handleQuoteCommentKeyDown}
-                  placeholder={
-                    isLinkedQuote
-                      ? "Наприклад: @tania макети погоджені, можна запускати у виробництво."
-                      : "Наприклад: @tania підготуй, будь ласка, ще варіант із темним фоном."
-                  }
-                  className="min-h-[110px]"
-                />
-                {mentionContext ? (
-                  <div
-                    className={cn(
-                      "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
-                      mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
-                    )}
-                  >
-                    {filteredMentionSuggestions.length > 0 ? (
-                      <div className="overflow-y-auto py-1" style={{ maxHeight: `${mentionDropdown.maxHeight}px` }}>
-                        {filteredMentionSuggestions.map((member, index) => (
-                          <button
-                            key={member.id}
-                            type="button"
-                            className={cn(
-                              "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                              index === mentionActiveIndex ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
-                            )}
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              applyMentionSuggestion(member);
-                            }}
-                          >
-                            <AvatarBase
-                              src={member.avatarUrl}
-                              name={member.label}
-                              fallback={getInitials(member.label)}
-                              size={24}
-                              className="text-[10px] font-semibold"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium">{member.label}</div>
-                              <div className="truncate text-xs text-muted-foreground">@{member.alias}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
-                        {mentionContext.query ? `Немає збігів для @${mentionContext.query}` : "Немає доступних користувачів"}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
-                  {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Надіслати коментар
-                </Button>
-              </div>
-            </div>
-            {isLinkedQuote ? (
-              <>
-                {quoteMentionsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Завантаження згадок...
-                  </div>
-                ) : quoteMentionsError ? (
-                  <div className="text-sm text-destructive">{quoteMentionsError}</div>
-                ) : quoteMentionComments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Поки немає згадок у коментарях цього прорахунку.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {quoteMentionComments.slice(0, 5).map((comment) => (
-                      <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-                        <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                          <AvatarBase
-                            src={getMemberAvatar(comment.created_by)}
-                            name={getMemberLabel(comment.created_by)}
-                            fallback={getInitials(getMemberLabel(comment.created_by))}
-                            size={14}
-                            className="shrink-0 border-border/70"
-                          />
-                          <span>{getMemberLabel(comment.created_by)}</span>
-                          <span>·</span>
-                          <span>{formatDate(comment.created_at, true)}</span>
-                        </div>
-                        <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3 break-words">
-                          {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Button variant="outline" className="w-full justify-start gap-2" onClick={() => navigate(`/orders/estimates/${task.quoteId}`)}>
-                  <ExternalLink className="h-4 w-4" />
-                  Відкрити коментарі прорахунку
-                </Button>
-              </>
-            ) : standaloneComments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
-            ) : (
-              <div className="space-y-2">
-                {standaloneComments.slice(0, 10).map((comment) => (
-                  <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-                    <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                      <AvatarBase
-                        src={getMemberAvatar(comment.created_by)}
-                        name={getMemberLabel(comment.created_by)}
-                        fallback={getInitials(getMemberLabel(comment.created_by))}
-                        size={14}
-                        className="shrink-0 border-border/70"
-                      />
-                      <span>{getMemberLabel(comment.created_by)}</span>
-                      <span>·</span>
-                      <span>{formatDate(comment.created_at, true)}</span>
-                    </div>
-                    <div className="mt-1 text-sm whitespace-pre-wrap break-words">
-                      {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            </div>
-          </section>
-
-          <section className="border-b border-border/40 pb-8">
+          <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
             <div className="flex items-center justify-between pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Історія задачі</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Історія</span>
               {historyEvents.length > 0 ? (
                 <span className="text-[11px] text-muted-foreground/60">
                   {Math.min(historyVisibleCount, historyEvents.length)} / {historyEvents.length}
@@ -8001,92 +8220,85 @@ export default function DesignTaskPage() {
               ) : null}
             </div>
             <div className="space-y-3">
-            {historyLoading && historyEvents.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Завантаження...
-              </div>
-            ) : historyGroups.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Подій ще немає</div>
-            ) : (
-              <div className="space-y-4">
-                {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
-                {historyGroups.map((group) => (
-                  <div key={group.label} className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.label}
-                    </div>
-                    <div className="space-y-3">
-                      {group.items.map((event) => {
-                        const Icon = event.icon;
-                        return (
-                          <div key={event.id} className="flex items-start gap-2.5">
-                            <div
-                              className={cn(
-                                "h-8 w-8 rounded-full border flex items-center justify-center shrink-0",
-                                event.accentClass
-                              )}
-                            >
-                              <Icon className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="text-sm font-medium">{event.title}</div>
-                                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {formatActivityClock(event.created_at)}
+              {historyLoading && historyEvents.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Завантаження...
+                </div>
+              ) : historyGroups.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Подій ще немає</div>
+              ) : (
+                <div className="space-y-4">
+                  {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
+                  {historyGroups.map((group) => (
+                    <div key={group.label} className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.label}
+                      </div>
+                      <div className="space-y-4">
+                        {group.items.map((event, eventIndex) => {
+                          const Icon = event.icon;
+                          return (
+                            <div key={event.id} className="flex items-stretch gap-3">
+                              <div className="flex w-4 shrink-0 flex-col items-center">
+                                <Icon className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                                {eventIndex < group.items.length - 1 ? (
+                                  <div className="mt-2 w-px flex-1 bg-border/45" />
+                                ) : null}
+                              </div>
+                              <div className="min-w-0 flex-1 pb-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="text-sm font-medium">{event.title}</div>
+                                  <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                    {formatActivityClock(event.created_at)}
+                                  </div>
                                 </div>
+                                <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <AvatarBase
+                                    src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
+                                    name={event.actorLabel}
+                                    fallback={getInitials(event.actorLabel)}
+                                    size={14}
+                                    className="shrink-0 border-border/70"
+                                  />
+                                  <span>{event.actorLabel}</span>
+                                </div>
+                                {event.description ? (
+                                  <div className="mt-1 text-xs text-muted-foreground">{event.description}</div>
+                                ) : null}
                               </div>
-                              <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                                <AvatarBase
-                                  src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
-                                  name={event.actorLabel}
-                                  fallback={getInitials(event.actorLabel)}
-                                  size={14}
-                                  className="shrink-0 border-border/70"
-                                />
-                                <span>{event.actorLabel}</span>
-                              </div>
-                              {event.description ? (
-                                <div className="text-xs text-muted-foreground mt-1">{event.description}</div>
-                              ) : null}
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {historyVisibleCount < historyEvents.length ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setHistoryVisibleCount((prev) => prev + 5)}
-                  >
-                    Показати ще 5
-                  </Button>
-                ) : !historyLoadedAll ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={historyLoading || !task?.id}
-                    onClick={() => {
-                      if (task?.id) {
-                        void loadHistory(task.id, { full: true });
-                      }
-                    }}
-                  >
-                    {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Завантажити ще з історії
-                  </Button>
-                ) : null}
-              </div>
-            )}
+                  ))}
+                  {historyVisibleCount < historyEvents.length ? (
+                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setHistoryVisibleCount((prev) => prev + 5)}>
+                      Показати ще 5
+                    </Button>
+                  ) : !historyLoadedAll ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={historyLoading || !task?.id}
+                      onClick={() => {
+                        if (task?.id) {
+                          void loadHistory(task.id, { full: true });
+                        }
+                      }}
+                    >
+                      {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Завантажити ще з історії
+                    </Button>
+                  ) : null}
+                </div>
+              )}
             </div>
           </section>
+          </div>
         </aside>
       </div>
 

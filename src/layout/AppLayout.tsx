@@ -1536,7 +1536,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* DESKTOP SIDEBAR */}
       <aside
         className={cn(
-          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border",
+          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-[hsl(var(--app-structure-divider))]",
           "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
           sidebarCollapsed ? "w-[84px]" : "w-[270px]"
         )}
@@ -1663,7 +1663,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <header
           key={theme}
           className={cn(
-            "fixed top-0 right-0 z-20 border-b border-border transition-[background-color,backdrop-filter,border-color] duration-200",
+            "fixed top-0 right-0 z-20 border-b border-[hsl(var(--app-structure-divider))] transition-[background-color,backdrop-filter,border-color] duration-200",
             "bg-[hsl(var(--page-underlay-bg)/0.78)] supports-[backdrop-filter]:backdrop-blur-md",
             sidebarCollapsed ? "md:left-[84px]" : "md:left-[270px]",
             "left-0"
@@ -2094,7 +2094,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             {/* Page header / page-level actions */}
             {header.showPageHeader === false ? (
               headerActions ? (
-                <div className="border-b border-border/70 bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
+                <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
                   <div className={cn("px-4 py-3 md:px-5 lg:px-6", !isCanvasMode && "px-0 py-0 md:px-0 lg:px-0")}>
                     {headerActions}
                   </div>
