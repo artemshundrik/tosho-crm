@@ -1937,6 +1937,14 @@ export default function DesignTaskPage() {
     task,
   ]);
 
+  // Auto-load customer attachments when the task is linked to a quote
+  useEffect(() => {
+    if (task && isUuid(task.quoteId) && !customerAttachmentsLoaded) {
+      void loadCustomerAttachments();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.quoteId]);
+
   const loadHistory = async (taskId: string, options?: { full?: boolean }) => {
     if (!effectiveTeamId) return;
     setHistoryLoading(true);
