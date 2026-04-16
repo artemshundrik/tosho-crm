@@ -6435,6 +6435,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Задача
+                    <span className="ml-2 text-xs text-muted-foreground">{designTask ? 1 : 0}</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -6801,15 +6802,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Коментарі
-                    {comments.length > 0 ? (
-                      <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
-                    ) : null}
+                    <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="files"
                     className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     Вкладення
+                    <span className="ml-2 text-xs text-muted-foreground">{attachments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="activity"
