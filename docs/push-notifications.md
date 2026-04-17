@@ -10,6 +10,7 @@
   - `netlify/functions/notify-users.ts`
   - `netlify/functions/quote-comments.ts`
   - `netlify/functions/quote-deadline-reminders.ts`
+  - `netlify/functions/team-events-reminders.ts`
 
 ## Local/frontend env
 
@@ -59,3 +60,13 @@ Copy:
 5. Any future `notifyUsers()` / mention / deadline reminder delivers:
    - in-app notification row
    - browser push through service worker
+
+## Scheduled team reminders
+
+- `netlify/functions/team-events-reminders.ts` runs hourly
+- sends team-wide reminders for:
+  - birthdays happening today
+  - work anniversaries happening today
+  - vacation start dates happening today
+  - vacation end dates happening today
+- reminders are deduped by event key in notification `href`
