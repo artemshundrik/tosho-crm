@@ -12,6 +12,15 @@ type ParsedRate = {
   sellChange: number | null;
 };
 
+type CurrencyWidgetEntry = {
+  buy?: {
+    interbank?: string | number | null;
+  } | null;
+  sell?: {
+    interbank?: string | number | null;
+  } | null;
+};
+
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -32,6 +41,16 @@ function parseDecimal(value: string) {
   const normalized = value.replace(",", ".").trim();
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseUnknownDecimal(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    return parseDecimal(value);
+  }
+  return null;
 }
 
 function extractRow(html: string, code: "USD" | "EUR") {
@@ -100,6 +119,42 @@ function extractRatesFromText(html: string) {
   };
 }
 
+function extractRatesFromWidgetJson(html: string) {
+  const match = html.match(/var\s+curWgtJSON\s*=\s*(\{[\s\S]*?\});/u);
+  if (!match) return null;
+
+  let parsed: Record<string, CurrencyWidgetEntry> | null = null;
+  try {
+    parsed = JSON.parse(match[1]) as Record<string, CurrencyWidgetEntry>;
+  } catch {
+    return null;
+  }
+
+  const usdEntry = parsed?.USD;
+  const eurEntry = parsed?.EUR;
+  const usdBuy = parseUnknownDecimal(usdEntry?.buy?.interbank);
+  const usdSell = parseUnknownDecimal(usdEntry?.sell?.interbank);
+  const eurBuy = parseUnknownDecimal(eurEntry?.buy?.interbank);
+  const eurSell = parseUnknownDecimal(eurEntry?.sell?.interbank);
+
+  if (!usdBuy || !usdSell || !eurBuy || !eurSell) {
+    return null;
+  }
+
+  return {
+    usd: {
+      buy: usdBuy,
+      sell: usdSell,
+      sellChange: null,
+    },
+    eur: {
+      buy: eurBuy,
+      sell: eurSell,
+      sellChange: null,
+    },
+  };
+}
+
 function extractCurrencyRate(html: string, code: "USD" | "EUR"): ParsedRate | null {
   const row = extractRow(html, code);
   if (!row) return null;
@@ -132,7 +187,7 @@ async function loadMinfinRates() {
   }
 
   const html = await response.text();
-  const fallbackRates = extractRatesFromText(html);
+  const fallbackRates = extractRatesFromWidgetJson(html) ?? extractRatesFromText(html);
   const usd = extractCurrencyRate(html, "USD") ?? fallbackRates?.usd ?? null;
   const eur = extractCurrencyRate(html, "EUR") ?? fallbackRates?.eur ?? null;
   if (!usd || !eur) {
