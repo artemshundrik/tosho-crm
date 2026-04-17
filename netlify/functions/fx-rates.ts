@@ -1,4 +1,5 @@
 const MINFIN_MB_URL = "https://minfin.com.ua/ua/currency/mb/";
+const MINFIN_EUR_MB_URL = "https://minfin.com.ua/ua/currency/mb/eur/";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
@@ -18,6 +19,15 @@ type CurrencyWidgetEntry = {
   } | null;
   sell?: {
     interbank?: string | number | null;
+  } | null;
+};
+
+type ExchangeRateJsonLdItem = {
+  "@type"?: string;
+  currency?: string;
+  description?: string;
+  currentExchangeRate?: {
+    price?: string | number | null;
   } | null;
 };
 
@@ -155,6 +165,61 @@ function extractRatesFromWidgetJson(html: string) {
   };
 }
 
+function parseJsonLdBlocks(html: string) {
+  return [...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
+function normalizeDescription(value?: string | null) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function extractRateFromJsonLd(html: string, code: "USD" | "EUR"): ParsedRate | null {
+  const blocks = parseJsonLdBlocks(html);
+  const items: ExchangeRateJsonLdItem[] = [];
+
+  for (const block of blocks) {
+    try {
+      const parsed = JSON.parse(block) as unknown;
+      const collect = (value: unknown) => {
+        if (!value || typeof value !== "object") return;
+        if (Array.isArray(value)) {
+          value.forEach(collect);
+          return;
+        }
+
+        const record = value as Record<string, unknown>;
+        if (record["@type"] === "ExchangeRateSpecification") {
+          items.push(record as ExchangeRateJsonLdItem);
+        }
+        Object.values(record).forEach(collect);
+      };
+      collect(parsed);
+    } catch {
+      // Ignore malformed JSON-LD blocks and continue with other strategies.
+    }
+  }
+
+  const matches = items.filter((item) => (item.currency ?? "").trim().toUpperCase() === code);
+  if (matches.length === 0) return null;
+
+  const buyItem = matches.find((item) => normalizeDescription(item.description).includes("куп"));
+  const sellItem = matches.find((item) => normalizeDescription(item.description).includes("прод"));
+  const buy = parseUnknownDecimal(buyItem?.currentExchangeRate?.price);
+  const sell = parseUnknownDecimal(sellItem?.currentExchangeRate?.price);
+  if (!buy || !sell) return null;
+
+  return {
+    buy,
+    sell,
+    sellChange: null,
+  };
+}
+
 function extractCurrencyRate(html: string, code: "USD" | "EUR"): ParsedRate | null {
   const row = extractRow(html, code);
   if (!row) return null;
@@ -174,8 +239,8 @@ function extractUpdatedAt(html: string) {
   return match?.[1] ?? null;
 }
 
-async function loadMinfinRates() {
-  const response = await fetch(MINFIN_MB_URL, {
+async function loadHtml(url: string) {
+  const response = await fetch(url, {
     headers: {
       "User-Agent": USER_AGENT,
       Accept: "text/html,application/xhtml+xml",
@@ -183,13 +248,19 @@ async function loadMinfinRates() {
     },
   });
   if (!response.ok) {
-    throw new Error(`Minfin responded with HTTP ${response.status}`);
+    throw new Error(`Minfin responded with HTTP ${response.status} for ${url}`);
   }
 
-  const html = await response.text();
-  const fallbackRates = extractRatesFromWidgetJson(html) ?? extractRatesFromText(html);
-  const usd = extractCurrencyRate(html, "USD") ?? fallbackRates?.usd ?? null;
-  const eur = extractCurrencyRate(html, "EUR") ?? fallbackRates?.eur ?? null;
+  return response.text();
+}
+
+async function loadMinfinRates() {
+  const [usdHtml, eurHtml] = await Promise.all([loadHtml(MINFIN_MB_URL), loadHtml(MINFIN_EUR_MB_URL)]);
+
+  const usdFallbackRates = extractRatesFromWidgetJson(usdHtml) ?? extractRatesFromText(usdHtml);
+  const eurFallbackRates = extractRatesFromWidgetJson(eurHtml) ?? extractRatesFromText(eurHtml);
+  const usd = extractRateFromJsonLd(usdHtml, "USD") ?? extractCurrencyRate(usdHtml, "USD") ?? usdFallbackRates?.usd ?? null;
+  const eur = extractRateFromJsonLd(eurHtml, "EUR") ?? extractCurrencyRate(eurHtml, "EUR") ?? eurFallbackRates?.eur ?? null;
   if (!usd || !eur) {
     throw new Error("Failed to parse USD/EUR rates from Minfin interbank page");
   }
@@ -197,7 +268,7 @@ async function loadMinfinRates() {
   return {
     source: "minfin_site_mb",
     sourceUrl: MINFIN_MB_URL,
-    updatedAtLabel: extractUpdatedAt(html),
+    updatedAtLabel: extractUpdatedAt(usdHtml) ?? extractUpdatedAt(eurHtml),
     fetchedAt: new Date().toISOString(),
     usd,
     eur,

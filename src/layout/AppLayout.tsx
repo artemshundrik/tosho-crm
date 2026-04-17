@@ -202,9 +202,7 @@ function FxCurrencyBadge({
 }
 
 async function fetchMinfinFxRates(signal?: AbortSignal) {
-  const endpoints = import.meta.env.DEV
-    ? ["/api/fx-rates", "/.netlify/functions/fx-rates"]
-    : ["/.netlify/functions/fx-rates", "/api/fx-rates"];
+  const endpoints = ["/.netlify/functions/fx-rates", "/api/fx-rates"];
   let lastError: Error | null = null;
 
   for (const endpoint of endpoints) {
