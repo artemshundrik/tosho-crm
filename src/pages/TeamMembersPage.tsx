@@ -2264,6 +2264,7 @@ export function TeamMembersPage() {
   }
 
   if (!workspaceId) {
+    return (
       <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
         <div className="overflow-hidden flex flex-col">
           <div className="p-6">
@@ -2274,8 +2275,10 @@ export function TeamMembersPage() {
           </div>
         </div>
       </div>
+    );
   }
 
+  return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
       <div className="overflow-hidden">
         <div className="p-5">
