@@ -3903,7 +3903,6 @@ export default function DesignPage() {
               </Button>
             </div>
             <Button
-              size="sm"
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
               onClick={() => setCreateDialogOpen(true)}
             >

@@ -15,7 +15,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] notranslate",
+      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm notranslate",
       "data-[state=open]:animate-in data-[state=open]:fade-in-0",
       "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
       "duration-200",
@@ -43,9 +43,8 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%] notranslate",
         "max-h-[calc(100dvh-1.5rem)]",
-        // контейнер — bg-card (білий у light, піднятий у dark), ring замість shadow (shadow заблокований)
-        "rounded-[var(--radius-inner)] border border-border/90 bg-card ring-1 ring-black/8 dark:ring-white/6 outline-none",
-        "flex flex-col gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4",
+        "rounded-[24px] border border-border/40 bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5 outline-none",
+        "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
         // ✅ м’яка анімація: fade + slide зверху, без zoom
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2",

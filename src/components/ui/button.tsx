@@ -17,7 +17,7 @@ const buttonVariants = cva(
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50",
     // Shape / spacing
-    "rounded-[var(--btn-radius)]",
+    "rounded-xl",
     "gap-2",
     "will-change-transform",
     "bg-clip-padding",
@@ -27,34 +27,27 @@ const buttonVariants = cva(
       variant: {
         // ✅ Filled CTA (Linear-style): semibold ALWAYS
         primary: [
-          "!font-medium", // ⬅️ ключ: прибиває “regular” у всіх кнопках з іконкою
-          "text-primary-foreground",
-          "gumloop-blue-gradient",
-          "btn-3d-shadow",
-          "btn-glow btn-glow-primary btn-sheen",
-          "hover:-translate-y-[1px]",
-          "active:scale-[0.985]",
+          "!font-medium",
+          "bg-foreground text-background",
+          "shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10",
+          "hover:opacity-85",
+          "active:scale-[0.98]",
         ].join(" "),
 
         // ✅ Surface (hero/secondary): medium by default (як у Linear)
         secondary: [
           "!font-medium",
-          "bg-secondary text-secondary-foreground border border-border",
-          "btn-surface-shadow",
-          "hover:-translate-y-[1px]",
-          "hover:btn-surface-shadow-hover",
-          "active:translate-y-0",
-          "active:scale-[0.99]",
-          "active:btn-surface-pressed",
+          "bg-muted/40 text-foreground border border-border/50",
+          "shadow-inner",
+          "hover:bg-muted/80",
+          "active:scale-[0.98]",
         ].join(" "),
 
         outline: [
           "!font-medium",
-          "border border-border bg-transparent text-foreground",
-          "hover:bg-muted/40",
-          "hover:-translate-y-[1px]",
-          "active:translate-y-0",
-          "active:scale-[0.99]",
+          "border border-border/50 bg-transparent text-foreground",
+          "hover:bg-muted/60",
+          "active:scale-[0.98]",
         ].join(" "),
 
         // ✅ Danger: soft, low-emphasis destructive tone
@@ -63,34 +56,29 @@ const buttonVariants = cva(
           "text-destructive",
           "bg-transparent",
           "border border-destructive/30",
-          "hover:bg-destructive/10",
-          "hover:-translate-y-[1px]",
-          "hover:text-destructive",
-          "active:translate-y-0",
-          "active:scale-[0.99]",
+          "hover:bg-danger-soft/80 hover:text-destructive",
+          "active:scale-[0.98]",
         ].join(" "),
 
         destructiveSolid: [
           "!font-medium",
           "bg-destructive text-destructive-foreground",
-          "shadow-md shadow-destructive/20",
-          "hover:bg-destructive/90",
-          "hover:-translate-y-[1px]",
-          "active:translate-y-0",
-          "active:scale-[0.99]",
+          "shadow-[0_1px_3px_rgba(0,0,0,0.1)]",
+          "hover:opacity-85",
+          "active:scale-[0.98]",
         ].join(" "),
 
         // ✅ Ghost/link: medium
-        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.99]",
+        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.98]",
         link: "!font-medium bg-transparent text-primary underline-offset-4 hover:underline",
 
         // ✅ Menu trigger / list item
-        menu: "!font-medium bg-transparent text-foreground hover:bg-muted/60 flex w-full justify-start",
+        menu: "!font-medium bg-transparent text-foreground hover:bg-muted/60 flex w-full justify-start rounded-lg",
 
         // ✅ Muted text action
         textMuted: [
           "!font-medium bg-transparent text-muted-foreground",
-          "rounded-[var(--radius-md)] hover:text-foreground hover:bg-muted/50",
+          "rounded-lg hover:text-foreground hover:bg-muted/50",
         ].join(" "),
 
         // ✅ Primary text action
@@ -98,48 +86,50 @@ const buttonVariants = cva(
 
         // ✅ Text on primary surface (e.g., split primary buttons)
         onPrimary: [
-          "!font-medium bg-transparent text-primary-foreground",
-          "hover:bg-primary-foreground/10",
+          "!font-medium bg-transparent text-background",
+          "hover:bg-background/10",
         ].join(" "),
 
         // ✅ Segmented tabs (uses aria-pressed for active state)
         segmented: [
           "!font-medium border border-transparent bg-transparent text-muted-foreground shadow-none",
           "hover:bg-background/40 hover:text-foreground",
-          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-card aria-[pressed=true]:text-foreground aria-[pressed=true]:shadow-sm",
+          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground aria-[pressed=true]:shadow-sm",
         ].join(" "),
 
         // ✅ Filter chip / pill toggle
         chip: [
-          "!font-semibold rounded-full border border-border",
+          "!font-semibold rounded-full border border-border/50",
           "h-7 px-3",
-          "bg-muted/30 text-muted-foreground",
-          "hover:text-foreground hover:bg-muted/40",
-          "aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary/10 aria-[pressed=true]:text-primary",
+          "bg-muted/40 text-muted-foreground shadow-inner",
+          "hover:text-foreground hover:bg-muted/60",
+          "aria-[pressed=true]:border-foreground/20 aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:shadow-md",
         ].join(" "),
 
         // ✅ Card-like action (list items, selection cards)
         card: [
           "!font-medium w-full justify-start text-left",
-          "rounded-[var(--radius-inner)] border border-border bg-card/60",
+          "rounded-xl border border-border/50 bg-card/60 shadow-sm",
           "hover:bg-muted/40",
-          "data-[state=active]:border-primary/30 data-[state=active]:bg-primary/5 data-[state=active]:ring-1 data-[state=active]:ring-primary/10",
+          "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
           "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-red-200 data-[status=unavailable]:bg-red-50/30 data-[status=unavailable]:opacity-80",
         ].join(" "),
 
         // ✅ Icon control (toolbar/search clear)
         control: [
           "!font-medium",
-          "rounded-[var(--radius-lg)]",
+          "rounded-xl",
+          "bg-transparent",
           "text-muted-foreground hover:text-foreground",
-          "hover:bg-muted",
+          "hover:bg-muted/40",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
         ].join(" "),
 
         // ✅ Icon control (destructive)
         controlDestructive: [
           "!font-medium",
-          "rounded-[var(--radius-lg)]",
+          "rounded-xl",
+          "bg-transparent",
           "text-destructive hover:text-destructive",
           "hover:bg-danger-soft/40",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -155,24 +145,24 @@ const buttonVariants = cva(
         // ✅ Pill toggle (attendance / binary switch)
         pill: [
           "!font-semibold rounded-full",
-          "bg-muted/40 text-foreground hover:bg-muted/60",
-          "aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground aria-[pressed=true]:hover:bg-primary/90",
+          "bg-muted/40 text-foreground shadow-inner hover:bg-muted/60",
+          "aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:hover:bg-foreground/90 aria-[pressed=true]:shadow-md",
           "border border-transparent",
         ].join(" "),
       },
 
       // ✅ Height (як ти хотів “як була”)
       size: {
-        xxs: "h-7 px-2 text-[11px] leading-none",
-        xs: "h-8 px-3 text-[13px] leading-[18px]",
-        sm: "h-10 px-3.5 text-sm",
-        md: "h-10 px-4 text-[15px]",
-        lg: "h-11 px-5 text-[15px]",
-        compact: "h-8 px-3 text-[13px] leading-[18px]",
-        iconXs: "h-8 w-8 px-0",
-        iconSm: "h-7 w-7 px-0",
+        xxs: "h-6 px-2 text-[10px] leading-none",
+        xs: "h-7 px-2.5 text-xs",
+        sm: "h-8 px-3 text-xs",
+        md: "h-9 px-4 text-sm",
+        lg: "h-10 px-5 text-[15px]",
+        compact: "h-7 px-3 text-xs",
+        iconXs: "h-7 w-7 px-0",
+        iconSm: "h-8 w-8 px-0",
         iconMd: "h-9 w-9 px-0",
-        icon: "h-10 w-10 px-0",  // 40x40
+        icon: "h-10 w-10 px-0",
       },
     },
 

@@ -7,23 +7,24 @@ export function cx(...arr: Array<string | undefined | false | null>) {
  * Всі кольори — тільки через design tokens.
  */
 export const CONTROL_BASE = cx(
-  "h-10 rounded-[var(--radius-md)] bg-background",
-  "border border-input",
+  "h-10 rounded-xl bg-muted/40",
+  "border border-border/50 shadow-inner",
   "text-foreground placeholder:text-muted-foreground",
-  "transition-colors duration-150",
-  "hover:bg-muted/25 hover:border-foreground/30",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 focus-visible:border-primary/60",
-  "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted/20",
+  "transition-all duration-200 ease-out",
+  "hover:bg-muted/60",
+  "focus-visible:outline-none focus-visible:bg-background focus-visible:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] focus-visible:ring-1 focus-visible:ring-black/5 dark:focus-visible:ring-white/10",
+  "focus:bg-background focus:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] focus:ring-1 focus:ring-black/5 dark:focus:ring-white/10",
+  "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted/20 disabled:shadow-none",
   "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
   "hover:[&>svg]:text-foreground"
 );
 
 export const TOOLBAR_CONTROL = cx(
   CONTROL_BASE,
-  "px-3.5 shadow-sm"
+  "px-3.5"
 );
 
-export const TOOLBAR_ACTION_BUTTON = cx("h-10 rounded-[var(--btn-radius)] px-4");
+export const TOOLBAR_ACTION_BUTTON = cx("h-10 rounded-xl px-4 transition-all duration-200 ease-out");
 
 export const CONTROL_ICON_BTN = cx(
   "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)]",
@@ -40,12 +41,21 @@ export const SEARCH_INPUT = cx(TOOLBAR_CONTROL, "pl-9 pr-9");
 export const SEARCH_CLEAR_BTN_POS = cx("absolute right-2 top-1/2 -translate-y-1/2");
 
 export const SEGMENTED_GROUP = cx(
-  "inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border/80 bg-muted/60 p-0.5"
+  "inline-flex p-1 h-11 items-center rounded-xl border border-border/50 bg-muted/40 shadow-inner"
 );
 
 export const SEGMENTED_GROUP_SM = cx(
-  "inline-flex h-10 items-center rounded-[var(--radius-lg)] border border-border/80 bg-muted/60 p-0.5"
+  "inline-flex p-0.5 h-9 items-center rounded-lg border border-border/50 bg-muted/40 shadow-inner"
 );
 
-export const SEGMENTED_TRIGGER = cx("h-9 rounded-[var(--radius-md)] px-4");
-export const SEGMENTED_TRIGGER_SM = cx("h-9 rounded-[var(--radius-md)] px-3.5");
+export const SEGMENTED_TRIGGER = cx(
+  "flex-1 inline-flex items-center justify-center gap-2 h-9 rounded-lg px-4 text-sm font-medium transition-all duration-200 ease-out text-muted-foreground hover:text-foreground hover:bg-background/50",
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] data-[state=active]:ring-1 data-[state=active]:ring-black/5 dark:data-[state=active]:ring-white/10",
+  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] data-[state=on]:ring-1 data-[state=on]:ring-black/5 dark:data-[state=on]:ring-white/10"
+);
+
+export const SEGMENTED_TRIGGER_SM = cx(
+  "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-md px-3 text-xs font-medium transition-all duration-200 ease-out text-muted-foreground hover:text-foreground hover:bg-background/50",
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-black/5 dark:data-[state=active]:ring-white/10",
+  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:ring-1 data-[state=on]:ring-black/5 dark:data-[state=on]:ring-white/10"
+);

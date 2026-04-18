@@ -4385,7 +4385,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </div>
           <div className="flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto">
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-            <Button onClick={openCreate} size="sm" className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
+            <Button onClick={openCreate} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
@@ -4970,8 +4970,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ) : quoteListMode === "grouped" ? (
             <div className="p-5 space-y-4">
               {groupedQuotesView.groups.map((group) => (
-                <div key={group.id} className="rounded-[var(--radius-lg)] border border-border bg-card overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/60">
+                <div key={group.id} className="overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border/50">
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         className={cn(
@@ -5035,8 +5035,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               ))}
 
               {groupedQuotesView.ungrouped.length > 0 ? (
-                <div className="rounded-[var(--radius-lg)] border border-border bg-card overflow-hidden">
-                  <div className="px-5 py-4 border-b border-border/60 text-sm font-semibold">Без групи</div>
+                <div className="overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border/50 text-sm font-semibold">Без групи</div>
                   <div className="divide-y divide-border/50">
                     {groupedQuotesView.ungrouped.map((row) => (
                       (() => {

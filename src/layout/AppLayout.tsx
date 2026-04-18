@@ -1534,7 +1534,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* DESKTOP SIDEBAR */}
       <aside
         className={cn(
-          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-[hsl(var(--app-structure-divider))]",
+          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
           "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
           sidebarCollapsed ? "w-[84px]" : "w-[270px]"
         )}
@@ -1661,8 +1661,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <header
           key={theme}
           className={cn(
-            "fixed top-0 right-0 z-20 border-b border-[hsl(var(--app-structure-divider))] transition-[background-color,backdrop-filter,border-color] duration-200",
-            "bg-[hsl(var(--page-underlay-bg)/0.78)] supports-[backdrop-filter]:backdrop-blur-md",
+            "fixed top-0 right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
+            "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[84px]" : "md:left-[270px]",
             "left-0"
           )}
@@ -1817,11 +1817,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
-                className="inline-flex h-9 w-full items-center gap-2 rounded-[var(--radius-lg)] border border-border/70 bg-background/75 pl-3.5 pr-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border hover:bg-muted/35 hover:text-foreground cursor-pointer"
+                className="inline-flex h-10 w-full max-w-[520px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground cursor-pointer"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="flex-1 text-left">Пошук...</span>
-                <kbd className="inline-flex h-6 select-none items-center rounded-[6px] border border-border bg-muted/60 px-2 font-mono text-[10px] font-medium opacity-80">
+                <kbd className="inline-flex h-6 select-none items-center rounded-md border border-border bg-background/60 px-2 font-mono text-[10px] font-medium opacity-80">
                   ⌘K
                 </kbd>
               </button>
@@ -1838,7 +1838,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 trigger={
                   <button
                     type="button"
-                    className="hidden lg:inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] border border-border/70 bg-muted/30 px-2.5 text-xs transition-colors duration-150 hover:bg-muted/60 hover:border-border cursor-pointer"
+                    className="hidden lg:inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-border/50 bg-muted/40 shadow-inner px-3 text-xs transition-all duration-200 hover:bg-muted/60 cursor-pointer"
                     aria-label="Курси валют"
                     title={fxError ?? fxStaleWarning ?? "Мінфін міжбанк · продаж"}
                   >
@@ -1975,7 +1975,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     type="button"
                     variant="control"
                     size="iconMd"
-                    className="relative"
+                    className="relative rounded-xl border border-border/50 bg-muted/40 shadow-inner hover:bg-muted/60 h-10 w-10 transition-all duration-200"
                     aria-label="Сповіщення"
                     title="Сповіщення"
                   >
@@ -2154,8 +2154,8 @@ function SidebarGroup({
       {!collapsed && !hideLabel ? (
         <h4
           className={cn(
-            "px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70",
-            isMobileDrawer ? "px-3 text-[11px] tracking-[0.18em] text-muted-foreground/75" : undefined
+            "px-3 text-[11px] font-medium tracking-[0.06em] text-muted-foreground/60",
+            isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
           )}
         >
           {label}
@@ -2182,33 +2182,21 @@ function SidebarGroup({
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 collapsed
-                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-[12px] px-0 py-0"
+                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-[14px] px-0 py-0"
                   : isMobileDrawer
-                    ? "min-h-11 rounded-[18px] px-3.5 py-2.5"
-                    : "h-10",
+                    ? "min-h-11 rounded-[16px] px-4 py-2.5"
+                    : "h-9 rounded-[10px]",
                 active
                   ? collapsed
-                    ? "bg-primary/15 text-foreground"
+                    ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
                     : isMobileDrawer
-                      ? "bg-primary/12 text-foreground shadow-[inset_0_0_0_1px_rgba(59,130,246,0.16)]"
-                      : "bg-primary/10 text-foreground"
+                      ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
+                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium"
                   : isMobileDrawer
-                    ? "text-muted-foreground hover:bg-background/75 hover:text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    ? "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               )}
             >
-              <span
-                className={cn(
-                  "absolute left-1 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full transition-opacity",
-                  collapsed
-                    ? "hidden"
-                    : active
-                    ? isMobileDrawer
-                      ? "h-7 bg-primary opacity-100"
-                      : "bg-primary opacity-100"
-                    : "bg-primary opacity-0 group-hover:opacity-40"
-                )}
-              />
 
               <Icon
                 className={cn(

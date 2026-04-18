@@ -1,12 +1,12 @@
 import * as React from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -339,15 +339,19 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="top-[3vh] max-h-[92vh] max-w-[760px] translate-y-0 overflow-y-auto sm:top-[4vh]">
-        <DialogHeader>
-          <DialogTitle className="text-base font-medium flex items-center gap-2">
-            <UserPlus className="h-4 w-4" />
-            {title}
-          </DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto p-0 flex flex-col">
+        <div className="px-6 py-4 border-b shrink-0 bg-muted/20">
+          <SheetHeader>
+            <SheetTitle className="text-base font-medium flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              {title}
+            </SheetTitle>
+            {description ? <SheetDescription>{description}</SheetDescription> : null}
+          </SheetHeader>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
         <div className="flex flex-wrap items-center gap-2">
           <Popover open={ownershipOpen} onOpenChange={setOwnershipOpen}>
@@ -1124,15 +1128,19 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
           ) : null}
         </div>
 
-        <DialogFooter className="pt-2 border-t border-border/50">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Скасувати
-          </Button>
-          <Button onClick={onSubmit} disabled={saving}>
-            {saving ? "Збереження..." : submitLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+
+        <div className="px-6 py-4 border-t shrink-0 bg-background">
+          <SheetFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Скасувати
+            </Button>
+            <Button onClick={onSubmit} disabled={saving}>
+              {saving ? "Збереження..." : submitLabel}
+            </Button>
+          </SheetFooter>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 };

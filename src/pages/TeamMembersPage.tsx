@@ -2264,23 +2264,20 @@ export function TeamMembersPage() {
   }
 
   if (!workspaceId) {
-    return (
       <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
-        <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
+        <div className="overflow-hidden flex flex-col">
           <div className="p-6">
             <div className="text-sm font-semibold text-foreground">Workspace not selected</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Немає доступного workspace. Перевір права доступу або створіть workspace.
             </div>
           </div>
-        </Card>
+        </div>
       </div>
-    );
   }
 
-  return (
     <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
-      <Card className="overflow-hidden border border-border bg-card shadow-none">
+      <div className="overflow-hidden">
         <div className="p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
@@ -2349,10 +2346,10 @@ export function TeamMembersPage() {
             </div>
           </div>
         </div>
-      </Card>
+      </div>
 
-      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none overflow-hidden flex flex-col">
-        <div className="flex flex-col gap-4 p-5 border-b border-border bg-muted/5">
+      <div className="overflow-hidden flex flex-col">
+        <div className="flex flex-col gap-4 p-5 pb-0">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className={SEGMENTED_GROUP}>
               <Button
@@ -3177,7 +3174,7 @@ export function TeamMembersPage() {
             )}
           </div>
         ) : null}
-      </Card>
+      </div>
 
       <Dialog
         open={inviteOpen}

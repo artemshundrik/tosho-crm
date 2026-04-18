@@ -2546,29 +2546,45 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const customersHeaderActions = useMemo(() => (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-          <Button
-            variant="segmented"
-            size="xs"
+        <div className="flex bg-muted/40 p-1 rounded-xl w-full lg:w-auto border border-border/50 shadow-inner">
+          <button
             aria-pressed={activeTab === "customers"}
             onClick={() => setActiveTab("customers")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            className={cn(
+              "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
+              activeTab === "customers" 
+                ? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10" 
+                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+            )}
           >
             <Building2 className="h-4 w-4" />
             Замовники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{customersTotal}</span>
-          </Button>
-          <Button
-            variant="segmented"
-            size="xs"
+            <span className={cn(
+              "ml-1.5 rounded-md px-2 py-0.5 text-[10px] tabular-nums font-semibold", 
+              activeTab === "customers" ? "bg-muted text-foreground" : "bg-muted-foreground/10 text-muted-foreground"
+            )}>
+              {customersTotal}
+            </span>
+          </button>
+          <button
             aria-pressed={activeTab === "leads"}
             onClick={() => setActiveTab("leads")}
-            className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            className={cn(
+              "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
+              activeTab === "leads" 
+                ? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10" 
+                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+            )}
           >
             <Users className="h-4 w-4" />
             Ліди
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{leadsTotal}</span>
-          </Button>
+            <span className={cn(
+              "ml-1.5 rounded-md px-2 py-0.5 text-[10px] tabular-nums font-semibold", 
+              activeTab === "leads" ? "bg-muted text-foreground" : "bg-muted-foreground/10 text-muted-foreground"
+            )}>
+              {leadsTotal}
+            </span>
+          </button>
         </div>
         <Button
           onClick={activeTab === "customers" ? openCreate : openCreateLead}
@@ -2730,7 +2746,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </div>
           </div>
         ) : null}
-        <TabsContent value="customers" className="mt-4">
+        <TabsContent value="customers" className="mt-0 pt-4">
           <div className="overflow-hidden">
             {customersLoading ? (
               <AppSectionLoader label="Завантаження..." />
@@ -2858,14 +2874,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableHead className="w-[34%] pl-6">Компанія</TableHead>
-                        <TableHead className="w-[92px] px-2">Тип</TableHead>
-                        <TableHead className="w-[30%] pl-2">Юрособа</TableHead>
-                        <TableHead className="w-[18%]">Сайт</TableHead>
-                        <TableHead className="w-[16%]">Менеджер</TableHead>
+                  <Table className="border-collapse">
+                    <TableHeader className="sticky top-0 z-10 bg-background/80 backdrop-blur-md">
+                      <TableRow className="border-b border-border/40 hover:bg-transparent">
+                        <TableHead className="w-[34%] pl-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Компанія</TableHead>
+                        <TableHead className="w-[92px] px-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Тип</TableHead>
+                        <TableHead className="w-[30%] pl-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Юрособа</TableHead>
+                        <TableHead className="w-[18%] text-xs font-medium text-muted-foreground uppercase tracking-wider">Сайт</TableHead>
+                        <TableHead className="w-[16%] text-xs font-medium text-muted-foreground uppercase tracking-wider">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2879,7 +2895,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         return (
                           <TableRow
                             key={row.id}
-                            className="hover:bg-muted/10 cursor-pointer"
+                            className="group hover:bg-muted/30 cursor-pointer border-b border-border/30 last:border-0 transition-colors"
                             onClick={() => openEdit(row)}
                           >
                             <TableCell className="pl-6">
@@ -2900,27 +2916,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top px-2">
                               {primaryEntityType ? (
-                                <div className="group relative inline-flex">
-                                  <Badge
-                                    variant="outline"
-                                    className="rounded-full px-2.5 py-0.5 text-[11px]"
-                                  >
-                                    {primaryEntityType}
-                                  </Badge>
-                                  {primaryEntityTypeDescription ? (
-                                    <span
-                                      className={cn(
-                                        "pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap",
-                                        "rounded-[10px] border border-border/70 bg-card/95 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-[var(--shadow-overlay)] backdrop-blur-md",
-                                        "opacity-0 translate-x-1 transition-all duration-200 ease-out",
-                                        "group-hover:opacity-100 group-hover:translate-x-0"
-                                      )}
-                                      role="tooltip"
-                                    >
-                                      {primaryEntityTypeDescription}
-                                    </span>
-                                  ) : null}
-                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-full px-2.5 py-0.5 text-[11px]"
+                                >
+                                  {primaryEntityType}
+                                </Badge>
                               ) : null}
                             </TableCell>
                             <TableCell className="align-top pl-2 max-w-[360px]">
@@ -2955,7 +2956,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
                             <TableCell
-                              className="text-right pr-4"
+                              className="text-right pr-4 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100"
                               onClick={(event) => event.stopPropagation()}
                             >
                               <DropdownMenu>
@@ -3025,7 +3026,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </div>
         </TabsContent>
 
-        <TabsContent value="leads" className="mt-4">
+        <TabsContent value="leads" className="mt-0 pt-4">
           <div className="overflow-hidden">
             {leadsLoading ? (
               <AppSectionLoader label="Завантаження..." />
@@ -3102,16 +3103,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableHead className="pl-6">Компанія</TableHead>
-                        <TableHead>Контакт</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Телефони</TableHead>
-                        <TableHead>Джерело</TableHead>
-                        <TableHead>Сайт</TableHead>
-                        <TableHead>Менеджер</TableHead>
+                  <Table className="border-collapse">
+                    <TableHeader className="sticky top-0 z-10 bg-background/80 backdrop-blur-md">
+                      <TableRow className="border-b border-border/40 hover:bg-transparent">
+                        <TableHead className="pl-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Компанія</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Контакт</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Телефони</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Джерело</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Сайт</TableHead>
+                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3119,7 +3120,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       {filteredLeads.map((lead) => (
                         <TableRow
                           key={lead.id}
-                          className="hover:bg-muted/10 cursor-pointer"
+                          className="group hover:bg-muted/30 cursor-pointer border-b border-border/30 last:border-0 transition-colors"
                           onClick={() => openEditLead(lead)}
                         >
                           <TableCell className="pl-6">
@@ -3163,7 +3164,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           </TableCell>
                           <TableCell>{renderManagerCell(lead.manager_user_id, lead.manager)}</TableCell>
                           <TableCell
-                            className="text-right pr-4"
+                            className="text-right pr-4 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100"
                             onClick={(event) => event.stopPropagation()}
                           >
                             <DropdownMenu>

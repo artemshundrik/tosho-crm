@@ -182,7 +182,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
       );
     }
     return (
-      <div className="flex items-center gap-3 rounded-[var(--radius-lg)] p-3 bg-muted/40">
+      <div className="flex items-center gap-3 rounded-xl p-2 bg-transparent">
         <Button
           type="button"
           variant="ghost"
@@ -239,9 +239,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
       );
     }
     return (
-      <div className="w-full rounded-[var(--radius-lg)] border border-border bg-card/60 px-3 py-3">
+      <div className="w-full rounded-xl bg-transparent px-3 py-2">
         <div className="flex items-center gap-3">
-          <Skeleton className="h-10 w-10 rounded-[var(--radius-lg)]" />
+          <Skeleton className="h-10 w-10 rounded-xl" />
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-3.5 w-32" />
             <Skeleton className="h-3 w-20" />
@@ -265,7 +265,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               type="button"
               variant="menu"
               size="icon"
-              className="h-10 w-10 rounded-[var(--radius-lg)] p-0"
+              className="h-10 w-10 rounded-xl p-0 hover:bg-muted/40"
               title={userData.name}
               aria-label="Меню профілю"
             >
@@ -322,7 +322,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           variant="menu"
           size="md"
           className={cn(
-            "w-full h-auto rounded-[var(--radius-lg)] px-2 py-2.5 text-left"
+            "w-full h-auto rounded-xl px-2 py-2 text-left hover:bg-muted/40 transition-colors"
           )}
         >
           <div className="flex items-center gap-2">

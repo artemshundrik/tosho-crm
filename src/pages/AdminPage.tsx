@@ -354,7 +354,7 @@ export function AdminPage() {
           </Alert>
         )}
 
-        <Card className="border border-border shadow-none">
+        <div className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base">Дані матчу</CardTitle>
           </CardHeader>
@@ -502,11 +502,11 @@ export function AdminPage() {
               </div>
             </form>
           </CardContent>
-        </Card>
+        </div>
 
         {mode === "edit" && editingId && <MatchAttendanceSection matchId={editingId} />}
 
-        <Card className="border border-border shadow-none">
+        <div className="shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base">Список матчів</CardTitle>
           </CardHeader>
@@ -562,7 +562,7 @@ export function AdminPage() {
               </Table>
             )}
           </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );
