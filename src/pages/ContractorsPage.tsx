@@ -4,6 +4,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { Button } from "@/components/ui/button";
 import {
   SEGMENTED_GROUP,
@@ -11,14 +12,6 @@ import {
   TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +21,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -354,8 +355,8 @@ export default function ContractorsPage() {
   }, []);
 
   const headerActions = useMemo(() => (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <UnifiedPageToolbar
+      topLeft={
         <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
           <Button
             variant="segmented"
@@ -380,6 +381,8 @@ export default function ContractorsPage() {
             <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{suppliersCount}</span>
           </Button>
         </div>
+      }
+      topRight={
         <Button
           onClick={openCreate}
           disabled={schemaMissing}
@@ -388,10 +391,9 @@ export default function ContractorsPage() {
           <PlusCircle className="h-4 w-4" />
           {activeTab === "contractors" ? "Новий підрядник" : "Новий постачальник"}
         </Button>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative w-full sm:max-w-[420px]">
+      }
+      search={
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -412,7 +414,8 @@ export default function ContractorsPage() {
             </Button>
           ) : null}
         </div>
-
+      }
+      filters={
         <Select value={serviceFilter} onValueChange={setServiceFilter}>
           <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
             <SelectValue placeholder="Всі послуги" />
@@ -426,8 +429,9 @@ export default function ContractorsPage() {
             ))}
           </SelectContent>
         </Select>
-
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground sm:ml-auto">
+      }
+      meta={
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           {hasActiveFilters ? (
             <Button
               variant="ghost"
@@ -443,8 +447,9 @@ export default function ContractorsPage() {
           <span className="tabular-nums">{activeTabCount}</span>
           {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
         </div>
-      </div>
-    </div>
+      }
+      searchClassName="xl:max-w-[420px]"
+    />
   ), [activeTab, activeTabCount, clearFilters, contractorsCount, hasActiveFilters, openCreate, refreshing, schemaMissing, search, serviceFilter, serviceOptions, suppliersCount]);
 
   usePageHeaderActions(headerActions, [headerActions]);
@@ -540,7 +545,7 @@ export default function ContractorsPage() {
   }, [deleteTarget, loadContractors, teamId]);
 
   if (authLoading || loading) {
-    return <AppSectionLoader label="Завантаження підрядників..." />;
+    return <AppSectionLoader label="Завантаження підрядників..." variant="table" />;
   }
 
   if (!teamId) {
@@ -549,13 +554,13 @@ export default function ContractorsPage() {
 
   return (
     <div className="w-full pb-20 md:pb-0 space-y-6">
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "contractors" | "suppliers")}>
-        <TabsContent value="contractors" className="mt-4">
-          <div className="-mx-4 overflow-hidden md:-mx-5 lg:-mx-6">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "contractors" | "suppliers")}>
+        <TabsContent value="contractors" className="mt-0 pt-0">
+          <div className="overflow-hidden">
             {error ? (
-              <div className="px-4 py-6 text-sm text-destructive md:px-5 lg:px-6">{error}</div>
+              <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="mx-4 rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground md:mx-5 lg:mx-6">
+              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -565,7 +570,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="mx-4 rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground md:mx-5 lg:mx-6">
+              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 {rows.length === 0
                   ? "Підрядників ще немає. Додайте першого або залийте seed у Supabase."
                   : "За цими фільтрами нічого не знайдено."}
@@ -637,9 +642,9 @@ export default function ContractorsPage() {
                 </div>
 
                 <div className="hidden md:block">
-                  <Table>
+                  <Table variant="list" size="md">
                     <TableHeader>
-                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableRow>
                         <TableHead className="w-[34%] pl-6">Підрядник</TableHead>
                         <TableHead className="w-[92px] px-2">Послуги</TableHead>
                         <TableHead className="w-[30%] pl-2">Контакт</TableHead>
@@ -653,7 +658,7 @@ export default function ContractorsPage() {
                       {filteredRows.map((row) => (
                         <TableRow
                           key={row.id}
-                          className="cursor-pointer hover:bg-muted/10"
+                          className="group cursor-pointer hover:bg-muted/10"
                           onClick={() => openEdit(row)}
                         >
                           <TableCell className="pl-6 align-top">
@@ -672,7 +677,7 @@ export default function ContractorsPage() {
                           <TableCell className="align-top">{renderLinkedLines(row.address)}</TableCell>
                           <TableCell className="align-top">{renderLinkedLines(row.delivery_info)}</TableCell>
                           <TableCell
-                            className="pr-4 text-right align-top"
+                            className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                             onClick={(event) => event.stopPropagation()}
                           >
                             <DropdownMenu>
@@ -703,12 +708,12 @@ export default function ContractorsPage() {
             )}
           </div>
         </TabsContent>
-        <TabsContent value="suppliers" className="mt-4">
-          <div className="-mx-4 overflow-hidden md:-mx-5 lg:-mx-6">
+        <TabsContent value="suppliers" className="mt-0 pt-0">
+          <div className="overflow-hidden">
             {error ? (
-              <div className="px-4 py-6 text-sm text-destructive md:px-5 lg:px-6">{error}</div>
+              <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="mx-4 rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground md:mx-5 lg:mx-6">
+              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -718,14 +723,14 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="mx-4 rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground md:mx-5 lg:mx-6">
+              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 За цими фільтрами нічого не знайдено.
               </div>
             ) : (
               <div className="hidden md:block">
-                <Table>
+                <Table variant="list" size="md">
                   <TableHeader>
-                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableRow>
                       <TableHead className="w-[34%] pl-6">Постачальник</TableHead>
                       <TableHead className="w-[92px] px-2">Послуги</TableHead>
                       <TableHead className="w-[30%] pl-2">Контакт</TableHead>
@@ -739,7 +744,7 @@ export default function ContractorsPage() {
                     {filteredRows.map((row) => (
                       <TableRow
                         key={`supplier-${row.id}`}
-                        className="cursor-pointer hover:bg-muted/10"
+                        className="group cursor-pointer hover:bg-muted/10"
                         onClick={() => openEdit(row)}
                         >
                           <TableCell className="pl-6 align-top">
@@ -758,7 +763,7 @@ export default function ContractorsPage() {
                         <TableCell className="align-top">{renderLinkedLines(row.address)}</TableCell>
                         <TableCell className="align-top">{renderLinkedLines(row.delivery_info)}</TableCell>
                         <TableCell
-                          className="pr-4 text-right align-top"
+                          className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
                           onClick={(event) => event.stopPropagation()}
                         >
                           <DropdownMenu>
@@ -790,7 +795,7 @@ export default function ContractorsPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog
+      <Sheet
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
@@ -801,17 +806,21 @@ export default function ContractorsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[760px]">
-          <DialogHeader>
-            <DialogTitle>
+        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-[760px]">
+          <div className="shrink-0 border-b bg-muted/20 px-6 py-4">
+            <SheetHeader>
+              <SheetTitle className="text-base font-medium">
               {editingRow
                 ? (activeTab === "contractors" ? "Редагувати підрядника" : "Редагувати постачальника")
                 : (activeTab === "contractors" ? "Новий підрядник" : "Новий постачальник")}
-            </DialogTitle>
-            <DialogDescription>
+              </SheetTitle>
+              <SheetDescription>
               Зберігається в `tosho.contractors` і доступне всій вашій команді.
-            </DialogDescription>
-          </DialogHeader>
+              </SheetDescription>
+            </SheetHeader>
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -911,7 +920,7 @@ export default function ContractorsPage() {
 
           {formError ? <div className="text-sm text-destructive">{formError}</div> : null}
 
-          <DialogFooter>
+          <SheetFooter className="border-t border-border/50 pt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Скасувати
             </Button>
@@ -921,9 +930,10 @@ export default function ContractorsPage() {
                 ? "Зберегти зміни"
                 : (activeTab === "contractors" ? "Створити підрядника" : "Створити постачальника")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

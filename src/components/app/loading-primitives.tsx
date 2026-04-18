@@ -33,6 +33,7 @@ type SurfaceSkeletonProps = {
   className?: string;
   rows?: number;
   compact?: boolean;
+  variant?: "surface" | "table";
 };
 
 export function SurfaceSkeleton({
@@ -40,7 +41,58 @@ export function SurfaceSkeleton({
   className,
   rows = 4,
   compact = false,
+  variant = "surface",
 }: SurfaceSkeletonProps) {
+  if (variant === "table") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className={cn("w-full", className)}
+      >
+        <div className="flex items-center gap-2 px-5 py-4 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inset-0 animate-ping rounded-full bg-primary/25" />
+            <span className="relative h-2.5 w-2.5 rounded-full bg-primary/70" />
+          </span>
+          <span>{label}</span>
+        </div>
+
+        <div className="border-y border-border/40">
+          <div className="grid h-11 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 bg-muted/45 px-6">
+            <Skeleton className="h-3 w-16 rounded-full opacity-80" />
+            <Skeleton className="h-3 w-20 rounded-full opacity-70" />
+            <Skeleton className="h-3 w-14 rounded-full opacity-70" />
+            <Skeleton className="h-3 w-12 rounded-full opacity-70" />
+            <Skeleton className="ml-auto h-3 w-10 rounded-full opacity-70" />
+          </div>
+
+          {Array.from({ length: rows }).map((_, index) => (
+            <div
+              key={index}
+              className="grid min-h-14 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 border-t border-border/30 px-6 py-3"
+            >
+              <div className="space-y-2">
+                <Skeleton className={cn("h-3.5 rounded-full", index % 3 === 0 ? "w-[58%]" : "w-[46%]")} />
+                <Skeleton className={cn("h-3 rounded-full opacity-75", index % 2 === 0 ? "w-[40%]" : "w-[52%]")} />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[72%]" : "w-[64%]")} />
+                <Skeleton className={cn("h-3 rounded-full opacity-75", index % 3 === 0 ? "w-[54%]" : "w-[68%]")} />
+              </div>
+              <Skeleton className={cn("h-6 rounded-full", index % 2 === 0 ? "w-24" : "w-20")} />
+              <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[74%]" : "w-[58%]")} />
+              <div className="flex justify-end">
+                <Skeleton className="h-8 w-8 rounded-[10px]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       role="status"

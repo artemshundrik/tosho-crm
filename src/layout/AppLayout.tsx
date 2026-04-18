@@ -633,7 +633,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(`${ROUTES.ordersEstimates}/`) ||
     location.pathname.startsWith(ROUTES.ordersCustomers) ||
     location.pathname.startsWith(ROUTES.ordersProduction) ||
-    location.pathname.startsWith(ROUTES.design);
+    location.pathname.startsWith(ROUTES.design) ||
+    location.pathname.startsWith(ROUTES.contractors) ||
+    location.pathname.startsWith(ROUTES.notifications) ||
+    location.pathname.startsWith(ROUTES.membersAccess);
 
   useEffect(() => {
     let cancelled = false;

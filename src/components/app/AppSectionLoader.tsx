@@ -6,15 +6,17 @@ type AppSectionLoaderProps = {
   label?: string;
   compact?: boolean;
   className?: string;
+  variant?: "surface" | "table";
 };
 
 export function AppSectionLoader({
   label = "Завантаження...",
   compact = false,
   className,
+  variant = "surface",
 }: AppSectionLoaderProps) {
   if (!compact) {
-    return <SurfaceSkeleton label={label} className={className} rows={4} />;
+    return <SurfaceSkeleton label={label} className={className} rows={4} variant={variant} />;
   }
 
   return (

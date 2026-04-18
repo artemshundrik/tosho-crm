@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
@@ -2561,48 +2562,40 @@ function CustomersPage({ teamId }: { teamId: string }) {
   };
 
   const customersHeaderActions = useMemo(() => (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex bg-muted/40 p-1 rounded-xl w-full lg:w-auto border border-border/50 shadow-inner">
-          <button
+    <UnifiedPageToolbar
+      topLeft={
+        <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          <Button
+            type="button"
+            variant="segmented"
+            size="xs"
             aria-pressed={activeTab === "customers"}
             onClick={() => setActiveTab("customers")}
-            className={cn(
-              "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
-              activeTab === "customers" 
-                ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]" 
-                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-            )}
+            className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
           >
             <Building2 className="h-4 w-4" />
             Замовники
-            <span className={cn(
-              "ml-1.5 rounded-md px-2 py-0.5 text-[10px] tabular-nums font-semibold", 
-              activeTab === "customers" ? "bg-muted text-foreground" : "bg-muted-foreground/10 text-muted-foreground"
-            )}>
+            <span className="ml-1.5 rounded-md bg-card px-2 py-0.5 text-[10px] font-semibold tabular-nums">
               {customersTotal}
             </span>
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="segmented"
+            size="xs"
             aria-pressed={activeTab === "leads"}
             onClick={() => setActiveTab("leads")}
-            className={cn(
-              "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
-              activeTab === "leads" 
-                ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]" 
-                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-            )}
+            className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
           >
             <Users className="h-4 w-4" />
             Ліди
-            <span className={cn(
-              "ml-1.5 rounded-md px-2 py-0.5 text-[10px] tabular-nums font-semibold", 
-              activeTab === "leads" ? "bg-muted text-foreground" : "bg-muted-foreground/10 text-muted-foreground"
-            )}>
+            <span className="ml-1.5 rounded-md bg-card px-2 py-0.5 text-[10px] font-semibold tabular-nums">
               {leadsTotal}
             </span>
-          </button>
+          </Button>
         </div>
+      }
+      topRight={
         <Button
           onClick={activeTab === "customers" ? openCreate : openCreateLead}
           className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
@@ -2610,10 +2603,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
           <PlusCircle className="h-4 w-4" />
           {activeTab === "customers" ? "Новий замовник" : "Новий лід"}
         </Button>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative w-full sm:max-w-[420px]">
+      }
+      search={
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -2634,6 +2626,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </Button>
           ) : null}
         </div>
+      }
+      filters={
+        <>
         {isManagerUser ? (
           <div
             className={cn(
@@ -2676,7 +2671,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </SelectContent>
           </Select>
         )}
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground sm:ml-auto">
+        </>
+      }
+      meta={
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           {hasActiveFilters ? (
             <Button
               variant="ghost"
@@ -2694,8 +2692,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           ) : null}
         </div>
-      </div>
-    </div>
+      }
+      searchClassName="xl:max-w-[420px]"
+    />
   ), [
     activeTab,
     customerManagerFilter,
@@ -2768,10 +2767,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
             </div>
           </div>
         ) : null}
-        <TabsContent value="customers" className="mt-0 pt-4">
+        <TabsContent value="customers" className="mt-0 pt-0">
             <div className="overflow-hidden">
               {customersLoading ? (
-              <AppSectionLoader label="Готуємо список замовників..." />
+              <AppSectionLoader label="Готуємо список замовників..." variant="table" />
               ) : customersError ? (
                 <div className="p-6 text-sm text-destructive">{customersError}</div>
               ) : filteredRows.length === 0 ? (
@@ -2896,14 +2895,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table className="border-collapse">
-                    <TableHeader className="sticky top-0 z-10 bg-background/80 backdrop-blur-md">
-                      <TableRow className="border-b border-border/40 hover:bg-transparent">
-                        <TableHead className="w-[34%] pl-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Компанія</TableHead>
-                        <TableHead className="w-[92px] px-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Тип</TableHead>
-                        <TableHead className="w-[30%] pl-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Юрособа</TableHead>
-                        <TableHead className="w-[18%] text-xs font-medium text-muted-foreground uppercase tracking-wider">Сайт</TableHead>
-                        <TableHead className="w-[16%] text-xs font-medium text-muted-foreground uppercase tracking-wider">Менеджер</TableHead>
+                  <Table variant="list" size="md">
+                    <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-[34%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[92px] px-2">Тип</TableHead>
+                        <TableHead className="w-[30%] pl-2">Юрособа</TableHead>
+                        <TableHead className="w-[18%]">Сайт</TableHead>
+                        <TableHead className="w-[16%]">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2983,7 +2982,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             >
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -3048,10 +3047,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </div>
         </TabsContent>
 
-        <TabsContent value="leads" className="mt-0 pt-4">
+        <TabsContent value="leads" className="mt-0 pt-0">
           <div className="overflow-hidden">
             {leadsLoading ? (
-              <AppSectionLoader label="Готуємо список лідів..." />
+              <AppSectionLoader label="Готуємо список лідів..." variant="table" />
             ) : leadsError ? (
               <div className="p-6 text-sm text-destructive">{leadsError}</div>
             ) : filteredLeads.length === 0 ? (
@@ -3125,16 +3124,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table className="border-collapse">
-                    <TableHeader className="sticky top-0 z-10 bg-background/80 backdrop-blur-md">
-                      <TableRow className="border-b border-border/40 hover:bg-transparent">
-                        <TableHead className="pl-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Компанія</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Контакт</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Телефони</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Джерело</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Сайт</TableHead>
-                        <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Менеджер</TableHead>
+                  <Table variant="list" size="md">
+                    <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="pl-6">Компанія</TableHead>
+                        <TableHead>Контакт</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Телефони</TableHead>
+                        <TableHead>Джерело</TableHead>
+                        <TableHead>Сайт</TableHead>
+                        <TableHead>Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3191,7 +3190,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           >
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

@@ -5,6 +5,7 @@ import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
@@ -345,9 +346,9 @@ export default function OrdersProductionPage() {
   }, [filteredRecords.length, viewTab]);
 
   const headerActions = (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <div className="flex w-full flex-col gap-2 self-stretch sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+    <UnifiedPageToolbar
+      topRight={
+        <>
           <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
             <Button
               variant="segmented"
@@ -370,11 +371,10 @@ export default function OrdersProductionPage() {
               <span className="hidden sm:inline">Kanban</span>
             </Button>
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="relative w-full xl:max-w-[370px]">
+        </>
+      }
+      search={
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -398,8 +398,9 @@ export default function OrdersProductionPage() {
             <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
           ) : null}
         </div>
-
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-1">
+      }
+      filters={
+        <>
           <Select value={headerFilter} onValueChange={(value) => setHeaderFilter(value as HeaderFilter)}>
             <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
               <SelectValue />
@@ -428,17 +429,15 @@ export default function OrdersProductionPage() {
           </Select>
 
           <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
+        </>
+      }
+      meta={
           <div className="text-sm font-semibold text-foreground">
             <span className="tabular-nums">{filteredRecords.length}</span>
             <span className="ml-1 text-muted-foreground">знайдено</span>
           </div>
-        </div>
-      </div>
-    </div>
+      }
+    />
   );
 
   usePageHeaderActions(headerActions, [
@@ -475,8 +474,8 @@ export default function OrdersProductionPage() {
   return (
     <PageCanvas>
       {viewTab === "register" ? (
-        <PageCanvasBody className="space-y-6 px-5 py-3 pb-20 md:pb-6">
-          <div className="grid gap-4 xl:grid-cols-4">
+        <PageCanvasBody className="space-y-6 py-3 pb-20 md:pb-6">
+          <div className="grid gap-4 px-5 xl:grid-cols-4">
             <Card className="overflow-hidden border-border/70 bg-card/95 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -535,145 +534,149 @@ export default function OrdersProductionPage() {
           <Tabs value={viewTab}>
             <TabsContent value="register" className="mt-0 space-y-4">
               {loading ? (
-                <AppSectionLoader label="Готуємо таблицю замовлень..." />
+                <AppSectionLoader label="Готуємо таблицю замовлень..." variant="table" />
               ) : error ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {error}
+                <div className="px-5">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
                 </div>
               ) : filteredRecords.length === 0 ? (
-                <Card className="border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
-                  Немає записів для відображення у таблиці.
-                </Card>
+                <div className="px-5">
+                  <Card className="border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
+                    Немає записів для відображення у таблиці.
+                  </Card>
+                </div>
               ) : (
-                <Card className="overflow-hidden border-border/70 bg-card/95">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/20 hover:bg-muted/20">
-                          <TableHead className="pl-6">Прорахунок</TableHead>
-                          <TableHead>Контрагент</TableHead>
-                          <TableHead>Стан</TableHead>
-                          <TableHead>Позиції</TableHead>
-                          <TableHead>Оплата</TableHead>
-                          <TableHead>Документи</TableHead>
-                          <TableHead>Готовність</TableHead>
-                          <TableHead className="pr-6 text-right">Сума</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredRecords.map((record) => (
-                          <TableRow
-                            key={record.id}
-                            className="cursor-pointer hover:bg-muted/10"
-                            onClick={() => openRecord(record)}
-                          >
-                            <TableCell className="pl-6 align-top">
-                              <div className="space-y-1">
-                                <HoverCopyText
-                                  value={record.quoteNumber}
-                                  textClassName="font-semibold text-foreground"
-                                  successMessage="Номер замовлення скопійовано"
-                                  copyLabel="Скопіювати номер замовлення"
-                                >
-                                  {record.quoteNumber}
-                                </HoverCopyText>
-                                <div className="text-xs text-muted-foreground">{formatOrderDate(record.updatedAt)}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="flex items-center gap-3">
-                                <EntityAvatar
-                                  src={record.customerLogoUrl}
-                                  name={record.customerName}
-                                  fallback={getInitials(record.customerName)}
-                                  size={36}
-                                />
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium">{record.customerName}</div>
-                                  <div className="truncate text-xs text-muted-foreground">
-                                    {record.partyType === "customer" ? "Замовник" : "Лід"}
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                                  record.source === "stored"
-                                    ? "tone-success"
-                                    : "border-border/70 bg-muted/20 text-muted-foreground"
-                                )}
+                <div className="overflow-x-auto">
+                  <Table variant="list" size="md">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6">Прорахунок</TableHead>
+                        <TableHead>Контрагент</TableHead>
+                        <TableHead>Стан</TableHead>
+                        <TableHead>Позиції</TableHead>
+                        <TableHead>Оплата</TableHead>
+                        <TableHead>Документи</TableHead>
+                        <TableHead>Готовність</TableHead>
+                        <TableHead className="pr-6 text-right">Сума</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRecords.map((record) => (
+                        <TableRow
+                          key={record.id}
+                          className="cursor-pointer hover:bg-muted/10"
+                          onClick={() => openRecord(record)}
+                        >
+                          <TableCell className="pl-6 align-top">
+                            <div className="space-y-1">
+                              <HoverCopyText
+                                value={record.quoteNumber}
+                                textClassName="font-mono font-semibold text-sm text-foreground"
+                                successMessage="Номер замовлення скопійовано"
+                                copyLabel="Скопіювати номер замовлення"
                               >
-                                {record.source === "stored" ? "Створено замовлення" : "Черга з прорахунку"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              {record.items.length > 0 ? (
-                                <div className="flex min-w-0 items-center gap-2 text-sm">
-                                  <span className="shrink-0 font-medium text-foreground">{record.itemCount}</span>
-                                  <span className="text-muted-foreground">•</span>
-                                  <span className="truncate text-muted-foreground">
-                                    {record.items[0]?.name || "Немає позицій"}
-                                  </span>
+                                {record.quoteNumber}
+                              </HoverCopyText>
+                              <div className="text-xs text-muted-foreground">{formatOrderDate(record.updatedAt)}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex items-center gap-3">
+                              <EntityAvatar
+                                src={record.customerLogoUrl}
+                                name={record.customerName}
+                                fallback={getInitials(record.customerName)}
+                                size={36}
+                              />
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">{record.customerName}</div>
+                                <div className="truncate text-xs text-muted-foreground">
+                                  {record.partyType === "customer" ? "Замовник" : "Лід"}
                                 </div>
-                              ) : (
-                                <div className="text-sm text-muted-foreground">Немає позицій</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                                record.source === "stored"
+                                  ? "tone-success"
+                                  : "border-border/70 bg-muted/20 text-muted-foreground"
                               )}
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="max-w-[220px] text-sm text-foreground">{record.paymentRail}</div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="flex flex-wrap gap-1.5">
-                                {renderDocBadge("Договір", record.docs.contract)}
-                                {renderDocBadge("Рахунок", record.docs.invoice)}
-                                {renderDocBadge("СП", record.docs.specification)}
+                            >
+                              {record.source === "stored" ? "Створено замовлення" : "Черга з прорахунку"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            {record.items.length > 0 ? (
+                              <div className="flex min-w-0 items-center gap-2 text-sm">
+                                <span className="shrink-0 font-medium text-foreground">{record.itemCount}</span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="truncate text-muted-foreground">
+                                  {record.items[0]?.name || "Немає позицій"}
+                                </span>
                               </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                                  record.readinessColumn === "ready"
-                                    ? "tone-success"
-                                    : record.readinessColumn === "design"
-                                      ? "tone-info"
-                                      : "tone-warning"
-                                )}
-                              >
-                                {record.readinessColumn === "ready"
-                                  ? "Готово"
+                            ) : (
+                              <div className="text-sm text-muted-foreground">Немає позицій</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="max-w-[220px] text-sm text-foreground">{record.paymentRail}</div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex flex-wrap gap-1.5">
+                              {renderDocBadge("Договір", record.docs.contract)}
+                              {renderDocBadge("Рахунок", record.docs.invoice)}
+                              {renderDocBadge("СП", record.docs.specification)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                                record.readinessColumn === "ready"
+                                  ? "tone-success"
                                   : record.readinessColumn === "design"
-                                    ? "Очікує макет"
-                                    : "Потрібні дані"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="pr-6 text-right align-top font-semibold text-foreground">
-                              {formatOrderMoney(record.total, record.currency)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Card>
+                                    ? "tone-info"
+                                    : "tone-warning"
+                              )}
+                            >
+                              {record.readinessColumn === "ready"
+                                ? "Готово"
+                                : record.readinessColumn === "design"
+                                  ? "Очікує макет"
+                                  : "Потрібні дані"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="pr-6 text-right align-top font-semibold text-foreground">
+                            {formatOrderMoney(record.total, record.currency)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </TabsContent>
           </Tabs>
         </PageCanvasBody>
       ) : (
-        <EstimatesKanbanCanvas className="px-5 py-3 pb-3">
+        <EstimatesKanbanCanvas className="py-3 pb-3">
           {loading ? (
-            <AppSectionLoader label="Завантаження черги..." />
+            <div className="px-5">
+              <AppSectionLoader label="Завантаження черги..." />
+            </div>
           ) : error ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="mx-5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                 {error}
               </div>
             ) : filteredRecords.length === 0 ? (
-              <Card className="border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
+              <Card className="mx-5 border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
                 У затверджених прорахунках поки немає записів для формування замовлень.
               </Card>
             ) : (

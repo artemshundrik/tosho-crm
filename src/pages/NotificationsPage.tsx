@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
   readInAppNotificationPreferences,
@@ -404,9 +405,9 @@ export default function NotificationsPage() {
 
   const notificationsHeaderActions = useMemo(
     () => (
-      <div className="space-y-3 px-4 py-3 md:px-5 lg:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className={SEGMENTED_GROUP}>
+      <UnifiedPageToolbar
+        topLeft={
+          <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
@@ -426,7 +427,9 @@ export default function NotificationsPage() {
               Непрочитані
             </Button>
           </div>
-          <div className="flex items-center gap-3">
+        }
+        topRight={
+          <>
             <div className="text-sm font-semibold text-foreground">
               {filtered.length}
               <span className="ml-1 text-muted-foreground">знайдено</span>
@@ -439,9 +442,9 @@ export default function NotificationsPage() {
             >
               Позначити всі
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
     ),
     [filter, filtered.length, markAllRead, unreadCount]
   );
@@ -453,7 +456,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6">
+    <div className="w-full pb-20 md:pb-0 space-y-6">
       <div className="rounded-[var(--radius-section)] border border-border bg-card/70 p-4 md:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">

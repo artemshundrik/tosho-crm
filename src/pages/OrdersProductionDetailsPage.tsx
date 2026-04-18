@@ -935,9 +935,9 @@ export default function OrdersProductionDetailsPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-        <Table>
+        <Table variant="list" size="md">
           <TableHeader>
-            <TableRow className="bg-muted/20 hover:bg-muted/20">
+            <TableRow>
               <TableHead className="w-14 text-center">№</TableHead>
               <TableHead>Товар</TableHead>
               <TableHead className="w-20 text-center">Од.</TableHead>

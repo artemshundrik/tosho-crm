@@ -40,6 +40,8 @@ import {
   Download,
   Palette,
   UserRound,
+  UserPlus,
+  ChevronDown,
   Image as ImageIcon,
   MoreVertical,
   ExternalLink,
@@ -62,6 +64,7 @@ import {
   Mail,
   PhoneCall,
   Send,
+  RotateCcw,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -159,6 +162,23 @@ type DesignTaskClientContact = {
   entityKind: "customer" | "lead" | null;
   email: string | null;
   phone: string | null;
+};
+
+type SidebarActionTone = "neutral" | "info" | "warning" | "success";
+
+const SIDEBAR_STATUS_ACTION_META: Partial<Record<DesignStatus, { icon: typeof Play; tone: SidebarActionTone; description: string }>> = {
+  in_progress: { icon: RotateCcw, tone: "info", description: "Поверне задачу в активну роботу." },
+  pm_review: { icon: CheckCircle2, tone: "info", description: "Зафіксує, що дизайн готовий до внутрішньої перевірки." },
+  client_review: { icon: Send, tone: "info", description: "Переведе задачу в етап погодження із замовником." },
+  approved: { icon: CheckCircle2, tone: "success", description: "Закриє задачу як фінально погоджену." },
+  changes: { icon: AlertTriangle, tone: "warning", description: "Поверне задачу на правки та доопрацювання." },
+};
+
+const SIDEBAR_ACTION_TONE_CLASS: Record<SidebarActionTone, string> = {
+  neutral: "design-task-side-action-tone-neutral",
+  info: "design-task-side-action-tone-info",
+  warning: "design-task-side-action-tone-warning",
+  success: "design-task-side-action-tone-success",
 };
 
 type QuoteItemRow = {
@@ -1110,6 +1130,7 @@ export default function DesignTaskPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyLoadedAll, setHistoryLoadedAll] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
   const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
   const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
@@ -2896,6 +2917,7 @@ export default function DesignTaskPage() {
 
   useEffect(() => {
     setHistoryVisibleCount(5);
+    setHistoryCollapsed(true);
   }, [task?.id]);
 
   const standaloneComments = useMemo<DesignTaskComment[]>(
@@ -5794,6 +5816,14 @@ export default function DesignTaskPage() {
   );
   const mobileSecondaryActionDisabled =
     !!statusSaving || (mobileSecondaryAction?.next === "client_review" && !canSendToClientNow);
+  const showSidebarPrimaryAction = !!primaryActionClick || primaryActionLoading;
+  const SidebarPrimaryActionIcon =
+    !task?.assigneeUserId || primaryActionLabel.includes("себе") ? UserPlus : task?.status === "changes" ? AlertTriangle : Play;
+  const timerCardTone: SidebarActionTone = isTimerRunning ? "success" : "neutral";
+  const timerHelperText = isTimerRunning
+    ? `Активний${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}. Постав на паузу після завершення роботи.`
+    : startTimerBlockedReason ?? "Запускай таймер на старті роботи і став на паузу одразу після завершення.";
+  const timerActionLabel = isTimerRunning ? "Поставити на паузу" : "Запустити таймер";
 
   const dropboxFolderNameDefault = useMemo(
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
@@ -7960,44 +7990,38 @@ export default function DesignTaskPage() {
           <section>
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/85">Деталі</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {isLinkedQuote ? (
-                    <Badge variant="outline" className="font-mono text-[10px]">
-                      {getTaskDisplayNumber(task)}
-                    </Badge>
-                  ) : null}
-                </div>
+                <div className="design-task-side-heading">Деталі</div>
               </div>
             </div>
 
-            <div className="mt-4 space-y-1">
+            <div className="design-task-detail-list">
               <button
                 type="button"
                 onClick={() => setPartyCardOpen(true)}
-                className="group flex w-full items-center gap-4 rounded-xl px-0 py-3 text-left transition-colors hover:bg-muted/10 focus-visible:outline-none"
+                className="group design-task-detail-row w-full text-left focus-visible:outline-none"
+                data-interactive="true"
               >
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                <span className="design-task-detail-label">
                   <Building2 className="h-4 w-4 text-muted-foreground/70" />
                   Замовник
                 </span>
-                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
+                <div className="design-task-detail-value relative">
                   <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={24} />
-                  <span className="truncate text-right text-[15px] font-medium">{task.customerName ?? "Не вказано"}</span>
+                  <span className="truncate">{task.customerName ?? "Не вказано"}</span>
                   <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition group-hover:opacity-100">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </span>
                 </div>
               </button>
 
-              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div className="group design-task-detail-row" data-interactive="true">
+                <span className="design-task-detail-label">
                   <UserRound className="h-4 w-4 text-muted-foreground/70" />
                   {taskRoleLabel}
                 </span>
-                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
+                <div className="design-task-detail-value relative">
                   <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={24} className="shrink-0 border-border/60" />
-                  <span className="truncate text-right text-[15px] font-medium">{taskManagerLabel}</span>
+                  <span className="truncate">{taskManagerLabel}</span>
                 </div>
                 {!designTaskLockedByOther && managerMembers.length > 0 ? (
                   <DropdownMenu>
@@ -8024,19 +8048,19 @@ export default function DesignTaskPage() {
                 ) : null}
               </div>
 
-              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div className="group design-task-detail-row" data-interactive="true">
+                <span className="design-task-detail-label">
                   <Palette className="h-4 w-4 text-muted-foreground/70" />
                   Дизайнер
                 </span>
-                <div className="relative flex min-w-0 flex-1 items-center justify-end gap-2">
+                <div className="design-task-detail-value relative">
                   {task.assigneeUserId ? (
                     <>
                       <AvatarBase src={getMemberAvatar(task.assigneeUserId)} name={getMemberLabel(task.assigneeUserId)} fallback={getInitials(getMemberLabel(task.assigneeUserId))} size={24} className="shrink-0 border-border/60" />
-                      <span className="truncate text-right text-[15px] font-medium">{getMemberLabel(task.assigneeUserId)}</span>
+                      <span className="truncate">{getMemberLabel(task.assigneeUserId)}</span>
                     </>
                   ) : (
-                    <span className="text-[15px] text-muted-foreground/60 italic">Не призначено</span>
+                    <span className="text-muted-foreground/60 italic">Не призначено</span>
                   )}
                 </div>
                 {canManageAssignments ? (
@@ -8090,12 +8114,12 @@ export default function DesignTaskPage() {
               </div>
 
               {isLinkedQuote ? (
-                <div className="flex items-center gap-4 rounded-xl px-0 py-3">
-                  <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
                     <ImageIcon className="h-4 w-4 text-muted-foreground/70" />
                     Робота
                   </span>
-                  <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                  <div className="design-task-detail-value">
                     {productPreviewUrl ? (
                       <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30" />
                     ) : (
@@ -8103,33 +8127,21 @@ export default function DesignTaskPage() {
                         <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                     )}
-                    <span className="truncate text-right text-[15px] font-medium">{quoteItem?.name ?? "Не вказано"}</span>
+                    <span className="truncate">{quoteItem?.name ?? "Не вказано"}</span>
                   </div>
                 </div>
               ) : null}
 
-              {isLinkedQuote ? (
-                <div className="flex items-center gap-4 rounded-xl px-0 py-3">
-                  <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Copy className="h-4 w-4 text-muted-foreground/70" />
-                    Прорахунок
-                  </span>
-                  <HoverCopyText value={getTaskDisplayNumber(task)} className="ml-auto min-w-0" textClassName="font-mono text-[15px] font-medium text-right" successMessage="Номер прорахунку скопійовано" copyLabel="Скопіювати номер прорахунку">
-                    {getTaskDisplayNumber(task)}
-                  </HoverCopyText>
-                </div>
-              ) : null}
-
-              <div className="flex items-center gap-4 rounded-xl px-0 py-3">
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div className="design-task-detail-row">
+                <span className="design-task-detail-label">
                   <CalendarDays className="h-4 w-4 text-muted-foreground/70" />
                   Створено
                 </span>
-                <span className="flex-1 truncate text-right text-[15px] font-medium text-foreground">{formatDate(task.createdAt, true)}</span>
+                <span className="design-task-detail-value">{formatDate(task.createdAt, true)}</span>
               </div>
 
-              <div className="group relative flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div className="group design-task-detail-row" data-interactive="true">
+                <span className="design-task-detail-label">
                   <CalendarClock className="h-4 w-4 text-muted-foreground/70" />
                   Дедлайн
                 </span>
@@ -8138,7 +8150,7 @@ export default function DesignTaskPage() {
                     <button
                       type="button"
                       className={cn(
-                        "flex min-w-0 flex-1 items-center justify-end text-right text-[14px] font-medium cursor-pointer",
+                        "design-task-detail-value cursor-pointer",
                         deadlineSaving && "opacity-50 pointer-events-none"
                       )}
                     >
@@ -8168,143 +8180,191 @@ export default function DesignTaskPage() {
                   <PencilLine className="h-3.5 w-3.5" />
                 </span>
               </div>
+            </div>
 
-              <div className="group flex items-center gap-4 rounded-xl px-0 py-3 transition-colors hover:bg-muted/10">
-                <span className="inline-flex w-[112px] shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Timer className="h-4 w-4 text-muted-foreground/70" />
-                  Таймер
-                </span>
-                <span className={cn("flex-1 truncate text-right font-mono text-[15px] font-semibold tabular-nums", isTimerRunning ? "tone-text-success" : "text-foreground")}>
-                  {timerElapsedLabel}
-                </span>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-md" disabled={!canStartTimer || !!timerBusy} title={startTimerBlockedReason ?? "Старт"} onClick={() => void handleStartTimer()}>
-                    {timerBusy === "start" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-md" disabled={!canPauseTimer || !!timerBusy} title={pauseTimerBlockedReason ?? "Пауза"} onClick={() => void handlePauseTimer()}>
-                    {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
-                  </Button>
+            <div className="mt-4">
+              <div className="design-task-panel-card" data-tone={timerCardTone}>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <div className="design-task-side-heading flex items-center gap-2 text-foreground/70">
+                      <Timer className="h-3.5 w-3.5" />
+                      Таймер
+                    </div>
+                    <div className={cn("design-task-timer-value mt-3", isTimerRunning ? "text-success-foreground" : "text-foreground")}>
+                      {timerElapsedLabel}
+                    </div>
+                  </div>
+                  {!isTimerRunning ? (
+                    <Button
+                      size="sm"
+                      className="h-10 w-full text-[16px] [&_svg]:size-5"
+                      disabled={!canStartTimer || !!timerBusy}
+                      onClick={() => void handleStartTimer()}
+                      title={startTimerBlockedReason ?? "Запустити таймер"}
+                    >
+                      {timerBusy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      {timerActionLabel}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 w-full text-[16px] [&_svg]:size-5"
+                      disabled={!canPauseTimer || !!timerBusy}
+                      onClick={() => void handlePauseTimer()}
+                      title={pauseTimerBlockedReason ?? "Поставити на паузу"}
+                    >
+                      {timerBusy === "pause" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                      {timerActionLabel}
+                    </Button>
+                  )}
                 </div>
+                {!isTimerRunning && startTimerBlockedReason ? (
+                  <div className="mt-3 text-xs leading-5 text-muted-foreground">{startTimerBlockedReason}</div>
+                ) : null}
               </div>
             </div>
 
-            {startTimerBlockedReason && !isTimerRunning ? (
-              <div className="mt-3 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-[11px] text-warning-foreground">{startTimerBlockedReason}</div>
-            ) : isTimerRunning && timerSummary.activeUserId ? (
-              <div className="mt-3 text-[11px] text-muted-foreground">Активний · {getMemberLabel(timerSummary.activeUserId)}</div>
-            ) : null}
-
-            {statusQuickActionsWithoutStart.length > 0 ? (
-              <div className="mt-5 space-y-1.5">
-                {statusQuickActionsWithoutStart.map((action) => (
+            {showSidebarPrimaryAction || statusQuickActionsWithoutStart.length > 0 ? (
+              <div className="mt-4 space-y-2.5">
+                {showSidebarPrimaryAction ? (
                   <Button
-                    key={`${task.status}-${action.next}`}
                     variant="outline"
-                    size="sm"
-                    className="h-8 w-full justify-start text-sm"
-                    disabled={!!statusSaving || (action.next === "client_review" && !canSendToClientNow)}
-                    onClick={() => void updateTaskStatus(action.next)}
+                    className="design-task-side-action-plain"
+                    disabled={primaryActionDisabled || designTaskLockedByOther}
+                    onClick={primaryActionClick ?? undefined}
                   >
-                    {statusSaving === action.next ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    {action.label}
+                    <span className="design-task-side-action-icon">
+                      {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SidebarPrimaryActionIcon className="h-4 w-4" />}
+                    </span>
+                    <span className="truncate text-sm font-semibold leading-5 text-foreground">{primaryActionLabel}</span>
                   </Button>
-                ))}
-                {task.status === "pm_review" && clientReviewBlockers.length > 0 ? (
-                  <div className="rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
-                    Для передачі замовнику: {clientReviewBlockers.join(" · ")}
-                  </div>
                 ) : null}
+                {statusQuickActionsWithoutStart.map((action) => {
+                  const meta = SIDEBAR_STATUS_ACTION_META[action.next] ?? {
+                    icon: ArrowLeft,
+                    tone: "neutral" as const,
+                    description: `Переведе задачу в статус «${DESIGN_STATUS_LABELS[action.next]}».`,
+                  };
+                  const ActionIcon = meta.icon;
+                  const blocked = action.next === "client_review" && !canSendToClientNow;
+                  return (
+                    <Button
+                      key={`${task.status}-${action.next}`}
+                      variant="outline"
+                      className="design-task-side-action-plain"
+                      disabled={!!statusSaving || blocked}
+                      onClick={() => void updateTaskStatus(action.next)}
+                    >
+                      <span className="design-task-side-action-icon">
+                        {statusSaving === action.next ? <Loader2 className="h-4 w-4 animate-spin" /> : <ActionIcon className="h-4 w-4" />}
+                      </span>
+                      <span className="truncate text-sm font-semibold leading-5 text-foreground">{action.label}</span>
+                    </Button>
+                  );
+                })}
               </div>
             ) : null}
           </section>
 
           <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
             <div className="flex items-center justify-between pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Історія</span>
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left"
+                onClick={() => setHistoryCollapsed((prev) => !prev)}
+                aria-expanded={!historyCollapsed}
+              >
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", historyCollapsed ? "-rotate-90" : "rotate-0")} />
+                <span className="design-task-side-heading">Історія</span>
+              </button>
               {historyEvents.length > 0 ? (
-                <span className="text-[11px] text-muted-foreground/60">
+                <span className="design-task-side-heading normal-case tracking-normal text-muted-foreground/60">
                   {Math.min(historyVisibleCount, historyEvents.length)} / {historyEvents.length}
                 </span>
               ) : null}
             </div>
-            <div className="space-y-3">
-              {historyLoading && historyEvents.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Завантаження...
-                </div>
-              ) : historyGroups.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Подій ще немає</div>
-              ) : (
-                <div className="space-y-4">
-                  {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
-                  {historyGroups.map((group) => (
-                    <div key={group.label} className="space-y-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {group.label}
-                      </div>
-                      <div className="space-y-4">
-                        {group.items.map((event, eventIndex) => {
-                          const Icon = event.icon;
-                          return (
-                            <div key={event.id} className="flex items-stretch gap-3">
-                              <div className="flex w-4 shrink-0 flex-col items-center">
-                                <Icon className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-                                {eventIndex < group.items.length - 1 ? (
-                                  <div className="mt-2 w-px flex-1 bg-border/45" />
-                                ) : null}
-                              </div>
-                              <div className="min-w-0 flex-1 pb-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="text-sm font-medium">{event.title}</div>
-                                  <div className="whitespace-nowrap text-xs text-muted-foreground">
-                                    {formatActivityClock(event.created_at)}
+
+            {!historyCollapsed ? (
+              <div className="space-y-3">
+                {historyLoading && historyEvents.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Завантаження...
+                  </div>
+                ) : historyGroups.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Подій ще немає</div>
+                ) : (
+                  <div className="space-y-4">
+                    {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
+                    {historyGroups.map((group) => (
+                      <div key={group.label} className="space-y-2.5">
+                        <div className="inline-flex rounded-full border border-border/50 bg-muted/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          {group.label}
+                        </div>
+                        <div className="space-y-4">
+                          {group.items.map((event, eventIndex) => {
+                            const Icon = event.icon;
+                            return (
+                              <div key={event.id} className="flex items-stretch gap-3">
+                                <div className="flex w-4 shrink-0 flex-col items-center">
+                                  <Icon className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                                  {eventIndex < group.items.length - 1 ? (
+                                    <div className="mt-2 w-px flex-1 bg-border/45" />
+                                  ) : null}
+                                </div>
+                                <div className="min-w-0 flex-1 pb-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="text-sm font-medium">{event.title}</div>
+                                    <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                      {formatActivityClock(event.created_at)}
+                                    </div>
                                   </div>
+                                  <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <AvatarBase
+                                      src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
+                                      name={event.actorLabel}
+                                      fallback={getInitials(event.actorLabel)}
+                                      size={14}
+                                      className="shrink-0 border-border/70"
+                                    />
+                                    <span>{event.actorLabel}</span>
+                                  </div>
+                                  {event.description ? (
+                                    <div className="mt-1 text-xs text-muted-foreground">{event.description}</div>
+                                  ) : null}
                                 </div>
-                                <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  <AvatarBase
-                                    src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
-                                    name={event.actorLabel}
-                                    fallback={getInitials(event.actorLabel)}
-                                    size={14}
-                                    className="shrink-0 border-border/70"
-                                  />
-                                  <span>{event.actorLabel}</span>
-                                </div>
-                                {event.description ? (
-                                  <div className="mt-1 text-xs text-muted-foreground">{event.description}</div>
-                                ) : null}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {historyVisibleCount < historyEvents.length ? (
-                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setHistoryVisibleCount((prev) => prev + 5)}>
-                      Показати ще 5
-                    </Button>
-                  ) : !historyLoadedAll ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={historyLoading || !task?.id}
-                      onClick={() => {
-                        if (task?.id) {
-                          void loadHistory(task.id, { full: true });
-                        }
-                      }}
-                    >
-                      {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Завантажити ще з історії
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </div>
+                    ))}
+                    {historyVisibleCount < historyEvents.length ? (
+                      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setHistoryVisibleCount((prev) => prev + 5)}>
+                        Показати ще 5
+                      </Button>
+                    ) : !historyLoadedAll ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        disabled={historyLoading || !task?.id}
+                        onClick={() => {
+                          if (task?.id) {
+                            void loadHistory(task.id, { full: true });
+                          }
+                        }}
+                      >
+                        {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Завантажити ще з історії
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </section>
           </div>
         </aside>

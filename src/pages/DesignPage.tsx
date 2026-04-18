@@ -39,6 +39,7 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
 import {
@@ -3836,8 +3837,8 @@ export default function DesignPage() {
 
   const designHeaderActions = useMemo(
     () => (
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <UnifiedPageToolbar
+        topLeft={
           <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
@@ -3870,7 +3871,9 @@ export default function DesignPage() {
               <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{standaloneTasksCount}</span>
             </Button>
           </div>
-          <div className="flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto">
+        }
+        topRight={
+          <>
             <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
               <Button
                 variant="segmented"
@@ -3910,11 +3913,10 @@ export default function DesignPage() {
               <Plus className="h-4 w-4" />
               Нова дизайн-задача
             </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="relative w-full xl:max-w-[370px]">
+          </>
+        }
+        search={
+          <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -3944,8 +3946,9 @@ export default function DesignPage() {
               <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
-
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-1">
+        }
+        filters={
+          <>
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}>
               <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
                 <SelectValue placeholder="Статус" />
@@ -4017,9 +4020,10 @@ export default function DesignPage() {
             )}
 
             <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
+          </>
+        }
+        meta={
+          <>
             {hasActiveFilters ? (
               <Button
                 variant="ghost"
@@ -4036,9 +4040,9 @@ export default function DesignPage() {
               <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
               {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
     ),
     [
       clearFilters,

@@ -8,29 +8,29 @@ const Table = React.forwardRef<
     variant?: "list" | "analytics" | "compact";
     size?: "sm" | "md" | "lg";
   }
->(({ className, variant, size, ...props }, ref) => {
+>(({ className, variant = "list", size = "md", ...props }, ref) => {
   const sizeClasses = {
-    sm: "[&_tbody_tr]:h-12 [&_th]:h-9 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
-    md: "[&_tbody_tr]:h-14 [&_th]:h-10 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3",
+    sm: "[&_tbody_tr]:h-12 [&_th]:h-10 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
+    md: "[&_tbody_tr]:h-14 [&_th]:h-11 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3.5",
     lg: "[&_tbody_tr]:h-16 [&_th]:h-12 [&_th]:px-6 [&_td]:px-6 [&_td]:py-4",
   };
 
   const variantClasses = {
     list: [
-      "[&_thead]:bg-background/72",
-      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-background/70",
+      "[&_thead]:bg-muted/45",
+      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
+      "[&_tbody_tr]:border-border/35 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/20",
     ].join(" "),
     analytics: [
       "[&_thead]:bg-background/80",
-      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
+      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
       "[&_tbody_tr:hover]:bg-background/75",
       "[&_tbody_td]:tabular-nums",
     ].join(" "),
     compact: [
-      "[&_thead]:bg-background/65",
-      "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-background/65",
+      "[&_thead]:bg-muted/38",
+      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
+      "[&_tbody_tr]:border-border/35 [&_tbody_tr:hover]:bg-muted/16",
     ].join(" "),
   };
 
@@ -40,8 +40,8 @@ const Table = React.forwardRef<
         ref={ref}
         className={cn(
           "w-full caption-bottom text-sm",
-          variant ? variantClasses[variant] : null,
-          size ? sizeClasses[size] : null,
+          variantClasses[variant],
+          sizeClasses[size],
           className
         )}
         data-variant={variant}
@@ -57,7 +57,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-border/40", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -95,7 +95,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-background/72 data-[state=selected]:bg-background/80",
+      "border-b border-border/30 transition-colors hover:bg-muted/20 data-[state=selected]:bg-primary/5",
       className
     )}
     {...props}
@@ -110,7 +110,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-11 px-6 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -125,7 +125,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "px-6 py-3.5 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

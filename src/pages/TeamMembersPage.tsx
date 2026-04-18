@@ -2222,7 +2222,7 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
+    <div className="flex w-full flex-col gap-6 pb-20 pt-4 md:pb-0">
       <div className="overflow-hidden">
         <div className="p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -2546,8 +2546,8 @@ export function TeamMembersPage() {
           </div>
           <div className="hidden overflow-x-auto md:block">
             <Table variant="list" size="md">
-              <TableHeader className="bg-muted/30">
-                <TableRow className="hover:bg-transparent border-border/50">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
                   <TableTextHeaderCell widthClass="w-[26%]" className="pl-6">
                     Користувач
                   </TableTextHeaderCell>
@@ -2754,7 +2754,7 @@ export function TeamMembersPage() {
                             align="end"
                             contentClassName="w-48"
                             trigger={
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 group-hover:opacity-100">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             }
@@ -2918,8 +2918,8 @@ export function TeamMembersPage() {
           </div>
           <div className="hidden overflow-x-auto md:block">
             <Table variant="list" size="md">
-              <TableHeader className="bg-muted/30">
-                <TableRow className="hover:bg-transparent border-border/50">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
                   <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">
                     Посилання / Email
                   </TableTextHeaderCell>
@@ -3085,8 +3085,8 @@ export function TeamMembersPage() {
               </div>
               <div className="hidden overflow-x-auto md:block">
                 <Table variant="list" size="md">
-                  <TableHeader className="bg-muted/30">
-                    <TableRow className="hover:bg-transparent border-border/50">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
                       <TableTextHeaderCell widthClass="w-[28%]" className="pl-6">
                         Користувач
                       </TableTextHeaderCell>

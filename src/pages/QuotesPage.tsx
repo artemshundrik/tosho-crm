@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
+import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import {
@@ -4363,8 +4365,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [bulkAddAvailableSets, bulkAddExistingOpen]);
 
   const estimatesHeaderActions = useMemo(() => (
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <UnifiedPageToolbar
+        topLeft={
           <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
@@ -4385,17 +4387,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               КП та набори
             </Button>
           </div>
-          <div className="flex w-full flex-col gap-2 self-stretch sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:self-auto">
+        }
+        topRight={
+          <>
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
             <Button onClick={openCreate} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="relative w-full xl:max-w-[370px]">
+          </>
+        }
+        search={
+          <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={contentView === "sets" ? quoteSetSearch : search}
@@ -4421,8 +4424,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
-
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-1">
+        }
+        filters={
+          <>
             {contentView !== "sets" ? (
               <>
                 <Select value={status} onValueChange={setStatusFilter}>
@@ -4539,9 +4543,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             )}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
+          </>
+        }
+        meta={
+          <>
             {hasActiveFilters ? (
               <Button
                 variant="ghost"
@@ -4558,9 +4563,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
               {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
   ), [
     clearFilters,
     contentView,
@@ -4828,9 +4833,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ))}
           </div>
           <div className="hidden md:block overflow-x-auto">
-            <Table className="[&_th]:px-5 [&_td]:px-5">
+            <Table variant="list" size="md" className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
-                  <TableRow className="bg-transparent border-b border-border/40">
+                  <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[12px]"></TableHead>
                   <TableHead>Назва</TableHead>
                   <TableHead>Тип</TableHead>
@@ -4906,13 +4911,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           })
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                    <TableCell className="text-right opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onClick={(event) => event.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 opacity-70 hover:opacity-100"
+                            className="h-8 w-8"
                             aria-label="Дії"
                           >
                             <MoreVertical className="h-4 w-4" />
@@ -4946,10 +4951,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
           {loading ? (
-            <div className="p-12 text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">Завантаження прорахунків...</p>
-            </div>
+            <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
           ) : error ? (
             <div className="p-12 text-center">
               <XCircle className="h-9 w-9 mx-auto mb-3 text-destructive/80" />
@@ -5250,9 +5252,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               })}
             </div>
             <div className="hidden md:block overflow-x-auto">
-              <Table className="[&_th]:px-5 [&_td]:px-5">
+              <Table variant="list" size="md" className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
-                  <TableRow className="bg-transparent hover:bg-transparent border-b border-border/40">
+                  <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[44px]">
                       <Checkbox
                         checked={
@@ -5269,7 +5271,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[140px] min-w-[140px]">
                       <button
                         onClick={() => handleSort("number")}
-                        className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] hover:text-foreground transition-colors"
                       >
                         Номер
                         {sortBy === "number" && (
@@ -5280,7 +5282,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[160px]">
                       <button
                         onClick={() => handleSort("date")}
-                        className="flex items-center gap-1.5 hover:text-foreground transition-colors font-semibold"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] hover:text-foreground transition-colors"
                       >
                         Дата
                         {sortBy === "date" && (
@@ -5504,13 +5506,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             );
                           })()}
                         </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="text-right opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 opacity-60 group-hover:opacity-100 transition-all"
+                                className="h-8 w-8"
                               >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
@@ -6186,9 +6188,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </div>
               ) : (
                 <div className="max-h-[48vh] overflow-auto">
-                  <Table>
+                  <Table variant="list" size="md">
                     <TableHeader>
-                      <TableRow className="bg-muted/20">
+                      <TableRow>
                         <TableHead className="w-[64px]">#</TableHead>
                         <TableHead>Прорахунок</TableHead>
                         <TableHead>Статус</TableHead>
@@ -6318,9 +6320,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </div>
                       </div>
                     ) : null}
-                    <Table>
+                    <Table variant="compact" size="sm">
                       <TableHeader>
-                        <TableRow className="bg-muted/10">
+                        <TableRow>
                           <TableHead className="w-[60px]">#</TableHead>
                           <TableHead className="w-[84px]">Фото</TableHead>
                           <TableHead>Товар</TableHead>
