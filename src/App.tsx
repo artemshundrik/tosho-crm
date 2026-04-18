@@ -113,6 +113,7 @@ const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 const RuntimeErrorsPage = lazyWithRetry(() => import("./pages/RuntimeErrorsPage"));
 const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
+const ColorPalettePage = lazyWithRetry(() => import("./pages/ColorPalettePage"));
 
 function RouteSuspense({
   children,
@@ -1171,6 +1172,20 @@ function AppRoutes() {
             >
               <RouteSuspense shell>
                 <RuntimeErrorsPage />
+              </RouteSuspense>
+            </RuntimeErrorsRouteGate>
+          }
+        />
+        <Route
+          path="admin/palette"
+          element={
+            <RuntimeErrorsRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              isSuperAdmin={permissions.isSuperAdmin}
+            >
+              <RouteSuspense shell>
+                <ColorPalettePage />
               </RouteSuspense>
             </RuntimeErrorsRouteGate>
           }

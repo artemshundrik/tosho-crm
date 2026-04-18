@@ -291,10 +291,10 @@ export function CompactSidebar({
         </div>
         {incompleteModels > 0 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-amber-600 dark:text-amber-500">
+            <span className="tone-text-warning">
               Незавершених:
             </span>
-            <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-500">
+            <span className="font-semibold tabular-nums tone-text-warning">
               {incompleteModels}
             </span>
           </div>

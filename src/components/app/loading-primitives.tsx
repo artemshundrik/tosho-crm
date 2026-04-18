@@ -47,7 +47,7 @@ export function SurfaceSkeleton({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        "rounded-[24px] border border-border/60 bg-card/70 p-4 shadow-[0_1px_0_rgba(15,23,42,0.02)]",
+        "rounded-[24px] border border-border/60 bg-card/82 p-4 shadow-[var(--shadow-elevated-sm)]",
         compact ? "space-y-3" : "space-y-4",
         className
       )}
@@ -65,16 +65,16 @@ export function SurfaceSkeleton({
           <div
             key={index}
             className={cn(
-              "flex items-center gap-3 rounded-[18px] border border-border/40 bg-muted/[0.03] px-3 py-3",
+              "flex items-center gap-3 rounded-[18px] border border-border/40 bg-background/60 px-3 py-3",
               compact && "rounded-[16px] py-2.5"
             )}
           >
-            <Skeleton className="h-10 w-10 shrink-0 rounded-xl bg-muted/80" />
+            <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className={cn("h-3.5 rounded-full bg-muted/80", index % 3 === 0 ? "w-[42%]" : "w-[58%]")} />
-              <Skeleton className={cn("h-3 rounded-full bg-muted/60", index % 2 === 0 ? "w-[72%]" : "w-[64%]")} />
+              <Skeleton className={cn("h-3.5 rounded-full", index % 3 === 0 ? "w-[42%]" : "w-[58%]")} />
+              <Skeleton className={cn("h-3 rounded-full opacity-80", index % 2 === 0 ? "w-[72%]" : "w-[64%]")} />
             </div>
-            <Skeleton className="h-7 w-16 shrink-0 rounded-full bg-muted/70" />
+            <Skeleton className="h-7 w-16 shrink-0 rounded-full opacity-90" />
           </div>
         ))}
       </div>
@@ -106,12 +106,12 @@ export function MenuSkeleton({
 
       {Array.from({ length: rows }).map((_, index) => (
         <div key={index} className="flex min-h-12 items-center gap-3 rounded-[14px] px-2 py-2">
-          <Skeleton className="h-9 w-9 shrink-0 rounded-xl bg-muted/80" />
+          <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
           <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className={cn("h-3.5 rounded-full bg-muted/80", index % 2 === 0 ? "w-[52%]" : "w-[64%]")} />
-            <Skeleton className={cn("h-3 rounded-full bg-muted/60", index % 2 === 0 ? "w-[74%]" : "w-[58%]")} />
+            <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[52%]" : "w-[64%]")} />
+            <Skeleton className={cn("h-3 rounded-full opacity-80", index % 2 === 0 ? "w-[74%]" : "w-[58%]")} />
           </div>
-          <Skeleton className="h-4 w-12 shrink-0 rounded-full bg-muted/70" />
+          <Skeleton className="h-4 w-12 shrink-0 rounded-full opacity-90" />
         </div>
       ))}
     </div>

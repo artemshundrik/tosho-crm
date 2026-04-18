@@ -46,7 +46,7 @@ export function NewMatchPrimarySplitCta({ baseTo = "/matches/new", className }: 
         <span>Новий матч</span>
       </Button>
 
-      <div className="self-stretch w-px bg-white/15" />
+      <div className="self-stretch w-px bg-background/15" />
 
       <AppDropdown
         open={open}

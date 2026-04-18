@@ -22,6 +22,7 @@ import {
   Route,
   Search,
   ShieldAlert,
+  SwatchBook,
   Sun,
   Truck,
   Users,
@@ -260,7 +261,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-black/5 dark:ring-white/8 shadow-[0_42px_120px_-40px_rgba(15,23,42,0.58),0_22px_54px_-34px_rgba(15,23,42,0.34)] dark:shadow-[0_52px_140px_-42px_rgba(2,6,23,0.85),0_26px_60px_-36px_rgba(2,6,23,0.62)]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-[var(--shadow-elevated-lg)]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -383,6 +384,7 @@ const ROUTES = {
   profile: "/profile",
   observability: "/admin/observability",
   runtimeErrors: "/admin/runtime-errors",
+  palettePreview: "/admin/palette",
 } as const;
 
 // --- Sidebar Config ---
@@ -418,6 +420,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
+  { label: "Design System", to: ROUTES.palettePreview, group: "account", icon: SwatchBook },
   { label: "Помилки", to: ROUTES.runtimeErrors, group: "account", icon: Bug },
 ];
 
@@ -633,6 +636,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.notifications,
       showPageHeader: false,
     };
+  if (pathname.startsWith(ROUTES.palettePreview))
+    return {
+      title: "Design System",
+      subtitle: "Палітра, badge-like елементи, chips і системні токени інтерфейсу.",
+      breadcrumbLabel: "Design System",
+      breadcrumbTo: ROUTES.palettePreview,
+    };
   if (pathname.startsWith(ROUTES.activity))
     return {
       title: "Активність",
@@ -767,6 +777,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     () =>
       sidebarLinks.filter((link) => {
         if (link.to === ROUTES.runtimeErrors && !permissions.isSuperAdmin) {
+          return false;
+        }
+        if (link.to === ROUTES.palettePreview && !permissions.isSuperAdmin) {
           return false;
         }
         if (link.to === ROUTES.observability && !(permissions.isSuperAdmin || permissions.isAdmin)) {
@@ -2051,9 +2064,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             <span
                               className={cn(
                                 "mt-1 h-2 w-2 rounded-full",
-                                !n.read && n.tone === "success" && "bg-emerald-500",
-                                !n.read && n.tone === "warning" && "bg-amber-500",
-                                !n.read && n.tone === "info" && "bg-sky-500",
+                                !n.read && n.tone === "success" && "tone-dot-success",
+                                !n.read && n.tone === "warning" && "tone-dot-warning",
+                                !n.read && n.tone === "info" && "tone-dot-info",
                                 !n.read && !n.tone && "bg-muted-foreground",
                                 n.read && "bg-muted-foreground/40"
                               )}
@@ -2214,7 +2227,7 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-normal",
+                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-medium",
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 collapsed

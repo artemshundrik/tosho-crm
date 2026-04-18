@@ -59,9 +59,7 @@ const renderDocBadge = (label: string, ready: boolean) => (
     variant="outline"
     className={cn(
       "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-      ready
-        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-        : "border-border/70 bg-muted/20 text-muted-foreground"
+      ready ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
     )}
   >
     {label}
@@ -785,10 +783,10 @@ export default function OrdersProductionDetailsPage() {
                   className={cn(
                     "rounded-full px-2.5 py-0.5 text-[11px]",
                     record.readinessColumn === "ready"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                      ? "tone-success"
                       : record.readinessColumn === "design"
-                        ? "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
-                        : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+                        ? "tone-info"
+                        : "tone-warning"
                   )}
                 >
                   {record.readinessColumn === "ready" ? "Готово до замовлення" : "Є блокери"}
@@ -1011,14 +1009,14 @@ export default function OrdersProductionDetailsPage() {
                 className={cn(
                   "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
                   step.done
-                    ? "border-emerald-300/60 bg-emerald-50/70 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-                    : "border-amber-300/60 bg-amber-50/70 dark:border-amber-500/20 dark:bg-amber-500/10"
+                    ? "tone-success-subtle"
+                    : "tone-warning-subtle"
                 )}
               >
                 {step.done ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-200" />
+                  <CheckCircle2 className="tone-text-success mt-0.5 h-4 w-4 shrink-0" />
                 ) : (
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-200" />
+                  <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
                 )}
                 <span>{step.label}</span>
               </div>

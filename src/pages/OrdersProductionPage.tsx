@@ -119,9 +119,7 @@ const renderDocBadge = (label: string, ready: boolean) => (
     variant="outline"
     className={cn(
       "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-      ready
-        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-        : "border-border/70 bg-muted/20 text-muted-foreground"
+      ready ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
     )}
   >
     {label}
@@ -491,44 +489,44 @@ export default function OrdersProductionPage() {
               </div>
             </Card>
 
-            <Card className="overflow-hidden border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+            <Card className="tone-success-subtle overflow-hidden p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm text-emerald-900/75 dark:text-emerald-100/80">Готово до замовлення</div>
-                  <div className="mt-2 text-3xl font-semibold tracking-tight text-emerald-900 dark:text-emerald-50">
+                  <div className="tone-text-success text-sm">Готово до замовлення</div>
+                  <div className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
                     {summary.ready}
                   </div>
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-white/70 p-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-200" />
+                <div className="tone-icon-box-success rounded-xl border p-2.5">
+                  <CheckCircle2 className="tone-text-success h-5 w-5" />
                 </div>
               </div>
             </Card>
 
-            <Card className="overflow-hidden border-amber-200 bg-amber-50/70 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <Card className="tone-warning-subtle overflow-hidden p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm text-amber-900/75 dark:text-amber-100/80">Лід / реквізити</div>
-                  <div className="mt-2 text-3xl font-semibold tracking-tight text-amber-900 dark:text-amber-50">
+                  <div className="tone-text-warning text-sm">Лід / реквізити</div>
+                  <div className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
                     {summary.counterparty}
                   </div>
                 </div>
-                <div className="rounded-xl border border-amber-200 bg-white/70 p-2.5 dark:border-amber-500/20 dark:bg-amber-500/10">
-                  <Building2 className="h-5 w-5 text-amber-700 dark:text-amber-200" />
+                <div className="tone-icon-box-warning rounded-xl border p-2.5">
+                  <Building2 className="tone-text-warning h-5 w-5" />
                 </div>
               </div>
             </Card>
 
-            <Card className="overflow-hidden border-sky-200 bg-sky-50/70 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
+            <Card className="tone-info-subtle overflow-hidden p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm text-sky-900/75 dark:text-sky-100/80">Макет / візуал</div>
-                  <div className="mt-2 text-3xl font-semibold tracking-tight text-sky-900 dark:text-sky-50">
+                  <div className="tone-text-info text-sm">Макет / візуал</div>
+                  <div className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
                     {summary.design}
                   </div>
                 </div>
-                <div className="rounded-xl border border-sky-200 bg-white/70 p-2.5 dark:border-sky-500/20 dark:bg-sky-500/10">
-                  <Palette className="h-5 w-5 text-sky-700 dark:text-sky-200" />
+                <div className="tone-icon-box-info rounded-xl border p-2.5">
+                  <Palette className="tone-text-info h-5 w-5" />
                 </div>
               </div>
             </Card>
@@ -604,7 +602,7 @@ export default function OrdersProductionPage() {
                                 className={cn(
                                   "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
                                   record.source === "stored"
-                                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                                    ? "tone-success"
                                     : "border-border/70 bg-muted/20 text-muted-foreground"
                                 )}
                               >
@@ -640,10 +638,10 @@ export default function OrdersProductionPage() {
                                 className={cn(
                                   "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
                                   record.readinessColumn === "ready"
-                                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                                    ? "tone-success"
                                     : record.readinessColumn === "design"
-                                      ? "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
-                                      : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+                                      ? "tone-info"
+                                      : "tone-warning"
                                 )}
                               >
                                 {record.readinessColumn === "ready"
@@ -753,10 +751,10 @@ export default function OrdersProductionPage() {
                                   className={cn(
                                     "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
                                     record.readinessColumn === "ready"
-                                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                                      ? "tone-success"
                                       : record.readinessColumn === "design"
-                                        ? "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
-                                        : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+                                        ? "tone-info"
+                                        : "tone-warning"
                                   )}
                                 >
                                   {record.readinessColumn === "ready" ? "Готово" : "Увага"}
@@ -787,19 +785,19 @@ export default function OrdersProductionPage() {
                               </div>
 
                               {record.blockers.length > 0 ? (
-                                <div className="mt-4 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-                                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-950 dark:text-amber-100">
+                                <div className="tone-warning-subtle mt-4 rounded-xl border p-3">
+                                  <div className="tone-text-warning mb-2 flex items-center gap-2 text-xs font-semibold">
                                     <AlertTriangle className="h-3.5 w-3.5" />
                                     Що блокує переведення у замовлення
                                   </div>
-                                  <div className="space-y-1 text-xs leading-5 text-amber-900 dark:text-amber-100/90">
+                                  <div className="tone-text-warning space-y-1 text-xs leading-5">
                                     {record.blockers.slice(0, 3).map((blocker) => (
                                       <div key={blocker}>{blocker}</div>
                                     ))}
                                   </div>
                                 </div>
                               ) : (
-                                <div className="mt-4 rounded-xl border border-emerald-300/60 bg-emerald-50/80 p-3 text-xs font-medium text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+                                <div className="tone-success-subtle tone-text-success mt-4 rounded-xl border p-3 text-xs font-medium">
                                   Умови виконані. Можна створювати пакет документів і переводити в замовлення.
                                 </div>
                               )}

@@ -46,7 +46,7 @@ export function MethodsSection({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 pb-2">
-        <div className="h-1 w-1 rounded-full bg-amber-500"></div>
+        <div className="h-1 w-1 rounded-full tone-dot-warning"></div>
         <div>
           <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Coins className="h-4 w-4" /> Доступні методи

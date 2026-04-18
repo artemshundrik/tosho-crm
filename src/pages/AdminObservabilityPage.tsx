@@ -132,10 +132,10 @@ type BackupRunRow = {
 const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
 const CHART_STROKES = {
   primary: "hsl(var(--primary))",
-  teal: "hsl(176 64% 36%)",
-  amber: "hsl(38 92% 42%)",
-  violet: "hsl(259 84% 62%)",
-  sky: "hsl(199 89% 48%)",
+  teal: "hsl(var(--success-foreground))",
+  amber: "hsl(var(--warning-foreground))",
+  violet: "hsl(var(--accent-tone-foreground))",
+  sky: "hsl(var(--info-foreground))",
 } as const;
 
 function getErrorMessage(error: unknown, fallback: string) {

@@ -4505,7 +4505,7 @@ export default function DesignPage() {
                           </div>
                         </button>
                         <div
-                          className="relative border-b border-border/40 bg-[linear-gradient(to_right,transparent_0%,transparent_calc(100%_-_1px),rgba(148,163,184,0.16)_calc(100%_-_1px),rgba(148,163,184,0.16)_100%)]"
+                          className="relative border-b border-border/40 bg-[linear-gradient(to_right,transparent_0%,transparent_calc(100%_-_1px),hsl(var(--neutral-soft-border)/0.34)_calc(100%_-_1px),hsl(var(--neutral-soft-border)/0.34)_100%)]"
                           style={{ gridColumn: `2 / span ${timelineAxis.columns.length}` }}
                         >
                           <div

@@ -2570,7 +2570,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             className={cn(
               "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
               activeTab === "customers" 
-                ? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10" 
+                ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]" 
                 : "text-muted-foreground hover:text-foreground hover:bg-background/50"
             )}
           >
@@ -2589,7 +2589,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             className={cn(
               "relative flex flex-1 lg:flex-none items-center justify-center gap-2 h-9 px-5 rounded-lg text-sm font-medium transition-all duration-200 ease-out",
               activeTab === "leads" 
-                ? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10" 
+                ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]" 
                 : "text-muted-foreground hover:text-foreground hover:bg-background/50"
             )}
           >
@@ -2727,32 +2727,32 @@ function CustomersPage({ teamId }: { teamId: string }) {
     <div className="w-full pb-20 md:pb-0 space-y-6">
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "customers" | "leads")}>
         {isManagerUser && search.trim() ? (
-          <div className="mb-4 rounded-[var(--radius-xl)] border border-amber-300/70 bg-amber-50/80 p-3">
+          <div className="mb-4 rounded-[var(--radius-xl)] border tone-warning-subtle p-3">
             <div className="flex flex-col gap-2">
               <div>
-                <p className="text-sm font-medium text-amber-950">Схожі компанії в інших менеджерів</p>
-                <p className="text-xs text-amber-900/80">
+                <p className="text-sm font-medium tone-text-warning">Схожі компанії в інших менеджерів</p>
+                <p className="text-xs tone-text-warning">
                   Ви й далі бачите тільки свої записи, але пошук підсвічує можливі дублікати в команді.
                 </p>
               </div>
               {crossManagerMatchesLoading ? (
                 <InlineLoading
                   label="Шукаємо збіги по команді..."
-                  className="min-h-6 text-xs text-amber-900/80"
-                  spinnerClassName="h-3 w-3 text-amber-900/80"
-                  textClassName="text-xs text-amber-900/80"
+                  className="min-h-6 text-xs tone-text-warning"
+                  spinnerClassName="h-3 w-3 tone-text-warning"
+                  textClassName="text-xs tone-text-warning"
                 />
               ) : crossManagerMatches.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {crossManagerMatches.map((match) => (
                     <div
                       key={`${match.entityType}-${match.id}`}
-                      className="min-w-[220px] rounded-[var(--radius-lg)] border border-amber-200 bg-white/80 px-3 py-2"
+                      className="min-w-[220px] rounded-[var(--radius-lg)] border border-warning-soft-border bg-background/85 px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
                         <Badge
-                          variant="outline"
-                          className="border-amber-300 bg-amber-100 text-[10px] uppercase tracking-wide text-amber-950"
+                          tone="warning"
+                          className="text-[10px] uppercase tracking-wide"
                         >
                           {match.entityType === "lead" ? "Лід" : "Замовник"}
                         </Badge>
@@ -2763,7 +2763,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-amber-900/80">Схожих записів в інших менеджерів не знайдено.</p>
+                <p className="text-xs tone-text-warning">Схожих записів в інших менеджерів не знайдено.</p>
               )}
             </div>
           </div>

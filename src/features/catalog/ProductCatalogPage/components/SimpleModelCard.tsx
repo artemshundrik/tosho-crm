@@ -77,7 +77,7 @@ export function SimpleModelCard({
         "group relative flex flex-col rounded-xl border transition-all duration-200",
         "hover:shadow-lg",
         !validation.isValid
-          ? "border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/10"
+          ? "tone-warning-subtle"
           : "border-border/60 bg-card hover:border-primary/30"
       )}
       onMouseEnter={() => setIsHovered(true)}

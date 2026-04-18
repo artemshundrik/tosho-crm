@@ -327,8 +327,8 @@ function getTodayDateOnly() {
 }
 
 function getAccessBadgeClass(role: string | null) {
-  if (role === "owner") return "bg-purple-500/10 border-purple-500/25 text-foreground";
-  if (role === "admin") return "bg-primary/10 border-primary/20 text-foreground";
+  if (role === "owner") return "tone-accent";
+  if (role === "admin") return "bg-info-soft text-info-foreground border-info-soft-border";
   return "bg-muted/50 border-border text-muted-foreground";
 }
 
@@ -2300,12 +2300,12 @@ export function TeamMembersPage() {
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Усього людей</div>
                 <div className="mt-1 text-2xl font-semibold text-foreground">{members.length}</div>
               </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-amber-700/80 dark:text-amber-300/80">Потребують уваги</div>
+              <div className="tone-warning-subtle rounded-2xl border px-4 py-3">
+                <div className="tone-text-warning text-xs uppercase tracking-wide">Потребують уваги</div>
                 <div className="mt-1 text-2xl font-semibold text-foreground">{needsAttentionCount}</div>
               </div>
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">Інвайти</div>
+              <div className="tone-success-subtle rounded-2xl border px-4 py-3">
+                <div className="tone-text-success text-xs uppercase tracking-wide">Інвайти</div>
                 <div className="mt-1 text-2xl font-semibold text-foreground">{activeInvitesCount}</div>
               </div>
             </div>
@@ -2330,22 +2330,22 @@ export function TeamMembersPage() {
               <div className="mt-1 text-sm text-muted-foreground">не вдасться порахувати стаж</div>
             </div>
 
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-4">
+            <div className="tone-warning-subtle rounded-2xl border px-4 py-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Випробувальний</div>
-                <AlertTriangle className="h-4 w-4 text-amber-600/80 dark:text-amber-400/80" />
+                <div className="text-xs font-medium uppercase tracking-wide tone-text-warning">Випробувальний</div>
+                <AlertTriangle className="tone-text-warning h-4 w-4" />
               </div>
               <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{probationReviewDueCount}</div>
-              <div className="mt-1 text-sm text-muted-foreground">чекають рішення або рев’ю</div>
+              <div className="mt-1 text-sm tone-copy-warning">чекають рішення або рев’ю</div>
             </div>
 
-            <div className="rounded-2xl border border-warning-soft-border bg-warning-soft/60 px-4 py-4">
+            <div className="tone-warning-subtle rounded-2xl border px-4 py-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-warning-foreground/80">Відсутність без кінця</div>
-                <Activity className="h-4 w-4 text-warning-foreground/80" />
+                <div className="tone-text-warning text-xs font-medium uppercase tracking-wide">Відсутність без кінця</div>
+                <Activity className="tone-text-warning h-4 w-4" />
               </div>
               <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{openAbsenceRangeCount}</div>
-              <div className="mt-1 text-sm text-muted-foreground">період треба закрити датою</div>
+              <div className="mt-1 text-sm tone-copy-warning">період треба закрити датою</div>
             </div>
           </div>
         </div>
@@ -2404,7 +2404,7 @@ export function TeamMembersPage() {
                 </div>
               ) : null}
               {canManage ? (
-                <Button size="sm" className="h-10 md:px-5" onClick={openInviteDialog}>
+                <Button variant="primary" size="lg" className="h-10 md:px-5" onClick={openInviteDialog}>
                   Інвайт
                 </Button>
               ) : null}
@@ -2584,7 +2584,7 @@ export function TeamMembersPage() {
                                 className={cn(
                                   "h-full rounded-full",
                                   probation.status === "active"
-                                    ? "bg-amber-500"
+                                    ? "tone-dot-warning"
                                     : "bg-muted-foreground/40"
                                 )}
                                 style={{ width: `${probation.progress}%` }}
@@ -2786,7 +2786,7 @@ export function TeamMembersPage() {
                                       className={cn(
                                         "h-full rounded-full",
                                         probation.status === "active"
-                                          ? "bg-amber-500"
+                                          ? "tone-dot-warning"
                                           : "bg-muted-foreground/40"
                                       )}
                                       style={{ width: `${probation.progress}%` }}
@@ -3243,8 +3243,8 @@ export function TeamMembersPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 rounded-[var(--radius-inner)] border border-emerald-100 dark:border-emerald-900/50">
-                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-3 shadow-sm">
+              <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-[var(--radius-inner)] border p-6">
+                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
                     <ShieldAlert className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-lg text-foreground">Посилання готове!</span>
@@ -3668,9 +3668,9 @@ export function TeamMembersPage() {
                               className={cn(
                                 "h-full rounded-full",
                                 selectedProbation.status === "completed"
-                                  ? "bg-emerald-500"
+                                  ? "tone-dot-success"
                                   : selectedProbation.status === "active"
-                                  ? "bg-amber-500"
+                                  ? "tone-dot-warning"
                                   : "bg-muted-foreground/40"
                               )}
                               style={{ width: `${selectedProbation.progress}%` }}

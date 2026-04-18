@@ -17,20 +17,20 @@ const Table = React.forwardRef<
 
   const variantClasses = {
     list: [
-      "[&_thead]:bg-muted/20",
+      "[&_thead]:bg-background/72",
       "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-background/70",
     ].join(" "),
     analytics: [
-      "[&_thead]:bg-muted/40",
+      "[&_thead]:bg-background/80",
       "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
-      "[&_tbody_tr:hover]:bg-muted/40",
+      "[&_tbody_tr:hover]:bg-background/75",
       "[&_tbody_td]:tabular-nums",
     ].join(" "),
     compact: [
-      "[&_thead]:bg-muted/10",
+      "[&_thead]:bg-background/65",
       "[&_th]:text-xs [&_th]:font-semibold [&_th]:text-muted-foreground",
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-muted/20",
+      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-background/65",
     ].join(" "),
   };
 
@@ -80,7 +80,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+      "border-t bg-background/70 font-medium [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -95,7 +95,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "border-b transition-colors hover:bg-background/72 data-[state=selected]:bg-background/80",
       className
     )}
     {...props}

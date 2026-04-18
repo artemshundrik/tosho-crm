@@ -169,7 +169,7 @@ export function StorageObjectImage({
         ? createPortal(
             <div
               aria-hidden="true"
-              className="pointer-events-none fixed z-[90] hidden overflow-hidden rounded-[14px] border border-border/70 bg-card shadow-[0_18px_40px_-14px_rgba(15,23,42,0.45)] opacity-100 scale-100 md:block"
+              className="pointer-events-none fixed z-[90] hidden overflow-hidden rounded-[14px] border border-border/70 bg-card shadow-[var(--shadow-elevated-preview)] opacity-100 scale-100 md:block"
               style={{
                 top: `${previewBounds.top}px`,
                 left: `${previewBounds.left}px`,

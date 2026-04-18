@@ -56,7 +56,7 @@ export function BulkActionsBar({
             variant="ghost"
             size="sm"
             onClick={onBulkClone}
-            className="gap-2 hover:bg-blue-500/10 hover:text-blue-600"
+            className="hover-tone-info gap-2"
           >
             <Copy className="h-4 w-4" />
             Клонувати
@@ -67,7 +67,7 @@ export function BulkActionsBar({
           variant="ghost"
           size="sm"
           onClick={onBulkExport}
-          className="gap-2 hover:bg-emerald-500/10 hover:text-emerald-600"
+          className="hover-tone-success gap-2"
         >
           <Download className="h-4 w-4" />
           Експорт

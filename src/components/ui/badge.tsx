@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /**
  * Badge system goals:
  * - One component for all status chips across the app
- * - Semantic tones: neutral/info/success/danger (+ destructive for system)
+ * - Semantic tones: neutral/info/accent/success/warning/danger (+ destructive for system)
  * - Consistent sizing + pill shape
  * - Still compatible with existing `variant` usage
  */
@@ -31,7 +31,9 @@ const badgeVariants = cva(
       tone: {
         neutral: "bg-neutral-soft text-neutral-foreground border-neutral-soft-border",
         info: "bg-info-soft text-info-foreground border-info-soft-border",
+        accent: "tone-accent",
         success: "bg-success-soft text-success-foreground border-success-soft-border",
+        warning: "bg-warning-soft text-warning-foreground border-warning-soft-border",
         danger: "bg-danger-soft text-danger-foreground border-danger-soft-border",
 
         /**
@@ -56,7 +58,9 @@ const badgeVariants = cva(
       // If tone is used, we usually want outline-like behavior but with soft bg; ensure no shadow by default
       { tone: "neutral", className: "shadow-none" },
       { tone: "info", className: "shadow-none" },
+      { tone: "accent", className: "shadow-none" },
       { tone: "success", className: "shadow-none" },
+      { tone: "warning", className: "shadow-none" },
       { tone: "danger", className: "shadow-none" },
       { tone: "destructive", className: "shadow-none" },
 

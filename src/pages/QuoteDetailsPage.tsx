@@ -5310,7 +5310,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
               <div className="space-y-3">
                 {quoteLockedByOther ? (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+                  <div className="tone-warning rounded-lg border px-4 py-3 text-sm">
                     <span className="font-medium">Режим лише перегляду.</span>{" "}
                     Запис редагує {quoteLock.holderName ?? "інший користувач"}.
                   </div>
@@ -5324,7 +5324,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 )}
 
                 {quoteRequirementsHint ? (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+                  <div className="tone-warning rounded-lg border px-4 py-3 text-sm">
                     <span className="font-medium">Прорахунок не готовий до збереження або зміни статусу.</span>{" "}
                     {quoteRequirementsHint}
                   </div>
@@ -6588,7 +6588,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               {isSelectedVisualization ? (
                                 <Badge
                                   variant="outline"
-                                  className="h-5 border-success/40 bg-success/10 px-2 text-[10px] text-success-foreground"
+                                  className="tone-success h-5 px-2 text-[10px]"
                                 >
                                   Обрано
                                 </Badge>
@@ -7559,7 +7559,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <div className="flex items-center justify-between py-1 text-sm">
                       <span className="text-muted-foreground">ПДВ</span>
-                      <span className="font-mono font-medium tabular-nums text-emerald-600">
+                      <span className="tone-text-success font-mono font-medium tabular-nums">
                         +{formatCurrency(selectedRunPricing.vatAmount, quote.currency)}
                       </span>
                     </div>
@@ -7797,7 +7797,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       {candidate.selectedFile ? (
                         <Badge
                           variant="outline"
-                          className="h-5 border-success/40 bg-success/10 px-2 text-[10px] text-success-foreground"
+                          className="tone-success h-5 px-2 text-[10px]"
                         >
                           Обрано: {candidate.selectedFile.file_name}
                         </Badge>

@@ -75,7 +75,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-black/5 dark:ring-white/8 shadow-[0_42px_120px_-40px_rgba(15,23,42,0.58),0_22px_54px_-34px_rgba(15,23,42,0.34)] dark:shadow-[0_52px_140px_-42px_rgba(2,6,23,0.85),0_26px_60px_-36px_rgba(2,6,23,0.62)]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-[var(--shadow-elevated-lg)]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -661,7 +661,7 @@ export default function NotificationsPage() {
             </section>
           </div>
 
-          <div className="rounded-[var(--radius-inner)] border border-border/70 bg-muted/10 p-4">
+          <div className="rounded-[var(--radius-inner)] border border-border/70 bg-background/68 p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-foreground">Тест in-app popup</div>
@@ -687,7 +687,7 @@ export default function NotificationsPage() {
       </Dialog>
 
       {filtered.length === 0 ? (
-        <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-[var(--radius-section)] border border-border bg-card/82 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.
         </div>
       ) : (
@@ -710,9 +710,9 @@ export default function NotificationsPage() {
                     <div
                       className={cn(
                         "h-2 w-2 rounded-full",
-                        !n.read && n.tone === "success" && "bg-emerald-500",
-                        !n.read && n.tone === "warning" && "bg-amber-500",
-                        !n.read && n.tone === "info" && "bg-sky-500",
+                        !n.read && n.tone === "success" && "tone-dot-success",
+                        !n.read && n.tone === "warning" && "tone-dot-warning",
+                        !n.read && n.tone === "info" && "tone-dot-info",
                         !n.read && !n.tone && "bg-muted-foreground",
                         n.read && "bg-muted-foreground/40"
                       )}

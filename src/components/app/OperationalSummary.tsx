@@ -150,9 +150,9 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
 
   const trendTone =
     kpi.trend?.direction === "up"
-      ? "bg-emerald-500/10 text-emerald-600"
+      ? "tone-success"
       : kpi.trend?.direction === "down"
-      ? "bg-rose-500/10 text-rose-600"
+      ? "tone-danger"
       : "bg-muted text-muted-foreground";
 
   if (kpi.key === "tournament") {
@@ -214,7 +214,7 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
   const wdlParts =
     kpi.key === "wdl" ? kpi.value.split(/[–-]/).map((v) => v.trim()).filter(Boolean) : [];
   const wdlValues = wdlParts.length === 3 ? wdlParts : ["Н/Д", "Н/Д", "Н/Д"];
-  const wdlColors = ["text-emerald-500 dark:text-emerald-400", "text-muted-foreground", "text-red-500 dark:text-red-400"];
+  const wdlColors = ["tone-text-success", "text-muted-foreground", "tone-text-danger"];
 
   return (
     <div className={cn("rounded-[var(--radius-inner)] border border-border bg-card/60", "px-4 py-3")}>
@@ -242,9 +242,9 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
                   key={i}
                   className={
                     c === "W"
-                      ? "text-emerald-500 dark:text-emerald-400"
+                      ? "tone-text-success"
                       : c === "L"
-                      ? "text-red-500 dark:text-red-400"
+                      ? "tone-text-danger"
                       : "text-muted-foreground"
                   }
                 >
@@ -280,9 +280,9 @@ function KpiCard({ kpi }: { kpi: OperationalSummaryKpi }) {
                   key={i}
                   className={
                     c === "W"
-                      ? "text-emerald-500 dark:text-emerald-400"
+                      ? "tone-text-success"
                       : c === "L"
-                      ? "text-red-500 dark:text-red-400"
+                      ? "tone-text-danger"
                       : "text-muted-foreground"
                   }
                 >

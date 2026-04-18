@@ -5733,7 +5733,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   }}
                                   onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                                   className={cn(
-                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
+                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-card p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
                                     canOpen ? "cursor-pointer hover:border-foreground/24" : "cursor-not-allowed opacity-70",
                                     draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                   )}
@@ -5762,7 +5762,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </div>
                                       {!canOpen ? (
                                         <div
-                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold text-muted-foreground"
+                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-[10px] font-semibold text-muted-foreground"
                                           title="Лише свої"
                                           aria-label="Лише свої"
                                         >
@@ -5813,7 +5813,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   </div>
 
                                   {productPreview || kanbanPreviewsLoading ? (
-                                    <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
+                                    <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-secondary px-3 py-2.5">
                                       <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                         <Package className="h-3.5 w-3.5" />
                                         Товар
@@ -5831,7 +5831,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                             }
                                           />
                                         ) : (
-                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
+                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-secondary">
                                             <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                                               {kanbanPreviewsLoading ? (
                                                 <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />

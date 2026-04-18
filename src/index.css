@@ -4,34 +4,34 @@
 @layer base {
   :root {
     /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
-    --background: 220 5% 97%; /* Світло-сірий фон сторінки */
-    --foreground: 240 10% 3.9%; /* Майже чорний текст */
+    --background: 0 0% 98.8%;
+    --foreground: 0 0% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 0 0% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 0 0% 14%;
 
-    --secondary: 220 6% 94%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 0 0% 95.9%;
+    --secondary-foreground: 0 0% 16%;
 
-    --muted: 220 6% 95%;
-    --muted-foreground: 220 9% 36%; /* ~5.5:1 на білому — WCAG AA з запасом */
+    --muted: 0 0% 95.5%;
+    --muted-foreground: 0 0% 40%;
 
-    --accent: 220 6% 94%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 0 0% 95.9%;
+    --accent-foreground: 0 0% 16%;
 
-    --destructive: 0 80% 50%; /* WCAG AA: білий текст ~4.8:1 */
+    --destructive: 357 75.8% 48.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 9% 85%; /* чіткіші межі */
-    --input: 220 9% 85%;
+    --border: 0 0% 86%;
+    --input: 0 0% 86%;
     
     /* --- BRAND TOKENS (single knob) --- */
     /* Change only --brand-h to switch brand color (blue -> magenta, etc.) */
-    --brand-h: 204;
-    --brand-s: 100%;
-    --brand-l: 47%;
+    --brand-h: 219;
+    --brand-s: 99.2%;
+    --brand-l: 52.7%;
 
     --primary: var(--brand-h) var(--brand-s) var(--brand-l);
     --primary-foreground: 210 40% 98%;
@@ -49,7 +49,7 @@
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
     /* Змінено на HSL 240 (нейтральний до фону) і трохи темніше (88%) для контрасту на білому */
-    --skeleton-bg: 240 5% 88%;
+    --skeleton-bg: 0 0% 89%;
 
     /* --- КНОПКИ (Gradient) --- */
     --btn-primary-grad-top: var(--brand-h) var(--brand-s) calc(var(--brand-l) + 5%);
@@ -59,86 +59,100 @@
     /* --- ТІНІ --- */
     --shadow-surface: none;
     --shadow-floating: none;
-    --shadow-overlay: 0 8px 18px rgba(15, 23, 42, 0.1);
+    --shadow-overlay: 0 8px 18px rgba(21, 31, 56, 0.1);
     --shadow-pressed: none;
     --shadow-primary-glow: none;
     --shadow-success-glow: none;
     --shadow-danger-glow: none;
+    --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.12), 0 1px 2px -1px hsl(var(--foreground) / 0.08);
+    --shadow-elevated-md: 0 18px 40px -20px hsl(var(--foreground) / 0.18);
+    --shadow-elevated-lg: 0 42px 120px -40px hsl(var(--foreground) / 0.22), 0 22px 54px -34px hsl(var(--foreground) / 0.14);
+    --shadow-elevated-preview: 0 18px 40px -14px hsl(var(--foreground) / 0.28);
+    --soft-ring: 0 0% 12% / 0.08;
+    --overlay-scrim: 0 0% 6% / 0.58;
+    --surface-sheen: 0 0% 100% / 0.36;
 
     /* --- BADGE TONES --- */
-    --neutral-soft: 220 14% 96%;
-    --neutral-soft-border: 220 13% 91%;
-    --neutral-foreground: 220 8% 45%;
+    --neutral-soft: 0 0% 96%;
+    --neutral-soft-border: 0 0% 86%;
+    --neutral-foreground: 0 0% 38%;
 
-    --info-soft: 214 95% 93%;
-    --info-soft-border: 214 85% 84%;
-    --info-foreground: 221 83% 42%; /* трохи темніший — кращий контраст */
+    --info-soft: 216 100% 95.8%;
+    --info-soft-border: 216 100% 84.5%;
+    --info-foreground: 219 99.2% 52.7%;
 
-    --success-soft: 142 68% 92%;
-    --success-soft-border: 142 55% 80%;
-    --success-foreground: 142 58% 27%; /* темніший зелений */
+    --accent-tone-soft: 264 100% 96.5%;
+    --accent-tone-soft-border: 264 82% 84%;
+    --accent-tone-foreground: 264 96.9% 61.8%;
 
-    --warning-soft: 45 88% 91%;
-    --warning-soft-border: 45 80% 76%;
-    --warning-foreground: 38 92% 30%; /* темніше amber → краща читабельність */
+    --success-soft: 137 46% 93.5%;
+    --success-soft-border: 137 36% 78%;
+    --success-foreground: 137 63.5% 38.6%;
 
-    --danger-soft: 0 80% 95%;
-    --danger-soft-border: 0 70% 84%;
-    --danger-foreground: 0 75% 38%; /* трохи темніший червоний */
+    --warning-soft: 47 88% 91%;
+    --warning-soft-border: 47 84% 74%;
+    --warning-foreground: 47 88.4% 38%;
+
+    --danger-soft: 357 88% 95.2%;
+    --danger-soft-border: 357 78% 83%;
+    --danger-foreground: 357 75.8% 48.6%;
 
     /* --- COMMAND SEARCH TOKENS (LIGHT) --- */
-    --cmd-highlight-bg: 214 95% 90%;
-    --cmd-highlight-foreground: 221 83% 24%;
-    --cmd-manager-chip-bg: 220 14% 96%;
-    --cmd-manager-chip-border: 220 13% 85%;
-    --cmd-manager-chip-foreground: 222 47% 18%;
-    --cmd-kind-customer-bg: 142 58% 91%;
-    --cmd-kind-customer-border: 142 45% 73%;
-    --cmd-kind-customer-foreground: 142 61% 24%;
-    --cmd-kind-lead-bg: 45 92% 89%;
-    --cmd-kind-lead-border: 43 82% 68%;
-    --cmd-kind-lead-foreground: 36 84% 24%;
-    --cmd-kind-quote-bg: 214 96% 91%;
-    --cmd-kind-quote-border: 214 84% 74%;
-    --cmd-kind-quote-foreground: 221 83% 28%;
-    --cmd-kind-design-bg: 280 72% 93%;
-    --cmd-kind-design-border: 280 58% 78%;
-    --cmd-kind-design-foreground: 282 46% 32%;
+    --cmd-highlight-bg: 214 100% 89%;
+    --cmd-highlight-foreground: 218 72% 24%;
+    --cmd-manager-chip-bg: 0 0% 96.2%;
+    --cmd-manager-chip-border: 0 0% 86%;
+    --cmd-manager-chip-foreground: 0 0% 24%;
+    --cmd-kind-customer-bg: 137 46% 93.5%;
+    --cmd-kind-customer-border: 137 36% 78%;
+    --cmd-kind-customer-foreground: 137 63.5% 38.6%;
+    --cmd-kind-lead-bg: 47 88% 91%;
+    --cmd-kind-lead-border: 47 84% 74%;
+    --cmd-kind-lead-foreground: 47 88.4% 38%;
+    --cmd-kind-quote-bg: 216 100% 95.8%;
+    --cmd-kind-quote-border: 216 100% 84.5%;
+    --cmd-kind-quote-foreground: 219 99.2% 52.7%;
+    --cmd-kind-order-bg: 0 0% 96%;
+    --cmd-kind-order-border: 0 0% 86%;
+    --cmd-kind-order-foreground: 0 0% 38%;
+    --cmd-kind-design-bg: 264 100% 96.5%;
+    --cmd-kind-design-border: 264 82% 84%;
+    --cmd-kind-design-foreground: 264 96.9% 61.8%;
 
     /* --- ENTITY AVATAR TOKENS (LIGHT) --- */
-    --entity-avatar-1-bg: 214 95% 93%;
-    --entity-avatar-1-border: 214 90% 86%;
-    --entity-avatar-1-fg: 221 83% 45%;
-    --entity-avatar-1-fallback: 214 92% 87%;
+    --entity-avatar-1-bg: 216 100% 95.8%;
+    --entity-avatar-1-border: 216 100% 84.5%;
+    --entity-avatar-1-fg: 219 99.2% 52.7%;
+    --entity-avatar-1-fallback: 216 100% 84.5%;
 
-    --entity-avatar-2-bg: 142 72% 93%;
-    --entity-avatar-2-border: 142 60% 83%;
-    --entity-avatar-2-fg: 142 55% 30%;
-    --entity-avatar-2-fallback: 142 62% 86%;
+    --entity-avatar-2-bg: 137 46% 93.5%;
+    --entity-avatar-2-border: 137 36% 78%;
+    --entity-avatar-2-fg: 137 63.5% 38.6%;
+    --entity-avatar-2-fallback: 137 36% 78%;
 
-    --entity-avatar-3-bg: 45 90% 92%;
-    --entity-avatar-3-border: 45 85% 80%;
-    --entity-avatar-3-fg: 45 90% 35%;
-    --entity-avatar-3-fallback: 45 88% 86%;
+    --entity-avatar-3-bg: 47 88% 91%;
+    --entity-avatar-3-border: 47 84% 74%;
+    --entity-avatar-3-fg: 47 88.4% 38%;
+    --entity-avatar-3-fallback: 47 84% 74%;
 
-    --entity-avatar-4-bg: 0 84% 95%;
-    --entity-avatar-4-border: 0 74% 86%;
-    --entity-avatar-4-fg: 0 72% 40%;
-    --entity-avatar-4-fallback: 0 78% 90%;
+    --entity-avatar-4-bg: 357 88% 95.2%;
+    --entity-avatar-4-border: 357 78% 83%;
+    --entity-avatar-4-fg: 357 75.8% 48.6%;
+    --entity-avatar-4-fallback: 357 78% 83%;
 
-    --entity-avatar-5-bg: 262 86% 95%;
-    --entity-avatar-5-border: 262 72% 86%;
-    --entity-avatar-5-fg: 262 70% 46%;
-    --entity-avatar-5-fallback: 262 78% 89%;
+    --entity-avatar-5-bg: 264 100% 96.5%;
+    --entity-avatar-5-border: 264 82% 84%;
+    --entity-avatar-5-fg: 264 96.9% 61.8%;
+    --entity-avatar-5-fallback: 264 82% 84%;
 
     --entity-avatar-6-bg: 188 88% 93%;
     --entity-avatar-6-border: 188 72% 82%;
     --entity-avatar-6-fg: 192 78% 36%;
-    --entity-avatar-6-fallback: 188 80% 87%;
+    --entity-avatar-6-fallback: 188 88% 85%;
 
     /* --- RATING + LEADER TOKENS (LIGHT) --- */
-    --rating-bronze-from: #e6beaa;
-    --rating-bronze-to: #a87860;
+    --rating-bronze-from: #f0c9b0;
+    --rating-bronze-to: #b97853;
     --rating-bronze-border: rgba(255, 255, 255, 0.25);
     --rating-bronze-foreground: #431407;
 
@@ -147,8 +161,8 @@
     --rating-silver-border: rgba(255, 255, 255, 0.4);
     --rating-silver-foreground: #1e293b;
 
-    --rating-gold-from: #e8c689;
-    --rating-gold-to: #b7903c;
+    --rating-gold-from: #f1cd6d;
+    --rating-gold-to: #c29221;
     --rating-gold-border: rgba(253, 230, 138, 0.4);
     --rating-gold-foreground: #422006;
 
@@ -156,37 +170,37 @@
     --rating-elite-mid: #1e3a8a;
     --rating-elite-to: #172554;
     --rating-elite-border: rgba(59, 130, 246, 0.4);
-    --rating-elite-foreground: #60a5fa;
+    --rating-elite-foreground: #78b7ff;
 
     --rating-legendary-from: #ffffff;
-    --rating-legendary-mid: #f0f9ff;
-    --rating-legendary-to: #fff1f2;
-    --rating-legendary-border: rgba(220, 184, 102, 0.6);
-    --rating-legendary-foreground: #a17a23;
+    --rating-legendary-mid: #eef8ff;
+    --rating-legendary-to: #ffe8ef;
+    --rating-legendary-border: rgba(232, 188, 72, 0.68);
+    --rating-legendary-foreground: #b88412;
 
-    --leader-goals-bg: rgba(59, 130, 246, 0.08);
-    --leader-goals-border: rgba(59, 130, 246, 0.25);
-    --leader-goals-foreground: #2563eb;
+    --leader-goals-bg: hsl(var(--info-soft) / 0.78);
+    --leader-goals-border: hsl(var(--info-soft-border));
+    --leader-goals-foreground: hsl(var(--info-foreground));
 
-    --leader-assists-bg: rgba(16, 185, 129, 0.1);
-    --leader-assists-border: rgba(16, 185, 129, 0.3);
-    --leader-assists-foreground: #059669;
+    --leader-assists-bg: hsl(var(--success-soft) / 0.82);
+    --leader-assists-border: hsl(var(--success-soft-border));
+    --leader-assists-foreground: hsl(var(--success-foreground));
 
-    --leader-points-bg: rgba(124, 58, 237, 0.08);
-    --leader-points-border: rgba(124, 58, 237, 0.25);
-    --leader-points-foreground: #7c3aed;
+    --leader-points-bg: hsl(var(--accent-tone-soft) / 0.8);
+    --leader-points-border: hsl(var(--accent-tone-soft-border));
+    --leader-points-foreground: hsl(var(--accent-tone-foreground));
 
-    --leader-matches-bg: rgba(59, 130, 246, 0.08);
-    --leader-matches-border: rgba(147, 197, 253, 0.55);
-    --leader-matches-foreground: #0284c7;
+    --leader-matches-bg: hsl(var(--neutral-soft) / 0.88);
+    --leader-matches-border: hsl(var(--neutral-soft-border));
+    --leader-matches-foreground: hsl(var(--neutral-foreground));
 
-    --leader-discipline-bg: rgba(249, 115, 22, 0.1);
-    --leader-discipline-border: rgba(249, 115, 22, 0.25);
-    --leader-discipline-foreground: #ea580c;
+    --leader-discipline-bg: hsl(var(--warning-soft) / 0.82);
+    --leader-discipline-border: hsl(var(--warning-soft-border));
+    --leader-discipline-foreground: hsl(var(--warning-foreground));
 
-    --leader-efficiency-bg: rgba(100, 116, 139, 0.1);
-    --leader-efficiency-border: rgba(148, 163, 184, 0.35);
-    --leader-efficiency-foreground: #64748b;
+    --leader-efficiency-bg: hsl(var(--neutral-soft) / 0.94);
+    --leader-efficiency-border: hsl(var(--neutral-soft-border));
+    --leader-efficiency-foreground: hsl(var(--neutral-foreground));
 
     /* --- TAB BAR TOKENS (LIGHT) --- */
     --tabbar-bg: var(--background);
@@ -207,69 +221,69 @@
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (LIGHT) --- */
-    --canvas-bg: 0 0% 100%;
-    --canvas-border: 220 7% 87%;
+    --canvas-bg: 0 0% 99.2%;
+    --canvas-border: 0 0% 87%;
     --canvas-radius: 28px;
     --canvas-shadow: none;
-    --canvas-header-bg: 220 7% 97%;
-    --canvas-grid-line: 220 7% 90%;
+    --canvas-header-bg: 0 0% 98.4%;
+    --canvas-grid-line: 0 0% 90%;
     --canvas-gutter-x: 20px;
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (LIGHT) --- */
-    --app-shell-bg: 220 7% 97%;
+    --app-shell-bg: 0 0% 96.9%;
     --app-shell-radius: 16px;
-    --app-main-bg: 0 0% 99%;
+    --app-main-bg: 0 0% 99.2%;
     --page-underlay-bg: var(--app-main-bg);
-    --sidebar-surface-bg: 220 8% 97%;
-    --app-structure-divider: 220 9% 85%;
-    --design-task-details-bg: 220 10% 98%;
+    --sidebar-surface-bg: 0 0% 96.4%;
+    --app-structure-divider: 0 0% 86.5%;
+    --design-task-details-bg: 0 0% 98.3%;
 
     /* --- KANBAN COLUMN TOKENS (LIGHT) --- */
-    --kanban-col-new-bg: 220 14% 98%;
-    --kanban-col-new-border: 220 10% 88%;
-    --kanban-col-new-accent: 220 10% 62%;
+    --kanban-col-new-bg: 0 0% 98.1%;
+    --kanban-col-new-border: 0 0% 87%;
+    --kanban-col-new-accent: 0 0% 62%;
     --kanban-col-estimating-bg: 207 58% 98%;
     --kanban-col-estimating-border: 207 42% 88%;
-    --kanban-col-estimating-accent: 207 84% 58%;
-    --kanban-col-estimated-bg: 256 58% 98%;
-    --kanban-col-estimated-border: 256 40% 89%;
-    --kanban-col-estimated-accent: 256 82% 66%;
-    --kanban-col-awaiting-bg: 42 90% 98%;
-    --kanban-col-awaiting-border: 42 64% 87%;
-    --kanban-col-awaiting-accent: 42 92% 54%;
-    --kanban-col-approved-bg: 152 46% 97%;
-    --kanban-col-approved-border: 152 34% 86%;
-    --kanban-col-approved-accent: 152 64% 42%;
-    --kanban-col-cancelled-bg: 0 0% 98%;
-    --kanban-col-cancelled-border: 220 10% 88%;
-    --kanban-col-cancelled-accent: 352 60% 62%;
+    --kanban-col-estimating-accent: 219 99.2% 52.7%;
+    --kanban-col-estimated-bg: 264 100% 97.8%;
+    --kanban-col-estimated-border: 264 82% 88%;
+    --kanban-col-estimated-accent: 264 96.9% 61.8%;
+    --kanban-col-awaiting-bg: 47 88% 95.8%;
+    --kanban-col-awaiting-border: 47 70% 84%;
+    --kanban-col-awaiting-accent: 47 88.4% 38%;
+    --kanban-col-approved-bg: 137 40% 96%;
+    --kanban-col-approved-border: 137 30% 84%;
+    --kanban-col-approved-accent: 137 63.5% 38.6%;
+    --kanban-col-cancelled-bg: 357 88% 97.6%;
+    --kanban-col-cancelled-border: 357 60% 87%;
+    --kanban-col-cancelled-accent: 357 75.8% 48.6%;
   }
 
   .dark {
     /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
-    --background: 220 12% 9.8%; /* Базовий темний нейтральний фон */
+    --background: 0 0% 7.8%;
     --foreground: 210 40% 98%; /* Білий текст */
 
-    --card: 220 12% 11.8%;
+    --card: 0 0% 9.8%;
     --card-foreground: 210 40% 98%;
-    --popover: 220 12% 12.8%;
+    --popover: 0 0% 10.2%;
     --popover-foreground: 210 40% 98%;
 
-    --secondary: 220 11% 14.2%;
+    --secondary: 0 0% 11.8%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 220 11% 14.2%;
-    --muted-foreground: 220 10% 68%; /* трохи яскравіший — краща читабельність */
+    --muted: 0 0% 11.8%;
+    --muted-foreground: 0 0% 68%;
 
-    --accent: 220 11% 14.2%;
+    --accent: 0 0% 11.8%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 72% 42%; /* яскравіший у темному — помітніший */
+    --destructive: 357 94.5% 64.1%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 10% 20%;
-    --input: 220 10% 20%;
+    --border: 0 0% 18.2%;
+    --input: 0 0% 18.2%;
 
     /* --- BRAND TOKENS (inherit from :root) --- */
 
@@ -286,82 +300,99 @@
     --shadow-primary-glow: none;
     --shadow-success-glow: none;
     --shadow-danger-glow: none;
+    --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.1), 0 1px 2px -1px hsl(var(--foreground) / 0.06);
+    --shadow-elevated-md: 0 18px 40px -20px hsl(0 0% 2% / 0.42);
+    --shadow-elevated-lg: 0 52px 140px -42px hsl(0 0% 2% / 0.85), 0 26px 60px -36px hsl(0 0% 2% / 0.62);
+    --shadow-elevated-preview: 0 18px 40px -14px hsl(0 0% 2% / 0.45);
+    --soft-ring: 0 0% 100% / 0.1;
+    --overlay-scrim: 220 40% 2% / 0.62;
+    --surface-sheen: 0 0% 100% / 0.2;
 
     /* --- SKELETON LOADING (UPDATED - DARK) --- */
     /* Lightness 20% проти 14% у Card - достатній контраст, не надто різкий */
     --skeleton-min-duration: 80ms;
     --skeleton-transition: 80ms;
-    --skeleton-bg: 220 10% 17%;
+    --skeleton-bg: 0 0% 14.2%;
 
-    --neutral-soft: 220 11% 15.5%;
-    --neutral-soft-border: 220 10% 22%;
-    --neutral-foreground: 220 8% 72%;
+    --primary: 218 100% 63.5%;
+    --ring: 218 100% 63.5%;
 
-    --info-soft: 217 70% 20%;
-    --info-soft-border: 217 70% 28%;
-    --info-foreground: 214 95% 75%;
+    --neutral-soft: 0 0% 12%;
+    --neutral-soft-border: 0 0% 19.2%;
+    --neutral-foreground: 0 0% 72%;
 
-    --success-soft: 142 30% 20%;
-    --success-soft-border: 142 30% 28%;
-    --success-foreground: 142 70% 70%;
+    --info-soft: 218 24% 13.8%;
+    --info-soft-border: 218 26% 25.5%;
+    --info-foreground: 218 100% 63.5%;
 
-    --warning-soft: 45 25% 20%;
-    --warning-soft-border: 45 25% 28%;
-    --warning-foreground: 45 90% 70%;
+    --accent-tone-soft: 264 22% 15%;
+    --accent-tone-soft-border: 264 24% 27.5%;
+    --accent-tone-foreground: 263 100% 79.2%;
 
-    --danger-soft: 0 35% 22%;
-    --danger-soft-border: 0 35% 30%;
-    --danger-foreground: 0 80% 75%;
+    --success-soft: 137 16% 14%;
+    --success-soft-border: 137 18% 24.8%;
+    --success-foreground: 137 48.8% 50.2%;
+
+    --warning-soft: 47 18% 14%;
+    --warning-soft-border: 47 20% 25.4%;
+    --warning-foreground: 47 88.4% 52.5%;
+
+    --danger-soft: 357 18% 14.2%;
+    --danger-soft-border: 357 20% 25.2%;
+    --danger-foreground: 357 94.5% 64.1%;
 
     /* --- COMMAND SEARCH TOKENS (DARK) --- */
-    --cmd-highlight-bg: 217 54% 26%;
-    --cmd-highlight-foreground: 214 95% 88%;
-    --cmd-manager-chip-bg: 220 11% 15.5%;
-    --cmd-manager-chip-border: 220 10% 24%;
+    --cmd-highlight-bg: 216 52% 28%;
+    --cmd-highlight-foreground: 214 96% 90%;
+    --cmd-manager-chip-bg: 0 0% 12.6%;
+    --cmd-manager-chip-border: 0 0% 19%;
     --cmd-manager-chip-foreground: 210 40% 94%;
-    --cmd-kind-customer-bg: 142 30% 22%;
-    --cmd-kind-customer-border: 142 30% 34%;
-    --cmd-kind-customer-foreground: 142 72% 78%;
-    --cmd-kind-lead-bg: 45 24% 22%;
-    --cmd-kind-lead-border: 45 24% 34%;
-    --cmd-kind-lead-foreground: 45 94% 78%;
-    --cmd-kind-quote-bg: 217 48% 24%;
-    --cmd-kind-quote-border: 217 48% 36%;
-    --cmd-kind-quote-foreground: 214 95% 82%;
-    --cmd-kind-design-bg: 280 24% 24%;
-    --cmd-kind-design-border: 280 30% 38%;
-    --cmd-kind-design-foreground: 282 82% 84%;
+    --cmd-kind-customer-bg: 137 22% 17%;
+    --cmd-kind-customer-border: 137 24% 28.5%;
+    --cmd-kind-customer-foreground: 137 48.8% 50.2%;
+    --cmd-kind-lead-bg: 47 24% 17%;
+    --cmd-kind-lead-border: 47 28% 30%;
+    --cmd-kind-lead-foreground: 47 88.4% 52.5%;
+    --cmd-kind-quote-bg: 218 30% 16.5%;
+    --cmd-kind-quote-border: 218 34% 29%;
+    --cmd-kind-quote-foreground: 218 100% 63.5%;
+    --cmd-kind-order-bg: 0 0% 12%;
+    --cmd-kind-order-border: 0 0% 19.2%;
+    --cmd-kind-order-foreground: 0 0% 72%;
+    --cmd-kind-design-bg: 264 28% 18%;
+    --cmd-kind-design-border: 264 32% 31%;
+    --cmd-kind-design-foreground: 263 100% 79.2%;
 
     /* --- ENTITY AVATAR TOKENS (DARK) --- */
-    --entity-avatar-1-bg: 217 70% 20%;
-    --entity-avatar-1-border: 217 70% 28%;
-    --entity-avatar-1-fg: 214 95% 75%;
-    --entity-avatar-1-fallback: 217 62% 27%;
+    --entity-avatar-1-bg: 218 30% 16.5%;
+    --entity-avatar-1-border: 218 34% 29%;
+    --entity-avatar-1-fg: 218 100% 63.5%;
+    --entity-avatar-1-fallback: 218 34% 29%;
 
-    --entity-avatar-2-bg: 142 30% 20%;
-    --entity-avatar-2-border: 142 30% 28%;
-    --entity-avatar-2-fg: 142 70% 70%;
-    --entity-avatar-2-fallback: 142 30% 28%;
+    --entity-avatar-2-bg: 137 22% 17%;
+    --entity-avatar-2-border: 137 24% 28.5%;
+    --entity-avatar-2-fg: 137 48.8% 50.2%;
+    --entity-avatar-2-fallback: 137 24% 28.5%;
 
-    --entity-avatar-3-bg: 45 25% 20%;
-    --entity-avatar-3-border: 45 25% 28%;
-    --entity-avatar-3-fg: 45 90% 70%;
-    --entity-avatar-3-fallback: 45 24% 30%;
+    --entity-avatar-3-bg: 47 24% 17%;
+    --entity-avatar-3-border: 47 28% 30%;
+    --entity-avatar-3-fg: 47 88.4% 52.5%;
+    --entity-avatar-3-fallback: 47 28% 30%;
 
-    --entity-avatar-4-bg: 0 35% 22%;
-    --entity-avatar-4-border: 0 35% 30%;
-    --entity-avatar-4-fg: 0 80% 75%;
-    --entity-avatar-4-fallback: 0 32% 30%;
+    --entity-avatar-4-bg: 357 24% 17.2%;
+    --entity-avatar-4-border: 357 26% 29.5%;
+    --entity-avatar-4-fg: 357 94.5% 64.1%;
+    --entity-avatar-4-fallback: 357 26% 29.5%;
 
-    --entity-avatar-5-bg: 262 28% 22%;
-    --entity-avatar-5-border: 262 30% 31%;
-    --entity-avatar-5-fg: 262 88% 78%;
-    --entity-avatar-5-fallback: 262 30% 30%;
+    --entity-avatar-5-bg: 264 28% 18%;
+    --entity-avatar-5-border: 264 32% 31%;
+    --entity-avatar-5-fg: 263 100% 79.2%;
+    --entity-avatar-5-fallback: 264 32% 31%;
 
     --entity-avatar-6-bg: 188 26% 21%;
     --entity-avatar-6-border: 188 28% 30%;
     --entity-avatar-6-fg: 188 84% 76%;
-    --entity-avatar-6-fallback: 188 26% 30%;
+    --entity-avatar-6-fallback: 188 30% 34%;
 
     /* --- RATING + LEADER TOKENS (DARK) --- */
     --rating-bronze-from: #6b4b3a;
@@ -374,46 +405,46 @@
     --rating-silver-border: rgba(255, 255, 255, 0.2);
     --rating-silver-foreground: #e2e8f0;
 
-    --rating-gold-from: #9a7a2e;
-    --rating-gold-to: #6b4f1c;
+    --rating-gold-from: #ae861c;
+    --rating-gold-to: #7d5a10;
     --rating-gold-border: rgba(253, 230, 138, 0.28);
     --rating-gold-foreground: #fdecc8;
 
     --rating-elite-from: #0b132b;
-    --rating-elite-mid: #1e3a8a;
-    --rating-elite-to: #102044;
+    --rating-elite-mid: #2450bf;
+    --rating-elite-to: #10275a;
     --rating-elite-border: rgba(59, 130, 246, 0.5);
     --rating-elite-foreground: #bfdbfe;
 
     --rating-legendary-from: #f2deb1;
-    --rating-legendary-mid: #c6973a;
-    --rating-legendary-to: #c6973a;
-    --rating-legendary-border: rgba(255, 214, 138, 0.5);
+    --rating-legendary-mid: #d7a23b;
+    --rating-legendary-to: #d7a23b;
+    --rating-legendary-border: rgba(255, 214, 138, 0.58);
     --rating-legendary-foreground: #3a2606;
 
-    --leader-goals-bg: rgba(59, 130, 246, 0.18);
-    --leader-goals-border: rgba(59, 130, 246, 0.45);
-    --leader-goals-foreground: #93c5fd;
+    --leader-goals-bg: hsl(var(--info-soft) / 0.95);
+    --leader-goals-border: hsl(var(--info-soft-border));
+    --leader-goals-foreground: hsl(var(--info-foreground));
 
-    --leader-assists-bg: rgba(16, 185, 129, 0.2);
-    --leader-assists-border: rgba(16, 185, 129, 0.45);
-    --leader-assists-foreground: #a7f3d0;
+    --leader-assists-bg: hsl(var(--success-soft) / 0.95);
+    --leader-assists-border: hsl(var(--success-soft-border));
+    --leader-assists-foreground: hsl(var(--success-foreground));
 
-    --leader-points-bg: rgba(124, 58, 237, 0.22);
-    --leader-points-border: rgba(124, 58, 237, 0.5);
-    --leader-points-foreground: #ddd6fe;
+    --leader-points-bg: hsl(var(--accent-tone-soft) / 0.95);
+    --leader-points-border: hsl(var(--accent-tone-soft-border));
+    --leader-points-foreground: hsl(var(--accent-tone-foreground));
 
-    --leader-matches-bg: rgba(59, 130, 246, 0.22);
-    --leader-matches-border: rgba(147, 197, 253, 0.55);
-    --leader-matches-foreground: #bae6fd;
+    --leader-matches-bg: hsl(var(--neutral-soft) / 0.94);
+    --leader-matches-border: hsl(var(--neutral-soft-border));
+    --leader-matches-foreground: hsl(var(--neutral-foreground));
 
-    --leader-discipline-bg: rgba(249, 115, 22, 0.22);
-    --leader-discipline-border: rgba(249, 115, 22, 0.5);
-    --leader-discipline-foreground: #fdba74;
+    --leader-discipline-bg: hsl(var(--warning-soft) / 0.95);
+    --leader-discipline-border: hsl(var(--warning-soft-border));
+    --leader-discipline-foreground: hsl(var(--warning-foreground));
 
-    --leader-efficiency-bg: rgba(148, 163, 184, 0.2);
-    --leader-efficiency-border: rgba(148, 163, 184, 0.45);
-    --leader-efficiency-foreground: #e2e8f0;
+    --leader-efficiency-bg: hsl(var(--neutral-soft) / 0.98);
+    --leader-efficiency-border: hsl(var(--neutral-soft-border));
+    --leader-efficiency-foreground: hsl(var(--neutral-foreground));
 
     /* --- TAB BAR TOKENS (DARK) --- */
     --tabbar-bg: var(--card);
@@ -434,43 +465,43 @@
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (DARK) --- */
-    --canvas-bg: 228 8% 9%;
-    --canvas-border: 228 8% 17%;
+    --canvas-bg: 0 0% 7.6%;
+    --canvas-border: 0 0% 14.4%;
     --canvas-radius: 24px;
     --canvas-shadow: none;
-    --canvas-header-bg: 228 8% 10%;
-    --canvas-grid-line: 228 8% 18%;
+    --canvas-header-bg: 0 0% 8.2%;
+    --canvas-grid-line: 0 0% 15.4%;
     --canvas-gutter-x: 20px;
     --canvas-gutter-y: 18px;
 
     /* --- APP SHELL TOKENS (DARK) --- */
-    --app-shell-bg: 220 12% 9.8%;
+    --app-shell-bg: 0 0% 7.6%;
     --app-shell-radius: 14px;
-    --app-main-bg: 220 12% 9.8%;
+    --app-main-bg: 0 0% 8%;
     --page-underlay-bg: var(--app-main-bg);
-    --sidebar-surface-bg: 228 12% 8%;
-    --app-structure-divider: 220 12% 14.9%;
-    --design-task-details-bg: 223 11.9% 11.6%;
+    --sidebar-surface-bg: 0 0% 6.2%;
+    --app-structure-divider: 0 0% 12.6%;
+    --design-task-details-bg: 0 0% 9.4%;
 
     /* --- KANBAN COLUMN TOKENS (DARK) --- */
-    --kanban-col-new-bg: 228 10% 11%;
-    --kanban-col-new-border: 228 9% 20%;
-    --kanban-col-new-accent: 220 10% 56%;
-    --kanban-col-estimating-bg: 214 22% 11%;
-    --kanban-col-estimating-border: 214 26% 23%;
-    --kanban-col-estimating-accent: 206 82% 58%;
-    --kanban-col-estimated-bg: 252 22% 11%;
-    --kanban-col-estimated-border: 252 22% 23%;
-    --kanban-col-estimated-accent: 256 80% 66%;
-    --kanban-col-awaiting-bg: 37 20% 11%;
-    --kanban-col-awaiting-border: 37 20% 23%;
-    --kanban-col-awaiting-accent: 42 88% 56%;
-    --kanban-col-approved-bg: 154 18% 11%;
-    --kanban-col-approved-border: 154 18% 22%;
-    --kanban-col-approved-accent: 152 70% 52%;
-    --kanban-col-cancelled-bg: 228 9% 11%;
-    --kanban-col-cancelled-border: 228 9% 20%;
-    --kanban-col-cancelled-accent: 350 62% 58%;
+    --kanban-col-new-bg: 0 0% 9.2%;
+    --kanban-col-new-border: 0 0% 16.8%;
+    --kanban-col-new-accent: 0 0% 42%;
+    --kanban-col-estimating-bg: 218 18% 9.4%;
+    --kanban-col-estimating-border: 218 20% 19.8%;
+    --kanban-col-estimating-accent: 218 100% 63.5%;
+    --kanban-col-estimated-bg: 264 18% 9.4%;
+    --kanban-col-estimated-border: 264 18% 19.8%;
+    --kanban-col-estimated-accent: 263 100% 79.2%;
+    --kanban-col-awaiting-bg: 47 16% 9.4%;
+    --kanban-col-awaiting-border: 47 16% 19.8%;
+    --kanban-col-awaiting-accent: 47 88.4% 52.5%;
+    --kanban-col-approved-bg: 137 14% 9.4%;
+    --kanban-col-approved-border: 137 14% 19.4%;
+    --kanban-col-approved-accent: 137 48.8% 50.2%;
+    --kanban-col-cancelled-bg: 357 14% 9.4%;
+    --kanban-col-cancelled-border: 357 14% 19.4%;
+    --kanban-col-cancelled-accent: 357 94.5% 64.1%;
   }
 
   * {
@@ -480,7 +511,7 @@
   body,
   #root {
     min-height: 100vh;
-    background-color: hsl(var(--sidebar-surface-bg));
+    background-color: hsl(var(--page-underlay-bg));
     margin: 0;
     padding: 0;
     overflow-x: hidden;
@@ -617,6 +648,171 @@
     border-color: hsl(var(--danger-soft-border));
   }
   .text-danger-foreground {
+    color: hsl(var(--danger-foreground));
+  }
+
+  .tone-neutral {
+    background-color: hsl(var(--neutral-soft));
+    border-color: hsl(var(--neutral-soft-border));
+    color: hsl(var(--neutral-foreground));
+  }
+  .tone-info {
+    background-color: hsl(var(--info-soft));
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .tone-accent {
+    background-color: hsl(var(--accent-tone-soft));
+    border-color: hsl(var(--accent-tone-soft-border));
+    color: hsl(var(--accent-tone-foreground));
+  }
+  .tone-success {
+    background-color: hsl(var(--success-soft));
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .tone-warning {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .tone-danger {
+    background-color: hsl(var(--danger-soft));
+    border-color: hsl(var(--danger-soft-border));
+    color: hsl(var(--danger-foreground));
+  }
+
+  .tone-neutral-subtle {
+    background-color: hsl(var(--neutral-soft) / 0.55);
+    border-color: hsl(var(--neutral-soft-border));
+  }
+  .tone-info-subtle {
+    background-color: hsl(var(--info-soft) / 0.72);
+    border-color: hsl(var(--info-soft-border));
+  }
+  .tone-accent-subtle {
+    background-color: hsl(var(--accent-tone-soft) / 0.72);
+    border-color: hsl(var(--accent-tone-soft-border));
+  }
+  .tone-success-subtle {
+    background-color: hsl(var(--success-soft) / 0.72);
+    border-color: hsl(var(--success-soft-border));
+  }
+  .tone-warning-subtle {
+    background-color: hsl(var(--warning-soft) / 0.72);
+    border-color: hsl(var(--warning-soft-border));
+  }
+  .tone-danger-subtle {
+    background-color: hsl(var(--danger-soft) / 0.72);
+    border-color: hsl(var(--danger-soft-border));
+  }
+
+  .tone-text-neutral {
+    color: hsl(var(--neutral-foreground));
+  }
+  .tone-text-info {
+    color: hsl(var(--info-foreground));
+  }
+  .tone-text-accent {
+    color: hsl(var(--accent-tone-foreground));
+  }
+  .tone-text-success {
+    color: hsl(var(--success-foreground));
+  }
+  .tone-text-warning {
+    color: hsl(var(--warning-foreground));
+  }
+  .tone-text-danger {
+    color: hsl(var(--danger-foreground));
+  }
+
+  .tone-copy-neutral {
+    color: hsl(var(--neutral-foreground) / 0.9);
+  }
+  .tone-copy-info {
+    color: hsl(var(--info-foreground) / 0.84);
+  }
+  .tone-copy-accent {
+    color: hsl(var(--accent-tone-foreground) / 0.84);
+  }
+  .tone-copy-success {
+    color: hsl(var(--success-foreground) / 0.86);
+  }
+  .tone-copy-warning {
+    color: hsl(var(--warning-foreground) / 0.86);
+  }
+  .tone-copy-danger {
+    color: hsl(var(--danger-foreground) / 0.84);
+  }
+
+  .tone-dot-neutral {
+    background-color: hsl(var(--neutral-foreground));
+  }
+  .tone-dot-info {
+    background-color: hsl(var(--info-foreground));
+  }
+  .tone-dot-accent {
+    background-color: hsl(var(--accent-tone-foreground));
+  }
+  .tone-dot-success {
+    background-color: hsl(var(--success-foreground));
+  }
+  .tone-dot-warning {
+    background-color: hsl(var(--warning-foreground));
+  }
+  .tone-dot-danger {
+    background-color: hsl(var(--danger-foreground));
+  }
+
+  .tone-icon-box-neutral {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--neutral-soft-border));
+    color: hsl(var(--neutral-foreground));
+  }
+  .tone-icon-box-info {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--info-soft-border));
+    color: hsl(var(--info-foreground));
+  }
+  .tone-icon-box-accent {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--accent-tone-soft-border));
+    color: hsl(var(--accent-tone-foreground));
+  }
+  .tone-icon-box-success {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--success-soft-border));
+    color: hsl(var(--success-foreground));
+  }
+  .tone-icon-box-warning {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
+  .tone-icon-box-danger {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--danger-soft-border));
+    color: hsl(var(--danger-foreground));
+  }
+
+  .hover-tone-info:hover {
+    background-color: hsl(var(--info-soft));
+    color: hsl(var(--info-foreground));
+  }
+  .hover-tone-accent:hover {
+    background-color: hsl(var(--accent-tone-soft));
+    color: hsl(var(--accent-tone-foreground));
+  }
+  .hover-tone-success:hover {
+    background-color: hsl(var(--success-soft));
+    color: hsl(var(--success-foreground));
+  }
+  .hover-tone-warning:hover {
+    background-color: hsl(var(--warning-soft));
+    color: hsl(var(--warning-foreground));
+  }
+  .hover-tone-danger:hover {
+    background-color: hsl(var(--danger-soft));
     color: hsl(var(--danger-foreground));
   }
 
@@ -829,7 +1025,7 @@
     border-radius: calc(var(--radius-lg) + 2px);
     border: 1px solid hsl(var(--kanban-col-new-border));
     background-color: hsl(var(--kanban-col-new-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-new-accent) / 0.3);
+    box-shadow: none;
     overflow: hidden;
   }
 
@@ -838,16 +1034,15 @@
     top: 0;
     z-index: 2;
     border-bottom: 1px solid hsl(var(--border) / 0.45);
-    background-color: hsl(var(--kanban-col-new-bg) / 0.92);
-    backdrop-filter: blur(6px);
+    background-color: hsl(var(--kanban-col-new-bg));
   }
 
   .kanban-estimate-card {
-    background-color: hsl(var(--card) / 0.84);
+    background-color: hsl(var(--card));
   }
 
   .kanban-empty-state {
-    background-color: hsl(var(--card) / 0.32);
+    background-color: hsl(var(--secondary));
   }
 
   .kanban-column-drop-target {
@@ -901,7 +1096,7 @@
   .kanban-column-status-new {
     border-color: hsl(var(--kanban-col-new-border));
     background-color: hsl(var(--kanban-col-new-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-new-accent) / 0.35);
+    box-shadow: none;
   }
 
   .kanban-column-status-estimating {
@@ -1098,6 +1293,12 @@
     color: hsl(var(--cmd-kind-quote-foreground));
   }
 
+  .cmd-kind-order {
+    background-color: hsl(var(--cmd-kind-order-bg));
+    border-color: hsl(var(--cmd-kind-order-border));
+    color: hsl(var(--cmd-kind-order-foreground));
+  }
+
   .cmd-kind-design {
     background-color: hsl(var(--cmd-kind-design-bg));
     border-color: hsl(var(--cmd-kind-design-border));
@@ -1118,10 +1319,10 @@
 .animate-shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.2) 20%,
-    rgba(255, 255, 255, 0.5) 60%,
-    rgba(255, 255, 255, 0)
+    hsl(var(--surface-sheen) / 0) 0%,
+    hsl(var(--surface-sheen) / 0.2) 20%,
+    hsl(var(--surface-sheen) / 0.5) 60%,
+    hsl(var(--surface-sheen) / 0) 100%
   );
   background-size: 200% auto;
   animation: shimmer 2s linear infinite;

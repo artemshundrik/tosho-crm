@@ -29,7 +29,7 @@ const buttonVariants = cva(
         primary: [
           "!font-medium",
           "bg-foreground text-background",
-          "shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5 dark:ring-white/10",
+          "shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]",
           "hover:opacity-85",
           "active:scale-[0.98]",
         ].join(" "),
@@ -63,7 +63,7 @@ const buttonVariants = cva(
         destructiveSolid: [
           "!font-medium",
           "bg-destructive text-destructive-foreground",
-          "shadow-[0_1px_3px_rgba(0,0,0,0.1)]",
+          "shadow-[var(--shadow-elevated-sm)]",
           "hover:opacity-85",
           "active:scale-[0.98]",
         ].join(" "),
@@ -112,7 +112,7 @@ const buttonVariants = cva(
           "rounded-xl border border-border/50 bg-card/60 shadow-sm",
           "hover:bg-muted/40",
           "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
-          "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-red-200 data-[status=unavailable]:bg-red-50/30 data-[status=unavailable]:opacity-80",
+          "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-danger-soft-border data-[status=unavailable]:bg-danger-soft data-[status=unavailable]:opacity-80",
         ].join(" "),
 
         // ✅ Icon control (toolbar/search clear)

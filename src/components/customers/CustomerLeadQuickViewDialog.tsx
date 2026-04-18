@@ -518,7 +518,7 @@ export function CustomerLeadQuickViewDialog({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border tone-icon-box-success">
                   <PackageCheck className="h-4.5 w-4.5" />
                 </div>
                 <div className="min-w-0">
@@ -553,7 +553,7 @@ export function CustomerLeadQuickViewDialog({
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border tone-icon-box-accent">
                 <DesignTypeIcon className="h-4.5 w-4.5" />
               </div>
               <div className="min-w-0">

@@ -171,7 +171,7 @@ export function CommandPalette({
                       onSelect={() => onNavigateToKind(kind.id)}
                       className="cursor-pointer"
                     >
-                      <Layers className="mr-2 h-4 w-4 text-emerald-500" />
+                      <Layers className="tone-text-success mr-2 h-4 w-4" />
                       <div className="flex items-center gap-2 flex-1">
                         <span>{kind.name}</span>
                         <span className="text-xs text-muted-foreground">→ {kind.typeName}</span>
@@ -218,7 +218,7 @@ export function CommandPalette({
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-medium truncate">{model.name}</span>
                               {!validation.isValid && (
-                                <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                <AlertTriangle className="tone-text-warning h-3 w-3 shrink-0" />
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -228,7 +228,7 @@ export function CommandPalette({
                               {hasTiers && (
                                 <Badge
                                   variant="secondary"
-                                  className="h-4 px-1.5 text-[10px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400"
+                                  className="tone-info h-4 px-1.5 text-[10px]"
                                 >
                                   {model.priceTiers?.length} тиражі
                                 </Badge>

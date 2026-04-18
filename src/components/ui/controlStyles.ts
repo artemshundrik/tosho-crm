@@ -12,8 +12,8 @@ export const CONTROL_BASE = cx(
   "text-foreground placeholder:text-muted-foreground",
   "transition-all duration-200 ease-out",
   "hover:bg-muted/60",
-  "focus-visible:outline-none focus-visible:bg-background focus-visible:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] focus-visible:ring-1 focus-visible:ring-black/5 dark:focus-visible:ring-white/10",
-  "focus:bg-background focus:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] focus:ring-1 focus:ring-black/5 dark:focus:ring-white/10",
+  "focus-visible:outline-none focus-visible:bg-background focus-visible:shadow-[var(--shadow-elevated-sm)] focus-visible:ring-1 focus-visible:ring-[hsl(var(--soft-ring))]",
+  "focus:bg-background focus:shadow-[var(--shadow-elevated-sm)] focus:ring-1 focus:ring-[hsl(var(--soft-ring))]",
   "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted/20 disabled:shadow-none",
   "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
   "hover:[&>svg]:text-foreground"
@@ -50,12 +50,12 @@ export const SEGMENTED_GROUP_SM = cx(
 
 export const SEGMENTED_TRIGGER = cx(
   "flex-1 inline-flex items-center justify-center gap-2 h-9 rounded-lg px-4 text-sm font-medium transition-all duration-200 ease-out text-muted-foreground hover:text-foreground hover:bg-background/50",
-  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] data-[state=active]:ring-1 data-[state=active]:ring-black/5 dark:data-[state=active]:ring-white/10",
-  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.06)] data-[state=on]:ring-1 data-[state=on]:ring-black/5 dark:data-[state=on]:ring-white/10"
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[var(--shadow-elevated-sm)] data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]",
+  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-[var(--shadow-elevated-sm)] data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );
 
 export const SEGMENTED_TRIGGER_SM = cx(
   "flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-md px-3 text-xs font-medium transition-all duration-200 ease-out text-muted-foreground hover:text-foreground hover:bg-background/50",
-  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-black/5 dark:data-[state=active]:ring-white/10",
-  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:ring-1 data-[state=on]:ring-black/5 dark:data-[state=on]:ring-white/10"
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[var(--shadow-elevated-sm)] data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]",
+  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-[var(--shadow-elevated-sm)] data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );

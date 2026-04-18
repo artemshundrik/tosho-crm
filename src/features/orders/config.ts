@@ -26,19 +26,19 @@ export const ORDER_READINESS_COLUMNS = [
     id: "counterparty",
     label: "Лід / реквізити",
     description: "Ще не вистачає контрагента, контактів або даних для договору.",
-    dotClass: "bg-amber-400",
+    dotClass: "tone-dot-warning",
   },
   {
     id: "design",
     label: "Макет / візуал",
     description: "Контрагент готовий, але немає повного погодження дизайну.",
-    dotClass: "bg-sky-400",
+    dotClass: "tone-dot-info",
   },
   {
     id: "ready",
     label: "Готово до замовлення",
     description: "Прорахунок уже можна переводити в замовлення.",
-    dotClass: "bg-emerald-400",
+    dotClass: "tone-dot-success",
   },
 ] as const;
 
@@ -211,10 +211,8 @@ export const ORDER_STATUS_SECTIONS = [
 
 export const ORDER_TONE_CLASSES = {
   neutral: "border-border bg-muted/30 text-muted-foreground",
-  info: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200",
-  success:
-    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
-  warning:
-    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100",
-  danger: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200",
+  info: "tone-info",
+  success: "tone-success",
+  warning: "tone-warning",
+  danger: "tone-danger",
 } as const;

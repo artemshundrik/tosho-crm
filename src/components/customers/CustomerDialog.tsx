@@ -708,7 +708,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     Додати контакт
                   </Button>
                 </div>
-                <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 px-3 py-2 text-xs leading-5 text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+                <div className="rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5 text-foreground">
                   Для створення договору та відправки документів у замовника обовʼязково мають бути email і мобільний номер телефону.
                 </div>
                 {form.contacts.map((contact, index) => (

@@ -538,12 +538,12 @@ export function ProfilePage() {
   const resolvedEmploymentStatus = normalizeEmploymentStatus(employmentStatus, probationEndDate);
   const employmentStatusTone =
     resolvedEmploymentStatus === "active"
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      ? "tone-success"
       : resolvedEmploymentStatus === "inactive"
       ? "border-border bg-muted text-muted-foreground"
       : resolvedEmploymentStatus === "rejected"
-      ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-      : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+      ? "tone-danger"
+      : "tone-warning";
   const employmentHeadline =
     resolvedEmploymentStatus === "active"
       ? "Штатний статус підтверджено"
@@ -569,7 +569,7 @@ export function ProfilePage() {
     <div className="mx-auto max-w-6xl py-6">
       <div className="overflow-hidden rounded-[var(--radius-section)] border border-border bg-card shadow-surface">
         <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-8 pt-6 md:px-10">
-          <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.36)_18%,transparent_36%)] opacity-60 dark:opacity-20" />
+          <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,hsl(var(--surface-sheen))_18%,transparent_36%)] opacity-60 dark:opacity-20" />
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="flex flex-col gap-5 md:flex-row md:items-end">
               <div className="relative mx-auto shrink-0 md:mx-0">
@@ -616,7 +616,7 @@ export function ProfilePage() {
                       className={cn(
                         "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
                         accessRole === "owner"
-                          ? "border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                          ? "tone-accent"
                           : accessRole === "admin"
                           ? "border-primary/20 bg-primary/10 text-foreground"
                           : "border-border bg-background/80 text-muted-foreground"
@@ -844,9 +844,9 @@ export function ProfilePage() {
                             className={cn(
                               "h-full rounded-full transition-[width]",
                               probation.status === "completed"
-                                ? "bg-emerald-500"
+                                ? "tone-dot-success"
                                 : probation.status === "active"
-                                ? "bg-amber-500"
+                                ? "tone-dot-warning"
                                 : "bg-muted-foreground/40"
                             )}
                             style={{ width: `${probation.progress}%` }}
@@ -859,12 +859,12 @@ export function ProfilePage() {
                       className={cn(
                         "mt-4 rounded-[var(--radius)] border px-3 py-3 text-sm",
                         resolvedEmploymentStatus === "active"
-                          ? "border-emerald-500/15 bg-emerald-500/5 text-foreground"
+                          ? "tone-success-subtle text-foreground"
                           : resolvedEmploymentStatus === "inactive"
                           ? "border-border/70 bg-muted/20 text-foreground"
                           : resolvedEmploymentStatus === "rejected"
-                          ? "border-rose-500/15 bg-rose-500/5 text-foreground"
-                          : "border-amber-500/15 bg-amber-500/5 text-foreground"
+                          ? "tone-danger-subtle text-foreground"
+                          : "tone-warning-subtle text-foreground"
                       )}
                     >
                       {employmentDescription}

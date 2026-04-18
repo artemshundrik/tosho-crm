@@ -499,28 +499,28 @@ export function FinancePage() {
             label: "Баланс",
             value: formatCurrency(balance),
             icon: Wallet,
-            iconTone: "text-emerald-500 bg-emerald-500/10",
+            iconTone: "tone-icon-box-success",
           },
           {
             key: "income",
             label: "Доходи",
             value: formatCurrency(incomeTotal),
             icon: TrendingUp,
-            iconTone: "text-blue-500 bg-blue-500/10",
+            iconTone: "tone-icon-box-info",
           },
           {
             key: "expense",
             label: "Витрати",
             value: formatCurrency(expenseTotal),
             icon: CircleDollarSign,
-            iconTone: "text-rose-500 bg-rose-500/10",
+            iconTone: "tone-icon-box-danger",
           },
           {
             key: "debt",
             label: "Борг",
             value: formatCurrency(debtTotal),
             icon: CreditCard,
-            iconTone: "text-amber-500 bg-amber-500/10",
+            iconTone: "tone-icon-box-warning",
           },
         ]}
       />
@@ -669,7 +669,7 @@ export function FinancePage() {
                     </div>
                     <div className="h-2 w-full rounded-full bg-muted">
                       <div
-                        className={cn("h-2 rounded-full", idx === 0 ? "bg-emerald-500" : "bg-blue-500/50")}
+                        className={cn("h-2 rounded-full", idx === 0 ? "tone-dot-success" : "tone-dot-info")}
                         style={{ width: `${item.value}%` }}
                       />
                     </div>
@@ -691,7 +691,7 @@ export function FinancePage() {
                     </div>
                     <div className="h-2 w-full rounded-full bg-muted">
                       <div
-                        className={cn("h-2 rounded-full", idx === 0 ? "bg-rose-500" : "bg-orange-500/50")}
+                        className={cn("h-2 rounded-full", idx === 0 ? "tone-dot-danger" : "tone-dot-warning")}
                         style={{ width: `${item.value}%` }}
                       />
                     </div>
@@ -709,7 +709,7 @@ export function FinancePage() {
               <CardContent className="space-y-4">
                 <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
                   <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <BadgeCheck className="h-4 w-4 text-emerald-500" />
+                    <BadgeCheck className="h-4 w-4 tone-text-success" />
                     Оплачено {paidTransactions.length} транзакцій
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
@@ -717,7 +717,7 @@ export function FinancePage() {
                   </div>
                   <div className="mt-3 h-2 w-full rounded-full bg-muted">
                     <div
-                      className="h-2 rounded-full bg-emerald-500"
+                      className="h-2 rounded-full tone-dot-success"
                       style={{ width: balance >= 0 ? "70%" : "35%" }}
                     />
                   </div>
@@ -725,7 +725,7 @@ export function FinancePage() {
 
                 <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
                   <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <BadgeAlert className="h-4 w-4 text-rose-500" />
+                    <BadgeAlert className="h-4 w-4 tone-text-warning" />
                     Прострочені рахунки
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">

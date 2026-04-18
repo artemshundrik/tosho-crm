@@ -44,35 +44,30 @@ export const statusIcons: Record<string, ComponentType<{ className?: string }>> 
 };
 
 export const statusClasses: Record<string, string> = {
-  new: "bg-muted/40 text-muted-foreground border-border",
-  estimating:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
-  estimated:
-    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
-  awaiting_approval:
-    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/40",
-  approved:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
-  cancelled:
-    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
+  new: "tone-neutral",
+  estimating: "tone-info",
+  estimated: "tone-accent",
+  awaiting_approval: "tone-warning",
+  approved: "tone-success",
+  cancelled: "tone-danger",
 };
 
 export const statusColorClass: Record<string, string> = {
   new: "text-muted-foreground",
-  estimating: "text-sky-400",
-  estimated: "text-violet-400",
-  awaiting_approval: "text-amber-400",
-  approved: "text-emerald-400",
-  cancelled: "text-rose-400",
+  estimating: "tone-text-info",
+  estimated: "tone-text-accent",
+  awaiting_approval: "tone-text-warning",
+  approved: "tone-text-success",
+  cancelled: "tone-text-danger",
 };
 
 export const KANBAN_COLUMNS = [
   { id: "new", label: statusLabels.new, dotClass: "bg-muted-foreground/60" },
-  { id: "estimating", label: statusLabels.estimating, dotClass: "bg-sky-400" },
-  { id: "estimated", label: statusLabels.estimated, dotClass: "bg-violet-400" },
-  { id: "awaiting_approval", label: statusLabels.awaiting_approval, dotClass: "bg-amber-400" },
-  { id: "approved", label: statusLabels.approved, dotClass: "bg-emerald-400" },
-  { id: "cancelled", label: statusLabels.cancelled, dotClass: "bg-rose-400" },
+  { id: "estimating", label: statusLabels.estimating, dotClass: "tone-dot-info" },
+  { id: "estimated", label: statusLabels.estimated, dotClass: "tone-dot-accent" },
+  { id: "awaiting_approval", label: statusLabels.awaiting_approval, dotClass: "tone-dot-warning" },
+  { id: "approved", label: statusLabels.approved, dotClass: "tone-dot-success" },
+  { id: "cancelled", label: statusLabels.cancelled, dotClass: "tone-dot-danger" },
 ];
 
 export type OwnershipOption = {

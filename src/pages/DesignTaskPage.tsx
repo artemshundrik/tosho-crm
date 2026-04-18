@@ -5986,9 +5986,9 @@ export default function DesignTaskPage() {
         : "Ще не експортовано";
   const dropboxStatusToneClass =
     dropboxSyncState === "synced"
-      ? "border-success/20 bg-success/5 text-success-foreground"
+      ? "tone-success-subtle text-foreground"
       : dropboxSyncState === "stale"
-        ? "border-amber-300/50 bg-amber-50/90 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        ? "tone-warning-subtle text-foreground"
         : "border-border/60 bg-background/70 text-muted-foreground";
   const latestDropboxExportedLabel = useMemo(() => {
     if (!latestDropboxExportedAt) return null;
@@ -6457,7 +6457,7 @@ export default function DesignTaskPage() {
     const requiresThisKind = kind === "visualization" ? requiresVisualizationOutput : requiresLayoutOutput;
     const kindLabel = DESIGN_OUTPUT_KIND_LABELS[kind];
     const kindIcon =
-      kind === "visualization" ? <ImageIcon className="h-4 w-4 text-sky-600" /> : <PencilLine className="h-4 w-4 text-emerald-600" />;
+      kind === "visualization" ? <ImageIcon className="h-4 w-4 tone-text-info" /> : <PencilLine className="h-4 w-4 tone-text-success" />;
     const canSendSelectedOutputs = selectedShareIds.length > 0;
     const canSendEmail = canSendSelectedOutputs && Boolean(clientContact.email);
     const canSendViber = canSendSelectedOutputs && Boolean(clientContact.phone);
@@ -7127,7 +7127,7 @@ export default function DesignTaskPage() {
       />
 
       {designTaskLockedByOther ? (
-        <div className="mx-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 sm:mx-5 md:mx-6 dark:text-amber-100 xl:mx-8">
+        <div className="mx-4 rounded-xl border tone-warning-subtle px-4 py-3 text-sm text-foreground sm:mx-5 md:mx-6 xl:mx-8">
           <span className="font-medium">Режим лише перегляду.</span>{" "}
           ТЗ редагує {designTaskLock.holderName ?? "інший користувач"}.
         </div>
@@ -7788,9 +7788,9 @@ export default function DesignTaskPage() {
                             <div className="mb-3 flex items-center justify-between gap-2">
                               <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                                 {kind === "visualization" ? (
-                                  <ImageIcon className="h-4 w-4 text-sky-600" />
+                                  <ImageIcon className="h-4 w-4 tone-text-info" />
                                 ) : (
-                                  <PencilLine className="h-4 w-4 text-emerald-600" />
+                                  <PencilLine className="h-4 w-4 tone-text-success" />
                                 )}
                                 {DESIGN_OUTPUT_KIND_LABELS[kind]}
                               </div>
@@ -7828,7 +7828,7 @@ export default function DesignTaskPage() {
                     </div>
 
                     {dropboxExportWarnings.length > 0 ? (
-                      <div className="rounded-xl border border-amber-300/30 bg-amber-50/10 p-3 text-sm text-amber-200">
+                      <div className="rounded-xl border tone-warning-subtle p-3 text-sm text-foreground">
                         <div className="mb-1 inline-flex items-center gap-2 font-medium">
                           <AlertTriangle className="h-4 w-4" />
                           Потрібно уточнення перед експортом
@@ -8174,7 +8174,7 @@ export default function DesignTaskPage() {
                   <Timer className="h-4 w-4 text-muted-foreground/70" />
                   Таймер
                 </span>
-                <span className={cn("flex-1 truncate text-right font-mono text-[15px] font-semibold tabular-nums", isTimerRunning ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
+                <span className={cn("flex-1 truncate text-right font-mono text-[15px] font-semibold tabular-nums", isTimerRunning ? "tone-text-success" : "text-foreground")}>
                   {timerElapsedLabel}
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -8537,9 +8537,9 @@ export default function DesignTaskPage() {
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                         {kind === "visualization" ? (
-                          <ImageIcon className="h-4 w-4 text-sky-600" />
+                          <ImageIcon className="h-4 w-4 tone-text-info" />
                         ) : (
-                          <PencilLine className="h-4 w-4 text-emerald-600" />
+                          <PencilLine className="h-4 w-4 tone-text-success" />
                         )}
                         {DESIGN_OUTPUT_KIND_LABELS[kind]}
                       </div>
@@ -8607,7 +8607,7 @@ export default function DesignTaskPage() {
             </div>
 
             {dropboxFolderRenameRequested ? (
-              <div className="rounded-2xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              <div className="rounded-2xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
                 {dropboxOnlyFolderRenameChange
                   ? "Змінена тільки назва папки. При оновленні буде створено нову папку замовлення з цією назвою, а стара папка в Dropbox залишиться без змін."
                   : "Назву папки змінено. Експорт піде в нову папку замовлення з цією назвою, а попередня папка в Dropbox автоматично не перейменовується."}
@@ -8615,7 +8615,7 @@ export default function DesignTaskPage() {
             ) : null}
 
             {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
-              <div className="rounded-2xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              <div className="rounded-2xl border tone-warning-subtle px-4 py-3 text-sm text-foreground">
                 Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
               </div>
             ) : null}

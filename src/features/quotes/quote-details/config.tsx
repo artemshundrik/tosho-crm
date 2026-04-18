@@ -138,17 +138,12 @@ export const statusLabels: Record<string, string> = {
 };
 
 export const statusClasses: Record<string, string> = {
-  new: "bg-muted/40 text-muted-foreground border-border",
-  estimating:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/40",
-  estimated:
-    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-500/40",
-  awaiting_approval:
-    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-500/40",
-  approved:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40",
-  cancelled:
-    "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/40",
+  new: "tone-neutral",
+  estimating: "tone-info",
+  estimated: "tone-accent",
+  awaiting_approval: "tone-warning",
+  approved: "tone-success",
+  cancelled: "tone-danger",
 };
 
 export const statusIcons: Record<string, LucideIcon> = {

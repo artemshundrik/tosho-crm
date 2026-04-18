@@ -139,9 +139,9 @@ function getAvailabilityCaption(
 }
 
 function getEventToneClass(type: TeamEvent["type"]) {
-  if (type === "birthday") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (type === "birthday") return "tone-warning";
   if (type === "return") return "border-primary/25 bg-primary/[0.08] text-primary";
-  return "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  return "tone-info";
 }
 
 export function TeamPage() {
@@ -321,15 +321,15 @@ export function TeamPage() {
                     </div>
                   </div>
                   <div className="grid min-w-[220px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
-                      <div className="text-xs uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">Онлайн</div>
+                    <div className="tone-success-subtle rounded-2xl border px-4 py-3">
+                      <div className="tone-text-success text-xs uppercase tracking-wide">Онлайн</div>
                       <div className="mt-1 text-2xl font-semibold text-foreground">{onlineMembers.length}</div>
                     </div>
-                    <div className="rounded-2xl border border-warning-soft-border bg-warning-soft/60 px-4 py-3">
-                      <div className="text-xs uppercase tracking-wide text-warning-foreground/80">Відсутні</div>
+                    <div className="tone-warning-subtle rounded-2xl border px-4 py-3">
+                      <div className="tone-text-warning text-xs uppercase tracking-wide">Відсутні</div>
                       <div className="mt-1 text-2xl font-semibold text-foreground">{awayMembers.length}</div>
                     </div>
-                    <div className="rounded-2xl border border-border/70 bg-muted/[0.05] px-4 py-3">
+                    <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
                       <div className="text-xs uppercase tracking-wide text-muted-foreground">Події 30 днів</div>
                       <div className="mt-1 text-2xl font-semibold text-foreground">{upcomingEvents.length}</div>
                     </div>
@@ -337,7 +337,7 @@ export function TeamPage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+                  <div className="rounded-2xl border border-border/70 bg-background/68 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm text-muted-foreground">Усього в команді</div>
@@ -348,7 +348,7 @@ export function TeamPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+                  <div className="rounded-2xl border border-border/70 bg-background/68 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm text-muted-foreground">Доступні до роботи</div>
@@ -361,7 +361,7 @@ export function TeamPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
+                  <div className="rounded-2xl border border-border/70 bg-background/68 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm text-muted-foreground">Повернення скоро</div>
@@ -378,7 +378,7 @@ export function TeamPage() {
               </div>
             </div>
 
-            <div className="bg-muted/[0.03] p-6">
+            <div className="bg-background/56 p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">Найближчі події</div>
@@ -450,7 +450,7 @@ export function TeamPage() {
                   key={day.key}
                   className={cn(
                     "min-h-[118px] rounded-2xl border p-3 transition-colors",
-                    day.inMonth ? "border-border/60 bg-muted/[0.03]" : "border-border/40 bg-muted/[0.02] opacity-60",
+                    day.inMonth ? "border-border/60 bg-background/60" : "border-border/40 bg-background/45 opacity-60",
                     day.isToday ? "ring-1 ring-primary/25" : ""
                   )}
                 >
@@ -497,12 +497,12 @@ export function TeamPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {onlineMembers.length === 0 ? (
-                <div className="rounded-2xl border border-border/60 bg-muted/[0.04] px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/60 bg-background/68 px-4 py-4 text-sm text-muted-foreground">
                   Наразі нікого онлайн.
                 </div>
               ) : (
                 onlineMembers.slice(0, 6).map((member) => (
-                  <div key={`online:${member.userId}`} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/[0.04] px-3 py-3">
+                  <div key={`online:${member.userId}`} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
                     <AvatarBase
                       src={member.avatarDisplayUrl}
                       name={member.label}
@@ -528,12 +528,12 @@ export function TeamPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {awayMembers.length === 0 ? (
-                <div className="rounded-2xl border border-border/60 bg-muted/[0.04] px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/60 bg-background/68 px-4 py-4 text-sm text-muted-foreground">
                   Зараз усі доступні до роботи.
                 </div>
               ) : (
                 awayMembers.slice(0, 6).map((member) => (
-                  <div key={`away:${member.userId}`} className="rounded-2xl border border-border/60 bg-muted/[0.04] px-3 py-3">
+                  <div key={`away:${member.userId}`} className="rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
                     <div className="flex items-center gap-3">
                       <AvatarBase
                         src={member.avatarDisplayUrl}
@@ -569,12 +569,12 @@ export function TeamPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {monthHighlights.length === 0 ? (
-                <div className="rounded-2xl border border-border/60 bg-muted/[0.04] px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/60 bg-background/68 px-4 py-4 text-sm text-muted-foreground">
                   На цей місяць подій не знайдено.
                 </div>
               ) : (
                 monthHighlights.slice(0, 6).map((event) => (
-                  <div key={`month:${event.id}`} className="rounded-2xl border border-border/60 bg-muted/[0.04] px-3 py-3">
+                  <div key={`month:${event.id}`} className="rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-foreground">{event.title}</div>
@@ -631,13 +631,13 @@ export function TeamPage() {
         </CardHeader>
         <CardContent>
           {filteredMembers.length === 0 ? (
-            <div className="rounded-2xl border border-border/60 bg-muted/[0.04] px-4 py-6 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-border/60 bg-background/68 px-4 py-6 text-sm text-muted-foreground">
               Немає людей за цими фільтрами.
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredMembers.map((member) => (
-                <div key={member.userId} className="rounded-2xl border border-border/60 bg-muted/[0.04] p-4">
+                <div key={member.userId} className="rounded-2xl border border-border/60 bg-background/68 p-4">
                   <div className="flex items-start gap-3">
                     <AvatarBase
                       src={member.avatarDisplayUrl}

@@ -61,7 +61,7 @@ export function BasicInfoTab({
       {/* Photo */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 pb-2">
-          <div className="h-1 w-1 rounded-full bg-purple-500"></div>
+          <div className="h-1 w-1 rounded-full tone-dot-accent"></div>
           <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <ImageIcon className="h-4 w-4" /> Фото моделі
           </h3>

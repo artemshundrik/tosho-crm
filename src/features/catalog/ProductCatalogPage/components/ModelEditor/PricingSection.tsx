@@ -38,7 +38,7 @@ export function PricingSection({
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-2">
         <div className="flex items-center gap-2">
-          <div className="h-1 w-1 rounded-full bg-emerald-500"></div>
+          <div className="h-1 w-1 rounded-full tone-dot-success"></div>
           <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Layers className="h-4 w-4" /> Ціноутворення
           </h3>

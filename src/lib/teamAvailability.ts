@@ -30,8 +30,8 @@ export function getTeamStatusIndicatorClass(params: {
   presence?: TeamPresenceStatus | null;
 }) {
   const availability = normalizeTeamAvailabilityStatus(params.availability);
-  if (availability !== "available") return "bg-amber-500 dark:bg-amber-400";
-  if (params.presence === "online") return "bg-emerald-500";
+  if (availability !== "available") return "tone-dot-warning";
+  if (params.presence === "online") return "tone-dot-success";
   return "";
 }
 

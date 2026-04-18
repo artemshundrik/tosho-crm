@@ -81,12 +81,12 @@ import type { CatalogType } from "@/types/catalog";
  * Quote statuses
  */
 const QUOTE_STATUSES = [
-  { value: "new", label: "Новий", icon: PlusCircle, iconClass: "text-slate-400" },
-  { value: "estimating", label: "На прорахунку", icon: PlayCircle, iconClass: "text-amber-400" },
-  { value: "estimated", label: "Пораховано", icon: Check, iconClass: "text-sky-400" },
-  { value: "awaiting_approval", label: "На погодженні", icon: Hourglass, iconClass: "text-violet-400" },
-  { value: "approved", label: "Затверджено", icon: CheckCircle2, iconClass: "text-emerald-400" },
-  { value: "cancelled", label: "Скасовано", icon: XCircle, iconClass: "text-rose-400" },
+  { value: "new", label: "Новий", icon: PlusCircle, iconClass: "tone-text-neutral" },
+  { value: "estimating", label: "На прорахунку", icon: PlayCircle, iconClass: "tone-text-warning" },
+  { value: "estimated", label: "Пораховано", icon: Check, iconClass: "tone-text-info" },
+  { value: "awaiting_approval", label: "На погодженні", icon: Hourglass, iconClass: "text-primary" },
+  { value: "approved", label: "Затверджено", icon: CheckCircle2, iconClass: "tone-text-success" },
+  { value: "cancelled", label: "Скасовано", icon: XCircle, iconClass: "tone-text-danger" },
 ];
 
 /**
@@ -1485,7 +1485,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="text-sm text-muted-foreground">Замовник або Лід *</div>
               <div className={cn(
                 "rounded-xl border px-3 py-2 text-sm",
-                customerId ? "border-emerald-500/30 bg-emerald-500/5 text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
+                customerId ? "tone-success-subtle text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
               )}>
                 {customerId ? "Поле заповнено" : "Потрібно обрати замовника або ліда перед збереженням"}
               </div>
@@ -1494,7 +1494,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               <div className="text-sm text-muted-foreground">Дедлайн прорахунку *</div>
               <div className={cn(
                 "rounded-xl border px-3 py-2 text-sm",
-                deadline ? "border-emerald-500/30 bg-emerald-500/5 text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
+                deadline ? "tone-success-subtle text-foreground" : "border-destructive/40 bg-destructive/5 text-destructive"
               )}>
                 {deadline ? format(deadline, "d MMMM yyyy, HH:mm", { locale: uk }) : "Потрібно вказати дату та час дедлайну"}
               </div>
