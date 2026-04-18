@@ -372,9 +372,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
-  const [managerFilter, setManagerFilter] = useState<string>(() => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER);
+  const [managerFilter, setManagerFilter] = useState<string>(
+    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
+  );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);

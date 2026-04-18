@@ -476,6 +476,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     () => restoredCache?.leadManagerFilter ?? ALL_MANAGERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(false);
+  // For manager users: delay list fetch until team members are loaded and filter is set
+  const [teamMembersReady, setTeamMembersReady] = useState(() => !isQuoteManagerJobRole(jobRole));
   const [crossManagerMatches, setCrossManagerMatches] = useState<SearchVisibilityMatch[]>([]);
   const [crossManagerMatchesLoading, setCrossManagerMatchesLoading] = useState(false);
 
@@ -1865,12 +1867,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const workspaceId = await resolveWorkspaceId(userId);
       if (!workspaceId) {
         setTeamMembers([]);
+        setTeamMembersReady(true);
         return;
       }
       const rows = await listWorkspaceMembersForDisplay(workspaceId);
+      // React 18 batches all setState calls in async context → single re-render
       setTeamMembers(rows);
+      if (isManagerUser && userId && !defaultManagerFilterApplied) {
+        const memberLabel = rows.find((r) => r.userId === userId)?.label?.trim();
+        if (memberLabel) {
+          setCustomerManagerFilter(memberLabel);
+          setLeadManagerFilter(memberLabel);
+          setDefaultManagerFilterApplied(true);
+        }
+      }
+      setTeamMembersReady(true);
     } catch {
       setTeamMembers([]);
+      setTeamMembersReady(true);
     }
   };
 
@@ -1903,13 +1917,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
   }, [teamId, userId]);
 
   useEffect(() => {
+    if (!teamMembersReady) return;
     const delay = search.trim() ? 250 : 0;
     const timeoutId = window.setTimeout(() => {
       void loadCustomers();
       void loadLeads();
     }, delay);
     return () => window.clearTimeout(timeoutId);
-  }, [customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search]);
+  }, [teamMembersReady, customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search]);
 
   useEffect(() => {
     if (!search.trim()) return;

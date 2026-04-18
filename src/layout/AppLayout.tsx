@@ -5,18 +5,21 @@ import {
   Bell,
   BarChart3,
   BriefcaseBusiness,
+  Bug,
   Building2,
   Calculator,
   Factory,
   FileCheck,
   FileMinus,
   FolderKanban,
+  KeyRound,
   LayoutGrid,
   Menu,
   Moon,
   Palette,
   X as CloseIcon,
   ReceiptText,
+  Route,
   Search,
   ShieldAlert,
   Sun,
@@ -30,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
 import {
   PageHeaderActionsProvider,
@@ -388,21 +392,21 @@ const baseSidebarLinks: SidebarLink[] = [
 
   // Замовлення
   { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2, moduleKey: "orders" },
-  { label: "Прорахунки замовлень", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "orders" },
+  { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "orders" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
-  { label: "Готові до відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "orders" },
+  { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "orders" },
 
   // Фінанси
   { label: "Рахунки", to: ROUTES.financeInvoices, group: "finance", icon: ReceiptText, moduleKey: "finance" },
-  { label: "Видаткові накладні", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus, moduleKey: "finance" },
-  { label: "Акти виконаних робіт", to: ROUTES.financeActs, group: "finance", icon: FileCheck, moduleKey: "finance" },
+  { label: "Видаткові", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus, moduleKey: "finance" },
+  { label: "Акти", to: ROUTES.financeActs, group: "finance", icon: FileCheck, moduleKey: "finance" },
 
   // Операції
-  { label: "Каталог продукції", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
-  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Truck, moduleKey: "logistics" },
+  { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
+  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Route, moduleKey: "logistics" },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
   {
-    label: "Підрядники та постачальники",
+    label: "Підрядники",
     to: ROUTES.contractors,
     group: "operations",
     icon: BriefcaseBusiness,
@@ -412,9 +416,9 @@ const baseSidebarLinks: SidebarLink[] = [
   // Акаунт
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users },
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
-  { label: "Управління командою", to: ROUTES.membersAccess, group: "account", icon: ShieldAlert, moduleKey: "team" },
+  { label: "Доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
-  { label: "Технічні помилки", to: ROUTES.runtimeErrors, group: "account", icon: ShieldAlert },
+  { label: "Помилки", to: ROUTES.runtimeErrors, group: "account", icon: Bug },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -1536,10 +1540,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         className={cn(
           "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
           "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
-          sidebarCollapsed ? "w-[84px]" : "w-[270px]"
+          sidebarCollapsed ? "w-[84px]" : "w-[290px]"
         )}
       >
-        <div className={cn("h-14", sidebarCollapsed ? "px-3" : "px-4")}>
+        <div className={cn("h-14 border-b border-border/40", sidebarCollapsed ? "px-3" : "px-4")}>
           <div className={cn("flex h-full items-center", sidebarCollapsed ? "justify-center" : "justify-between")}>
             <Link
               to={ROUTES.overview}
@@ -1587,11 +1591,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             sidebarCollapsed ? "px-2 py-2" : "px-4 py-3"
           )}
         >
+          {currentModuleAccess === undefined ? (
+            <SidebarNavSkeleton collapsed={sidebarCollapsed} />
+          ) : (
           <div
             className={cn(
               sidebarCollapsed
                 ? "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70"
-                : "space-y-5"
+                : "space-y-4"
             )}
           >
             <div className={cn("relative", sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
@@ -1606,7 +1613,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             </div>
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
-                label="Замовлення"
+                label="Збут"
                 links={visibleSidebarLinks.filter((l) => l.group === "orders")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
@@ -1641,10 +1648,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               />
             </div>
           </div>
+          )}
         </nav>
 
         {/* Footer / Profile */}
-<div className={cn(sidebarCollapsed ? "p-2" : "p-4")}>
+<div className={cn("border-t border-border/40", sidebarCollapsed ? "p-2" : "p-4")}>
   <UserMenu compact={sidebarCollapsed} />
 </div>
       </aside>
@@ -1653,7 +1661,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <div
         className={cn(
           "transition-[padding] duration-[220ms] ease-linear",
-          sidebarCollapsed ? "md:pl-[84px]" : "md:pl-[270px]"
+          sidebarCollapsed ? "md:pl-[84px]" : "md:pl-[290px]"
         )}
       >
         <div>
@@ -1663,7 +1671,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           className={cn(
             "fixed top-0 right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
-            sidebarCollapsed ? "md:left-[84px]" : "md:left-[270px]",
+            sidebarCollapsed ? "md:left-[84px]" : "md:left-[290px]",
             "left-0"
           )}
         >
@@ -2129,6 +2137,34 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   );
 }
 
+function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
+  const SkeletonItem = () => (
+    <div className={cn(
+      "flex items-center gap-2.5",
+      collapsed ? "mx-auto h-10 w-10 justify-center" : "h-9 px-3"
+    )}>
+      <Skeleton className={cn("shrink-0 rounded-md", collapsed ? "h-[18px] w-[18px]" : "h-[18px] w-[18px]")} />
+      {!collapsed && <Skeleton className="h-4 w-[100px] max-w-full rounded-md" />}
+    </div>
+  );
+
+  const SkeletonGroup = ({ count, showLabel }: { count: number; showLabel?: boolean }) => (
+    <div className="space-y-1">
+      {!collapsed && showLabel && <Skeleton className="mx-3 mb-2 h-2.5 w-12 rounded-md" />}
+      {Array.from({ length: count }).map((_, i) => <SkeletonItem key={i} />)}
+    </div>
+  );
+
+  return (
+    <div className={cn("space-y-4", collapsed && "space-y-0")}>
+      <SkeletonGroup count={1} />
+      <SkeletonGroup count={4} showLabel />
+      <SkeletonGroup count={3} showLabel />
+      <SkeletonGroup count={5} showLabel />
+    </div>
+  );
+}
+
 function SidebarGroup({
   label,
   links,
@@ -2154,7 +2190,7 @@ function SidebarGroup({
       {!collapsed && !hideLabel ? (
         <h4
           className={cn(
-            "px-3 text-[11px] font-medium tracking-[0.06em] text-muted-foreground/60",
+            "px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/65",
             isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
           )}
         >
@@ -2178,7 +2214,7 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-[13px] font-normal",
+                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-normal",
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 collapsed
@@ -2191,7 +2227,7 @@ function SidebarGroup({
                     ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
                     : isMobileDrawer
                       ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
-                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium"
+                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium pl-4 after:absolute after:left-0 after:inset-y-1.5 after:w-[3px] after:rounded-full after:bg-primary"
                   : isMobileDrawer
                     ? "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
@@ -2200,7 +2236,7 @@ function SidebarGroup({
 
               <Icon
                 className={cn(
-                  "h-4 w-4 shrink-0 transition-colors",
+                  "h-[18px] w-[18px] shrink-0 transition-colors",
                   active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />

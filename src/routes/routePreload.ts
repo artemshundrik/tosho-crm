@@ -33,7 +33,7 @@ const routeImporters: RoutePreloadEntry[] = [
 ];
 
 const prefetched = new Set<string>();
-const ALLOW_HEAVY_ROUTE_PRELOAD = false;
+const ALLOW_HEAVY_ROUTE_PRELOAD = true;
 
 export function preloadRoute(pathname: string) {
   if (prefetched.has(pathname)) return;

@@ -814,13 +814,13 @@ export default function DesignPage() {
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER
+    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
     () => restoredFilters?.timelineZoom ?? "day"
