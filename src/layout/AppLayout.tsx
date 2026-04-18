@@ -1991,7 +1991,7 @@ function SidebarGroup({
                     ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
                     : isMobileDrawer
                       ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
-                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium pl-4 after:absolute after:left-0 after:inset-y-1.5 after:w-[3px] after:rounded-full after:bg-primary"
+                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium"
                   : isMobileDrawer
                     ? "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
@@ -2001,7 +2001,7 @@ function SidebarGroup({
               <Icon
                 className={cn(
                   "h-[18px] w-[18px] shrink-0 transition-colors",
-                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
 
