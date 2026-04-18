@@ -20,9 +20,9 @@ import {
   type ActivityRow,
 } from "@/lib/activity";
 import { listTeamMembers } from "@/lib/toshoApi";
-import { Activity, FileText, Palette, Users, Wallet } from "lucide-react";
+import { Activity, FileText, Palette, Users } from "lucide-react";
 
-type FilterMode = "all" | "quotes" | "design" | "finance" | "team" | "other";
+type FilterMode = "all" | "quotes" | "design" | "team" | "other";
 type ActivityPageCache = {
   items: ActivityItem[];
 };
@@ -162,7 +162,6 @@ export default function ActivityPage() {
   const iconForItem = (item: ActivityItem) => {
     if (item.type === "quotes") return FileText;
     if (item.type === "design") return Palette;
-    if (item.type === "finance") return Wallet;
     if (item.type === "team") return Users;
     return Activity;
   };
@@ -170,7 +169,6 @@ export default function ActivityPage() {
   const badgeForItem = (item: ActivityItem) => {
     if (item.type === "quotes") return { label: "Прорахунки", tone: "info" as const };
     if (item.type === "design") return { label: "Дизайн", tone: "success" as const };
-    if (item.type === "finance") return { label: "Фінанси", tone: "danger" as const };
     if (item.type === "team") return { label: "Команда", tone: "neutral" as const };
     return { label: "Інше", tone: "neutral" as const };
   };
@@ -235,17 +233,6 @@ export default function ActivityPage() {
                 )}
               >
                 Дизайн
-              </TabsTrigger>
-              <TabsTrigger
-                value="finance"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Фінанси
               </TabsTrigger>
               <TabsTrigger
                 value="team"

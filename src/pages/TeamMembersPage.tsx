@@ -17,7 +17,6 @@ import {
   Activity,
   Shield,
   Gift,
-  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
@@ -133,7 +132,6 @@ type MemberProfileMeta = {
   moduleAccess: {
     overview: boolean;
     orders: boolean;
-    finance: boolean;
     design: boolean;
     logistics: boolean;
     catalog: boolean;
@@ -255,7 +253,6 @@ const AVAILABILITY_OPTIONS = [
 const DEFAULT_MODULE_ACCESS = {
   overview: true,
   orders: true,
-  finance: false,
   design: true,
   logistics: false,
   catalog: false,
@@ -266,7 +263,6 @@ const DEFAULT_MODULE_ACCESS = {
 const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
   overview: "Огляд",
   orders: "Замовлення",
-  finance: "Фінанси",
   design: "Дизайн",
   logistics: "Логістика",
   catalog: "Каталог",
@@ -277,7 +273,6 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
 const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]> = [
   "overview",
   "orders",
-  "finance",
   "design",
   "logistics",
   "catalog",
@@ -357,7 +352,6 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
   return {
     overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
     orders: typeof input.orders === "boolean" ? input.orders : DEFAULT_MODULE_ACCESS.orders,
-    finance: typeof input.finance === "boolean" ? input.finance : DEFAULT_MODULE_ACCESS.finance,
     design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
@@ -463,7 +457,7 @@ function isRecoverableTeamProfileError(message: string) {
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
-  const { entries, onlineEntries } = useWorkspacePresence();
+  const { entries } = useWorkspacePresence();
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
   const hasCache = Boolean(cached?.workspaceId);
@@ -2160,8 +2154,6 @@ export function TeamMembersPage() {
     ? MEMBER_ACCESS_ROLE_OPTIONS
     : MEMBER_ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
   const activeInvitesCount = invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length;
-  const memberIdsSet = new Set(members.map((member) => member.user_id));
-  const onlineNowCount = onlineEntries.filter((entry) => memberIdsSet.has(entry.userId)).length;
   const managerOptions = members.map((member) => {
     const profile = memberProfilesByUserId[member.user_id];
     const label =
@@ -2177,55 +2169,6 @@ export function TeamMembersPage() {
   });
   const selectedManagerLabel =
     managerOptions.find((option) => option.id === editProfileManagerUserId)?.label ?? "Не обрано";
-  const upcomingBirthdayEvents = useMemo(() => {
-    const candidates = members
-      .map((member) => {
-        const insight = getBirthdayInsight(memberMetaByUserId[member.user_id]?.birthDate);
-        if (!insight) return null;
-        return {
-          type: "birthday" as const,
-          member,
-          insight,
-        };
-      })
-      .filter(Boolean) as Array<{
-      type: "birthday";
-      member: Member;
-      insight: NonNullable<ReturnType<typeof getBirthdayInsight>>;
-    }>;
-
-    candidates.sort((a, b) => a.insight.daysUntil - b.insight.daysUntil);
-    return candidates;
-  }, [members, memberMetaByUserId]);
-  const upcomingAnniversaryEvents = useMemo(() => {
-    const candidates = members
-      .map((member) => {
-        const insight = getWorkAnniversaryInsight(memberMetaByUserId[member.user_id]?.startDate);
-        if (!insight) return null;
-        return {
-          type: "anniversary" as const,
-          member,
-          insight,
-        };
-      })
-      .filter(Boolean) as Array<{
-      type: "anniversary";
-      member: Member;
-      insight: NonNullable<ReturnType<typeof getWorkAnniversaryInsight>>;
-    }>;
-
-    candidates.sort((a, b) => a.insight.daysUntil - b.insight.daysUntil);
-    return candidates;
-  }, [members, memberMetaByUserId]);
-  const upcomingTeamEvents = useMemo(() => {
-    const combined = [...upcomingBirthdayEvents, ...upcomingAnniversaryEvents]
-      .sort((a, b) => {
-        if (a.insight.daysUntil !== b.insight.daysUntil) return a.insight.daysUntil - b.insight.daysUntil;
-        return getMemberDisplayName(a.member).localeCompare(getMemberDisplayName(b.member), "uk");
-      })
-      .slice(0, 3);
-    return combined;
-  }, [getMemberDisplayName, upcomingAnniversaryEvents, upcomingBirthdayEvents]);
   const needsAttentionCount = useMemo(() => {
     return members.filter((member) => {
       const meta = memberMetaByUserId[member.user_id];

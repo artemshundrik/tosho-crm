@@ -61,9 +61,6 @@ const TeamMembersPage = lazyWithRetry(() =>
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
-const AdminPage = lazyWithRetry(() =>
-  import("./pages/AdminPage").then((module) => ({ default: module.AdminPage }))
-);
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -74,36 +71,10 @@ const ProductCatalogPage = lazyWithRetry(() => import("./features/catalog/Produc
 const OrdersProductionPage = lazyWithRetry(() => import("./pages/OrdersProductionPage"));
 const OrdersProductionDetailsRoutePage = lazyWithRetry(() => import("./pages/OrdersProductionDetailsRoutePage"));
 const OrdersReadyToShipPage = lazyWithRetry(() => import("./pages/OrdersReadyToShipPage"));
-const FinanceInvoicesPage = lazyWithRetry(() => import("./pages/FinanceInvoicesPage"));
-const FinanceExpenseInvoicesPage = lazyWithRetry(() => import("./pages/FinanceExpenseInvoicesPage"));
-const FinanceActsPage = lazyWithRetry(() => import("./pages/FinanceActsPage"));
 const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
 const DesignPage = lazyWithRetry(() => import("./pages/DesignPage"));
 const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
-const FinancePage = lazyWithRetry(() =>
-  import("./pages/FinancePage").then((module) => ({ default: module.FinancePage }))
-);
-const FinanceTransactionCreatePage = lazyWithRetry(() =>
-  import("./pages/FinanceTransactionCreatePage").then((module) => ({
-    default: module.FinanceTransactionCreatePage,
-  }))
-);
-const FinanceInvoiceCreatePage = lazyWithRetry(() =>
-  import("./pages/FinanceInvoiceCreatePage").then((module) => ({
-    default: module.FinanceInvoiceCreatePage,
-  }))
-);
-const FinancePoolCreatePage = lazyWithRetry(() =>
-  import("./pages/FinancePoolCreatePage").then((module) => ({
-    default: module.FinancePoolCreatePage,
-  }))
-);
-const FinancePoolDetailsPage = lazyWithRetry(() =>
-  import("./pages/FinancePoolDetailsPage").then((module) => ({
-    default: module.FinancePoolDetailsPage,
-  }))
-);
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
@@ -285,14 +256,6 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/design", scope: "page", group: "operations", test: (value) => value === "/design" },
     { pattern: "/design/:id", scope: "details", group: "operations", test: (value) => /^\/design\/[^/]+$/.test(value) },
     { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
-    { pattern: "/finance", scope: "page", group: "finance", test: (value) => value === "/finance" },
-    { pattern: "/finance/invoices", scope: "page", group: "finance", test: (value) => value === "/finance/invoices" },
-    { pattern: "/finance/invoices/new", scope: "create", group: "finance", test: (value) => value === "/finance/invoices/new" },
-    { pattern: "/finance/expense-invoices", scope: "page", group: "finance", test: (value) => value.startsWith("/finance/expense-invoices") },
-    { pattern: "/finance/acts", scope: "page", group: "finance", test: (value) => value.startsWith("/finance/acts") },
-    { pattern: "/finance/transactions/new", scope: "create", group: "finance", test: (value) => value === "/finance/transactions/new" },
-    { pattern: "/finance/pools/new", scope: "create", group: "finance", test: (value) => value === "/finance/pools/new" },
-    { pattern: "/finance/pools/:id", scope: "details", group: "finance", test: (value) => /^\/finance\/pools\/[^/]+$/.test(value) },
   ];
 
   const matched = routeMatchers.find((entry) => entry.test(normalized));
@@ -801,8 +764,6 @@ function LoginPage() {
   );
 }
 
-// --- ТУТ БУЛА СТАРА ФУНКЦІЯ InvitePage (MVP). Я ЇЇ ВИДАЛИВ. ---
-
 // =======================
 // App routes
 // =======================
@@ -1014,30 +975,6 @@ function AppRoutes() {
           }
         />
         <Route
-          path="finance/invoices"
-          element={
-            <RouteSuspense shell>
-              <FinanceInvoicesPage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/expense-invoices"
-          element={
-            <RouteSuspense shell>
-              <FinanceExpenseInvoicesPage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/acts"
-          element={
-            <RouteSuspense shell>
-              <FinanceActsPage />
-            </RouteSuspense>
-          }
-        />
-        <Route
           path="logistics"
           element={
             <RouteSuspense shell>
@@ -1092,58 +1029,10 @@ function AppRoutes() {
           }
         />
         <Route
-          path="finance"
-          element={
-            <RouteSuspense shell>
-              <FinancePage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/transactions/new"
-          element={
-            <RouteSuspense shell>
-              <FinanceTransactionCreatePage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/invoices/new"
-          element={
-            <RouteSuspense shell>
-              <FinanceInvoiceCreatePage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/pools/new"
-          element={
-            <RouteSuspense shell>
-              <FinancePoolCreatePage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="finance/pools/:id"
-          element={
-            <RouteSuspense shell>
-              <FinancePoolDetailsPage />
-            </RouteSuspense>
-          }
-        />
-        <Route
           path="profile"
           element={
             <RouteSuspense shell>
               <ProfilePage />
-            </RouteSuspense>
-          }
-        />
-        <Route
-          path="admin"
-          element={
-            <RouteSuspense shell>
-              <AdminPage />
             </RouteSuspense>
           }
         />

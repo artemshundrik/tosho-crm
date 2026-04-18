@@ -202,25 +202,10 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
     ],
   },
   {
-    id: "finance-ops",
-    label: "Finance & Ops",
-    description: "Статусні badge-и для фінансів, адміністрування й операційних підказок.",
+    id: "ops-admin",
+    label: "Ops & Admin",
+    description: "Статусні badge-и для адміністрування й операційних підказок.",
     groups: [
-      {
-        id: "finance-status",
-        label: "Finance Statuses",
-        description: "Основні теги фінансових таблиць і планів.",
-        items: [
-          { label: "План активний", note: "Активний billing plan", tone: "info", source: ["src/pages/FinancePage.tsx"] },
-          { label: "План неактивний", note: "План вимкнено", tone: "neutral", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Очікує", note: "Транзакція ще не закрита", tone: "info", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Оплачено", note: "Транзакція завершена", tone: "success", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Скасовано", note: "Операція скасована", tone: "danger", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Повернено", note: "Refund із нейтральним тоном", tone: "neutral", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Інвойс: draft", note: "Поки без явної стилізації, але входить до badge inventory", className: "bg-muted text-muted-foreground border-border", variant: "outline", source: ["src/pages/FinancePage.tsx"] },
-          { label: "Інвойс: overdue", note: "Кандидат на warning/danger normalization", className: "bg-warning-soft text-warning-foreground border-warning-soft-border", variant: "outline", source: ["src/pages/FinancePage.tsx"] },
-        ],
-      },
       {
         id: "ops-warning",
         label: "Operational And Matching",

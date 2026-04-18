@@ -34,7 +34,7 @@ export function resolveActivityType(input: {
   entity_type?: string | null;
   action?: string | null;
   title?: string | null;
-}): "quotes" | "design" | "finance" | "team" | "other" {
+}): "quotes" | "design" | "team" | "other" {
   const haystack = `${input.entity_type ?? ""} ${input.action ?? ""} ${input.title ?? ""}`.toLowerCase();
   if (
     haystack.includes("design") ||
@@ -44,14 +44,13 @@ export function resolveActivityType(input: {
     return "design";
   }
   if (
-    haystack.includes("finance") ||
     haystack.includes("invoice") ||
     haystack.includes("transaction") ||
     haystack.includes("payment") ||
     haystack.includes("рахунок") ||
     haystack.includes("плат")
   ) {
-    return "finance";
+    return "other";
   }
   if (
     haystack.includes("team") ||

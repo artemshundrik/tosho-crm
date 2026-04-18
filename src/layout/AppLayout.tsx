@@ -1,6 +1,6 @@
 // src/layout/AppLayout.tsx
 import React, { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Link, matchPath, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   BarChart3,
@@ -9,8 +9,6 @@ import {
   Building2,
   Calculator,
   Factory,
-  FileCheck,
-  FileMinus,
   FolderKanban,
   KeyRound,
   LayoutGrid,
@@ -18,7 +16,6 @@ import {
   Moon,
   Palette,
   X as CloseIcon,
-  ReceiptText,
   Route,
   Search,
   ShieldAlert,
@@ -85,14 +82,14 @@ type AppLayoutProps = {
   children?: ReactNode;
 };
 
-type SidebarGroupKey = "overview" | "orders" | "finance" | "operations" | "account";
+type SidebarGroupKey = "overview" | "orders" | "operations" | "account";
 
 type SidebarLink = {
   label: string;
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?: "overview" | "orders" | "finance" | "design" | "logistics" | "catalog" | "contractors" | "team";
+  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "team";
 };
 
 type HeaderConfig = {
@@ -102,13 +99,6 @@ type HeaderConfig = {
   breadcrumbTo: string;
   eyebrow?: string;
   showPageHeader?: boolean;
-};
-
-type MatchMeta = {
-  opponent_name: string;
-  match_date: string;
-  score_team: number | null;
-  score_opponent: number | null;
 };
 
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
@@ -351,26 +341,13 @@ function getNotificationActionLabel(href?: string) {
 // --- Routes ---
 const ROUTES = {
   overview: "/overview",
-
-  matches: "/matches-shadcn",
-  trainings: "/admin/trainings",
-  players: "/admin/players",
-  tournaments: "/admin/tournaments",
-  finance: "/finance",
   activity: "/activity",
-
-  analyticsPlayers: "/analytics/players",
-  analyticsTeam: "/analytics/team",
-  trainingsAnalytics: "/admin/trainings/analytics",
 
   ordersEstimates: "/orders/estimates",
   ordersCustomers: "/orders/customers",
   ordersProduction: "/orders/production",
   ordersReadyToShip: "/orders/ready-to-ship",
   catalogProducts: "/catalog/products",
-  financeInvoices: "/finance/invoices",
-  financeExpenseInvoices: "/finance/expense-invoices",
-  financeActs: "/finance/acts",
 
   logistics: "/logistics",
   design: "/design",
@@ -397,12 +374,6 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "orders" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
   { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "orders" },
-
-  // Фінанси
-  { label: "Рахунки", to: ROUTES.financeInvoices, group: "finance", icon: ReceiptText, moduleKey: "finance" },
-  { label: "Видаткові", to: ROUTES.financeExpenseInvoices, group: "finance", icon: FileMinus, moduleKey: "finance" },
-  { label: "Акти", to: ROUTES.financeActs, group: "finance", icon: FileCheck, moduleKey: "finance" },
-
   // Операції
   { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Route, moduleKey: "logistics" },
@@ -475,28 +446,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.catalogProducts,
       showPageHeader: false,
     };
-  if (pathname.startsWith(ROUTES.financeInvoices))
-    return {
-      title: "Рахунки",
-      subtitle: "Рахунки для замовників і статуси оплат.",
-      breadcrumbLabel: "Рахунки",
-      breadcrumbTo: ROUTES.financeInvoices,
-      showPageHeader: false,
-    };
-  if (pathname.startsWith(ROUTES.financeExpenseInvoices))
-    return {
-      title: "Видаткові накладні",
-      subtitle: "Документи відвантаження та облік витрат.",
-      breadcrumbLabel: "Видаткові накладні",
-      breadcrumbTo: ROUTES.financeExpenseInvoices,
-    };
-  if (pathname.startsWith(ROUTES.financeActs))
-    return {
-      title: "Акти виконаних робіт",
-      subtitle: "Акти для закриття робіт і звітності.",
-      breadcrumbLabel: "Акти виконаних робіт",
-      breadcrumbTo: ROUTES.financeActs,
-    };
   if (pathname.startsWith(ROUTES.logistics))
     return {
       title: "Логістика",
@@ -528,106 +477,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.team,
       showPageHeader: false,
     };
-
-  if (pathname === ROUTES.analyticsTeam)
-    return {
-      title: "Аналітика команди",
-      subtitle: "Тренди, форма та інсайти (висновки, не таблиці).",
-      breadcrumbLabel: "Аналітика команди",
-      breadcrumbTo: ROUTES.analyticsTeam,
-    };
-
-  if (pathname.includes("trainings/analytics"))
-    return {
-      title: "Аналітика тренувань",
-      subtitle: "Відстежуй відвідуваність, лідерів присутності та тренувальні тренди.",
-      breadcrumbLabel: "Аналітика тренувань",
-      breadcrumbTo: ROUTES.trainingsAnalytics,
-    };
-
-  if (pathname.includes("analytics"))
-    return {
-      title: "Статистика гравців",
-      subtitle: "Голи, асисти та інші метрики по гравцях з фільтрами.",
-      breadcrumbLabel: "Статистика гравців",
-      breadcrumbTo: ROUTES.analyticsPlayers,
-    };
-
-  if (pathname.includes("players"))
-    return {
-      title: "Гравці",
-      subtitle: "Склад команди та профілі гравців.",
-      breadcrumbLabel: "Гравці",
-      breadcrumbTo: ROUTES.players,
-    };
-
-  if (pathname.startsWith("/player/"))
-    return {
-      title: "Профіль гравця",
-      subtitle: "Статистика, матчі та участь у тренуваннях.",
-      breadcrumbLabel: "Гравці",
-      breadcrumbTo: ROUTES.players,
-    };
-
-  if (pathname.includes("matches-shadcn"))
-    return {
-      title: "Матчі",
-      subtitle: "Розклад, результати та події матчу.",
-      breadcrumbLabel: "Матчі",
-      breadcrumbTo: ROUTES.matches,
-    };
-
-  if (pathname.includes("trainings"))
-    return {
-      title: "Тренування",
-      subtitle: "Планування, відвідуваність та нотатки.",
-      breadcrumbLabel: "Тренування",
-      breadcrumbTo: ROUTES.trainings,
-    };
-
-  if (pathname.includes("tournaments"))
-    return {
-      title: "Турніри",
-      subtitle: "Сезони, формати, матчі та таблиці.",
-      breadcrumbLabel: "Турніри",
-      breadcrumbTo: ROUTES.tournaments,
-    };
-  if (pathname.startsWith("/finance/transactions/new"))
-    return {
-      title: "Новий платіж",
-      subtitle: "Додай дохід або витрату та привʼяжи до гравця за потреби.",
-      breadcrumbLabel: "Фінанси",
-      breadcrumbTo: ROUTES.finance,
-    };
-  if (pathname.startsWith("/finance/invoices/new"))
-    return {
-      title: "Новий рахунок",
-      subtitle: "Створи рахунок для гравця або команди.",
-      breadcrumbLabel: "Фінанси",
-      breadcrumbTo: ROUTES.finance,
-    };
-  if (pathname.startsWith("/finance/pools/new"))
-    return {
-      title: "Новий збір",
-      subtitle: "Збір на оренду або внески з контролем оплати.",
-      breadcrumbLabel: "Фінанси",
-      breadcrumbTo: ROUTES.finance,
-    };
-  if (pathname.startsWith("/finance/pools/"))
-    return {
-      title: "Збір",
-      subtitle: "Прогрес збору та список оплат.",
-      breadcrumbLabel: "Фінанси",
-      breadcrumbTo: ROUTES.finance,
-    };
-  if (pathname.includes("finance"))
-    return {
-      title: "Фінанси",
-      subtitle: "Оплати, плани, нарахування та фінансова аналітика.",
-      breadcrumbLabel: "Фінанси",
-      breadcrumbTo: ROUTES.finance,
-    };
-
   if (pathname.startsWith(ROUTES.notifications))
     return {
       title: "Сповіщення",
@@ -693,12 +542,6 @@ if (pathname === ROUTES.profile)
 
 // --- Small helpers ---
 function isActivePath(currentPath: string, to: string) {
-  if (to === ROUTES.trainings) {
-    return (
-      currentPath === to ||
-      (currentPath.startsWith(to + "/") && !currentPath.startsWith(ROUTES.trainingsAnalytics))
-    );
-  }
   return currentPath === to || currentPath.startsWith(to + "/");
 }
 
@@ -819,21 +662,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(ROUTES.ordersProduction) ||
     location.pathname.startsWith(ROUTES.design);
 
-  // /matches/:matchId/events
-  const matchEventsRoute = useMemo(() => {
-    return matchPath({ path: "/matches/:matchId/events", end: true }, location.pathname);
-  }, [location.pathname]);
-
-  const matchDetailsRoute = useMemo(() => {
-    return matchPath({ path: "/matches/:matchId", end: true }, location.pathname);
-  }, [location.pathname]);
-
-  const matchId =
-    ((matchEventsRoute?.params as { matchId?: string } | undefined)?.matchId) ||
-    ((matchDetailsRoute?.params as { matchId?: string } | undefined)?.matchId);
-
-  const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -875,68 +703,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // Optional workspace logo (kept null by default to avoid heavy legacy team queries)
   const [workspaceLogo] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadMatchMeta() {
-      if (!matchId) {
-        setMatchMeta(null);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("matches")
-        .select("opponent_name, match_date, score_team, score_opponent")
-        .eq("id", matchId)
-        .single();
-
-      if (cancelled) return;
-
-      if (error || !data) {
-        setMatchMeta(null);
-        return;
-      }
-
-      setMatchMeta(data as MatchMeta);
-    }
-
-    loadMatchMeta();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [matchId]);
-
-  const header = useMemo(() => {
-    if (!matchId) return baseHeader;
-
-    const score =
-      matchMeta && matchMeta.score_team !== null && matchMeta.score_opponent !== null
-        ? `${matchMeta.score_team}:${matchMeta.score_opponent}`
-        : "Н/Д:Н/Д";
-
-    const metaSubtitle = matchMeta
-      ? `${matchMeta.opponent_name} • ${formatDateTimeUA(matchMeta.match_date)} • ${score}`
-      : "Деталі матчу, склад, події та статистика.";
-
-    if (matchEventsRoute) {
-      return {
-        title: "Події матчу",
-        subtitle: matchMeta
-          ? `${matchMeta.opponent_name} • ${formatDateTimeUA(matchMeta.match_date)} • ${score}`
-          : "Голи, асисти, картки та відвідуваність матчу.",
-        breadcrumbLabel: "Матчі",
-        breadcrumbTo: ROUTES.matches,
-      };
-    }
-
-    return {
-      title: "Деталі матчу",
-      subtitle: metaSubtitle,
-      breadcrumbLabel: "Матчі",
-      breadcrumbTo: ROUTES.matches,
-    };
-  }, [baseHeader, matchId, matchMeta, matchEventsRoute]);
+  const header = baseHeader;
 
   const workspacePresence = useWorkspacePresenceState({
     teamId,
@@ -1635,15 +1402,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             </div>
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
-                label="Фінанси"
-                links={visibleSidebarLinks.filter((l) => l.group === "finance")}
-                currentPath={location.pathname}
-                notificationsUnreadCount={unreadCount}
-                collapsed={sidebarCollapsed}
-              />
-            </div>
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
-              <SidebarGroup
                 label="Операції"
                 links={visibleSidebarLinks.filter((l) => l.group === "operations")}
                 currentPath={location.pathname}
@@ -1773,13 +1531,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           <SidebarGroup
                             label="Замовлення"
                             links={visibleSidebarLinks.filter((l) => l.group === "orders")}
-                            currentPath={location.pathname}
-                            onNavigate={() => setMobileMenuOpen(false)}
-                            notificationsUnreadCount={unreadCount}
-                          />
-                          <SidebarGroup
-                            label="Фінанси"
-                            links={visibleSidebarLinks.filter((l) => l.group === "finance")}
                             currentPath={location.pathname}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
@@ -2151,29 +1902,29 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 }
 
 function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
-  const SkeletonItem = () => (
-    <div className={cn(
-      "flex items-center gap-2.5",
-      collapsed ? "mx-auto h-10 w-10 justify-center" : "h-9 px-3"
-    )}>
-      <Skeleton className={cn("shrink-0 rounded-md", collapsed ? "h-[18px] w-[18px]" : "h-[18px] w-[18px]")} />
-      {!collapsed && <Skeleton className="h-4 w-[100px] max-w-full rounded-md" />}
-    </div>
-  );
-
-  const SkeletonGroup = ({ count, showLabel }: { count: number; showLabel?: boolean }) => (
-    <div className="space-y-1">
-      {!collapsed && showLabel && <Skeleton className="mx-3 mb-2 h-2.5 w-12 rounded-md" />}
-      {Array.from({ length: count }).map((_, i) => <SkeletonItem key={i} />)}
-    </div>
-  );
+  const groups = [
+    { count: 1, showLabel: false },
+    { count: 4, showLabel: true },
+    { count: 3, showLabel: true },
+    { count: 5, showLabel: true },
+  ] as const;
 
   return (
     <div className={cn("space-y-4", collapsed && "space-y-0")}>
-      <SkeletonGroup count={1} />
-      <SkeletonGroup count={4} showLabel />
-      <SkeletonGroup count={3} showLabel />
-      <SkeletonGroup count={5} showLabel />
+      {groups.map((group, groupIndex) => (
+        <div key={`${group.count}-${groupIndex}`} className="space-y-1">
+          {!collapsed && group.showLabel ? <Skeleton className="mx-3 mb-2 h-2.5 w-12 rounded-md" /> : null}
+          {Array.from({ length: group.count }).map((_, itemIndex) => (
+            <div
+              key={`${groupIndex}-${itemIndex}`}
+              className={cn("flex items-center gap-2.5", collapsed ? "mx-auto h-10 w-10 justify-center" : "h-9 px-3")}
+            >
+              <Skeleton className="h-[18px] w-[18px] shrink-0 rounded-md" />
+              {!collapsed ? <Skeleton className="h-4 w-[100px] max-w-full rounded-md" /> : null}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

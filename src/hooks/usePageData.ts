@@ -33,9 +33,9 @@ type UsePageDataOptions<T> = {
  * @example
  * ```tsx
  * const { data, loading, showSkeleton, error } = usePageData({
- *   cacheKey: `player:${playerId}`,
+ *   cacheKey: `quote:${quoteId}`,
  *   loadFn: async () => {
- *     const { data } = await supabase.from('players').select('*').eq('id', playerId).single();
+ *     const { data } = await supabase.from('quotes').select('*').eq('id', quoteId).single();
  *     return data;
  *   },
  *   cacheTTL: 5 * 60 * 1000, // 5 хвилин

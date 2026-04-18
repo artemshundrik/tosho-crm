@@ -141,7 +141,6 @@ type UpsertWorkspaceMemberProfileInput = {
 const DEFAULT_MODULE_ACCESS = {
   overview: true,
   orders: true,
-  finance: false,
   design: true,
   logistics: false,
   catalog: false,
@@ -176,7 +175,6 @@ function normalizeModuleAccess(value: unknown) {
   return {
     overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
     orders: typeof input.orders === "boolean" ? input.orders : DEFAULT_MODULE_ACCESS.orders,
-    finance: typeof input.finance === "boolean" ? input.finance : DEFAULT_MODULE_ACCESS.finance,
     design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,

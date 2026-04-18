@@ -8,16 +8,11 @@ type RoutePreloadEntry = {
 
 const routeImporters: RoutePreloadEntry[] = [
   { pattern: /^\/overview$/, importer: () => import("../pages/OverviewPage") },
-  { pattern: /^\/finance$/, importer: () => import("../pages/FinancePage") },
-  { pattern: /^\/finance\/invoices$/, importer: () => import("../pages/FinanceInvoicesPage") },
-  { pattern: /^\/finance\/expense-invoices$/, importer: () => import("../pages/FinanceExpenseInvoicesPage") },
-  { pattern: /^\/finance\/acts$/, importer: () => import("../pages/FinanceActsPage") },
   { pattern: /^\/activity$/, importer: () => import("../pages/ActivityPage") },
   { pattern: /^\/notifications$/, importer: () => import("../pages/NotificationsPage") },
   { pattern: /^\/team$/, importer: () => import("../pages/TeamPage") },
   { pattern: /^\/settings\/members$/, importer: () => import("../pages/TeamMembersPage") },
   { pattern: /^\/profile$/, importer: () => import("../pages/ProfilePage") },
-  { pattern: /^\/admin$/, importer: () => import("../pages/AdminPage") },
   { pattern: /^\/admin\/observability$/, importer: () => import("../pages/AdminObservabilityPage") },
   { pattern: /^\/admin\/runtime-errors$/, importer: () => import("../pages/RuntimeErrorsPage") },
   { pattern: /^\/orders\/estimates$/, importer: () => import("../pages/OrdersEstimatesPage"), heavy: true },

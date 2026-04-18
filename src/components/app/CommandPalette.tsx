@@ -16,12 +16,9 @@ import {
   Building2,
   Calculator,
   Factory,
-  FileCheck,
-  FileMinus,
   FolderKanban,
   History,
   Palette,
-  ReceiptText,
   Search,
   Truck,
   User,
@@ -84,7 +81,7 @@ type SearchResultItem = {
 
 const RECENTS_KEY = "fayna_cmdk_recents_v1";
 const MAX_RECENTS = 8;
-const GENERIC_RECENT_LABELS = new Set(["Дизайн", "Замовники", "Замовлення", "Команда", "Фінанси", "Каталог продукції", "Сторінка"]);
+const GENERIC_RECENT_LABELS = new Set(["Дизайн", "Замовники", "Замовлення", "Команда", "Каталог продукції", "Сторінка"]);
 
 function normalizeText(s: string) {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
@@ -159,10 +156,6 @@ function getPathSummary(path: string) {
   if (path.startsWith("/orders/customers")) return "База замовників і лідів";
   if (path.startsWith("/orders/production")) return "Черга замовлень";
   if (path.startsWith("/catalog/products")) return "Каталог продукції";
-  if (path.startsWith("/finance/invoices")) return "Розділ рахунків";
-  if (path.startsWith("/finance/expense-invoices")) return "Розділ видаткових";
-  if (path.startsWith("/finance/acts")) return "Розділ актів";
-  if (path.startsWith("/finance")) return "Фінансовий розділ";
   if (path.startsWith("/team")) return "Сторінка команди";
   if (path.startsWith("/notifications")) return "Центр сповіщень";
   if (path.startsWith("/profile")) return "Профіль користувача";
@@ -369,42 +362,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         keywords: ["дизайн", "design", "tasks"],
         to: "/design",
         icon: Palette,
-      },
-      {
-        key: "route-finance",
-        label: "Фінанси",
-        description: "Платежі, рахунки та фінансові документи",
-        kindLabel: "Сторінка",
-        keywords: ["фінанси", "finance", "payments"],
-        to: "/finance",
-        icon: ReceiptText,
-      },
-      {
-        key: "route-finance-invoices",
-        label: "Рахунки",
-        description: "Список рахунків",
-        kindLabel: "Сторінка",
-        keywords: ["рахунок", "invoice"],
-        to: "/finance/invoices",
-        icon: ReceiptText,
-      },
-      {
-        key: "route-finance-expense-invoices",
-        label: "Видаткові накладні",
-        description: "Список видаткових накладних",
-        kindLabel: "Сторінка",
-        keywords: ["видаткова", "expense invoice"],
-        to: "/finance/expense-invoices",
-        icon: FileMinus,
-      },
-      {
-        key: "route-finance-acts",
-        label: "Акти виконаних робіт",
-        description: "Список актів виконаних робіт",
-        kindLabel: "Сторінка",
-        keywords: ["акт", "acts"],
-        to: "/finance/acts",
-        icon: FileCheck,
       },
       {
         key: "route-notifications",

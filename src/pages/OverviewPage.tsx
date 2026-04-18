@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Activity as ActivityIcon, ArrowRight, Clock3, FileText, LayoutGrid, Palette, Plus, RefreshCw, Users, Wallet } from "lucide-react";
+import { Activity as ActivityIcon, ArrowRight, Clock3, FileText, LayoutGrid, Palette, Plus, RefreshCw, Users } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -60,7 +60,7 @@ type ActivityRow = {
   href?: string | null;
   created_at?: string | null;
   avatar_url?: string | null;
-  type?: "quotes" | "design" | "finance" | "team" | "other";
+  type?: "quotes" | "design" | "team" | "other";
 };
 
 type OverviewData = {
@@ -174,7 +174,6 @@ const getInitials = (name?: string | null) => {
 const overviewActivityIcon = (type?: string) => {
   if (type === "quotes") return FileText;
   if (type === "design") return Palette;
-  if (type === "finance") return Wallet;
   if (type === "team") return Users;
   return ActivityIcon;
 };

@@ -135,23 +135,6 @@ const KANBAN_SWATCHES = [
   { label: "Cancelled", accentVar: "--kanban-col-cancelled-accent", bgVar: "--kanban-col-cancelled-bg", borderVar: "--kanban-col-cancelled-border" },
 ];
 
-const LEADER_SWATCHES = [
-  { label: "Goals", bg: "var(--leader-goals-bg)", border: "var(--leader-goals-border)", color: "var(--leader-goals-foreground)" },
-  { label: "Assists", bg: "var(--leader-assists-bg)", border: "var(--leader-assists-border)", color: "var(--leader-assists-foreground)" },
-  { label: "Points", bg: "var(--leader-points-bg)", border: "var(--leader-points-border)", color: "var(--leader-points-foreground)" },
-  { label: "Matches", bg: "var(--leader-matches-bg)", border: "var(--leader-matches-border)", color: "var(--leader-matches-foreground)" },
-  { label: "Discipline", bg: "var(--leader-discipline-bg)", border: "var(--leader-discipline-border)", color: "var(--leader-discipline-foreground)" },
-  { label: "Efficiency", bg: "var(--leader-efficiency-bg)", border: "var(--leader-efficiency-border)", color: "var(--leader-efficiency-foreground)" },
-];
-
-const RATING_SWATCHES = [
-  { label: "Bronze", from: "var(--rating-bronze-from)", mid: "var(--rating-bronze-from)", to: "var(--rating-bronze-to)", border: "var(--rating-bronze-border)", color: "var(--rating-bronze-foreground)" },
-  { label: "Silver", from: "var(--rating-silver-from)", mid: "var(--rating-silver-from)", to: "var(--rating-silver-to)", border: "var(--rating-silver-border)", color: "var(--rating-silver-foreground)" },
-  { label: "Gold", from: "var(--rating-gold-from)", mid: "var(--rating-gold-from)", to: "var(--rating-gold-to)", border: "var(--rating-gold-border)", color: "var(--rating-gold-foreground)" },
-  { label: "Elite", from: "var(--rating-elite-from)", mid: "var(--rating-elite-mid)", to: "var(--rating-elite-to)", border: "var(--rating-elite-border)", color: "var(--rating-elite-foreground)" },
-  { label: "Legendary", from: "var(--rating-legendary-from)", mid: "var(--rating-legendary-mid)", to: "var(--rating-legendary-to)", border: "var(--rating-legendary-border)", color: "var(--rating-legendary-foreground)" },
-];
-
 const TONE_ICON = {
   neutral: Circle,
   info: Info,
@@ -220,24 +203,6 @@ function buildDerivedSemanticAliases(): CSSVarMap {
     "--kanban-col-cancelled-bg": "var(--danger-soft)",
     "--kanban-col-cancelled-border": "var(--danger-soft-border)",
     "--kanban-col-cancelled-accent": "var(--danger-foreground)",
-    "--leader-goals-bg": "hsl(var(--info-soft) / 0.78)",
-    "--leader-goals-border": "hsl(var(--info-soft-border))",
-    "--leader-goals-foreground": "hsl(var(--info-foreground))",
-    "--leader-assists-bg": "hsl(var(--success-soft) / 0.82)",
-    "--leader-assists-border": "hsl(var(--success-soft-border))",
-    "--leader-assists-foreground": "hsl(var(--success-foreground))",
-    "--leader-points-bg": "hsl(var(--accent-tone-soft) / 0.8)",
-    "--leader-points-border": "hsl(var(--accent-tone-soft-border))",
-    "--leader-points-foreground": "hsl(var(--accent-tone-foreground))",
-    "--leader-matches-bg": "hsl(var(--neutral-soft) / 0.88)",
-    "--leader-matches-border": "hsl(var(--neutral-soft-border))",
-    "--leader-matches-foreground": "hsl(var(--neutral-foreground))",
-    "--leader-discipline-bg": "hsl(var(--warning-soft) / 0.82)",
-    "--leader-discipline-border": "hsl(var(--warning-soft-border))",
-    "--leader-discipline-foreground": "hsl(var(--warning-foreground))",
-    "--leader-efficiency-bg": "hsl(var(--neutral-soft) / 0.94)",
-    "--leader-efficiency-border": "hsl(var(--neutral-soft-border))",
-    "--leader-efficiency-foreground": "hsl(var(--neutral-foreground))",
   };
 }
 
@@ -337,46 +302,6 @@ const PRESETS: Record<
       "--kanban-col-cancelled-bg": "356 100% 98.4%",
       "--kanban-col-cancelled-border": "356 64% 90%",
       "--kanban-col-cancelled-accent": "356 72% 48%",
-      "--leader-goals-bg": "hsl(var(--info-soft) / 0.78)",
-      "--leader-goals-border": "hsl(var(--info-soft-border))",
-      "--leader-goals-foreground": "hsl(var(--info-foreground))",
-      "--leader-assists-bg": "hsl(var(--success-soft) / 0.82)",
-      "--leader-assists-border": "hsl(var(--success-soft-border))",
-      "--leader-assists-foreground": "hsl(var(--success-foreground))",
-      "--leader-points-bg": "hsl(var(--accent-tone-soft) / 0.8)",
-      "--leader-points-border": "hsl(var(--accent-tone-soft-border))",
-      "--leader-points-foreground": "hsl(var(--accent-tone-foreground))",
-      "--leader-matches-bg": "hsl(var(--neutral-soft) / 0.88)",
-      "--leader-matches-border": "hsl(var(--neutral-soft-border))",
-      "--leader-matches-foreground": "hsl(var(--neutral-foreground))",
-      "--leader-discipline-bg": "hsl(var(--warning-soft) / 0.82)",
-      "--leader-discipline-border": "hsl(var(--warning-soft-border))",
-      "--leader-discipline-foreground": "hsl(var(--warning-foreground))",
-      "--leader-efficiency-bg": "hsl(var(--neutral-soft) / 0.94)",
-      "--leader-efficiency-border": "hsl(var(--neutral-soft-border))",
-      "--leader-efficiency-foreground": "hsl(var(--neutral-foreground))",
-      "--rating-bronze-from": "#f2d0bb",
-      "--rating-bronze-to": "#b87552",
-      "--rating-bronze-border": "rgba(184, 117, 82, 0.28)",
-      "--rating-bronze-foreground": "#5f2d12",
-      "--rating-silver-from": "#f4f7fb",
-      "--rating-silver-to": "#d4dbe5",
-      "--rating-silver-border": "rgba(148, 163, 184, 0.28)",
-      "--rating-silver-foreground": "#334155",
-      "--rating-gold-from": "#f4d56a",
-      "--rating-gold-to": "#c7921c",
-      "--rating-gold-border": "rgba(199, 146, 28, 0.3)",
-      "--rating-gold-foreground": "#5a3b02",
-      "--rating-elite-from": "#14213d",
-      "--rating-elite-mid": "#2556cf",
-      "--rating-elite-to": "#1c326c",
-      "--rating-elite-border": "rgba(37, 86, 207, 0.4)",
-      "--rating-elite-foreground": "#d9e6ff",
-      "--rating-legendary-from": "#ffffff",
-      "--rating-legendary-mid": "#eef5ff",
-      "--rating-legendary-to": "#fde8ef",
-      "--rating-legendary-border": "rgba(205, 162, 59, 0.42)",
-      "--rating-legendary-foreground": "#b07a11",
     },
     dark: {
       "--primary": "214 100% 70%",
@@ -456,24 +381,6 @@ const PRESETS: Record<
       "--kanban-col-cancelled-bg": "353 14% 12.2%",
       "--kanban-col-cancelled-border": "353 16% 23%",
       "--kanban-col-cancelled-accent": "354 70% 79%",
-      "--leader-goals-bg": "hsl(var(--info-soft) / 0.95)",
-      "--leader-goals-border": "hsl(var(--info-soft-border))",
-      "--leader-goals-foreground": "hsl(var(--info-foreground))",
-      "--leader-assists-bg": "hsl(var(--success-soft) / 0.95)",
-      "--leader-assists-border": "hsl(var(--success-soft-border))",
-      "--leader-assists-foreground": "hsl(var(--success-foreground))",
-      "--leader-points-bg": "hsl(var(--accent-tone-soft) / 0.95)",
-      "--leader-points-border": "hsl(var(--accent-tone-soft-border))",
-      "--leader-points-foreground": "hsl(var(--accent-tone-foreground))",
-      "--leader-matches-bg": "hsl(var(--neutral-soft) / 0.94)",
-      "--leader-matches-border": "hsl(var(--neutral-soft-border))",
-      "--leader-matches-foreground": "hsl(var(--neutral-foreground))",
-      "--leader-discipline-bg": "hsl(var(--warning-soft) / 0.95)",
-      "--leader-discipline-border": "hsl(var(--warning-soft-border))",
-      "--leader-discipline-foreground": "hsl(var(--warning-foreground))",
-      "--leader-efficiency-bg": "hsl(var(--neutral-soft) / 0.98)",
-      "--leader-efficiency-border": "hsl(var(--neutral-soft-border))",
-      "--leader-efficiency-foreground": "hsl(var(--neutral-foreground))",
     },
   },
   radix: {
@@ -1054,41 +961,10 @@ export default function ColorPalettePage() {
               </SectionCard>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-              <SectionCard title="Kanban Status Surfaces" description="Column accents для estimates/design kanban surfaces.">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {KANBAN_SWATCHES.map((item) => (
-                    <KanbanChip key={item.label} {...item} />
-                  ))}
-                </div>
-              </SectionCard>
-
-              <SectionCard title="Leaderboard Tokens" description="Акценти для player/team leader cards та окремих performance-модулів.">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {LEADER_SWATCHES.map((item) => (
-                    <VarPanel key={item.label} label={item.label} bg={item.bg} border={item.border} color={item.color}>
-                      Leader accent family
-                    </VarPanel>
-                  ))}
-                </div>
-              </SectionCard>
-            </div>
-
-            <SectionCard title="Rating Gradients" description="Градієнти для рейтингів і achievement-like surfaces.">
+            <SectionCard title="Kanban Status Surfaces" description="Column accents для estimates/design kanban surfaces.">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {RATING_SWATCHES.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-[var(--radius-inner)] border px-4 py-4"
-                    style={{
-                      borderColor: item.border,
-                      color: item.color,
-                      backgroundImage: `linear-gradient(135deg, ${item.from}, ${item.mid}, ${item.to})`,
-                    }}
-                  >
-                    <div className="text-sm font-semibold">{item.label}</div>
-                    <div className="mt-1 text-xs opacity-90">Rating gradient</div>
-                  </div>
+                {KANBAN_SWATCHES.map((item) => (
+                  <KanbanChip key={item.label} {...item} />
                 ))}
               </div>
             </SectionCard>
