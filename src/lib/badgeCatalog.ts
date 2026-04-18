@@ -241,11 +241,11 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Command Palette Kinds",
         description: "Маркування типів сутностей у глобальному та каталожному пошуку.",
         items: [
-          { label: "Замовник", note: "Сутність customer", className: "cmd-kind-customer", variant: "outline", source: ["src/layout/AppLayout.tsx", "src/pages/ColorPalettePage.tsx"] },
-          { label: "Лід", note: "Сутність lead", className: "cmd-kind-lead", variant: "outline", source: ["src/layout/AppLayout.tsx", "src/pages/ColorPalettePage.tsx"] },
-          { label: "Прорахунок", note: "Сутність quote", className: "cmd-kind-quote", variant: "outline", source: ["src/layout/AppLayout.tsx", "src/pages/ColorPalettePage.tsx"] },
-          { label: "Замовлення", note: "Сутність order", className: "cmd-kind-order", variant: "outline", source: ["src/layout/AppLayout.tsx", "src/pages/ColorPalettePage.tsx"] },
-          { label: "Дизайн", note: "Сутність design", className: "cmd-kind-design", variant: "outline", source: ["src/layout/AppLayout.tsx", "src/pages/ColorPalettePage.tsx"] },
+          { label: "Замовник", note: "Сутність customer", className: "cmd-kind-customer", variant: "outline", source: ["src/layout/AppLayout.tsx"] },
+          { label: "Лід", note: "Сутність lead", className: "cmd-kind-lead", variant: "outline", source: ["src/layout/AppLayout.tsx"] },
+          { label: "Прорахунок", note: "Сутність quote", className: "cmd-kind-quote", variant: "outline", source: ["src/layout/AppLayout.tsx"] },
+          { label: "Замовлення", note: "Сутність order", className: "cmd-kind-order", variant: "outline", source: ["src/layout/AppLayout.tsx"] },
+          { label: "Дизайн", note: "Сутність design", className: "cmd-kind-design", variant: "outline", source: ["src/layout/AppLayout.tsx"] },
         ],
       },
       {

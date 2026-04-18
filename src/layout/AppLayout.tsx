@@ -5,7 +5,6 @@ import {
   Bell,
   BarChart3,
   BriefcaseBusiness,
-  Bug,
   Building2,
   Calculator,
   Factory,
@@ -19,7 +18,6 @@ import {
   Route,
   Search,
   ShieldAlert,
-  SwatchBook,
   Sun,
   Truck,
   Users,
@@ -360,8 +358,6 @@ const ROUTES = {
   accountSettings: "/account-settings",
   profile: "/profile",
   observability: "/admin/observability",
-  runtimeErrors: "/admin/runtime-errors",
-  palettePreview: "/admin/palette",
 } as const;
 
 // --- Sidebar Config ---
@@ -391,8 +387,6 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
-  { label: "Design System", to: ROUTES.palettePreview, group: "account", icon: SwatchBook },
-  { label: "Помилки", to: ROUTES.runtimeErrors, group: "account", icon: Bug },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -485,13 +479,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.notifications,
       showPageHeader: false,
     };
-  if (pathname.startsWith(ROUTES.palettePreview))
-    return {
-      title: "Design System",
-      subtitle: "Палітра, badge-like елементи, chips і системні токени інтерфейсу.",
-      breadcrumbLabel: "Design System",
-      breadcrumbTo: ROUTES.palettePreview,
-    };
   if (pathname.startsWith(ROUTES.activity))
     return {
       title: "Активність",
@@ -505,14 +492,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Щоденні snapshots по базі, storage і важких SQL-шляхах.",
       breadcrumbLabel: "Observability",
       breadcrumbTo: ROUTES.observability,
-      showPageHeader: false,
-    };
-  if (pathname.startsWith(ROUTES.runtimeErrors))
-    return {
-      title: "Технічні помилки",
-      subtitle: "Фронтові runtime-помилки інтерфейсу для діагностики.",
-      breadcrumbLabel: "Технічні помилки",
-      breadcrumbTo: ROUTES.runtimeErrors,
       showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.membersAccess))
@@ -619,12 +598,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
-        if (link.to === ROUTES.runtimeErrors && !permissions.isSuperAdmin) {
-          return false;
-        }
-        if (link.to === ROUTES.palettePreview && !permissions.isSuperAdmin) {
-          return false;
-        }
         if (link.to === ROUTES.observability && !(permissions.isSuperAdmin || permissions.isAdmin)) {
           return false;
         }

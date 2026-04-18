@@ -82,9 +82,7 @@ const ResetPasswordPage = lazyWithRetry(() => import("./pages/ResetPasswordPage"
 const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPage"));
 const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
-const RuntimeErrorsPage = lazyWithRetry(() => import("./pages/RuntimeErrorsPage"));
 const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
-const ColorPalettePage = lazyWithRetry(() => import("./pages/ColorPalettePage"));
 
 function RouteSuspense({
   children,
@@ -244,7 +242,6 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
     { pattern: "/admin/observability", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/observability") },
-    { pattern: "/admin/runtime-errors", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/runtime-errors") },
     { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
     { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
     { pattern: "/orders/estimates/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/estimates\/[^/]+$/.test(value) },
@@ -577,29 +574,6 @@ function ModuleRouteGate({
     <PermissionGate
       allowed={isSuperAdmin || hasModuleAccess}
       requirement={`картка доступів: ${moduleLabel} або access_role: owner (Super Admin)`}
-      accessRole={accessRole}
-      jobRole={jobRole}
-    >
-      {children}
-    </PermissionGate>
-  );
-}
-
-function RuntimeErrorsRouteGate({
-  accessRole,
-  jobRole,
-  isSuperAdmin,
-  children,
-}: {
-  accessRole: string | null;
-  jobRole: string | null;
-  isSuperAdmin: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <PermissionGate
-      allowed={isSuperAdmin}
-      requirement="access_role: owner (Super Admin)"
       accessRole={accessRole}
       jobRole={jobRole}
     >
@@ -1049,34 +1023,6 @@ function AppRoutes() {
                 <AdminObservabilityPage />
               </RouteSuspense>
             </PermissionGate>
-          }
-        />
-        <Route
-          path="admin/runtime-errors"
-          element={
-            <RuntimeErrorsRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-            >
-              <RouteSuspense shell>
-                <RuntimeErrorsPage />
-              </RouteSuspense>
-            </RuntimeErrorsRouteGate>
-          }
-        />
-        <Route
-          path="admin/palette"
-          element={
-            <RuntimeErrorsRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-            >
-              <RouteSuspense shell>
-                <ColorPalettePage />
-              </RouteSuspense>
-            </RuntimeErrorsRouteGate>
           }
         />
       </Route>
