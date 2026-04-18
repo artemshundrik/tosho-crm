@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import {
@@ -31,14 +31,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { buildCompanySearchVariants, matchesCompanyNameSearch, scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { supabase } from "@/lib/supabaseClient";
 import { listCustomersBySearch, listLeadsBySearch, listQuotes } from "@/lib/toshoApi";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
+import { InlineLoading } from "@/components/app/loading-primitives";
 
 type RouteItem = {
   key: string;
   label: string;
+  description: string;
+  kindLabel?: string;
   keywords: string[];
   to: string;
   icon: React.ElementType;
@@ -47,6 +51,7 @@ type RouteItem = {
 type ActionItem = {
   key: string;
   label: string;
+  description: string;
   keywords: string[];
   to: string;
   icon: React.ElementType;
@@ -56,6 +61,8 @@ type RecentItem = {
   label: string;
   to: string;
   ts: number;
+  description?: string;
+  kindLabel?: string;
 };
 
 type SearchResultItem = {
@@ -77,6 +84,7 @@ type SearchResultItem = {
 
 const RECENTS_KEY = "fayna_cmdk_recents_v1";
 const MAX_RECENTS = 8;
+const GENERIC_RECENT_LABELS = new Set(["Дизайн", "Замовники", "Замовлення", "Команда", "Фінанси", "Каталог продукції", "Сторінка"]);
 
 function normalizeText(s: string) {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
@@ -131,11 +139,116 @@ function getKindBadgeClass(kindLabel: string) {
       return "cmd-kind-lead";
     case "Прорахунок":
       return "cmd-kind-quote";
+    case "Замовлення":
+      return "cmd-kind-order";
     case "Дизайн":
       return "cmd-kind-design";
     default:
       return "border-border bg-muted text-muted-foreground";
   }
+}
+
+function getPathSummary(path: string) {
+  if (path.startsWith("/settings/members")) return "Налаштування доступів і ролей команди";
+  if (path.startsWith("/admin/observability")) return "Системний контроль, storage і технічні метрики";
+  if (path.startsWith("/design/")) return "Конкретна дизайн-задача";
+  if (path === "/design") return "Розділ дизайн-задач";
+  if (path.startsWith("/orders/estimates/")) return "Конкретний прорахунок";
+  if (path === "/orders/estimates") return "Список прорахунків";
+  if (path.startsWith("/orders/production/")) return "Конкретне замовлення";
+  if (path.startsWith("/orders/customers")) return "База замовників і лідів";
+  if (path.startsWith("/orders/production")) return "Черга замовлень";
+  if (path.startsWith("/catalog/products")) return "Каталог продукції";
+  if (path.startsWith("/finance/invoices")) return "Розділ рахунків";
+  if (path.startsWith("/finance/expense-invoices")) return "Розділ видаткових";
+  if (path.startsWith("/finance/acts")) return "Розділ актів";
+  if (path.startsWith("/finance")) return "Фінансовий розділ";
+  if (path.startsWith("/team")) return "Сторінка команди";
+  if (path.startsWith("/notifications")) return "Центр сповіщень";
+  if (path.startsWith("/profile")) return "Профіль користувача";
+  return "Нещодавно відкрито";
+}
+
+function getRoutePresentation(path: string) {
+  if (path.startsWith("/settings/members")) {
+    return {
+      label: "Управління командою",
+      description: "Налаштування ролей, доступів і учасників",
+      kindLabel: "Налаштування",
+    };
+  }
+  if (path.startsWith("/admin/observability")) {
+    return {
+      label: "Контроль системи",
+      description: "Observability, storage, orphan files і технічні метрики",
+      kindLabel: "Адмін",
+    };
+  }
+  if (path.startsWith("/design/")) {
+    return {
+      label: "Дизайн-задача",
+      description: "Конкретна дизайн-задача",
+      kindLabel: "Дизайн",
+    };
+  }
+  if (path.startsWith("/orders/estimates/")) {
+    return {
+      label: "Прорахунок",
+      description: "Конкретний прорахунок",
+      kindLabel: "Прорахунок",
+    };
+  }
+  if (path.startsWith("/orders/production/")) {
+    return {
+      label: "Замовлення",
+      description: "Конкретне замовлення",
+      kindLabel: "Замовлення",
+    };
+  }
+  if (path.startsWith("/orders/customers")) {
+    return {
+      label: "Замовники",
+      description: "База замовників і лідів",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/orders/production")) {
+    return {
+      label: "Замовлення",
+      description: "Черга замовлень і виробництво",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/catalog/products")) {
+    return {
+      label: "Каталог продукції",
+      description: "Каталог товарів і моделей",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/notifications")) {
+    return {
+      label: "Сповіщення",
+      description: "Центр сповіщень",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/team")) {
+    return {
+      label: "Команда",
+      description: "Стан команди, події і присутність",
+      kindLabel: "Сторінка",
+    };
+  }
+  return null;
+}
+
+function isLikelyLegacyRecent(item: RecentItem) {
+  if (item.description || item.kindLabel) return false;
+  if (GENERIC_RECENT_LABELS.has(item.label) && /\/[0-9a-f]{8}-/i.test(item.to)) return true;
+  if (item.to.includes("?customerId=") || item.to.includes("?leadId=")) return true;
+  if (item.label === "Сторінка") return true;
+  return false;
 }
 
 function loadRecents(): RecentItem[] {
@@ -149,6 +262,19 @@ function loadRecents(): RecentItem[] {
         (x) =>
           typeof x?.to === "string" && typeof x?.label === "string" && typeof x?.ts === "number"
       )
+      .filter((item) => !isLikelyLegacyRecent(item))
+      .map((item) => ({
+        ...item,
+        ...(getRoutePresentation(item.to) ?? {}),
+        description:
+          typeof item.description === "string" && item.description.trim()
+            ? item.description.trim()
+            : getPathSummary(item.to),
+        kindLabel:
+          typeof item.kindLabel === "string" && item.kindLabel.trim()
+            ? item.kindLabel.trim()
+            : "Нещодавно",
+      }))
       .sort((a, b) => b.ts - a.ts)
       .slice(0, MAX_RECENTS);
   } catch {
@@ -164,34 +290,12 @@ function saveRecents(items: RecentItem[]) {
   }
 }
 
-function pushRecent(next: { label: string; to: string }) {
+function pushRecent(next: { label: string; to: string; description?: string; kindLabel?: string }) {
   const current = loadRecents();
   const now = Date.now();
   const filtered = current.filter((x) => x.to !== next.to);
   const updated: RecentItem[] = [{ ...next, ts: now }, ...filtered].slice(0, MAX_RECENTS);
   saveRecents(updated);
-}
-
-function pathToLabel(pathname: string): string {
-  if (pathname.startsWith("/admin/observability")) return "Admin Observability";
-  if (pathname.startsWith("/orders/estimates")) return "Прорахунки замовлень";
-  if (pathname.startsWith("/orders/customers")) return "Замовники";
-  if (pathname.startsWith("/orders/production")) return "Замовлення";
-  if (pathname.startsWith("/orders/ready-to-ship")) return "Готові до відвантаження";
-  if (pathname.startsWith("/catalog/products")) return "Каталог продукції";
-  if (pathname.startsWith("/design")) return "Дизайн";
-  if (pathname.startsWith("/logistics")) return "Логістика";
-  if (pathname.startsWith("/contractors")) return "Підрядники та постачальники";
-  if (pathname.startsWith("/finance/invoices")) return "Рахунки";
-  if (pathname.startsWith("/finance/expense-invoices")) return "Видаткові накладні";
-  if (pathname.startsWith("/finance/acts")) return "Акти виконаних робіт";
-  if (pathname.startsWith("/finance")) return "Фінанси";
-  if (pathname.startsWith("/activity")) return "Активність";
-  if (pathname.startsWith("/notifications")) return "Сповіщення";
-  if (pathname.startsWith("/team")) return "Команда";
-  if (pathname.startsWith("/settings/members")) return "Управління командою";
-  if (pathname.startsWith("/profile")) return "Профіль";
-  return "Сторінка";
 }
 
 export type CommandPaletteProps = {
@@ -201,19 +305,22 @@ export type CommandPaletteProps = {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { teamId, userId, permissions } = useAuth();
 
   const [query, setQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
+  const activeSearchQuery = query.trim();
+  const shouldSearchCRM = open && Boolean(teamId) && activeSearchQuery.length >= 2;
 
   const routes: RouteItem[] = useMemo(
     () => [
       {
         key: "route-estimates",
         label: "Прорахунки замовлень",
+        description: "Список прорахунків і комерційних пропозицій",
+        kindLabel: "Сторінка",
         keywords: ["прорахунок", "кп", "estimate", "quotes"],
         to: "/orders/estimates",
         icon: Calculator,
@@ -221,6 +328,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-customers",
         label: "Замовники",
+        description: "База замовників і лідів",
+        kindLabel: "Сторінка",
         keywords: ["замовники", "customers", "companies"],
         to: "/orders/customers",
         icon: Building2,
@@ -228,6 +337,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-production",
         label: "Замовлення",
+        description: "Черга замовлень і виробництво",
+        kindLabel: "Сторінка",
         keywords: ["виробництво", "production", "orders"],
         to: "/orders/production",
         icon: Factory,
@@ -235,6 +346,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-ready-to-ship",
         label: "Готові до відвантаження",
+        description: "Замовлення, готові до відправки",
+        kindLabel: "Сторінка",
         keywords: ["доставка", "відвантаження", "shipping"],
         to: "/orders/ready-to-ship",
         icon: Truck,
@@ -242,6 +355,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-catalog",
         label: "Каталог продукції",
+        description: "Каталог товарів і моделей",
+        kindLabel: "Сторінка",
         keywords: ["каталог", "products", "items"],
         to: "/catalog/products",
         icon: FolderKanban,
@@ -249,6 +364,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-design",
         label: "Дизайн",
+        description: "Черга дизайн-задач і макетів",
+        kindLabel: "Сторінка",
         keywords: ["дизайн", "design", "tasks"],
         to: "/design",
         icon: Palette,
@@ -256,6 +373,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-finance",
         label: "Фінанси",
+        description: "Платежі, рахунки та фінансові документи",
+        kindLabel: "Сторінка",
         keywords: ["фінанси", "finance", "payments"],
         to: "/finance",
         icon: ReceiptText,
@@ -263,6 +382,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-finance-invoices",
         label: "Рахунки",
+        description: "Список рахунків",
+        kindLabel: "Сторінка",
         keywords: ["рахунок", "invoice"],
         to: "/finance/invoices",
         icon: ReceiptText,
@@ -270,6 +391,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-finance-expense-invoices",
         label: "Видаткові накладні",
+        description: "Список видаткових накладних",
+        kindLabel: "Сторінка",
         keywords: ["видаткова", "expense invoice"],
         to: "/finance/expense-invoices",
         icon: FileMinus,
@@ -277,6 +400,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-finance-acts",
         label: "Акти виконаних робіт",
+        description: "Список актів виконаних робіт",
+        kindLabel: "Сторінка",
         keywords: ["акт", "acts"],
         to: "/finance/acts",
         icon: FileCheck,
@@ -284,6 +409,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-notifications",
         label: "Сповіщення",
+        description: "Центр сповіщень",
+        kindLabel: "Сторінка",
         keywords: ["notifications", "alerts", "події"],
         to: "/notifications",
         icon: Bell,
@@ -291,6 +418,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "route-team",
         label: "Команда",
+        description: "Стан команди, події і присутність",
+        kindLabel: "Сторінка",
         keywords: ["команда", "люди", "статуси", "відпустка", "лікарняний", "birthday"],
         to: "/team",
         icon: Users,
@@ -299,7 +428,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         ? [
             {
               key: "route-admin-observability",
-              label: "Admin Observability",
+              label: "Контроль системи",
+              description: "Observability, storage і технічні метрики",
+              kindLabel: "Адмін",
               keywords: ["observability", "admin", "контроль", "панель", "адмін", "метрики", "storage", "orphan files"],
               to: "/admin/observability",
               icon: Search,
@@ -315,6 +446,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "action-open-estimates",
         label: "Відкрити прорахунки",
+        description: "Швидкий перехід до прорахунків",
         keywords: ["швидко", "прорахунки", "quotes"],
         to: "/orders/estimates",
         icon: Calculator,
@@ -322,6 +454,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "action-open-design",
         label: "Відкрити дизайн-задачі",
+        description: "Швидкий перехід до дизайну",
         keywords: ["швидко", "design", "дизайн"],
         to: "/design",
         icon: Palette,
@@ -329,6 +462,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       {
         key: "action-open-profile",
         label: "Відкрити профіль",
+        description: "Ваш профіль і персональні налаштування",
         keywords: ["profile", "акаунт"],
         to: "/profile",
         icon: User,
@@ -336,11 +470,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     ],
     []
   );
-
-  useEffect(() => {
-    const label = pathToLabel(location.pathname);
-    pushRecent({ label, to: location.pathname });
-  }, [location.pathname]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -438,8 +567,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
 
     let cancelled = false;
+    setSearchLoading(true);
     const timeoutId = window.setTimeout(async () => {
-      setSearchLoading(true);
       try {
         const normalizedQuery = normalizeText(trimmedQuery);
         const loadDesignTaskRows = async () => {
@@ -498,9 +627,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         const quoteResponses = await Promise.all(
           queryVariants.map((variant) => listQuotes({ teamId, search: variant, limit: 10 }))
         );
-        const [customers, leads, designTaskResponse] = await Promise.all([
+        const [customers, leads, orderRows, designTaskResponse] = await Promise.all([
           listCustomersBySearch(teamId, trimmedQuery),
           listLeadsBySearch(teamId, trimmedQuery),
+          loadDerivedOrders(teamId, userId),
           loadDesignTaskRows(),
         ]);
         const resolveManagerMeta = (managerUserId?: string | null, managerLabel?: string | null) => {
@@ -553,6 +683,69 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               logoUrl: quote.customer_logo_url ?? null,
               avatarName: quote.customer_name?.trim() || quote.title?.trim() || quoteLabel,
               kindLabel: "Прорахунок",
+              score,
+              group: "records",
+            });
+          });
+
+        orderRows
+          .map((order) => {
+            const orderLabel = order.quoteNumber?.trim() || "Замовлення";
+            const description = [order.customerName?.trim(), order.orderStatus?.trim()]
+              .filter(Boolean)
+              .join(" · ");
+            const itemNames = order.items.slice(0, 3).map((item) => item.name).filter(Boolean);
+            const searchScore = Math.max(
+              scoreCompanyNameMatch(trimmedQuery, [
+                order.customerName ?? null,
+                order.quoteNumber ?? null,
+                ...itemNames,
+              ]),
+              normalizeText(
+                [
+                  orderLabel,
+                  description,
+                  order.id,
+                  order.customerName,
+                  order.quoteNumber,
+                  order.paymentRail,
+                  ...itemNames,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              ).includes(normalizedQuery)
+                ? 72
+                : 0
+            );
+            return {
+              order,
+              orderLabel,
+              description,
+              score: searchScore,
+            };
+          })
+          .filter((entry) => entry.score > 0)
+          .sort((left, right) => right.score - left.score)
+          .slice(0, 6)
+          .forEach(({ order, orderLabel, description, score }) => {
+            nextResults.push({
+              key: `order-${order.id}`,
+              label: orderLabel,
+              description: description || "Замовлення",
+              value: buildCommandSearchValue([
+                orderLabel,
+                description,
+                order.id,
+                order.customerName,
+                order.quoteNumber,
+                order.paymentRail,
+                ...order.items.slice(0, 3).map((item) => item.name),
+              ]),
+              to: `/orders/production/${order.id}`,
+              icon: Factory,
+              logoUrl: order.customerLogoUrl ?? null,
+              avatarName: order.customerName?.trim() || orderLabel,
+              kindLabel: "Замовлення",
               score,
               group: "records",
             });
@@ -793,9 +986,25 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [memberById, memberByLabel, open, query, teamId]);
+  }, [memberById, memberByLabel, open, query, teamId, userId]);
 
   function go(to: string) {
+    const matchedResult = searchResults.find((result) => result.to === to);
+    const matchedAction = actions.find((item) => item.to === to);
+    const matchedRoute = routes.find((item) => item.to === to);
+    pushRecent({
+      label: matchedResult?.label ?? matchedAction?.label ?? matchedRoute?.label ?? to,
+      to,
+      description:
+        matchedResult?.description ??
+        (matchedAction ? "Швидка дія в команд палеті" : undefined) ??
+        getPathSummary(to),
+      kindLabel:
+        matchedResult?.kindLabel ??
+        (matchedAction ? "Дія" : undefined) ??
+        matchedRoute?.kindLabel ??
+        "Нещодавно",
+    });
     onOpenChange(false);
     navigate(to);
   }
@@ -814,6 +1023,27 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     () => searchResults.filter((result) => result.group === "records"),
     [searchResults]
   );
+  const normalizedQuery = normalizeText(query);
+  const hasActiveQuery = activeSearchQuery.length > 0;
+  const filteredRecents = useMemo(() => {
+    if (!hasActiveQuery) return recents.slice(0, 6);
+    return recents.filter((item) =>
+      buildCommandSearchValue([item.label, item.to]).includes(normalizedQuery)
+    );
+  }, [hasActiveQuery, normalizedQuery, recents]);
+  const filteredActions = useMemo(() => {
+    if (!hasActiveQuery) return actions;
+    return actions.filter((item) =>
+      buildCommandSearchValue([item.label, ...item.keywords, item.to]).includes(normalizedQuery)
+    );
+  }, [actions, hasActiveQuery, normalizedQuery]);
+  const filteredRoutes = useMemo(() => {
+    if (!hasActiveQuery) return [];
+    return routes.filter((item) =>
+      buildCommandSearchValue([item.label, ...item.keywords, item.to]).includes(normalizedQuery)
+    );
+  }, [hasActiveQuery, normalizedQuery, routes]);
+  const showHomeState = !hasActiveQuery;
 
   function renderResultItem(result: SearchResultItem) {
     const Icon = result.icon;
@@ -909,7 +1139,57 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       />
 
       <CommandList className="py-1">
-        <CommandEmpty>{searchLoading ? "Шукаю..." : "Нічого не знайдено."}</CommandEmpty>
+        <CommandEmpty>Нічого не знайдено.</CommandEmpty>
+
+        {shouldSearchCRM && searchLoading ? (
+          <>
+            <CommandGroup heading="Пошук у CRM">
+              <CommandItem
+                value={buildCommandSearchValue([activeSearchQuery, "crm loading 1"])}
+                disabled
+                className="opacity-100"
+              >
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                  <Search className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <InlineLoading
+                    label={`Шукаємо в CRM за запитом “${activeSearchQuery}”...`}
+                    className="min-h-5 text-sm"
+                    spinnerClassName="h-3.5 w-3.5"
+                    textClassName="text-sm"
+                  />
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Замовники, ліди, прорахунки, замовлення та дизайн-задачі
+                  </div>
+                </div>
+              </CommandItem>
+              <CommandItem
+                value={buildCommandSearchValue([activeSearchQuery, "crm loading 2"])}
+                disabled
+                className="opacity-100"
+              >
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/20" />
+                <div className="min-w-0 flex-1">
+                  <div className="h-4 w-44 animate-pulse rounded-full bg-muted/70" />
+                  <div className="mt-2 h-3 w-64 animate-pulse rounded-full bg-muted/50" />
+                </div>
+              </CommandItem>
+              <CommandItem
+                value={buildCommandSearchValue([activeSearchQuery, "crm loading 3"])}
+                disabled
+                className="opacity-100"
+              >
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/20" />
+                <div className="min-w-0 flex-1">
+                  <div className="h-4 w-36 animate-pulse rounded-full bg-muted/70" />
+                  <div className="mt-2 h-3 w-52 animate-pulse rounded-full bg-muted/50" />
+                </div>
+              </CommandItem>
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        ) : null}
 
         {companyResults.length > 0 && (
           <>
@@ -929,29 +1209,41 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </>
         )}
 
-        {recents.length > 0 && (
+        {showHomeState && filteredRecents.length > 0 && (
           <>
             <CommandGroup heading="Останні">
-              {recents.map((r) => (
+              {filteredRecents.map((r) => (
               <CommandItem
                 key={`recent-${r.to}`}
-                value={buildCommandSearchValue([r.label, r.to])}
+                value={buildCommandSearchValue([r.label, r.description, r.kindLabel, r.to])}
                 onSelect={() => go(r.to)}
               >
                   <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
                     <History className="h-4 w-4" />
                   </span>
-                  <span className="flex-1">{r.label}</span>
-                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">{r.to}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate">{r.label}</span>
+                      {r.kindLabel ? (
+                        <span className="shrink-0 rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {r.kindLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {r.description || getPathSummary(r.to)}
+                    </div>
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandSeparator />
+            {filteredActions.length > 0 ? <CommandSeparator /> : null}
           </>
         )}
 
-        <CommandGroup heading="Швидкі дії">
-          {actions.map((a) => {
+        {filteredActions.length > 0 ? (
+        <CommandGroup heading={showHomeState ? "Швидкі дії" : "Дії"}>
+          {filteredActions.map((a) => {
             const Icon = a.icon;
             return (
               <CommandItem
@@ -962,16 +1254,21 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span>{a.label}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate">{a.label}</div>
+                  <div className="truncate text-xs text-muted-foreground">{a.description}</div>
+                </div>
               </CommandItem>
             );
           })}
         </CommandGroup>
+        ) : null}
 
-        <CommandSeparator />
+        {!showHomeState && filteredActions.length > 0 && filteredRoutes.length > 0 ? <CommandSeparator /> : null}
 
+        {!showHomeState && filteredRoutes.length > 0 ? (
         <CommandGroup heading="Сторінки">
-          {routes.map((r) => {
+          {filteredRoutes.map((r) => {
             const Icon = r.icon;
             return (
               <CommandItem
@@ -982,12 +1279,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="flex-1">{r.label}</span>
-                <span className="text-xs text-muted-foreground truncate max-w-[180px]">{r.to}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate">{r.label}</div>
+                  <div className="truncate text-xs text-muted-foreground">{r.description}</div>
+                </div>
               </CommandItem>
             );
           })}
         </CommandGroup>
+        ) : null}
       </CommandList>
     </CommandDialog>
   );

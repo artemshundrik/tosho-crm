@@ -5,6 +5,7 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WorkspacePresenceEntry } from "@/hooks/useWorkspacePresenceState";
+import { MenuSkeleton } from "@/components/app/loading-primitives";
 
 type PresenceAvatarStackProps = {
   entries: WorkspacePresenceEntry[];
@@ -155,7 +156,7 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
             Онлайн зараз ({entries.length})
           </div>
           {loading ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">Оновлення...</div>
+            <MenuSkeleton rows={3} label="Оновлюємо присутність..." />
           ) : entries.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">Наразі нікого онлайн.</div>
           ) : (

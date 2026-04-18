@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { InlineLoading } from "@/components/app/loading-primitives";
 import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -2719,7 +2721,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
                 </p>
               </div>
               {crossManagerMatchesLoading ? (
-                <p className="text-xs text-amber-900/80">Шукаю збіги по команді…</p>
+                <InlineLoading
+                  label="Шукаємо збіги по команді..."
+                  className="min-h-6 text-xs text-amber-900/80"
+                  spinnerClassName="h-3 w-3 text-amber-900/80"
+                  textClassName="text-xs text-amber-900/80"
+                />
               ) : crossManagerMatches.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {crossManagerMatches.map((match) => (
@@ -2747,12 +2754,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </div>
         ) : null}
         <TabsContent value="customers" className="mt-0 pt-4">
-          <div className="overflow-hidden">
-            {customersLoading ? (
-              <AppSectionLoader label="Завантаження..." />
-            ) : customersError ? (
-              <div className="p-6 text-sm text-destructive">{customersError}</div>
-            ) : filteredRows.length === 0 ? (
+            <div className="overflow-hidden">
+              {customersLoading ? (
+              <AppSectionLoader label="Готуємо список замовників..." />
+              ) : customersError ? (
+                <div className="p-6 text-sm text-destructive">{customersError}</div>
+              ) : filteredRows.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Немає замовників. Додайте першого.</div>
             ) : (
               <>
@@ -3029,7 +3036,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         <TabsContent value="leads" className="mt-0 pt-4">
           <div className="overflow-hidden">
             {leadsLoading ? (
-              <AppSectionLoader label="Завантаження..." />
+              <AppSectionLoader label="Готуємо список лідів..." />
             ) : leadsError ? (
               <div className="p-6 text-sm text-destructive">{leadsError}</div>
             ) : filteredLeads.length === 0 ? (
@@ -3421,7 +3428,7 @@ export default function OrdersCustomersPage() {
   const { teamId, loading, session } = useAuth();
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Завантаження...</div>;
+    return <AppPageLoader title="Завантаження" subtitle="Готуємо замовників, лідів і пов'язані дані." />;
   }
 
   if (!session) {

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
+import { InlineLoading } from "@/components/app/loading-primitives";
 
 type InviteInfo = {
   email: string;
@@ -209,7 +210,7 @@ export default function InvitePage() {
         ) : (
           <>
             {inviteLoading ? (
-              <div className="text-sm text-muted-foreground">Завантаження інвайту...</div>
+              <InlineLoading label="Завантажуємо інвайт..." className="py-1" />
             ) : null}
 
             {inviteEmail ? (

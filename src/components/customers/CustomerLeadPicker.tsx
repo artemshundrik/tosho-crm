@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { matchesCompanyNameSearch } from "@/lib/companyNameSearch";
 import { cn } from "@/lib/utils";
+import { MenuSkeleton } from "@/components/app/loading-primitives";
 
 export type CustomerLeadOption = {
   id: string;
@@ -146,7 +147,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
               onScroll={updateScrollHints}
             >
               {loading ? (
-                <div className="p-2 text-xs text-muted-foreground">Завантаження...</div>
+                <MenuSkeleton rows={4} label="Завантажуємо замовників і лідів..." />
               ) : visibleOptions.length > 0 ? (
                 visibleOptions.map((option) => {
                   const isSelected = selectedLabel.trim() === option.label && selectedType === option.entityType;

@@ -22,6 +22,7 @@ import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/contro
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
+import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
@@ -1085,7 +1086,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </TabsList>
             <TabsContent value="calculations" className="mt-3">
               {linkedLoading ? (
-                <div className="text-sm text-muted-foreground">Завантаження...</div>
+                <SurfaceSkeleton label="Завантажуємо прорахунки..." rows={3} compact className="border-none bg-transparent p-0" />
               ) : calculations.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
               ) : (
@@ -1096,7 +1097,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </TabsContent>
             <TabsContent value="orders" className="mt-3">
               {linkedLoading ? (
-                <div className="text-sm text-muted-foreground">Завантаження...</div>
+                <SurfaceSkeleton label="Завантажуємо замовлення..." rows={3} compact className="border-none bg-transparent p-0" />
               ) : orders.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
               ) : (
@@ -1107,7 +1108,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </TabsContent>
             <TabsContent value="design" className="mt-3">
               {linkedLoading ? (
-                <div className="text-sm text-muted-foreground">Завантаження...</div>
+                <SurfaceSkeleton label="Завантажуємо дизайн-задачі..." rows={3} compact className="border-none bg-transparent p-0" />
               ) : designTasks.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Поки немає дизайн-задач.</div>
               ) : (

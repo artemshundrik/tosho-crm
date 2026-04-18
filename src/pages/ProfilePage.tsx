@@ -23,6 +23,7 @@ import {
   type EmploymentStatus,
 } from "@/lib/employment";
 import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile } from "@/lib/workspaceMemberDirectory";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
@@ -74,8 +75,7 @@ export function ProfilePage() {
     }
   }, [hasCache, loading]);
   
-  // Показуємо skeleton тільки якщо немає кешу
-  const shouldShowSkeleton = loading && !hasCache;
+  const showSkeleton = useMinimumLoading(loading && !hasCache);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(cached?.avatarUrl ?? null);
   const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -530,9 +530,7 @@ export function ProfilePage() {
     }
   };
 
-  if (loading) {
-    if (shouldShowSkeleton) return <DetailSkeleton />;
-  }
+  if (showSkeleton) return <DetailSkeleton />;
 
   const employmentDuration = formatEmploymentDuration(startDate);
   const employmentDays = getEmploymentDurationDays(startDate);

@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
+import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import {
   createEmptyCustomerLegalEntity,
   formatOwnershipTypeLabel,
@@ -1222,7 +1223,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </TabsList>
                 <TabsContent value="calculations" className="mt-3">
                   {linkedLoading ? (
-                    <div className="text-sm text-muted-foreground">Завантаження...</div>
+                    <SurfaceSkeleton label="Завантажуємо прорахунки..." rows={3} compact className="border-none bg-transparent p-0" />
                   ) : calculations.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Поки немає прорахунків.</div>
                   ) : (
@@ -1233,7 +1234,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </TabsContent>
                 <TabsContent value="orders" className="mt-3">
                   {linkedLoading ? (
-                    <div className="text-sm text-muted-foreground">Завантаження...</div>
+                    <SurfaceSkeleton label="Завантажуємо замовлення..." rows={3} compact className="border-none bg-transparent p-0" />
                   ) : orders.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Поки немає замовлень.</div>
                   ) : (
@@ -1244,7 +1245,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </TabsContent>
                 <TabsContent value="design" className="mt-3">
                   {linkedLoading ? (
-                    <div className="text-sm text-muted-foreground">Завантаження...</div>
+                    <SurfaceSkeleton label="Завантажуємо дизайн-задачі..." rows={3} compact className="border-none bg-transparent p-0" />
                   ) : designTasks.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Поки немає дизайн-задач.</div>
                   ) : (

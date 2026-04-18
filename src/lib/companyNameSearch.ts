@@ -140,6 +140,23 @@ const toCompact = (value: string) => value.replace(/\s+/g, "");
 
 const toConsonantSkeleton = (value: string) => toCompact(value).replace(/[aeiouy]/g, "");
 
+const LATIN_CONSONANT_REGEX = /[bcdfghjklmnpqrstvwxz]/;
+
+const buildDoubledConsonantVariants = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized || normalized.length < 4) return [];
+
+  const variants = new Set<string>();
+  for (let index = 1; index < normalized.length - 1; index += 1) {
+    const char = normalized[index];
+    if (!char || !LATIN_CONSONANT_REGEX.test(char)) continue;
+    if (normalized[index - 1] === char || normalized[index + 1] === char) continue;
+    variants.add(`${normalized.slice(0, index + 1)}${char}${normalized.slice(index + 1)}`);
+  }
+
+  return Array.from(variants);
+};
+
 export const normalizeCompanyName = (value?: string | null) => stripToWords(value);
 
 export const normalizeCompanyNameLooseKey = (value?: string | null) => toPhoneticLatin(value ?? "");
@@ -173,6 +190,14 @@ export const buildCompanySearchVariants = (value?: string | null) => {
   const phoneticLatinWords = phoneticLatin.split(" ").filter((item) => item.length >= 3);
   const phoneticCyrillicWords = phoneticCyrillic.split(" ").filter((item) => item.length >= 3);
   const softCWords = phoneticLatinWords.map((item) => item.replace(/k(?=[aeiou])/g, "c"));
+  const doubledConsonantVariants = [
+    ...buildDoubledConsonantVariants(raw),
+    ...buildDoubledConsonantVariants(latin),
+    ...buildDoubledConsonantVariants(phoneticLatin),
+    ...rawWords.flatMap(buildDoubledConsonantVariants),
+    ...latinWords.flatMap(buildDoubledConsonantVariants),
+    ...phoneticLatinWords.flatMap(buildDoubledConsonantVariants),
+  ];
 
   return Array.from(
     new Set(
@@ -189,6 +214,7 @@ export const buildCompanySearchVariants = (value?: string | null) => {
         ...phoneticLatinWords,
         ...phoneticCyrillicWords,
         ...softCWords,
+        ...doubledConsonantVariants,
       ]
         .map((item) => item.trim())
         .filter((item) => item.length >= 2)

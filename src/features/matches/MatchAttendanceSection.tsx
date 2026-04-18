@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from '../../lib/supabaseClient';
+import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 
 type MatchAttendanceSectionProps = {
   matchId: string;
@@ -182,7 +183,7 @@ export function MatchAttendanceSection({ matchId }: MatchAttendanceSectionProps)
 
         <div className="max-h-80 overflow-y-auto rounded-[var(--radius-inner)] border border-border/60 bg-muted/10">
           {loading ? (
-            <p className="p-4 text-sm text-muted-foreground">Завантаження...</p>
+            <SurfaceSkeleton label="Завантажуємо склад команди..." rows={5} compact className="border-none bg-transparent p-3" />
           ) : playerList.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">Немає активних гравців.</p>
           ) : (

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { usePageCache } from "@/hooks/usePageCache";
+import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -81,8 +82,7 @@ export function FinancePoolDetailsPage() {
     }
   }, [hasCache, loading]);
   
-  // Показуємо skeleton тільки якщо немає кешу
-  const shouldShowSkeleton = loading && !hasCache;
+  const showSkeleton = useMinimumLoading(loading && !hasCache);
   const [pool, setPool] = useState<FinancePool | null>(cached?.pool ?? null);
   const [participants, setParticipants] = useState<ParticipantRow[]>(cached?.participants ?? []);
   const [payInputs, setPayInputs] = useState<Record<string, string>>({});
@@ -171,9 +171,7 @@ export function FinancePoolDetailsPage() {
     toast.success("Платіж зараховано");
   };
 
-  if (loading) {
-    if (shouldShowSkeleton) return <DetailSkeleton />;
-  }
+  if (showSkeleton) return <DetailSkeleton />;
 
   if (!pool) {
     return (

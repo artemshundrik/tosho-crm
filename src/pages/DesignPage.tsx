@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
+import { InlineLoading } from "@/components/app/loading-primitives";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -5132,14 +5133,15 @@ export default function DesignPage() {
       </Dialog>
 
       {viewMode !== "kanban" && (((loading && tasks.length === 0) || membersLoading || refreshing)) && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {membersLoading
-            ? "Завантаження учасників..."
-            : refreshing
-            ? "Оновлення задач..."
-            : "Завантаження задач..."}
-        </div>
+        <InlineLoading
+          label={
+            membersLoading
+              ? "Завантажуємо учасників..."
+              : refreshing
+              ? "Оновлюємо задачі..."
+              : "Завантажуємо задачі..."
+          }
+        />
       )}
 
       {viewMode !== "kanban" && hasMoreTasks && !loading && !membersLoading ? (

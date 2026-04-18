@@ -126,12 +126,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data.session ?? null;
         setSession(nextSession);
         if (nextSession?.user?.id) {
-          void refreshTeamContext(nextSession.user.id, { forceRefresh: true }).catch((error) => {
+          try {
+            await refreshTeamContext(nextSession.user.id, { forceRefresh: true });
+          } catch (error) {
             console.error("Failed to initialize team context", error);
             if (mounted) {
               resetTeamContext();
             }
-          });
+          }
         } else {
           resetTeamContext();
         }
