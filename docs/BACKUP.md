@@ -1,10 +1,25 @@
 # Backup and Restore (minimal setup)
 
+Status note:
+- this is an ops document for backup/restore
+- for coding decisions and repo navigation, trust:
+  - [AGENTS.md](/Users/artem/Projects/tosho-crm/AGENTS.md)
+  - [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md)
+  - [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md)
+  - [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md)
+- machine-local backup state can differ from tracked docs
+
 This project uses Supabase. Supabase is the source of truth for database backups.
 This repo keeps a separate backup flow only for Storage files:
 - Storage buckets backup as a separate weekly/monthly flow
 - Offsite copy of the Storage archive (Dropbox API)
 - Secrets backup (`.env`, API keys) in a password/secrets manager
+
+Status note as of April 19, 2026:
+- the tracked active LaunchAgent in this repo is [ops/com.tosho.crm.backup.plist](/Users/artem/Projects/tosho-crm/ops/com.tosho.crm.backup.plist)
+- that LaunchAgent runs `scripts/backup-storage-and-upload.sh`
+- the tracked storage helpers are `scripts/backup-storage.sh` and `scripts/backup-storage-if-needed.sh`
+- `scripts/report-backup-run.mjs` and `scripts/upload-backups-dropbox.mjs` load `.env.backup` and `.env.local` relative to the repo root, so they work correctly under `launchd`
 
 ## 1. Requirements
 
@@ -67,7 +82,9 @@ export STORAGE_S3_SECRET_ACCESS_KEY='...'
 bash scripts/restore.sh backups/YYYYMMDD-HHMMSSZ.tar.gz
 ```
 
-## 5. Cron (daily at 02:30)
+## 5. Legacy DB archive cron example (optional)
+
+This is not the current tracked default automation path. The current tracked LaunchAgent uses the storage/Dropbox flow described below.
 
 Example crontab entry:
 
@@ -78,7 +95,7 @@ Example crontab entry:
 ## 6. macOS auto backup when computer is ON (recommended)
 
 If your laptop is often off/asleep at 02:30, use `launchd` instead of cron.
-This runs on login and then checks every hour. If today's backup already exists, it skips.
+This runs on login and then checks every hour.
 
 1) Create env file with secrets:
 
@@ -104,7 +121,7 @@ cat > ~/Library/LaunchAgents/com.tosho.crm.backup.plist <<'EOF'
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>source /Users/artem/Projects/tosho-crm/.env.backup && export PATH="/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" && /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-if-needed.sh >> /Users/artem/Projects/tosho-crm/backups/backup.log 2>&1</string>
+    <string>source /Users/artem/Projects/tosho-crm/.env.backup && export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" && /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh >> /Users/artem/Projects/tosho-crm/backups/backup.log 2>&1</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -168,7 +185,7 @@ cd /Users/artem/Projects/tosho-crm
 node scripts/upload-backups-dropbox.mjs
 ```
 
-## 8. Update LaunchAgent command
+## 8. Current tracked LaunchAgent command
 
 Use:
 

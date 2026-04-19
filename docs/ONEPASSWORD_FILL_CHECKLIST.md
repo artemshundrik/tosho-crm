@@ -1,5 +1,14 @@
 # 1Password Fill Checklist
 
+Status note:
+- this is an ops/handoff fill plan, not a coding-source document
+- for coding decisions and repo navigation use:
+  - [AGENTS.md](/Users/artem/Projects/tosho-crm/AGENTS.md)
+  - [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md)
+  - [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md)
+  - [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md)
+- values and confirmations in this file are operational snapshots and may lag behind current code or local machine state
+
 ## Purpose
 
 This checklist is the practical version of the handoff docs.
@@ -36,10 +45,6 @@ Confirmed without exposing secrets:
   - `STORAGE_S3_ACCESS_KEY_ID`
   - `STORAGE_S3_SECRET_ACCESS_KEY`
   - `STORAGE_BUCKETS`
-  - `B2_S3_ENDPOINT`
-  - `B2_BUCKET`
-  - `B2_KEY_ID`
-  - `B2_APPLICATION_KEY`
   - `KEEP_ARCHIVES`
   - `KEEP_STORAGE_ARCHIVES`
   - `DROPBOX_RETENTION_DATABASE_DAILY`
@@ -222,20 +227,6 @@ Fill these fields:
 - `Last verified`
 - `Notes`
 
-Additional fields to add because they exist in the current backup env:
-
-- `B2_S3_ENDPOINT`
-- `B2_BUCKET`
-- `B2_KEY_ID`
-- `B2_APPLICATION_KEY`
-
-Important note:
-
-- these `B2_*` fields exist in the real backup env
-- they are not documented in the tracked examples or handoff docs
-- repo search did not show current code using them directly
-- before handoff, decide whether they are still active, legacy, or reserved for manual recovery
-
 ## Item 6: `Tosho CRM / Recovery Notes`
 
 Fill these fields:
@@ -275,7 +266,6 @@ Fill these fields:
   - `DROPBOX_APP_SECRET`
   - `DROPBOX_REFRESH_TOKEN`
   - `WEB_PUSH_VAPID_PRIVATE_KEY`
-  - `B2_APPLICATION_KEY` if B2 is still active
 - `Operational visibility`
   Fill with:
   - latest `backup_runs` row seen in DB
@@ -291,24 +281,24 @@ Fill these fields:
 
 ## Gaps to fix before handoff is complete
 
-### 1. Backup automation references missing scripts
+### 1. Backup automation must use current tracked script paths
 
 `scripts/backup-storage-and-upload.sh` calls:
 
 - `scripts/backup-storage.sh`
 - `scripts/backup-storage-if-needed.sh`
 
-These files are not present in the repo.
+These helpers are now tracked in the repo.
 
 Impact:
 
-- the documented backup flow is not self-contained in the current repository
-- the director handoff is weaker because restore and backup responsibility is not fully reproducible from tracked code
+- if a local machine still points to older backup script names, scheduled runs can fail even though the repo is correct
+- handoff notes should reference the current tracked script names, not older local-history paths
 
 Action:
 
-- verify whether these scripts exist outside git
-- if they are still needed, add them back to the repo or replace the automation with the actual maintained flow
+- verify the local `launchd` job still points to `scripts/backup-storage-and-upload.sh`
+- when debugging, use the tracked helper names above rather than older local-history script names
 
 ### 2. Dropbox backup root is not confirmed in the real backup env
 
@@ -322,19 +312,7 @@ Action:
 - place it in `1Password`
 - ensure the backup runtime uses that exact value
 
-### 3. B2 credentials are undocumented in handoff docs
-
-Impact:
-
-- there is live backup-related access that the director would not know exists
-
-Action:
-
-- decide whether B2 is active
-- if active, add a dedicated section or item in `1Password`
-- if legacy, document that explicitly and remove stale credentials where appropriate
-
-### 4. Some effective values exist only by code defaults
+### 3. Some effective values exist only by code defaults
 
 Known examples:
 
@@ -355,7 +333,6 @@ Action:
 - Create all six `1Password` items
 - Fill all confirmed fields from current working values
 - Verify vendor dashboard access for Supabase, Netlify, and Dropbox
-- Decide whether B2 is active and document it
 - Confirm the actual backup runtime path and destination
 - Record `Last verified` on every item
 - Run one executive-style recovery walkthrough using only `1Password` plus docs

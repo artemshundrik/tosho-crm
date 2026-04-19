@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, "..");
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -21,8 +26,8 @@ function loadEnvFile(filePath) {
   }
 }
 
-loadEnvFile(path.resolve(".env.backup"));
-loadEnvFile(path.resolve(".env.local"));
+loadEnvFile(path.join(repoRoot, ".env.backup"));
+loadEnvFile(path.join(repoRoot, ".env.local"));
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

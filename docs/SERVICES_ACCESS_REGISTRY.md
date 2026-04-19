@@ -1,5 +1,14 @@
 # Services And Access Registry
 
+Status note:
+- this is an ops/secrets registry document
+- for coding and implementation decisions, trust:
+  - [AGENTS.md](/Users/artem/Projects/tosho-crm/AGENTS.md)
+  - [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md)
+  - [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md)
+  - [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md)
+- if this registry conflicts with current tracked code, current tracked code wins
+
 ## Recommended approach
 
 For this CRM, the simplest and most stable setup is:
@@ -163,6 +172,10 @@ Variables in use:
 Notes:
 - these should stay isolated in `.env.backup`
 - `ops/com.tosho.crm.backup.plist` already sources `.env.backup`, which is the right pattern
+- as of April 19, 2026, the tracked active LaunchAgent command is `scripts/backup-storage-and-upload.sh`
+- treat older backup-automation references as legacy local-history, not the current tracked default
+- the tracked storage helper scripts are `scripts/backup-storage.sh` and `scripts/backup-storage-if-needed.sh`
+- Dropbox upload and backup-run reporting resolve `.env.backup` and `.env.local` from the repo root, which avoids `launchd` cwd issues
 
 ### 6. Minfin
 

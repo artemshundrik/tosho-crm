@@ -1,5 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, "..");
 
 const DROPBOX_API_BASE_URL = "https://api.dropboxapi.com/2";
 const DROPBOX_CONTENT_API_BASE_URL = "https://content.dropboxapi.com/2";
@@ -32,8 +37,8 @@ function loadEnvFile(filePath) {
   }
 }
 
-loadEnvFile(path.resolve(".env.backup"));
-loadEnvFile(path.resolve(".env.local"));
+loadEnvFile(path.join(repoRoot, ".env.backup"));
+loadEnvFile(path.join(repoRoot, ".env.local"));
 
 function requireEnv(name) {
   const value = process.env[name]?.trim();
@@ -353,9 +358,12 @@ async function cleanupFolderRetention(folderPath, keepCount) {
 }
 
 function getLatestArchivePath() {
-  const backupRoot = path.resolve(process.env.BACKUP_ROOT?.trim() || "./backups");
-  const latestPointerPath = process.env.DROPBOX_BACKUP_POINTER_PATH?.trim()
-    ? path.resolve(process.env.DROPBOX_BACKUP_POINTER_PATH.trim())
+  const configuredPointerPath = process.env.DROPBOX_BACKUP_POINTER_PATH?.trim();
+  const backupRoot = configuredPointerPath
+    ? path.dirname(path.resolve(configuredPointerPath))
+    : path.resolve(process.env.BACKUP_ROOT?.trim() || "./backups");
+  const latestPointerPath = configuredPointerPath
+    ? path.resolve(configuredPointerPath)
     : path.join(backupRoot, ".latest-successful-archive");
   let latestArchive = "";
 

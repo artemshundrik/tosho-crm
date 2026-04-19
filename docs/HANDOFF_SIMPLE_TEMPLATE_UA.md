@@ -1,5 +1,14 @@
 # Передача доступів Tosho CRM
 
+Статус документа:
+- це handoff-шаблон для бізнесу та операційної передачі, не основне джерело істини для coding-work
+- для коду, архітектури, таблиць і workflow використовуй:
+  - [AGENTS.md](/Users/artem/Projects/tosho-crm/AGENTS.md)
+  - [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md)
+  - [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md)
+  - [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md)
+- якщо цей шаблон не збігається з поточним кодом, орієнтуйся на поточний код
+
 ## Як користуватись
 
 Скопіюй цей шаблон в `1Password`, `Notes`, `Notion` або окремий захищений документ і заповни поля.

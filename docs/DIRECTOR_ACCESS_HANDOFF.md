@@ -1,5 +1,14 @@
 # Director Access Handoff
 
+Status note for Codex and engineering work:
+- this is an executive handoff / ops document, not the primary source of truth for coding decisions
+- for coding, architecture, schema, and implementation patterns use:
+  - [AGENTS.md](/Users/artem/Projects/tosho-crm/AGENTS.md)
+  - [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md)
+  - [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md)
+  - [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md)
+- if this document conflicts with current tracked code, current code wins
+
 ## Purpose
 
 This document defines which critical accesses the director must have for `Tosho CRM`, where they should be stored, and what each one is used for.
