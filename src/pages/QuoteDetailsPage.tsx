@@ -794,6 +794,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
   const [designCollaboratorIds, setDesignCollaboratorIds] = useState<string[]>([]);
   const [designTaskType, setDesignTaskType] = useState<DesignTaskType | null>(null);
+  const [createDesignTaskDialogOpen, setCreateDesignTaskDialogOpen] = useState(false);
   const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
   const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
   const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
@@ -2806,6 +2807,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     designTaskType?: DesignTaskType | null;
   }) => {
     if (!teamId) return;
+    const nextDesignTaskType = override?.designTaskType ?? designTaskType;
+    if (!nextDesignTaskType) {
+      setDesignTaskError("Оберіть тип дизайнерської задачі.");
+      setCreateDesignTaskDialogOpen(true);
+      return;
+    }
     setDesignTaskSaving(true);
     setDesignTaskError(null);
     try {
@@ -2822,10 +2829,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const collaboratorUserIds = Array.from(
         new Set((override?.collaboratorUserIds ?? designCollaboratorIds).filter((value) => value && value !== assigneeUserId))
       );
-      const nextDesignTaskType = override?.designTaskType ?? designTaskType;
-      if (!nextDesignTaskType) {
-        throw new Error("Оберіть тип дизайнерської задачі");
-      }
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
@@ -2886,6 +2889,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         assignedAt: nextAssignedAt ?? null,
         metadata: meta,
       });
+      setCreateDesignTaskDialogOpen(false);
       setDesignAssigneeId(nextAssignee ?? null);
       setDesignTaskType(nextDesignTaskType);
 
@@ -5251,7 +5255,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   size="sm"
                   className="h-8 gap-2 max-sm:flex-1"
                   disabled={designTaskSaving || !canEditQuoteContent}
-                  onClick={() => void createDesignTask()}
+                  onClick={() => {
+                    setDesignTaskError(null);
+                    setCreateDesignTaskDialogOpen(true);
+                  }}
                 >
                   <Palette className="h-4 w-4" />
                   <span className="truncate">{designTaskSaving ? "Створення..." : "Створити дизайн-задачу"}</span>
@@ -6878,7 +6885,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>
+                        <Button
+                          size="sm"
+                          onClick={() => void createDesignTask()}
+                          disabled={designTaskSaving || !designTaskType}
+                        >
                           {designTaskSaving ? "Створення..." : "Створити задачу"}
                         </Button>
                         <Button
@@ -8174,6 +8185,188 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         onConfirm={confirmDeleteAttachment}
         loading={!!attachmentsDeletingId}
       />
+
+      <Dialog open={createDesignTaskDialogOpen} onOpenChange={setCreateDesignTaskDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Створити дизайн-задачу</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              {quote?.number
+                ? `Прорахунок ${quote.number}. Вкажіть тип задачі й за потреби призначте виконавця.`
+                : "Вкажіть тип задачі й за потреби призначте виконавця."}
+            </div>
+
+            {designTaskError ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {designTaskError}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label>Тип задачі</Label>
+              <Select
+                value={designTaskType ?? "none"}
+                onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
+                disabled={designTaskSaving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Оберіть тип задачі">
+                    {designTaskType ? (
+                      <span className="inline-flex items-center gap-2">
+                        {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
+                        <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
+                      </span>
+                    ) : (
+                      "Оберіть тип задачі"
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" disabled>
+                    Оберіть тип задачі
+                  </SelectItem>
+                  {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <span className="inline-flex items-center gap-2">
+                        {createElement(DESIGN_TASK_TYPE_ICONS[option.value], { className: "h-4 w-4 text-muted-foreground" })}
+                        <span>{option.label}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Виконавець</Label>
+                <Select
+                  value={designAssigneeId ?? "none"}
+                  onValueChange={(value) => {
+                    const nextAssigneeId = value === "none" ? null : value;
+                    setDesignAssigneeId(nextAssigneeId);
+                    setDesignCollaboratorIds((prev) => prev.filter((entry) => entry !== nextAssigneeId));
+                  }}
+                  disabled={designTaskSaving}
+                >
+                  <SelectTrigger>
+                    {designAssigneeId ? (
+                      <div className="flex min-w-0 items-center gap-2">
+                        <AvatarBase
+                          src={memberAvatarById.get(designAssigneeId) ?? null}
+                          name={memberById.get(designAssigneeId) ?? designAssigneeId}
+                          fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
+                          size={20}
+                          className="text-[9px] font-semibold"
+                        />
+                        <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">Без виконавця</span>
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без виконавця</SelectItem>
+                    {designerMembers.length > 0 ? (
+                      designerMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          <div className="flex items-center gap-2">
+                            <AvatarBase
+                              src={member.avatarUrl}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={20}
+                              className="text-[9px] font-semibold"
+                            />
+                            <span>{member.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="empty" disabled>
+                        {teamMembers.length === 0
+                          ? "Немає учасників"
+                          : hasRoleInfo
+                          ? "Немає дизайнерів"
+                          : "Ролі не налаштовані"}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Співвиконавці</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      disabled={designTaskSaving}
+                    >
+                      <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="truncate">
+                        {designCollaboratorIds.length === 0
+                          ? "Не додано"
+                          : designCollaboratorIds.length === 1
+                          ? getMemberLabel(designCollaboratorIds[0])
+                          : `Співвиконавці · ${designCollaboratorIds.length}`}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[280px]">
+                    <DropdownMenuLabel>Співвиконавці</DropdownMenuLabel>
+                    {designerMembers.filter((member) => member.id !== designAssigneeId).map((member) => {
+                      const checked = designCollaboratorIds.includes(member.id);
+                      return (
+                        <DropdownMenuCheckboxItem
+                          key={member.id}
+                          checked={checked}
+                          onCheckedChange={(nextChecked) => {
+                            setDesignCollaboratorIds((prev) =>
+                              nextChecked ? [...prev, member.id] : prev.filter((entry) => entry !== member.id)
+                            );
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <AvatarBase
+                              src={member.avatarUrl}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={20}
+                              className="text-[9px] font-semibold"
+                            />
+                            <span>{member.label}</span>
+                          </div>
+                        </DropdownMenuCheckboxItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCreateDesignTaskDialogOpen(false)}
+              disabled={designTaskSaving}
+            >
+              Скасувати
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void createDesignTask()}
+              disabled={designTaskSaving || !designTaskType}
+            >
+              {designTaskSaving ? "Створення..." : "Створити задачу"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={itemModalOpen} onOpenChange={setItemModalOpen}>
         <DialogContent className="w-[min(1040px,calc(100vw-32px))] max-h-[90vh] gap-0 overflow-hidden border border-border/60 bg-card p-0 text-foreground">
