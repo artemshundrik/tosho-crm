@@ -2392,9 +2392,10 @@ export default function DesignTaskPage() {
           },
         });
         if (mentionedUserIds.length > 0) {
+          const actorLabel = userId ? getMemberLabel(userId) : "System";
           await notifyUsers({
             userIds: mentionedUserIds,
-            title: `Згадка у дизайн-задачі ${getTaskDisplayNumber(task)}`,
+            title: `${actorLabel} згадав(ла) вас у дизайн-задачі ${getTaskDisplayNumber(task)}`,
             body: body.length > 160 ? `${body.slice(0, 157)}...` : body,
             href: `/design/${task.id}`,
             type: "info",
@@ -6899,7 +6900,7 @@ export default function DesignTaskPage() {
             <HoverCopyText
               value={taskHeaderTitle}
               className="max-w-full"
-              textClassName="font-mono text-[15px] text-primary font-medium tracking-tight md:text-[16px]"
+              textClassName="font-mono text-[17px] font-medium tracking-tight text-primary md:text-[18px]"
               buttonStyle="overlay"
               buttonClassName="h-6 w-6 rounded-md"
               successMessage="Номер дизайн-задачі скопійовано"

@@ -193,6 +193,12 @@ When changing a route or top-level module, these files often all matter:
 - Permission logic should reuse [src/lib/permissions.ts](/Users/artem/Projects/tosho-crm/src/lib/permissions.ts).
 - Module access also lives in workspace member directory metadata, not only in `access_role`.
 
+### Frontend UI Tokens
+
+- New UI states should prefer semantic tokens and shared tone helpers/components instead of raw palette classes.
+- For badges, chips, avatar markers, and similar status surfaces, implement light/dark-safe token classes on the first pass.
+- If a visual pattern repeats, treat it as a component or reusable style contract, not a one-off page patch.
+
 ### Netlify Function Pattern
 
 - Most privileged serverless flows use:

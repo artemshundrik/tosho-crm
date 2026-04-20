@@ -22,6 +22,13 @@ Use when the task is mainly UI or client behavior.
 4. Reuse permission, workspace, and data helpers before adding new fetch/util layers.
 5. If the change spans multiple files or types, verify with `npm run build`.
 
+UI implementation rules:
+
+- if a new badge, status chip, avatar marker, or tone state is introduced, prefer a reusable component or a local/shared tone helper instead of repeating raw class strings
+- prefer semantic design tokens such as `info/success/warning/danger` surfaces over hardcoded palette classes like `pink-50`, `sky-50`, `violet-200`, etc.
+- new UI states must be valid in both light and dark theme on the first implementation, not patched later
+- when a pattern repeats more than once on a page or across modules, consolidate it before adding more one-off variants
+
 ## 2. New Route Or Module Change
 
 When adding or changing a top-level route/module, inspect all relevant surfaces:

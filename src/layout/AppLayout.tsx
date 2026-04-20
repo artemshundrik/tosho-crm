@@ -1446,7 +1446,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       <div className="shrink-0 border-b border-border/70 bg-background/55">
                         <SheetHeader className="px-4 pb-2 pt-4">
                           <div className="flex items-center justify-between gap-3">
-                            <SheetTitle>ToSho CRM</SheetTitle>
+                            <SheetTitle className="flex items-center">
+                              <Link
+                                to={ROUTES.overview}
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="inline-flex items-center justify-center rounded-[10px] px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                aria-label="ToSho CRM"
+                              >
+                                <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-[24px] w-auto" />
+                              </Link>
+                            </SheetTitle>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <Button
                                 variant="control"
