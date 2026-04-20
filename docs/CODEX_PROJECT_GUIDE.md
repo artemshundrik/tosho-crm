@@ -209,9 +209,11 @@ When changing a route or top-level module, these files often all matter:
 ### Design Task Model
 
 - Design tasks are primarily `activity_log` entities with `action = 'design_task'`.
+- Shared design work is modeled as `1 primary assignee + collaborator metadata` on the same design-task activity row, not as duplicated tasks or equal multi-assignee ownership.
 - Related history often uses additional `activity_log` actions such as:
   - `design_task_status`
   - `design_task_assignment`
+  - `design_task_collaborators`
   - `design_task_estimate`
   - `design_output_upload`
   - `design_output_selection`

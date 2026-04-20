@@ -52,6 +52,7 @@ import {
 import {
   ChevronDown,
   User,
+  Users,
   CalendarIcon,
   DollarSign,
   Shirt,
@@ -370,6 +371,78 @@ const ChipDropdown: React.FC<{
   );
 };
 
+const MultiChipDropdown: React.FC<{
+  values: string[];
+  onChange: (values: string[]) => void;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  placeholder: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  popoverClassName?: string;
+}> = ({ values, onChange, options, placeholder, icon, disabled = false, popoverClassName }) => {
+  const [open, setOpen] = React.useState(false);
+  const selectedOptions = options.filter((option) => values.includes(option.value));
+  const label =
+    selectedOptions.length === 0
+      ? placeholder
+      : selectedOptions.length === 1
+      ? selectedOptions[0]?.label ?? placeholder
+      : `Співвиконавці · ${selectedOptions.length}`;
+
+  return (
+    <Popover open={disabled ? false : open} onOpenChange={(next) => !disabled && setOpen(next)}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            selectedOptions.length > 0
+              ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70",
+            disabled && "pointer-events-none opacity-50"
+          )}
+        >
+          <span className={cn("mr-2 shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", selectedOptions.length > 0 ? "text-primary" : "text-muted-foreground")}>
+            {icon}
+          </span>
+          <span className={cn("min-w-0 flex-1 truncate text-left font-medium", selectedOptions.length === 0 && "text-muted-foreground")}>
+            {label}
+          </span>
+          <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className={cn("w-[320px] p-2", popoverClassName)}>
+        <div className="space-y-1">
+          {options.map((option) => {
+            const active = values.includes(option.value);
+            return (
+              <Button
+                key={option.value}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 w-full justify-between text-sm",
+                  active && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                )}
+                onClick={() => {
+                  onChange(
+                    active ? values.filter((value) => value !== option.value) : [...values, option.value]
+                  );
+                }}
+              >
+                <span>{option.label}</span>
+                {active ? <Check className="h-4 w-4" /> : null}
+              </Button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 /**
  * Customer type
  */
@@ -429,6 +502,7 @@ export type NewQuoteFormData = {
   customerType?: "customer" | "lead";
   managerId?: string;
   designAssigneeId?: string | null;
+  designCollaboratorIds?: string[];
   designTaskType?: DesignTaskType | null;
   deadline?: Date;
   deadlineNote?: string;
@@ -502,6 +576,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     payer: "",
   });
   const [designAssigneeId, setDesignAssigneeId] = React.useState<string | null>(null);
+  const [designCollaboratorIds, setDesignCollaboratorIds] = React.useState<string[]>([]);
   const [designTaskType, setDesignTaskType] = React.useState<DesignTaskType | null>(null);
   const [categoryId, setCategoryId] = React.useState<string>("");
   const [kindId, setKindId] = React.useState<string>("");
@@ -773,10 +848,20 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     if (nextPrintMode === "no_print") {
       setCreateDesignTask(false);
       setDesignAssigneeId(null);
+      setDesignCollaboratorIds([]);
       setDesignTaskType(null);
     } else {
       setCreateDesignTask(!!initialValues?.createDesignTask);
       setDesignAssigneeId(initialValues?.designAssigneeId ?? null);
+      setDesignCollaboratorIds(
+        Array.from(
+          new Set(
+            (initialValues?.designCollaboratorIds ?? []).filter(
+              (value) => value && value !== (initialValues?.designAssigneeId ?? null)
+            )
+          )
+        )
+      );
       setDesignTaskType(initialValues?.designTaskType ?? null);
     }
     setFiles(initialValues?.files ?? []);
@@ -1092,6 +1177,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       customerType,
       managerId,
       designAssigneeId: shouldCreateDesignTask ? designAssigneeId : null,
+      designCollaboratorIds:
+        shouldCreateDesignTask
+          ? Array.from(new Set(designCollaboratorIds.filter((value) => value && value !== designAssigneeId)))
+          : [],
       designTaskType: shouldCreateDesignTask ? designTaskType : null,
       deadline,
       deadlineNote,
@@ -2042,6 +2131,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       setCreateDesignTask(next);
                       if (!next) {
                         setDesignAssigneeId(null);
+                        setDesignCollaboratorIds([]);
                         setDesignTaskType(null);
                       }
                     }}
@@ -2063,7 +2153,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   </div>
                   <ChipDropdown
                     value={designAssigneeId ?? "none"}
-                    onChange={(value) => setDesignAssigneeId(value === "none" ? null : value)}
+                    onChange={(value) => {
+                      const nextAssigneeId = value === "none" ? null : value;
+                      setDesignAssigneeId(nextAssigneeId);
+                      setDesignCollaboratorIds((prev) => prev.filter((entry) => entry !== nextAssigneeId));
+                    }}
                     disabled={!createDesignTask}
                     options={
                       designerMembers.length > 0
@@ -2090,6 +2184,26 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     icon={<User className="h-3.5 w-3.5" />}
                     popoverClassName="w-[320px]"
                     isActive={Boolean(designAssigneeId)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Співвиконавці
+                  </div>
+                  <MultiChipDropdown
+                    values={designCollaboratorIds}
+                    onChange={(values) => setDesignCollaboratorIds(values.filter((value) => value !== designAssigneeId))}
+                    disabled={!createDesignTask}
+                    options={designerMembers
+                      .filter((member) => member.id !== designAssigneeId)
+                      .map((member) => ({
+                        value: member.id,
+                        label: member.label,
+                      }))}
+                    placeholder={createDesignTask ? "Не додано" : "Увімкніть задачу"}
+                    icon={<Users className="h-3.5 w-3.5" />}
+                    popoverClassName="w-[320px]"
                   />
                 </div>
 

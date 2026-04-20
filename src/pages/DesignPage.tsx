@@ -29,13 +29,18 @@ import {
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
-import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
+import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
   getDesignTasksTimerSummaryMap,
   pauseDesignTaskTimer,
   type DesignTaskTimerSummary,
 } from "@/lib/designTaskTimer";
+import {
+  getDesignTaskCollaboratorIds,
+  resolveDesignTaskCollaborators,
+  withDesignTaskCollaboratorMetadata,
+} from "@/lib/designTaskCollaborators";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -558,6 +563,24 @@ function sanitizeDesignTaskMetadataForCache(metadata: DesignTask["metadata"]): D
   if (typeof metadata.has_files === "boolean") {
     next.has_files = metadata.has_files;
   }
+  const collaboratorUserIds = getDesignTaskCollaboratorIds(metadata);
+  if (collaboratorUserIds.length > 0) {
+    next.collaborator_user_ids = collaboratorUserIds;
+  }
+  if (
+    metadata.collaborator_labels &&
+    typeof metadata.collaborator_labels === "object" &&
+    !Array.isArray(metadata.collaborator_labels)
+  ) {
+    next.collaborator_labels = metadata.collaborator_labels;
+  }
+  if (
+    metadata.collaborator_avatar_urls &&
+    typeof metadata.collaborator_avatar_urls === "object" &&
+    !Array.isArray(metadata.collaborator_avatar_urls)
+  ) {
+    next.collaborator_avatar_urls = metadata.collaborator_avatar_urls;
+  }
   return next;
 }
 
@@ -786,6 +809,8 @@ export default function DesignPage() {
   const [createManagerPopoverOpen, setCreateManagerPopoverOpen] = useState(false);
   const [createAssigneeUserId, setCreateAssigneeUserId] = useState<string>("none");
   const [createAssigneePopoverOpen, setCreateAssigneePopoverOpen] = useState(false);
+  const [createCollaboratorIds, setCreateCollaboratorIds] = useState<string[]>([]);
+  const [createCollaboratorsPopoverOpen, setCreateCollaboratorsPopoverOpen] = useState(false);
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createFilesDragActive, setCreateFilesDragActive] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
@@ -969,6 +994,20 @@ export default function DesignPage() {
   };
   const getTaskAssigneeAvatar = (task: DesignTask) =>
     getMemberAvatar(task.assigneeUserId) || task.assigneeAvatarUrl?.trim() || null;
+  const getTaskCollaborators = useCallback(
+    (task: Pick<DesignTask, "assigneeUserId" | "metadata">) =>
+      resolveDesignTaskCollaborators(task.metadata, {
+        assigneeUserId: task.assigneeUserId,
+        resolveLabel: getMemberLabel,
+        resolveAvatar: getMemberAvatar,
+      }),
+    [getMemberAvatar]
+  );
+  const isUserCollaboratorOnTask = useCallback(
+    (task: Pick<DesignTask, "assigneeUserId" | "metadata">, memberId?: string | null) =>
+      !!memberId && getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId).includes(memberId),
+    []
+  );
   const completedSummaryTaskDeps = useMemo(
     () =>
       tasks
@@ -982,7 +1021,8 @@ export default function DesignPage() {
         currentStatus: task.status,
         nextStatus: column.id,
         canManageAssignments: canManageDesignStatuses,
-        isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+        isAssignedToCurrentUser:
+          !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
       })
     );
   const canMarkTaskReady = (task: DesignTask) =>
@@ -990,7 +1030,8 @@ export default function DesignPage() {
       currentStatus: task.status,
       nextStatus: "pm_review",
       canManageAssignments: canManageDesignStatuses,
-      isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+      isAssignedToCurrentUser:
+        !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
     });
 
   const getTaskTimerSummary = useCallback((taskId: string): DesignTaskTimerSummary => {
@@ -2024,6 +2065,7 @@ export default function DesignPage() {
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     return visibleTasks.filter((task) => {
+      const collaboratorIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId);
       const isLinkedTask = isUuid(task.quoteId);
       if (contentView === "linked" && !isLinkedTask) return false;
       if (contentView === "standalone" && isLinkedTask) return false;
@@ -2031,10 +2073,12 @@ export default function DesignPage() {
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
 
       if (effectiveDesignerFilter === NO_DESIGNER_FILTER && task.assigneeUserId) return false;
+      if (effectiveDesignerFilter === NO_DESIGNER_FILTER && collaboratorIds.length > 0) return false;
       if (
         effectiveDesignerFilter !== ALL_DESIGNERS_FILTER &&
         effectiveDesignerFilter !== NO_DESIGNER_FILTER &&
-        task.assigneeUserId !== effectiveDesignerFilter
+        task.assigneeUserId !== effectiveDesignerFilter &&
+        !collaboratorIds.includes(effectiveDesignerFilter)
       ) {
         return false;
       }
@@ -2051,6 +2095,7 @@ export default function DesignPage() {
         task.title,
         task.customerName,
         task.productName,
+        ...getTaskCollaborators(task).map((entry) => entry.label),
         task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : null,
       ]
         .filter(Boolean)
@@ -2059,7 +2104,7 @@ export default function DesignPage() {
 
       return haystack.includes(query);
     });
-  }, [contentView, effectiveDesignerFilter, isManagerUser, managerFilter, search, statusFilter, visibleTasks]);
+  }, [contentView, effectiveDesignerFilter, getTaskCollaborators, isManagerUser, managerFilter, search, statusFilter, visibleTasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -2716,6 +2761,7 @@ export default function DesignPage() {
     setCreateManagerUserId((prev) => (prev && prev !== "none" ? prev : userId));
     if (shouldForceSelfAssignee) {
       setCreateAssigneeUserId(userId);
+      setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== userId));
     }
   }, [createDialogOpen, userId, shouldForceSelfAssignee]);
 
@@ -2742,7 +2788,8 @@ export default function DesignPage() {
       currentStatus: draggedTask.status,
       nextStatus,
       canManageAssignments: canManageDesignStatuses,
-      isAssignedToCurrentUser: !!userId && draggedTask.assigneeUserId === userId,
+      isAssignedToCurrentUser:
+        !!userId && (draggedTask.assigneeUserId === userId || isUserCollaboratorOnTask(draggedTask, userId)),
     })) {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
@@ -2757,7 +2804,8 @@ export default function DesignPage() {
         currentStatus: task.status,
         nextStatus: next,
         canManageAssignments: canManageDesignStatuses,
-        isAssignedToCurrentUser: !!userId && task.assigneeUserId === userId,
+        isAssignedToCurrentUser:
+          !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
       })
     ) {
       toast.error("Ви не можете перевести задачу в цей статус");
@@ -2868,6 +2916,14 @@ export default function DesignPage() {
           toStatus: next,
           actorUserId: userId ?? null,
         });
+        await notifyDesignTaskCollaboratorsOnStatusChange({
+          designTaskId: task.id,
+          taskLabel: `#${getTaskDisplayNumber(task)}`,
+          toStatus: next,
+          actorUserId: userId ?? null,
+          actorName: actorLabel,
+          collaboratorUserIds: getTaskCollaborators(task).map((entry) => entry.userId),
+        });
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about design status change", notifyError);
       }
@@ -2926,19 +2982,30 @@ export default function DesignPage() {
       options?.estimateMinutes != null
         ? (userId ?? null)
         : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
-    const nextMetadata: Record<string, unknown> = {
-      ...(task.metadata ?? {}),
-      status: task.status,
-      methods_count: task.methodsCount ?? 0,
-      has_files: task.hasFiles ?? false,
-      quote_id: task.quoteId,
-      design_deadline: task.designDeadline ?? null,
-      assignee_user_id: nextAssigneeUserId,
-      assigned_at: nextAssignedAt,
-      estimate_minutes: estimateMinutes,
-      estimate_set_at: estimateSetAt,
-      estimated_by_user_id: estimatedByUserId,
-    };
+    const collaboratorUserIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId).filter(
+      (value) => value !== nextAssigneeUserId
+    );
+    const nextMetadata = withDesignTaskCollaboratorMetadata(
+      {
+        ...(task.metadata ?? {}),
+        status: task.status,
+        methods_count: task.methodsCount ?? 0,
+        has_files: task.hasFiles ?? false,
+        quote_id: task.quoteId,
+        design_deadline: task.designDeadline ?? null,
+        assignee_user_id: nextAssigneeUserId,
+        assigned_at: nextAssignedAt,
+        estimate_minutes: estimateMinutes,
+        estimate_set_at: estimateSetAt,
+        estimated_by_user_id: estimatedByUserId,
+      },
+      collaboratorUserIds,
+      {
+        assigneeUserId: nextAssigneeUserId,
+        resolveLabel: getMemberLabel,
+        resolveAvatar: getMemberAvatar,
+      }
+    );
 
     const previousAssignee = task.assigneeUserId ?? null;
     const previousAssignedAt = task.assignedAt ?? null;
@@ -3014,6 +3081,7 @@ export default function DesignPage() {
             to_assignee_user_id: nextAssigneeUserId,
             to_assignee_label: nextAssigneeUserId ? nextAssigneeLabel : null,
             to_assignee_avatar_url: nextAssigneeUserId ? nextAssigneeAvatarUrl : null,
+            collaborator_user_ids: collaboratorUserIds,
           },
         });
       } catch (logError) {
@@ -3070,6 +3138,8 @@ export default function DesignPage() {
                 ...row,
                 assigneeUserId: previousAssignee,
                 assignedAt: previousAssignedAt,
+                assigneeLabel: previousAssignee ? previousAssigneeLabel : null,
+                assigneeAvatarUrl: previousAssignee ? previousAssigneeAvatarUrl ?? null : null,
                 metadata: previousMetadata,
               }
             : row
@@ -3181,6 +3251,9 @@ export default function DesignPage() {
           ? (userId ?? null)
           : createManagerUserId;
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
+      const collaboratorUserIds = Array.from(
+        new Set(createCollaboratorIds.filter((value) => value && value !== assigneeUserId))
+      );
       const entityId = `standalone-${crypto.randomUUID()}`;
       const actorName = userId ? getMemberLabel(userId) : "System";
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
@@ -3207,32 +3280,40 @@ export default function DesignPage() {
           entity_type: "design_task",
           entity_id: entityId,
           title: subject,
-          metadata: {
-            source: "design_task_created_manual",
-            task_kind: "standalone",
-            task_owner_role: permissions.isDesigner ? "designer" : "manager",
-            created_by_user_id: userId ?? null,
-            status: "new",
-            design_task_number: designTaskNumber,
-            quote_id: null,
-            assignee_user_id: assigneeUserId,
-            assignee_label: assigneeLabel,
-            assignee_avatar_url: assigneeAvatarUrl,
-            assigned_at: assignedAt,
-            manager_user_id: managerUserId,
-            manager_label: managerLabel,
-            customer_id: customerId,
-            customer_name: customerName || null,
-            customer_type: customerName ? customerType : null,
-            customer_logo_url: customerLogoUrl,
-            design_task_type: createDesignTaskType,
-            design_brief: brief || null,
-            standalone_brief_files: [],
-            design_deadline: deadline,
-            deadline,
-            methods_count: 0,
-            has_files: createFiles.length > 0,
-          },
+          metadata: withDesignTaskCollaboratorMetadata(
+            {
+              source: "design_task_created_manual",
+              task_kind: "standalone",
+              task_owner_role: permissions.isDesigner ? "designer" : "manager",
+              created_by_user_id: userId ?? null,
+              status: "new",
+              design_task_number: designTaskNumber,
+              quote_id: null,
+              assignee_user_id: assigneeUserId,
+              assignee_label: assigneeLabel,
+              assignee_avatar_url: assigneeAvatarUrl,
+              assigned_at: assignedAt,
+              manager_user_id: managerUserId,
+              manager_label: managerLabel,
+              customer_id: customerId,
+              customer_name: customerName || null,
+              customer_type: customerName ? customerType : null,
+              customer_logo_url: customerLogoUrl,
+              design_task_type: createDesignTaskType,
+              design_brief: brief || null,
+              standalone_brief_files: [],
+              design_deadline: deadline,
+              deadline,
+              methods_count: 0,
+              has_files: createFiles.length > 0,
+            },
+            collaboratorUserIds,
+            {
+              assigneeUserId,
+              resolveLabel: getMemberLabel,
+              resolveAvatar: getMemberAvatar,
+            }
+          ),
         })
         .select("id,entity_id,metadata,title,created_at")
         .single();
@@ -3334,6 +3415,19 @@ export default function DesignPage() {
           console.warn("Failed to notify assignee about standalone design task", notifyError);
         }
       }
+      if (collaboratorUserIds.length > 0) {
+        try {
+          await notifyUsers({
+            userIds: collaboratorUserIds.filter((value) => value !== userId && value !== assigneeUserId),
+            title: "Вас додано як співвиконавця",
+            body: `${actorName} додав(ла) вас до нової дизайн-задачі.`,
+            href: `/design/${createdTask.id}`,
+            type: "info",
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify collaborators about standalone design task", notifyError);
+        }
+      }
 
       const createdTaskHref = `/design/${createdTask.id}`;
       const createdTaskLabel = createdTask.designTaskNumber ?? "Без номера";
@@ -3353,6 +3447,8 @@ export default function DesignPage() {
       setCreateManagerPopoverOpen(false);
       setCreateAssigneeUserId("none");
       setCreateAssigneePopoverOpen(false);
+      setCreateCollaboratorIds([]);
+      setCreateCollaboratorsPopoverOpen(false);
       setCreateFilesDragActive(false);
       setCreateFiles([]);
       toast.success("Дизайн-задачу створено", {
@@ -3577,6 +3673,7 @@ export default function DesignPage() {
     const isAttachedFromStandalone = isTaskAttachedFromStandalone(task) && isLinkedQuote;
     const partyLabel = getTaskPartyLabel();
     const assigneeLabel = getTaskAssigneeLabel(task);
+    const collaboratorEntries = getTaskCollaborators(task);
     const deadlineBadge = getDeadlineBadge(task.designDeadline);
     return (
       <KanbanCard
@@ -3791,22 +3888,43 @@ export default function DesignPage() {
         ) : null}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
           <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
-            {task.assigneeUserId ? (
-              <AvatarBase
-                src={getTaskAssigneeAvatar(task)}
-                name={assigneeLabel}
-                fallback={getInitials(assigneeLabel)}
-                size={26}
-                className="text-[10px] font-semibold"
-                availability={getMemberAvailability(task.assigneeUserId)}
-                presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
-              />
-            ) : (
-              <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
-                <User className="h-3.5 w-3.5" />
-              </div>
-            )}
-            <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
+            <div className="flex shrink-0 items-center -space-x-2">
+              {task.assigneeUserId ? (
+                <AvatarBase
+                  src={getTaskAssigneeAvatar(task)}
+                  name={assigneeLabel}
+                  fallback={getInitials(assigneeLabel)}
+                  size={26}
+                  className="text-[10px] font-semibold ring-2 ring-background"
+                  availability={getMemberAvailability(task.assigneeUserId)}
+                  presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
+                />
+              ) : (
+                <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground ring-2 ring-background">
+                  <User className="h-3.5 w-3.5" />
+                </div>
+              )}
+              {collaboratorEntries.slice(0, 2).map((entry) => (
+                <AvatarBase
+                  key={`task-collaborator-${task.id}-${entry.userId}`}
+                  src={entry.avatarUrl}
+                  name={entry.label}
+                  fallback={getInitials(entry.label)}
+                  size={22}
+                  className="text-[9px] font-semibold ring-2 ring-background"
+                  availability={getMemberAvailability(entry.userId)}
+                  presence={onlineMemberIds.has(entry.userId) ? "online" : "offline"}
+                />
+              ))}
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
+              {collaboratorEntries.length > 0 ? (
+                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
+                  {collaboratorEntries.length > 1 ? `Спільна +${collaboratorEntries.length}` : "Спільна"}
+                </Badge>
+              ) : null}
+            </div>
           </div>
           {task.designDeadline ? (
             (() => {
@@ -5170,6 +5288,8 @@ export default function DesignPage() {
             setCreateDesignTaskType(null);
             setCreateDesignTaskTypePopoverOpen(false);
             setCreateAssigneePopoverOpen(false);
+            setCreateCollaboratorIds([]);
+            setCreateCollaboratorsPopoverOpen(false);
             setCreateManagerPopoverOpen(false);
             setCreateDeadlinePopoverOpen(false);
             setCreateFilesDragActive(false);
@@ -5439,6 +5559,7 @@ export default function DesignPage() {
                         className="w-full justify-start gap-2 h-9 text-sm"
                         onClick={() => {
                           setCreateAssigneeUserId("none");
+                          setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== "none"));
                           setCreateAssigneePopoverOpen(false);
                         }}
                       >
@@ -5463,6 +5584,7 @@ export default function DesignPage() {
                             className="h-auto w-full justify-start gap-2 py-2 text-sm"
                             onClick={() => {
                               setCreateAssigneeUserId(member.id);
+                              setCreateCollaboratorIds((prev) => prev.filter((entry) => entry !== member.id));
                               setCreateAssigneePopoverOpen(false);
                             }}
                             title={member.label}
@@ -5503,6 +5625,75 @@ export default function DesignPage() {
                   </PopoverContent>
                 </Popover>
               )}
+
+              <Popover open={createCollaboratorsPopoverOpen} onOpenChange={setCreateCollaboratorsPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Chip
+                    size="md"
+                    icon={<Users className="h-4 w-4" />}
+                    active={createCollaboratorIds.length > 0}
+                  >
+                    {createCollaboratorIds.length === 0
+                      ? "Співвиконавці"
+                      : createCollaboratorIds.length === 1
+                      ? getMemberLabel(createCollaboratorIds[0])
+                      : `Співвиконавці · ${createCollaboratorIds.length}`}
+                  </Chip>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="start" portalled={false}>
+                  <div className="space-y-1">
+                    {sortedDesignerCapacityOptions
+                      .filter((member) => member.id !== createAssigneeUserId)
+                      .map((member) => {
+                        const checked = createCollaboratorIds.includes(member.id);
+                        const workload = designerLoadById.get(member.id);
+                        return (
+                          <Button
+                            key={member.id}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-auto w-full justify-start gap-2 py-2 text-sm",
+                              checked && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                            )}
+                            onClick={() => {
+                              setCreateCollaboratorIds((prev) =>
+                                checked ? prev.filter((entry) => entry !== member.id) : [...prev, member.id]
+                              );
+                            }}
+                            title={member.label}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl ?? null}
+                              name={member.label}
+                              fallback={getInitials(member.label)}
+                              size={20}
+                              className="border-border/60 shrink-0"
+                              fallbackClassName="text-[10px] font-semibold"
+                            />
+                            <div className="min-w-0 flex-1 text-left">
+                              <div className="truncate">{member.label}</div>
+                              {workload ? (
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                                  <span>·</span>
+                                  <span>{workload.activeTaskCount} задач</span>
+                                </div>
+                              ) : null}
+                            </div>
+                            <Check
+                              className={cn(
+                                "ml-auto h-3.5 w-3.5 text-primary",
+                                checked ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </Button>
+                        );
+                      })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>

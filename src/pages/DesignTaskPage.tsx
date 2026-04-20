@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -65,6 +66,7 @@ import {
   PhoneCall,
   Send,
   RotateCcw,
+  Users,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -101,7 +103,11 @@ import {
   getDesignStatusActionLabel,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
-import { notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
+import {
+  notifyDesignTaskCollaboratorsChanged,
+  notifyDesignTaskCollaboratorsOnStatusChange,
+  notifyQuoteInitiatorOnDesignStatusChange,
+} from "@/lib/workflowNotifications";
 import {
   formatElapsedSeconds,
   getDesignTaskTimerSummary,
@@ -123,6 +129,11 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
+import {
+  getDesignTaskCollaboratorIds,
+  resolveDesignTaskCollaborators,
+  withDesignTaskCollaboratorMetadata,
+} from "@/lib/designTaskCollaborators";
 import {
   buildMentionAlias,
   extractMentionKeys,
@@ -626,6 +637,24 @@ function sanitizeDesignTaskMetadataForCache(metadata?: Record<string, unknown> |
   keys.forEach((key) => {
     if (metadata[key] !== undefined) next[key] = metadata[key];
   });
+  const collaboratorUserIds = getDesignTaskCollaboratorIds(metadata);
+  if (collaboratorUserIds.length > 0) {
+    next.collaborator_user_ids = collaboratorUserIds;
+  }
+  if (
+    metadata.collaborator_labels &&
+    typeof metadata.collaborator_labels === "object" &&
+    !Array.isArray(metadata.collaborator_labels)
+  ) {
+    next.collaborator_labels = metadata.collaborator_labels;
+  }
+  if (
+    metadata.collaborator_avatar_urls &&
+    typeof metadata.collaborator_avatar_urls === "object" &&
+    !Array.isArray(metadata.collaborator_avatar_urls)
+  ) {
+    next.collaborator_avatar_urls = metadata.collaborator_avatar_urls;
+  }
   return next;
 }
 
@@ -1112,6 +1141,7 @@ export default function DesignTaskPage() {
   const [designQueueTasks, setDesignQueueTasks] = useState<DesignTask[]>([]);
   const [assigningSelf, setAssigningSelf] = useState(false);
   const [assigningMemberId, setAssigningMemberId] = useState<string | null>(null);
+  const [collaboratorSaving, setCollaboratorSaving] = useState(false);
   const [managerSaving, setManagerSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
   const [outputUploading, setOutputUploading] = useState(false);
@@ -1213,7 +1243,6 @@ export default function DesignTaskPage() {
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canSelfAssign = permissions.canSelfAssignDesign;
-  const isAssignedToMe = !!userId && task?.assigneeUserId === userId;
   const designTaskLock = useEntityLock({
     teamId: effectiveTeamId,
     entityType: "design_task",
@@ -1244,6 +1273,21 @@ export default function DesignTaskPage() {
     if (!id) return null;
     return memberAvatarById[id] ?? null;
   };
+  const getTaskCollaborators = useCallback(
+    (targetTask?: Pick<DesignTask, "assigneeUserId" | "metadata"> | null) =>
+      targetTask
+        ? resolveDesignTaskCollaborators(targetTask.metadata, {
+            assigneeUserId: targetTask.assigneeUserId,
+            resolveLabel: getMemberLabel,
+            resolveAvatar: getMemberAvatar,
+          })
+        : [],
+    [memberById, memberAvatarById]
+  );
+  const taskCollaborators = useMemo(() => getTaskCollaborators(task), [getTaskCollaborators, task]);
+  const isCollaboratorOnTask = !!userId && taskCollaborators.some((entry) => entry.userId === userId);
+  const isAssignedToMe =
+    !!userId && ((!!task?.assigneeUserId && task.assigneeUserId === userId) || isCollaboratorOnTask);
 
   const canDeleteTaskBriefAttachment = useCallback(
     (attachment: AttachmentRow) => {
@@ -2472,13 +2516,13 @@ export default function DesignTaskPage() {
     task.status === "in_progress" &&
     !isTimerRunning &&
     !!task.assigneeUserId &&
-    (task.assigneeUserId === userId || canManageAssignments);
+    (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
   const canPauseTimer =
     !!task &&
     isTimerRunning &&
     !!userId &&
     !!task.assigneeUserId &&
-    (task.assigneeUserId === userId || canManageAssignments);
+    (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
   const startTimerBlockedReason = !task
     ? "Задача не завантажена"
     : !userId
@@ -2487,8 +2531,8 @@ export default function DesignTaskPage() {
         ? "Спочатку переведіть задачу у статус «В роботі»"
         : !task.assigneeUserId
           ? "Спочатку призначте виконавця"
-          : task.assigneeUserId !== userId && !canManageAssignments
-            ? "Запускати таймер може тільки виконавець задачі"
+          : task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments
+            ? "Запускати таймер може виконавець або співвиконавець задачі"
             : isTimerRunning
               ? "Таймер уже запущено"
               : null;
@@ -2500,8 +2544,8 @@ export default function DesignTaskPage() {
         ? "Таймер не запущено"
         : !task.assigneeUserId
           ? "Виконавець не вказаний"
-          : task.assigneeUserId !== userId && !canManageAssignments
-            ? "Ставити на паузу може тільки виконавець задачі"
+          : task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments
+            ? "Ставити на паузу може виконавець або співвиконавець задачі"
             : null;
 
   const methods = useMemo(() => {
@@ -4145,8 +4189,8 @@ export default function DesignTaskPage() {
       toast.error("Спочатку призначте виконавця.");
       return;
     }
-    if (task.assigneeUserId !== userId && !canManageAssignments) {
-      toast.error("Таймер може запускати виконавець задачі.");
+    if (task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments) {
+      toast.error("Таймер може запускати виконавець або співвиконавець задачі.");
       return;
     }
     setTimerBusy("start");
@@ -4317,6 +4361,14 @@ export default function DesignTaskPage() {
           designTaskId: task.id,
           toStatus: nextStatus,
           actorUserId: userId ?? null,
+        });
+        await notifyDesignTaskCollaboratorsOnStatusChange({
+          designTaskId: task.id,
+          taskLabel: `#${getTaskDisplayNumber(task)}`,
+          toStatus: nextStatus,
+          actorUserId: userId ?? null,
+          actorName: actorLabel,
+          collaboratorUserIds: taskCollaborators.map((entry) => entry.userId),
         });
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about design status change", notifyError);
@@ -4785,20 +4837,31 @@ export default function DesignTaskPage() {
       options?.estimateMinutes != null
         ? (userId ?? null)
         : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
-    const nextMetadata: Record<string, unknown> = {
-      ...(task.metadata ?? {}),
-      status: task.status,
-      methods_count: task.methodsCount ?? 0,
-      has_files: task.hasFiles ?? false,
-      quote_id: task.quoteId,
-      design_deadline: task.designDeadline ?? null,
-      deadline: task.designDeadline ?? null,
-      assignee_user_id: nextAssigneeUserId,
-      assigned_at: nextAssignedAt,
-      estimate_minutes: estimateMinutes,
-      estimate_set_at: estimateSetAt,
-      estimated_by_user_id: estimatedByUserId,
-    };
+    const collaboratorUserIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId).filter(
+      (value) => value !== nextAssigneeUserId
+    );
+    const nextMetadata = withDesignTaskCollaboratorMetadata(
+      {
+        ...(task.metadata ?? {}),
+        status: task.status,
+        methods_count: task.methodsCount ?? 0,
+        has_files: task.hasFiles ?? false,
+        quote_id: task.quoteId,
+        design_deadline: task.designDeadline ?? null,
+        deadline: task.designDeadline ?? null,
+        assignee_user_id: nextAssigneeUserId,
+        assigned_at: nextAssignedAt,
+        estimate_minutes: estimateMinutes,
+        estimate_set_at: estimateSetAt,
+        estimated_by_user_id: estimatedByUserId,
+      },
+      collaboratorUserIds,
+      {
+        assigneeUserId: nextAssigneeUserId,
+        resolveLabel: getMemberLabel,
+        resolveAvatar: getMemberAvatar,
+      }
+    );
 
     const previousTask = task;
     setAssigningMemberId(nextAssigneeUserId ?? "__clear__");
@@ -4871,6 +4934,7 @@ export default function DesignTaskPage() {
             from_assignee_label: previousAssigneeLabel,
             to_assignee_user_id: nextAssigneeUserId,
             to_assignee_label: nextAssigneeUserId ? nextAssigneeLabel : null,
+            collaborator_user_ids: collaboratorUserIds,
           },
         });
       } catch (logError) {
@@ -4918,6 +4982,98 @@ export default function DesignTaskPage() {
       toast.error(message);
     } finally {
       setAssigningMemberId(null);
+    }
+  };
+
+  const updateCollaborators = async (nextCollaboratorUserIds: string[]) => {
+    if (!task || !effectiveTeamId || collaboratorSaving || !canManageAssignments) return;
+    if (!ensureCanEdit()) return;
+
+    const previousCollaboratorIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId);
+    const normalizedNextIds = Array.from(new Set(nextCollaboratorUserIds.filter(Boolean))).filter(
+      (value) => value !== task.assigneeUserId
+    );
+
+    if (
+      previousCollaboratorIds.length === normalizedNextIds.length &&
+      previousCollaboratorIds.every((value, index) => value === normalizedNextIds[index])
+    ) {
+      return;
+    }
+
+    const previousTask = task;
+    const nextMetadata = withDesignTaskCollaboratorMetadata(task.metadata, normalizedNextIds, {
+      assigneeUserId: task.assigneeUserId,
+      resolveLabel: getMemberLabel,
+      resolveAvatar: getMemberAvatar,
+    });
+
+    const addedUserIds = normalizedNextIds.filter((value) => !previousCollaboratorIds.includes(value));
+    const removedUserIds = previousCollaboratorIds.filter((value) => !normalizedNextIds.includes(value));
+
+    setCollaboratorSaving(true);
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+    setDesignQueueTasks((prev) =>
+      prev.map((queueTask) => (queueTask.id === task.id ? { ...queueTask, metadata: nextMetadata } : queueTask))
+    );
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        const addedLabels = addedUserIds.map((value) => getMemberLabel(value));
+        const removedLabels = removedUserIds.map((value) => getMemberLabel(value));
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_collaborators",
+          title:
+            addedLabels.length > 0 && removedLabels.length > 0
+              ? `Співвиконавці: +${addedLabels.join(", ")} · -${removedLabels.join(", ")}`
+              : addedLabels.length > 0
+                ? `Додано співвиконавців: ${addedLabels.join(", ")}`
+                : `Знято співвиконавців: ${removedLabels.join(", ")}`,
+          metadata: {
+            source: "design_task_collaborators",
+            from_collaborator_user_ids: previousCollaboratorIds,
+            to_collaborator_user_ids: normalizedNextIds,
+          },
+        });
+        await notifyDesignTaskCollaboratorsChanged({
+          designTaskId: task.id,
+          actorUserId: userId ?? null,
+          actorName: actorLabel,
+          taskLabel: `#${getTaskDisplayNumber(task)}`,
+          addedUserIds,
+          removedUserIds,
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task collaborator update", logError);
+      }
+
+      toast.success(
+        normalizedNextIds.length > 0
+          ? `Співвиконавців оновлено: ${normalizedNextIds.length}`
+          : "Співвиконавців очищено"
+      );
+    } catch (e: unknown) {
+      setTask(previousTask);
+      setDesignQueueTasks((prev) => prev.map((queueTask) => (queueTask.id === previousTask.id ? previousTask : queueTask)));
+      const message = getErrorMessage(e, "Не вдалося оновити співвиконавців");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setCollaboratorSaving(false);
     }
   };
 
@@ -5018,20 +5174,31 @@ export default function DesignTaskPage() {
       options?.estimateMinutes != null
         ? userId
         : (((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? userId);
-    const nextMetadata: Record<string, unknown> = {
-      ...(task.metadata ?? {}),
-      status: nextStatus,
-      methods_count: task.methodsCount ?? 0,
-      has_files: task.hasFiles ?? false,
-      quote_id: task.quoteId,
-      design_deadline: task.designDeadline ?? null,
-      deadline: task.designDeadline ?? null,
-      assignee_user_id: userId,
-      assigned_at: nextAssignedAt,
-      estimate_minutes: estimateMinutes,
-      estimate_set_at: estimateSetAt,
-      estimated_by_user_id: estimatedByUserId,
-    };
+    const collaboratorUserIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId).filter(
+      (value) => value !== userId
+    );
+    const nextMetadata = withDesignTaskCollaboratorMetadata(
+      {
+        ...(task.metadata ?? {}),
+        status: nextStatus,
+        methods_count: task.methodsCount ?? 0,
+        has_files: task.hasFiles ?? false,
+        quote_id: task.quoteId,
+        design_deadline: task.designDeadline ?? null,
+        deadline: task.designDeadline ?? null,
+        assignee_user_id: userId,
+        assigned_at: nextAssignedAt,
+        estimate_minutes: estimateMinutes,
+        estimate_set_at: estimateSetAt,
+        estimated_by_user_id: estimatedByUserId,
+      },
+      collaboratorUserIds,
+      {
+        assigneeUserId: userId,
+        resolveLabel: getMemberLabel,
+        resolveAvatar: getMemberAvatar,
+      }
+    );
 
     const previousTask = task;
     setTask((prev) =>
@@ -5103,6 +5270,7 @@ export default function DesignTaskPage() {
             from_assignee_label: previousAssigneeLabel,
             to_assignee_user_id: userId,
             to_assignee_label: getMemberLabel(userId),
+            collaborator_user_ids: collaboratorUserIds,
           },
         });
 
@@ -5314,7 +5482,7 @@ export default function DesignTaskPage() {
   };
 
   const isStatusStartable = task?.status === "new" || task?.status === "changes";
-  const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId;
+  const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId && !isCollaboratorOnTask;
   const selectedVisualizationOutputFileIds = useMemo(() => {
     const explicit = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata, "visualization");
     if (explicit.length > 0) return explicit;
@@ -5761,7 +5929,7 @@ export default function DesignTaskPage() {
     !!task &&
     canSelfAssign &&
     !assigningSelf &&
-    (!task.assigneeUserId || task.assigneeUserId === userId || canManageAssignments);
+    (!task.assigneeUserId || task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
 
   const canStartWorkNow =
     !!task &&
@@ -6447,7 +6615,7 @@ export default function DesignTaskPage() {
     (typeof task.metadata?.manager_label === "string" && task.metadata.manager_label.trim()) ||
     (taskManagerUserId ? getMemberLabel(taskManagerUserId) : "Не вказано");
   const taskManagerAvatar = taskManagerUserId ? getMemberAvatar(taskManagerUserId) : null;
-  const canEditTaskTitle = !!task && !!userId && (task.assigneeUserId === userId || canManageAssignments);
+  const canEditTaskTitle = !!task && !!userId && (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
   const startInlineTitleEdit = () => {
     if (!canEditTaskTitle) return;
     setRenameError(null);
@@ -6959,6 +7127,25 @@ export default function DesignTaskPage() {
               />
               <span className="truncate max-w-[160px]">{getMemberLabel(task.assigneeUserId)}</span>
             </Badge>
+            {taskCollaborators.length > 0 ? (
+              <Badge variant="outline" className="px-2.5 py-1 text-xs gap-1.5">
+                <span className="flex items-center -space-x-1.5">
+                  {taskCollaborators.slice(0, 2).map((entry) => (
+                    <AvatarBase
+                      key={`task-meta-collaborator-${entry.userId}`}
+                      src={entry.avatarUrl}
+                      name={entry.label}
+                      fallback={getInitials(entry.label)}
+                      size={16}
+                      className="border-border/70 ring-2 ring-background"
+                    />
+                  ))}
+                </span>
+                <span className="truncate max-w-[180px]">
+                  {taskCollaborators.length > 1 ? `Співвиконавці · ${taskCollaborators.length}` : "Співвиконавець"}
+                </span>
+              </Badge>
+            ) : null}
             <Popover open={headerTypePopoverOpen} onOpenChange={setHeaderTypePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -8111,6 +8298,96 @@ export default function DesignTaskPage() {
                   <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
                     {assigningSelf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                   </Button>
+                ) : null}
+              </div>
+
+              <div className="group design-task-detail-row" data-interactive="true">
+                <span className="design-task-detail-label">
+                  <Users className="h-4 w-4 text-muted-foreground/70" />
+                  Співвиконавці
+                </span>
+                <div className="design-task-detail-value relative">
+                  {taskCollaborators.length > 0 ? (
+                    <>
+                      <span className="flex items-center -space-x-2">
+                        {taskCollaborators.slice(0, 3).map((entry) => (
+                          <AvatarBase
+                            key={`task-detail-collaborator-${entry.userId}`}
+                            src={entry.avatarUrl}
+                            name={entry.label}
+                            fallback={getInitials(entry.label)}
+                            size={24}
+                            className="shrink-0 border-border/60 ring-2 ring-background"
+                          />
+                        ))}
+                      </span>
+                      <span className="truncate">
+                        {taskCollaborators.length === 1
+                          ? taskCollaborators[0]?.label
+                          : `${taskCollaborators.slice(0, 2).map((entry) => entry.label).join(", ")}${taskCollaborators.length > 2 ? ` +${taskCollaborators.length - 2}` : ""}`}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/60 italic">Не додано</span>
+                  )}
+                </div>
+                {canManageAssignments ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100"
+                        disabled={collaboratorSaving}
+                      >
+                        {collaboratorSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>Співвиконавці</DropdownMenuLabel>
+                      {sortedDesignerMembers.length === 0 ? (
+                        <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
+                      ) : (
+                        sortedDesignerMembers.map((member) => {
+                          const checked = taskCollaborators.some((entry) => entry.userId === member.id);
+                          const disabled = task.assigneeUserId === member.id;
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={`collaborator-${member.id}`}
+                              checked={checked}
+                              disabled={disabled || collaboratorSaving}
+                              className="gap-2 py-2"
+                              onSelect={(event) => event.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const nextIds = nextChecked
+                                  ? [...taskCollaborators.map((entry) => entry.userId), member.id]
+                                  : taskCollaborators.map((entry) => entry.userId).filter((value) => value !== member.id);
+                                void updateCollaborators(nextIds);
+                              }}
+                            >
+                              <AvatarBase
+                                src={member.avatarUrl ?? getMemberAvatar(member.id)}
+                                name={member.label}
+                                fallback={getInitials(member.label)}
+                                size={18}
+                                className="shrink-0 border-border/70"
+                                fallbackClassName="text-[10px] font-semibold"
+                              />
+                              <span className="truncate">{member.label}</span>
+                              {disabled ? <span className="ml-auto text-[10px] text-muted-foreground">Основний</span> : null}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => void updateCollaborators([])}
+                        disabled={taskCollaborators.length === 0 || collaboratorSaving}
+                      >
+                        Очистити співвиконавців
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null}
               </div>
 

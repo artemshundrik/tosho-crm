@@ -25,13 +25,16 @@ import {
 } from "@/components/ui/command";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
+import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   getAttachmentDisplayFileName,
@@ -125,6 +128,7 @@ import {
   Truck,
   Calendar,
   User,
+  Users,
   Upload,
   Download,
   Search,
@@ -788,6 +792,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
   const [designAssigneeId, setDesignAssigneeId] = useState<string | null>(null);
+  const [designCollaboratorIds, setDesignCollaboratorIds] = useState<string[]>([]);
   const [designTaskType, setDesignTaskType] = useState<DesignTaskType | null>(null);
   const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
   const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
@@ -2794,6 +2799,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const createDesignTask = async (override?: {
     assigneeUserId?: string | null;
+    collaboratorUserIds?: string[];
     modelName?: string | null;
     methodsCount?: number;
     designBrief?: string | null;
@@ -2813,6 +2819,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const methodsCount = override?.methodsCount ?? items[0]?.methods?.length ?? 0;
       const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
       const assigneeUserId = override?.assigneeUserId ?? designAssigneeId ?? null;
+      const collaboratorUserIds = Array.from(
+        new Set((override?.collaboratorUserIds ?? designCollaboratorIds).filter((value) => value && value !== assigneeUserId))
+      );
       const nextDesignTaskType = override?.designTaskType ?? designTaskType;
       if (!nextDesignTaskType) {
         throw new Error("Оберіть тип дизайнерської задачі");
@@ -2820,6 +2829,37 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
       const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
+
+      const designTaskMetadata = withDesignTaskCollaboratorMetadata(
+        {
+          source: "design_task_created",
+          status: "new",
+          design_task_number: designTaskNumber,
+          quote_id: quoteId,
+          design_task_id: null,
+          assignee_user_id: assigneeUserId,
+          assigned_at: assignedAt,
+          design_task_type: nextDesignTaskType,
+          quote_type: quote?.quote_type ?? null,
+          methods_count: methodsCount,
+          has_files: attachments.length > 0,
+          design_deadline: designDeadline,
+          deadline: designDeadline,
+          design_brief:
+            override?.designBrief ??
+            designBriefPreview ??
+            quote?.design_brief ??
+            quote?.comment ??
+            null,
+          model: modelName,
+        },
+        collaboratorUserIds,
+        {
+          assigneeUserId,
+          resolveLabel: (memberId) => getMemberLabel(memberId),
+          resolveAvatar: (memberId) => memberAvatarById.get(memberId) ?? null,
+        }
+      );
 
       const { data, error } = await supabase
         .from("activity_log")
@@ -2831,28 +2871,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           entity_type: "design_task",
           entity_id: quoteId,
           title: `Дизайн: ${modelName}`,
-          metadata: {
-            source: "design_task_created",
-            status: "new",
-            design_task_number: designTaskNumber,
-            quote_id: quoteId,
-            design_task_id: null,
-            assignee_user_id: assigneeUserId,
-            assigned_at: assignedAt,
-            design_task_type: nextDesignTaskType,
-            quote_type: quote?.quote_type ?? null,
-            methods_count: methodsCount,
-            has_files: attachments.length > 0,
-            design_deadline: designDeadline,
-            deadline: designDeadline,
-            design_brief:
-              override?.designBrief ??
-              designBriefPreview ??
-              quote?.design_brief ??
-              quote?.comment ??
-              null,
-            model: modelName,
-          },
+          metadata: designTaskMetadata,
         })
         .select("id, metadata")
         .single();
@@ -2875,6 +2894,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           quoteId,
           designTaskId: (data as { id: string }).id,
           assigneeUserId,
+          collaboratorUserIds,
           actorUserId: userId,
           actorName,
         });
@@ -4395,6 +4415,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (data.createDesignTask && !designTask) {
         await createDesignTask({
           assigneeUserId: data.designAssigneeId ?? null,
+          collaboratorUserIds: data.designCollaboratorIds ?? [],
           designTaskType: data.designTaskType ?? null,
           modelName: model?.name ?? primaryItem?.title ?? "Позиція",
           methodsCount: methodsPayload?.length ?? 0,
@@ -6714,39 +6735,147 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div className="text-xs text-muted-foreground">
                         Створи нову задачу або привʼяжи існуючу дизайн-задачу цього ж замовника.
                       </div>
-                      <div className="max-w-[360px]">
-                        <div className="mb-2 text-xs font-medium text-muted-foreground">Тип задачі</div>
-                        <Select
-                          value={designTaskType ?? "none"}
-                          onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
-                          disabled={designTaskSaving}
-                        >
-                          <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
-                            <SelectValue placeholder="Оберіть тип задачі">
-                              {designTaskType ? (
-                                <span className="inline-flex items-center gap-2">
-                                  {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
-                                  <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
-                                </span>
-                              ) : (
-                                "Оберіть тип задачі"
-                              )}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none" disabled>
-                              Оберіть тип задачі
-                            </SelectItem>
-                            {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                <span className="inline-flex items-center gap-2">
-                                  {createElement(DESIGN_TASK_TYPE_ICONS[option.value], { className: "h-4 w-4 text-muted-foreground" })}
-                                  <span>{option.label}</span>
-                                </span>
+                      <div className="grid gap-3 md:max-w-[760px] md:grid-cols-3">
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">Тип задачі</div>
+                          <Select
+                            value={designTaskType ?? "none"}
+                            onValueChange={(value) => setDesignTaskType(value === "none" ? null : (value as DesignTaskType))}
+                            disabled={designTaskSaving}
+                          >
+                            <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                              <SelectValue placeholder="Оберіть тип задачі">
+                                {designTaskType ? (
+                                  <span className="inline-flex items-center gap-2">
+                                    {createElement(DESIGN_TASK_TYPE_ICONS[designTaskType], { className: "h-4 w-4 text-muted-foreground" })}
+                                    <span>{DESIGN_TASK_TYPE_LABELS[designTaskType]}</span>
+                                  </span>
+                                ) : (
+                                  "Оберіть тип задачі"
+                                )}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" disabled>
+                                Оберіть тип задачі
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              {DESIGN_TASK_TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <span className="inline-flex items-center gap-2">
+                                    {createElement(DESIGN_TASK_TYPE_ICONS[option.value], { className: "h-4 w-4 text-muted-foreground" })}
+                                    <span>{option.label}</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">Виконавець</div>
+                          <Select
+                            value={designAssigneeId ?? "none"}
+                            onValueChange={(value) => {
+                              const nextAssigneeId = value === "none" ? null : value;
+                              setDesignAssigneeId(nextAssigneeId);
+                              setDesignCollaboratorIds((prev) => prev.filter((entry) => entry !== nextAssigneeId));
+                            }}
+                            disabled={designTaskSaving}
+                          >
+                            <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                              {designAssigneeId ? (
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <AvatarBase
+                                    src={memberAvatarById.get(designAssigneeId) ?? null}
+                                    name={memberById.get(designAssigneeId) ?? designAssigneeId}
+                                    fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
+                                    size={20}
+                                    className="text-[9px] font-semibold"
+                                  />
+                                  <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Без виконавця</span>
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Без виконавця</SelectItem>
+                              {designerMembers.length > 0 ? (
+                                designerMembers.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>
+                                    <div className="flex items-center gap-2">
+                                      <AvatarBase
+                                        src={member.avatarUrl}
+                                        name={member.label}
+                                        fallback={getInitials(member.label)}
+                                        size={20}
+                                        className="text-[9px] font-semibold"
+                                      />
+                                      <span>{member.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="empty" disabled>
+                                  {teamMembers.length === 0
+                                    ? "Немає учасників"
+                                    : hasRoleInfo
+                                    ? "Немає дизайнерів"
+                                    : "Ролі не налаштовані"}
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">Співвиконавці</div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 w-full justify-start border-border/40 bg-muted/[0.03]"
+                                disabled={designTaskSaving}
+                              >
+                                <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <span className="truncate">
+                                  {designCollaboratorIds.length === 0
+                                    ? "Не додано"
+                                    : designCollaboratorIds.length === 1
+                                    ? getMemberLabel(designCollaboratorIds[0])
+                                    : `Співвиконавці · ${designCollaboratorIds.length}`}
+                                </span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-[280px]">
+                              <DropdownMenuLabel>Співвиконавці</DropdownMenuLabel>
+                              {designerMembers.filter((member) => member.id !== designAssigneeId).map((member) => {
+                                const checked = designCollaboratorIds.includes(member.id);
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={member.id}
+                                    checked={checked}
+                                    onCheckedChange={(nextChecked) => {
+                                      setDesignCollaboratorIds((prev) =>
+                                        nextChecked ? [...prev, member.id] : prev.filter((entry) => entry !== member.id)
+                                      );
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <AvatarBase
+                                        src={member.avatarUrl}
+                                        name={member.label}
+                                        fallback={getInitials(member.label)}
+                                        size={20}
+                                        className="text-[9px] font-semibold"
+                                      />
+                                      <span>{member.label}</span>
+                                    </div>
+                                  </DropdownMenuCheckboxItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={() => void createDesignTask()} disabled={designTaskSaving}>

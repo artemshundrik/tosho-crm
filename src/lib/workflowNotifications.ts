@@ -186,6 +186,7 @@ export async function notifyDesignTaskStakeholdersOnCreate(params: {
   actorUserId?: string | null;
   actorName?: string | null;
   assigneeUserId?: string | null;
+  collaboratorUserIds?: string[];
 }) {
   const { teamId, createdBy, assignedTo, quoteNumber } = await resolveQuoteInitiator(params.quoteId);
   const members = await resolveTeamMembers(teamId);
@@ -193,6 +194,7 @@ export async function notifyDesignTaskStakeholdersOnCreate(params: {
   const quoteRef = quoteNumber ? `#${quoteNumber}` : "цього прорахунку";
 
   const assigneeRecipients = new Set<string>();
+  const collaboratorRecipients = new Set<string>();
   const designerPoolRecipients = new Set<string>();
   const stakeholderRecipients = new Set<string>();
 
@@ -201,17 +203,23 @@ export async function notifyDesignTaskStakeholdersOnCreate(params: {
   } else {
     for (const designerUserId of pickDesignerUserIds(members)) designerPoolRecipients.add(designerUserId);
   }
+  for (const collaboratorUserId of params.collaboratorUserIds ?? []) {
+    if (collaboratorUserId) collaboratorRecipients.add(collaboratorUserId);
+  }
 
   if (assignedTo) stakeholderRecipients.add(assignedTo);
   if (createdBy) stakeholderRecipients.add(createdBy);
 
   if (params.actorUserId) {
     assigneeRecipients.delete(params.actorUserId);
+    collaboratorRecipients.delete(params.actorUserId);
     designerPoolRecipients.delete(params.actorUserId);
     stakeholderRecipients.delete(params.actorUserId);
   }
 
+  for (const userId of assigneeRecipients) collaboratorRecipients.delete(userId);
   for (const userId of assigneeRecipients) stakeholderRecipients.delete(userId);
+  for (const userId of collaboratorRecipients) stakeholderRecipients.delete(userId);
   for (const userId of designerPoolRecipients) stakeholderRecipients.delete(userId);
 
   if (assigneeRecipients.size > 0) {
@@ -234,6 +242,16 @@ export async function notifyDesignTaskStakeholdersOnCreate(params: {
     });
   }
 
+  if (collaboratorRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(collaboratorRecipients),
+      title: "Вас додано як співвиконавця",
+      body: `${actorName} додав(ла) вас як співвиконавця до задачі по прорахунку ${quoteRef}.`,
+      href: `/design/${params.designTaskId}`,
+      type: "info",
+    });
+  }
+
   if (stakeholderRecipients.size > 0) {
     await notifyUsers({
       userIds: Array.from(stakeholderRecipients),
@@ -241,6 +259,44 @@ export async function notifyDesignTaskStakeholdersOnCreate(params: {
       body: `${actorName} створив(ла) дизайн-задачу по прорахунку ${quoteRef}.`,
       href: `/design/${params.designTaskId}`,
       type: "info",
+    });
+  }
+}
+
+export async function notifyDesignTaskCollaboratorsChanged(params: {
+  designTaskId: string;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  taskLabel: string;
+  addedUserIds?: string[];
+  removedUserIds?: string[];
+}) {
+  const actorName = params.actorName ?? "System";
+  const addedRecipients = new Set((params.addedUserIds ?? []).filter((value): value is string => !!value));
+  const removedRecipients = new Set((params.removedUserIds ?? []).filter((value): value is string => !!value));
+
+  if (params.actorUserId) {
+    addedRecipients.delete(params.actorUserId);
+    removedRecipients.delete(params.actorUserId);
+  }
+
+  if (addedRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(addedRecipients),
+      title: "Вас додано як співвиконавця",
+      body: `${actorName} додав(ла) вас як співвиконавця до задачі ${params.taskLabel}.`,
+      href: `/design/${params.designTaskId}`,
+      type: "info",
+    });
+  }
+
+  if (removedRecipients.size > 0) {
+    await notifyUsers({
+      userIds: Array.from(removedRecipients),
+      title: "Вас знято зі співвиконавців",
+      body: `${actorName} прибрав(ла) вас зі співвиконавців задачі ${params.taskLabel}.`,
+      href: `/design/${params.designTaskId}`,
+      type: "warning",
     });
   }
 }
@@ -319,6 +375,30 @@ export async function notifyQuoteInitiatorOnDesignStatusChange(params: {
     userIds: Array.from(recipients),
     title: alert.title,
     body: alert.body(quoteRef),
+    href: `/design/${params.designTaskId}`,
+    type: alert.type,
+  });
+}
+
+export async function notifyDesignTaskCollaboratorsOnStatusChange(params: {
+  designTaskId: string;
+  taskLabel: string;
+  toStatus: string;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  collaboratorUserIds?: string[];
+}) {
+  const alert = DESIGN_STATUS_ALERTS[params.toStatus];
+  if (!alert) return;
+
+  const recipients = new Set((params.collaboratorUserIds ?? []).filter((value): value is string => !!value));
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: alert.title,
+    body: `${params.actorName ?? "System"} змінив(ла) статус спільної задачі ${params.taskLabel}.`,
     href: `/design/${params.designTaskId}`,
     type: alert.type,
   });

@@ -76,6 +76,7 @@ Read first:
 Checklist:
 
 - confirm assignee behavior
+- treat design-task ownership as `1 primary assignee + optional collaborators`, not equal multi-assignee ownership
 - confirm stakeholder notifications
 - confirm quote linkage
 - confirm metadata fields used by downstream readers

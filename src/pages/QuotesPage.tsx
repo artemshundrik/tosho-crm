@@ -17,6 +17,7 @@ import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreat
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
+import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import {
@@ -1848,9 +1849,38 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const modelName = packageItemName ?? model?.name ?? "Позиція";
         const designDeadline = deadlineAt;
         const assigneeUserId = data.designAssigneeId ?? null;
+        const collaboratorUserIds = Array.from(
+          new Set((data.designCollaboratorIds ?? []).filter((value) => value && value !== assigneeUserId))
+        );
         const designTaskType = data.designTaskType;
         if (!designTaskType) throw new Error("Оберіть тип дизайнерської задачі");
         const assignedAt = assigneeUserId ? new Date().toISOString() : null;
+        const designTaskMetadata = withDesignTaskCollaboratorMetadata(
+          {
+            source: "design_task_created",
+            status: "new",
+            design_task_number: designTaskNumber,
+            quote_id: created.id,
+            design_task_id: null,
+            assignee_user_id: assigneeUserId,
+            assigned_at: assignedAt,
+            design_task_type: designTaskType,
+            quote_type: data.quoteType,
+            methods_count: isPrintPackageQuote ? 1 : data.printApplications.length,
+            has_files: data.files.length > 0,
+            design_deadline: designDeadline,
+            deadline: designDeadline,
+            design_brief: data.comment?.trim() || data.deadlineNote?.trim() || null,
+            model: modelName,
+          },
+          collaboratorUserIds,
+          {
+            assigneeUserId,
+            resolveLabel: (userId) => memberById.get(userId)?.label ?? "Учасник",
+          resolveAvatar: (userId) => memberById.get(userId)?.avatarUrl ?? null,
+        }
+      );
+
         const { data: designTaskRow, error: designTaskError } = await supabase
           .from("activity_log")
           .insert({
@@ -1861,23 +1891,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             entity_type: "design_task",
             entity_id: created.id,
             title: `Дизайн: ${modelName}`,
-            metadata: {
-              source: "design_task_created",
-              status: "new",
-              design_task_number: designTaskNumber,
-              quote_id: created.id,
-              design_task_id: null,
-              assignee_user_id: assigneeUserId,
-              assigned_at: assignedAt,
-              design_task_type: designTaskType,
-              quote_type: data.quoteType,
-              methods_count: isPrintPackageQuote ? 1 : data.printApplications.length,
-              has_files: data.files.length > 0,
-              design_deadline: designDeadline,
-              deadline: designDeadline,
-              design_brief: data.comment?.trim() || data.deadlineNote?.trim() || null,
-              model: modelName,
-            },
+            metadata: designTaskMetadata,
           })
           .select("id")
           .single();
@@ -1891,6 +1905,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               quoteId: created.id,
               designTaskId: createdDesignTaskId,
               assigneeUserId,
+              collaboratorUserIds,
               actorUserId: currentUserId,
               actorName,
             });
@@ -2357,6 +2372,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     designBrief: string | null;
     designDeadline: string | null;
     assigneeUserId: string | null;
+    collaboratorUserIds?: string[];
     designTaskType: DesignTaskType;
     hasFiles: boolean;
   }) => {
@@ -2379,6 +2395,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
     const assignedAt = params.assigneeUserId ? new Date().toISOString() : null;
 
+    const designTaskMetadata = withDesignTaskCollaboratorMetadata(
+      {
+        source: "design_task_created",
+        status: "new",
+        design_task_number: designTaskNumber,
+        quote_id: params.quoteId,
+        design_task_id: null,
+        assignee_user_id: params.assigneeUserId,
+        assigned_at: assignedAt,
+        design_task_type: params.designTaskType,
+        quote_type: params.quoteType ?? null,
+        methods_count: params.methodsCount,
+        has_files: params.hasFiles,
+        design_deadline: params.designDeadline,
+        deadline: params.designDeadline,
+        design_brief: params.designBrief,
+        model: params.modelName,
+      },
+      params.collaboratorUserIds ?? [],
+      {
+        assigneeUserId: params.assigneeUserId ?? null,
+        resolveLabel: (userId) => memberById.get(userId)?.label ?? "Учасник",
+        resolveAvatar: (userId) => memberById.get(userId)?.avatarUrl ?? null,
+      }
+    );
+
     const { data: designTaskRow, error: designTaskError } = await supabase
       .from("activity_log")
       .insert({
@@ -2389,28 +2431,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         entity_type: "design_task",
         entity_id: params.quoteId,
         title: `Дизайн: ${params.modelName}`,
-        metadata: {
-          source: "design_task_created",
-          status: "new",
-          design_task_number: designTaskNumber,
-          quote_id: params.quoteId,
-          design_task_id: null,
-          assignee_user_id: params.assigneeUserId,
-          assigned_at: assignedAt,
-          design_task_type: params.designTaskType,
-          quote_type: params.quoteType ?? null,
-          methods_count: params.methodsCount,
-          has_files: params.hasFiles,
-          design_deadline: params.designDeadline,
-          deadline: params.designDeadline,
-          design_brief: params.designBrief,
-          model: params.modelName,
-        },
+        metadata: designTaskMetadata,
       })
       .select("id")
       .single();
     if (designTaskError) throw designTaskError;
-    return (designTaskRow as { id?: string } | null)?.id ?? null;
+    const designTaskId = (designTaskRow as { id?: string } | null)?.id ?? null;
+    if (designTaskId) {
+      try {
+        await notifyDesignTaskStakeholdersOnCreate({
+          quoteId: params.quoteId,
+          designTaskId,
+          assigneeUserId: params.assigneeUserId,
+          collaboratorUserIds: params.collaboratorUserIds ?? [],
+          actorUserId: currentUserId,
+          actorName,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify designers about new design task", notifyError);
+      }
+    }
+    return designTaskId;
   };
 
   const handleCreate = async () => {
@@ -3777,6 +3818,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
           designDeadline: formatDeadlineValue(data.deadline),
           assigneeUserId: data.designAssigneeId ?? null,
+          collaboratorUserIds: data.designCollaboratorIds ?? [],
           designTaskType: data.designTaskType,
           hasFiles: data.files.length > 0,
         });

@@ -103,11 +103,15 @@ This is the most important non-obvious part of the repo.
     - `design_task_number`
     - `design_task_type`
     - `assignee_user_id`
+    - `collaborator_user_ids`
+    - `collaborator_labels`
+    - `collaborator_avatar_urls`
     - design output metadata
 
 - Related design-task events also live in `activity_log`, including:
   - `design_task_status`
   - `design_task_assignment`
+  - `design_task_collaborators`
   - `design_task_estimate`
   - `design_task_title`
   - `design_task_deadline`
