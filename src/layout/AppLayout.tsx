@@ -1746,44 +1746,49 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 }
                 content={
                   <>
-                    <div className="px-3 py-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-foreground">Сповіщення</div>
-                        {unreadCount > 0 ? (
-                          <Button
-                            type="button"
-                            variant="textMuted"
-                            size="xs"
-                            onClick={markAllRead}
-                            className="h-auto p-0"
-                          >
-                            Позначити всі
-                          </Button>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {unreadCount > 0 ? `Непрочитані: ${unreadCount}` : "Все прочитано"}
-                      </div>
-                      {push.supported && push.configured ? (
-                        <div className="mt-2">
-                          <Button
-                            type="button"
-                            variant={push.enabled ? "secondary" : "outline"}
-                            size="xs"
-                            onClick={push.enabled ? push.disable : push.enable}
-                            disabled={push.busy}
-                          >
-                            {push.enabled ? "Push увімкнено" : "Увімкнути push"}
-                          </Button>
+                    <div className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[15px] font-semibold tracking-tight text-foreground">Сповіщення</div>
                         </div>
-                      ) : null}
+                        <div className="flex shrink-0 items-start gap-2">
+                          {push.supported && push.configured ? (
+                            <Button
+                              type="button"
+                              variant={push.enabled ? "secondary" : "outline"}
+                              size="xs"
+                              className="rounded-full"
+                              onClick={push.enabled ? push.disable : push.enable}
+                              disabled={push.busy}
+                            >
+                              {push.enabled ? "Push увімкнено" : "Push вимкнено"}
+                            </Button>
+                          ) : null}
+                          {unreadCount > 0 ? (
+                            <Button
+                              type="button"
+                              variant="textMuted"
+                              size="xs"
+                              onClick={markAllRead}
+                              className="h-auto px-0 py-0.5"
+                            >
+                              Позначити всі
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                     <div className="h-px bg-border/70" />
                     <div className="max-h-[320px] overflow-auto">
                       {notificationsLoading ? (
-                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
+                        <div className="px-4 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
                       ) : unreadNotifications.length === 0 ? (
-                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">Немає непрочитаних.</div>
+                        <div className="px-4 py-4">
+                          <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-5 text-center">
+                            <div className="text-sm font-medium text-foreground">Немає непрочитаних</div>
+                            <div className="mt-1 text-xs text-muted-foreground">Нові події з’являться тут автоматично.</div>
+                          </div>
+                        </div>
                       ) : (
                         unreadNotifications.map((n) => (
                           <Button
@@ -1791,7 +1796,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             type="button"
                             variant="menu"
                             size="sm"
-                            className="h-auto w-full justify-start items-start gap-3 px-3 py-2.5 text-left"
+                            className="h-auto w-full items-start justify-start gap-3 px-4 py-3 text-left"
                             onClick={() => {
                               openNotification(n);
                               setNotificationsOpen(false);
@@ -1809,7 +1814,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             />
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
-                              <div className="text-xs text-muted-foreground line-clamp-2">{n.description}</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.description}</div>
                               <div className="mt-1 text-[10px] text-muted-foreground/70">{n.time}</div>
                             </div>
                           </Button>
@@ -1821,13 +1826,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       type="button"
                       variant="menu"
                       size="sm"
-                      className="h-auto w-full justify-start px-3 py-2.5 text-left"
+                      className="h-auto w-full justify-between px-4 py-3 text-left"
                       onClick={() => {
                         navigate("/notifications");
                         setNotificationsOpen(false);
                       }}
                     >
-                      Всі сповіщення
+                      <span className="font-medium">Всі сповіщення</span>
+                      <span className="text-xs text-muted-foreground">Відкрити</span>
                     </Button>
                   </>
                 }
