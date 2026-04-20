@@ -63,16 +63,20 @@ export function usePageData<T>({
   const [loading, setLoading] = useState(!cached || (isStale && showSkeletonOnStale));
   const [error, setError] = useState<Error | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(!cached);
-  
-  const hasCacheRef = useRef(Boolean(cached));
+
   const isStaleRef = useRef(isStale);
   const loadPromiseRef = useRef<Promise<T> | null>(null);
   const loadFnRef = useRef(loadFn);
+  const activeCacheKeyRef = useRef(cacheKey);
 
   // Оновлюємо ref при зміні функції
   useEffect(() => {
     loadFnRef.current = loadFn;
   }, [loadFn]);
+
+  useEffect(() => {
+    activeCacheKeyRef.current = cacheKey;
+  }, [cacheKey]);
 
   // Оновлюємо isStale ref
   useEffect(() => {
@@ -93,6 +97,8 @@ export function usePageData<T>({
       return loadPromiseRef.current;
     }
 
+    const requestCacheKey = cacheKey;
+
     if (!isBackground) {
       setLoading(true);
       setError(null);
@@ -100,6 +106,9 @@ export function usePageData<T>({
 
     const promise = loadFnRef.current()
       .then((newData) => {
+        if (activeCacheKeyRef.current !== requestCacheKey) {
+          return newData;
+        }
         setData(newData);
         setError(null);
         
@@ -113,24 +122,35 @@ export function usePageData<T>({
       })
       .catch((err) => {
         const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
+        if (activeCacheKeyRef.current === requestCacheKey) {
+          setError(error);
+        }
         console.error(`[usePageData] Error loading data for ${cacheKey}:`, error);
         throw error;
       })
       .finally(() => {
-        if (!isBackground) {
+        if (!isBackground && activeCacheKeyRef.current === requestCacheKey) {
           setLoading(false);
         }
-        loadPromiseRef.current = null;
-        setIsInitialLoad(false);
+        if (loadPromiseRef.current === promise) {
+          loadPromiseRef.current = null;
+        }
+        if (activeCacheKeyRef.current === requestCacheKey) {
+          setIsInitialLoad(false);
+        }
       });
 
     loadPromiseRef.current = promise;
     return promise;
   };
 
-  // Початкове завантаження
   useEffect(() => {
+    loadPromiseRef.current = null;
+    setData(cached?.data ?? null);
+    setError(null);
+    setLoading(!cached || (isStale && showSkeletonOnStale));
+    setIsInitialLoad(!cached);
+
     if (!cached) {
       // Немає кешу - завантажуємо з skeleton
       loadData(false);
@@ -144,9 +164,8 @@ export function usePageData<T>({
         loadData(true);
       }
     }
-     
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cacheKey, cached, isStale, showSkeletonOnStale, backgroundRefetch]);
 
   // Background refetch
   useEffect(() => {
@@ -174,7 +193,6 @@ export function usePageData<T>({
   const clearCache = () => {
     queryClient.removeQueries({ queryKey: fullCacheKey });
     setData(null);
-    hasCacheRef.current = false;
   };
 
   return {

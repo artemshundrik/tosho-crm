@@ -21,6 +21,7 @@ Use when the task is mainly UI or client behavior.
 3. Open the closest `src/lib/*` or `src/features/*` helper.
 4. Reuse permission, workspace, and data helpers before adding new fetch/util layers.
 5. If the change spans multiple files or types, verify with `npm run build`.
+6. Check the change for avoidable render/query regressions before finishing.
 
 UI implementation rules:
 
@@ -28,6 +29,9 @@ UI implementation rules:
 - prefer semantic design tokens such as `info/success/warning/danger` surfaces over hardcoded palette classes like `pink-50`, `sky-50`, `violet-200`, etc.
 - new UI states must be valid in both light and dark theme on the first implementation, not patched later
 - when a pattern repeats more than once on a page or across modules, consolidate it before adding more one-off variants
+- avatar surfaces must reuse the canonical member/avatar helpers rather than page-local URL assembly
+- customer/lead/company logo surfaces must reuse normalized logo helpers and `EntityAvatar`, not raw table values without normalization
+- watch for performance regressions: avoid N+1 fetches, reuse cached member/logo directories, and keep overview/list queries bounded
 
 ## 2. New Route Or Module Change
 
@@ -70,6 +74,7 @@ Read first:
 - [src/lib/designTaskActivity.ts](/Users/artem/Projects/tosho-crm/src/lib/designTaskActivity.ts)
 - [src/lib/designTaskTimer.ts](/Users/artem/Projects/tosho-crm/src/lib/designTaskTimer.ts)
 - [src/lib/workflowNotifications.ts](/Users/artem/Projects/tosho-crm/src/lib/workflowNotifications.ts)
+- [src/lib/customerLogo.ts](/Users/artem/Projects/tosho-crm/src/lib/customerLogo.ts) when customer/lead branding appears on design surfaces
 - [src/features/orders/orderRecords.ts](/Users/artem/Projects/tosho-crm/src/features/orders/orderRecords.ts) if outputs or approvals matter downstream
 - [scripts/admin-observability.sql](/Users/artem/Projects/tosho-crm/scripts/admin-observability.sql) if design metadata affects observability
 
@@ -80,7 +85,28 @@ Checklist:
 - confirm stakeholder notifications
 - confirm quote linkage
 - confirm metadata fields used by downstream readers
+- confirm display metadata such as `design_task_number`, `quote_number`, `customer_name`, `customer_logo_url`, and assignee avatar/name fallbacks used by overview/notifications/design lists
 - confirm role-based edit restrictions for designers vs managers/admins
+
+## 4A. Overview / Activity / Notifications Visual Identity Change
+
+Read first:
+
+- [src/pages/OverviewPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/OverviewPage.tsx)
+- [src/pages/ActivityPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ActivityPage.tsx)
+- [src/pages/NotificationsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/NotificationsPage.tsx)
+- [src/lib/customerLogo.ts](/Users/artem/Projects/tosho-crm/src/lib/customerLogo.ts)
+- [src/lib/workspaceMemberDirectory.ts](/Users/artem/Projects/tosho-crm/src/lib/workspaceMemberDirectory.ts)
+- [src/lib/avatarUrl.ts](/Users/artem/Projects/tosho-crm/src/lib/avatarUrl.ts)
+- [src/components/app/avatar-kit.tsx](/Users/artem/Projects/tosho-crm/src/components/app/avatar-kit.tsx)
+
+Checklist:
+
+- do not invent a new avatar/logo resolution path for overview cards or feed rows
+- prefer cached member/logo directories over repeated per-row fetches
+- if a card shows a quote or design task, confirm that number/title/logo are derived from the same normalized metadata/source used elsewhere in the app
+- if activity cards show actors, confirm avatar fallback works by `user_id` and by normalized display name when `user_id` is absent
+- inspect whether the change increased first-load queries or widened existing query result sets
 
 ## 5. Orders / Production Change
 
@@ -237,6 +263,7 @@ Minimum verification:
 - `npm run build`
 - targeted search for old names and affected metadata keys
 - inspect the main page/function paths that rely on the change
+- if the change affects a list/dashboard/feed, explicitly sanity-check that it did not introduce obvious performance regressions such as N+1 fetches, unbounded reads, or duplicate directory/logo loads
 
 ## 15. Docs Change
 

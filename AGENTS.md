@@ -23,11 +23,14 @@ When sources disagree, use this order:
 
 - Do not start with broad repo-wide search if the task clearly belongs to a known domain. Use the canonical entrypoints in `docs/CODEX_PROJECT_GUIDE.md` first.
 - Reuse existing workspace, permission, notification, attachment, and order-derivation helpers before introducing new patterns.
+- For teammate avatars, reuse the canonical chain: `src/lib/workspaceMemberDirectory.ts` + `src/lib/avatarUrl.ts` + `src/components/app/avatar-kit.tsx`. Do not ship ad hoc avatar lookups or raw storage-path rendering when an existing helper already resolves/caches the reference.
+- For customer/lead/company logos, reuse `src/lib/customerLogo.ts`, normalized `customer_logo_url` fields, and `EntityAvatar`. Do not introduce one-off logo fallback logic in pages when a shared normalized source already exists.
 - Treat `tosho` as the main app schema unless code explicitly uses `public` for an integration table or helper function.
 - Design tasks are primarily `activity_log`-backed entities with metadata, not a simple `design_tasks` table. Confirm this model before changing design flows.
 - Orders/production screens use derived records assembled in `src/features/orders/orderRecords.ts`; do not assume `tosho.orders` alone explains the UI.
 - For user-initiated server actions, prefer the established pattern: user-scoped auth/RLS check first, privileged write second.
 - Be conservative around permissions, route/module access, quote workflow state, design-task metadata contracts, attachment deletion, and admin observability queries.
+- Treat performance as a required review dimension for every change. Reuse caches/directories before adding queries, avoid N+1 lookups or broad unbounded reads, and sanity-check whether the first render now does more work than before.
 - Treat backup/ops automation as a partially legacy zone. Verify actual tracked files and local machine state before relying on old doc snippets.
 
 ## New Route Or Module Checklist

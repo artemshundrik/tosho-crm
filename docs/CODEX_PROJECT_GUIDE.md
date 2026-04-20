@@ -56,6 +56,8 @@ These are important and current as of April 19, 2026:
 
 - Frontend data and shared logic:
   [src/lib/toshoApi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoApi.ts)
+  [src/lib/customerLogo.ts](/Users/artem/Projects/tosho-crm/src/lib/customerLogo.ts)
+  [src/lib/avatarUrl.ts](/Users/artem/Projects/tosho-crm/src/lib/avatarUrl.ts)
   [src/lib/attachmentPreview.ts](/Users/artem/Projects/tosho-crm/src/lib/attachmentPreview.ts)
   [src/lib/workflowNotifications.ts](/Users/artem/Projects/tosho-crm/src/lib/workflowNotifications.ts)
   [src/lib/designTaskActivity.ts](/Users/artem/Projects/tosho-crm/src/lib/designTaskActivity.ts)
@@ -198,6 +200,26 @@ When changing a route or top-level module, these files often all matter:
 - New UI states should prefer semantic tokens and shared tone helpers/components instead of raw palette classes.
 - For badges, chips, avatar markers, and similar status surfaces, implement light/dark-safe token classes on the first pass.
 - If a visual pattern repeats, treat it as a component or reusable style contract, not a one-off page patch.
+
+### Avatar And Logo Sources
+
+- Team/user avatars should go through the canonical path:
+  [src/lib/workspaceMemberDirectory.ts](/Users/artem/Projects/tosho-crm/src/lib/workspaceMemberDirectory.ts)
+  [src/lib/avatarUrl.ts](/Users/artem/Projects/tosho-crm/src/lib/avatarUrl.ts)
+  [src/components/app/avatar-kit.tsx](/Users/artem/Projects/tosho-crm/src/components/app/avatar-kit.tsx)
+- Customer/lead/company logos should go through normalized logo sources from:
+  [src/lib/customerLogo.ts](/Users/artem/Projects/tosho-crm/src/lib/customerLogo.ts)
+  and already-normalized `customer_logo_url` reads from
+  [src/lib/toshoApi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoApi.ts)
+- For overview/notifications/design surfaces, prefer reusing cached member/logo directories over adding fresh per-card lookups.
+- Do not render raw Supabase REST URLs, raw storage paths, or page-local avatar/logo fallback logic if a shared helper already exists.
+
+### Performance Guardrail
+
+- Any code change should be reviewed for first-render cost, query count, and cache reuse, not only for visual correctness.
+- Reuse existing cached directories/helpers before adding new fetches.
+- Keep list queries bounded and avoid N+1 fetch patterns inside page render paths.
+- When a page already has an established lightweight fetch shape, preserve or improve it instead of expanding the data load opportunistically.
 
 ### Netlify Function Pattern
 
