@@ -88,6 +88,12 @@ import {
   waitForSignedAttachmentUrl,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
+import {
+  parseStoredDesignOutputFiles,
+  recoverDesignOutputFilesFromHistory,
+  serializeStoredDesignOutputFiles,
+  syncDesignOutputFilesToQuoteAttachments,
+} from "@/lib/designTaskOutputSync";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -1212,6 +1218,7 @@ export default function DesignTaskPage() {
   const [deletingTask, setDeletingTask] = useState(false);
   const objectUrlRegistryRef = useRef<Set<string>>(new Set());
   const ghostOutputReconciledTaskIdRef = useRef<string | null>(null);
+  const restoredDesignOutputsTaskIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
@@ -1692,29 +1699,12 @@ export default function DesignTaskPage() {
 
         const rawDesignFiles = Array.isArray(meta.design_output_files) ? meta.design_output_files : [];
         const designOutputFallbackType = parseDesignTaskType(meta.design_task_type);
-        const parsedDesignFiles: DesignOutputFile[] = rawDesignFiles
-          .map((row: unknown) => {
-            if (!row || typeof row !== "object") return null;
-            const entry = row as Record<string, unknown>;
-            const fileName = typeof entry.file_name === "string" && entry.file_name ? entry.file_name : null;
-            const storageBucket = typeof entry.storage_bucket === "string" && entry.storage_bucket ? entry.storage_bucket : null;
-            const storagePath = typeof entry.storage_path === "string" && entry.storage_path ? entry.storage_path : null;
-            if (!fileName || !storageBucket || !storagePath) return null;
-            return {
-              id: typeof entry.id === "string" && entry.id ? entry.id : crypto.randomUUID(),
-              file_name: fileName,
-              file_size: entry.file_size == null ? null : Number(entry.file_size),
-              mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
-              storage_bucket: storageBucket,
-              storage_path: storagePath,
-              uploaded_by: typeof entry.uploaded_by === "string" ? entry.uploaded_by : null,
-              created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
-              group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
-              output_kind: parseDesignOutputKind(entry.output_kind, designOutputFallbackType),
-              signed_url: null,
-            } satisfies DesignOutputFile;
-          })
-          .filter(Boolean) as DesignOutputFile[];
+        const parsedDesignFiles: DesignOutputFile[] = parseStoredDesignOutputFiles(rawDesignFiles).map((file) => ({
+          ...file,
+          group_label: normalizeOutputGroupLabel(file.group_label),
+          output_kind: parseDesignOutputKind(file.output_kind, designOutputFallbackType),
+          signed_url: null,
+        }));
 
         const designFilesWithUrls = parsedDesignFiles;
 
@@ -3155,18 +3145,13 @@ export default function DesignTaskPage() {
   ) => {
     if (!task || !effectiveTeamId) return;
     if (!ensureCanEdit()) return;
-    const filesForMeta = nextFiles.map((file) => ({
-      id: file.id,
-      file_name: file.file_name,
-      file_size: file.file_size,
-      mime_type: file.mime_type,
-      storage_bucket: file.storage_bucket,
-      storage_path: file.storage_path,
-      uploaded_by: file.uploaded_by,
-      created_at: file.created_at,
-      group_label: normalizeOutputGroupLabel(file.group_label),
-      output_kind: file.output_kind ?? null,
-    }));
+    const filesForMeta = serializeStoredDesignOutputFiles(
+      nextFiles.map((file) => ({
+        ...file,
+        group_label: normalizeOutputGroupLabel(file.group_label),
+        output_kind: file.output_kind ?? null,
+      }))
+    );
     const linksForMeta = nextLinks.map((link) => ({
       id: link.id,
       label: link.label,
@@ -3210,29 +3195,12 @@ export default function DesignTaskPage() {
   const syncDesignFileToQuoteVisualizations = async (file: DesignOutputFile) => {
     if (!task || !effectiveTeamId || !isUuid(task.quoteId)) return;
     if (!ensureCanEdit()) return;
-
-    const { data: existing, error: existingError } = await supabase
-      .schema("tosho")
-      .from("quote_attachments")
-      .select("id")
-      .eq("quote_id", task.quoteId)
-      .eq("storage_bucket", file.storage_bucket)
-      .eq("storage_path", file.storage_path)
-      .maybeSingle();
-    if (existingError) throw existingError;
-    if (existing?.id) return;
-
-    const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-      team_id: effectiveTeamId,
-      quote_id: task.quoteId,
-      file_name: file.file_name,
-      mime_type: file.mime_type || null,
-      file_size: file.file_size,
-      storage_bucket: file.storage_bucket,
-      storage_path: file.storage_path,
-      uploaded_by: userId ?? null,
+    await syncDesignOutputFilesToQuoteAttachments({
+      teamId: effectiveTeamId,
+      quoteId: task.quoteId,
+      files: [file],
+      fallbackUploadedBy: userId ?? null,
     });
-    if (insertError) throw insertError;
   };
 
   const buildOutputSelectionMetadata = (
@@ -3295,76 +3263,21 @@ export default function DesignTaskPage() {
   const reconcileGhostDesignOutputs = useCallback(async () => {
     if (!task || !effectiveTeamId || !isUuid(task.quoteId) || designOutputFiles.length === 0) return;
     if (ghostOutputReconciledTaskIdRef.current === task.id) return;
-
-    const { data, error } = await supabase
-      .schema("tosho")
-      .from("quote_attachments")
-      .select("storage_bucket,storage_path")
-      .eq("quote_id", task.quoteId);
-    if (error) throw error;
-
-    const quoteAttachmentKeys = new Set(
-      ((data as Array<{ storage_bucket?: string | null; storage_path?: string | null }> | null) ?? [])
-        .map((row) =>
-          typeof row.storage_bucket === "string" && typeof row.storage_path === "string"
-            ? `${row.storage_bucket}:${row.storage_path}`
-            : null
-        )
-        .filter((value): value is string => Boolean(value))
-    );
-    const ghostFiles = designOutputFiles.filter(
-      (file) =>
-        file.storage_bucket &&
-        file.storage_path &&
-        !quoteAttachmentKeys.has(`${file.storage_bucket}:${file.storage_path}`)
-    );
-    if (ghostFiles.length === 0) {
-      ghostOutputReconciledTaskIdRef.current = task.id;
-      return;
-    }
-
-    const removedIds = new Set(ghostFiles.map((file) => file.id));
-    const nextFiles = designOutputFiles.filter((file) => !removedIds.has(file.id));
-    const actorLabel = userId ? getMemberLabel(userId) : "System";
-    const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
-      visualization: getSelectedDesignOutputFileIdsFromMetadata(task.metadata ?? {}, "visualization").filter(
-        (id) => !removedIds.has(id)
-      ),
-      layout: getSelectedDesignOutputFileIdsFromMetadata(task.metadata ?? {}, "layout").filter(
-        (id) => !removedIds.has(id)
-      ),
-    };
-    const nextMetadataPatch = buildOutputSelectionMetadata(
-      task.metadata ?? {},
-      nextSelectedByKind,
-      actorLabel,
-      nextFiles
-    );
-
-    await persistDesignOutputs(nextFiles, designOutputLinks, {
-      metadataPatch: nextMetadataPatch,
-    });
-    setDesignOutputFiles(nextFiles);
-    setFileAccessUrlByKey((prev) => {
-      const next = { ...prev };
-      ghostFiles.forEach((file) => {
-        if (!file.storage_bucket || !file.storage_path) return;
-        delete next[`${file.storage_bucket}:${file.storage_path}`];
-        delete next[`${file.storage_bucket}:${getAttachmentVariantPath(file.storage_path, "preview")}`];
-        delete next[`${file.storage_bucket}:${getAttachmentVariantPath(file.storage_path, "thumb")}`];
-      });
-      return next;
+    const insertedCount = await syncDesignOutputFilesToQuoteAttachments({
+      teamId: effectiveTeamId,
+      quoteId: task.quoteId,
+      files: designOutputFiles,
+      fallbackUploadedBy: userId ?? null,
     });
     ghostOutputReconciledTaskIdRef.current = task.id;
-    toast.warning("Знайдено биті файли у матеріалах", {
-      description: `Прибрано ${ghostFiles.length} запис(и), яких уже немає в quote attachments.`,
-    });
+    if (insertedCount > 0) {
+      toast.success("Відновлено зв’язок матеріалів з прорахунком", {
+        description: `Повернуто ${insertedCount} файл(и) в quote attachments.`,
+      });
+    }
   }, [
-    buildOutputSelectionMetadata,
     designOutputFiles,
-    designOutputLinks,
     effectiveTeamId,
-    persistDesignOutputs,
     task,
     userId,
   ]);
@@ -3372,6 +3285,61 @@ export default function DesignTaskPage() {
   useEffect(() => {
     if (ghostOutputReconciledTaskIdRef.current && ghostOutputReconciledTaskIdRef.current !== task?.id) {
       ghostOutputReconciledTaskIdRef.current = null;
+    }
+  }, [task?.id]);
+
+  const restoreDesignOutputsFromHistoryIfNeeded = useCallback(async () => {
+    if (!task || !effectiveTeamId || !isUuid(task.quoteId) || designOutputFiles.length > 0) return;
+    if (restoredDesignOutputsTaskIdRef.current === task.id) return;
+
+    const metadata = task.metadata ?? {};
+    const isLinkedTask = metadata.task_kind === "linked" || typeof metadata.attached_quote_at === "string";
+    if (!isLinkedTask) {
+      restoredDesignOutputsTaskIdRef.current = task.id;
+      return;
+    }
+
+    const recoveredFiles = (await recoverDesignOutputFilesFromHistory(task.id)).map((file) => ({
+      ...file,
+      group_label: normalizeOutputGroupLabel(file.group_label),
+      output_kind: parseDesignOutputKind(file.output_kind, parseDesignTaskType(metadata.design_task_type)),
+      signed_url: null,
+    })) as DesignOutputFile[];
+    if (recoveredFiles.length === 0) {
+      restoredDesignOutputsTaskIdRef.current = task.id;
+      return;
+    }
+
+    await syncDesignOutputFilesToQuoteAttachments({
+      teamId: effectiveTeamId,
+      quoteId: task.quoteId,
+      files: recoveredFiles,
+      fallbackUploadedBy: userId ?? null,
+    });
+
+    const nextMetadata: Record<string, unknown> = {
+      ...metadata,
+      design_output_files: serializeStoredDesignOutputFiles(recoveredFiles),
+    };
+
+    const { error: updateError } = await supabase
+      .from("activity_log")
+      .update({ metadata: nextMetadata })
+      .eq("id", task.id)
+      .eq("team_id", effectiveTeamId);
+    if (updateError) throw updateError;
+
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+    setDesignOutputFiles(recoveredFiles);
+    restoredDesignOutputsTaskIdRef.current = task.id;
+    toast.success("Матеріали дизайн-задачі відновлено", {
+      description: `Повернуто ${recoveredFiles.length} файл(и) з історії завантажень.`,
+    });
+  }, [designOutputFiles.length, effectiveTeamId, task, userId]);
+
+  useEffect(() => {
+    if (restoredDesignOutputsTaskIdRef.current && restoredDesignOutputsTaskIdRef.current !== task?.id) {
+      restoredDesignOutputsTaskIdRef.current = null;
     }
   }, [task?.id]);
 
@@ -3836,6 +3804,12 @@ export default function DesignTaskPage() {
     });
   }, [reconcileGhostDesignOutputs]);
 
+  useEffect(() => {
+    void restoreDesignOutputsFromHistoryIfNeeded().catch((error) => {
+      console.warn("Failed to restore design outputs from history", error);
+    });
+  }, [restoreDesignOutputsFromHistoryIfNeeded]);
+
   const handleCreateDesignOutputGroup = async () => {
     try {
       const nextGroup = normalizeOutputGroupLabel(createGroupDraft);
@@ -4114,32 +4088,12 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
-      if (selectedFiles.length > 0) {
-        for (const selectedFile of selectedFiles) {
-          const { data: existing, error: existingError } = await supabase
-            .schema("tosho")
-            .from("quote_attachments")
-            .select("id")
-            .eq("quote_id", quoteCandidate.id)
-            .eq("storage_bucket", selectedFile.storage_bucket)
-            .eq("storage_path", selectedFile.storage_path)
-            .maybeSingle();
-          if (existingError) throw existingError;
-          if (!existing?.id) {
-            const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-              team_id: effectiveTeamId,
-              quote_id: quoteCandidate.id,
-              file_name: selectedFile.file_name,
-              mime_type: selectedFile.mime_type || null,
-              file_size: selectedFile.file_size,
-              storage_bucket: selectedFile.storage_bucket,
-              storage_path: selectedFile.storage_path,
-              uploaded_by: selectedFile.uploaded_by ?? userId ?? null,
-            });
-            if (insertError) throw insertError;
-          }
-        }
-      }
+      await syncDesignOutputFilesToQuoteAttachments({
+        teamId: effectiveTeamId,
+        quoteId: quoteCandidate.id,
+        files: designOutputFiles,
+        fallbackUploadedBy: userId ?? null,
+      });
 
       await logDesignTaskActivity({
         teamId: effectiveTeamId,

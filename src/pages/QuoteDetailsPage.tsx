@@ -44,6 +44,7 @@ import {
   uploadAttachmentWithVariants,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
+import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
@@ -2725,35 +2726,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       const { error } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata, entity_id: quoteId })
         .eq("id", candidate.id)
         .eq("team_id", teamId);
       if (error) throw error;
 
-      if (candidate.selectedFile) {
-        const { data: existing, error: existingError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .select("id")
-          .eq("quote_id", quoteId)
-          .eq("storage_bucket", candidate.selectedFile.storage_bucket)
-          .eq("storage_path", candidate.selectedFile.storage_path)
-          .maybeSingle();
-        if (existingError) throw existingError;
-        if (!existing?.id) {
-          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-            team_id: teamId,
-            quote_id: quoteId,
-            file_name: candidate.selectedFile.file_name,
-            mime_type: candidate.selectedFile.mime_type || null,
-            file_size: candidate.selectedFile.file_size,
-            storage_bucket: candidate.selectedFile.storage_bucket,
-            storage_path: candidate.selectedFile.storage_path,
-            uploaded_by: candidate.selectedFile.uploaded_by ?? userId ?? null,
-          });
-          if (insertError) throw insertError;
-        }
-      }
+      const candidateFiles = parseDesignOutputMetaFiles(candidate.metadata.design_output_files);
+      await syncDesignOutputFilesToQuoteAttachments({
+        teamId,
+        quoteId,
+        files: candidateFiles,
+        fallbackUploadedBy: userId ?? null,
+      });
 
       await logDesignTaskActivity({
         teamId,

@@ -549,17 +549,17 @@ export default function OrdersProductionPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <Table variant="list" size="md">
+                  <Table variant="list" size="md" className="table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="pl-6">Прорахунок</TableHead>
-                        <TableHead>Контрагент</TableHead>
-                        <TableHead>Стан</TableHead>
-                        <TableHead>Позиції</TableHead>
-                        <TableHead>Оплата</TableHead>
-                        <TableHead>Документи</TableHead>
-                        <TableHead>Готовність</TableHead>
-                        <TableHead className="pr-6 text-right">Сума</TableHead>
+                        <TableHead className="w-[160px] pl-6 whitespace-nowrap">Прорахунок</TableHead>
+                        <TableHead className="w-[260px] whitespace-nowrap">Контрагент</TableHead>
+                        <TableHead className="w-[180px] whitespace-nowrap">Стан</TableHead>
+                        <TableHead className="w-auto">Позиції</TableHead>
+                        <TableHead className="w-[160px] whitespace-nowrap">Оплата</TableHead>
+                        <TableHead className="w-[150px] whitespace-nowrap">Документи</TableHead>
+                        <TableHead className="w-[140px] whitespace-nowrap">Готовність</TableHead>
+                        <TableHead className="w-[120px] pr-6 text-right whitespace-nowrap">Сума</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -613,10 +613,13 @@ export default function OrdersProductionPage() {
                           </TableCell>
                           <TableCell className="align-top">
                             {record.items.length > 0 ? (
-                              <div className="flex min-w-0 items-center gap-2 text-sm">
+                              <div className="flex min-w-0 items-start gap-2 text-sm">
                                 <span className="shrink-0 font-medium text-foreground">{record.itemCount}</span>
-                                <span className="text-muted-foreground">•</span>
-                                <span className="truncate text-muted-foreground">
+                                <span className="mt-0.5 shrink-0 text-muted-foreground">•</span>
+                                <span
+                                  className="min-w-0 text-muted-foreground leading-5 line-clamp-2 break-words"
+                                  title={record.items[0]?.name || "Немає позицій"}
+                                >
                                   {record.items[0]?.name || "Немає позицій"}
                                 </span>
                               </div>
@@ -625,7 +628,9 @@ export default function OrdersProductionPage() {
                             )}
                           </TableCell>
                           <TableCell className="align-top">
-                            <div className="max-w-[220px] text-sm text-foreground">{record.paymentRail}</div>
+                            <div className="text-sm leading-6 text-foreground break-words line-clamp-3">
+                              {record.paymentRail}
+                            </div>
                           </TableCell>
                           <TableCell className="align-top">
                             <div className="flex flex-wrap gap-1.5">
