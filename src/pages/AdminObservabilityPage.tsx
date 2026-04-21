@@ -29,6 +29,8 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { toast } from "sonner";
 import type {
   AttachmentAuditReviewRow,
+  BackupRunDisplayRow,
+  BackupSectionSummary,
   ChartRange,
   OperationsMetricKey,
   TrendDatum,
@@ -39,6 +41,9 @@ const OverviewTabPanel = lazy(() =>
 );
 const AttachmentsTabPanel = lazy(() =>
   import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.AttachmentsTabPanel }))
+);
+const BackupsTabPanel = lazy(() =>
+  import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.BackupsTabPanel }))
 );
 
 type QueryStat = {
@@ -129,6 +134,14 @@ type BackupRunRow = {
   created_at: string;
 };
 
+type BackupHealth = {
+  latestRun: BackupRunRow | null;
+  latestSuccessfulRun: BackupRunRow | null;
+  ageHours: number | null;
+  tone: "good" | "warning" | "danger" | "neutral";
+  message: string;
+};
+
 const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
 const CHART_STROKES = {
   primary: "hsl(var(--primary))",
@@ -202,6 +215,37 @@ function formatRunwayDays(days: number | null) {
   if (days >= 365) return `${(days / 365).toFixed(1)} року`;
   if (days >= 30) return `${(days / 30).toFixed(1)} міс.`;
   return `${Math.round(days)} днів`;
+}
+
+function buildBackupHealth(runs: BackupRunRow[], subjectLabel: string): BackupHealth {
+  const latestRun = runs[0] ?? null;
+  const latestSuccessfulRun = runs.find((row) => row.status === "success") ?? null;
+  const ageHours = latestSuccessfulRun
+    ? Math.max(0, (Date.now() - new Date(latestSuccessfulRun.finished_at).getTime()) / (1000 * 60 * 60))
+    : null;
+  const tone: BackupHealth["tone"] =
+    latestRun?.status === "failed"
+      ? "danger"
+      : ageHours === null
+        ? "warning"
+        : ageHours <= 8 * 24
+          ? "good"
+          : ageHours <= 16 * 24
+            ? "warning"
+            : "danger";
+  const message = latestRun
+    ? latestRun.status === "failed"
+      ? `Останній backup ${subjectLabel} впав ${formatDateTimeShort(latestRun.finished_at)}.${latestRun.error_message ? ` ${latestRun.error_message}` : ""}`
+      : `Останній успішний backup ${subjectLabel}: ${formatDateTimeShort(latestRun.finished_at)} · ${latestRun.archive_name ?? "архів"}${latestRun.archive_size_bytes ? ` · ${formatBytes(latestRun.archive_size_bytes)}` : ""}.`
+    : `Ще немає жодного записаного backup-run по ${subjectLabel}.`;
+
+  return {
+    latestRun,
+    latestSuccessfulRun,
+    ageHours,
+    tone,
+    message,
+  };
 }
 
 function average(values: number[]) {
@@ -293,7 +337,7 @@ export default function AdminObservabilityPage() {
   const { teamId, userId, loading: authLoading, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [backupRuns, setBackupRuns] = useState<BackupRunRow[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "attachments">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups">("overview");
   const [operationsRange, setOperationsRange] = useState<ChartRange>("7d");
   const [operationsMetric, setOperationsMetric] = useState<OperationsMetricKey>("storageTodayMb");
   const [loading, setLoading] = useState(true);
@@ -370,9 +414,9 @@ export default function AdminObservabilityPage() {
       .from("backup_runs")
       .select("*")
       .eq("workspace_id", workspaceId)
-      .eq("section", "storage")
+      .in("section", ["storage", "database"])
       .order("finished_at", { ascending: false })
-      .limit(20);
+      .limit(40);
 
     if (fetchError) {
       const isSetupError =
@@ -534,8 +578,14 @@ export default function AdminObservabilityPage() {
   }, [activeTab, attachmentAuditAttempted, attachmentAuditLoaded, attachmentAuditLoading, loadAttachmentAudit, permissions.isAdmin, permissions.isSuperAdmin, workspaceId]);
 
   const latest = rows[0] ?? null;
-  const latestBackupRun = backupRuns[0] ?? null;
-  const latestSuccessfulBackupRun = backupRuns.find((row) => row.status === "success") ?? null;
+  const storageBackupRuns = useMemo(
+    () => backupRuns.filter((row) => row.section === "storage"),
+    [backupRuns]
+  );
+  const databaseBackupRuns = useMemo(
+    () => backupRuns.filter((row) => row.section === "database"),
+    [backupRuns]
+  );
   const previousRows = rows.slice(1);
   const attachmentDeleteReadyRows = useMemo(
     () => attachmentAuditRows.filter((row) => !row.entityExists && row.entityKind !== "unknown"),
@@ -713,24 +763,14 @@ export default function AdminObservabilityPage() {
     averageStorageGrowthBytes > 0 ? remainingStorageBytes / averageStorageGrowthBytes : null;
   const storagePlanTone: "good" | "warning" | "danger" | "neutral" =
     storageUsagePercent >= 90 ? "danger" : storageUsagePercent >= 70 ? "warning" : "good";
-  const backupAgeHours = latestSuccessfulBackupRun
-    ? Math.max(0, (Date.now() - new Date(latestSuccessfulBackupRun.finished_at).getTime()) / (1000 * 60 * 60))
-    : null;
-  const backupHealthTone: "good" | "warning" | "danger" | "neutral" =
-    latestBackupRun?.status === "failed"
-      ? "danger"
-      : backupAgeHours === null
-        ? "warning"
-        : backupAgeHours <= 8 * 24
-          ? "good"
-          : backupAgeHours <= 16 * 24
-            ? "warning"
-            : "danger";
-  const backupHealthMessage = latestBackupRun
-    ? latestBackupRun.status === "failed"
-      ? `Останній backup файлів впав ${formatDateTimeShort(latestBackupRun.finished_at)}.${latestBackupRun.error_message ? ` ${latestBackupRun.error_message}` : ""}`
-      : `Останній успішний backup файлів: ${formatDateTimeShort(latestBackupRun.finished_at)} · ${latestBackupRun.archive_name ?? "архів"}${latestBackupRun.archive_size_bytes ? ` · ${formatBytes(latestBackupRun.archive_size_bytes)}` : ""}.`
-    : "Ще немає жодного записаного backup-run по файлах.";
+  const storageBackupHealth = useMemo(
+    () => buildBackupHealth(storageBackupRuns, "файлів"),
+    [storageBackupRuns]
+  );
+  const databaseBackupHealth = useMemo(
+    () => buildBackupHealth(databaseBackupRuns, "бази"),
+    [databaseBackupRuns]
+  );
   const summaryGood: string[] = [];
   const summaryWatch: string[] = [];
   const summaryBad: string[] = [];
@@ -756,9 +796,12 @@ export default function AdminObservabilityPage() {
   if (attachmentHygieneTone === "good") summaryGood.push("Attachment hygiene під контролем.");
   if (attachmentHygieneTone === "warning") summaryWatch.push("У attachments є orphan files або missing previews.");
   if (attachmentHygieneTone === "danger") summaryBad.push("У attachments накопичилось помітне сміття або багато missing previews.");
-  if (backupHealthTone === "good") summaryGood.push("Backup файлів актуальний.");
-  if (backupHealthTone === "warning") summaryWatch.push("Backup файлів давно не оновлювався або ще не записаний.");
-  if (backupHealthTone === "danger") summaryBad.push("Останній backup файлів завершився помилкою або занадто старий.");
+  if (storageBackupHealth.tone === "good") summaryGood.push("Backup файлів актуальний.");
+  if (storageBackupHealth.tone === "warning") summaryWatch.push("Backup файлів давно не оновлювався або ще не записаний.");
+  if (storageBackupHealth.tone === "danger") summaryBad.push("Останній backup файлів завершився помилкою або занадто старий.");
+  if (databaseBackupHealth.tone === "good") summaryGood.push("Backup бази актуальний.");
+  if (databaseBackupHealth.tone === "warning") summaryWatch.push("Backup бази давно не оновлювався або ще не записаний.");
+  if (databaseBackupHealth.tone === "danger") summaryBad.push("Останній backup бази завершився помилкою або занадто старий.");
 
   if (!summaryGood.length && latest) {
     summaryGood.push("Snapshot зібраний і критичних аварійних сигналів не видно.");
@@ -767,8 +810,13 @@ export default function AdminObservabilityPage() {
     ? [
         {
           title: "Backup файлів",
-          description: backupHealthMessage,
-          tone: backupHealthTone,
+          description: storageBackupHealth.message,
+          tone: storageBackupHealth.tone,
+        },
+        {
+          title: "Backup бази",
+          description: databaseBackupHealth.message,
+          tone: databaseBackupHealth.tone,
         },
         {
           title: "Storage за сьогодні",
@@ -801,22 +849,70 @@ export default function AdminObservabilityPage() {
     ? [
         {
           title: "1. Backup файлів",
-          description: backupHealthMessage,
+          description: storageBackupHealth.message,
         },
         {
-          title: "2. Storage за сьогодні",
+          title: "2. Backup бази",
+          description: databaseBackupHealth.message,
+        },
+        {
+          title: "3. Storage за сьогодні",
           description: `Головний індикатор хвиль upload-ів, генерацій прев'ю і важких дизайн-днів. Зараз: ${formatBytes(latest.storage_today_bytes)} у ${formatCompactCount(latest.storage_today_objects)} objects.`,
         },
         {
-          title: "3. Attachment hygiene",
+          title: "4. Attachment hygiene",
           description: `Дивимось на orphan originals і missing variants. Зараз: ${formatCompactCount(attachmentOrphanCount)} possible orphan originals і ${formatCompactCount(attachmentMissingVariants)} missing variants.`,
         },
         {
-          title: "4. Ріст бази і dead tuples",
+          title: "5. Ріст бази і dead tuples",
           description: "Це уже health-рівень. Важливо, але не треба дивитися на нього щогодини, якщо немає інциденту.",
         },
       ]
     : [];
+  const backupSections = useMemo<BackupSectionSummary[]>(
+    () =>
+      [
+        {
+          key: "storage",
+          title: "Storage backups",
+          retentionHint: "weekly: 8 · monthly: 6",
+          health: storageBackupHealth,
+          rows: storageBackupRuns,
+        },
+        {
+          key: "database",
+          title: "Database backups",
+          retentionHint: "daily: 14 · weekly: 8 · monthly: 12",
+          health: databaseBackupHealth,
+          rows: databaseBackupRuns,
+        },
+      ].map((section) => ({
+        key: section.key,
+        title: section.title,
+        tone: section.health.tone,
+        message: section.health.message,
+        latestSuccessLabel: section.health.latestSuccessfulRun
+          ? formatDateTimeShort(section.health.latestSuccessfulRun.finished_at)
+          : "Ще немає успішного запуску",
+        latestSuccessSize: section.health.latestSuccessfulRun?.archive_size_bytes
+          ? formatBytes(section.health.latestSuccessfulRun.archive_size_bytes)
+          : "—",
+        latestDropboxPath: section.health.latestSuccessfulRun?.dropbox_path ?? "Ще не записано",
+        retentionHint: section.retentionHint,
+        recentRuns: section.rows.slice(0, 10).map<BackupRunDisplayRow>((row) => ({
+          id: row.id,
+          status: row.status,
+          schedule: row.schedule,
+          finishedAt: row.finished_at,
+          archiveName: row.archive_name ?? null,
+          archiveSizeBytes: row.archive_size_bytes ?? null,
+          dropboxPath: row.dropbox_path ?? null,
+          errorMessage: row.error_message ?? null,
+          machineName: row.machine_name ?? null,
+        })),
+      })),
+    [databaseBackupHealth, databaseBackupRuns, storageBackupHealth, storageBackupRuns]
+  );
   const latestVsPrevious = latest && previousRows[0]
     ? {
         storageBytesDelta: numberOrZero(latest.storage_today_bytes) - numberOrZero(previousRows[0].storage_today_bytes),
@@ -897,7 +993,7 @@ export default function AdminObservabilityPage() {
             </div>
           </section>
         ) : (
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments")} className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups")} className="w-full">
             {refreshError ? (
               <section className="mb-6 rounded-[24px] border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -916,6 +1012,12 @@ export default function AdminObservabilityPage() {
                   className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Огляд
+                </TabsTrigger>
+                <TabsTrigger
+                  value="backups"
+                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
+                  Backups
                 </TabsTrigger>
                 <TabsTrigger
                   value="attachments"
@@ -975,20 +1077,40 @@ export default function AdminObservabilityPage() {
                     icon: Download,
                     title: "Backup файлів",
                     value:
-                      latestSuccessfulBackupRun && latestSuccessfulBackupRun.archive_size_bytes !== null && latestSuccessfulBackupRun.archive_size_bytes !== undefined
-                        ? formatBytes(latestSuccessfulBackupRun.archive_size_bytes)
+                      storageBackupHealth.latestSuccessfulRun && storageBackupHealth.latestSuccessfulRun.archive_size_bytes !== null && storageBackupHealth.latestSuccessfulRun.archive_size_bytes !== undefined
+                        ? formatBytes(storageBackupHealth.latestSuccessfulRun.archive_size_bytes)
                         : "—",
-                    hint: latestSuccessfulBackupRun
-                      ? `${formatDateTimeShort(latestSuccessfulBackupRun.finished_at)} · ${latestSuccessfulBackupRun.archive_name ?? "storage backup"}`
+                    hint: storageBackupHealth.latestSuccessfulRun
+                      ? `${formatDateTimeShort(storageBackupHealth.latestSuccessfulRun.finished_at)} · ${storageBackupHealth.latestSuccessfulRun.archive_name ?? "storage backup"}`
                       : "Ще немає успішного backup-run по файлах",
                     badge: {
                       label:
-                        backupHealthTone === "danger"
+                        storageBackupHealth.tone === "danger"
                           ? "Проблема"
-                          : backupHealthTone === "warning"
+                          : storageBackupHealth.tone === "warning"
                             ? "Перевірити"
                             : "Актуально",
-                      tone: backupHealthTone,
+                      tone: storageBackupHealth.tone,
+                    },
+                  },
+                  {
+                    icon: Download,
+                    title: "Backup бази",
+                    value:
+                      databaseBackupHealth.latestSuccessfulRun && databaseBackupHealth.latestSuccessfulRun.archive_size_bytes !== null && databaseBackupHealth.latestSuccessfulRun.archive_size_bytes !== undefined
+                        ? formatBytes(databaseBackupHealth.latestSuccessfulRun.archive_size_bytes)
+                        : "—",
+                    hint: databaseBackupHealth.latestSuccessfulRun
+                      ? `${formatDateTimeShort(databaseBackupHealth.latestSuccessfulRun.finished_at)} · ${databaseBackupHealth.latestSuccessfulRun.archive_name ?? "database backup"}`
+                      : "Ще немає успішного backup-run по базі",
+                    badge: {
+                      label:
+                        databaseBackupHealth.tone === "danger"
+                          ? "Проблема"
+                          : databaseBackupHealth.tone === "warning"
+                            ? "Перевірити"
+                            : "Актуально",
+                      tone: databaseBackupHealth.tone,
                     },
                   },
                   {
@@ -1051,6 +1173,22 @@ export default function AdminObservabilityPage() {
                 }}
                 systemStatusRows={systemStatusRows}
                 operationalPriorityRows={operationalPriorityRows}
+              />
+            </Suspense>
+
+            <Suspense
+              fallback={
+                activeTab === "backups" ? (
+                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                    <AppSectionLoader label="Завантаження backup monitor..." className="border-none bg-transparent py-12" />
+                  </section>
+                ) : null
+              }
+            >
+              <BackupsTabPanel
+                sections={backupSections}
+                formatBytes={formatBytes}
+                formatDateTimeShort={formatDateTimeShort}
               />
             </Suspense>
 

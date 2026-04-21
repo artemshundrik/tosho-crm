@@ -10,14 +10,16 @@ Status note:
 - machine-local backup state can differ from tracked docs
 
 This project uses Supabase. Supabase is the source of truth for database backups.
-This repo keeps a separate backup flow only for Storage files:
-- Storage buckets backup as a separate weekly/monthly flow
-- Offsite copy of the Storage archive (Dropbox API)
+This repo keeps a separate repo-side backup flow for:
+- Database archives
+- Storage buckets archives
+- Offsite copy of these archives to Dropbox
 - Secrets backup (`.env`, API keys) in a password/secrets manager
 
-Status note as of April 19, 2026:
+Status note as of April 21, 2026:
 - the tracked active LaunchAgent in this repo is [ops/com.tosho.crm.backup.plist](/Users/artem/Projects/tosho-crm/ops/com.tosho.crm.backup.plist)
-- that LaunchAgent runs `scripts/backup-storage-and-upload.sh`
+- that LaunchAgent runs `scripts/backup-offsite.sh`
+- the tracked database helpers are `scripts/backup-database.sh` and `scripts/backup-database-if-needed.sh`
 - the tracked storage helpers are `scripts/backup-storage.sh` and `scripts/backup-storage-if-needed.sh`
 - `scripts/report-backup-run.mjs` and `scripts/upload-backups-dropbox.mjs` load `.env.backup` and `.env.local` relative to the repo root, so they work correctly under `launchd`
 
@@ -56,13 +58,30 @@ export DROPBOX_REFRESH_TOKEN='...'
 export DROPBOX_BACKUP_ROOT='/Tosho Team Folder/CRM Backups'
 ```
 
-## 3. Run storage backup
+## 3. Run database backup
+
+```bash
+bash scripts/backup-database-and-upload.sh
+```
+
+This creates a DB archive under `backups/database` and uploads it to Dropbox:
+
+- `/Tosho Team Folder/CRM Backups/database/daily`
+- `/Tosho Team Folder/CRM Backups/database/weekly`
+- `/Tosho Team Folder/CRM Backups/database/monthly`
+
+Schedule behavior:
+- daily archive upload every day
+- weekly copy every Sunday
+- monthly copy on the 1st day of the month
+
+## 4. Run storage backup
 
 ```bash
 bash scripts/backup-storage-and-upload.sh
 ```
 
-## 4. Run restore
+## 5. Run restore
 
 Set restore target DB and explicit confirmation:
 
@@ -82,7 +101,7 @@ export STORAGE_S3_SECRET_ACCESS_KEY='...'
 bash scripts/restore.sh backups/YYYYMMDD-HHMMSSZ.tar.gz
 ```
 
-## 5. Legacy DB archive cron example (optional)
+## 6. Legacy DB archive cron example (optional)
 
 This is not the current tracked default automation path. The current tracked LaunchAgent uses the storage/Dropbox flow described below.
 
@@ -92,7 +111,7 @@ Example crontab entry:
 30 2 * * * cd /Users/artem/Projects/tosho-crm && /bin/bash scripts/backup.sh >> /Users/artem/Projects/tosho-crm/backups/backup.log 2>&1
 ```
 
-## 6. macOS auto backup when computer is ON (recommended)
+## 7. macOS auto backup when computer is ON (recommended)
 
 If your laptop is often off/asleep at 02:30, use `launchd` instead of cron.
 This runs on login and then checks every hour.
@@ -103,6 +122,8 @@ This runs on login and then checks every hour.
 cat > /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
 export BACKUP_ROOT='/Users/artem/Projects/tosho-crm/backups'
 export BACKUP_DB_URL='postgresql://postgres.nqqabedngnndtltzvqyi:REPLACE_WITH_URLENCODED_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require'
+export SUPABASE_URL='https://<project-ref>.supabase.co'
+export SUPABASE_SERVICE_ROLE_KEY='REPLACE_WITH_SERVICE_ROLE_KEY'
 EOF
 chmod 600 /Users/artem/Projects/tosho-crm/.env.backup
 ```
@@ -121,7 +142,7 @@ cat > ~/Library/LaunchAgents/com.tosho.crm.backup.plist <<'EOF'
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>source /Users/artem/Projects/tosho-crm/.env.backup && export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" && /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh >> /Users/artem/Projects/tosho-crm/backups/backup.log 2>&1</string>
+    <string>source /Users/artem/Projects/tosho-crm/.env.backup && export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" && /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-offsite.sh >> /Users/artem/Projects/tosho-crm/backups/backup.log 2>&1</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -150,23 +171,37 @@ launchctl list | grep com.tosho.crm.backup
 tail -n 50 /Users/artem/Projects/tosho-crm/backups/backup.log
 ```
 
-## 7. Offsite copy to Dropbox (recommended)
+## 8. Offsite copy to Dropbox (recommended)
 
-This project already includes a Dropbox API integration. Storage backups upload to:
+This project already includes a Dropbox API integration. Database backups upload to:
+
+- `/Tosho Team Folder/CRM Backups/database/daily`
+- `/Tosho Team Folder/CRM Backups/database/weekly`
+- `/Tosho Team Folder/CRM Backups/database/monthly`
+
+Storage backups upload to:
 
 - `/Tosho Team Folder/CRM Backups/storage/weekly`
 - `/Tosho Team Folder/CRM Backups/storage/monthly`
+
+Database schedule:
+- daily every day
+- weekly every Sunday
+- monthly on the 1st day of the month
 
 Storage schedule:
 - weekly every Sunday
 - monthly on the 1st day of the month
 
 Retention:
+- Database daily: keep 14
+- Database weekly: keep 8
+- Database monthly: keep 12
 - Storage weekly: keep 8
 - Storage monthly: keep 6
 - Local Storage archives: keep 8
 
-Add Dropbox vars to `.env.backup` or `.env.local`:
+Add Dropbox vars to `.env.backup`:
 
 ```bash
 cat >> /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
@@ -177,19 +212,42 @@ export DROPBOX_BACKUP_ROOT='/Tosho Team Folder/CRM Backups'
 EOF
 ```
 
-Test upload manually:
+Backup-run reporting to `tosho.backup_runs` also reads these vars from `.env.backup`:
+
+```bash
+cat >> /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
+export BACKUP_WORKSPACE_ID='REPLACE_WITH_WORKSPACE_ID'
+export SUPABASE_URL='https://<project-ref>.supabase.co'
+export SUPABASE_SERVICE_ROLE_KEY='REPLACE_WITH_SERVICE_ROLE_KEY'
+EOF
+```
+
+Recommended operational state:
+- keep all backup automation secrets in `.env.backup`
+- do not rely on `.env.local` for `launchd` backup runs
+- keep `.env.local` focused on app/dev runtime concerns
+
+Test database upload manually:
 
 ```bash
 source /Users/artem/Projects/tosho-crm/.env.backup
 cd /Users/artem/Projects/tosho-crm
-node scripts/upload-backups-dropbox.mjs
+bash scripts/backup-database-and-upload.sh
 ```
 
-## 8. Current tracked LaunchAgent command
+Test storage upload manually:
+
+```bash
+source /Users/artem/Projects/tosho-crm/.env.backup
+cd /Users/artem/Projects/tosho-crm
+bash scripts/backup-storage-and-upload.sh
+```
+
+## 9. Current tracked LaunchAgent command
 
 Use:
 
-- `/bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh`
+- `/bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-offsite.sh`
 
 Reload agent:
 
@@ -199,10 +257,14 @@ launchctl load ~/Library/LaunchAgents/com.tosho.crm.backup.plist
 launchctl kickstart -k gui/$(id -u)/com.tosho.crm.backup
 ```
 
-## 9. Minimal operational policy
+## 10. Minimal operational policy
 
-- Rely on Supabase for DB backups
-- Run Storage backup weekly/monthly only
+- Keep daily DB archives outside Supabase as a secondary recovery path
+- Run Storage backup weekly/monthly
+- Upload DB and Storage archives to Dropbox
+- Keep DB daily archives: 14
+- Keep DB weekly archives: 8
+- Keep DB monthly archives: 12
 - Keep Storage weekly archives: 8
 - Keep Storage monthly archives: 6
 - Test Storage restore at least once per month on a test location

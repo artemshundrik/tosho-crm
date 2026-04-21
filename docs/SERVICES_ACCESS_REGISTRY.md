@@ -157,6 +157,8 @@ Variables in use:
 - `BACKUP_WORKSPACE_ID`
 - `BACKUP_DB_URL`
 - `BACKUP_INCLUDE_STORAGE`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `KEEP_ARCHIVES`
 - `KEEP_STORAGE_ARCHIVES`
 - `DROPBOX_RETENTION_DATABASE_DAILY`
@@ -172,10 +174,12 @@ Variables in use:
 Notes:
 - these should stay isolated in `.env.backup`
 - `ops/com.tosho.crm.backup.plist` already sources `.env.backup`, which is the right pattern
-- as of April 19, 2026, the tracked active LaunchAgent command is `scripts/backup-storage-and-upload.sh`
+- as of April 21, 2026, the tracked active LaunchAgent command is `scripts/backup-offsite.sh`
 - treat older backup-automation references as legacy local-history, not the current tracked default
+- the tracked database helper scripts are `scripts/backup-database.sh` and `scripts/backup-database-if-needed.sh`
 - the tracked storage helper scripts are `scripts/backup-storage.sh` and `scripts/backup-storage-if-needed.sh`
-- Dropbox upload and backup-run reporting resolve `.env.backup` and `.env.local` from the repo root, which avoids `launchd` cwd issues
+- Dropbox upload and backup-run reporting resolve their env files from the repo root, which avoids `launchd` cwd issues
+- recommended operational state is enough Dropbox and Supabase reporting config in `.env.backup` for backup runtime to work without `.env.local`
 
 ### 6. Minfin
 
@@ -209,13 +213,15 @@ Assessment:
 
 Current variable groups found:
 - DB backup connection
+- backup reporting Supabase config
 - storage S3 backup config
+- Dropbox backup upload config
 - backup retention config
 
 Assessment:
 - structure is good
 - should remain strictly for backup/ops concerns
-- missing explicit documented Dropbox backup credentials in the tracked template
+- tracked template now includes the core Dropbox and backup-reporting values
 
 ### Netlify environment
 

@@ -12,4 +12,4 @@ BACKUP_ROOT="${STORAGE_BACKUP_ROOT}" \
 BACKUP_ARCHIVE_SUFFIX="-storage" \
 LATEST_POINTER_PATH="${STORAGE_BACKUP_ROOT}/.latest-successful-storage-archive" \
 KEEP_ARCHIVES="${STORAGE_KEEP_ARCHIVES}" \
-"${SCRIPT_DIR}/backup.sh"
+/bin/bash "${SCRIPT_DIR}/backup.sh"

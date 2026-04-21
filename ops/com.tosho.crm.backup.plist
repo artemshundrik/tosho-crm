@@ -8,7 +8,7 @@
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>source /Users/artem/Projects/tosho-crm/.env.backup &amp;&amp; export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" &amp;&amp; /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-storage-and-upload.sh &gt;&gt; /Users/artem/Projects/tosho-crm/backups/backup.log 2&gt;&amp;1</string>
+    <string>source /Users/artem/Projects/tosho-crm/.env.backup &amp;&amp; export PATH="/opt/homebrew/bin:/opt/homebrew/opt/libpq/bin:/usr/bin:/bin:/usr/sbin:/sbin" &amp;&amp; /bin/bash /Users/artem/Projects/tosho-crm/scripts/backup-offsite.sh &gt;&gt; /Users/artem/Projects/tosho-crm/backups/backup.log 2&gt;&amp;1</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

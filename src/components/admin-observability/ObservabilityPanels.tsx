@@ -111,6 +111,36 @@ export type AttachmentsTabPanelProps = {
   formatDateTimeShort: (value?: string | null) => string;
 };
 
+export type BackupRunDisplayRow = {
+  id: string;
+  status: "success" | "failed";
+  schedule?: string | null;
+  finishedAt: string;
+  archiveName?: string | null;
+  archiveSizeBytes?: number | null;
+  dropboxPath?: string | null;
+  errorMessage?: string | null;
+  machineName?: string | null;
+};
+
+export type BackupSectionSummary = {
+  key: string;
+  title: string;
+  tone: ObservabilityTone;
+  message: string;
+  latestSuccessLabel: string;
+  latestSuccessSize: string;
+  latestDropboxPath: string;
+  retentionHint: string;
+  recentRuns: BackupRunDisplayRow[];
+};
+
+export type BackupsTabPanelProps = {
+  sections: BackupSectionSummary[];
+  formatBytes: (value: number | null | undefined) => string;
+  formatDateTimeShort: (value?: string | null) => string;
+};
+
 function numberOrZero(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -763,6 +793,122 @@ export function AttachmentsTabPanel({
           ))}
         </div>
       )}
+    </TabsContent>
+  );
+}
+
+export function BackupsTabPanel({
+  sections,
+  formatBytes,
+  formatDateTimeShort,
+}: BackupsTabPanelProps) {
+  return (
+    <TabsContent value="backups" className="mt-6 space-y-6">
+      <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+        <div className="text-sm font-semibold text-foreground">Backups monitor</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          Storage і database backup-и в одному місці: останній стан, Dropbox-шлях і недавні запуски без читання сирих логів.
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        {sections.map((section) => (
+          <section key={section.key} className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">{section.title}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{section.message}</div>
+              </div>
+              <Badge variant="outline" className={cn("rounded-full px-3 py-1 text-[11px] font-semibold", toneClasses(section.tone))}>
+                {section.tone === "danger" ? "Проблема" : section.tone === "warning" ? "Перевірити" : "OK"}
+              </Badge>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Останній успіх</div>
+                <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessLabel}</div>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Розмір архіву</div>
+                <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessSize}</div>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Retention</div>
+                <div className="mt-2 text-sm font-semibold text-foreground">{section.retentionHint}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Dropbox</div>
+              <div className="mt-2 break-all text-sm text-foreground">{section.latestDropboxPath}</div>
+            </div>
+
+            <div className="mt-5 overflow-x-auto">
+              <Table variant="analytics" size="sm" className="min-w-[880px] table-fixed">
+                <colgroup>
+                  <col className="w-[10%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[19%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Schedule</TableHead>
+                    <TableHead>Час</TableHead>
+                    <TableHead>Архів</TableHead>
+                    <TableHead>Dropbox</TableHead>
+                    <TableHead>Розмір</TableHead>
+                    <TableHead>Машина</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {section.recentRuns.length ? (
+                    section.recentRuns.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                              toneClasses(row.status === "failed" ? "danger" : "good")
+                            )}
+                          >
+                            {row.status === "failed" ? "failed" : "success"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.schedule ?? "manual"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDateTimeShort(row.finishedAt)}</TableCell>
+                        <TableCell className="text-sm text-foreground">
+                          <div className="break-all">{row.archiveName ?? "—"}</div>
+                          {row.errorMessage ? (
+                            <div className="mt-1 text-xs leading-5 text-danger-foreground">{row.errorMessage}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="break-all">{row.dropboxPath ?? "—"}</div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatBytes(row.archiveSizeBytes)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.machineName ?? "—"}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                        Запусків для цієї секції поки немає.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        ))}
+      </section>
     </TabsContent>
   );
 }

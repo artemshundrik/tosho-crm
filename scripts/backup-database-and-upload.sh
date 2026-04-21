@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_BIN="${NODE_BIN:-}"
+FORCE_BACKUP="${DROPBOX_BACKUP_FORCE_DATABASE:-0}"
 FORCE_WEEKLY="${DROPBOX_BACKUP_FORCE_WEEKLY:-0}"
 FORCE_MONTHLY="${DROPBOX_BACKUP_FORCE_MONTHLY:-0}"
 RUN_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -10,8 +11,8 @@ RUN_LOG="$(mktemp)"
 RUN_STATUS="success"
 RUN_ERROR_MESSAGE=""
 BACKUP_ATTEMPTED="0"
-STORAGE_POINTER_PATH="${SCRIPT_DIR}/../backups/storage/.latest-successful-storage-archive"
-STORAGE_UPLOAD_STATE_PATH="${SCRIPT_DIR}/../backups/storage/.latest-dropbox-uploaded-storage"
+DATABASE_POINTER_PATH="${SCRIPT_DIR}/../backups/database/.latest-successful-database-archive"
+DATABASE_UPLOAD_STATE_PATH="${SCRIPT_DIR}/../backups/database/.latest-dropbox-uploaded-database"
 
 current_archive_needs_upload() {
   local pointer_path="$1"
@@ -56,27 +57,27 @@ if [[ -z "${NODE_BIN}" ]]; then
 fi
 
 before_pointer=""
-if [[ -f "${STORAGE_POINTER_PATH}" ]]; then
-  before_pointer="$(cat "${STORAGE_POINTER_PATH}")"
+if [[ -f "${DATABASE_POINTER_PATH}" ]]; then
+  before_pointer="$(cat "${DATABASE_POINTER_PATH}")"
 fi
 
-if [[ "${FORCE_WEEKLY}" == "1" || "${FORCE_MONTHLY}" == "1" ]]; then
+if [[ "${FORCE_BACKUP}" == "1" ]]; then
   BACKUP_ATTEMPTED="1"
-  if ! BACKUP_ROOT="${BACKUP_ROOT:-${SCRIPT_DIR}/../backups/storage}" /bin/bash "${SCRIPT_DIR}/backup-storage.sh" >>"${RUN_LOG}" 2>&1; then
+  if ! BACKUP_ROOT="${BACKUP_ROOT:-${SCRIPT_DIR}/../backups}" /bin/bash "${SCRIPT_DIR}/backup-database.sh" >>"${RUN_LOG}" 2>&1; then
     RUN_STATUS="failed"
   fi
 else
-  if ! /bin/bash "${SCRIPT_DIR}/backup-storage-if-needed.sh" >>"${RUN_LOG}" 2>&1; then
+  if ! /bin/bash "${SCRIPT_DIR}/backup-database-if-needed.sh" >>"${RUN_LOG}" 2>&1; then
     RUN_STATUS="failed"
     BACKUP_ATTEMPTED="1"
   else
     after_pointer=""
-    if [[ -f "${STORAGE_POINTER_PATH}" ]]; then
-      after_pointer="$(cat "${STORAGE_POINTER_PATH}")"
+    if [[ -f "${DATABASE_POINTER_PATH}" ]]; then
+      after_pointer="$(cat "${DATABASE_POINTER_PATH}")"
     fi
     if [[ -n "${after_pointer}" && "${after_pointer}" != "${before_pointer}" ]]; then
       BACKUP_ATTEMPTED="1"
-    elif current_archive_needs_upload "${STORAGE_POINTER_PATH}" "${STORAGE_UPLOAD_STATE_PATH}"; then
+    elif current_archive_needs_upload "${DATABASE_POINTER_PATH}" "${DATABASE_UPLOAD_STATE_PATH}"; then
       BACKUP_ATTEMPTED="1"
     fi
   fi
@@ -87,9 +88,9 @@ if [[ "${RUN_STATUS}" == "success" && "${BACKUP_ATTEMPTED}" == "0" ]]; then
   exit 0
 fi
 
-export DROPBOX_BACKUP_POINTER_PATH="${STORAGE_POINTER_PATH}"
-export DROPBOX_BACKUP_SECTION="storage"
-export DROPBOX_BACKUP_UPLOAD_DAILY="0"
+export DROPBOX_BACKUP_POINTER_PATH="${DATABASE_POINTER_PATH}"
+export DROPBOX_BACKUP_SECTION="database"
+export DROPBOX_BACKUP_UPLOAD_DAILY="1"
 export DROPBOX_BACKUP_UPLOAD_WEEKLY="1"
 export DROPBOX_BACKUP_UPLOAD_MONTHLY="1"
 export DROPBOX_BACKUP_FORCE_WEEKLY="${FORCE_WEEKLY}"
@@ -117,16 +118,19 @@ if [[ -n "${latest_archive}" && -f "${latest_archive}" ]]; then
   archive_size_bytes="$(stat -f %z "${latest_archive}" 2>/dev/null || stat -c %s "${latest_archive}" 2>/dev/null || true)"
 fi
 if [[ -n "${archive_name}" ]]; then
-  if [[ "${FORCE_MONTHLY}" == "1" ]]; then
-    dropbox_path="/Tosho Team Folder/CRM Backups/storage/monthly/${archive_name}"
+  base_root="${DROPBOX_BACKUP_ROOT:-/Tosho Team Folder/CRM Backups}"
+  if [[ "${FORCE_MONTHLY}" == "1" || "$(date -u +%d)" == "01" ]]; then
+    dropbox_path="${base_root}/database/monthly/${archive_name}"
+  elif [[ "${FORCE_WEEKLY}" == "1" || "$(date -u +%u)" == "7" ]]; then
+    dropbox_path="${base_root}/database/weekly/${archive_name}"
   else
-    dropbox_path="/Tosho Team Folder/CRM Backups/storage/weekly/${archive_name}"
+    dropbox_path="${base_root}/database/daily/${archive_name}"
   fi
 fi
 
-BACKUP_RUN_SECTION="storage" \
+BACKUP_RUN_SECTION="database" \
 BACKUP_RUN_STATUS="${RUN_STATUS}" \
-BACKUP_RUN_SCHEDULE="$([[ "${FORCE_MONTHLY}" == "1" ]] && echo "monthly" || echo "weekly")" \
+BACKUP_RUN_SCHEDULE="$([[ "${FORCE_MONTHLY}" == "1" || "$(date -u +%d)" == "01" ]] && echo "monthly" || ([[ "${FORCE_WEEKLY}" == "1" || "$(date -u +%u)" == "7" ]] && echo "weekly" || echo "daily"))" \
 BACKUP_RUN_STARTED_AT="${RUN_STARTED_AT}" \
 BACKUP_RUN_FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
 BACKUP_RUN_ARCHIVE_NAME="${archive_name}" \

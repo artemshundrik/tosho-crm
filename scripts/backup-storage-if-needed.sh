@@ -20,4 +20,4 @@ if compgen -G "${STORAGE_BACKUP_ROOT}/${today_utc}-*-storage.tar.gz" >/dev/null 
   exit 0
 fi
 
-"${SCRIPT_DIR}/backup-storage.sh"
+/bin/bash "${SCRIPT_DIR}/backup-storage.sh"

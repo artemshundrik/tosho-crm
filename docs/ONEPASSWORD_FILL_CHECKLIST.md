@@ -41,6 +41,8 @@ Confirmed without exposing secrets:
   - `BACKUP_WORKSPACE_ID`
   - `BACKUP_DB_URL`
   - `BACKUP_INCLUDE_STORAGE`
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
   - `STORAGE_S3_ENDPOINT`
   - `STORAGE_S3_ACCESS_KEY_ID`
   - `STORAGE_S3_SECRET_ACCESS_KEY`
@@ -50,6 +52,7 @@ Confirmed without exposing secrets:
   - `DROPBOX_RETENTION_DATABASE_DAILY`
   - `DROPBOX_RETENTION_DATABASE_WEEKLY`
   - `DROPBOX_RETENTION_DATABASE_MONTHLY`
+  - `DROPBOX_RETENTION_STORAGE_DAILY`
   - `DROPBOX_RETENTION_STORAGE_WEEKLY`
   - `DROPBOX_RETENTION_STORAGE_MONTHLY`
 - live Supabase storage buckets currently visible in the database:
@@ -64,8 +67,10 @@ Confirmed without exposing secrets:
   - `storage.buckets`
   - `storage.objects`
 - latest confirmed monitoring data seen in the database:
-  - latest `backup_runs` row: `storage / success / weekly / 2026-04-11T10:34:33Z`
-  - `admin_observability_snapshots`: `7` rows, latest `2026-04-11T11:29:13Z`
+  - latest `backup_runs` rows include:
+    - `database / success / daily / 2026-04-21T13:29:29Z`
+    - `storage / success / weekly / 2026-04-19T10:08:04Z`
+  - `admin_observability_snapshots`: `14` rows in the verified backup dump
 
 ## Item 1: `Tosho CRM / Supabase`
 
@@ -142,8 +147,7 @@ Fill these fields:
 - `DROPBOX_REFRESH_TOKEN`
   Status: confirmed present in `.env.local`
 - `DROPBOX_BACKUP_ROOT`
-  Status: expected by scripts and docs, but not confirmed in current `.env.backup`
-  Action: verify actual path in the environment that runs backups
+  Status: required by scripts and docs; verify the exact runtime value in the environment that runs backups
 - `VITE_DROPBOX_TEST_SHARED_URL`
   Status: confirmed present in `.env.local`
 - `Dropbox App Console URL`
@@ -189,6 +193,10 @@ Fill these fields:
   Status: confirmed present in `.env.backup`
 - `BACKUP_INCLUDE_STORAGE`
   Status: confirmed present in `.env.backup`
+- `SUPABASE_URL`
+  Status: confirmed present in `.env.backup`
+- `SUPABASE_SERVICE_ROLE_KEY`
+  Status: confirmed present in `.env.backup`
 - `STORAGE_S3_ENDPOINT`
   Status: confirmed present in `.env.backup`
 - `STORAGE_S3_ACCESS_KEY_ID`
@@ -209,8 +217,7 @@ Fill these fields:
 - `DROPBOX_RETENTION_DATABASE_MONTHLY`
   Status: confirmed present in `.env.backup`
 - `DROPBOX_RETENTION_STORAGE_DAILY`
-  Status: not confirmed in current `.env.backup`
-  Action: either add it explicitly or record that the script default is used
+  Status: confirmed present in `.env.backup`
 - `DROPBOX_RETENTION_STORAGE_WEEKLY`
   Status: confirmed present in `.env.backup`
 - `DROPBOX_RETENTION_STORAGE_MONTHLY`
@@ -221,7 +228,9 @@ Fill these fields:
 - `Restore doc`
   Fill with: `docs/BACKUP.md`
 - `Last successful backup record seen`
-  Fill with: `storage / success / weekly / 2026-04-11T10:34:33Z`
+  Fill with:
+  - `database / success / daily / 2026-04-21T13:29:29Z`
+  - `storage / success / weekly / 2026-04-19T10:08:04Z`
 - `Owner`
 - `Director Access`
 - `Last verified`
@@ -283,8 +292,13 @@ Fill these fields:
 
 ### 1. Backup automation must use current tracked script paths
 
-`scripts/backup-storage-and-upload.sh` calls:
+Tracked backup runners now include:
 
+- `scripts/backup-offsite.sh`
+- `scripts/backup-database-and-upload.sh`
+- `scripts/backup-database.sh`
+- `scripts/backup-database-if-needed.sh`
+- `scripts/backup-storage-and-upload.sh`
 - `scripts/backup-storage.sh`
 - `scripts/backup-storage-if-needed.sh`
 
@@ -297,7 +311,7 @@ Impact:
 
 Action:
 
-- verify the local `launchd` job still points to `scripts/backup-storage-and-upload.sh`
+- verify the local `launchd` job now points to `scripts/backup-offsite.sh`
 - when debugging, use the tracked helper names above rather than older local-history script names
 
 ### 2. Dropbox backup root is not confirmed in the real backup env
