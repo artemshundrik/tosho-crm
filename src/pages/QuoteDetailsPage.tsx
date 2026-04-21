@@ -2512,7 +2512,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [teamId, editQuoteDialogOpen, editQuoteCustomerSearch]);
 
   const loadQuote = async () => {
-    if (!quote) setLoading(true);
     setError(null);
     try {
       const summary = await getQuoteSummary(quoteId);
@@ -2563,7 +2562,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } else {
         setError(message);
       }
-      if (!quote) setQuote(null);
     } finally {
       setLoading(false);
     }
@@ -3679,8 +3677,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (!quoteId) return;
-    setItemsLoaded(items.length > 0);
-    setRunsLoaded(runs.length > 0);
+    const nextInitialCache = readQuoteDetailsCache(teamId, quoteId);
+    setQuote(nextInitialCache?.quote ?? null);
+    setLoading(!nextInitialCache?.quote);
+    setError(null);
+    setItems([]);
+    setItemsError(null);
+    setItemsLoaded(false);
+    setRuns([]);
+    setRunsOriginal([]);
+    setRunsError(null);
+    setRunsLoaded(false);
+    setSelectedRunId(null);
+    setComments([]);
+    setCommentsError(null);
+    setAttachments([]);
+    setDesignVisualizations([]);
+    setAttachmentsError(null);
+    setDesignTask(null);
+    setDesignTaskError(null);
+    setDesignAssigneeId(null);
+    setDesignTaskType(null);
+    setDesignTaskCandidates([]);
     activityTabLoadedQuoteRef.current = null;
     setHistory([]);
     setHistoryError(null);
@@ -3693,6 +3711,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadRuns();
     void loadComments();
     void loadDesignTask();
+    void loadAttachments();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId, teamId]);
 
@@ -3812,7 +3831,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, quoteId, selectedDesignOutputFile, designVisualizations, userId]);
 
+  const didInitItemAttachmentRefreshRef = useRef(false);
+
   useEffect(() => {
+    if (!didInitItemAttachmentRefreshRef.current) {
+      didInitItemAttachmentRefreshRef.current = true;
+      return;
+    }
     if (itemAttachmentUploading) return;
     void loadAttachments();
 // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5135,7 +5160,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setAutoMethodsApplied(true);
   };
 
-  if (loading) {
+  if (loading || quoteSectionsBootstrapping) {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо прорахунок." />;
   }
 
@@ -5554,6 +5579,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   imageUrl={productPreview.url}
                                   zoomImageUrl={productPreview.zoomUrl}
                                   alt={modelLabel ?? "Товар"}
+                                  loadStrategy="eager"
                                   className="h-16 w-16 rounded-xl object-cover"
                                 />
                               </div>
@@ -6431,20 +6457,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="brief"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     ТЗ
                   </TabsTrigger>
                   <TabsTrigger
                     value="visuals"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Візуалізації
                     <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="task"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Задача
                     <span className="ml-2 text-xs text-muted-foreground">{designTask ? 1 : 0}</span>

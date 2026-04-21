@@ -1,11 +1,7 @@
-import { lazy, Suspense } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
-
-const QuoteDetailsPage = lazy(() =>
-  import("@/pages/QuoteDetailsPage").then((module) => ({ default: module.QuoteDetailsPage }))
-);
+import { QuoteDetailsPage } from "@/pages/QuoteDetailsPage";
 
 export default function OrdersEstimateDetailsPage() {
   const { id } = useParams();
@@ -31,9 +27,5 @@ export default function OrdersEstimateDetailsPage() {
     );
   }
 
-  return (
-    <Suspense fallback={<AppPageLoader title="Завантаження" subtitle="Відкриваємо прорахунок." />}>
-      <QuoteDetailsPage teamId={teamId} quoteId={id} />
-    </Suspense>
-  );
+  return <QuoteDetailsPage teamId={teamId} quoteId={id} />;
 }

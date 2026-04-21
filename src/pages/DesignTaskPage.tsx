@@ -1506,9 +1506,30 @@ export default function DesignTaskPage() {
   }, [effectiveTeamId]);
 
   useEffect(() => {
+    const nextInitialCache = readDesignTaskPageCache(teamId ?? "", id ?? "");
+    setTask(nextInitialCache?.task ?? null);
+    setTitleDraft(nextInitialCache?.task?.title ?? "");
+    setQuoteItem(nextInitialCache?.quoteItem ?? null);
+    setProductPreviewUrl(nextInitialCache?.productPreviewUrl ?? null);
+    setProductZoomPreviewUrl(nextInitialCache?.productZoomPreviewUrl ?? null);
+    setAttachments(nextInitialCache?.attachments ?? []);
+    setCustomerAttachmentsLoaded(nextInitialCache?.customerAttachmentsLoaded ?? false);
+    setCustomerAttachmentsError(null);
+    setDesignOutputFiles(nextInitialCache?.designOutputFiles ?? []);
+    setDesignOutputLinks(nextInitialCache?.designOutputLinks ?? []);
+    setDesignOutputGroups(nextInitialCache?.designOutputGroups ?? []);
+    setHistoryRows([]);
+    setHistoryError(null);
+    setHistoryLoadedAll(false);
+    setQuoteMentionComments([]);
+    setQuoteMentionsError(null);
+    setLoading(!nextInitialCache?.task);
+    setError(null);
+  }, [teamId, id]);
+
+  useEffect(() => {
     const load = async () => {
       if (!id || !effectiveTeamId) return;
-      if (!task) setLoading(true);
       setError(null);
       try {
         const { data: row, error: rowError } = await supabase

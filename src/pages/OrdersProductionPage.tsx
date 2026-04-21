@@ -455,7 +455,7 @@ export default function OrdersProductionPage() {
     workspacePresence.activeHereEntries,
   ]);
 
-  if (authLoading) {
+  if (authLoading || (loading && records.length === 0)) {
     return <AppPageLoader title="Завантаження" subtitle="Підтягуємо затверджені прорахунки та чергу замовлень." />;
   }
 

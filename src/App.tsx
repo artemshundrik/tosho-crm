@@ -86,12 +86,11 @@ const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservab
 
 function RouteSuspense({
   children,
-  shell = false,
 }: {
   children: React.ReactNode;
   shell?: boolean;
 }) {
-  return <Suspense fallback={shell ? <AppShell /> : <PageSkeleton />}>{children}</Suspense>;
+  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
 const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
+import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -545,7 +546,7 @@ export default function ContractorsPage() {
   }, [deleteTarget, loadContractors, teamId]);
 
   if (authLoading || loading) {
-    return <AppSectionLoader label="Завантаження підрядників..." variant="table" />;
+    return <AppPageLoader title="Завантаження" subtitle="Готуємо підрядників і постачальників." />;
   }
 
   if (!teamId) {

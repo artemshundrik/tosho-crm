@@ -315,10 +315,6 @@ export default function ProductCatalogPage() {
   };
 
   // Loading states
-  if (teamLoading) {
-    return <AppPageLoader title="Завантаження" subtitle="Відкриваємо каталог продукції." />;
-  }
-
   if (teamError) {
     return <div className="p-6 text-sm text-destructive">{teamError}</div>;
   }
@@ -331,7 +327,7 @@ export default function ProductCatalogPage() {
     );
   }
 
-  if (catalogLoading && catalog.length === 0) {
+  if (teamLoading || (catalogLoading && catalog.length === 0)) {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо каталог продукції." />;
   }
 
