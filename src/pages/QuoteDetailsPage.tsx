@@ -101,6 +101,7 @@ import {
   type QuoteRun,
   type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
+import { mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
@@ -706,6 +707,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [editQuoteSaving, setEditQuoteSaving] = useState(false);
   const [editQuoteError, setEditQuoteError] = useState<string | null>(null);
   const [editQuoteInitialValues, setEditQuoteInitialValues] = useState<Partial<NewQuoteFormData> | null>(null);
+  const [editQuoteOriginalRuns, setEditQuoteOriginalRuns] = useState<QuoteRun[]>([]);
   const [editQuoteCustomers, setEditQuoteCustomers] = useState<
     Array<{
       id: string;
@@ -4269,6 +4271,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const openEditQuote = () => {
     if (!quote) return;
+    setEditQuoteOriginalRuns([]);
     const primaryItem = items[0] ?? null;
     const primaryRuns =
       runs.length > 0
@@ -4276,10 +4279,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         : primaryItem && Number(primaryItem.qty ?? 0) > 0
           ? [
               {
+                id: undefined,
                 quantity: Number(primaryItem.qty ?? 0),
               },
             ]
           : [];
+
+    setEditQuoteOriginalRuns(runs);
 
     setEditQuoteCustomerSearch(!quote.customer_id ? quote.customer_name ?? "" : "");
     setEditQuoteInitialValues({
@@ -4314,7 +4320,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           ? Number(primaryRuns[0]?.quantity ?? primaryItem?.qty ?? 0)
           : undefined,
       runs: primaryRuns
-        .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+        .map((run) => ({ id: run.id, quantity: Number(run.quantity) || 0 }))
         .filter((run) => run.quantity > 0),
       quantityUnit: normalizeUnitLabel(primaryItem?.unit ?? "шт."),
       printApplications: toPrintApplications(primaryItem),
@@ -4403,31 +4409,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           .eq("id", primaryItem.id);
         if (itemError) throw itemError;
 
-        const { error: deleteRunsError } = await supabase
-          .schema("tosho")
-          .from("quote_item_runs")
-          .delete()
-          .eq("quote_id", quoteId);
-        if (deleteRunsError) throw deleteRunsError;
-
         if (normalizedRuns.length > 0) {
           const targetManagerRate = await getManagerRateForUser(data.managerId?.trim() || quote?.assigned_to || quote?.created_by || userId);
-          await upsertQuoteRuns(
+          const { payload, idsToDelete } = mergeQuoteRunsWithExisting({
+            existingRuns: editQuoteOriginalRuns,
+            nextRuns: normalizedRuns,
             quoteId,
-            normalizedRuns.map((run) => ({
-              id: crypto.randomUUID(),
-              quote_id: quoteId,
-              quote_item_id: primaryItem.id,
-              quantity: run.quantity,
-              unit_price_model: 0,
-              unit_price_print: 0,
-              logistics_cost: 0,
-              desired_manager_income: 0,
-              manager_rate: targetManagerRate,
-              fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-              vat_rate: DEFAULT_VAT_RATE,
-            }))
-          );
+            quoteItemId: primaryItem.id,
+            managerRate: targetManagerRate,
+            defaultManagerRate: DEFAULT_MANAGER_RATE,
+            defaultFixedCostRate: DEFAULT_FIXED_COST_RATE,
+            defaultVatRate: DEFAULT_VAT_RATE,
+          });
+          if (idsToDelete.length > 0) {
+            const { error: deleteRunsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .delete()
+              .in("id", idsToDelete);
+            if (deleteRunsError) throw deleteRunsError;
+          }
+          await upsertQuoteRuns(quoteId, payload);
+        } else if (editQuoteOriginalRuns.length > 0) {
+          const idsToDelete = editQuoteOriginalRuns
+            .map((run) => run.id)
+            .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+          if (idsToDelete.length > 0) {
+            const { error: deleteRunsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .delete()
+              .in("id", idsToDelete);
+            if (deleteRunsError) throw deleteRunsError;
+          }
         }
       }
 

@@ -518,7 +518,7 @@ export type NewQuoteFormData = {
   productConfiguratorPreset?: PrintConfiguratorPreset | null;
   printPackageConfig?: PrintPackageConfig;
   quantity?: number;
-  runs?: Array<{ quantity: number }>;
+  runs?: Array<{ id?: string; quantity: number }>;
   quantityUnit: string;
   printApplications: PrintApplication[];
   createDesignTask?: boolean;
@@ -831,7 +831,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       (initialValues?.runs ?? [])
         .filter((run) => Number(run.quantity) > 0)
         .map((run, index) => ({
-          id: `${Date.now()}-${index}`,
+          id: run.id?.trim() || `${Date.now()}-${index}`,
           quantity: String(run.quantity),
         })) ?? [];
     if (nextRuns.length > 0) {
@@ -1109,7 +1109,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     }
 
     const normalizedRuns = runs
-      .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+      .map((run) => ({ id: run.id, quantity: Number(run.quantity) || 0 }))
       .filter((run) => run.quantity > 0);
     const primaryQuantity = normalizedRuns[0]?.quantity ?? Number(quantity ?? 0);
     const normalizedPrintProductConfig =

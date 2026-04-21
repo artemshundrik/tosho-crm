@@ -57,10 +57,12 @@ import {
   type CustomerQuoteRow,
   type QuoteItemExportRow,
   type QuoteItemPreviewRow,
+  type QuoteRun,
   type TeamMemberRow,
   type CustomerRow,
   type LeadSearchRow,
 } from "@/lib/toshoApi";
+import { mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import {
@@ -392,6 +394,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<QuoteListRow | null>(null);
   const [editInitialValues, setEditInitialValues] = useState<Partial<NewQuoteFormData> | null>(null);
+  const [editOriginalRuns, setEditOriginalRuns] = useState<QuoteRun[]>([]);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -3595,6 +3598,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     setEditLoading(true);
     setEditTarget(row);
     setEditPrimaryItemId(null);
+    setEditOriginalRuns([]);
     setCustomerSearch(!row.customer_id ? row.customer_name ?? "" : "");
     const initialDeadline =
       row.deadline_at && !Number.isNaN(new Date(row.deadline_at).getTime())
@@ -3636,10 +3640,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           : primaryItem && Number(primaryItem.qty ?? 0) > 0
             ? [
                 {
+                  id: undefined,
                   quantity: Number(primaryItem.qty ?? 0),
                 },
               ]
             : [];
+      setEditOriginalRuns(itemRuns);
       setEditPrimaryItemId(primaryItem?.id ?? null);
       const freshDeadline =
         fresh.deadline_at && !Number.isNaN(new Date(fresh.deadline_at).getTime())
@@ -3672,7 +3678,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ? Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0)
             : undefined,
         runs: fallbackRuns
-          .map((run) => ({ quantity: Number(run.quantity) || 0 }))
+          .map((run) => ({ id: run.id, quantity: Number(run.quantity) || 0 }))
           .filter((run) => run.quantity > 0),
         quantityUnit: normalizeUnitLabel(primaryItem?.unit ?? "шт."),
         printApplications: toPrintApplications(primaryItem?.methods ?? null),
@@ -3772,13 +3778,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           .eq("quote_id", editTarget.id);
         if (itemError) throw itemError;
 
-        const { error: deleteRunsError } = await supabase
-          .schema("tosho")
-          .from("quote_item_runs")
-          .delete()
-          .eq("quote_id", editTarget.id);
-        if (deleteRunsError) throw deleteRunsError;
-
         if (normalizedRuns.length > 0) {
           const managerRate = await getManagerRateForUser(
             data.managerId?.trim() ||
@@ -3787,22 +3786,37 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               currentUserId ||
               userId
           );
-          await upsertQuoteRuns(
-            editTarget.id,
-            normalizedRuns.map((run) => ({
-              id: crypto.randomUUID(),
-              quote_id: editTarget.id,
-              quote_item_id: editPrimaryItemId,
-              quantity: run.quantity,
-              unit_price_model: 0,
-              unit_price_print: 0,
-              logistics_cost: 0,
-              desired_manager_income: 0,
-              manager_rate: managerRate,
-              fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-              vat_rate: DEFAULT_VAT_RATE,
-            }))
-          );
+          const { payload, idsToDelete } = mergeQuoteRunsWithExisting({
+            existingRuns: editOriginalRuns,
+            nextRuns: normalizedRuns,
+            quoteId: editTarget.id,
+            quoteItemId: editPrimaryItemId,
+            managerRate,
+            defaultManagerRate: DEFAULT_MANAGER_RATE,
+            defaultFixedCostRate: DEFAULT_FIXED_COST_RATE,
+            defaultVatRate: DEFAULT_VAT_RATE,
+          });
+          if (idsToDelete.length > 0) {
+            const { error: deleteRunsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .delete()
+              .in("id", idsToDelete);
+            if (deleteRunsError) throw deleteRunsError;
+          }
+          await upsertQuoteRuns(editTarget.id, payload);
+        } else if (editOriginalRuns.length > 0) {
+          const idsToDelete = editOriginalRuns
+            .map((run) => run.id)
+            .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+          if (idsToDelete.length > 0) {
+            const { error: deleteRunsError } = await supabase
+              .schema("tosho")
+              .from("quote_item_runs")
+              .delete()
+              .in("id", idsToDelete);
+            if (deleteRunsError) throw deleteRunsError;
+          }
         }
       }
 
