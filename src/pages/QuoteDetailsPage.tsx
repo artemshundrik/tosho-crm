@@ -48,6 +48,12 @@ import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputS
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
+  BRIEF_DIALOG_PREVIEW_CLASS,
+  BRIEF_SURFACE_FRAME_CLASS,
+  BRIEF_SURFACE_TEXT_CLASS,
+  BRIEF_TEXTAREA_CLASS,
+} from "@/components/brief/briefSurfaceStyles";
+import {
   formatPrintProductSummary,
   getPrintProductConfig,
   getPrintProductDetailSections,
@@ -6510,13 +6516,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           }}
                           onBlur={handleBriefInlineBlur}
                           placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-                          className="min-h-[220px] resize-none border-border/40 bg-muted/[0.03]"
+                          className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[220px]")}
                         />
                       ) : (
                         <div
                           role="button"
                           tabIndex={0}
-                          className="w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] px-4 py-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          className={cn(BRIEF_SURFACE_FRAME_CLASS, "px-4 py-4")}
                           aria-readonly="true"
                           onClick={() => setBriefInlineEditing(true)}
                           onKeyDown={(event) => {
@@ -6526,7 +6532,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             }
                           }}
                         >
-                          <div className="min-h-[220px] text-sm leading-relaxed text-foreground">
+                          <div className={cn("min-h-[220px]", BRIEF_SURFACE_TEXT_CLASS)}>
                             {renderBriefRichText(briefText)}
                           </div>
                         </div>
@@ -7843,11 +7849,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
             rows={10}
             disabled={briefSaving}
-            className="min-h-[240px] flex-1 resize-none overflow-y-auto overscroll-contain border-border/40 bg-muted/[0.03]"
+            className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[240px] flex-1 overflow-y-auto overscroll-contain")}
           />
-          <div className="min-h-0 rounded-lg border border-border/60 bg-background/70 p-3">
+          <div className={BRIEF_DIALOG_PREVIEW_CLASS}>
             <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
-            <div className="max-h-48 overflow-auto text-sm text-foreground">
+            <div className={cn("max-h-48 overflow-auto", BRIEF_SURFACE_TEXT_CLASS)}>
               {renderBriefRichText(designBriefPreview)}
             </div>
           </div>

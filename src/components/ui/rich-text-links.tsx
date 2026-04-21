@@ -180,71 +180,114 @@ export function renderRichTextBlocks(
 
   const lines = text.split("\n");
   const blocks: ReactNode[] = [];
-  let bulletItems: ReactNode[] = [];
-  let orderedItems: ReactNode[] = [];
+  let currentList:
+    | {
+        type: "ul" | "ol";
+        items: Array<{ key: string; lines: string[]; orderNumber?: number }>;
+      }
+    | null = null;
 
-  const flushLists = () => {
-    if (bulletItems.length > 0) {
+  const flushList = () => {
+    if (!currentList || currentList.items.length === 0) return;
+
+    const renderedItems = currentList.items.map((item) => (
+      <li key={item.key}>
+        <div className="space-y-1.5">
+          {item.lines.map((line, index) => (
+            <div key={`${item.key}-line-${index}`} className="whitespace-pre-wrap break-words">
+              {renderInlineRichText(line, options)}
+            </div>
+          ))}
+        </div>
+      </li>
+    ));
+
+    if (currentList.type === "ul") {
       blocks.push(
-        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
-          {bulletItems}
+        <ul key={`ul-${blocks.length}`} className="list-disc space-y-3 pl-5 marker:text-foreground/75">
+          {renderedItems}
         </ul>
       );
-      bulletItems = [];
-    }
-    if (orderedItems.length > 0) {
+    } else {
       blocks.push(
-        <ol key={`ol-${blocks.length}`} className="list-decimal space-y-1 pl-5">
-          {orderedItems}
+        <ol
+          key={`ol-${blocks.length}`}
+          start={currentList.items[0]?.orderNumber ?? 1}
+          className="list-decimal space-y-3 pl-6 marker:font-semibold marker:text-foreground/85"
+        >
+          {renderedItems}
         </ol>
       );
-      orderedItems = [];
     }
+
+    currentList = null;
+  };
+
+  const ensureList = (type: "ul" | "ol") => {
+    if (!currentList || currentList.type !== type) {
+      flushList();
+      currentList = { type, items: [] };
+    }
+    return currentList;
+  };
+
+  const appendLineToCurrentListItem = (line: string) => {
+    const lastItem = currentList?.items[currentList.items.length - 1];
+    if (!lastItem) return false;
+    lastItem.lines.push(line);
+    return true;
   };
 
   lines.forEach((rawLine, lineIndex) => {
     const line = rawLine.trimEnd();
     const trimmed = line.trim();
     if (!trimmed) {
-      flushLists();
+      flushList();
       return;
     }
 
     const headingMatch = trimmed.match(/^##\s+(.*)$/);
     if (headingMatch) {
-      flushLists();
+      flushList();
       blocks.push(
-        <div key={`h-${lineIndex}`} className="text-sm font-semibold text-foreground">
+        <div key={`h-${lineIndex}`} className="text-sm font-semibold leading-7 text-foreground">
           {renderInlineRichText(headingMatch[1], options)}
         </div>
       );
       return;
     }
 
-    const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
     if (orderedMatch) {
-      orderedItems.push(
-        <li key={`ol-li-${lineIndex}`}>{renderInlineRichText(orderedMatch[1], options)}</li>
-      );
+      ensureList("ol").items.push({
+        key: `ol-li-${lineIndex}`,
+        lines: [orderedMatch[2]],
+        orderNumber: Number(orderedMatch[1]) || undefined,
+      });
       return;
     }
 
     const bulletMatch = trimmed.match(/^-+\s+(.*)$/);
     if (bulletMatch) {
-      bulletItems.push(
-        <li key={`ul-li-${lineIndex}`}>{renderInlineRichText(bulletMatch[1], options)}</li>
-      );
+      ensureList("ul").items.push({
+        key: `ul-li-${lineIndex}`,
+        lines: [bulletMatch[1]],
+      });
       return;
     }
 
-    flushLists();
+    if (appendLineToCurrentListItem(line)) {
+      return;
+    }
+
+    flushList();
     blocks.push(
-      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words">
+      <p key={`p-${lineIndex}`} className="whitespace-pre-wrap break-words leading-7">
         {renderInlineRichText(line, options)}
       </p>
     );
   });
 
-  flushLists();
-  return <div className="space-y-2">{blocks}</div>;
+  flushList();
+  return <div className="space-y-3">{blocks}</div>;
 }

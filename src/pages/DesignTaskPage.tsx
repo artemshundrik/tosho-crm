@@ -128,6 +128,12 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
+  BRIEF_DIALOG_PREVIEW_CLASS,
+  BRIEF_SURFACE_FRAME_CLASS,
+  BRIEF_SURFACE_TEXT_CLASS,
+  BRIEF_TEXTAREA_CLASS,
+} from "@/components/brief/briefSurfaceStyles";
+import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
   DESIGN_TASK_TYPE_OPTIONS,
@@ -7365,13 +7371,13 @@ export default function DesignTaskPage() {
                     placeholder="Опишіть задачу для дизайнера…"
                     rows={5}
                     disabled={briefSaving || designTaskLockedByOther}
-                    className="min-h-[140px] resize-none"
+                    className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[140px]")}
                   />
                 ) : (
                   <div
                     role="button"
                     tabIndex={0}
-                    className="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-3 text-left transition-colors hover:border-foreground/30 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className={cn(BRIEF_SURFACE_FRAME_CLASS, "px-4 py-4")}
                     aria-readonly="true"
                     onClick={() => setBriefInlineEditing(true)}
                     onKeyDown={(event) => {
@@ -7381,7 +7387,7 @@ export default function DesignTaskPage() {
                       }
                     }}
                   >
-                    <div className="min-h-[140px] text-sm leading-7 text-foreground">{renderBriefRichText(briefDraft)}</div>
+                    <div className={cn("min-h-[140px]", BRIEF_SURFACE_TEXT_CLASS)}>{renderBriefRichText(briefDraft)}</div>
                   </div>
                 )}
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -8716,14 +8722,14 @@ export default function DesignTaskPage() {
               placeholder="Опишіть задачу для дизайнера…"
               rows={10}
               disabled={briefSaving || designTaskLockedByOther}
-              className="min-h-[240px] flex-1 resize-none overflow-y-auto overscroll-contain"
+              className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[240px] flex-1 overflow-y-auto overscroll-contain")}
             />
             <div className="text-xs text-muted-foreground">
               Якщо текст довший за видиму область, редактор залишиться стабільним по висоті і ввімкне внутрішній скрол.
             </div>
-            <div className="min-h-0 rounded-lg border border-border/60 bg-background/70 p-3">
+            <div className={BRIEF_DIALOG_PREVIEW_CLASS}>
               <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
-              <div className="max-h-48 overflow-auto text-sm text-foreground">
+              <div className={cn("max-h-48 overflow-auto", BRIEF_SURFACE_TEXT_CLASS)}>
                 {renderBriefRichText(briefDraft)}
               </div>
             </div>
