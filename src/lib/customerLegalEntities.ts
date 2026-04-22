@@ -194,3 +194,19 @@ export const hasCustomerLegalEntityIdentity = (
       entity.signatoryName.trim() ||
       entity.signatoryPosition.trim()
   );
+
+export const getCustomerLegalEntityDocumentMissingFields = (
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId"> | null | undefined
+) => {
+  if (!entity) return ["тип", "назву", "код"];
+
+  const missing: string[] = [];
+  if (!entity.ownershipType.trim()) missing.push("тип");
+  if (!entity.legalName.trim()) missing.push("назву");
+  if (!entity.taxId.trim()) missing.push("код");
+  return missing;
+};
+
+export const hasCustomerLegalEntityDocumentEssentials = (
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId"> | null | undefined
+) => getCustomerLegalEntityDocumentMissingFields(entity).length === 0;

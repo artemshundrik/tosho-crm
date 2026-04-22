@@ -39,7 +39,9 @@ import {
   formatCustomerLegalEntitySummary,
   formatCustomerLegalEntityTitle,
   formatOwnershipTypeLabel,
+  getCustomerLegalEntityDocumentMissingFields,
   getPrimaryCustomerLegalEntity,
+  hasCustomerLegalEntityDocumentEssentials,
   hasCustomerLegalEntityIdentity,
   parseCustomerLegalEntities,
   serializeCustomerLegalEntities,
@@ -1135,10 +1137,18 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const option = OWNERSHIP_OPTIONS.find((entry) => entry.value === (primary.ownershipType ?? "").trim().toLowerCase());
     return option?.description ?? null;
   };
+  const hasCustomerMissingRequisites = (row: CustomerRow) =>
+    !hasCustomerLegalEntityDocumentEssentials(getCustomerPrimaryLegalEntity(row));
+  const getCustomerMissingRequisitesLabel = (row: CustomerRow) => {
+    const missing = getCustomerLegalEntityDocumentMissingFields(getCustomerPrimaryLegalEntity(row));
+    if (missing.length === 0) return null;
+    return `Заповніть ${missing.join(", ")}`;
+  };
   const renderPrimaryEntityLabel = (row: CustomerRow) => {
     const primary = getCustomerPrimaryLegalEntity(row);
     if (!primary) return "Не вказано";
     if (!hasCustomerLegalEntityIdentity(primary)) return "Реквізити не заповнені";
+    if (!hasCustomerLegalEntityDocumentEssentials(primary)) return primary.legalName.trim() || "Реквізити не заповнені";
     return formatCustomerLegalEntityTitle(primary);
   };
 
@@ -2782,11 +2792,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                     (() => {
                       const legalEntities = getCustomerLegalEntities(row);
                       const primaryEntity = getCustomerPrimaryLegalEntity(row);
+                      const missingRequisites = hasCustomerMissingRequisites(row);
+                      const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
 
                       return (
                         <div
                           key={row.id}
-                          className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                          className={cn(
+                            "rounded-[var(--radius-inner)] border bg-card p-4",
+                            missingRequisites ? "border-warning-soft-border/80 bg-warning-soft/10" : "border-border"
+                          )}
                           onClick={() => openEdit(row)}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -2855,11 +2870,28 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               <span className="text-muted-foreground">
                                 {legalEntities.length > 1 ? "Основна юр. особа:" : "Юр. особа:"}
                               </span>{" "}
-                              {renderPrimaryEntityLabel(row)}
+                              <span className={missingRequisites ? "text-warning-foreground" : undefined}>
+                                {renderPrimaryEntityLabel(row)}
+                              </span>
                             </div>
-                            {!primaryEntity || !hasCustomerLegalEntityIdentity(primaryEntity) ? (
+                            {missingRequisitesLabel ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge
+                                  tone="warning"
+                                  variant="outline"
+                                  className="rounded-full px-2.5 py-1 text-[11px] font-medium normal-case tracking-normal"
+                                >
+                                  Реквізити не заповнені
+                                </Badge>
+                                <span className="text-xs text-warning-foreground/90">{missingRequisitesLabel}</span>
+                              </div>
+                            ) : null}
+                            {!primaryEntity || !hasCustomerLegalEntityDocumentEssentials(primaryEntity) ? (
                               <div>
-                                <span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> Додайте реквізити
+                                <span className={cn("text-muted-foreground", missingRequisites ? "text-warning-foreground/80" : undefined)}>
+                                  ЄДРПОУ / ІПН:
+                                </span>{" "}
+                                <span className={missingRequisites ? "text-warning-foreground" : undefined}>Додайте реквізити</span>
                               </div>
                             ) : primaryEntity.taxId ? (
                               <div>
@@ -2912,11 +2944,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         const primaryEntity = getCustomerPrimaryLegalEntity(row);
                         const primaryEntityType = getCustomerPrimaryLegalEntityType(row);
                         const primaryEntityTypeDescription = getCustomerPrimaryLegalEntityTypeDescription(row);
+                        const missingRequisites = hasCustomerMissingRequisites(row);
+                        const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
 
                         return (
                           <TableRow
                             key={row.id}
-                            className="group hover:bg-muted/30 cursor-pointer border-b border-border/30 last:border-0 transition-colors"
+                            className={cn(
+                              "group cursor-pointer border-b border-border/30 last:border-0 transition-colors",
+                              missingRequisites ? "bg-warning-soft/10 hover:bg-warning-soft/15" : "hover:bg-muted/30"
+                            )}
                             onClick={() => openEdit(row)}
                           >
                             <TableCell className="pl-6">
@@ -2947,10 +2984,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top pl-2 max-w-[360px]">
                               <div className="space-y-1">
-                                <div className="truncate font-medium">{renderPrimaryEntityLabel(row)}</div>
-                                {(primaryEntity && hasCustomerLegalEntityIdentity(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (
+                                <div className={cn("truncate font-medium", missingRequisites ? "text-warning-foreground" : undefined)}>
+                                  {renderPrimaryEntityLabel(row)}
+                                </div>
+                                {missingRequisitesLabel ? (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Badge
+                                      tone="warning"
+                                      variant="outline"
+                                      className="rounded-full px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal"
+                                    >
+                                      Реквізити не заповнені
+                                    </Badge>
+                                    <span className="truncate text-warning-foreground/90">{missingRequisitesLabel}</span>
+                                  </div>
+                                ) : null}
+                                {(primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    {primaryEntity && hasCustomerLegalEntityIdentity(primaryEntity) && primaryEntity.taxId ? (
+                                    {primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId ? (
                                       <span>{`Код ${primaryEntity.taxId}`}</span>
                                     ) : null}
                                     {legalEntities.length > 1 ? (
