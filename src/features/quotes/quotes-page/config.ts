@@ -85,6 +85,7 @@ export type VatOption = {
 
 export const OWNERSHIP_OPTIONS: OwnershipOption[] = [
   { value: "tov", label: "ТОВ", description: "Товариство з обмеженою відповідальністю", group: "Бізнес" },
+  { value: "fg", label: "ФГ", description: "Фермерське господарство", group: "Бізнес" },
   { value: "pp", label: "ПП", description: "Приватне підприємство", group: "Бізнес" },
   { value: "vp", label: "ВП", description: "Відокремлений підрозділ", group: "Бізнес" },
   { value: "go", label: "ГО", description: "Громадська організація", group: "Бізнес" },
