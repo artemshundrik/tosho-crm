@@ -1611,7 +1611,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
           .order("name", { ascending: true });
 
         if (isManagerUser && userId) {
-          query = query.eq("manager_user_id", userId);
+          if (currentManagerLabel) {
+            query = query.or(`manager_user_id.eq.${userId},manager.eq.${currentManagerLabel}`);
+          } else {
+            query = query.eq("manager_user_id", userId);
+          }
         } else if (customerManagerFilter !== ALL_MANAGERS_FILTER) {
           const selectedManager = memberByLabel.get(customerManagerFilter);
           if (selectedManager?.userId) {
@@ -1713,7 +1717,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setCustomersLoading(false);
       setCustomersRefreshing(false);
     }
-  }, [customerManagerFilter, isManagerUser, memberByLabel, runCustomerSelect, search, teamId, userId]);
+  }, [currentManagerLabel, customerManagerFilter, isManagerUser, memberByLabel, runCustomerSelect, search, teamId, userId]);
 
   const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
@@ -1743,7 +1747,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
           .order("company_name", { ascending: true });
 
         if (isManagerUser && userId) {
-          query = query.eq("manager_user_id", userId);
+          if (currentManagerLabel) {
+            query = query.or(`manager_user_id.eq.${userId},manager.eq.${currentManagerLabel}`);
+          } else {
+            query = query.eq("manager_user_id", userId);
+          }
         } else if (leadManagerFilter !== ALL_MANAGERS_FILTER) {
           const selectedManager = memberByLabel.get(leadManagerFilter);
           if (selectedManager?.userId) {
@@ -1871,7 +1879,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadsLoading(false);
       setLeadsRefreshing(false);
     }
-  }, [isManagerUser, leadManagerFilter, memberByLabel, search, teamId, userId]);
+  }, [currentManagerLabel, isManagerUser, leadManagerFilter, memberByLabel, search, teamId, userId]);
 
   const loadTeamMembers = async () => {
     try {
