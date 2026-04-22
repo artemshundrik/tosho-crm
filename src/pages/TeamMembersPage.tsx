@@ -1498,7 +1498,7 @@ export function TeamMembersPage() {
     }
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/update-password`,
       });
       if (error) throw error;
       toast.success("Лист для скидання паролю надіслано");
