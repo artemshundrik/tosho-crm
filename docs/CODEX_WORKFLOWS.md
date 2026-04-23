@@ -32,6 +32,7 @@ UI implementation rules:
 - avatar surfaces must reuse the canonical member/avatar helpers rather than page-local URL assembly
 - customer/lead/company logo surfaces must reuse normalized logo helpers and `EntityAvatar`, not raw table values without normalization
 - watch for performance regressions: avoid N+1 fetches, reuse cached member/logo directories, and keep overview/list queries bounded
+- after a major feature or multi-step UI iteration, update the Codex docs in the same task instead of leaving the final contract only in conversation history
 
 ## 2. New Route Or Module Change
 
@@ -207,8 +208,8 @@ Checklist:
 
 Read first:
 
-- [src/pages/ToShoAiPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ToShoAiPage.tsx)
 - [src/features/tosho-ai/ToShoAiConsole.tsx](/Users/artem/Projects/tosho-crm/src/features/tosho-ai/ToShoAiConsole.tsx)
+- [src/components/app/ToShoAiLauncherButton.tsx](/Users/artem/Projects/tosho-crm/src/components/app/ToShoAiLauncherButton.tsx)
 - [src/lib/toshoAi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoAi.ts)
 - [netlify/functions/tosho-ai.ts](/Users/artem/Projects/tosho-crm/netlify/functions/tosho-ai.ts)
 - [scripts/tosho-ai.sql](/Users/artem/Projects/tosho-crm/scripts/tosho-ai.sql)
@@ -220,6 +221,11 @@ Checklist:
 - avoid notifying the actor about their own escalation
 - keep knowledge items curated and attributed; do not silently turn raw chat logs into canonical answers
 - watch first-render cost in the launcher/sheet and avoid loading ToSho AI data when the surface is closed
+- keep ToSho AI as a drawer-first shell surface unless the task explicitly reintroduces a top-level route
+- keep the floating launcher hidden while the drawer is open
+- avoid hover/focus animation patterns on the launcher that shift layout or visibly jitter
+- keep the drawer header brand-only and do not duplicate the main `Шо треба?` heading in the same header row
+- prefer divider-separated sections over nested card-inside-card composition when refining the ToSho AI drawer UI
 - verify `OPENAI_API_KEY`, `OPENAI_MODEL`, `TELEGRAM_SUPPORT_BOT_TOKEN`, `TELEGRAM_SUPPORT_CHAT_ID`, and `TOSHO_APP_BASE_URL` assumptions before debugging runtime behavior
 
 ## 11. Attachment / Storage Change

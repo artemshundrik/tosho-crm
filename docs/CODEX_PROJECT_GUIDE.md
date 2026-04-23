@@ -160,11 +160,19 @@ When changing a route or top-level module, these files often all matter:
 
 ### ToSho AI
 
-- [src/pages/ToShoAiPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ToShoAiPage.tsx)
 - [src/features/tosho-ai/ToShoAiConsole.tsx](/Users/artem/Projects/tosho-crm/src/features/tosho-ai/ToShoAiConsole.tsx)
+- [src/components/app/ToShoAiLauncherButton.tsx](/Users/artem/Projects/tosho-crm/src/components/app/ToShoAiLauncherButton.tsx)
 - [src/lib/toshoAi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoAi.ts)
 - [netlify/functions/tosho-ai.ts](/Users/artem/Projects/tosho-crm/netlify/functions/tosho-ai.ts)
 - [scripts/tosho-ai.sql](/Users/artem/Projects/tosho-crm/scripts/tosho-ai.sql)
+
+Current UI contract:
+
+- ToSho AI is currently a drawer/sheet support surface triggered from the floating launcher, not a user-facing top-level route/module.
+- Keep the launcher hidden while the drawer is open.
+- Keep the drawer header brand-only: `ToSho AI` wordmark in the header, primary `Шо треба?` heading in the content, not duplicated in the same row.
+- Prefer one continuous support surface with dividers over nested card-inside-card wrappers when iterating on this UI.
+- Treat the current launcher motion as performance-sensitive UI; avoid hover effects that shift layout or cause visible jitter.
 
 ### Admin Observability
 
@@ -178,7 +186,6 @@ When changing a route or top-level module, these files often all matter:
 - `/overview`
 - `/activity`
 - `/notifications`
-- `/tosho-ai`
 - `/team`
 - `/orders/customers`
 - `/orders/estimates`
@@ -230,6 +237,12 @@ When changing a route or top-level module, these files often all matter:
 - Reuse existing cached directories/helpers before adding new fetches.
 - Keep list queries bounded and avoid N+1 fetch patterns inside page render paths.
 - When a page already has an established lightweight fetch shape, preserve or improve it instead of expanding the data load opportunistically.
+- For shell-only UI iterations such as ToSho AI launcher/drawer styling, avoid turning a visual pass into a routing or data-loading expansion unless explicitly requested.
+
+### Codex Documentation Hygiene
+
+- After any major feature, major UI iteration, or notable behavior change, update `docs/CODEX_PROJECT_GUIDE.md` and/or `docs/CODEX_WORKFLOWS.md` in the same change set.
+- Do not leave new architectural/UI contracts only in chat history; if a repeated rule emerged during iteration, write it down here.
 
 ### Netlify Function Pattern
 

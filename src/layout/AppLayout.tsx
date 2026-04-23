@@ -26,7 +26,6 @@ import {
   CircleDot,
   PanelLeftClose,
   PanelLeftOpen,
-  Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -69,11 +68,12 @@ import { MINFIN_MB_URL, type MinfinFxResponse } from "@/lib/minfinFx";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
+import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { toast } from "sonner";
-import { ToShoAiConsole } from "@/features/tosho-ai/ToShoAiConsole";
-import { buildToShoAiRouteContext, saveToShoAiLastContext, TOSHO_AI_ROUTE } from "@/lib/toshoAi";
+import { ToShoAiConsole, ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiConsole";
+import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi";
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
@@ -361,7 +361,6 @@ const ROUTES = {
   accountSettings: "/account-settings",
   profile: "/profile",
   observability: "/admin/observability",
-  toshoAi: TOSHO_AI_ROUTE,
 } as const;
 
 // --- Sidebar Config ---
@@ -483,14 +482,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.notifications,
       showPageHeader: false,
     };
-  if (pathname.startsWith(ROUTES.toshoAi))
-    return {
-      title: "ToSho AI",
-      subtitle: "Командний центр, який пояснює, маршрутизує і дотискає CRM-кейси.",
-      breadcrumbLabel: "ToSho AI",
-      breadcrumbTo: ROUTES.toshoAi,
-      showPageHeader: false,
-    };
   if (pathname.startsWith(ROUTES.activity))
     return {
       title: "Активність",
@@ -603,7 +594,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const pageNode = children ?? <Outlet />;
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
   const headerActions = usePageHeaderActionsValue();
-  const isToShoAiRoute = location.pathname.startsWith(ROUTES.toshoAi);
   const toshoAiContext = useMemo(
     () =>
       buildToShoAiRouteContext({
@@ -775,9 +765,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    if (isToShoAiRoute) return;
     saveToShoAiLastContext(toshoAiContext);
-  }, [isToShoAiRoute, toshoAiContext]);
+  }, [toshoAiContext]);
 
   useEffect(() => {
     const syncPreferences = () => {
@@ -1614,17 +1603,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="hidden lg:inline-flex h-10 rounded-full border-border/50 bg-muted/40 px-4 shadow-inner"
-                onClick={() => setToshoAiOpen(true)}
-              >
-                <Sparkles className="h-4 w-4" />
-                ToSho AI
-              </Button>
-
               <AppDropdown
                 align="end"
                 sideOffset={10}
@@ -1936,29 +1914,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <SheetHeader className="space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      ToSho AI
-                    </div>
-                    <SheetTitle className="text-[1.65rem] leading-tight tracking-[-0.04em]">
-                      Шо треба?
-                    </SheetTitle>
-                    <div className="max-w-[40rem] text-sm leading-6 text-muted-foreground">
+                    <ToShoAiWordmark />
+                    <SheetTitle className="sr-only">Шо треба?</SheetTitle>
+                    <div className="max-w-[56rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-6 text-muted-foreground">
                       Пояснить. Полагодить. Передасть. Дотисне. І одразу прикрутить контекст поточної CRM-сторінки.
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        navigate(ROUTES.toshoAi);
-                        setToshoAiOpen(false);
-                      }}
-                    >
-                      Відкрити як сторінку
-                    </Button>
                     <SheetClose asChild>
                       <Button type="button" variant="ghost" size="iconSm" aria-label="Закрити ToSho AI">
                         <CloseIcon className="h-4 w-4" />
@@ -1972,29 +1934,18 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               <ToShoAiConsole
                 active={toshoAiOpen}
                 surface="sheet"
-                initialContext={isToShoAiRoute ? undefined : toshoAiContext}
-                onOpenFullPage={() => {
-                  navigate(ROUTES.toshoAi);
-                  setToshoAiOpen(false);
-                }}
+                initialContext={toshoAiContext}
               />
             </div>
           </div>
         </SheetContent>
       </Sheet>
 
-      {!isToShoAiRoute ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55] flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+18px)] md:right-0 md:px-6 md:pb-6">
-          <Button
-            type="button"
-            size="lg"
-            className="pointer-events-auto h-12 rounded-full px-4 shadow-[var(--shadow-elevated-lg)]"
-            onClick={() => setToshoAiOpen(true)}
-          >
-            <Sparkles className="h-4 w-4" />
-            ToSho AI
-            <span className="hidden text-background/70 sm:inline">Шо треба?</span>
-          </Button>
+      {!toshoAiOpen ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55] flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
+          <div className="flex flex-col items-end gap-2">
+            <ToShoAiLauncherButton variant="nova" onClick={() => setToshoAiOpen(true)} />
+          </div>
         </div>
       ) : null}
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />

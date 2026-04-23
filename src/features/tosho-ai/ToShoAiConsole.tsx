@@ -11,8 +11,8 @@ import {
   BookOpen,
   Bot,
   CheckCheck,
+  ChevronDown,
   ChevronRight,
-  Clock3,
   ExternalLink,
   Loader2,
   MessageSquare,
@@ -21,7 +21,6 @@ import {
   Route,
   Send,
   Sparkles,
-  TriangleAlert,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,7 +60,6 @@ type ToShoAiConsoleProps = {
   active?: boolean;
   surface?: "page" | "sheet";
   initialContext?: ToShoAiRouteContext | null;
-  onOpenFullPage?: () => void;
 };
 
 type KnowledgeDraft = {
@@ -195,6 +193,27 @@ function normalizeSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
+function getModeAccentClasses(tone: (typeof MODE_META)[ToShoAiMode]["tone"], active: boolean) {
+  if (tone === "info") {
+    return active
+      ? "border-sky-400/40 bg-sky-500/12 text-sky-950 dark:text-sky-100"
+      : "border-border/60 bg-background/60 hover:bg-muted/35";
+  }
+  if (tone === "warning") {
+    return active
+      ? "border-amber-400/45 bg-amber-500/12 text-amber-950 dark:text-amber-100"
+      : "border-border/60 bg-background/60 hover:bg-muted/35";
+  }
+  if (tone === "success") {
+    return active
+      ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-950 dark:text-emerald-100"
+      : "border-border/60 bg-background/60 hover:bg-muted/35";
+  }
+  return active
+    ? "border-fuchsia-400/40 bg-fuchsia-500/12 text-fuchsia-950 dark:text-fuchsia-100"
+    : "border-border/60 bg-background/60 hover:bg-muted/35";
+}
+
 function formatFeedbackLabel(value: ToShoAiMessage["feedback"]) {
   if (value === "helpful") return "Допомогло";
   if (value === "not_helpful") return "Не допомогло";
@@ -215,6 +234,32 @@ function toDraft(item?: ToShoAiKnowledgeItem | null): KnowledgeDraft {
     sourceHref: item.sourceHref ?? "",
     status: item.status,
   };
+}
+
+export function ToShoAiWordmark() {
+  return (
+    <div className="inline-flex items-center gap-2.5">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E6007E]/12 text-[#E6007E] ring-1 ring-[#E6007E]/18">
+        <svg
+          viewBox="0 0 33 33"
+          className="h-[18px] w-[18px]"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            d="M13.9446 6.46076C14.2193 5.34828 15.8008 5.34828 16.0754 6.46076C17.2477 11.2094 20.9555 14.9171 25.7041 16.0893C26.8167 16.3639 26.8167 17.9455 25.7041 18.2201C20.9555 19.3924 17.2477 23.1 16.0754 27.8487C15.8008 28.9611 14.2193 28.9611 13.9446 27.8487C12.7723 23.1 9.06455 19.3924 4.31589 18.2201C3.20337 17.9455 3.20337 16.3639 4.31589 16.0893C9.06455 14.9171 12.7723 11.2094 13.9446 6.46076Z"
+            fill="currentColor"
+          />
+          <path
+            d="M25.6579 1.74675C25.7691 1.29646 26.4092 1.29646 26.5204 1.74675C26.9949 3.66882 28.4957 5.16953 30.4177 5.64401C30.868 5.75518 30.868 6.39533 30.4177 6.50649C28.4957 6.98097 26.9949 8.48169 26.5204 10.4038C26.4092 10.854 25.7691 10.854 25.6579 10.4038C25.1834 8.48169 23.6827 6.98097 21.7606 6.50649C21.3103 6.39533 21.3103 5.75518 21.7606 5.64401C23.6827 5.16953 25.1834 3.66882 25.6579 1.74675Z"
+            fill="currentColor"
+          />
+        </svg>
+      </div>
+      <span className="text-[18px] font-semibold tracking-[-0.03em] text-[#E6007E] md:text-[20px]">ToSho AI</span>
+    </div>
+  );
 }
 
 function ThreadCard({
@@ -386,7 +431,6 @@ export function ToShoAiConsole({
   active = true,
   surface = "page",
   initialContext,
-  onOpenFullPage,
 }: ToShoAiConsoleProps) {
   const compact = surface === "sheet";
   const resolvedContext = useMemo(
@@ -406,6 +450,7 @@ export function ToShoAiConsole({
   const deferredQueueSearch = useDeferredValue(queueSearch);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [knowledgeDraft, setKnowledgeDraft] = useState<KnowledgeDraft>(EMPTY_DRAFT);
+  const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   const selectedThread = snapshot?.selectedThread ?? null;
@@ -603,41 +648,77 @@ export function ToShoAiConsole({
   return (
     <>
       <div className={cn("space-y-5", compact ? "pb-2" : "space-y-6")}>
-        <section className="relative overflow-hidden rounded-[30px] border border-border/60 bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.24),transparent_38%),radial-gradient(circle_at_top_right,hsl(var(--info)/0.22),transparent_32%),linear-gradient(135deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] shadow-[var(--shadow-elevated-lg)]">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:22px_22px] opacity-40" />
-          <div className="relative grid gap-6 px-5 py-6 md:px-6 md:py-7 lg:grid-cols-[1.3fr_0.9fr]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge tone="accent" size="sm" pill className="backdrop-blur">
-                  ToSho AI
-                </Badge>
-                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Пояснить. Полагодить. Передасть. Дотисне.
-                </span>
+        <section className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.18),transparent_36%),radial-gradient(circle_at_top_right,hsl(var(--info)/0.16),transparent_30%)]" />
+          <div className="relative grid gap-5 px-1 py-1 lg:grid-cols-[1.25fr_0.95fr]">
+            <div className="space-y-3">
+              <div className="text-[24px] font-semibold leading-tight tracking-[-0.03em] text-foreground md:text-[28px]">
+                Шо треба?
               </div>
-              <div className="space-y-3">
-                <div className="text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[0.95] tracking-[-0.04em] text-foreground">
-                  Шо робимо?
-                </div>
-                <div className="max-w-[56rem] text-[15px] leading-6 text-muted-foreground md:text-base">
-                  ToSho AI бачить поточний контекст CRM, підтягує знання, ловить технічний слід і одразу збирає
-                  звернення в нормальний маршрут, а не в “щось не працює”.
-                </div>
+              <div className="max-w-[64rem] text-[14px] leading-6 text-muted-foreground md:text-[15px]">
+                Питання, збій або передача в роботу: <span className="whitespace-nowrap">бачу сторінку</span>, підтягую знання і збираю нормальний тред без зайвого шуму.
               </div>
-              <div className="flex flex-wrap gap-2.5">
-                <MetricPill label="Мої треди" value={snapshot?.stats.myOpenCount ?? 0} />
-                <MetricPill label="Черга" value={snapshot?.stats.queueOpenCount ?? 0} />
-                <MetricPill label="База знань" value={snapshot?.stats.knowledgeActiveCount ?? 0} />
+              <div className={cn("grid gap-2", compact ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4")}>
+                {(
+                  Object.entries(MODE_META) as Array<
+                    [ToShoAiMode, (typeof MODE_META)[ToShoAiMode]]
+                  >
+                ).map(([entryMode, meta]) => {
+                  const Icon = meta.icon;
+                  return (
+                    <button
+                      key={entryMode}
+                      type="button"
+                      onClick={() => setMode(entryMode)}
+                      className={cn(
+                        "rounded-[18px] border px-3 py-3 text-left transition-colors",
+                        getModeAccentClasses(meta.tone, mode === entryMode),
+                        mode === entryMode ? "shadow-[var(--shadow-elevated-sm)]" : "text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-foreground">{meta.label}</span>
+                        <div
+                          className={cn(
+                            "flex h-7 w-7 items-center justify-center rounded-full",
+                            mode === entryMode
+                              ? meta.tone === "info"
+                                ? "bg-sky-500/16 text-sky-600 dark:text-sky-300"
+                                : meta.tone === "warning"
+                                  ? "bg-amber-500/16 text-amber-600 dark:text-amber-300"
+                                  : meta.tone === "success"
+                                    ? "bg-emerald-500/16 text-emerald-600 dark:text-emerald-300"
+                                    : "bg-fuchsia-500/16 text-fuchsia-600 dark:text-fuchsia-300"
+                              : "bg-muted/70 text-muted-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-muted-foreground">{meta.hint}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <Card className="border-border/60 bg-card/75 backdrop-blur">
-              <CardHeader className="space-y-3 p-5">
+            <div className="space-y-3 rounded-[26px] border border-border/60 bg-card/70 p-4 backdrop-blur md:p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-[17px] tracking-[-0.02em]">Контекст зараз</CardTitle>
+                  <div className="text-[17px] font-semibold tracking-[-0.02em] text-foreground">Зараз бачу</div>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
                 </div>
-                <div className="grid gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="neutral" size="sm" pill>
+                    Мої треди: {snapshot?.stats.myOpenCount ?? 0}
+                  </Badge>
+                  <Badge tone="neutral" size="sm" pill>
+                    Черга: {snapshot?.stats.queueOpenCount ?? 0}
+                  </Badge>
+                  <Badge tone="neutral" size="sm" pill>
+                    Знання: {snapshot?.stats.knowledgeActiveCount ?? 0}
+                  </Badge>
+                </div>
+                <div className="grid gap-2.5">
                   <ContextStat title="Бачу сторінку" value={resolvedContext.routeLabel} />
                   <ContextStat title="Маршрут" value={resolvedContext.href} mono />
                   <ContextStat
@@ -656,113 +737,72 @@ export function ToShoAiConsole({
                     <div className="mt-1 leading-5">{snapshot.diagnostics.latestRuntimeErrorTitle}</div>
                   </div>
                 ) : null}
-              </CardHeader>
-            </Card>
+            </div>
           </div>
         </section>
 
         <div className={cn("grid gap-5", compact ? "grid-cols-1" : "xl:grid-cols-[1.1fr_0.9fr]")}>
-          <div className="space-y-5">
-            <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
-              <CardHeader className="space-y-4 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-[18px] tracking-[-0.02em]">Command center</CardTitle>
-                    <div className="mt-1 text-sm text-muted-foreground">Шо треба від ToSho AI саме зараз?</div>
-                  </div>
-                  {!compact && onOpenFullPage ? (
-                    <Button type="button" variant="outline" size="sm" onClick={onOpenFullPage}>
-                      Відкрити як сторінку
-                    </Button>
-                  ) : null}
-                </div>
+          <div className="space-y-0">
+            <div className="space-y-4 px-1 py-2">
+              <div>
+                <div className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">Запит</div>
+                <div className="mt-1 text-sm text-muted-foreground">Напиши по-людськи. Решту ToSho AI збере сам.</div>
+              </div>
 
-                <div className={cn("grid gap-3", compact ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4")}>
-                  {(
-                    Object.entries(MODE_META) as Array<
-                      [ToShoAiMode, (typeof MODE_META)[ToShoAiMode]]
+              <div className="rounded-[26px] border border-border/60 bg-background/75 p-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <span>{modeMeta.label}</span>
+                  <span>•</span>
+                  <span>{resolvedContext.routeLabel}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {modeMeta.prompts.map((prompt) => (
+                    <Button
+                      key={prompt}
+                      type="button"
+                      variant="chip"
+                      size="sm"
+                      onClick={() => setComposerValue(prompt)}
                     >
-                  ).map(([entryMode, meta]) => {
-                    const Icon = meta.icon;
-                    return (
-                      <button
-                        key={entryMode}
-                        type="button"
-                        onClick={() => setMode(entryMode)}
-                        className={cn(
-                          "rounded-[24px] border px-4 py-4 text-left transition-colors",
-                          mode === entryMode
-                            ? "border-foreground/20 bg-foreground/5 shadow-[var(--shadow-elevated-sm)]"
-                            : "border-border/60 bg-background/70 hover:bg-muted/35"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <Badge tone={meta.tone} size="sm" pill>
-                            {meta.label}
-                          </Badge>
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="mt-3 text-sm leading-5 text-muted-foreground">{meta.hint}</div>
-                      </button>
-                    );
-                  })}
+                      {prompt}
+                    </Button>
+                  ))}
                 </div>
-
-                <div className="rounded-[26px] border border-border/60 bg-background/75 p-4">
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    <span>{modeMeta.label}</span>
-                    <span>•</span>
-                    <span>{resolvedContext.routeLabel}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {modeMeta.prompts.map((prompt) => (
-                      <Button
-                        key={prompt}
-                        type="button"
-                        variant="chip"
-                        size="sm"
-                        onClick={() => setComposerValue(prompt)}
-                      >
-                        {prompt}
+                <div className="mt-4 space-y-3">
+                  <Textarea
+                    value={composerValue}
+                    onChange={(event) => setComposerValue(event.target.value)}
+                    rows={compact ? 5 : 6}
+                    placeholder={modeMeta.placeholder}
+                    className="min-h-[148px] rounded-[24px] border-border/60 bg-card/80 text-[15px] leading-6 shadow-inner"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-muted-foreground">
+                      Можна писати по-людськи. ToSho AI сам збере маршрут, пріоритет і контекст.
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadSnapshot(selectedThreadId)}>
+                        <RefreshCw className="h-4 w-4" />
+                        Оновити
                       </Button>
-                    ))}
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    <Textarea
-                      value={composerValue}
-                      onChange={(event) => setComposerValue(event.target.value)}
-                      rows={compact ? 5 : 6}
-                      placeholder={modeMeta.placeholder}
-                      className="min-h-[148px] rounded-[24px] border-border/60 bg-card/80 text-[15px] leading-6 shadow-inner"
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-sm text-muted-foreground">
-                        Можна писати по-людськи. ToSho AI сам збере маршрут, пріоритет і контекст.
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => void loadSnapshot(selectedThreadId)}>
-                          <RefreshCw className="h-4 w-4" />
-                          Оновити
-                        </Button>
-                        <Button type="button" size="sm" onClick={() => void handleSend()} disabled={actionBusy === "send"}>
-                          {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                          Дати хід
-                        </Button>
-                      </div>
+                      <Button type="button" size="sm" onClick={() => void handleSend()} disabled={actionBusy === "send"}>
+                        {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Дати хід
+                      </Button>
                     </div>
                   </div>
                 </div>
-              </CardHeader>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
-              <CardHeader className="space-y-2 p-5">
-                <CardTitle className="text-[18px] tracking-[-0.02em]">Поточний тред</CardTitle>
+            <div className="px-1 py-5">
+              <div className="mb-4 space-y-1">
+                <div className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">Поточний тред</div>
                 <div className="text-sm text-muted-foreground">
                   Тут живе повний контекст: відповіді, маршрутизація, feedback і дотиск до результату.
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4 p-5 pt-0">
+              </div>
+              <div className="space-y-4">
                 {selectedThread ? (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
@@ -854,15 +894,15 @@ export function ToShoAiConsole({
                     description="Почни з короткого запиту вище. ToSho AI одразу зробить із нього нормальний командний тред."
                   />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-5">
             <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
               <CardHeader className="space-y-3 p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-[18px] tracking-[-0.02em]">Черга і мої кейси</CardTitle>
+                  <CardTitle className="text-[18px] tracking-[-0.02em]">Треди</CardTitle>
                   {snapshot?.permissions.canManageQueue ? (
                     <Badge tone="warning" size="sm" pill>
                       Командний маршрут
@@ -902,7 +942,7 @@ export function ToShoAiConsole({
                   <div>
                     <CardTitle className="text-[18px] tracking-[-0.02em]">База знань</CardTitle>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      Curated knowledge, на якій ToSho AI стоїть, а не фантазує.
+                      Картки, з яких ToSho AI бере відповіді. Спочатку читати, потім уже редагувати.
                     </div>
                   </div>
                   {snapshot?.permissions.canManageKnowledge ? (
@@ -945,36 +985,59 @@ export function ToShoAiConsole({
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                             <span>Оновлено {formatDateTime(item.updatedAt)}</span>
                             {item.sourceLabel ? <span>{item.sourceLabel}</span> : null}
-                            {item.sourceHref ? (
-                              <a
-                                href={item.sourceHref}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-foreground hover:underline"
-                              >
-                                Джерело
-                                <ExternalLink className="h-3 w-3" />
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setExpandedKnowledgeId((prev) => (prev === item.id ? null : item.id))}
+                          >
+                            {expandedKnowledgeId === item.id ? "Сховати" : "Читати"}
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 transition-transform",
+                                expandedKnowledgeId === item.id && "rotate-180"
+                              )}
+                            />
+                          </Button>
+                          {item.sourceHref ? (
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <a href={item.sourceHref} target="_blank" rel="noreferrer">
+                                Відкрити джерело
+                                <ExternalLink className="h-4 w-4" />
                               </a>
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {expandedKnowledgeId === item.id ? (
+                        <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                          <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-xs text-muted-foreground">
+                              {item.sourceLabel ? `Основа: ${item.sourceLabel}` : "Внутрішня база знань"}
+                            </div>
+                            {snapshot?.permissions.canManageKnowledge ? (
+                              <div className="flex items-center gap-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => openKnowledgeDialog(item)}>
+                                  Редагувати
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={actionBusy === `delete-knowledge:${item.id}`}
+                                  onClick={() => void handleDeleteKnowledge(item)}
+                                >
+                                  Видалити
+                                </Button>
+                              </div>
                             ) : null}
                           </div>
                         </div>
-                        {snapshot?.permissions.canManageKnowledge ? (
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => openKnowledgeDialog(item)}>
-                              Редагувати
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              disabled={actionBusy === `delete-knowledge:${item.id}`}
-                              onClick={() => void handleDeleteKnowledge(item)}
-                            >
-                              Видалити
-                            </Button>
-                          </div>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (
@@ -987,44 +1050,6 @@ export function ToShoAiConsole({
               </CardContent>
             </Card>
 
-            <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
-              <CardHeader className="space-y-2 p-5">
-                <CardTitle className="text-[18px] tracking-[-0.02em]">Що вже бачу</CardTitle>
-                <div className="text-sm text-muted-foreground">
-                  Короткий live summary по тому, де зараз користувач і що можна зробити без зайвого чату.
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 p-5 pt-0">
-                <SummaryRow
-                  icon={<Sparkles className="h-4 w-4" />}
-                  label="Поточний режим"
-                  value={modeMeta.label}
-                  note={modeMeta.hint}
-                />
-                <SummaryRow
-                  icon={<Clock3 className="h-4 w-4" />}
-                  label="Поточна сторінка"
-                  value={resolvedContext.routeLabel}
-                  note={resolvedContext.href}
-                />
-                <SummaryRow
-                  icon={
-                    snapshot?.diagnostics.recentRuntimeErrorCount ? (
-                      <TriangleAlert className="h-4 w-4" />
-                    ) : (
-                      <BookOpen className="h-4 w-4" />
-                    )
-                  }
-                  label="Технічний слід"
-                  value={
-                    snapshot?.diagnostics.recentRuntimeErrorCount
-                      ? `${snapshot.diagnostics.recentRuntimeErrorCount} runtime signal`
-                      : "Поки чисто"
-                  }
-                  note={snapshot?.diagnostics.latestRuntimeErrorTitle || "Без свіжих помилок на цій сторінці"}
-                />
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
@@ -1136,15 +1161,6 @@ export function ToShoAiConsole({
   );
 }
 
-function MetricPill({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="inline-flex min-w-[120px] flex-col rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 shadow-[var(--shadow-elevated-sm)] backdrop-blur">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
-      <div className="mt-1 text-[24px] font-semibold leading-none tracking-[-0.04em] text-foreground">{value}</div>
-    </div>
-  );
-}
-
 function ContextStat({
   title,
   value,
@@ -1189,31 +1205,6 @@ function EmptyPanel({
       </div>
       <div className="mt-3 text-[15px] font-semibold text-foreground">{title}</div>
       <div className="mt-1 text-sm leading-6 text-muted-foreground">{description}</div>
-    </div>
-  );
-}
-
-function SummaryRow({
-  icon,
-  label,
-  value,
-  note,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  note: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-[22px] border border-border/60 bg-background/60 px-4 py-4">
-      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
-        <div className="mt-1 text-[15px] font-semibold leading-5 text-foreground">{value}</div>
-        <div className="mt-1 text-sm leading-6 text-muted-foreground">{note}</div>
-      </div>
     </div>
   );
 }
