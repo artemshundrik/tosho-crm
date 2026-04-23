@@ -60,6 +60,14 @@ type RequestBody = {
     sourceLabel?: string | null;
     sourceHref?: string | null;
   };
+  attachments?: Array<{
+    id?: string;
+    fileName?: string;
+    mimeType?: string | null;
+    fileSize?: number | null;
+    storageBucket?: string;
+    storagePath?: string;
+  }>;
 };
 
 type AuthContext = {
@@ -139,12 +147,45 @@ type RuntimeErrorRow = {
   metadata?: JsonRecord | null;
 };
 
+type SupportAttachmentInput = {
+  id: string;
+  fileName: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  storageBucket: string;
+  storagePath: string;
+};
+
 type RoutingCandidate = {
   userId: string;
   label: string;
+  avatarUrl: string | null;
   accessRole: string | null;
   jobRole: string | null;
   moduleAccess: Record<string, boolean>;
+};
+
+type AnalyticsBadge = {
+  label: string;
+  value: number | string;
+};
+
+type AnalyticsRow = {
+  id: string;
+  label: string;
+  avatarUrl?: string | null;
+  primary: string;
+  secondary?: string | null;
+  badges?: AnalyticsBadge[];
+};
+
+type AnalyticsPayload = {
+  kind: "people" | "entity";
+  title: string;
+  caption: string;
+  metricLabel: string;
+  rows: AnalyticsRow[];
+  note?: string | null;
 };
 
 type AssistantDecision = {
@@ -160,6 +201,16 @@ type AssistantDecision = {
   shouldNotify: boolean;
   knowledgeIds: string[];
   internalSummary: string;
+  analytics?: AnalyticsPayload | null;
+};
+
+type AnalyticsResult = {
+  title: string;
+  summary: string;
+  markdown: string;
+  domain: ToShoAiDomain;
+  confidence: number;
+  analytics: AnalyticsPayload;
 };
 
 const DEFAULT_ROUTE_CONTEXT = {
@@ -261,6 +312,49 @@ function normalizeText(value?: string | null) {
   return (value ?? "").trim();
 }
 
+const SEARCH_STOP_TOKENS = new Set([
+  "і",
+  "й",
+  "та",
+  "або",
+  "але",
+  "в",
+  "у",
+  "на",
+  "до",
+  "по",
+  "для",
+  "це",
+  "цей",
+  "ця",
+  "ці",
+  "тут",
+  "там",
+  "мені",
+  "треба",
+]);
+
+const SEARCH_WEAK_TOKENS = new Set([
+  "як",
+  "де",
+  "що",
+  "коли",
+  "чому",
+  "можна",
+  "поясни",
+  "покажи",
+  "розкажи",
+  "новий",
+  "нова",
+  "нове",
+  "створити",
+  "створення",
+  "робити",
+  "правильно",
+  "саме",
+  "відбувається",
+]);
+
 function normalizeSlug(value: string) {
   return value
     .toLowerCase()
@@ -343,7 +437,7 @@ function tokenize(value: string) {
         .toLowerCase()
         .match(/[\p{L}\p{N}_-]{2,}/gu) ?? []
     )
-  );
+  ).filter((token) => !SEARCH_STOP_TOKENS.has(token));
 }
 
 function trimTo(value: string, limit: number) {
@@ -363,6 +457,54 @@ function toPlainList(value: unknown): string[] {
   );
 }
 
+function toSupportAttachments(value: unknown): SupportAttachmentInput[] {
+  return (Array.isArray(value) ? value : [])
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const typed = entry as {
+        id?: unknown;
+        fileName?: unknown;
+        mimeType?: unknown;
+        fileSize?: unknown;
+        storageBucket?: unknown;
+        storagePath?: unknown;
+      };
+      const storageBucket = normalizeText(typeof typed.storageBucket === "string" ? typed.storageBucket : "");
+      const storagePath = normalizeText(typeof typed.storagePath === "string" ? typed.storagePath : "");
+      const fileName = normalizeText(typeof typed.fileName === "string" ? typed.fileName : "");
+      if (!storageBucket || !storagePath || !fileName) return null;
+
+      return {
+        id: normalizeText(typeof typed.id === "string" ? typed.id : "") || crypto.randomUUID(),
+        fileName,
+        mimeType: normalizeText(typeof typed.mimeType === "string" ? typed.mimeType : "") || null,
+        fileSize:
+          typeof typed.fileSize === "number" && Number.isFinite(typed.fileSize)
+            ? typed.fileSize
+            : typeof typed.fileSize === "string" && typed.fileSize.trim()
+              ? Number(typed.fileSize)
+              : null,
+        storageBucket,
+        storagePath,
+      } satisfies SupportAttachmentInput;
+    })
+    .filter((value): value is SupportAttachmentInput => Boolean(value));
+}
+
+async function signSupportAttachment(
+  adminClient: ReturnType<typeof createClient>,
+  attachment: SupportAttachmentInput
+) {
+  const { data } = await adminClient.storage
+    .from(attachment.storageBucket)
+    .createSignedUrl(attachment.storagePath, 60 * 60);
+
+  return {
+    ...attachment,
+    url: typeof data?.signedUrl === "string" ? data.signedUrl : null,
+  };
+}
+
 function deriveDomainFromMessage(message: string, fallback: ToShoAiDomain) {
   const normalized = normalizeText(message).toLowerCase();
   if (/дизайн|макет|правк|preview|mockup|approval/u.test(normalized)) return "design";
@@ -375,6 +517,23 @@ function deriveDomainFromMessage(message: string, fallback: ToShoAiDomain) {
   return fallback;
 }
 
+function isCapabilityQuestion(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return /^(чи можна|чи є|чи можна в|чи можна на|можна чи)/u.test(normalized) || /\b(в одному|разом|окремо|кілька|два|дві)\b/u.test(normalized);
+}
+
+function isInformationalQuestion(message: string, mode: ToShoAiMode) {
+  if (mode !== "ask") return false;
+  const normalized = normalizeText(message).toLowerCase();
+  return /\?$/.test(message.trim()) || /^(як|де|що|коли|чому|поясни|покажи|розкажи|можна|чи)\b/u.test(normalized);
+}
+
+function hasIssueSignal(message: string, mode: ToShoAiMode) {
+  if (mode === "fix") return true;
+  const normalized = normalizeText(message).toLowerCase();
+  return /не працю|злам|помилк|error|bug|не зберіга|не відкрива|збій/u.test(normalized);
+}
+
 function inferPriority(message: string, runtimeErrors: RuntimeErrorRow[], mode: ToShoAiMode) {
   const normalized = normalizeText(message).toLowerCase();
   if (/терміново|critical|urgent|горить|падає|зламал/u.test(normalized)) return "urgent" as ToShoAiPriority;
@@ -383,6 +542,149 @@ function inferPriority(message: string, runtimeErrors: RuntimeErrorRow[], mode: 
   }
   if (mode === "route" || mode === "resolve") return "medium" as ToShoAiPriority;
   return "low" as ToShoAiPriority;
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatShortPersonName(value: string) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return normalized;
+  return `${parts[0]} ${parts[1][0]}.`;
+}
+
+function formatDesignTaskTypeLabel(value: string) {
+  const normalized = normalizeText(value).toLowerCase();
+  const labels: Record<string, string> = {
+    visualization: "Візуалізація",
+    visualization_layout_adaptation: "Візуал + адаптація макету",
+    layout_adaptation: "Адаптація макету",
+    layout: "Макет",
+    presentation: "Презентація",
+    creative: "Креатив",
+    "без типу": "Без типу",
+    none: "Без типу",
+  };
+  return labels[normalized] ?? value.replace(/_/g, " ");
+}
+
+function formatQuoteStatusLabel(value: string) {
+  const normalized = normalizeText(value).toLowerCase();
+  const labels: Record<string, string> = {
+    new: "Новий",
+    draft: "Чернетка",
+    estimating: "Рахується",
+    estimated: "Пораховано",
+    awaiting_approval: "На погодженні",
+    approved: "Затверджено",
+    rejected: "Відхилено",
+    cancelled: "Скасовано",
+    canceled: "Скасовано",
+    archived: "Архів",
+    "без статусу": "Без статусу",
+  };
+  return labels[normalized] ?? value.replace(/_/g, " ");
+}
+
+function formatOrderStatusLabel(value: string) {
+  const normalized = normalizeText(value).toLowerCase();
+  const labels: Record<string, string> = {
+    new: "Нове",
+    pending: "Очікує",
+    in_progress: "В роботі",
+    production: "У виробництві",
+    ready: "Готове",
+    ready_to_ship: "Готове до відправки",
+    shipped: "Відправлено",
+    completed: "Завершено",
+    cancelled: "Скасовано",
+    canceled: "Скасовано",
+    "без статусу": "Без статусу",
+  };
+  return labels[normalized] ?? value.replace(/_/g, " ");
+}
+
+function formatAnalyticsBadges(input: Record<string, number>, labelFn: (value: string) => string) {
+  return Object.entries(input)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, value]) => ({ label: labelFn(label), value: formatInteger(value) }));
+}
+
+function formatAnalyticsBadgeLine(input: Record<string, number>, labelFn: (value: string) => string) {
+  return formatAnalyticsBadges(input, labelFn)
+    .map((badge) => `${badge.label}: ${badge.value}`)
+    .join(" · ");
+}
+
+function parsePeriodFromMessage(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  const now = new Date();
+  let start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  let label = "за останні 30 днів";
+
+  if (/сьогодні|today/u.test(normalized)) {
+    start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    label = "за сьогодні";
+  } else if (/тижд|7\s*д/u.test(normalized)) {
+    start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    label = "за останні 7 днів";
+  } else if (/поточн(ий|ому|ого)\s+місяц|цього\s+місяц/u.test(normalized)) {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    label = "за поточний календарний місяць";
+  } else if (/квартал|90\s*д/u.test(normalized)) {
+    start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    label = "за останні 90 днів";
+  }
+
+  return { sinceIso: start.toISOString(), label };
+}
+
+function normalizeAnalyticsName(value: string | null | undefined) {
+  return normalizeText(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+function stripAnalyticsQueryTerms(message: string) {
+  return normalizeText(message)
+    .replace(/[?!.]+$/g, "")
+    .replace(
+      /\b(скільки|порахуй|порахувати|рахуй|покажи|дай|за|останній|останні|місяць|днів|день|тиждень|поточний|цього|у|в|ліда|лід|замовника|замовник|клієнта|клієнт|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|дизайнерам|дизайнерах|дизайнери|тасок|задач|зробив|зробили|кожен|кожного|по)\b/giu,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldRunAnalytics(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  if (!/(скільки|порах|рахуй|статист|звіт|аналітик|топ|по\s+менеджер|по\s+дизайн)/u.test(normalized)) return false;
+  return /(дизайн|дизайнер|таск|задач|прорах|quote|коштор|замовл|order|менеджер|лід|замовник|клієнт)/u.test(normalized);
+}
+
+function toAnalyticsDecision(result: AnalyticsResult): AssistantDecision {
+  return {
+    title: result.title,
+    summary: result.summary,
+    answerMarkdown: result.markdown,
+    playfulLine: "Порахував по живих даних CRM.",
+    status: "waiting_user",
+    priority: "low",
+    domain: result.domain,
+    confidence: result.confidence,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: result.summary,
+    analytics: result.analytics,
+  };
 }
 
 async function resolveAuthContext(
@@ -505,22 +807,59 @@ async function listKnowledgeItems(
 }
 
 function scoreKnowledgeItem(item: KnowledgeItemRow, queryText: string, routeLabel: string) {
-  const tokens = tokenize(`${queryText} ${routeLabel}`);
-  if (tokens.length === 0) return 0;
+  const queryTokens = tokenize(queryText);
+  const routeTokens = tokenize(routeLabel);
+  const strongQueryTokens = queryTokens.filter((token) => !SEARCH_WEAK_TOKENS.has(token));
+  const capabilityQuestion = isCapabilityQuestion(queryText);
+  if (queryTokens.length === 0 && routeTokens.length === 0) return 0;
 
   const title = normalizeText(item.title).toLowerCase();
   const summary = normalizeText(item.summary).toLowerCase();
   const body = normalizeText(item.body).toLowerCase();
   const tags = (item.tags ?? []).join(" ").toLowerCase();
   const keywords = (item.keywords ?? []).join(" ").toLowerCase();
+  const haystacks = [title, summary, tags, keywords, body];
 
-  let score = 0;
-  for (const token of tokens) {
+  const scoreToken = (token: string) => {
+    let score = 0;
     if (title.includes(token)) score += 7;
     if (summary.includes(token)) score += 5;
     if (tags.includes(token)) score += 4;
     if (keywords.includes(token)) score += 4;
     if (body.includes(token)) score += 2;
+    return score;
+  };
+
+  let score = 0;
+  let strongMatches = 0;
+
+  for (const token of strongQueryTokens) {
+    const tokenScore = scoreToken(token);
+    if (tokenScore > 0) {
+      strongMatches += 1;
+      score += tokenScore * 1.2;
+    }
+  }
+
+  if (strongQueryTokens.length > 0 && strongMatches === 0) {
+    return 0;
+  }
+
+  if (capabilityQuestion && strongQueryTokens.length >= 2 && strongMatches < Math.min(2, strongQueryTokens.length)) {
+    return 0;
+  }
+
+  for (const token of queryTokens) {
+    if (strongQueryTokens.includes(token)) continue;
+    score += scoreToken(token) * 0.35;
+  }
+
+  const routeMatches = routeTokens.filter((token) => haystacks.some((value) => value.includes(token))).length;
+  score += routeMatches;
+
+  if (strongQueryTokens.length === 0 && queryTokens.length > 0) {
+    const anyQueryMatch = queryTokens.some((token) => haystacks.some((value) => value.includes(token)));
+    if (!anyQueryMatch) return 0;
   }
 
   return score;
@@ -581,7 +920,7 @@ async function listRoutingCandidates(
       adminClient
         .schema("tosho")
         .from("team_member_profiles")
-        .select("workspace_id,user_id,full_name,module_access")
+        .select("workspace_id,user_id,full_name,avatar_url,avatar_path,module_access")
         .eq("workspace_id", workspaceId),
     ]);
 
@@ -592,6 +931,8 @@ async function listRoutingCandidates(
     ((profilesData ?? []) as Array<{
       user_id?: string | null;
       full_name?: string | null;
+      avatar_url?: string | null;
+      avatar_path?: string | null;
       module_access?: unknown;
     }>).map((profile) => {
       const moduleAccessInput = (profile.module_access ?? {}) as Record<string, unknown>;
@@ -599,6 +940,7 @@ async function listRoutingCandidates(
         profile.user_id ?? "",
         {
           fullName: normalizeText(profile.full_name),
+          avatarUrl: normalizeText(profile.avatar_url || profile.avatar_path) || null,
           moduleAccess: {
             overview: Boolean(moduleAccessInput.overview),
             orders: Boolean(moduleAccessInput.orders),
@@ -631,6 +973,7 @@ async function listRoutingCandidates(
       return {
         userId,
         label,
+        avatarUrl: profile?.avatarUrl ?? null,
         accessRole: normalizeText(row.access_role) || null,
         jobRole: normalizeText(row.job_role) || null,
         moduleAccess: profile?.moduleAccess ?? {
@@ -684,23 +1027,551 @@ function rankRoutingRecipients(candidates: RoutingCandidate[], domain: ToShoAiDo
     .map((entry) => entry.candidate);
 }
 
+async function buildDesignCompletionAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const memberById = new Map(members.map((member) => [member.userId, member]));
+
+  const { data, error } = await params.adminClient
+    .from("activity_log")
+    .select("entity_id,metadata,created_at")
+    .eq("team_id", params.auth.teamId)
+    .eq("action", "design_task_status")
+    .gte("created_at", period.sinceIso)
+    .limit(10000);
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<string, { userId: string; label: string; avatarUrl: string | null; total: number; byType: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{ metadata?: JsonRecord | null }>) {
+    const metadata = row.metadata ?? {};
+    if (metadata.to_status !== "approved") continue;
+    const userId = normalizeText(typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : "");
+    if (!userId) continue;
+    const member = memberById.get(userId);
+    const rawLabel = member?.label ?? normalizeText(typeof metadata.assignee_label === "string" ? metadata.assignee_label : "") ?? userId.slice(0, 8);
+    const label = formatShortPersonName(rawLabel) || rawLabel;
+    const taskType = normalizeText(typeof metadata.design_task_type === "string" ? metadata.design_task_type : "") || "без типу";
+    const bucket = buckets.get(userId) ?? { userId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, byType: {} };
+    bucket.total += 1;
+    bucket.byType[taskType] = (bucket.byType[taskType] ?? 0) + 1;
+    buckets.set(userId, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const body =
+    rows.length > 0
+      ? `Готово. Найбільше завершених дизайн-задач ${period.label}: **${rows[0].label}** — ${formatInteger(rows[0].total)}. Нижче розклав по людях і типах задач.`
+      : "За цей період не знайшов завершених дизайн-задач.";
+  const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
+    id: row.userId,
+    label: row.label,
+    avatarUrl: row.avatarUrl,
+    primary: `${formatInteger(row.total)} задач`,
+    secondary: null,
+    badges: formatAnalyticsBadges(row.byType, formatDesignTaskTypeLabel),
+  }));
+
+  return {
+    title: "Дизайн-задачі по дизайнерах",
+    summary: `Пораховано ${formatInteger(total)} завершених дизайн-задач ${period.label}.`,
+    markdown: body,
+    domain: "design",
+    confidence: 0.94,
+    analytics: {
+      kind: "people",
+      title: "Дизайн-задачі",
+      caption: `${formatInteger(total)} завершених задач ${period.label}`,
+      metricLabel: "Завершено",
+      rows: analyticsRows,
+      note: "Рахую переходи дизайн-задач у статус approved.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function buildManagerQuoteAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const memberById = new Map(members.map((member) => [member.userId, member]));
+
+  const { data, error } = await params.adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("id,status,total,assigned_to,created_by,created_at")
+    .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
+    .limit(10000);
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{ assigned_to?: string | null; created_by?: string | null; status?: string | null; total?: number | string | null }>) {
+    const ownerId = normalizeText(row.assigned_to || row.created_by || "");
+    if (!ownerId) continue;
+    const member = memberById.get(ownerId);
+    const rawLabel = member?.label ?? ownerId.slice(0, 8);
+    const label = formatShortPersonName(rawLabel) || rawLabel;
+    const status = normalizeText(row.status) || "без статусу";
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const bucket = buckets.get(ownerId) ?? { id: ownerId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, approved: 0, sum: 0, byStatus: {} };
+    bucket.total += 1;
+    if (status === "approved") bucket.approved += 1;
+    if (Number.isFinite(amount)) bucket.sum += amount;
+    bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
+    buckets.set(ownerId, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const totalQuotes = rows.reduce((sum, row) => sum + row.total, 0);
+  const approvedQuotes = rows.reduce((sum, row) => sum + row.approved, 0);
+  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const body =
+    rows.length > 0
+      ? `Готово. ${period.label} знайшов **${formatInteger(totalQuotes)}** прорахунків по менеджерах: **${formatInteger(approvedQuotes)}** затверджено, сума **${formatMoney(totalSum)}**.`
+      : "За цей період не знайшов прорахунків.";
+  const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    avatarUrl: row.avatarUrl,
+    primary: `${formatInteger(row.total)} прорах.`,
+    secondary: `Затверджено ${formatInteger(row.approved)} · сума ${formatMoney(row.sum)}`,
+    badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
+  }));
+
+  return {
+    title: "Прорахунки по менеджерах",
+    summary: `Пораховано прорахунки по менеджерах ${period.label}.`,
+    markdown: body,
+    domain: "orders",
+    confidence: 0.9,
+    analytics: {
+      kind: "people",
+      title: "Прорахунки по менеджерах",
+      caption: `${formatInteger(totalQuotes)} прорахунків ${period.label}`,
+      metricLabel: "Прорахунки",
+      rows: analyticsRows,
+      note: "Менеджер береться з assigned_to, якщо його немає - з created_by.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function buildManagerOrderAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const memberById = new Map(members.map((member) => [member.userId, member]));
+
+  const { data, error } = await params.adminClient
+    .schema("tosho")
+    .from("orders")
+    .select("id,total,manager_user_id,manager_label,order_status,created_at")
+    .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
+    .limit(10000);
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; sum: number; byStatus: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{ manager_user_id?: string | null; manager_label?: string | null; order_status?: string | null; total?: number | string | null }>) {
+    const key = normalizeText(row.manager_user_id || row.manager_label || "Без менеджера");
+    const member = row.manager_user_id ? memberById.get(row.manager_user_id) : null;
+    const rawLabel = member?.label ?? (normalizeText(row.manager_label) || key);
+    const label = formatShortPersonName(rawLabel) || rawLabel;
+    const status = normalizeText(row.order_status) || "без статусу";
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const bucket = buckets.get(key) ?? { id: key, label, avatarUrl: member?.avatarUrl ?? null, total: 0, sum: 0, byStatus: {} };
+    bucket.total += 1;
+    if (Number.isFinite(amount)) bucket.sum += amount;
+    bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
+    buckets.set(key, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const totalOrders = rows.reduce((sum, row) => sum + row.total, 0);
+  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const body =
+    rows.length > 0
+      ? `Готово. ${period.label} знайшов **${formatInteger(totalOrders)}** замовлень по менеджерах, сума **${formatMoney(totalSum)}**.`
+      : "За цей період не знайшов замовлень.";
+  const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    avatarUrl: row.avatarUrl,
+    primary: `${formatInteger(row.total)} замовл.`,
+    secondary: `Сума ${formatMoney(row.sum)}`,
+    badges: formatAnalyticsBadges(row.byStatus, formatOrderStatusLabel),
+  }));
+
+  return {
+    title: "Замовлення по менеджерах",
+    summary: `Пораховано замовлення по менеджерах ${period.label}.`,
+    markdown: body,
+    domain: "orders",
+    confidence: 0.9,
+    analytics: {
+      kind: "people",
+      title: "Замовлення по менеджерах",
+      caption: `${formatInteger(totalOrders)} замовлень ${period.label}`,
+      metricLabel: "Замовлення",
+      rows: analyticsRows,
+      note: "Менеджер береться з manager_user_id або manager_label.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function buildCustomerQuoteAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  const { data, error } = await params.adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("id,status,total,customer_id,customer_name,created_at")
+    .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
+    .limit(10000);
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<
+    string,
+    { id: string; label: string; total: number; approved: number; sum: number; byStatus: Record<string, number> }
+  >();
+  for (const row of (data ?? []) as Array<{
+    customer_id?: string | null;
+    customer_name?: string | null;
+    status?: string | null;
+    total?: number | string | null;
+  }>) {
+    const customerId = normalizeText(row.customer_id);
+    const customerName = normalizeText(row.customer_name) || "Без замовника";
+    const key = customerId || normalizeAnalyticsName(customerName) || "unknown";
+    const status = normalizeText(row.status) || "без статусу";
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const bucket = buckets.get(key) ?? { id: key, label: customerName, total: 0, approved: 0, sum: 0, byStatus: {} };
+    bucket.total += 1;
+    if (status === "approved") bucket.approved += 1;
+    if (Number.isFinite(amount)) bucket.sum += amount;
+    bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
+    buckets.set(key, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const totalQuotes = rows.reduce((sum, row) => sum + row.total, 0);
+  const approvedQuotes = rows.reduce((sum, row) => sum + row.approved, 0);
+  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const top = rows[0] ?? null;
+  const body = top
+    ? `Готово. Найбільше прорахунків ${period.label} у **${top.label}** — ${formatInteger(top.total)}. Загалом знайшов **${formatInteger(totalQuotes)}** прорахунків по замовниках.`
+    : "За цей період не знайшов прорахунків по замовниках.";
+
+  return {
+    title: "Прорахунки по замовниках",
+    summary: `Пораховано ${formatInteger(totalQuotes)} прорахунків по замовниках ${period.label}.`,
+    markdown: body,
+    domain: "orders",
+    confidence: 0.9,
+    analytics: {
+      kind: "entity",
+      title: "Прорахунки по замовниках",
+      caption: `${formatInteger(totalQuotes)} прорахунків ${period.label} · затверджено ${formatInteger(approvedQuotes)} · сума ${formatMoney(totalSum)}`,
+      metricLabel: "Прорахунки",
+      rows: rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        primary: `${formatInteger(row.total)} прорах.`,
+        secondary: `Затверджено ${formatInteger(row.approved)} · сума ${formatMoney(row.sum)}`,
+        badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
+      })),
+      note: "Групую прорахунки за customer_id, а якщо його немає - за назвою customer_name.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function resolvePartyForAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+}) {
+  const searchParams = new URLSearchParams(params.routeContext.search.startsWith("?") ? params.routeContext.search.slice(1) : params.routeContext.search);
+  const explicitCustomerId = normalizeText(searchParams.get("customerId"));
+  const explicitLeadId = normalizeText(searchParams.get("leadId"));
+
+  if (explicitCustomerId) {
+    const { data } = await params.adminClient
+      .schema("tosho")
+      .from("customers")
+      .select("id,name,legal_name")
+      .eq("team_id", params.auth.teamId)
+      .eq("id", explicitCustomerId)
+      .maybeSingle();
+    const row = data as { id?: string; name?: string | null; legal_name?: string | null } | null;
+    if (row?.id) return { kind: "customer" as const, id: row.id, name: normalizeText(row.name || row.legal_name) || row.id };
+  }
+
+  if (explicitLeadId) {
+    const { data } = await params.adminClient
+      .schema("tosho")
+      .from("leads")
+      .select("id,company_name,legal_name,first_name,last_name")
+      .eq("team_id", params.auth.teamId)
+      .eq("id", explicitLeadId)
+      .maybeSingle();
+    const row = data as { id?: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null } | null;
+    if (row?.id) {
+      const person = [row.first_name, row.last_name].map(normalizeText).filter(Boolean).join(" ");
+      return { kind: "lead" as const, id: row.id, name: normalizeText(row.company_name || row.legal_name || person) || row.id };
+    }
+  }
+
+  const query = stripAnalyticsQueryTerms(params.message);
+  if (!query) return null;
+  const escaped = query.replace(/[%_]/g, "\\$&");
+
+  const [customerResult, leadResult] = await Promise.all([
+    params.adminClient
+      .schema("tosho")
+      .from("customers")
+      .select("id,name,legal_name")
+      .eq("team_id", params.auth.teamId)
+      .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
+      .limit(3),
+    params.adminClient
+      .schema("tosho")
+      .from("leads")
+      .select("id,company_name,legal_name,first_name,last_name")
+      .eq("team_id", params.auth.teamId)
+      .or(`company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%`)
+      .limit(3),
+  ]);
+
+  const customer = ((customerResult.data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null }>)[0];
+  if (customer) {
+    return { kind: "customer" as const, id: customer.id, name: normalizeText(customer.name || customer.legal_name) || customer.id };
+  }
+
+  const lead = ((leadResult.data ?? []) as Array<{ id: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null }>)[0];
+  if (lead) {
+    const person = [lead.first_name, lead.last_name].map(normalizeText).filter(Boolean).join(" ");
+    return { kind: "lead" as const, id: lead.id, name: normalizeText(lead.company_name || lead.legal_name || person) || lead.id };
+  }
+
+  return null;
+}
+
+async function buildPartyQuoteOrderAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+}) {
+  const party = await resolvePartyForAnalytics(params);
+  if (!party) {
+    return {
+      title: "Прорахунки і замовлення по клієнту",
+      summary: "Потрібна назва або відкритий клієнт/лід.",
+      markdown: "Можу порахувати прорахунки й замовлення по конкретному ліду або замовнику, але треба назва/ID або відкритий профіль клієнта.\n\nПриклад: `скільки у замовника Nike прорахунків і замовлень?`",
+      domain: "orders",
+      confidence: 0.72,
+      analytics: {
+        kind: "entity",
+        title: "Прорахунки і замовлення",
+        caption: "Потрібен конкретний лід або замовник",
+        metricLabel: "Кількість",
+        rows: [],
+        note: "Відкрий профіль клієнта або напиши його назву в питанні.",
+      },
+    } satisfies AnalyticsResult;
+  }
+
+  const quoteQuery = params.adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("id,status,total,customer_id,customer_name,created_at")
+    .eq("team_id", params.auth.teamId)
+    .limit(10000);
+
+  const orderQuery = params.adminClient
+    .schema("tosho")
+    .from("orders")
+    .select("id,quote_id,order_status,total,customer_id,customer_name,party_type,created_at")
+    .eq("team_id", params.auth.teamId)
+    .limit(10000);
+
+  const [quoteResult, orderResult] = await Promise.all([quoteQuery, orderQuery]);
+  if (quoteResult.error) throw new Error(quoteResult.error.message);
+  if (orderResult.error) throw new Error(orderResult.error.message);
+
+  const partyName = normalizeAnalyticsName(party.name);
+  const quotes = ((quoteResult.data ?? []) as Array<{ id: string; status?: string | null; total?: number | string | null; customer_id?: string | null; customer_name?: string | null }>).filter((row) => {
+    if (party.kind === "customer") return row.customer_id === party.id;
+    return !row.customer_id && normalizeAnalyticsName(row.customer_name).includes(partyName);
+  });
+  const quoteIds = new Set(quotes.map((quote) => quote.id));
+  const orders = ((orderResult.data ?? []) as Array<{ id: string; quote_id?: string | null; order_status?: string | null; total?: number | string | null; customer_id?: string | null; customer_name?: string | null; party_type?: string | null }>).filter((row) => {
+    if (row.quote_id && quoteIds.has(row.quote_id)) return true;
+    if (party.kind === "customer") return row.customer_id === party.id;
+    return row.party_type === "lead" && normalizeAnalyticsName(row.customer_name).includes(partyName);
+  });
+
+  const quoteByStatus: Record<string, number> = {};
+  let quoteSum = 0;
+  for (const quote of quotes) {
+    const status = normalizeText(quote.status) || "без статусу";
+    quoteByStatus[status] = (quoteByStatus[status] ?? 0) + 1;
+    const amount = typeof quote.total === "number" ? quote.total : quote.total ? Number(quote.total) : 0;
+    if (Number.isFinite(amount)) quoteSum += amount;
+  }
+
+  const orderByStatus: Record<string, number> = {};
+  let orderSum = 0;
+  for (const order of orders) {
+    const status = normalizeText(order.order_status) || "без статусу";
+    orderByStatus[status] = (orderByStatus[status] ?? 0) + 1;
+    const amount = typeof order.total === "number" ? order.total : order.total ? Number(order.total) : 0;
+    if (Number.isFinite(amount)) orderSum += amount;
+  }
+
+  const quoteStatusLine = formatAnalyticsBadgeLine(quoteByStatus, formatQuoteStatusLabel) || "немає статусів";
+  const orderStatusLine = formatAnalyticsBadgeLine(orderByStatus, formatOrderStatusLabel) || "немає статусів";
+  const quoteCount = quotes.length;
+  const orderCount = orders.length;
+
+  return {
+    title: `${party.kind === "customer" ? "Замовник" : "Лід"}: прорахунки і замовлення`,
+    summary: `${party.name}: ${formatInteger(quoteCount)} прорах., ${formatInteger(orderCount)} замовл.`,
+    markdown: `Порахував по ${party.kind === "customer" ? "замовнику" : "ліду"} **${party.name}**: **${formatInteger(quoteCount)}** прорахунків і **${formatInteger(orderCount)}** замовлень.`,
+    domain: "orders",
+    confidence: party.kind === "customer" ? 0.92 : 0.82,
+    analytics: {
+      kind: "entity",
+      title: party.name,
+      caption: party.kind === "customer" ? "Замовник" : "Лід",
+      metricLabel: "Кількість",
+      rows: [
+        {
+          id: "quotes",
+          label: "Прорахунки",
+          primary: formatInteger(quoteCount),
+          secondary: `Сума ${formatMoney(quoteSum)} · ${quoteStatusLine}`,
+          badges: formatAnalyticsBadges(quoteByStatus, formatQuoteStatusLabel),
+        },
+        {
+          id: "orders",
+          label: "Замовлення",
+          primary: formatInteger(orderCount),
+          secondary: `Сума ${formatMoney(orderSum)} · ${orderStatusLine}`,
+          badges: formatAnalyticsBadges(orderByStatus, formatOrderStatusLabel),
+        },
+      ],
+      note:
+        party.kind === "customer"
+          ? "Замовника рахую по customer_id."
+          : "Ліда рахую по назві в customer_name і пов'язаних quote_id.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function buildAnalyticsDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+}) {
+  if (!shouldRunAnalytics(params.message)) return null;
+  const normalized = normalizeText(params.message).toLowerCase();
+
+  if (/(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)) {
+    return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
+  }
+
+  if (/(замовник|клієнт)/u.test(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
+    const stripped = stripAnalyticsQueryTerms(params.message);
+    const asksForCustomerBreakdown =
+      /по\s+(яким\s+)?(замовник|клієнт)|у\s+якого\s+(замовник|клієнт)|найбільш|топ/u.test(normalized);
+    if (asksForCustomerBreakdown || !stripped) {
+      return toAnalyticsDecision(await buildCustomerQuoteAnalytics(params));
+    }
+  }
+
+  if (/(лід|замовник|клієнт)/u.test(normalized) && /(прорах|замовл|order|quote)/u.test(normalized)) {
+    return toAnalyticsDecision(await buildPartyQuoteOrderAnalytics(params));
+  }
+
+  if (/менеджер/u.test(normalized) && /(замовл|order)/u.test(normalized) && !/прорах/u.test(normalized)) {
+    return toAnalyticsDecision(await buildManagerOrderAnalytics(params));
+  }
+
+  if (/менеджер/u.test(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
+    return toAnalyticsDecision(await buildManagerQuoteAnalytics(params));
+  }
+
+  return null;
+}
+
+function getDomainProductGuidance(domain: ToShoAiDomain) {
+  switch (domain) {
+    case "catalog":
+      return {
+        summary: "У каталозі товари створюються як нові моделі.",
+        markdown:
+          "Базовий флоу тут такий:\n1. Відкрий **Каталог**.\n2. Запусти дію **Створити нову модель**.\n3. У редакторі моделі заповни основні дані товару.\n4. Натисни **Створити модель**.",
+      };
+    case "design":
+      return {
+        summary: "На дизайні працюють через чергу і конкретні дизайн-задачі.",
+        markdown:
+          "Базовий флоу тут такий:\n1. Відкрий **Дизайн** або потрібну дизайн-задачу.\n2. Подивись чергу, статус і поточний етап.\n3. Якщо треба передати далі, краще робити це як окремий кейс з контекстом.",
+      };
+    case "orders":
+      return {
+        summary: "Для замовлень основний шлях іде через окремий прорахунок під конкретний товар або сценарій продажу.",
+        markdown:
+          "Базовий флоу тут такий:\n1. Під окремий товар або окремий комерційний сценарій створюй окремий прорахунок.\n2. Якщо треба тримати кілька прорахунків разом, краще збирати їх у набір прорахунків.\n3. Уже всередині прорахунку перевіряй статус, клієнта і подальший маршрут.",
+      };
+    default:
+      return null;
+  }
+}
+
 function buildFallbackDecision(params: {
   message: string;
   mode: ToShoAiMode;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
   runtimeErrors: RuntimeErrorRow[];
   knowledge: KnowledgeItemRow[];
+  attachments: SupportAttachmentInput[];
+  openAiEnabled: boolean;
 }): AssistantDecision {
+  const infoRequest = isInformationalQuestion(params.message, params.mode);
+  const issueSignal = hasIssueSignal(params.message, params.mode);
   const domain = deriveDomainFromMessage(params.message, params.routeContext.domainHint);
-  const priority = inferPriority(params.message, params.runtimeErrors, params.mode);
-  const confidence = params.knowledge.length > 0 ? 0.78 : params.runtimeErrors.length > 0 ? 0.56 : 0.44;
-  const shouldEscalate = params.mode !== "ask" || params.runtimeErrors.length > 0 || params.knowledge.length === 0;
+  const productGuidance = getDomainProductGuidance(domain);
+  const relevantRuntimeErrors = issueSignal ? params.runtimeErrors : [];
+  const priority = inferPriority(params.message, relevantRuntimeErrors, params.mode);
+  const confidence = params.knowledge.length > 0 ? 0.78 : productGuidance ? 0.6 : relevantRuntimeErrors.length > 0 ? 0.56 : 0.44;
+  const shouldEscalate =
+    params.mode === "route" ||
+    params.mode === "resolve" ||
+    (params.mode === "fix" && (relevantRuntimeErrors.length > 0 || params.attachments.length > 0 || params.knowledge.length === 0)) ||
+    (!infoRequest && params.knowledge.length === 0);
   const shouldNotify = shouldEscalate && (params.mode !== "ask" || priority === "high" || priority === "urgent");
   const status: ToShoAiStatus = shouldEscalate
     ? params.mode === "resolve"
       ? "in_progress"
       : "open"
-    : confidence >= 0.74
+    : infoRequest || confidence >= 0.74
       ? "waiting_user"
       : "open";
 
@@ -716,13 +1587,29 @@ function buildFallbackDecision(params: {
       : "- Поки що curated knowledge base по цій темі ще порожня.";
 
   const runtimeBlock =
-    params.runtimeErrors.length > 0
-      ? `\n\nБачу технічний слід: **${trimTo(params.runtimeErrors[0]?.title || "runtime error", 140)}**.`
+    relevantRuntimeErrors.length > 0
+      ? `\n\nБачу технічний слід: **${trimTo(relevantRuntimeErrors[0]?.title || "runtime error", 140)}**.`
+      : "";
+  const attachmentsBlock =
+    params.attachments.length > 0
+      ? `\n\nПрикріплено файли: ${params.attachments.map((attachment) => attachment.fileName).join(", ")}.`
       : "";
 
+  const primaryKnowledge = params.knowledge[0] ?? null;
+  const secondaryKnowledge = params.knowledge[1] ?? null;
+  const noKnowledgeMessage = params.openAiEnabled
+    ? "Не знайшов підтвердженої інструкції саме про це в базі знань."
+    : "Не знайшов підтвердженої інструкції саме про це. Зараз ToSho AI працює без OpenAI API, тому відповідає обережніше.";
+
   const answerMarkdown = shouldEscalate
-    ? `Зібрав контекст по цій ситуації і вже можу передати її далі без зайвого кола уточнень.${runtimeBlock}\n\nЩо бачу зараз:\n${knowledgeBlock}\n\nНаступний крок: сформую звернення з маршрутом **${domain}** і пріоритетом **${priority}**.`
-    : `Ось що знайшов по поточному контексту:\n${knowledgeBlock}\n\nЯкщо цього не вистачить, я одразу переведу це в нормальне звернення без “а де саме зламалось?”.`;
+    ? `Це краще передати далі вже з контекстом.${runtimeBlock}${attachmentsBlock}\n\nЩо підтягнулося:\n${knowledgeBlock}\n\nДалі: оформлю звернення з маршрутом **${domain}** і пріоритетом **${priority}**.`
+    : primaryKnowledge
+      ? `${trimTo(primaryKnowledge.summary || primaryKnowledge.body, 420)}${
+          secondaryKnowledge ? `\n\nЩе по темі:\n- **${secondaryKnowledge.title}**: ${trimTo(secondaryKnowledge.summary || secondaryKnowledge.body, 140)}` : ""
+        }${attachmentsBlock}`
+      : productGuidance && infoRequest
+        ? `${noKnowledgeMessage}${attachmentsBlock}\n\n${productGuidance.markdown}`
+        : `${noKnowledgeMessage}${attachmentsBlock}\n\nЩо можна зробити далі:\n- додати коротку статтю в базу знань\n- або ввімкнути OpenAI API для живих відповідей`;
 
   return {
     title:
@@ -734,11 +1621,21 @@ function buildFallbackDecision(params: {
       ) || "Нове звернення до ToSho AI",
     summary: shouldEscalate
       ? "Потрібна ескалація з контекстом сторінки та маршрутом."
-      : "Є відповідь по knowledge base без ручної ескалації.",
+      : primaryKnowledge
+        ? "Є коротка відповідь по базі знань."
+        : productGuidance && infoRequest
+          ? "Є базова підказка по продукту, але без curated статті."
+          : "Підтвердженої відповіді в базі знань поки немає.",
     answerMarkdown,
     playfulLine: shouldEscalate
-      ? "Без «а де саме зламалось?» — контекст уже зі мною."
-      : "Коротко, по ділу і без магії.",
+      ? "Контекст уже зі мною."
+      : primaryKnowledge
+        ? "Коротко і по ділу."
+        : productGuidance && infoRequest
+          ? "Є базовий флоу, але без прямого підтвердження деталей."
+          : params.openAiEnabled
+            ? "Тут бракує точного knowledge source."
+            : "Тут бракує або точного source, або OpenAI brain.",
     status,
     priority,
     domain,
@@ -779,11 +1676,14 @@ async function callOpenAiDecision(params: {
   runtimeErrors: RuntimeErrorRow[];
   knowledge: KnowledgeItemRow[];
   recentMessages: SupportMessageRow[];
+  attachments: SupportAttachmentInput[];
 }): Promise<AssistantDecision | null> {
   const apiKey = normalizeText(process.env.OPENAI_API_KEY);
   if (!apiKey) return null;
 
   const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const inferredDomain = deriveDomainFromMessage(params.message, params.routeContext.domainHint);
+  const productGuidance = getDomainProductGuidance(inferredDomain);
   const recentMessages = params.recentMessages
     .slice(-8)
     .map((message) => `${message.role.toUpperCase()}: ${trimTo(message.body, 500)}`)
@@ -810,15 +1710,39 @@ async function callOpenAiDecision(params: {
           .join("\n")
       : "No recent runtime errors for this route.";
 
+  const attachmentBlock =
+    params.attachments.length > 0
+      ? params.attachments
+          .map(
+            (attachment) =>
+              `${attachment.fileName} (${attachment.mimeType || "file"}${attachment.fileSize ? `, ${attachment.fileSize} bytes` : ""})`
+          )
+          .join("\n")
+      : "No attachments.";
+  const productGuidanceBlock = productGuidance
+    ? `SUMMARY: ${productGuidance.summary}\nGUIDANCE:\n${productGuidance.markdown}`
+    : "No built-in product guidance for this domain.";
+
   const developerPrompt = [
     "You are ToSho AI, an embedded CRM command layer for a creative agency.",
     "Reply in Ukrainian.",
     "Tone: calm, premium, operational, slightly playful, never clownish, never cheesy.",
     "Only rely on the provided CRM context, recent runtime signals, and curated knowledge snippets.",
+    "For simple informational how-to questions, answer directly first.",
+    "For capability questions like 'чи можна', 'чи є', 'чи можна в одному', do not answer yes/no unless the evidence explicitly supports that exact claim.",
+    "If the current CRM flow suggests a stricter rule than a broad snippet, prefer the stricter operational rule.",
+    "For estimate questions about multiple different products, prefer separate estimates unless the evidence explicitly confirms multi-product support inside one estimate.",
     "If evidence is weak, say so through a lower confidence and prefer escalation.",
     "Keep answer_markdown concise and practical. No model disclaimers.",
+    "Prefer 2-5 short paragraphs or a short numbered list. No long intros.",
+    "Do not start with filler like 'Так, базово' or 'Коротко по суті' unless it adds value.",
+    "Do not end with 'якщо хочеш, можу ще...' unless the user explicitly asked for expansion.",
+    "Avoid sounding like documentation; answer like a sharp operator inside the CRM.",
+    "Do not talk about routing, owners, or escalation unless you actually decide to escalate.",
     "If mode is fix/route/resolve, bias toward escalation and a concrete route owner.",
+    "Built-in product guidance is weaker than curated knowledge but stronger than guessing.",
     "If knowledge snippets are relevant, reference them through knowledge_ids.",
+    "If the snippets are only adjacent context and not direct proof, say that you cannot confirm it exactly.",
   ].join(" ");
 
   const userPrompt = [
@@ -830,6 +1754,8 @@ async function callOpenAiDecision(params: {
     `USER_MESSAGE:\n${params.message}`,
     `RECENT_THREAD:\n${recentMessages || "No prior messages."}`,
     `RUNTIME_ERRORS:\n${runtimeBlock}`,
+    `ATTACHMENTS:\n${attachmentBlock}`,
+    `PRODUCT_GUIDANCE:\n${productGuidanceBlock}`,
     `CURATED_KNOWLEDGE:\n${knowledgeBlock}`,
     "Return a structured decision for the CRM assistant.",
   ].join("\n\n");
@@ -991,6 +1917,7 @@ async function loadThread(
   const messages = ((messagesData ?? []) as SupportMessageRow[]).map((row) => {
     const metadata = (row.metadata ?? {}) as JsonRecord;
     const rawSources = Array.isArray(metadata.sources) ? metadata.sources : [];
+    const rawAttachments = toSupportAttachments(metadata.attachments);
     const sources = rawSources
       .map((source) => {
         if (!source || typeof source !== "object") return null;
@@ -1018,14 +1945,24 @@ async function loadThread(
       createdAt: row.created_at,
       feedback: feedbackByMessageId.get(row.id) ?? null,
       sources,
+      attachments: rawAttachments,
       metadata: metadata,
     };
   });
 
+  const signedMessages = await Promise.all(
+    messages.map(async (message) => ({
+      ...message,
+      attachments: await Promise.all(
+        message.attachments.map((attachment) => signSupportAttachment(adminClient, attachment))
+      ),
+    }))
+  );
+
   return {
     ...mapRequestSummary(request),
     context: (request.context ?? {}) as JsonRecord,
-    messages,
+    messages: signedMessages,
   };
 }
 
@@ -1087,11 +2024,7 @@ async function buildSnapshot(params: {
   const recentRequests = ((recentResult.data ?? []) as SupportRequestRow[]).map(mapRequestSummary);
   const queue = ((queueResult.data ?? []) as SupportRequestRow[]).map(mapRequestSummary);
 
-  const selectedRequestId =
-    normalizeText(params.selectedRequestId) ||
-    normalizeText(recentRequests[0]?.id) ||
-    normalizeText(queue[0]?.id) ||
-    "";
+  const selectedRequestId = normalizeText(params.selectedRequestId) || "";
   const selectedThread = selectedRequestId ? await loadThread(adminClient, auth, selectedRequestId) : null;
 
   return {
@@ -1142,7 +2075,21 @@ function buildAbsoluteHref(routeHref?: string | null) {
   return `${baseUrl.replace(/\/+$/g, "")}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
 }
 
+function buildSupportNotificationHref(routeHref: string | null | undefined, requestId: string) {
+  const trimmed = normalizeText(routeHref) || "/overview";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  const [pathnamePart, searchPart = ""] = trimmed.split("?");
+  const params = new URLSearchParams(searchPart);
+  params.set("tosho_ai", "open");
+  params.set("tosho_ai_request", requestId);
+  const nextSearch = params.toString();
+
+  return `${pathnamePart}${nextSearch ? `?${nextSearch}` : ""}`;
+}
+
 async function sendTelegramEscalation(params: {
+  requestId: string;
   title: string;
   summary: string;
   priority: ToShoAiPriority;
@@ -1155,7 +2102,7 @@ async function sendTelegramEscalation(params: {
   const chatId = normalizeText(process.env.TELEGRAM_SUPPORT_CHAT_ID);
   if (!token || !chatId) return false;
 
-  const routeLink = buildAbsoluteHref(params.routeHref);
+  const routeLink = buildAbsoluteHref(buildSupportNotificationHref(params.routeHref, params.requestId));
   const lines = [
     "ToSho AI",
     `${params.title}`,
@@ -1195,7 +2142,7 @@ async function notifyRoutingRecipients(params: {
       `${params.actorLabel} передав(ла) кейс · ${params.request.domain} · ${params.request.priority}`,
       180
     ),
-    href: params.request.route_href || "/tosho-ai",
+    href: buildSupportNotificationHref(params.request.route_href, params.request.id),
     type: params.request.priority === "urgent" || params.request.priority === "high" ? "warning" : "info",
   }));
 
@@ -1218,8 +2165,9 @@ async function handleSend(params: {
   const existingRequest = normalizeText(params.body.requestId)
     ? await selectAccessibleRequest(params.adminClient, params.auth, normalizeText(params.body.requestId))
     : null;
+  const attachments = toSupportAttachments(params.body.attachments);
 
-  const activeKnowledge = await listKnowledgeItems(params.adminClient, params.auth.workspaceId, true);
+  const activeKnowledge = await listKnowledgeItems(params.adminClient, params.auth.workspaceId, false);
   const knowledgeCandidates = selectKnowledgeCandidates(activeKnowledge, message, routeContext.routeLabel);
   const runtimeErrors = await listRuntimeErrors(
     params.adminClient,
@@ -1243,18 +2191,31 @@ async function handleSend(params: {
 
   let assistantDecision: AssistantDecision | null = null;
   let usedFallback = false;
+  const analyticsRequested = shouldRunAnalytics(message);
 
-  try {
-    assistantDecision = await callOpenAiDecision({
+  if (analyticsRequested) {
+    assistantDecision = await buildAnalyticsDecision({
+      adminClient: params.adminClient,
+      auth: params.auth,
       message,
-      mode,
       routeContext,
-      runtimeErrors,
-      knowledge: knowledgeCandidates,
-      recentMessages,
     });
-  } catch {
-    assistantDecision = null;
+  }
+
+  if (!assistantDecision) {
+    try {
+      assistantDecision = await callOpenAiDecision({
+        message,
+        mode,
+        routeContext,
+        runtimeErrors,
+        knowledge: knowledgeCandidates,
+        recentMessages,
+        attachments,
+      });
+    } catch {
+      assistantDecision = null;
+    }
   }
 
   if (!assistantDecision) {
@@ -1265,6 +2226,8 @@ async function handleSend(params: {
       routeContext,
       runtimeErrors,
       knowledge: knowledgeCandidates,
+      attachments,
+      openAiEnabled: Boolean(normalizeText(process.env.OPENAI_API_KEY)),
     });
   }
 
@@ -1368,6 +2331,7 @@ async function handleSend(params: {
       metadata: {
         mode,
         routeContext,
+        attachments,
       },
     },
     {
@@ -1383,6 +2347,7 @@ async function handleSend(params: {
         playfulLine: assistantDecision.playfulLine,
         usedFallback,
         sources: sourceItems,
+        analytics: assistantDecision.analytics ?? null,
       },
     },
   ]);
@@ -1405,6 +2370,7 @@ async function handleSend(params: {
     });
 
     await sendTelegramEscalation({
+      requestId: requestRow.id,
       title: requestRow.title,
       summary: assistantDecision.internalSummary,
       priority: requestRow.priority,

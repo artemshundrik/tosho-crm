@@ -1682,10 +1682,51 @@
   color: rgba(255, 255, 255, 0.58);
 }
 
+.tosho-ai-feedback-control {
+  display: inline-flex;
+  height: 40px;
+  width: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--border) / 0.65);
+  background: hsl(var(--card) / 0.7);
+  color: hsl(var(--muted-foreground));
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.tosho-ai-feedback-control--helpful:hover {
+  border-color: hsl(var(--success-soft-border));
+  background: hsl(var(--success-soft) / 0.72);
+  color: hsl(var(--success-foreground));
+}
+
+.tosho-ai-feedback-control--not-helpful:hover {
+  border-color: hsl(var(--danger-soft-border));
+  background: hsl(var(--danger-soft) / 0.72);
+  color: hsl(var(--destructive));
+}
+
+.tosho-ai-feedback-control--helpful[data-state="active"] {
+  border-color: hsl(var(--success-soft-border));
+  background: hsl(var(--success-soft));
+  color: hsl(var(--success-foreground));
+}
+
+.tosho-ai-feedback-control--not-helpful[data-state="active"] {
+  border-color: hsl(var(--danger-soft-border));
+  background: hsl(var(--danger-soft));
+  color: hsl(var(--destructive));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tosho-ai-launcher,
   .tosho-ai-launcher__label,
-  .tosho-ai-launcher__liquid {
+  .tosho-ai-launcher__liquid,
+  .tosho-ai-feedback-control {
     transition: none;
     animation: none;
   }

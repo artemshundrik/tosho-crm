@@ -12,6 +12,12 @@ Before changing code:
 4. Prefer current code over older prose docs when they disagree.
 5. If the task is in backup/ops territory, verify the actual tracked files and local machine state before assuming the docs are fully current.
 
+Local runtime rule:
+
+- if the change depends on Netlify Functions, redirects, or `/.netlify/functions/*`, verify locally with `npx netlify dev`, not plain `npm run dev`
+- for local Netlify function parity, `.env.local` must include server-side Supabase vars too: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; `VITE_SUPABASE_*` alone only covers the frontend client
+- when using `netlify dev`, test the app via `http://localhost:8888` unless the local proxy is configured differently
+
 ## 1. New Frontend Change
 
 Use when the task is mainly UI or client behavior.
@@ -220,13 +226,26 @@ Checklist:
 - keep route context, entity ids, and runtime-error context attached to the request
 - avoid notifying the actor about their own escalation
 - keep knowledge items curated and attributed; do not silently turn raw chat logs into canonical answers
+- use only active knowledge items for assistant answer retrieval; drafts/archived items are editorial surfaces, not live answer sources
 - watch first-render cost in the launcher/sheet and avoid loading ToSho AI data when the surface is closed
 - keep ToSho AI as a drawer-first shell surface unless the task explicitly reintroduces a top-level route
 - keep the floating launcher hidden while the drawer is open
 - avoid hover/focus animation patterns on the launcher that shift layout or visibly jitter
 - keep the drawer header brand-only and do not duplicate the main `Шо треба?` heading in the same header row
+- keep composer defaulting to a new thread; selecting an old thread must be explicit, not an accidental side effect of opening the drawer
+- keep ToSho AI top-of-drawer UI action-first; avoid large explanatory or observability cards above the composer when a quieter inline context row or details expander will do
+- keep ToSho AI auto-first: users should be able to type without first classifying the intent; if manual intent chips exist, treat them as optional overrides, not a required first step
+- keep the ToSho AI composer inline and low-friction: single-row by default, auto-grow when needed, `Enter` sends, `Shift+Enter` adds a new line, and show an explicit “response appears here” placeholder before the first reply
+- keep the sheet visually narrow and chat-like; avoid turning the drawer into a broad dashboard with multiple equal-weight cards competing with the conversation
+- in an active thread, strip the chrome back to the conversation: hide route/runtime badges and support metadata unless they are actually needed for an escalated case
+- do not show manager status/priority controls in the normal chat flow; only surface them in a separate explicit escalation/queue-management surface when the case is genuinely routed
+- if fallback is answering without curated knowledge, prefer a short direct answer or product hint over a long operational paragraph about routing
+- if support notifications need a fallback `href`, use a real app route like `/overview` or the captured page context, not the removed `/tosho-ai` page route
+- for ToSho AI notification deep-links, open the current CRM route with drawer query params and selected request id; do not reintroduce a standalone support page
+- if ToSho AI needs screenshots/files, reuse the existing attachment storage helpers and keep file metadata inside `support_messages.metadata` unless a wider attachment domain is explicitly requested
 - prefer divider-separated sections over nested card-inside-card composition when refining the ToSho AI drawer UI
 - verify `OPENAI_API_KEY`, `OPENAI_MODEL`, `TELEGRAM_SUPPORT_BOT_TOKEN`, `TELEGRAM_SUPPORT_CHAT_ID`, and `TOSHO_APP_BASE_URL` assumptions before debugging runtime behavior
+- keep quote/estimate knowledge aligned with the current product flow: if multiple products should be represented as separate estimates and grouped through `quote_sets`, do not let ToSho AI answer as if one estimate is a free-form multi-product document
 
 ## 11. Attachment / Storage Change
 

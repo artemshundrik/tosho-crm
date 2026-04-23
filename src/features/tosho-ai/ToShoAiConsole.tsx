@@ -1,10 +1,12 @@
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   startTransition,
   useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -13,21 +15,30 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  Copy,
   ExternalLink,
+  FileText,
+  ImageIcon,
+  Layers3,
   Loader2,
   MessageSquare,
-  Plus,
-  RefreshCw,
+  Paperclip,
+  PanelsTopLeft,
+  Presentation,
   Route,
   Send,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Wrench,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useAuth } from "@/auth/AuthProvider";
+import { PlayerAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -39,11 +50,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadAttachmentWithVariants, removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { cn } from "@/lib/utils";
 import {
   buildToShoAiRouteContext,
   callToShoAiApi,
   readToShoAiLastContext,
+  type ToShoAiAttachment,
   type ToShoAiApiResponse,
   type ToShoAiKnowledgeItem,
   type ToShoAiMessage,
@@ -59,6 +72,7 @@ type ToShoAiConsoleProps = {
   active?: boolean;
   surface?: "page" | "sheet";
   initialContext?: ToShoAiRouteContext | null;
+  initialRequestId?: string | null;
 };
 
 type KnowledgeDraft = {
@@ -74,6 +88,42 @@ type KnowledgeDraft = {
   status: "active" | "draft" | "archived";
 };
 
+type PendingAttachment = {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+};
+
+type AnalyticsBadge = {
+  label: string;
+  value: number | string;
+};
+
+type AnalyticsRow = {
+  id: string;
+  label: string;
+  avatarUrl?: string | null;
+  primary: string;
+  secondary?: string | null;
+  badges?: AnalyticsBadge[];
+};
+
+type AnalyticsPayload = {
+  kind: "people" | "entity";
+  title: string;
+  caption: string;
+  metricLabel: string;
+  rows: AnalyticsRow[];
+  note?: string | null;
+};
+
+type ToShoAiComposerIntent = ToShoAiMode | "auto";
+
+const SUPPORT_ATTACHMENT_BUCKET =
+  (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined)?.trim() || "attachments";
+const MAX_SUPPORT_ATTACHMENTS = 4;
+const MAX_SUPPORT_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
+
 const MODE_META: Record<
   ToShoAiMode,
   {
@@ -88,7 +138,7 @@ const MODE_META: Record<
   ask: {
     label: "Поясни",
     hint: "Шо це і як це працює",
-    placeholder: "Напиши, що хочеш зрозуміти в CRM.",
+    placeholder: "Напиши питання або опиши, що треба зробити.",
     icon: Sparkles,
     tone: "info",
     prompts: [
@@ -100,7 +150,7 @@ const MODE_META: Record<
   fix: {
     label: "Полагодь",
     hint: "Шось не те? Знайду, де болить",
-    placeholder: "Опиши, що не працює і що очікував побачити.",
+    placeholder: "Опиши проблему: що сталося і що мало бути.",
     icon: Wrench,
     tone: "warning",
     prompts: [
@@ -112,7 +162,7 @@ const MODE_META: Record<
   route: {
     label: "Передай",
     hint: "Зберу контекст і закину кому треба",
-    placeholder: "Опиши, що саме треба передати або ескалювати.",
+    placeholder: "Опиши запит, який треба передати далі.",
     icon: Route,
     tone: "accent",
     prompts: [
@@ -124,7 +174,7 @@ const MODE_META: Record<
   resolve: {
     label: "Дотисни",
     hint: "Не загублю, не відпущу, доведу",
-    placeholder: "Опиши, що треба довести до результату.",
+    placeholder: "Опиши задачу, яку треба довести до результату.",
     icon: CheckCheck,
     tone: "success",
     prompts: [
@@ -134,6 +184,17 @@ const MODE_META: Record<
     ],
   },
 };
+
+const AUTO_MODE_META = {
+  label: "Авто",
+  hint: "ToSho AI сам вирішить, що з цим робити",
+  placeholder: "Напиши питання, проблему або задачу.",
+  prompts: [
+    "Що тут зараз відбувається?",
+    "Щось не працює, допоможи розібратись.",
+    "Потрібно передати це далі з нормальним контекстом.",
+  ],
+} as const;
 
 const STATUS_META: Record<ToShoAiStatus, { label: string; tone: "neutral" | "info" | "warning" | "success" }> = {
   open: { label: "Нове", tone: "warning" },
@@ -188,35 +249,108 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
+function formatBytes(value?: number | null) {
+  if (!value || !Number.isFinite(value)) return null;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+function isPreviewableAttachment(attachment: Pick<ToShoAiAttachment, "mimeType" | "url">) {
+  return Boolean(attachment.url && attachment.mimeType?.startsWith("image/"));
+}
+
 function normalizeSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
-function getModeAccentClasses(tone: (typeof MODE_META)[ToShoAiMode]["tone"], active: boolean) {
-  if (tone === "info") {
-    return active
-      ? "border-sky-400/40 bg-sky-500/12 text-sky-950 dark:text-sky-100"
-      : "border-border/60 bg-background/60 hover:bg-muted/35";
-  }
-  if (tone === "warning") {
-    return active
-      ? "border-amber-400/45 bg-amber-500/12 text-amber-950 dark:text-amber-100"
-      : "border-border/60 bg-background/60 hover:bg-muted/35";
-  }
-  if (tone === "success") {
-    return active
-      ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-950 dark:text-emerald-100"
-      : "border-border/60 bg-background/60 hover:bg-muted/35";
-  }
-  return active
-    ? "border-fuchsia-400/40 bg-fuchsia-500/12 text-fuchsia-950 dark:text-fuchsia-100"
-    : "border-border/60 bg-background/60 hover:bg-muted/35";
+function formatAssistantMessageBody(body: string) {
+  return body
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/^\s*-\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
-function formatFeedbackLabel(value: ToShoAiMessage["feedback"]) {
-  if (value === "helpful") return "Допомогло";
-  if (value === "not_helpful") return "Не допомогло";
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function readAnalyticsPayload(metadata: Record<string, unknown> | null): AnalyticsPayload | null {
+  const analytics = metadata?.analytics;
+  if (!isRecord(analytics)) return null;
+  const rows = Array.isArray(analytics.rows) ? analytics.rows : [];
+  const parsedRows = rows.flatMap((row): AnalyticsRow[] => {
+    if (!isRecord(row) || typeof row.id !== "string" || typeof row.label !== "string") return [];
+    const badges = Array.isArray(row.badges)
+      ? row.badges.flatMap((badge): AnalyticsBadge[] => {
+          if (!isRecord(badge) || typeof badge.label !== "string") return [];
+          const value = badge.value;
+          if (typeof value !== "string" && typeof value !== "number") return [];
+          return [{ label: badge.label, value }];
+        })
+      : [];
+    return [
+      {
+        id: row.id,
+        label: row.label,
+        avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
+        primary: typeof row.primary === "string" ? row.primary : String(row.primary ?? ""),
+        secondary: typeof row.secondary === "string" ? row.secondary : null,
+        badges,
+      },
+    ];
+  });
+
+  const kind = analytics.kind === "entity" ? "entity" : "people";
+  const title = typeof analytics.title === "string" ? analytics.title : "";
+  const caption = typeof analytics.caption === "string" ? analytics.caption : "";
+  const metricLabel = typeof analytics.metricLabel === "string" ? analytics.metricLabel : "Показник";
+  if (!title && parsedRows.length === 0) return null;
+
+  return {
+    kind,
+    title: title || "Підрахунок",
+    caption,
+    metricLabel,
+    rows: parsedRows,
+    note: typeof analytics.note === "string" ? analytics.note : null,
+  };
+}
+
+function getAnalyticsBadgeIcon(label: string) {
+  const normalized = normalizeSearch(label);
+  if (normalized.includes("візуал +")) return Layers3;
+  if (normalized.includes("візуал")) return ImageIcon;
+  if (normalized.includes("презентац")) return Presentation;
+  if (normalized.includes("креатив")) return Sparkles;
+  if (normalized.includes("адаптац")) return Copy;
+  if (normalized.includes("макет")) return PanelsTopLeft;
   return null;
+}
+
+function formatShortDisplayName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return value;
+  return `${parts[0]} ${parts[1][0]}.`;
+}
+
+function inferComposerMode(input: {
+  composerValue: string;
+  hasAttachments: boolean;
+  routeLabel: string;
+  domainHint: ToShoAiRouteContext["domainHint"];
+}): ToShoAiMode {
+  const normalized = input.composerValue.trim().toLowerCase();
+  if (!normalized && input.hasAttachments) return "fix";
+  if (/не працю|злам|помилк|error|bug|не зберіга|не відкрива|збій/u.test(normalized)) return "fix";
+  if (/передай|ескал|закинь|перекинь|кому треба|в роботу/u.test(normalized)) return "route";
+  if (/дотис|доведи|що далі|план|хто відповідальний|підсум/u.test(normalized)) return "resolve";
+  if (input.domainHint === "design" && /бриф|дизайн|макет|правк/u.test(normalized)) return "route";
+  if (/як|де|що це|поясни|покажи|розкажи/u.test(normalized)) return "ask";
+  if (input.routeLabel === "Огляд" && !normalized) return "ask";
+  return "ask";
 }
 
 function toDraft(item?: ToShoAiKnowledgeItem | null): KnowledgeDraft {
@@ -316,6 +450,85 @@ function ThreadCard({
   );
 }
 
+function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
+  return (
+    <div className="mt-4 overflow-hidden rounded-[22px] border border-border/65 bg-background/55">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-foreground">{analytics.title}</div>
+          {analytics.caption ? <div className="mt-0.5 text-xs text-muted-foreground">{analytics.caption}</div> : null}
+        </div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {analytics.metricLabel}
+        </div>
+      </div>
+
+      {analytics.rows.length > 0 ? (
+        <div className="divide-y divide-border/45">
+          {analytics.rows.map((row, index) => {
+            const displayLabel = analytics.kind === "people" ? formatShortDisplayName(row.label) : row.label;
+            const secondaryIsBadgeDuplicate =
+              Boolean(row.secondary) &&
+              Boolean(row.badges?.length) &&
+              row.badges!.every((badge) => row.secondary?.includes(badge.label));
+            return (
+              <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-3.5 py-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  {analytics.kind === "people" ? (
+                    <PlayerAvatar
+                      src={row.avatarUrl ?? null}
+                      name={displayLabel}
+                      size={34}
+                      className="mt-0.5 shrink-0 ring-1 ring-border/60"
+                      fallbackClassName="text-[11px] font-semibold"
+                    />
+                  ) : (
+                    <div className="mt-0.5 flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/35 text-xs font-semibold text-muted-foreground">
+                      {index + 1}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">{displayLabel}</div>
+                    {row.secondary && !secondaryIsBadgeDuplicate ? (
+                      <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{row.secondary}</div>
+                    ) : null}
+                    {row.badges && row.badges.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {row.badges.map((badge) => {
+                          const BadgeIcon = getAnalyticsBadgeIcon(badge.label);
+                          return (
+                            <span
+                              key={`${row.id}:${badge.label}`}
+                              className="inline-flex h-6 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary"
+                            >
+                              {BadgeIcon ? <BadgeIcon className="h-3.5 w-3.5" /> : null}
+                              <span>{badge.label}</span>
+                              <span className="font-semibold">{badge.value}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="text-right text-sm font-semibold text-foreground">{row.primary}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-3.5 py-5 text-sm text-muted-foreground">Немає рядків для цього підрахунку.</div>
+      )}
+
+      {analytics.note ? (
+        <div className="border-t border-border/45 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
+          {analytics.note}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MessageCard({
   message,
   onFeedback,
@@ -323,105 +536,145 @@ function MessageCard({
   message: ToShoAiMessage;
   onFeedback: (messageId: string, value: "helpful" | "not_helpful") => void;
 }) {
+  const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
-  const playfulLine =
-    typeof message.metadata?.playfulLine === "string" && message.metadata.playfulLine.trim()
-      ? message.metadata.playfulLine.trim()
-      : "";
+  const displayBody = isAssistant ? formatAssistantMessageBody(message.body) : message.body;
+  const analytics = isAssistant ? readAnalyticsPayload(message.metadata) : null;
 
   return (
-    <div
-      className={cn(
-        "rounded-[24px] border px-4 py-4",
-        isAssistant
-          ? "border-border/70 bg-card shadow-[var(--shadow-elevated-sm)]"
-          : "border-info-soft-border bg-info-soft/70"
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full border",
-              isAssistant
-                ? "border-foreground/10 bg-foreground text-background"
-                : "border-info-soft-border bg-background/80 text-foreground"
-            )}
-          >
-            {isAssistant ? <Bot className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-foreground">
-              {message.actorLabel || (isAssistant ? "ToSho AI" : "Користувач")}
+    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("max-w-[88%] min-w-0 space-y-2", isUser && "items-end")}>
+        <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", isUser ? "justify-end" : "justify-start")}>
+          {!isUser ? (
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full border",
+                isAssistant
+                  ? "border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]"
+                  : "border-border/60 bg-background/80 text-foreground"
+              )}
+            >
+              {isAssistant ? <Bot className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
             </div>
-            <div className="text-xs text-muted-foreground">{formatDateTime(message.createdAt)}</div>
+          ) : null}
+          <div className={cn("flex items-center gap-2", isUser && "flex-row-reverse")}>
+            <span className="font-medium text-foreground/80">
+              {message.actorLabel || (isAssistant ? "ToSho AI" : "Користувач")}
+            </span>
+            <span>{formatDateTime(message.createdAt)}</span>
           </div>
         </div>
-        {message.feedback ? (
-          <Badge tone={message.feedback === "helpful" ? "success" : "warning"} size="sm" pill>
-            {formatFeedbackLabel(message.feedback)}
-          </Badge>
+        <div
+          className={cn(
+            "rounded-[28px] border px-4 py-3.5 shadow-[var(--shadow-elevated-sm)]",
+            isUser
+              ? "border-[#E6007E]/18 bg-[#E6007E]/12"
+              : "border-border/60 bg-card/88"
+          )}
+        >
+          <div className="whitespace-pre-wrap text-[15px] leading-6 text-foreground">{displayBody}</div>
+
+          {analytics ? <AnalyticsResultTable analytics={analytics} /> : null}
+
+          {message.attachments.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Вкладення</div>
+              <div className="grid gap-2">
+                {message.attachments.map((attachment) => (
+                  <a
+                    key={`${message.id}:${attachment.id}`}
+                    href={attachment.url ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
+                  >
+                    <div className="flex items-start gap-3">
+                      {isPreviewableAttachment(attachment) ? (
+                        <img
+                          src={attachment.url ?? undefined}
+                          alt={attachment.fileName}
+                          className="h-14 w-14 rounded-xl border border-border/50 object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground">
+                          {attachment.mimeType?.startsWith("image/") ? (
+                            <ImageIcon className="h-5 w-5" />
+                          ) : (
+                            <FileText className="h-5 w-5" />
+                          )}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">{attachment.fileName}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {[attachment.mimeType || "file", formatBytes(attachment.fileSize)].filter(Boolean).join(" • ")}
+                        </div>
+                      </div>
+                      <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {message.sources.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Джерела</div>
+              <div className="grid gap-2">
+                {message.sources.map((source) => (
+                  <div
+                    key={`${message.id}:${source.id}`}
+                    className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3"
+                  >
+                    <div className="text-sm font-medium text-foreground">{source.title}</div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{source.sourceLabel || "Внутрішня база знань"}</span>
+                      {source.sourceHref ? (
+                        <a
+                          href={source.sourceHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-foreground hover:underline"
+                        >
+                          Джерело
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {isAssistant ? (
+          <div className="flex items-center justify-start gap-2 pl-4">
+            <button
+              type="button"
+              className="tosho-ai-feedback-control tosho-ai-feedback-control--helpful"
+              data-state={message.feedback === "helpful" ? "active" : "inactive"}
+              aria-label="Допомогло"
+              title="Допомогло"
+              onClick={() => onFeedback(message.id, "helpful")}
+            >
+              <ThumbsUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="tosho-ai-feedback-control tosho-ai-feedback-control--not-helpful"
+              data-state={message.feedback === "not_helpful" ? "active" : "inactive"}
+              aria-label="Не допомогло"
+              title="Не допомогло"
+              onClick={() => onFeedback(message.id, "not_helpful")}
+            >
+              <ThumbsDown className="h-4 w-4" />
+            </button>
+          </div>
         ) : null}
       </div>
-
-      {playfulLine ? (
-        <div className="mt-4 rounded-2xl border border-border/60 bg-muted/25 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          {playfulLine}
-        </div>
-      ) : null}
-
-      <div className="mt-4 whitespace-pre-wrap text-[15px] leading-6 text-foreground">{message.body}</div>
-
-      {message.sources.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Джерела</div>
-          <div className="grid gap-2">
-            {message.sources.map((source) => (
-              <div
-                key={`${message.id}:${source.id}`}
-                className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3"
-              >
-                <div className="text-sm font-medium text-foreground">{source.title}</div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{source.sourceLabel || "Внутрішня база знань"}</span>
-                  {source.sourceHref ? (
-                    <a
-                      href={source.sourceHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-foreground hover:underline"
-                    >
-                      Джерело
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {isAssistant ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant={message.feedback === "helpful" ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => onFeedback(message.id, "helpful")}
-          >
-            Допомогло
-          </Button>
-          <Button
-            type="button"
-            variant={message.feedback === "not_helpful" ? "primary" : "outline"}
-            size="sm"
-            onClick={() => onFeedback(message.id, "not_helpful")}
-          >
-            Не допомогло
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -430,8 +683,14 @@ export function ToShoAiConsole({
   active = true,
   surface = "page",
   initialContext,
+  initialRequestId = null,
 }: ToShoAiConsoleProps) {
   const compact = surface === "sheet";
+  const { teamId, userId } = useAuth();
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
   const resolvedContext = useMemo(
     () => {
       const currentRouteContext =
@@ -450,11 +709,16 @@ export function ToShoAiConsole({
 
   const [snapshot, setSnapshot] = useState<ToShoAiSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
-  const [mode, setMode] = useState<ToShoAiMode>("ask");
+  const [composerIntent, setComposerIntent] = useState<ToShoAiComposerIntent>("auto");
   const [composerValue, setComposerValue] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [queueSearch, setQueueSearch] = useState("");
   const deferredQueueSearch = useDeferredValue(queueSearch);
+  const [threadScope, setThreadScope] = useState<"mine" | "queue">("mine");
+  const [showRequestList, setShowRequestList] = useState(false);
+  const [knowledgeExpanded, setKnowledgeExpanded] = useState(false);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [knowledgeDraft, setKnowledgeDraft] = useState<KnowledgeDraft>(EMPTY_DRAFT);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
@@ -462,48 +726,67 @@ export function ToShoAiConsole({
 
   const selectedThread = snapshot?.selectedThread ?? null;
   const queueSearchValue = normalizeSearch(deferredQueueSearch);
+  const isAiUnavailable = !snapshot && Boolean(loadError);
+  const canSendMessage = Boolean((composerValue.trim() || pendingAttachments.length > 0) && !isAiUnavailable);
 
-  const filteredQueue = useMemo(() => {
-    const queue = snapshot?.queue ?? [];
-    if (!queueSearchValue) return queue;
-    return queue.filter((item) => {
+  const threadItems = useMemo(() => {
+    if (snapshot?.permissions.canManageQueue && threadScope === "queue") {
+      return snapshot.queue ?? [];
+    }
+    return snapshot?.recentRequests ?? [];
+  }, [snapshot?.permissions.canManageQueue, snapshot?.queue, snapshot?.recentRequests, threadScope]);
+
+  const filteredThreads = useMemo(() => {
+    if (!queueSearchValue) return threadItems;
+    return threadItems.filter((item) => {
       const haystack = normalizeSearch(
         `${item.title} ${item.summary ?? ""} ${item.routeLabel ?? ""} ${item.assigneeLabel ?? ""} ${item.createdByLabel ?? ""}`
       );
       return haystack.includes(queueSearchValue);
     });
-  }, [queueSearchValue, snapshot?.queue]);
+  }, [queueSearchValue, threadItems]);
 
   const loadSnapshot = useCallback(
-    async (requestId?: string | null) => {
+    async (requestId: string | null = null) => {
       if (!active) return;
       setLoading(true);
       try {
+        setLoadError(null);
         const response = await callToShoAiApi("bootstrap", {
-          requestId: requestId ?? selectedThreadId ?? null,
+          requestId,
           routeContext: resolvedContext,
         });
         setSnapshot(response.snapshot);
         setSelectedThreadId(response.snapshot.selectedThread?.id ?? null);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Не вдалося завантажити ToSho AI.");
+        const message = error instanceof Error ? error.message : "Не вдалося завантажити ToSho AI.";
+        setLoadError(message);
+        toast.error(message);
       } finally {
         setLoading(false);
       }
     },
-    [active, resolvedContext, selectedThreadId]
+    [active, resolvedContext]
   );
 
   useEffect(() => {
     if (!active) return;
-    void loadSnapshot(selectedThreadId);
-  }, [active, loadSnapshot, selectedThreadId]);
+    setSelectedThreadId(initialRequestId ?? null);
+    setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
+    void loadSnapshot(initialRequestId ?? null);
+  }, [active, initialRequestId, loadSnapshot, resolvedContext.href]);
 
   useEffect(() => {
     if (selectedThread?.mode) {
-      setMode(selectedThread.mode);
+      setComposerIntent(selectedThread.mode);
     }
   }, [selectedThread?.id, selectedThread?.mode]);
+
+  useEffect(() => {
+    if (!snapshot?.permissions.canManageQueue && threadScope !== "mine") {
+      setThreadScope("mine");
+    }
+  }, [snapshot?.permissions.canManageQueue, threadScope]);
 
   const applySnapshotResponse = useCallback((response: ToShoAiApiResponse) => {
     setSnapshot(response.snapshot);
@@ -515,26 +798,172 @@ export function ToShoAiConsole({
       startTransition(() => {
         setSelectedThreadId(requestId);
       });
+      void loadSnapshot(requestId);
     },
-    []
+    [loadSnapshot]
+  );
+
+  const handleStartNewThread = useCallback(() => {
+    startTransition(() => {
+      setSelectedThreadId(null);
+    });
+    setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
+    setComposerIntent("auto");
+  }, []);
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
+
+  useEffect(() => {
+    return () => {
+      pendingAttachmentsRef.current.forEach((attachment) => {
+        if (attachment.previewUrl) {
+          URL.revokeObjectURL(attachment.previewUrl);
+        }
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const textarea = composerInputRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    const nextHeight = Math.min(textarea.scrollHeight, 220);
+    textarea.style.height = `${Math.max(48, nextHeight)}px`;
+  }, [composerValue, compact]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [selectedThread?.id, selectedThread?.messages.length, actionBusy]);
+
+  const handleRemovePendingAttachment = useCallback((attachmentId: string) => {
+    setPendingAttachments((prev) => {
+      const next = prev.filter((attachment) => {
+        const shouldKeep = attachment.id !== attachmentId;
+        if (!shouldKeep && attachment.previewUrl) {
+          URL.revokeObjectURL(attachment.previewUrl);
+        }
+        return shouldKeep;
+      });
+      return next;
+    });
+  }, []);
+
+  const handlePickAttachments = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setPendingAttachments((prev) => {
+      const remainingSlots = Math.max(0, MAX_SUPPORT_ATTACHMENTS - prev.length);
+      if (remainingSlots === 0) {
+        toast.error(`Можна прикріпити не більше ${MAX_SUPPORT_ATTACHMENTS} файлів.`);
+        return prev;
+      }
+
+      const selected = Array.from(files).slice(0, remainingSlots);
+      const oversized = selected.filter((file) => file.size > MAX_SUPPORT_ATTACHMENT_SIZE_BYTES);
+      const allowed = selected.filter((file) => file.size <= MAX_SUPPORT_ATTACHMENT_SIZE_BYTES);
+
+      if (oversized.length > 0) {
+        toast.error("Деякі файли завеликі. Максимум 50 MB на файл.");
+      }
+
+      const additions = allowed.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      }));
+
+      return [...prev, ...additions];
+    });
+
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
+  }, []);
+
+  const uploadPendingAttachments = useCallback(async () => {
+    if (pendingAttachments.length === 0) return { attachments: [], uploaded: [] as Array<{ bucket: string; path: string }> };
+    if (!teamId || !userId) {
+      throw new Error("Немає team/user context для завантаження вкладень.");
+    }
+
+    const uploaded: Array<{ bucket: string; path: string }> = [];
+    try {
+      const attachments = [];
+      for (const pending of pendingAttachments) {
+        const safeName = pending.file.name.replace(/[^\w.-]+/g, "_");
+        const storagePath = `teams/${teamId}/support-attachments/${userId}/${Date.now()}-${pending.id}-${safeName}`;
+        const uploadResult = await uploadAttachmentWithVariants({
+          bucket: SUPPORT_ATTACHMENT_BUCKET,
+          storagePath,
+          file: pending.file,
+          cacheControl: "31536000, immutable",
+        });
+
+        uploaded.push({ bucket: SUPPORT_ATTACHMENT_BUCKET, path: uploadResult.storagePath });
+        attachments.push({
+          id: pending.id,
+          fileName: pending.file.name,
+          mimeType: uploadResult.contentType || pending.file.type || null,
+          fileSize: uploadResult.size || pending.file.size,
+          storageBucket: SUPPORT_ATTACHMENT_BUCKET,
+          storagePath: uploadResult.storagePath,
+        });
+      }
+
+      return { attachments, uploaded };
+    } catch (error) {
+      await Promise.all(
+        uploaded.map((item) =>
+          removeAttachmentWithVariants(item.bucket, item.path).catch(() => undefined)
+        )
+      );
+      throw error;
+    }
+  }, [pendingAttachments, teamId, userId]);
+
+  const effectiveMode = useMemo(
+    () =>
+      composerIntent === "auto"
+        ? inferComposerMode({
+            composerValue,
+            hasAttachments: pendingAttachments.length > 0,
+            routeLabel: resolvedContext.routeLabel,
+            domainHint: resolvedContext.domainHint,
+          })
+        : composerIntent,
+    [composerIntent, composerValue, pendingAttachments.length, resolvedContext.domainHint, resolvedContext.routeLabel]
   );
 
   const handleSend = useCallback(async () => {
-    if (!composerValue.trim()) {
-      toast.error("Напиши запит для ToSho AI.");
+    if (!composerValue.trim() && pendingAttachments.length === 0) {
+      toast.error("Напиши запит або прикріпи файл для ToSho AI.");
       return;
     }
 
     setActionBusy("send");
+    let uploadedStorageFiles: Array<{ bucket: string; path: string }> = [];
     try {
+      const uploaded = await uploadPendingAttachments();
+      uploadedStorageFiles = uploaded.uploaded;
       const response = await callToShoAiApi("send", {
         requestId: selectedThreadId,
         message: composerValue,
-        mode,
+        mode: effectiveMode,
         routeContext: resolvedContext,
+        attachments: uploaded.attachments,
       });
       applySnapshotResponse(response);
       setComposerValue("");
+      setPendingAttachments((prev) => {
+        prev.forEach((attachment) => {
+          if (attachment.previewUrl) {
+            URL.revokeObjectURL(attachment.previewUrl);
+          }
+        });
+        return [];
+      });
       const description =
         response.meta?.info ||
         (response.meta?.requestCreated
@@ -542,16 +971,53 @@ export function ToShoAiConsole({
           : "ToSho AI оновив тред і дотиснув контекст.");
       toast.success("ToSho AI відпрацював", { description });
     } catch (error) {
+      if (uploadedStorageFiles.length > 0) {
+        await Promise.all(
+          uploadedStorageFiles.map((item) =>
+            removeAttachmentWithVariants(item.bucket, item.path).catch(() => undefined)
+          )
+        );
+      }
       toast.error(error instanceof Error ? error.message : "Не вдалося відправити запит.");
     } finally {
       setActionBusy(null);
     }
-  }, [applySnapshotResponse, composerValue, mode, resolvedContext, selectedThreadId]);
+  }, [
+    applySnapshotResponse,
+    composerValue,
+    effectiveMode,
+    pendingAttachments.length,
+    resolvedContext,
+    selectedThreadId,
+    uploadPendingAttachments,
+  ]);
+
+  const handleComposerKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key !== "Enter" || event.shiftKey) return;
+      event.preventDefault();
+      if (actionBusy === "send") return;
+      void handleSend();
+    },
+    [actionBusy, handleSend]
+  );
 
   const handleFeedback = useCallback(
     async (messageId: string, value: "helpful" | "not_helpful") => {
       if (!selectedThread) return;
-      setActionBusy(`feedback:${messageId}:${value}`);
+      const previousSnapshot = snapshot;
+      setSnapshot((prev) => {
+        if (!prev?.selectedThread || prev.selectedThread.id !== selectedThread.id) return prev;
+        return {
+          ...prev,
+          selectedThread: {
+            ...prev.selectedThread,
+            messages: prev.selectedThread.messages.map((message) =>
+              message.id === messageId ? { ...message, feedback: value } : message
+            ),
+          },
+        };
+      });
       try {
         const response = await callToShoAiApi("feedback", {
           requestId: selectedThread.id,
@@ -560,34 +1026,12 @@ export function ToShoAiConsole({
           routeContext: resolvedContext,
         });
         applySnapshotResponse(response);
-        toast.success(value === "helpful" ? "Зафіксовано, що відповідь спрацювала." : "Зафіксовано, що потрібно дотиснути.");
       } catch (error) {
+        setSnapshot(previousSnapshot);
         toast.error(error instanceof Error ? error.message : "Не вдалося зберегти feedback.");
-      } finally {
-        setActionBusy(null);
       }
     },
-    [applySnapshotResponse, resolvedContext, selectedThread]
-  );
-
-  const handleUpdateRequest = useCallback(
-    async (patch: { status?: ToShoAiStatus; priority?: ToShoAiPriority }) => {
-      if (!selectedThread) return;
-      setActionBusy("update-request");
-      try {
-        const response = await callToShoAiApi("update_request", {
-          requestId: selectedThread.id,
-          ...patch,
-          routeContext: resolvedContext,
-        });
-        applySnapshotResponse(response);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Не вдалося оновити статус кейсу.");
-      } finally {
-        setActionBusy(null);
-      }
-    },
-    [applySnapshotResponse, resolvedContext, selectedThread]
+    [applySnapshotResponse, resolvedContext, selectedThread, snapshot]
   );
 
   const openKnowledgeDialog = useCallback((item?: ToShoAiKnowledgeItem | null) => {
@@ -650,416 +1094,333 @@ export function ToShoAiConsole({
     [applySnapshotResponse, resolvedContext, selectedThread?.id]
   );
 
-  const modeMeta = MODE_META[mode];
+  const intentMeta = composerIntent === "auto" ? AUTO_MODE_META : MODE_META[composerIntent];
 
   return (
     <>
-      <div className={cn("space-y-5", compact ? "pb-2" : "space-y-6")}>
-        <section className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.18),transparent_36%),radial-gradient(circle_at_top_right,hsl(var(--info)/0.16),transparent_30%)]" />
-          <div className="relative grid gap-5 px-1 py-1 lg:grid-cols-[1.25fr_0.95fr]">
-            <div className="space-y-3">
-              <div className="text-[24px] font-semibold leading-tight tracking-[-0.03em] text-foreground md:text-[28px]">
-                Шо треба?
-              </div>
-              <div className="max-w-[64rem] text-[14px] leading-6 text-muted-foreground md:text-[15px]">
-                Питання, збій або передача в роботу: <span className="whitespace-nowrap">бачу сторінку</span>, підтягую знання і збираю нормальний тред без зайвого шуму.
-              </div>
-              <div className={cn("grid gap-2", compact ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4")}>
-                {(
-                  Object.entries(MODE_META) as Array<
-                    [ToShoAiMode, (typeof MODE_META)[ToShoAiMode]]
-                  >
-                ).map(([entryMode, meta]) => {
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={entryMode}
-                      type="button"
-                      onClick={() => setMode(entryMode)}
-                      className={cn(
-                        "rounded-[18px] border px-3 py-3 text-left transition-colors",
-                        getModeAccentClasses(meta.tone, mode === entryMode),
-                        mode === entryMode ? "shadow-[var(--shadow-elevated-sm)]" : "text-foreground"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-foreground">{meta.label}</span>
-                        <div
-                          className={cn(
-                            "flex h-7 w-7 items-center justify-center rounded-full",
-                            mode === entryMode
-                              ? meta.tone === "info"
-                                ? "bg-sky-500/16 text-sky-600 dark:text-sky-300"
-                                : meta.tone === "warning"
-                                  ? "bg-amber-500/16 text-amber-600 dark:text-amber-300"
-                                  : meta.tone === "success"
-                                    ? "bg-emerald-500/16 text-emerald-600 dark:text-emerald-300"
-                                    : "bg-fuchsia-500/16 text-fuchsia-600 dark:text-fuchsia-300"
-                              : "bg-muted/70 text-muted-foreground"
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                      </div>
-                      <div className="mt-1 text-xs leading-5 text-muted-foreground">{meta.hint}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-[26px] border border-border/60 bg-card/70 p-4 backdrop-blur md:p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-[17px] font-semibold tracking-[-0.02em] text-foreground">Зараз бачу</div>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex min-h-full w-full flex-col gap-4 px-4 pb-4 pt-3 md:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {!selectedThread ? (
                   <Badge tone="neutral" size="sm" pill>
-                    Мої треди: {snapshot?.stats.myOpenCount ?? 0}
+                    {resolvedContext.routeLabel}
                   </Badge>
-                  <Badge tone="neutral" size="sm" pill>
-                    Черга: {snapshot?.stats.queueOpenCount ?? 0}
-                  </Badge>
-                  <Badge tone="neutral" size="sm" pill>
-                    Знання: {snapshot?.stats.knowledgeActiveCount ?? 0}
-                  </Badge>
-                </div>
-                <div className="grid gap-2.5">
-                  <ContextStat title="Бачу сторінку" value={resolvedContext.routeLabel} />
-                  <ContextStat title="Маршрут" value={resolvedContext.href} mono />
-                  <ContextStat
-                    title="Технічний слід"
-                    value={
-                      snapshot?.diagnostics.recentRuntimeErrorCount
-                        ? `${snapshot.diagnostics.recentRuntimeErrorCount} runtime signal`
-                        : "Чисто"
-                    }
-                    tone={snapshot?.diagnostics.recentRuntimeErrorCount ? "warning" : "success"}
-                  />
-                </div>
-                {snapshot?.diagnostics.latestRuntimeErrorTitle ? (
-                  <div className="rounded-[20px] border border-warning-soft-border bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
-                    <div className="font-semibold">Останній технічний слід</div>
-                    <div className="mt-1 leading-5">{snapshot.diagnostics.latestRuntimeErrorTitle}</div>
-                  </div>
                 ) : null}
-            </div>
-          </div>
-        </section>
-
-        <div className={cn("grid gap-5", compact ? "grid-cols-1" : "xl:grid-cols-[1.1fr_0.9fr]")}>
-          <div className="space-y-0">
-            <div className="space-y-4 px-1 py-2">
-              <div>
-                <div className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">Запит</div>
-                <div className="mt-1 text-sm text-muted-foreground">Напиши по-людськи. Решту ToSho AI збере сам.</div>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
               </div>
+              <div className="ml-auto flex items-center rounded-full border border-border/60 bg-card/55 p-1">
+                <Button
+                  type="button"
+                  variant={showRequestList ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setShowRequestList((prev) => !prev);
+                    setKnowledgeExpanded(false);
+                  }}
+                  className="h-8 rounded-full px-3"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Історія
+                </Button>
+                <Button
+                  type="button"
+                  variant={knowledgeExpanded ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setKnowledgeExpanded((prev) => !prev);
+                    setShowRequestList(false);
+                  }}
+                  className="h-8 rounded-full px-3"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Знання
+                </Button>
+                {selectedThread ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={handleStartNewThread} className="h-8 rounded-full px-3">
+                    Новий чат
+                  </Button>
+                ) : null}
+              </div>
+            </div>
 
-              <div className="rounded-[26px] border border-border/60 bg-background/75 p-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  <span>{modeMeta.label}</span>
-                  <span>•</span>
-                  <span>{resolvedContext.routeLabel}</span>
+            {showRequestList ? (
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-[var(--shadow-elevated-sm)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Попередні звернення</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Тільки якщо треба повернутись до старого діалогу.</div>
+                  </div>
+                  <Badge tone={threadScope === "queue" ? "warning" : "neutral"} size="sm" pill>
+                    {threadScope === "queue" ? "Передано в роботу" : "Мої звернення"}
+                  </Badge>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {modeMeta.prompts.map((prompt) => (
-                    <Button
-                      key={prompt}
-                      type="button"
-                      variant="chip"
-                      size="sm"
-                      onClick={() => setComposerValue(prompt)}
-                    >
-                      {prompt}
-                    </Button>
-                  ))}
-                </div>
-                <div className="mt-4 space-y-3">
-                  <Textarea
-                    value={composerValue}
-                    onChange={(event) => setComposerValue(event.target.value)}
-                    rows={compact ? 5 : 6}
-                    placeholder={modeMeta.placeholder}
-                    className="min-h-[148px] rounded-[24px] border-border/60 bg-card/80 text-[15px] leading-6 shadow-inner"
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-muted-foreground">
-                      Можна писати по-людськи. ToSho AI сам збере маршрут, пріоритет і контекст.
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => void loadSnapshot(selectedThreadId)}>
-                        <RefreshCw className="h-4 w-4" />
-                        Оновити
-                      </Button>
-                      <Button type="button" size="sm" onClick={() => void handleSend()} disabled={actionBusy === "send"}>
-                        {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        Дати хід
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-1 py-5">
-              <div className="mb-4 space-y-1">
-                <div className="text-[18px] font-semibold tracking-[-0.02em] text-foreground">Поточний тред</div>
-                <div className="text-sm text-muted-foreground">
-                  Тут живе повний контекст: відповіді, маршрутизація, feedback і дотиск до результату.
-                </div>
-              </div>
-              <div className="space-y-4">
-                {selectedThread ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={STATUS_META[selectedThread.status].tone} size="sm" pill>
-                        {STATUS_META[selectedThread.status].label}
-                      </Badge>
-                      <Badge tone={PRIORITY_META[selectedThread.priority].tone} size="sm" pill>
-                        {PRIORITY_META[selectedThread.priority].label}
-                      </Badge>
-                      <Badge tone="neutral" size="sm" pill>
-                        {DOMAIN_LABELS[selectedThread.domain] ?? DOMAIN_LABELS.general}
-                      </Badge>
-                      {selectedThread.routeLabel ? (
-                        <Badge tone="neutral" size="sm" pill>
-                          {selectedThread.routeLabel}
-                        </Badge>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-3 rounded-[24px] border border-border/60 bg-background/60 px-4 py-4 md:grid-cols-[1.1fr_0.9fr]">
-                      <div className="space-y-2">
-                        <div className="text-[17px] font-semibold leading-6">{selectedThread.title}</div>
-                        {selectedThread.summary ? (
-                          <div className="text-sm leading-6 text-muted-foreground">{selectedThread.summary}</div>
-                        ) : null}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span>Оновлено {formatDateTime(selectedThread.updatedAt)}</span>
-                          {selectedThread.assigneeLabel ? <span>Власник: {selectedThread.assigneeLabel}</span> : null}
-                          {selectedThread.aiConfidence !== null ? (
-                            <span>Впевненість {Math.round(selectedThread.aiConfidence * 100)}%</span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {snapshot?.permissions.canManageQueue ? (
-                        <div className="space-y-3">
-                          <div>
-                            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Статус
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {(Object.keys(STATUS_META) as ToShoAiStatus[]).map((status) => (
-                                <Button
-                                  key={status}
-                                  type="button"
-                                  variant={selectedThread.status === status ? "primary" : "outline"}
-                                  size="sm"
-                                  disabled={actionBusy === "update-request"}
-                                  onClick={() => void handleUpdateRequest({ status })}
-                                >
-                                  {STATUS_META[status].label}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Пріоритет
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {(Object.keys(PRIORITY_META) as ToShoAiPriority[]).map((priority) => (
-                                <Button
-                                  key={priority}
-                                  type="button"
-                                  variant={selectedThread.priority === priority ? "primary" : "outline"}
-                                  size="sm"
-                                  disabled={actionBusy === "update-request"}
-                                  onClick={() => void handleUpdateRequest({ priority })}
-                                >
-                                  {PRIORITY_META[priority].label}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-3">
-                      {selectedThread.messages.map((message) => (
-                        <MessageCard key={message.id} message={message} onFeedback={handleFeedback} />
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <EmptyPanel
-                    icon={<Bot className="h-5 w-5" />}
-                    title="Ще нема треду"
-                    description="Почни з короткого запиту вище. ToSho AI одразу зробить із нього нормальний командний тред."
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-5">
-            <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
-              <CardHeader className="space-y-3 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-[18px] tracking-[-0.02em]">Треди</CardTitle>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={threadScope === "mine" ? "primary" : "outline"}
+                    onClick={() => setThreadScope("mine")}
+                  >
+                    Мої
+                  </Button>
                   {snapshot?.permissions.canManageQueue ? (
-                    <Badge tone="warning" size="sm" pill>
-                      Командний маршрут
-                    </Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={threadScope === "queue" ? "primary" : "outline"}
+                      onClick={() => setThreadScope("queue")}
+                    >
+                      В роботі
+                    </Button>
                   ) : null}
                 </div>
                 <Input
                   value={queueSearch}
                   onChange={(event) => setQueueSearch(event.target.value)}
-                  placeholder="Фільтр по титулах, маршруту або власнику"
-                  className="rounded-2xl border-border/60 bg-background/70"
+                  placeholder="Пошук по зверненнях"
+                  className="mt-3 rounded-2xl border-border/60 bg-background/70"
                 />
-              </CardHeader>
-              <CardContent className="space-y-3 p-5 pt-0">
-                {(filteredQueue.length > 0 ? filteredQueue : snapshot?.recentRequests ?? []).length > 0 ? (
-                  (filteredQueue.length > 0 ? filteredQueue : snapshot?.recentRequests ?? []).map((item) => (
-                    <ThreadCard
-                      key={item.id}
-                      item={item}
-                      active={selectedThread?.id === item.id}
-                      onSelect={() => handleSelectThread(item.id)}
+                <div className="mt-3 space-y-3">
+                  {filteredThreads.length > 0 ? (
+                    filteredThreads.map((item) => (
+                      <ThreadCard
+                        key={item.id}
+                        item={item}
+                        active={selectedThread?.id === item.id}
+                        onSelect={() => handleSelectThread(item.id)}
+                      />
+                    ))
+                  ) : (
+                    <EmptyPanel
+                      icon={<MessageSquare className="h-5 w-5" />}
+                      title={queueSearchValue ? "Нічого не знайдено" : threadScope === "queue" ? "Поки нічого не передано" : "Поки тихо"}
+                      description={
+                        queueSearchValue
+                          ? "Спробуй інший пошук."
+                          : threadScope === "queue"
+                            ? "Коли ToSho AI передасть щось у роботу, це з’явиться тут."
+                            : "Щойно з’явиться перше звернення, воно оселиться тут."
+                      }
                     />
-                  ))
-                ) : (
-                  <EmptyPanel
-                    icon={<MessageSquare className="h-5 w-5" />}
-                    title="Поки тихо"
-                    description="Щойно з’явиться перший кейс або тред, він оселиться тут."
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
-              <CardHeader className="space-y-3 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-[18px] tracking-[-0.02em]">База знань</CardTitle>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      Картки, з яких ToSho AI бере відповіді. Спочатку читати, потім уже редагувати.
-                    </div>
-                  </div>
-                  {snapshot?.permissions.canManageKnowledge ? (
-                    <Button type="button" size="sm" onClick={() => openKnowledgeDialog(null)}>
-                      <Plus className="h-4 w-4" />
-                      Нова картка
-                    </Button>
-                  ) : null}
+                  )}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3 p-5 pt-0">
-                {(snapshot?.knowledgeItems ?? []).length > 0 ? (
-                  (snapshot?.knowledgeItems ?? []).map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-[22px] border border-border/60 bg-background/60 px-4 py-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge
-                              tone={
-                                item.status === "active" ? "success" : item.status === "draft" ? "warning" : "neutral"
-                              }
-                              size="sm"
-                              pill
-                            >
-                              {item.status === "active" ? "Активна" : item.status === "draft" ? "Чернетка" : "Архів"}
-                            </Badge>
-                            {item.tags.slice(0, 3).map((tag) => (
-                              <Badge key={`${item.id}:${tag}`} tone="neutral" size="sm" pill>
-                                {tag}
+              </div>
+            ) : null}
+
+            {knowledgeExpanded ? (
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-[var(--shadow-elevated-sm)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">База знань</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Що вже знає ToSho AI і звідки він це бере.</div>
+                  </div>
+                  <Badge tone="neutral" size="sm" pill>
+                    Активних: {snapshot?.stats.knowledgeActiveCount ?? 0}
+                  </Badge>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {(snapshot?.knowledgeItems ?? []).length > 0 ? (
+                    (snapshot?.knowledgeItems ?? []).map((item) => (
+                      <div key={item.id} className="rounded-[22px] border border-border/60 bg-background/65 px-4 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                tone={
+                                  item.status === "active" ? "success" : item.status === "draft" ? "warning" : "neutral"
+                                }
+                                size="sm"
+                                pill
+                              >
+                                {item.status === "active" ? "Активна" : item.status === "draft" ? "Чернетка" : "Архів"}
                               </Badge>
-                            ))}
-                          </div>
-                          <div className="text-[15px] font-semibold leading-5">{item.title}</div>
-                          <div className="text-sm leading-6 text-muted-foreground">
-                            {item.summary || item.body.slice(0, compact ? 120 : 190)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>Оновлено {formatDateTime(item.updatedAt)}</span>
-                            {item.sourceLabel ? <span>{item.sourceLabel}</span> : null}
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setExpandedKnowledgeId((prev) => (prev === item.id ? null : item.id))}
-                          >
-                            {expandedKnowledgeId === item.id ? "Сховати" : "Читати"}
-                            <ChevronDown
-                              className={cn(
-                                "h-4 w-4 transition-transform",
-                                expandedKnowledgeId === item.id && "rotate-180"
-                              )}
-                            />
-                          </Button>
-                          {item.sourceHref ? (
-                            <Button type="button" variant="outline" size="sm" asChild>
-                              <a href={item.sourceHref} target="_blank" rel="noreferrer">
-                                Відкрити джерело
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                      {expandedKnowledgeId === item.id ? (
-                        <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
-                          <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="text-xs text-muted-foreground">
-                              {item.sourceLabel ? `Основа: ${item.sourceLabel}` : "Внутрішня база знань"}
+                              {item.tags.slice(0, 3).map((tag) => (
+                                <Badge key={`${item.id}:${tag}`} tone="neutral" size="sm" pill>
+                                  {tag}
+                                </Badge>
+                              ))}
                             </div>
-                            {snapshot?.permissions.canManageKnowledge ? (
-                              <div className="flex items-center gap-2">
-                                <Button type="button" variant="ghost" size="sm" onClick={() => openKnowledgeDialog(item)}>
-                                  Редагувати
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  disabled={actionBusy === `delete-knowledge:${item.id}`}
-                                  onClick={() => void handleDeleteKnowledge(item)}
-                                >
-                                  Видалити
-                                </Button>
-                              </div>
+                            <div className="text-[15px] font-semibold leading-5 text-foreground">{item.title}</div>
+                            <div className="text-sm leading-6 text-muted-foreground">
+                              {item.summary || item.body.slice(0, compact ? 120 : 190)}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setExpandedKnowledgeId((prev) => (prev === item.id ? null : item.id))}
+                            >
+                              {expandedKnowledgeId === item.id ? "Сховати" : "Читати"}
+                              <ChevronDown
+                                className={cn("h-4 w-4 transition-transform", expandedKnowledgeId === item.id && "rotate-180")}
+                              />
+                            </Button>
+                            {item.sourceHref ? (
+                              <Button type="button" variant="outline" size="sm" asChild>
+                                <a href={item.sourceHref} target="_blank" rel="noreferrer">
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              </Button>
                             ) : null}
                           </div>
                         </div>
-                      ) : null}
-                    </div>
-                  ))
-                ) : (
-                  <EmptyPanel
-                    icon={<BookOpen className="h-5 w-5" />}
-                    title="Curated knowledge ще порожня"
-                    description="Додай перші картки по найчастіших питаннях команди, і ToSho AI почне відповідати сильніше."
-                  />
-                )}
-              </CardContent>
-            </Card>
+                        {expandedKnowledgeId === item.id ? (
+                          <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                            <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="text-xs text-muted-foreground">
+                                {item.sourceLabel ? `Основа: ${item.sourceLabel}` : "Внутрішня база знань"}
+                              </div>
+                              {snapshot?.permissions.canManageKnowledge ? (
+                                <div className="flex items-center gap-2">
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => openKnowledgeDialog(item)}>
+                                    Редагувати
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={actionBusy === `delete-knowledge:${item.id}`}
+                                    onClick={() => void handleDeleteKnowledge(item)}
+                                  >
+                                    Видалити
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyPanel
+                      icon={<BookOpen className="h-5 w-5" />}
+                      title="База знань поки порожня"
+                      description="Додай перші картки по найчастіших питаннях команди, і ToSho AI почне відповідати сильніше."
+                    />
+                  )}
+                </div>
+              </div>
+            ) : null}
 
+            {!snapshot && !loading && loadError ? (
+              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4 shadow-[var(--shadow-elevated-sm)]">
+                <EmptyPanel
+                  icon={<Bot className="h-5 w-5" />}
+                  title="ToSho AI тимчасово недоступний"
+                  description={loadError}
+                />
+                <div className="mt-3 flex justify-center">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void loadSnapshot(selectedThreadId)}>
+                    Спробувати ще раз
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="min-h-0 flex-1 space-y-4">
+              {selectedThread ? (
+                <div className="space-y-4">
+                  <div className="space-y-4">
+                    {selectedThread.messages.map((message) => (
+                      <MessageCard key={message.id} message={message} onFeedback={handleFeedback} />
+                    ))}
+                    <div ref={chatBottomRef} />
+                  </div>
+
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div ref={chatBottomRef} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-border/60 bg-background/92 px-4 pb-4 pt-3 backdrop-blur md:px-5">
+          <div className="w-full space-y-3 px-0">
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => handlePickAttachments(event.target.files)}
+            />
+
+            {pendingAttachments.length > 0 ? (
+              <div className="flex flex-wrap gap-2 px-0 pt-1">
+                {pendingAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card/75 px-3 py-2"
+                  >
+                    {attachment.previewUrl ? (
+                      <img
+                        src={attachment.previewUrl}
+                        alt={attachment.file.name}
+                        className="h-7 w-7 rounded-full border border-border/50 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/50 bg-muted/30 text-muted-foreground">
+                        <FileText className="h-3.5 w-3.5" />
+                      </div>
+                    )}
+                    <span className="max-w-[180px] truncate text-sm text-foreground">{attachment.file.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="iconSm"
+                      onClick={() => handleRemovePendingAttachment(attachment.id)}
+                      aria-label={`Прибрати ${attachment.file.name}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex items-end gap-2 px-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => attachmentInputRef.current?.click()}
+                className="h-12 w-12 shrink-0 rounded-full p-0"
+                aria-label="Прикріпити файл"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Textarea
+                ref={composerInputRef}
+                value={composerValue}
+                onChange={(event) => setComposerValue(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                enterKeyHint="send"
+                rows={1}
+                placeholder={intentMeta.placeholder}
+                className="h-12 max-h-[220px] min-h-[48px] flex-1 resize-none overflow-y-auto rounded-[24px] border-border/60 bg-card/88 px-4 py-3 text-sm leading-5 shadow-inner"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleSend()}
+                disabled={actionBusy === "send" || !canSendMessage}
+                className="h-12 w-12 shrink-0 rounded-full p-0"
+                aria-label="Надіслати"
+              >
+                {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+
 
       <Dialog open={knowledgeDialogOpen} onOpenChange={setKnowledgeDialogOpen}>
         <DialogContent className="max-w-[780px]">
@@ -1165,34 +1526,6 @@ export function ToShoAiConsole({
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function ContextStat({
-  title,
-  value,
-  tone = "neutral",
-  mono = false,
-}: {
-  title: string;
-  value: string;
-  tone?: "neutral" | "warning" | "success";
-  mono?: boolean;
-}) {
-  return (
-    <div className="rounded-[22px] border border-border/60 bg-background/70 px-4 py-3">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</div>
-      <div
-        className={cn(
-          "mt-1 text-sm font-medium text-foreground",
-          mono && "font-mono text-[12px]",
-          tone === "warning" && "text-warning-foreground",
-          tone === "success" && "text-success-foreground"
-        )}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 

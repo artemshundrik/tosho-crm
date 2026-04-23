@@ -34,6 +34,16 @@ export type ToShoAiSource = {
   sourceHref: string | null;
 };
 
+export type ToShoAiAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  storageBucket: string;
+  storagePath: string;
+  url: string | null;
+};
+
 export type ToShoAiMessage = {
   id: string;
   role: "user" | "assistant" | "human" | "system";
@@ -42,6 +52,7 @@ export type ToShoAiMessage = {
   createdAt: string;
   feedback: "helpful" | "not_helpful" | null;
   sources: ToShoAiSource[];
+  attachments: ToShoAiAttachment[];
   metadata: Record<string, unknown> | null;
 };
 

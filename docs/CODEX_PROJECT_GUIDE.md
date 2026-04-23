@@ -171,6 +171,16 @@ Current UI contract:
 - ToSho AI is currently a drawer/sheet support surface triggered from the floating launcher, not a user-facing top-level route/module.
 - Keep the launcher hidden while the drawer is open.
 - Keep the drawer header brand-only: `ToSho AI` wordmark in the header, primary `Шо треба?` heading in the content, not duplicated in the same row.
+- Keep the drawer default focused on composing a new request; do not auto-open an unrelated old thread just because one exists in history.
+- Keep the first screen biased toward action: mode pills + prompt chips + composer first; route/runtime context should stay secondary and compact, not dominate the top of the drawer.
+- Prefer an auto-first support flow: the user should be able to type immediately and let ToSho AI decide whether this is `ask`, `fix`, `route`, or `resolve`; manual mode selection is secondary.
+- Keep the composer physically simple: single-line by default, auto-grow only as the user types more, primary send action inline on the right, and an obvious “answer appears here” state directly below.
+- Prefer a chat surface over dashboard composition: user messages should read as right-side bubbles, ToSho AI replies as left-side bubbles, and knowledge/history should stay secondary behind toggles or empty-state suggestions.
+- Keep the drawer narrow and chat-like; do not let it drift back into a broad dashboard with multiple equal-weight status panels above the conversation.
+- In an active chat, keep the chrome quiet: route/runtime badges are for the empty state or hidden details, not a permanent top banner over every thread.
+- Manager controls such as status/priority routing belong only on genuinely routed or escalated cases, not on ordinary `ask` chats that stayed conversational.
+- If a notification or routed escalation should open ToSho AI, deep-link into the current page with drawer query params instead of reviving a top-level `/tosho-ai` page.
+- ToSho AI attachments currently ride through storage + `support_messages.metadata`; do not add a separate attachment table unless the product scope explicitly grows beyond this flow.
 - Prefer one continuous support surface with dividers over nested card-inside-card wrappers when iterating on this UI.
 - Treat the current launcher motion as performance-sensitive UI; avoid hover effects that shift layout or cause visible jitter.
 

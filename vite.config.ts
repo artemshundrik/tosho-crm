@@ -1,7 +1,7 @@
 import path from "path";
 import { readFileSync, promises as fs } from "fs";
 import os from "os";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { createClient } from "@supabase/supabase-js";
@@ -26,12 +26,25 @@ function sendJson(res: import("http").ServerResponse, statusCode: number, body: 
 }
 
 async function readJsonBody(req: import("http").IncomingMessage) {
+  const raw = await readRawBody(req);
+  return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+}
+
+async function readRawBody(req: import("http").IncomingMessage) {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
-  const raw = Buffer.concat(chunks).toString("utf-8").trim();
-  return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  return Buffer.concat(chunks).toString("utf-8").trim();
+}
+
+function normalizeRequestHeaders(headers: import("http").IncomingHttpHeaders) {
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value.join(", ") : value,
+    ])
+  ) as Record<string, string | undefined>;
 }
 
 async function generateAttachmentPreviewLocally(req: import("http").IncomingMessage): Promise<DevJsonResponse> {
@@ -254,7 +267,12 @@ async function loadMinfinRates() {
   };
 }
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  for (const [key, value] of Object.entries(env)) {
+    process.env[key] ??= value;
+  }
+
   const builtAt = new Date().toISOString();
   const appVersion = {
     version: packageJson.version ?? "0.0.0",
@@ -347,6 +365,31 @@ export default defineConfig(({ command }) => {
               } catch (error) {
                 sendJson(res, 500, {
                   error: error instanceof Error ? error.message : "Failed to generate preview",
+                });
+              }
+            });
+          },
+        }
+      : undefined,
+    command === "serve"
+      ? {
+          name: "dev-tosho-ai-function",
+          configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+              if (req.url?.split("?")[0] !== "/.netlify/functions/tosho-ai") return next();
+
+              try {
+                const { handler } = await import("./netlify/functions/tosho-ai");
+                const response = await handler({
+                  httpMethod: req.method,
+                  headers: normalizeRequestHeaders(req.headers),
+                  body: req.method === "GET" || req.method === "HEAD" ? null : await readRawBody(req),
+                });
+
+                sendJson(res, response.statusCode, JSON.parse(response.body || "{}") as Record<string, unknown>);
+              } catch (error) {
+                sendJson(res, 500, {
+                  error: error instanceof Error ? error.message : "ToSho AI request failed",
                 });
               }
             });

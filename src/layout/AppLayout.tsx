@@ -577,6 +577,27 @@ function reminderKeyFromHref(href?: string | null) {
   return value?.trim() || null;
 }
 
+const TOSHO_AI_OPEN_PARAM = "tosho_ai";
+const TOSHO_AI_REQUEST_PARAM = "tosho_ai_request";
+
+function readToShoAiIntent(search: string) {
+  const params = new URLSearchParams(search);
+  const shouldOpen = params.get(TOSHO_AI_OPEN_PARAM)?.trim() === "open";
+  const requestId = params.get(TOSHO_AI_REQUEST_PARAM)?.trim() || null;
+  return {
+    shouldOpen,
+    requestId,
+  };
+}
+
+function stripToShoAiIntent(search: string) {
+  const params = new URLSearchParams(search);
+  params.delete(TOSHO_AI_OPEN_PARAM);
+  params.delete(TOSHO_AI_REQUEST_PARAM);
+  const nextSearch = params.toString();
+  return nextSearch ? `?${nextSearch}` : "";
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <PageHeaderActionsProvider>
@@ -703,6 +724,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [toshoAiOpen, setToshoAiOpen] = useState(false);
+  const [toshoAiRequestedThreadId, setToshoAiRequestedThreadId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -767,6 +789,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   useEffect(() => {
     saveToShoAiLastContext(toshoAiContext);
   }, [toshoAiContext]);
+
+  useEffect(() => {
+    const intent = readToShoAiIntent(location.search);
+    if (!intent.shouldOpen) return;
+
+    setToshoAiRequestedThreadId(intent.requestId);
+    setToshoAiOpen(true);
+
+    const nextSearch = stripToShoAiIntent(location.search);
+    navigate(`${location.pathname}${nextSearch}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     const syncPreferences = () => {
@@ -1156,6 +1189,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       window.removeEventListener("activity_read", handler);
     };
   }, [loadActivityUnread]);
+
+  const handleToShoAiOpenChange = React.useCallback((open: boolean) => {
+    setToshoAiOpen(open);
+    if (!open) {
+      setToshoAiRequestedThreadId(null);
+    }
+  }, []);
 
   const openNotification = React.useCallback(async (n: NotificationItem) => {
     setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
@@ -1903,22 +1943,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       </div>
 
       <TabBar hidden={mobileMenuOpen} />
-      <Sheet open={toshoAiOpen} onOpenChange={setToshoAiOpen}>
+      <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent
           side="right"
           hideClose
-          className="w-full max-w-none overflow-hidden border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:max-w-[920px]"
+          className="w-full max-w-none overflow-hidden border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:max-w-[620px]"
         >
           <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-border/70 bg-background/70 px-4 py-4 backdrop-blur-xl md:px-5">
-              <SheetHeader className="space-y-3">
+              <SheetHeader>
                 <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
+                  <div>
                     <ToShoAiWordmark />
                     <SheetTitle className="sr-only">Шо треба?</SheetTitle>
-                    <div className="max-w-[56rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-6 text-muted-foreground">
-                      Пояснить. Полагодить. Передасть. Дотисне. І одразу прикрутить контекст поточної CRM-сторінки.
-                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <SheetClose asChild>
@@ -1930,11 +1967,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 </div>
               </SheetHeader>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+            <div className="min-h-0 flex-1 overflow-hidden p-0">
               <ToShoAiConsole
+                key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}`}
                 active={toshoAiOpen}
                 surface="sheet"
                 initialContext={toshoAiContext}
+                initialRequestId={toshoAiRequestedThreadId}
               />
             </div>
           </div>
@@ -1944,7 +1983,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {!toshoAiOpen ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55] flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
           <div className="flex flex-col items-end gap-2">
-            <ToShoAiLauncherButton variant="nova" onClick={() => setToshoAiOpen(true)} />
+            <ToShoAiLauncherButton
+              variant="nova"
+              onClick={() => {
+                setToshoAiRequestedThreadId(null);
+                setToshoAiOpen(true);
+              }}
+            />
           </div>
         </div>
       ) : null}
