@@ -173,6 +173,8 @@ const DEFAULT_ROUTE_CONTEXT = {
   entityId: null,
 };
 
+const RUNTIME_ERROR_RECENCY_MS = 30 * 60 * 1000;
+
 const OPENAI_STRUCTURED_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -553,7 +555,11 @@ async function listRuntimeErrors(
     .limit(8);
 
   if (error) return [] as RuntimeErrorRow[];
-  const rows = (data ?? []) as RuntimeErrorRow[];
+  const rows = ((data ?? []) as RuntimeErrorRow[]).filter((row) => {
+    const createdAtMs = Date.parse(row.created_at);
+    if (!Number.isFinite(createdAtMs)) return false;
+    return Date.now() - createdAtMs <= RUNTIME_ERROR_RECENCY_MS;
+  });
   const exactMatches = rows.filter((row) => normalizeText(row.href) === normalizeText(routeHref));
   if (exactMatches.length > 0) return exactMatches;
   const routeMatches = rows.filter((row) => normalizeText(row.href).startsWith(pathname));
