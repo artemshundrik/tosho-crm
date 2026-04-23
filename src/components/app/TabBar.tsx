@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Calculator, Palette, Users } from "lucide-react";
+import { Calculator, Palette, Sparkles, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
 import { preloadRoute } from "@/routes/routePreload";
+import { TOSHO_AI_ROUTE } from "@/lib/toshoAi";
 
 type TabItem = {
   label: string;
@@ -30,6 +31,12 @@ const TAB_ITEMS: TabItem[] = [
     to: "/design",
     icon: Palette,
     isActive: (pathname) => pathname.startsWith("/design"),
+  },
+  {
+    label: "ToSho AI",
+    to: TOSHO_AI_ROUTE,
+    icon: Sparkles,
+    isActive: (pathname) => pathname.startsWith(TOSHO_AI_ROUTE),
   },
 ];
 

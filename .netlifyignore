@@ -1,0 +1,9 @@
+backups/
+tmp/
+node_modules/
+dist/
+dist-ssr/
+.env.backup
+.env.local
+.git/
+.DS_Store

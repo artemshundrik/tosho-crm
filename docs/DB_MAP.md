@@ -208,6 +208,20 @@ These tables together power the product catalog and quote item configuration.
 - `runtime_errors`
   - runtime error sink written by frontend logging
 
+- `support_requests`
+  - ToSho AI ticket/thread header rows
+  - stores mode, status, priority, domain, route context, assignee, and AI confidence
+
+- `support_messages`
+  - threaded user / assistant / human messages under a ToSho AI request
+
+- `support_feedback`
+  - per-message feedback loop for `helpful` / `not_helpful`
+
+- `support_knowledge_items`
+  - curated workspace knowledge base used by ToSho AI
+  - stores title, summary, body, tags, keywords, and source attribution
+
 - `_healthcheck`
   - lightweight health probe table/view used by frontend helper
 

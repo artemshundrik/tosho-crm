@@ -40,6 +40,7 @@ These are important and current as of April 19, 2026:
   - contractors
   - team management and HR
   - notifications
+  - ToSho AI support / knowledge / escalation
   - admin observability
 
 ## Directory Map
@@ -157,6 +158,14 @@ When changing a route or top-level module, these files often all matter:
 - [netlify/functions/_notificationDelivery.ts](/Users/artem/Projects/tosho-crm/netlify/functions/_notificationDelivery.ts)
 - [netlify/functions/notify-users.ts](/Users/artem/Projects/tosho-crm/netlify/functions/notify-users.ts)
 
+### ToSho AI
+
+- [src/pages/ToShoAiPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ToShoAiPage.tsx)
+- [src/features/tosho-ai/ToShoAiConsole.tsx](/Users/artem/Projects/tosho-crm/src/features/tosho-ai/ToShoAiConsole.tsx)
+- [src/lib/toshoAi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoAi.ts)
+- [netlify/functions/tosho-ai.ts](/Users/artem/Projects/tosho-crm/netlify/functions/tosho-ai.ts)
+- [scripts/tosho-ai.sql](/Users/artem/Projects/tosho-crm/scripts/tosho-ai.sql)
+
 ### Admin Observability
 
 - [src/pages/AdminObservabilityPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/AdminObservabilityPage.tsx)
@@ -169,6 +178,7 @@ When changing a route or top-level module, these files often all matter:
 - `/overview`
 - `/activity`
 - `/notifications`
+- `/tosho-ai`
 - `/team`
 - `/orders/customers`
 - `/orders/estimates`
@@ -289,6 +299,13 @@ When changing a route or top-level module, these files often all matter:
 
 - Netlify environment
   - server-side production secrets for functions
+  - ToSho AI server runtime uses:
+    - `OPENAI_API_KEY`
+    - `OPENAI_MODEL`
+    - `TELEGRAM_SUPPORT_BOT_TOKEN`
+    - `TELEGRAM_SUPPORT_CHAT_ID`
+    - `TOSHO_APP_BASE_URL`
+  - if `OPENAI_API_KEY` is absent, `netlify/functions/tosho-ai.ts` falls back to deterministic support routing/answer heuristics
 
 ## Docs Status
 

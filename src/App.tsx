@@ -23,6 +23,7 @@ import { AppVersionWatcher } from "@/components/app/AppVersionWatcher";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
+import { TOSHO_AI_ROUTE } from "@/lib/toshoAi";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
 import {
   getCachedCurrentWorkspaceMemberDirectoryEntry,
@@ -83,6 +84,7 @@ const UpdatePasswordPage = lazyWithRetry(() => import("./pages/UpdatePasswordPag
 const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"));
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
+const ToShoAiPage = lazyWithRetry(() => import("./pages/ToShoAiPage"));
 
 function RouteSuspense({
   children,
@@ -237,6 +239,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/overview", scope: "page", group: "overview", test: (value) => value === "/overview" },
     { pattern: "/notifications", scope: "page", group: "account", test: (value) => value.startsWith("/notifications") },
     { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
+    { pattern: "/tosho-ai", scope: "page", group: "account", test: (value) => value.startsWith("/tosho-ai") },
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
@@ -864,6 +867,14 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <NotificationsPage />
+            </RouteSuspense>
+          }
+        />
+        <Route
+          path={TOSHO_AI_ROUTE.slice(1)}
+          element={
+            <RouteSuspense shell>
+              <ToShoAiPage />
             </RouteSuspense>
           }
         />

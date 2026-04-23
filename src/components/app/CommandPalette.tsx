@@ -20,6 +20,7 @@ import {
   History,
   Palette,
   Search,
+  Sparkles,
   Truck,
   User,
   Users,
@@ -34,6 +35,7 @@ import { listCustomersBySearch, listLeadsBySearch, listQuotes } from "@/lib/tosh
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import { InlineLoading } from "@/components/app/loading-primitives";
+import { TOSHO_AI_ROUTE } from "@/lib/toshoAi";
 
 type RouteItem = {
   key: string;
@@ -146,6 +148,7 @@ function getKindBadgeClass(kindLabel: string) {
 }
 
 function getPathSummary(path: string) {
+  if (path.startsWith(TOSHO_AI_ROUTE)) return "Командний центр ToSho AI";
   if (path.startsWith("/settings/members")) return "Налаштування доступів і ролей команди";
   if (path.startsWith("/admin/observability")) return "Системний контроль, storage і технічні метрики";
   if (path.startsWith("/design/")) return "Конкретна дизайн-задача";
@@ -163,6 +166,13 @@ function getPathSummary(path: string) {
 }
 
 function getRoutePresentation(path: string) {
+  if (path.startsWith(TOSHO_AI_ROUTE)) {
+    return {
+      label: "ToSho AI",
+      description: "Командний центр з ескалацією, знаннями і чергою кейсів",
+      kindLabel: "Команда",
+    };
+  }
   if (path.startsWith("/settings/members")) {
     return {
       label: "Управління командою",
@@ -310,6 +320,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const routes: RouteItem[] = useMemo(
     () => [
       {
+        key: "route-tosho-ai",
+        label: "ToSho AI",
+        description: "Командний центр з ескалацією, знаннями і чергою кейсів",
+        kindLabel: "Команда",
+        keywords: ["ai", "assistant", "support", "help", "tosho ai", "помічник", "ескалація"],
+        to: TOSHO_AI_ROUTE,
+        icon: Sparkles,
+      },
+      {
         key: "route-estimates",
         label: "Прорахунки замовлень",
         description: "Список прорахунків і комерційних пропозицій",
@@ -400,6 +419,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const actions: ActionItem[] = useMemo(
     () => [
+      {
+        key: "action-open-tosho-ai",
+        label: "Відкрити ToSho AI",
+        description: "Командний центр допомоги, маршрутизації і knowledge base",
+        keywords: ["ai", "assistant", "help", "support"],
+        to: TOSHO_AI_ROUTE,
+        icon: Sparkles,
+      },
       {
         key: "action-open-estimates",
         label: "Відкрити прорахунки",
