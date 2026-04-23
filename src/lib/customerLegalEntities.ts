@@ -13,6 +13,7 @@ export type CustomerLegalEntity = {
 const OWNERSHIP_LABELS: Record<string, string> = {
   tov: "ТОВ",
   fg: "ФГ",
+  bf: "БФ",
   pp: "ПП",
   vp: "ВП",
   go: "ГО",
