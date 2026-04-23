@@ -165,6 +165,8 @@ type RoutingCandidate = {
   moduleAccess: Record<string, boolean>;
 };
 
+type AnalyticsPersonTarget = Pick<RoutingCandidate, "userId" | "label" | "avatarUrl" | "jobRole" | "accessRole" | "moduleAccess">;
+
 type AnalyticsBadge = {
   label: string;
   value: number | string;
@@ -560,6 +562,85 @@ function formatShortPersonName(value: string) {
   return `${parts[0]} ${parts[1][0]}.`;
 }
 
+function normalizePersonToken(value: string) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[ʼ’'`]/g, "")
+    .replace(/[^a-zа-яіїєґ0-9]+/giu, "");
+}
+
+function levenshteinDistance(a: string, b: string) {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const current = Array.from({ length: b.length + 1 }, () => 0);
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[b.length];
+}
+
+function personNameTokens(label: string) {
+  const baseTokens = normalizeText(label)
+    .split(/\s+/)
+    .map(normalizePersonToken)
+    .filter(Boolean);
+  const aliases = new Set(baseTokens);
+  if (baseTokens.includes("даря") || baseTokens.includes("дарья")) {
+    aliases.add("даша");
+    aliases.add("dasha");
+  }
+  if (baseTokens.includes("олена") || baseTokens.includes("лена")) {
+    aliases.add("ліна");
+    aliases.add("лина");
+  }
+  return Array.from(aliases);
+}
+
+function findAnalyticsPersonMatches(message: string, members: RoutingCandidate[]) {
+  const queryTokens = stripAnalyticsQueryTerms(message)
+    .split(/\s+/)
+    .map(normalizePersonToken)
+    .filter((token) => token.length >= 2);
+  if (queryTokens.length === 0) return [] as RoutingCandidate[];
+
+  return members
+    .map((member) => {
+      const tokens = personNameTokens(member.label);
+      let score = 0;
+      for (const queryToken of queryTokens) {
+        for (const token of tokens) {
+          if (queryToken === token) score += 12;
+          else if (token.startsWith(queryToken) || queryToken.startsWith(token)) score += 8;
+          else if (queryToken.length >= 4 && token.length >= 4 && levenshteinDistance(queryToken, token) <= 1) score += 5;
+        }
+      }
+      return { member, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.member.label.localeCompare(b.member.label, "uk"))
+    .slice(0, 5)
+    .map((entry) => entry.member);
+}
+
+function analyticsPersonRoleLabel(member: AnalyticsPersonTarget) {
+  const role = normalizeRole(member.jobRole);
+  if (role === "designer" || role === "дизайнер" || member.moduleAccess.design) return "Дизайнер";
+  if (role === "manager" || member.moduleAccess.orders) return "Менеджер";
+  if (role === "pm") return "PM";
+  if (role === "seo") return "Адмін";
+  return "Команда";
+}
+
 function formatDesignTaskTypeLabel(value: string) {
   const normalized = normalizeText(value).toLowerCase();
   const labels: Record<string, string> = {
@@ -656,17 +737,37 @@ function stripAnalyticsQueryTerms(message: string) {
   return normalizeText(message)
     .replace(/[?!.]+$/g, "")
     .replace(
-      /\b(скільки|порахуй|порахувати|рахуй|покажи|дай|за|останній|останні|місяць|днів|день|тиждень|поточний|цього|у|в|ліда|лід|замовника|замовник|клієнта|клієнт|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|дизайнерам|дизайнерах|дизайнери|тасок|задач|зробив|зробили|кожен|кожного|по)\b/giu,
+      /\b(скільки|порахуй|порахувати|рахуй|покажи|дай|зріз|статистика|статистику|стату|за|останній|останні|місяць|днів|день|тиждень|поточний|цього|найбільше|більше|всього|якого|яким|яких|у|в|ліда|лід|замовника|замовник|замовників|замовниках|замовники|клієнта|клієнт|клієнтів|клієнтах|клієнти|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|менеджера|иенеджерам|иенеджерах|иенеджери|дизайнерам|дизайнерах|дизайнери|дизайнів|дизайни|дизайн|тасок|задач|зробив|зробила|зробили|кожен|кожного|по)\b/giu,
       " "
     )
     .replace(/\s+/g, " ")
     .trim();
 }
 
+function hasManagerAnalyticsTerm(normalized: string) {
+  return /(менеджер|менеджер|менедж|иенедж|mene|manager)/u.test(normalized);
+}
+
+function hasCustomerAnalyticsTerm(normalized: string) {
+  return /(замовник|клієнт|контрагент|customer)/u.test(normalized);
+}
+
 function shouldRunAnalytics(message: string) {
   const normalized = normalizeText(message).toLowerCase();
-  if (!/(скільки|порах|рахуй|статист|звіт|аналітик|топ|по\s+менеджер|по\s+дизайн)/u.test(normalized)) return false;
-  return /(дизайн|дизайнер|таск|задач|прорах|quote|коштор|замовл|order|менеджер|лід|замовник|клієнт)/u.test(normalized);
+  const hasAnalyticsVerb =
+    /(скільки|порах|рахуй|статист|звіт|аналітик|топ|зріз|найбільш|більше\s+всього|по\s+дизайн)/u.test(
+      normalized
+    ) ||
+    /по\s+(менедж|иенедж)/u.test(normalized) ||
+    /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
+  if (!hasAnalyticsVerb) return false;
+  return (
+    /(дизайн|дизайнер|таск|задач|прорах|quote|коштор|замовл|order|лід|замовник|клієнт|контрагент)/u.test(
+      normalized
+    ) ||
+    hasManagerAnalyticsTerm(normalized) ||
+    stripAnalyticsQueryTerms(message).length > 0
+  );
 }
 
 function toAnalyticsDecision(result: AnalyticsResult): AssistantDecision {
@@ -1031,6 +1132,7 @@ async function buildDesignCompletionAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   message: string;
+  targetMember?: AnalyticsPersonTarget | null;
 }) {
   const period = parsePeriodFromMessage(params.message);
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
@@ -1051,6 +1153,7 @@ async function buildDesignCompletionAnalytics(params: {
     if (metadata.to_status !== "approved") continue;
     const userId = normalizeText(typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : "");
     if (!userId) continue;
+    if (params.targetMember && userId !== params.targetMember.userId) continue;
     const member = memberById.get(userId);
     const rawLabel = member?.label ?? normalizeText(typeof metadata.assignee_label === "string" ? metadata.assignee_label : "") ?? userId.slice(0, 8);
     const label = formatShortPersonName(rawLabel) || rawLabel;
@@ -1065,8 +1168,12 @@ async function buildDesignCompletionAnalytics(params: {
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const body =
     rows.length > 0
-      ? `Готово. Найбільше завершених дизайн-задач ${period.label}: **${rows[0].label}** — ${formatInteger(rows[0].total)}. Нижче розклав по людях і типах задач.`
-      : "За цей період не знайшов завершених дизайн-задач.";
+      ? params.targetMember
+        ? `Готово. **${rows[0].label}** має ${formatInteger(rows[0].total)} завершених дизайн-задач ${period.label}.`
+        : `Готово. Найбільше завершених дизайн-задач ${period.label}: **${rows[0].label}** — ${formatInteger(rows[0].total)}. Нижче розклав по людях і типах задач.`
+      : params.targetMember
+        ? `За цей період не знайшов завершених дизайн-задач у **${formatShortPersonName(params.targetMember.label) || params.targetMember.label}**.`
+        : "За цей період не знайшов завершених дизайн-задач.";
   const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
     id: row.userId,
     label: row.label,
@@ -1084,7 +1191,9 @@ async function buildDesignCompletionAnalytics(params: {
     confidence: 0.94,
     analytics: {
       kind: "people",
-      title: "Дизайн-задачі",
+      title: params.targetMember
+        ? `Дизайн: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
+        : "Дизайн-задачі",
       caption: `${formatInteger(total)} завершених задач ${period.label}`,
       metricLabel: "Завершено",
       rows: analyticsRows,
@@ -1097,6 +1206,7 @@ async function buildManagerQuoteAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   message: string;
+  targetMember?: AnalyticsPersonTarget | null;
 }) {
   const period = parsePeriodFromMessage(params.message);
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
@@ -1115,6 +1225,7 @@ async function buildManagerQuoteAnalytics(params: {
   for (const row of (data ?? []) as Array<{ assigned_to?: string | null; created_by?: string | null; status?: string | null; total?: number | string | null }>) {
     const ownerId = normalizeText(row.assigned_to || row.created_by || "");
     if (!ownerId) continue;
+    if (params.targetMember && ownerId !== params.targetMember.userId) continue;
     const member = memberById.get(ownerId);
     const rawLabel = member?.label ?? ownerId.slice(0, 8);
     const label = formatShortPersonName(rawLabel) || rawLabel;
@@ -1134,8 +1245,12 @@ async function buildManagerQuoteAnalytics(params: {
   const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
   const body =
     rows.length > 0
-      ? `Готово. ${period.label} знайшов **${formatInteger(totalQuotes)}** прорахунків по менеджерах: **${formatInteger(approvedQuotes)}** затверджено, сума **${formatMoney(totalSum)}**.`
-      : "За цей період не знайшов прорахунків.";
+      ? params.targetMember
+        ? `Готово. **${rows[0].label}** має ${formatInteger(totalQuotes)} прорахунків ${period.label}: ${formatInteger(approvedQuotes)} затверджено, сума ${formatMoney(totalSum)}.`
+        : `Готово. ${period.label} знайшов **${formatInteger(totalQuotes)}** прорахунків по менеджерах: **${formatInteger(approvedQuotes)}** затверджено, сума **${formatMoney(totalSum)}**.`
+      : params.targetMember
+        ? `За цей період не знайшов прорахунків у **${formatShortPersonName(params.targetMember.label) || params.targetMember.label}**.`
+        : "За цей період не знайшов прорахунків.";
   const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
     id: row.id,
     label: row.label,
@@ -1153,7 +1268,9 @@ async function buildManagerQuoteAnalytics(params: {
     confidence: 0.9,
     analytics: {
       kind: "people",
-      title: "Прорахунки по менеджерах",
+      title: params.targetMember
+        ? `Прорахунки: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
+        : "Прорахунки по менеджерах",
       caption: `${formatInteger(totalQuotes)} прорахунків ${period.label}`,
       metricLabel: "Прорахунки",
       rows: analyticsRows,
@@ -1166,6 +1283,7 @@ async function buildManagerOrderAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   message: string;
+  targetMember?: AnalyticsPersonTarget | null;
 }) {
   const period = parsePeriodFromMessage(params.message);
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
@@ -1183,6 +1301,7 @@ async function buildManagerOrderAnalytics(params: {
   const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; sum: number; byStatus: Record<string, number> }>();
   for (const row of (data ?? []) as Array<{ manager_user_id?: string | null; manager_label?: string | null; order_status?: string | null; total?: number | string | null }>) {
     const key = normalizeText(row.manager_user_id || row.manager_label || "Без менеджера");
+    if (params.targetMember && key !== params.targetMember.userId) continue;
     const member = row.manager_user_id ? memberById.get(row.manager_user_id) : null;
     const rawLabel = member?.label ?? (normalizeText(row.manager_label) || key);
     const label = formatShortPersonName(rawLabel) || rawLabel;
@@ -1200,8 +1319,12 @@ async function buildManagerOrderAnalytics(params: {
   const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
   const body =
     rows.length > 0
-      ? `Готово. ${period.label} знайшов **${formatInteger(totalOrders)}** замовлень по менеджерах, сума **${formatMoney(totalSum)}**.`
-      : "За цей період не знайшов замовлень.";
+      ? params.targetMember
+        ? `Готово. **${rows[0].label}** має ${formatInteger(totalOrders)} замовлень ${period.label}, сума ${formatMoney(totalSum)}.`
+        : `Готово. ${period.label} знайшов **${formatInteger(totalOrders)}** замовлень по менеджерах, сума **${formatMoney(totalSum)}**.`
+      : params.targetMember
+        ? `За цей період не знайшов замовлень у **${formatShortPersonName(params.targetMember.label) || params.targetMember.label}**.`
+        : "За цей період не знайшов замовлень.";
   const analyticsRows: AnalyticsRow[] = rows.map((row) => ({
     id: row.id,
     label: row.label,
@@ -1219,7 +1342,9 @@ async function buildManagerOrderAnalytics(params: {
     confidence: 0.9,
     analytics: {
       kind: "people",
-      title: "Замовлення по менеджерах",
+      title: params.targetMember
+        ? `Замовлення: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
+        : "Замовлення по менеджерах",
       caption: `${formatInteger(totalOrders)} замовлень ${period.label}`,
       metricLabel: "Замовлення",
       rows: analyticsRows,
@@ -1294,6 +1419,77 @@ async function buildCustomerQuoteAnalytics(params: {
         badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
       })),
       note: "Групую прорахунки за customer_id, а якщо його немає - за назвою customer_name.",
+    },
+  } satisfies AnalyticsResult;
+}
+
+async function buildManagerCustomerAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  targetMember: AnalyticsPersonTarget;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  const { data, error } = await params.adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("id,status,total,customer_id,customer_name,assigned_to,created_by,created_at")
+    .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
+    .limit(10000);
+  if (error) throw new Error(error.message);
+
+  const customers = new Map<string, { id: string; label: string; quoteCount: number; sum: number; byStatus: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{
+    assigned_to?: string | null;
+    created_by?: string | null;
+    customer_id?: string | null;
+    customer_name?: string | null;
+    status?: string | null;
+    total?: number | string | null;
+  }>) {
+    const ownerId = normalizeText(row.assigned_to || row.created_by || "");
+    if (ownerId !== params.targetMember.userId) continue;
+    const customerName = normalizeText(row.customer_name) || "Без замовника";
+    const customerId = normalizeText(row.customer_id) || normalizeAnalyticsName(customerName) || "unknown";
+    const status = normalizeText(row.status) || "без статусу";
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, quoteCount: 0, sum: 0, byStatus: {} };
+    bucket.quoteCount += 1;
+    if (Number.isFinite(amount)) bucket.sum += amount;
+    bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
+    customers.set(customerId, bucket);
+  }
+
+  const rows = Array.from(customers.values()).sort(
+    (a, b) => b.quoteCount - a.quoteCount || a.label.localeCompare(b.label, "uk")
+  );
+  const totalQuotes = rows.reduce((sum, row) => sum + row.quoteCount, 0);
+  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const targetLabel = formatShortPersonName(params.targetMember.label) || params.targetMember.label;
+
+  return {
+    title: `Замовники: ${targetLabel}`,
+    summary: `${targetLabel}: ${formatInteger(rows.length)} замовників, ${formatInteger(totalQuotes)} прорахунків ${period.label}.`,
+    markdown:
+      rows.length > 0
+        ? `Готово. У **${targetLabel}** ${formatInteger(rows.length)} замовників і ${formatInteger(totalQuotes)} прорахунків ${period.label}.`
+        : `За цей період не знайшов замовників із прорахунками у **${targetLabel}**.`,
+    domain: "orders",
+    confidence: 0.9,
+    analytics: {
+      kind: "entity",
+      title: `Замовники: ${targetLabel}`,
+      caption: `${formatInteger(rows.length)} замовників · ${formatInteger(totalQuotes)} прорахунків · сума ${formatMoney(totalSum)}`,
+      metricLabel: "Прорахунки",
+      rows: rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        primary: `${formatInteger(row.quoteCount)} прорах.`,
+        secondary: `Сума ${formatMoney(row.sum)}`,
+        badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
+      })),
+      note: "Замовників менеджера рахую по прорахунках: assigned_to, fallback created_by.",
     },
   } satisfies AnalyticsResult;
 }
@@ -1483,6 +1679,85 @@ async function buildPartyQuoteOrderAnalytics(params: {
   } satisfies AnalyticsResult;
 }
 
+function buildPersonAmbiguityDecision(candidates: RoutingCandidate[]): AssistantDecision {
+  const rows = candidates.map((member) => ({
+    id: member.userId,
+    label: formatShortPersonName(member.label) || member.label,
+    avatarUrl: member.avatarUrl,
+    primary: analyticsPersonRoleLabel(member),
+    secondary: member.jobRole || member.accessRole || null,
+    badges: [
+      { label: member.moduleAccess.design ? "Дизайн" : "Не дизайн", value: member.moduleAccess.design ? "так" : "ні" },
+      { label: member.moduleAccess.orders ? "Збут" : "Не збут", value: member.moduleAccess.orders ? "так" : "ні" },
+    ],
+  }));
+
+  return {
+    title: "Уточни людину",
+    summary: "Знайшов кілька схожих людей.",
+    answerMarkdown: "Знайшов кілька схожих людей. Напиши, кого саме рахувати: менеджера чи дизайнера, або додай прізвище.",
+    playfulLine: "Потрібне уточнення перед підрахунком.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "team",
+    confidence: 0.84,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "Analytics person query is ambiguous.",
+    analytics: {
+      kind: "people",
+      title: "Кого рахувати?",
+      caption: "Є кілька збігів по імені",
+      metricLabel: "Роль",
+      rows,
+      note: "Уточни роль або прізвище, і я порахую потрібний зріз.",
+    },
+  };
+}
+
+async function buildPersonAnalyticsDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const matches = findAnalyticsPersonMatches(params.message, members);
+  if (matches.length === 0) return null;
+
+  const normalized = normalizeText(params.message).toLowerCase();
+  const explicitlyDesign = /(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized);
+  const explicitlyCustomers = /(замовник|клієнт|контрагент)/u.test(normalized);
+  const explicitlyOrders = /(замовл|order)/u.test(normalized) && !/(замовник|клієнт|контрагент)/u.test(normalized);
+  const explicitlyQuotes = /(прорах|quote|коштор|кп)/u.test(normalized);
+
+  const relevantMatches = matches.filter((member) => {
+    const role = normalizeRole(member.jobRole);
+    if (explicitlyDesign) return member.moduleAccess.design || role === "designer" || role === "дизайнер";
+    if (explicitlyCustomers || explicitlyOrders || explicitlyQuotes || hasManagerAnalyticsTerm(normalized)) {
+      return member.moduleAccess.orders || role === "manager" || role === "pm";
+    }
+    return true;
+  });
+  const candidates = relevantMatches.length > 0 ? relevantMatches : matches;
+  if (candidates.length > 1) return buildPersonAmbiguityDecision(candidates);
+
+  const target = candidates[0];
+  const role = normalizeRole(target.jobRole);
+  const looksDesigner = target.moduleAccess.design || role === "designer" || role === "дизайнер";
+
+  if (explicitlyDesign || (!explicitlyCustomers && !explicitlyOrders && !explicitlyQuotes && looksDesigner)) {
+    return toAnalyticsDecision(await buildDesignCompletionAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyCustomers) {
+    return toAnalyticsDecision(await buildManagerCustomerAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyOrders) {
+    return toAnalyticsDecision(await buildManagerOrderAnalytics({ ...params, targetMember: target }));
+  }
+  return toAnalyticsDecision(await buildManagerQuoteAnalytics({ ...params, targetMember: target }));
+}
+
 async function buildAnalyticsDecision(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -1492,29 +1767,42 @@ async function buildAnalyticsDecision(params: {
   if (!shouldRunAnalytics(params.message)) return null;
   const normalized = normalizeText(params.message).toLowerCase();
 
+  const personDecision = await buildPersonAnalyticsDecision(params);
+  if (personDecision) return personDecision;
+
   if (/(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
   }
 
-  if (/(замовник|клієнт)/u.test(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
+  if (hasCustomerAnalyticsTerm(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
     const stripped = stripAnalyticsQueryTerms(params.message);
     const asksForCustomerBreakdown =
-      /по\s+(яким\s+)?(замовник|клієнт)|у\s+якого\s+(замовник|клієнт)|найбільш|топ/u.test(normalized);
+      /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
+        normalized
+      );
     if (asksForCustomerBreakdown || !stripped) {
       return toAnalyticsDecision(await buildCustomerQuoteAnalytics(params));
     }
   }
 
-  if (/(лід|замовник|клієнт)/u.test(normalized) && /(прорах|замовл|order|quote)/u.test(normalized)) {
+  if (/(лід|замовник|клієнт|контрагент)/u.test(normalized) && /(прорах|замовл|order|quote)/u.test(normalized)) {
     return toAnalyticsDecision(await buildPartyQuoteOrderAnalytics(params));
   }
 
-  if (/менеджер/u.test(normalized) && /(замовл|order)/u.test(normalized) && !/прорах/u.test(normalized)) {
+  if (hasManagerAnalyticsTerm(normalized) && /(замовл|order)/u.test(normalized) && !/прорах/u.test(normalized)) {
     return toAnalyticsDecision(await buildManagerOrderAnalytics(params));
   }
 
-  if (/менеджер/u.test(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
+  if (hasManagerAnalyticsTerm(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
     return toAnalyticsDecision(await buildManagerQuoteAnalytics(params));
+  }
+
+  if (/(прорах|quote|коштор|кп)/u.test(normalized)) {
+    const stripped = stripAnalyticsQueryTerms(params.message);
+    if (stripped) {
+      return toAnalyticsDecision(await buildPartyQuoteOrderAnalytics(params));
+    }
+    return toAnalyticsDecision(await buildCustomerQuoteAnalytics(params));
   }
 
   return null;

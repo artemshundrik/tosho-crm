@@ -94,6 +94,12 @@ type PendingAttachment = {
   previewUrl: string | null;
 };
 
+type PromptSuggestion = {
+  label: string;
+  text: string;
+  tone: "design" | "orders" | "team" | "general";
+};
+
 type AnalyticsBadge = {
   label: string;
   value: number | string;
@@ -336,6 +342,65 @@ function formatShortDisplayName(value: string) {
   return `${parts[0]} ${parts[1][0]}.`;
 }
 
+function normalizeRoleText(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function buildPromptSuggestions(input: {
+  jobRole?: string | null;
+  canManageQueue?: boolean;
+  domainHint: ToShoAiRouteContext["domainHint"];
+}): PromptSuggestion[] {
+  const jobRole = normalizeRoleText(input.jobRole);
+  const isDesigner = jobRole === "designer" || jobRole === "дизайнер" || input.domainHint === "design";
+  const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager"].includes(jobRole);
+  const isOps = jobRole === "pm" || jobRole === "logistics";
+  const isAdminLike = input.canManageQueue || jobRole === "seo";
+
+  if (isDesigner) {
+    return [
+      { label: "Дизайн за тиждень", text: "скільки тасок зробив кожен дизайнер за останній тиждень?", tone: "design" },
+      { label: "Стата по дизайнеру", text: "дай статистику по Ліні за останній місяць", tone: "design" },
+      { label: "Топ по типах", text: "скільки візуалізацій і адаптацій зробили дизайнери за місяць?", tone: "design" },
+      { label: "Де дивитись", text: "де дивитись дизайн-задачі і їх статуси?", tone: "general" },
+    ];
+  }
+
+  if (isManager) {
+    return [
+      { label: "Прорахунки менеджерів", text: "дай зріз по менеджерах скільки прорахунків за останній тиждень", tone: "orders" },
+      { label: "Топ замовників", text: "у якого замовника найбільше прорахунків за тиждень?", tone: "orders" },
+      { label: "Замовники менеджера", text: "скільки замовників у Вікторії за місяць?", tone: "orders" },
+      { label: "Конкретний клієнт", text: "скільки прорахунків у Авантпрінт?", tone: "orders" },
+    ];
+  }
+
+  if (isOps) {
+    return [
+      { label: "Замовлення менеджерів", text: "скільки замовлень по менеджерах за останній тиждень?", tone: "orders" },
+      { label: "Прорахунки", text: "скільки прорахунків по менеджерах за місяць?", tone: "orders" },
+      { label: "Клієнт", text: "скільки у замовника Авантпрінт прорахунків і замовлень?", tone: "orders" },
+      { label: "Дизайн", text: "скільки дизайн-задач закрили за тиждень?", tone: "design" },
+    ];
+  }
+
+  if (isAdminLike) {
+    return [
+      { label: "Менеджери", text: "дай зріз по менеджерах скільки прорахунків за останній тиждень", tone: "orders" },
+      { label: "Дизайнери", text: "скільки тасок зробив кожен дизайнер за останній місяць?", tone: "design" },
+      { label: "Замовники", text: "у якого замовника найбільше прорахунків за місяць?", tone: "orders" },
+      { label: "Людина", text: "дай статистику по Дар'ї за місяць", tone: "team" },
+    ];
+  }
+
+  return [
+    { label: "Що тут?", text: "що тут зараз відбувається?", tone: "general" },
+    { label: "Прорахунки", text: "скільки прорахунків по менеджерах за тиждень?", tone: "orders" },
+    { label: "Замовник", text: "у якого замовника найбільше прорахунків?", tone: "orders" },
+    { label: "Дизайн", text: "скільки дизайн-задач закрили за тиждень?", tone: "design" },
+  ];
+}
+
 function inferComposerMode(input: {
   composerValue: string;
   hasAttachments: boolean;
@@ -529,6 +594,50 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
   );
 }
 
+function EmptyChatSuggestions({
+  suggestions,
+  onSelect,
+}: {
+  suggestions: PromptSuggestion[];
+  onSelect: (value: string) => void;
+}) {
+  const toneClass: Record<PromptSuggestion["tone"], string> = {
+    design: "border-primary/20 bg-primary/8 text-primary hover:bg-primary/12",
+    orders: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/80",
+    team: "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80",
+    general: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
+  };
+
+  return (
+    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-[var(--shadow-elevated-sm)]">
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-foreground">Можна спитати</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Підставлю в поле, ти можеш дописати своє.</div>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {suggestions.map((suggestion) => (
+          <button
+            key={`${suggestion.label}:${suggestion.text}`}
+            type="button"
+            onClick={() => onSelect(suggestion.text)}
+            className={cn(
+              "inline-flex min-h-9 items-center rounded-full border px-3 py-2 text-left text-sm font-medium transition-colors",
+              toneClass[suggestion.tone]
+            )}
+          >
+            {suggestion.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MessageCard({
   message,
   onFeedback,
@@ -543,7 +652,7 @@ function MessageCard({
 
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[88%] min-w-0 space-y-2", isUser && "items-end")}>
+      <div className={cn("max-w-[96%] min-w-0 space-y-2 sm:max-w-[88%]", isUser && "items-end")}>
         <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", isUser ? "justify-end" : "justify-start")}>
           {!isUser ? (
             <div
@@ -566,7 +675,7 @@ function MessageCard({
         </div>
         <div
           className={cn(
-            "rounded-[28px] border px-4 py-3.5 shadow-[var(--shadow-elevated-sm)]",
+            "rounded-[24px] border px-3.5 py-3 text-[15px] shadow-[var(--shadow-elevated-sm)] sm:rounded-[28px] sm:px-4 sm:py-3.5",
             isUser
               ? "border-[#E6007E]/18 bg-[#E6007E]/12"
               : "border-border/60 bg-card/88"
@@ -686,7 +795,7 @@ export function ToShoAiConsole({
   initialRequestId = null,
 }: ToShoAiConsoleProps) {
   const compact = surface === "sheet";
-  const { teamId, userId } = useAuth();
+  const { teamId, userId, jobRole, permissions } = useAuth();
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -745,6 +854,16 @@ export function ToShoAiConsole({
       return haystack.includes(queueSearchValue);
     });
   }, [queueSearchValue, threadItems]);
+
+  const promptSuggestions = useMemo(
+    () =>
+      buildPromptSuggestions({
+        jobRole,
+        canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
+        domainHint: resolvedContext.domainHint,
+      }),
+    [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
+  );
 
   const loadSnapshot = useCallback(
     async (requestId: string | null = null) => {
@@ -811,6 +930,14 @@ export function ToShoAiConsole({
     setComposerIntent("auto");
   }, []);
 
+  const handleSelectPromptSuggestion = useCallback((value: string) => {
+    setComposerValue(value);
+    setComposerIntent("auto");
+    window.requestAnimationFrame(() => {
+      composerInputRef.current?.focus();
+    });
+  }, []);
+
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
@@ -830,7 +957,8 @@ export function ToShoAiConsole({
     if (!textarea) return;
     textarea.style.height = "0px";
     const nextHeight = Math.min(textarea.scrollHeight, 220);
-    textarea.style.height = `${Math.max(48, nextHeight)}px`;
+    const minHeight = compact && typeof window !== "undefined" && window.innerWidth < 640 ? 44 : 48;
+    textarea.style.height = `${Math.max(minHeight, nextHeight)}px`;
   }, [composerValue, compact]);
 
   useEffect(() => {
@@ -1100,8 +1228,8 @@ export function ToShoAiConsole({
     <>
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex min-h-full w-full flex-col gap-4 px-4 pb-4 pt-3 md:px-5">
-            <div className="flex items-center justify-between gap-3">
+          <div className="flex min-h-full w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {!selectedThread ? (
                   <Badge tone="neutral" size="sm" pill>
@@ -1110,7 +1238,7 @@ export function ToShoAiConsole({
                 ) : null}
                 {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
               </div>
-              <div className="ml-auto flex items-center rounded-full border border-border/60 bg-card/55 p-1">
+              <div className="ml-auto flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
                 <Button
                   type="button"
                   variant={showRequestList ? "secondary" : "ghost"}
@@ -1119,10 +1247,10 @@ export function ToShoAiConsole({
                     setShowRequestList((prev) => !prev);
                     setKnowledgeExpanded(false);
                   }}
-                  className="h-8 rounded-full px-3"
+                  className="h-8 rounded-full px-2.5 sm:px-3"
                 >
                   <MessageSquare className="h-4 w-4" />
-                  Історія
+                  <span className="hidden min-[380px]:inline">Історія</span>
                 </Button>
                 <Button
                   type="button"
@@ -1132,14 +1260,15 @@ export function ToShoAiConsole({
                     setKnowledgeExpanded((prev) => !prev);
                     setShowRequestList(false);
                   }}
-                  className="h-8 rounded-full px-3"
+                  className="h-8 rounded-full px-2.5 sm:px-3"
                 >
                   <BookOpen className="h-4 w-4" />
-                  Знання
+                  <span className="hidden min-[380px]:inline">Знання</span>
                 </Button>
                 {selectedThread ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={handleStartNewThread} className="h-8 rounded-full px-3">
-                    Новий чат
+                  <Button type="button" variant="ghost" size="sm" onClick={handleStartNewThread} className="h-8 rounded-full px-2.5 sm:px-3">
+                    <span className="hidden min-[420px]:inline">Новий чат</span>
+                    <span className="min-[420px]:hidden">Новий</span>
                   </Button>
                 ) : null}
               </div>
@@ -1335,6 +1464,9 @@ export function ToShoAiConsole({
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {!showRequestList && !knowledgeExpanded && !isAiUnavailable ? (
+                    <EmptyChatSuggestions suggestions={promptSuggestions} onSelect={handleSelectPromptSuggestion} />
+                  ) : null}
                   <div ref={chatBottomRef} />
                 </div>
               )}
@@ -1342,7 +1474,7 @@ export function ToShoAiConsole({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border/60 bg-background/92 px-4 pb-4 pt-3 backdrop-blur md:px-5">
+        <div className="shrink-0 border-t border-border/60 bg-background/92 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
           <div className="w-full space-y-3 px-0">
             <input
               ref={attachmentInputRef}
@@ -1391,7 +1523,7 @@ export function ToShoAiConsole({
                 variant="outline"
                 size="sm"
                 onClick={() => attachmentInputRef.current?.click()}
-                className="h-12 w-12 shrink-0 rounded-full p-0"
+                className="h-11 w-11 shrink-0 rounded-full p-0 sm:h-12 sm:w-12"
                 aria-label="Прикріпити файл"
               >
                 <Paperclip className="h-4 w-4" />
@@ -1404,14 +1536,14 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={intentMeta.placeholder}
-                className="h-12 max-h-[220px] min-h-[48px] flex-1 resize-none overflow-y-auto rounded-[24px] border-border/60 bg-card/88 px-4 py-3 text-sm leading-5 shadow-inner"
+                className="h-11 max-h-[160px] min-h-[44px] flex-1 resize-none overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
               />
               <Button
                 type="button"
                 size="sm"
                 onClick={() => void handleSend()}
                 disabled={actionBusy === "send" || !canSendMessage}
-                className="h-12 w-12 shrink-0 rounded-full p-0"
+                className="h-11 w-11 shrink-0 rounded-full p-0 sm:h-12 sm:w-12"
                 aria-label="Надіслати"
               >
                 {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

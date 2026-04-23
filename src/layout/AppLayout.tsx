@@ -1942,15 +1942,15 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </div>
       </div>
 
-      <TabBar hidden={mobileMenuOpen} />
+      <TabBar hidden={mobileMenuOpen || toshoAiOpen} />
       <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent
           side="right"
           hideClose
-          className="w-full max-w-none overflow-hidden border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:max-w-[620px]"
+          className="inset-0 z-[80] h-[100dvh] w-full max-w-none overflow-hidden border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:max-w-[620px]"
         >
           <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0 border-b border-border/70 bg-background/70 px-4 py-4 backdrop-blur-xl md:px-5">
+            <div className="shrink-0 border-b border-border/70 bg-background/82 px-3 py-3 backdrop-blur-xl sm:px-4 sm:py-4 md:px-5">
               <SheetHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -1959,7 +1959,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     <SheetClose asChild>
-                      <Button type="button" variant="ghost" size="iconSm" aria-label="Закрити ToSho AI">
+                      <Button type="button" variant="ghost" size="iconSm" className="h-9 w-9 rounded-full" aria-label="Закрити ToSho AI">
                         <CloseIcon className="h-4 w-4" />
                       </Button>
                     </SheetClose>
