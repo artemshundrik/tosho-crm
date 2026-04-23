@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export const TOSHO_AI_ROUTE = "/tosho-ai";
 const TOSHO_AI_LAST_CONTEXT_KEY = "tosho_ai:last-context";
 
 export type ToShoAiMode = "ask" | "fix" | "route" | "resolve";
@@ -238,12 +237,6 @@ const ROUTE_RULES: ToShoAiRouteRule[] = [
     title: "Підрядники",
     routeLabel: "Підрядники",
     domainHint: "contractors",
-  },
-  {
-    test: (pathname) => pathname.startsWith(TOSHO_AI_ROUTE),
-    title: "ToSho AI",
-    routeLabel: "ToSho AI",
-    domainHint: "general",
   },
 ];
 

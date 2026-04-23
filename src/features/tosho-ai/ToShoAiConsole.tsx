@@ -41,7 +41,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
-  TOSHO_AI_ROUTE,
   buildToShoAiRouteContext,
   callToShoAiApi,
   readToShoAiLastContext,
@@ -434,10 +433,18 @@ export function ToShoAiConsole({
 }: ToShoAiConsoleProps) {
   const compact = surface === "sheet";
   const resolvedContext = useMemo(
-    () =>
-      initialContext ??
-      readToShoAiLastContext() ??
-      buildToShoAiRouteContext({ pathname: TOSHO_AI_ROUTE, title: "ToSho AI" }),
+    () => {
+      const currentRouteContext =
+        typeof window === "undefined"
+          ? buildToShoAiRouteContext({ pathname: "/", title: "Поточна сторінка" })
+          : buildToShoAiRouteContext({
+              pathname: window.location.pathname,
+              search: window.location.search,
+              title: document.title || "Поточна сторінка",
+            });
+
+      return initialContext ?? readToShoAiLastContext() ?? currentRouteContext;
+    },
     [initialContext]
   );
 
