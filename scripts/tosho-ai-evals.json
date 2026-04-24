@@ -1,5 +1,46 @@
 [
   {
+    "id": "designer-ranking-direct-no-openai",
+    "message": "Покажи рейтинг дизайнерів за кількістю закритих дизайн-задач за останній місяць.",
+    "routeContext": {
+      "pathname": "/design",
+      "search": "",
+      "href": "/design",
+      "title": "Дизайн",
+      "routeLabel": "Дизайн",
+      "domainHint": "design",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "design",
+      "requiresAnalytics": true,
+      "directAnalytics": true,
+      "noOpenAi": true,
+      "noKnowledgeRetrieval": true
+    }
+  },
+  {
+    "id": "designer-ranking-synthesis-openai",
+    "message": "Проаналізуй рейтинг дизайнерів за закритими дизайн-задачами за останній місяць і скажи, що мені як CEO зробити першим.",
+    "routeContext": {
+      "pathname": "/design",
+      "search": "",
+      "href": "/design",
+      "title": "Дизайн",
+      "routeLabel": "Дизайн",
+      "domainHint": "design",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "design",
+      "requiresAnalytics": true,
+      "openAiOk": true,
+      "crmToolExecutedIncludes": ["get_crm_analytics"]
+    }
+  },
+  {
     "id": "orders-how-to-separate-estimates",
     "message": "чи можна в одному прорахунку рахувати кілька різних товарів?",
     "routeContext": {
@@ -34,7 +75,10 @@
     "expect": {
       "domain": "design",
       "statusIn": ["waiting_user", "open"],
-      "requiresAnalytics": true
+      "requiresAnalytics": true,
+      "directAnalytics": true,
+      "noOpenAi": true,
+      "noKnowledgeRetrieval": true
     }
   },
   {

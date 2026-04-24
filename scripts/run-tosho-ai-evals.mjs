@@ -62,6 +62,38 @@ function assertCase(testCase, payload) {
   if (expect.requiresAnalytics && !assistant.metadata?.analytics) {
     throw new Error("expected assistant metadata.analytics");
   }
+  if (expect.directAnalytics) {
+    const requested = assistant.metadata?.crmTools?.requested;
+    const executed = assistant.metadata?.crmTools?.executed;
+    if (!Array.isArray(requested) || !requested.includes("direct_crm_analytics")) {
+      throw new Error("expected direct_crm_analytics in crmTools.requested");
+    }
+    if (!Array.isArray(executed) || !executed.includes("direct_crm_analytics")) {
+      throw new Error("expected direct_crm_analytics in crmTools.executed");
+    }
+  }
+  if (expect.noOpenAi) {
+    if (assistant.metadata?.openAi?.attempted === true || assistant.metadata?.openAi?.ok === true) {
+      throw new Error("expected no OpenAI completion for this case");
+    }
+  }
+  if (expect.noKnowledgeRetrieval) {
+    if (assistant.metadata?.knowledgeRetrieval) {
+      throw new Error("expected no knowledge retrieval for this case");
+    }
+  }
+  if (expect.openAiOk) {
+    if (assistant.metadata?.openAi?.ok !== true) {
+      throw new Error("expected successful OpenAI completion");
+    }
+  }
+  if (Array.isArray(expect.crmToolExecutedIncludes)) {
+    const executed = assistant.metadata?.crmTools?.executed;
+    if (!Array.isArray(executed)) throw new Error("expected crmTools.executed");
+    for (const tool of expect.crmToolExecutedIncludes) {
+      if (!executed.includes(tool)) throw new Error(`expected crmTools.executed to include ${tool}`);
+    }
+  }
 }
 
 let passed = 0;

@@ -1302,26 +1302,45 @@ function hasPersonalActionPlanTerm(normalized: string) {
   );
 }
 
-function shouldRunAnalytics(message: string) {
-  const normalized = normalizeText(message).toLowerCase();
-  const hasAnalyticsVerb =
-    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
-      normalized
-    ) ||
-    /по\s+(менедж|иенедж)/u.test(normalized) ||
-    /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
-  if (hasAdminObservabilityTerm(normalized)) return true;
-  if (hasPersonalActionPlanTerm(normalized)) return true;
-  if (!hasAnalyticsVerb) return false;
-  return (
-    /(дизайн|дизайнер|таск|задач|прорах|quote|коштор|замовл|order|лід|замовник|клієнт|контрагент)/u.test(
-      normalized
-    ) ||
-    hasManagerAnalyticsTerm(normalized) ||
-    hasLogisticsAnalyticsTerm(normalized) ||
-    hasEmployeeAnalyticsTerm(normalized) ||
-    stripAnalyticsQueryTerms(message).length > 0
-  );
+type SupportedAnalyticsIntent =
+  | "admin_health"
+  | "personal_focus"
+  | "designer_ranking"
+  | "design_completion"
+  | "team_role_list"
+  | "logistics_limited"
+  | "customer_quote_breakdown"
+  | "customer_order_limited"
+  | "party_quote_order"
+  | "manager_quote"
+  | "manager_order_limited"
+  | "quote_summary";
+
+const SUPPORTED_ANALYTICS_INTENTS: Array<{ intent: SupportedAnalyticsIntent; label: string }> = [
+  { intent: "admin_health", label: "admin health: observability, runtime errors, backups, storage hygiene" },
+  { intent: "personal_focus", label: "personal focus: what the current user should do next" },
+  { intent: "designer_ranking", label: "designer ranking by approved/closed design tasks" },
+  { intent: "design_completion", label: "design task completion counts and design workload summaries" },
+  { intent: "team_role_list", label: "team lists by role: designers, managers, logistics, employees" },
+  { intent: "logistics_limited", label: "limited logistics/order status snapshot; orders and shipping are not final modules" },
+  { intent: "customer_quote_breakdown", label: "customers/leads ranked by quote/estimate activity" },
+  { intent: "customer_order_limited", label: "limited customer order snapshot; orders are not final modules" },
+  { intent: "party_quote_order", label: "quote/order activity for a named customer, lead, or contractor" },
+  { intent: "manager_quote", label: "quote/estimate activity by manager" },
+  { intent: "manager_order_limited", label: "limited order activity by manager; orders are not final modules" },
+  { intent: "quote_summary", label: "quote/estimate totals and quote/customer summaries" },
+];
+
+const CRM_CAPABILITY_BOUNDARIES = [
+  "Reliable CRM modules today: design tasks, estimates/quotes, customers/leads, contractors/suppliers, catalog, admin health.",
+  "Orders, production, logistics, and shipping are incomplete. Treat them as limited technical/status signals, not authoritative business performance.",
+  "Do not invent production or shipment workflows. If the user asks about unfinished modules, say the module is limited and explain what CRM data is actually available.",
+  "For direct counts, rankings, lists, and status tables, prefer deterministic CRM analytics over OpenAI synthesis.",
+  "Use OpenAI synthesis only for explanation, priorities, risks, decisions, or next-step recommendations on top of CRM data.",
+];
+
+function analyticsIntentPromptList() {
+  return SUPPORTED_ANALYTICS_INTENTS.map((item) => `- ${item.intent}: ${item.label}`).join("\n");
 }
 
 function isDesignerRankingAnalyticsQuery(message: string) {
@@ -1329,6 +1348,65 @@ function isDesignerRankingAnalyticsQuery(message: string) {
   return (
     /(дизайнер|дизайнери|дизайнерів)/u.test(normalized) &&
     /(рейтинг|топ|найбільш|найменш|хто|порівн|кільк|скільки|закрит|закрив|заверш|виконан|approved)/u.test(normalized)
+  );
+}
+
+function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsIntent | null {
+  const normalized = normalizeText(message).toLowerCase();
+  const hasAnalyticsVerb =
+    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
+      normalized
+    ) ||
+    /по\s+(менедж|иенедж)/u.test(normalized) ||
+    /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
+  const hasAdminTerm = hasAdminObservabilityTerm(normalized);
+  const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
+  const hasQuoteTerm = /(прорах|quote|коштор|кп)/u.test(normalized);
+  const hasOrderTerm = /(замовл|order)/u.test(normalized);
+  const hasPartyTerm = /(лід|замовник|клієнт|контрагент)/u.test(normalized);
+  const hasManagerTerm = hasManagerAnalyticsTerm(normalized);
+  const hasLogisticsTerm = hasLogisticsAnalyticsTerm(normalized);
+  const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
+  const hasCustomerTerm = hasCustomerAnalyticsTerm(normalized);
+  const stripped = stripAnalyticsQueryTerms(message);
+  const asksForPeopleList =
+    /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
+      normalized
+    ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
+
+  if (hasAdminTerm) return "admin_health";
+  if (hasPersonalActionPlanTerm(normalized)) return "personal_focus";
+  if (isDesignerRankingAnalyticsQuery(message)) return "designer_ranking";
+  if (!hasAnalyticsVerb && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasManagerTerm && !hasLogisticsTerm) {
+    return null;
+  }
+  if (asksForPeopleList || (hasEmployeeTerm && hasAnalyticsVerb)) return "team_role_list";
+  if (hasLogisticsTerm && !hasQuoteTerm && !hasDesignTerm && !hasPartyTerm && !hasManagerTerm) return "logistics_limited";
+  if (hasDesignTerm) return "design_completion";
+  if (hasCustomerTerm) {
+    if (hasOrderTerm && !hasQuoteTerm) return "customer_order_limited";
+    return "customer_quote_breakdown";
+  }
+  if ((hasQuoteTerm || hasOrderTerm) && (hasPartyTerm || (stripped && !hasManagerTerm))) return "party_quote_order";
+  if (hasManagerTerm && hasOrderTerm && !hasQuoteTerm) return "manager_order_limited";
+  if (hasManagerTerm) return "manager_quote";
+  if (hasOrderTerm && !hasQuoteTerm) return "manager_order_limited";
+  if (hasQuoteTerm) return "quote_summary";
+  return null;
+}
+
+function shouldRunAnalytics(message: string) {
+  return detectSupportedAnalyticsIntent(message) !== null;
+}
+
+function isDirectAnalyticsRequest(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return (
+    detectSupportedAnalyticsIntent(message) !== null &&
+    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
+      normalized
+    ) &&
+    !shouldSynthesizeAnalyticsWithOpenAi(message)
   );
 }
 
@@ -4260,7 +4338,8 @@ async function buildAnalyticsDecision(params: {
   message: string;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
 }) {
-  if (!shouldRunAnalytics(params.message)) return null;
+  const supportedIntent = detectSupportedAnalyticsIntent(params.message);
+  if (!supportedIntent) return null;
   const normalized = normalizeText(params.message).toLowerCase();
   const hasAdminTerm = hasAdminObservabilityTerm(normalized);
   const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
@@ -4281,17 +4360,17 @@ async function buildAnalyticsDecision(params: {
       normalized
     ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
 
-  if (hasAdminTerm && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasPartyTerm && !hasManagerTerm) {
+  if (supportedIntent === "admin_health" && hasAdminTerm && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasPartyTerm && !hasManagerTerm) {
     const adminDecision = await buildAdminObservabilityAnalytics(params);
     if (adminDecision) return toAnalyticsDecision(adminDecision);
   }
 
-  if (hasPersonalActionPlanTerm(normalized) && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
+  if (supportedIntent === "personal_focus" && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
     const personalDecision = await buildPersonalActionPlanAnalytics(params);
     if (personalDecision) return toAnalyticsDecision(personalDecision);
   }
 
-  if (asksForDesignerRanking) {
+  if (supportedIntent === "designer_ranking" || asksForDesignerRanking) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
   }
 
@@ -4364,7 +4443,7 @@ const CRM_TOOL_DEFINITIONS = [
     type: "function",
     name: "get_crm_analytics",
     description:
-      "Get a controlled live CRM analytics snapshot for quotes, orders, design tasks, logistics, team, personal focus, or admin health. Use only when the user asks for counts, status, workload, health, statistics, or what to focus on.",
+      "Get a controlled live CRM analytics snapshot only for supported intents: admin health, personal focus, designer/design metrics, team role lists, quote/estimate metrics, customer/lead quote metrics, and limited order/logistics signals.",
     strict: true,
     parameters: {
       type: "object",
@@ -4428,6 +4507,20 @@ async function runCrmToolCalling(params: {
   message: string;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
 }) {
+  const supportedIntent = detectSupportedAnalyticsIntent(params.message);
+  if (!supportedIntent) {
+    return {
+      block: `No CRM tools were used. Supported analytics intents:\n${analyticsIntentPromptList()}`,
+      diagnostics: {
+        attempted: false,
+        requested: [],
+        executed: [],
+        latencyMs: null,
+        error: "No supported CRM analytics intent matched this request.",
+      } satisfies CrmToolDiagnostics,
+    };
+  }
+
   const startedAt = Date.now();
   const diagnostics: CrmToolDiagnostics = {
     attempted: true,
@@ -4441,7 +4534,11 @@ async function runCrmToolCalling(params: {
     const toolPrompt = [
       "You are deciding whether ToSho AI needs live CRM data before answering.",
       "Call get_crm_analytics only for live counts, statistics, workload, operational health, personal focus, or status summaries.",
+      `The detected supported analytics intent is: ${supportedIntent}.`,
+      `Supported analytics intents:\n${analyticsIntentPromptList()}`,
+      `CRM capability boundaries:\n${CRM_CAPABILITY_BOUNDARIES.map((item) => `- ${item}`).join("\n")}`,
       "Do not call tools for general how-to questions, writing help, or support escalation without a data question.",
+      "Do not call tools for analytics outside the supported intents. Ask for a narrower supported metric instead.",
       "Preserve names, @mentions, and time periods in the query argument.",
     ].join(" ");
     const input = [
@@ -4782,6 +4879,8 @@ async function callOpenAiDecision(params: {
     "Reply in Ukrainian.",
     "Tone: calm, premium, operational, slightly playful, never clownish, never cheesy.",
     "Only rely on the provided CRM context, recent runtime signals, and curated knowledge snippets.",
+    `CRM capability boundaries:\n${CRM_CAPABILITY_BOUNDARIES.map((item) => `- ${item}`).join("\n")}`,
+    `Supported CRM analytics intents:\n${analyticsIntentPromptList()}`,
     "For simple informational how-to questions, answer directly first.",
     "For capability questions like 'чи можна', 'чи є', 'чи можна в одному', do not answer yes/no unless the evidence explicitly supports that exact claim.",
     "If the current CRM flow suggests a stricter rule than a broad snippet, prefer the stricter operational rule.",
@@ -5288,7 +5387,7 @@ async function handleSend(params: {
       message: analyticsMessage,
       routeContext,
     });
-    if (analyticsDecision && !shouldSynthesizeAnalyticsWithOpenAi(message)) {
+    if (analyticsDecision && isDirectAnalyticsRequest(message)) {
       assistantDecision = analyticsDecision;
       crmToolDiagnostics = {
         attempted: true,
