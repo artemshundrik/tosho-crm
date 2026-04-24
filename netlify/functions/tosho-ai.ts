@@ -45,6 +45,8 @@ type RequestBody = {
     entityType?: string | null;
     entityId?: string | null;
   };
+  includeHistory?: boolean;
+  includeKnowledge?: boolean;
   feedback?: "helpful" | "not_helpful";
   status?: ToShoAiStatus;
   priority?: ToShoAiPriority;
@@ -185,6 +187,7 @@ type AnalyticsPayload = {
   kind: "people" | "entity";
   title: string;
   caption: string;
+  avatarUrl?: string | null;
   metricLabel: string;
   rows: AnalyticsRow[];
   note?: string | null;
@@ -710,8 +713,30 @@ function parsePeriodFromMessage(message: string) {
   const now = new Date();
   let start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   let label = "за останні 30 днів";
+  const monthCountMatch = normalized.match(
+    /(?:за\s+)?(?:(\d+)|(два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))\s+місяц/iu
+  );
 
-  if (/сьогодні|today/u.test(normalized)) {
+  if (monthCountMatch) {
+    const wordToNumber: Record<string, number> = {
+      "два": 2,
+      "дві": 2,
+      "три": 3,
+      "чотири": 4,
+      "п'ять": 5,
+      "пять": 5,
+      "шість": 6,
+      "сім": 7,
+      "вісім": 8,
+      "дев'ять": 9,
+      "девять": 9,
+      "десять": 10,
+    };
+    const rawCount = monthCountMatch[1] ? Number(monthCountMatch[1]) : wordToNumber[monthCountMatch[2] ?? ""] ?? 2;
+    const monthCount = Math.max(1, Math.min(12, Number.isFinite(rawCount) ? rawCount : 2));
+    start = new Date(now.getTime() - monthCount * 30 * 24 * 60 * 60 * 1000);
+    label = `за останні ${monthCount} міс.`;
+  } else if (/сьогодні|today/u.test(normalized)) {
     start = new Date(now);
     start.setHours(0, 0, 0, 0);
     label = "за сьогодні";
@@ -737,7 +762,7 @@ function stripAnalyticsQueryTerms(message: string) {
   return normalizeText(message)
     .replace(/[?!.]+$/g, "")
     .replace(
-      /\b(скільки|порахуй|порахувати|рахуй|покажи|дай|зріз|статистика|статистику|стату|за|останній|останні|місяць|днів|день|тиждень|поточний|цього|найбільше|більше|всього|якого|яким|яких|у|в|ліда|лід|замовника|замовник|замовників|замовниках|замовники|клієнта|клієнт|клієнтів|клієнтах|клієнти|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|менеджера|иенеджерам|иенеджерах|иенеджери|дизайнерам|дизайнерах|дизайнери|дизайнів|дизайни|дизайн|тасок|задач|зробив|зробила|зробили|кожен|кожного|по)\b/giu,
+      /\b(а|і|й|ще|скільки|порахуй|порахувати|рахуй|покажи|дай|зріз|статистика|статистику|стату|за|останній|останні|місяць|місяці|місяців|днів|день|тиждень|поточний|цього|найбільше|більше|всього|якого|яким|яких|у|в|ліда|лід|замовника|замовник|замовників|замовниках|замовники|клієнта|клієнт|клієнтів|клієнтах|клієнти|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|менеджера|иенеджерам|иенеджерах|иенеджери|дизайнерам|дизайнерах|дизайнери|дизайнів|дизайни|дизайн|тасок|задач|зробив|зробила|зробили|кожен|кожного|по)\b/giu,
       " "
     )
     .replace(/\s+/g, " ")
@@ -760,6 +785,111 @@ function extractPartySearchQuery(message: string) {
     )
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function transliterateLatinToUkrainian(value: string) {
+  const lower = normalizeText(value).toLowerCase();
+  if (!/[a-z]/i.test(lower)) return "";
+  const pairs: Array<[string, string]> = [
+    ["shch", "щ"],
+    ["sch", "щ"],
+    ["zh", "ж"],
+    ["kh", "х"],
+    ["ts", "ц"],
+    ["ch", "ч"],
+    ["sh", "ш"],
+    ["yu", "ю"],
+    ["ya", "я"],
+    ["ye", "є"],
+    ["yi", "ї"],
+    ["a", "а"],
+    ["b", "б"],
+    ["v", "в"],
+    ["h", "г"],
+    ["g", "г"],
+    ["d", "д"],
+    ["e", "е"],
+    ["z", "з"],
+    ["y", "и"],
+    ["i", "і"],
+    ["j", "й"],
+    ["k", "к"],
+    ["l", "л"],
+    ["m", "м"],
+    ["n", "н"],
+    ["o", "о"],
+    ["p", "п"],
+    ["r", "р"],
+    ["s", "с"],
+    ["t", "т"],
+    ["u", "у"],
+    ["f", "ф"],
+    ["c", "к"],
+  ];
+  let result = lower;
+  for (const [from, to] of pairs) {
+    result = result.replace(new RegExp(from, "g"), to);
+  }
+  return result;
+}
+
+function buildPartySearchVariants(query: string) {
+  const variants = new Set<string>();
+  const normalized = normalizeText(query)
+    .replace(/[?!.,"`]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized) variants.add(normalized);
+
+  for (const token of normalized.split(/\s+/).filter((item) => item.length >= 3)) {
+    variants.add(token);
+  }
+
+  const transliterated = transliterateLatinToUkrainian(normalized);
+  if (transliterated) {
+    variants.add(transliterated);
+    variants.add(transliterated.replace(/і\b/giu, "и"));
+    if (transliterated.length > 5) variants.add(transliterated.slice(0, -1));
+    for (const token of transliterated.split(/\s+/).filter((item) => item.length >= 4)) {
+      variants.add(token);
+      if (token.endsWith("і") || token.endsWith("и")) variants.add(token.slice(0, -1));
+    }
+  }
+
+  return Array.from(variants)
+    .map((item) => normalizeText(item))
+    .filter((item, index, list) => item.length >= 3 && list.indexOf(item) === index)
+    .slice(0, 8);
+}
+
+function escapeIlikeValue(value: string) {
+  return normalizeText(value)
+    .replace(/[(),]/g, " ")
+    .replace(/[%_]/g, "\\$&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildPartyOrFilter(fields: string[], variants: string[]) {
+  return variants
+    .map(escapeIlikeValue)
+    .filter(Boolean)
+    .flatMap((variant) => fields.map((field) => `${field}.ilike.%${variant}%`))
+    .join(",");
+}
+
+function scorePartySearchCandidate(name: string, variants: string[]) {
+  const normalizedName = normalizeAnalyticsName(name);
+  const compactName = normalizedName.replace(/\s+/g, "");
+  return variants.reduce((score, variant) => {
+    const normalizedVariant = normalizeAnalyticsName(variant);
+    const compactVariant = normalizedVariant.replace(/\s+/g, "");
+    if (!normalizedVariant) return score;
+    if (normalizedName === normalizedVariant) return score + 100;
+    if (normalizedName.includes(normalizedVariant)) return score + 40 + normalizedVariant.length;
+    if (compactName.includes(compactVariant)) return score + 30 + compactVariant.length;
+    return score;
+  }, 0);
 }
 
 function hasManagerAnalyticsTerm(normalized: string) {
@@ -786,6 +916,115 @@ function shouldRunAnalytics(message: string) {
     hasManagerAnalyticsTerm(normalized) ||
     stripAnalyticsQueryTerms(message).length > 0
   );
+}
+
+function hasAnalyticsFollowUpSignal(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  if (!normalized || normalized.length > 120) return false;
+  return /^(а|і|й|ще|а\s+ще|а\s+за|за|по|тепер|тоді)\b/u.test(normalized) ||
+    /(тижд|місяц|квартал|сьогодні|вчора|днів|дні|замовл|прорах|дизайн|таск|задач|менеджер|замовник|клієнт|контрагент|лід)/u.test(normalized);
+}
+
+type AnalyticsMetricIntent = "quotes" | "orders" | "design" | "customers" | null;
+
+function detectAnalyticsMetricIntent(message: string): AnalyticsMetricIntent {
+  const normalized = normalizeText(message).toLowerCase();
+  if (/(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized)) return "design";
+  if (/(замовл|order)/u.test(normalized) && !/(замовник|замовників|клієнт|контрагент)/u.test(normalized)) {
+    return "orders";
+  }
+  if (/(замовник|замовників|клієнт|контрагент)/u.test(normalized) && !/(прорах|quote|коштор|кп)/u.test(normalized)) {
+    return "customers";
+  }
+  if (/(прорах|quote|коштор|кп)/u.test(normalized)) return "quotes";
+  return null;
+}
+
+function metricIntentPhrase(metric: AnalyticsMetricIntent) {
+  if (metric === "orders") return "замовлень";
+  if (metric === "design") return "дизайнів";
+  if (metric === "customers") return "замовників";
+  return "прорахунків";
+}
+
+function extractFollowUpTarget(message: string) {
+  const normalized = normalizeText(message)
+    .replace(/[?!.]+$/g, "")
+    .replace(/\b(а|і|й|ще|тепер|тоді)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = normalized.match(/(?:^|\s)(?:у|в|по|для)\s+(.+?)(?:\s+(?:за|скільки|прорах|замовл|дизайн|таск|задач)\b|$)/iu);
+  const target = normalizeText(match?.[1]);
+  if (!target) return "";
+  return target
+    .replace(
+      /\b(нього|неї|них|цього|цьому|цій|цей|замовника|замовнику|клієнта|клієнту|контрагента|контрагенту|ліда|ліду|менеджера|дизайнера)\b/giu,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasPartyAnalyticsContext(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return /(замовник|клієнт|контрагент|лід)/u.test(normalized);
+}
+
+function hasPersonAnalyticsContext(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return /(менеджер|дизайнер|співробітник|користувач)/u.test(normalized);
+}
+
+function extractFollowUpPeriodHint(message: string) {
+  const normalized = normalizeText(message).replace(/[?!.]+$/g, "");
+  const explicit = normalized.match(
+    /\bза\s+(?:останн(?:ій|і|ю)\s+)?(?:(?:\d+|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\s+)?(?:дн(?:і|ів|я)|тиждень|тижні|місяць|місяці|місяців|квартал|рік)\b/iu
+  );
+  if (explicit?.[0]) return explicit[0];
+  if (/сьогодні|today/iu.test(normalized)) return "за сьогодні";
+  if (/вчора/iu.test(normalized)) return "за вчора";
+  if (/тижд/iu.test(normalized)) return "за останній тиждень";
+  if (/місяц/iu.test(normalized)) return "за місяць";
+  if (/квартал/iu.test(normalized)) return "за квартал";
+  return "";
+}
+
+function buildAnalyticsMessageWithContext(message: string, recentMessages: SupportMessageRow[]) {
+  if (shouldRunAnalytics(message)) return message;
+  if (!hasAnalyticsFollowUpSignal(message)) return message;
+  const previousUserAnalyticsMessage = [...recentMessages]
+    .reverse()
+    .find((entry) => entry.role === "user" && shouldRunAnalytics(entry.body));
+  if (!previousUserAnalyticsMessage) return message;
+
+  const previousMessage = previousUserAnalyticsMessage.body;
+  const currentMetric = detectAnalyticsMetricIntent(message);
+  const previousMetric = detectAnalyticsMetricIntent(previousMessage);
+  const metric = currentMetric ?? previousMetric;
+  const target = extractFollowUpTarget(message);
+
+  if (target) {
+    const targetPrefix =
+      hasPartyAnalyticsContext(previousMessage) && !hasPersonAnalyticsContext(previousMessage)
+        ? "у замовника"
+        : "у";
+    const periodTail = extractFollowUpPeriodHint(message);
+    return `скільки ${metricIntentPhrase(metric)} ${targetPrefix} ${target}${periodTail ? ` ${periodTail}` : ""}?`;
+  }
+
+  if (currentMetric) {
+    const previousTarget = extractPartySearchQuery(previousMessage) || stripAnalyticsQueryTerms(previousMessage);
+    if (previousTarget) {
+      const targetPrefix =
+        hasPartyAnalyticsContext(previousMessage) && !hasPersonAnalyticsContext(previousMessage)
+          ? "у замовника"
+          : "у";
+      const periodTail = extractFollowUpPeriodHint(message) || extractFollowUpPeriodHint(previousMessage);
+      return `скільки ${metricIntentPhrase(currentMetric)} ${targetPrefix} ${previousTarget}${periodTail ? ` ${periodTail}` : ""}?`;
+    }
+  }
+
+  return `${previousMessage}\n${message}`;
 }
 
 function toAnalyticsDecision(result: AnalyticsResult): AssistantDecision {
@@ -1380,7 +1619,7 @@ async function buildCustomerQuoteAnalytics(params: {
   const { data, error } = await params.adminClient
     .schema("tosho")
     .from("quotes")
-    .select("id,status,total,customer_id,customer_name,created_at")
+    .select("id,status,total,customer_id,customer_name,customer_logo_url,created_at")
     .eq("team_id", params.auth.teamId)
     .gte("created_at", period.sinceIso)
     .limit(10000);
@@ -1388,11 +1627,12 @@ async function buildCustomerQuoteAnalytics(params: {
 
   const buckets = new Map<
     string,
-    { id: string; label: string; total: number; approved: number; sum: number; byStatus: Record<string, number> }
+    { id: string; label: string; logoUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }
   >();
   for (const row of (data ?? []) as Array<{
     customer_id?: string | null;
     customer_name?: string | null;
+    customer_logo_url?: string | null;
     status?: string | null;
     total?: number | string | null;
   }>) {
@@ -1401,7 +1641,8 @@ async function buildCustomerQuoteAnalytics(params: {
     const key = customerId || normalizeAnalyticsName(customerName) || "unknown";
     const status = normalizeText(row.status) || "без статусу";
     const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
-    const bucket = buckets.get(key) ?? { id: key, label: customerName, total: 0, approved: 0, sum: 0, byStatus: {} };
+    const bucket = buckets.get(key) ?? { id: key, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, total: 0, approved: 0, sum: 0, byStatus: {} };
+    if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
     bucket.total += 1;
     if (status === "approved") bucket.approved += 1;
     if (Number.isFinite(amount)) bucket.sum += amount;
@@ -1432,6 +1673,7 @@ async function buildCustomerQuoteAnalytics(params: {
       rows: rows.map((row) => ({
         id: row.id,
         label: row.label,
+        avatarUrl: row.logoUrl,
         primary: `${formatInteger(row.total)} прорах.`,
         secondary: `Затверджено ${formatInteger(row.approved)} · сума ${formatMoney(row.sum)}`,
         badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
@@ -1451,18 +1693,19 @@ async function buildManagerCustomerAnalytics(params: {
   const { data, error } = await params.adminClient
     .schema("tosho")
     .from("quotes")
-    .select("id,status,total,customer_id,customer_name,assigned_to,created_by,created_at")
+    .select("id,status,total,customer_id,customer_name,customer_logo_url,assigned_to,created_by,created_at")
     .eq("team_id", params.auth.teamId)
     .gte("created_at", period.sinceIso)
     .limit(10000);
   if (error) throw new Error(error.message);
 
-  const customers = new Map<string, { id: string; label: string; quoteCount: number; sum: number; byStatus: Record<string, number> }>();
+  const customers = new Map<string, { id: string; label: string; logoUrl: string | null; quoteCount: number; sum: number; byStatus: Record<string, number> }>();
   for (const row of (data ?? []) as Array<{
     assigned_to?: string | null;
     created_by?: string | null;
     customer_id?: string | null;
     customer_name?: string | null;
+    customer_logo_url?: string | null;
     status?: string | null;
     total?: number | string | null;
   }>) {
@@ -1472,7 +1715,8 @@ async function buildManagerCustomerAnalytics(params: {
     const customerId = normalizeText(row.customer_id) || normalizeAnalyticsName(customerName) || "unknown";
     const status = normalizeText(row.status) || "без статусу";
     const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
-    const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, quoteCount: 0, sum: 0, byStatus: {} };
+    const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, quoteCount: 0, sum: 0, byStatus: {} };
+    if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
     bucket.quoteCount += 1;
     if (Number.isFinite(amount)) bucket.sum += amount;
     bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
@@ -1503,6 +1747,7 @@ async function buildManagerCustomerAnalytics(params: {
       rows: rows.map((row) => ({
         id: row.id,
         label: row.label,
+        avatarUrl: row.logoUrl,
         primary: `${formatInteger(row.quoteCount)} прорах.`,
         secondary: `Сума ${formatMoney(row.sum)}`,
         badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
@@ -1526,59 +1771,75 @@ async function resolvePartyForAnalytics(params: {
     const { data } = await params.adminClient
       .schema("tosho")
       .from("customers")
-      .select("id,name,legal_name")
+      .select("id,name,legal_name,logo_url")
       .eq("team_id", params.auth.teamId)
       .eq("id", explicitCustomerId)
       .maybeSingle();
-    const row = data as { id?: string; name?: string | null; legal_name?: string | null } | null;
-    if (row?.id) return { kind: "customer" as const, id: row.id, name: normalizeText(row.name || row.legal_name) || row.id };
+    const row = data as { id?: string; name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+    if (row?.id) return { kind: "customer" as const, id: row.id, name: normalizeText(row.name || row.legal_name) || row.id, logoUrl: normalizeText(row.logo_url) || null };
   }
 
   if (explicitLeadId) {
     const { data } = await params.adminClient
       .schema("tosho")
       .from("leads")
-      .select("id,company_name,legal_name,first_name,last_name")
+      .select("id,company_name,legal_name,first_name,last_name,logo_url")
       .eq("team_id", params.auth.teamId)
       .eq("id", explicitLeadId)
       .maybeSingle();
-    const row = data as { id?: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null } | null;
+    const row = data as { id?: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null; logo_url?: string | null } | null;
     if (row?.id) {
       const person = [row.first_name, row.last_name].map(normalizeText).filter(Boolean).join(" ");
-      return { kind: "lead" as const, id: row.id, name: normalizeText(row.company_name || row.legal_name || person) || row.id };
+      return { kind: "lead" as const, id: row.id, name: normalizeText(row.company_name || row.legal_name || person) || row.id, logoUrl: normalizeText(row.logo_url) || null };
     }
   }
 
   const query = extractPartySearchQuery(params.message) || stripAnalyticsQueryTerms(params.message);
   if (!query) return null;
-  const escaped = query.replace(/[%_]/g, "\\$&");
+  const searchVariants = buildPartySearchVariants(query);
+  if (searchVariants.length === 0) return null;
+  const customerFilter = buildPartyOrFilter(["name", "legal_name"], searchVariants);
+  const leadFilter = buildPartyOrFilter(["company_name", "legal_name", "first_name", "last_name"], searchVariants);
 
   const [customerResult, leadResult] = await Promise.all([
     params.adminClient
       .schema("tosho")
       .from("customers")
-      .select("id,name,legal_name")
+      .select("id,name,legal_name,logo_url")
       .eq("team_id", params.auth.teamId)
-      .or(`name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%`)
-      .limit(3),
+      .or(customerFilter)
+      .limit(8),
     params.adminClient
       .schema("tosho")
       .from("leads")
-      .select("id,company_name,legal_name,first_name,last_name")
+      .select("id,company_name,legal_name,first_name,last_name,logo_url")
       .eq("team_id", params.auth.teamId)
-      .or(`company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%`)
-      .limit(3),
+      .or(leadFilter)
+      .limit(8),
   ]);
 
-  const customer = ((customerResult.data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null }>)[0];
+  const customer = ((customerResult.data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }>)
+    .map((row) => ({
+      row,
+      score: scorePartySearchCandidate(`${row.name ?? ""} ${row.legal_name ?? ""}`, searchVariants),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.row;
   if (customer) {
-    return { kind: "customer" as const, id: customer.id, name: normalizeText(customer.name || customer.legal_name) || customer.id };
+    return { kind: "customer" as const, id: customer.id, name: normalizeText(customer.name || customer.legal_name) || customer.id, logoUrl: normalizeText(customer.logo_url) || null };
   }
 
-  const lead = ((leadResult.data ?? []) as Array<{ id: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null }>)[0];
+  const lead = ((leadResult.data ?? []) as Array<{ id: string; company_name?: string | null; legal_name?: string | null; first_name?: string | null; last_name?: string | null; logo_url?: string | null }>)
+    .map((row) => ({
+      row,
+      score: scorePartySearchCandidate(
+        `${row.company_name ?? ""} ${row.legal_name ?? ""} ${row.first_name ?? ""} ${row.last_name ?? ""}`,
+        searchVariants
+      ),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.row;
   if (lead) {
     const person = [lead.first_name, lead.last_name].map(normalizeText).filter(Boolean).join(" ");
-    return { kind: "lead" as const, id: lead.id, name: normalizeText(lead.company_name || lead.legal_name || person) || lead.id };
+    return { kind: "lead" as const, id: lead.id, name: normalizeText(lead.company_name || lead.legal_name || person) || lead.id, logoUrl: normalizeText(lead.logo_url) || null };
   }
 
   return null;
@@ -1590,6 +1851,12 @@ async function buildPartyQuoteOrderAnalytics(params: {
   message: string;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
 }) {
+  const period = parsePeriodFromMessage(params.message);
+  const normalizedMessage = normalizeText(params.message).toLowerCase();
+  const wantsQuotes = /(прорах|quote|коштор|кп)/u.test(normalizedMessage);
+  const wantsOrders = /(замовл|order)/u.test(normalizedMessage);
+  const includeQuotes = wantsQuotes || !wantsOrders;
+  const includeOrders = wantsOrders || !wantsQuotes;
   const party = await resolvePartyForAnalytics(params);
   if (!party) {
     return {
@@ -1614,6 +1881,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
     .from("quotes")
     .select("id,status,total,customer_id,customer_name,created_at")
     .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
     .limit(10000);
 
   const orderQuery = params.adminClient
@@ -1621,6 +1889,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
     .from("orders")
     .select("id,quote_id,order_status,total,customer_id,customer_name,party_type,created_at")
     .eq("team_id", params.auth.teamId)
+    .gte("created_at", period.sinceIso)
     .limit(10000);
 
   const [quoteResult, orderResult] = await Promise.all([quoteQuery, orderQuery]);
@@ -1661,34 +1930,44 @@ async function buildPartyQuoteOrderAnalytics(params: {
   const orderStatusLine = formatAnalyticsBadgeLine(orderByStatus, formatOrderStatusLabel) || "немає статусів";
   const quoteCount = quotes.length;
   const orderCount = orders.length;
+  const summaryParts = [
+    includeQuotes ? `${formatInteger(quoteCount)} прорахунків` : "",
+    includeOrders ? `${formatInteger(orderCount)} замовлень` : "",
+  ].filter(Boolean);
+  const rows: AnalyticsRow[] = [
+    includeQuotes
+      ? {
+          id: "quotes",
+          label: "Прорахунки",
+          primary: formatInteger(quoteCount),
+          secondary: `Сума ${formatMoney(quoteSum)} · ${quoteStatusLine}`,
+          badges: formatAnalyticsBadges(quoteByStatus, formatQuoteStatusLabel),
+        }
+      : null,
+    includeOrders
+      ? {
+          id: "orders",
+          label: "Замовлення",
+          primary: formatInteger(orderCount),
+          secondary: `Сума ${formatMoney(orderSum)} · ${orderStatusLine}`,
+          badges: formatAnalyticsBadges(orderByStatus, formatOrderStatusLabel),
+        }
+      : null,
+  ].filter((row): row is AnalyticsRow => Boolean(row));
 
   return {
     title: `${party.kind === "customer" ? "Замовник" : "Лід"}: прорахунки і замовлення`,
-    summary: `${party.name}: ${formatInteger(quoteCount)} прорах., ${formatInteger(orderCount)} замовл.`,
-    markdown: `Порахував по ${party.kind === "customer" ? "замовнику" : "ліду"} **${party.name}**: **${formatInteger(quoteCount)}** прорахунків і **${formatInteger(orderCount)}** замовлень.`,
+    summary: `${party.name}: ${summaryParts.join(" і ")} ${period.label}.`,
+    markdown: `Порахував по ${party.kind === "customer" ? "замовнику" : "ліду"} **${party.name}** ${period.label}: **${summaryParts.join(" і ")}**.`,
     domain: "orders",
     confidence: party.kind === "customer" ? 0.92 : 0.82,
     analytics: {
       kind: "entity",
       title: party.name,
       caption: party.kind === "customer" ? "Замовник" : "Лід",
+      avatarUrl: party.logoUrl,
       metricLabel: "Кількість",
-      rows: [
-        {
-          id: "quotes",
-          label: "Прорахунки",
-          primary: formatInteger(quoteCount),
-          secondary: `Сума ${formatMoney(quoteSum)} · ${quoteStatusLine}`,
-          badges: formatAnalyticsBadges(quoteByStatus, formatQuoteStatusLabel),
-        },
-        {
-          id: "orders",
-          label: "Замовлення",
-          primary: formatInteger(orderCount),
-          secondary: `Сума ${formatMoney(orderSum)} · ${orderStatusLine}`,
-          badges: formatAnalyticsBadges(orderByStatus, formatOrderStatusLabel),
-        },
-      ],
+      rows,
       note:
         party.kind === "customer"
           ? "Замовника рахую по customer_id."
@@ -2277,8 +2556,12 @@ async function buildSnapshot(params: {
   auth: AuthContext;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
   selectedRequestId?: string | null;
+  includeHistory?: boolean;
+  includeKnowledge?: boolean;
 }) {
   const { adminClient, auth, routeContext } = params;
+  const shouldIncludeHistory = params.includeHistory === true;
+  const shouldIncludeKnowledge = params.includeKnowledge === true;
   const recentBaseQuery = adminClient
     .schema("tosho")
     .from("support_requests")
@@ -2318,9 +2601,11 @@ async function buildSnapshot(params: {
         .limit(10);
 
   const [recentResult, queueResult, knowledgeItems, runtimeErrors] = await Promise.all([
-    recentQuery,
-    queueQuery,
-    listKnowledgeItems(adminClient, auth.workspaceId, auth.canManageKnowledge),
+    shouldIncludeHistory ? recentQuery : Promise.resolve({ data: [], error: null }),
+    shouldIncludeHistory ? queueQuery : Promise.resolve({ data: [], error: null }),
+    shouldIncludeKnowledge
+      ? listKnowledgeItems(adminClient, auth.workspaceId, auth.canManageKnowledge)
+      : Promise.resolve([] as KnowledgeItemRow[]),
     listRuntimeErrors(adminClient, auth.teamId, auth.userId, routeContext.href, routeContext.pathname),
   ]);
 
@@ -2490,20 +2775,22 @@ async function handleSend(params: {
           .from("support_messages")
           .select("id,request_id,workspace_id,role,user_id,actor_label,body,metadata,created_at")
           .eq("request_id", existingRequest.id)
-          .order("created_at", { ascending: true })
-          .limit(8)
+          .order("created_at", { ascending: false })
+          .limit(12)
       ).data ?? []) as SupportMessageRow[])
+        .reverse()
     : [];
 
   let assistantDecision: AssistantDecision | null = null;
   let usedFallback = false;
-  const analyticsRequested = shouldRunAnalytics(message);
+  const analyticsMessage = buildAnalyticsMessageWithContext(message, recentMessages);
+  const analyticsRequested = shouldRunAnalytics(analyticsMessage);
 
   if (analyticsRequested) {
     assistantDecision = await buildAnalyticsDecision({
       adminClient: params.adminClient,
       auth: params.auth,
-      message,
+      message: analyticsMessage,
       routeContext,
     });
   }
@@ -2692,6 +2979,8 @@ async function handleSend(params: {
     auth: params.auth,
     routeContext,
     selectedRequestId: requestRow.id,
+    includeHistory: params.body.includeHistory === true,
+    includeKnowledge: params.body.includeKnowledge === true,
   });
 
   return {
@@ -2761,6 +3050,8 @@ async function handleFeedback(params: {
       auth: params.auth,
       routeContext: sanitizeRouteContext(params.body.routeContext),
       selectedRequestId: requestId,
+      includeHistory: params.body.includeHistory === true,
+      includeKnowledge: params.body.includeKnowledge === true,
     }),
   };
 }
@@ -2799,6 +3090,8 @@ async function handleUpdateRequest(params: {
       auth: params.auth,
       routeContext: sanitizeRouteContext(params.body.routeContext),
       selectedRequestId: requestId,
+      includeHistory: params.body.includeHistory === true,
+      includeKnowledge: params.body.includeKnowledge === true,
     }),
   };
 }
@@ -2860,6 +3153,8 @@ async function handleUpsertKnowledge(params: {
       auth: params.auth,
       routeContext: sanitizeRouteContext(params.body.routeContext),
       selectedRequestId: normalizeText(params.body.requestId) || null,
+      includeHistory: params.body.includeHistory === true,
+      includeKnowledge: true,
     }),
   };
 }
@@ -2890,6 +3185,8 @@ async function handleDeleteKnowledge(params: {
       auth: params.auth,
       routeContext: sanitizeRouteContext(params.body.routeContext),
       selectedRequestId: normalizeText(params.body.requestId) || null,
+      includeHistory: params.body.includeHistory === true,
+      includeKnowledge: true,
     }),
   };
 }
@@ -2991,6 +3288,8 @@ export const handler = async (event: HttpEvent) => {
             auth,
             routeContext,
             selectedRequestId: normalizeText(body.requestId) || null,
+            includeHistory: body.includeHistory === true,
+            includeKnowledge: body.includeKnowledge === true,
           }),
         });
     }

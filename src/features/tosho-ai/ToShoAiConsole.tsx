@@ -12,11 +12,14 @@ import {
 import {
   BookOpen,
   Bot,
+  Building2,
+  Calculator,
   CheckCheck,
   ChevronDown,
   ChevronRight,
   Copy,
   ExternalLink,
+  Factory,
   FileText,
   ImageIcon,
   Layers3,
@@ -24,7 +27,9 @@ import {
   MessageSquare,
   Paperclip,
   PanelsTopLeft,
+  Palette,
   Presentation,
+  Plus,
   Route,
   Send,
   Sparkles,
@@ -36,7 +41,7 @@ import {
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { PlayerAvatar } from "@/components/app/avatar-kit";
+import { EntityAvatar, PlayerAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -125,6 +130,7 @@ type AnalyticsPayload = {
   kind: "people" | "entity";
   title: string;
   caption: string;
+  avatarUrl?: string | null;
   metricLabel: string;
   rows: AnalyticsRow[];
   note?: string | null;
@@ -319,6 +325,7 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
   const kind = analytics.kind === "entity" ? "entity" : "people";
   const title = typeof analytics.title === "string" ? analytics.title : "";
   const caption = typeof analytics.caption === "string" ? analytics.caption : "";
+  const avatarUrl = typeof analytics.avatarUrl === "string" ? analytics.avatarUrl : null;
   const metricLabel = typeof analytics.metricLabel === "string" ? analytics.metricLabel : "Показник";
   if (!title && parsedRows.length === 0) return null;
 
@@ -326,6 +333,7 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
     kind,
     title: title || "Підрахунок",
     caption,
+    avatarUrl,
     metricLabel,
     rows: parsedRows,
     note: typeof analytics.note === "string" ? analytics.note : null,
@@ -341,6 +349,14 @@ function getAnalyticsBadgeIcon(label: string) {
   if (normalized.includes("адаптац")) return Copy;
   if (normalized.includes("макет")) return PanelsTopLeft;
   return null;
+}
+
+function getAnalyticsRowIcon(label: string, metricLabel?: string | null) {
+  const normalized = normalizeSearch(`${label} ${metricLabel ?? ""}`);
+  if (normalized.includes("прорах")) return Calculator;
+  if (normalized.includes("замовл")) return Factory;
+  if (normalized.includes("дизайн") || normalized.includes("задач") || normalized.includes("таск")) return Palette;
+  return Building2;
 }
 
 function formatShortDisplayName(value: string) {
@@ -599,9 +615,20 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
   return (
     <div className="mt-4 overflow-hidden rounded-[22px] border border-border/65 bg-background/55">
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">{analytics.title}</div>
-          {analytics.caption ? <div className="mt-0.5 text-xs text-muted-foreground">{analytics.caption}</div> : null}
+        <div className="flex min-w-0 items-center gap-2.5">
+          {analytics.kind === "entity" ? (
+            <EntityAvatar
+              src={analytics.avatarUrl ?? null}
+              name={analytics.title}
+              size={34}
+              className="ring-1 ring-border/60"
+              fallbackClassName="text-[11px] font-semibold"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground">{analytics.title}</div>
+            {analytics.caption ? <div className="mt-0.5 text-xs text-muted-foreground">{analytics.caption}</div> : null}
+          </div>
         </div>
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {analytics.metricLabel}
@@ -610,12 +637,13 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
 
       {analytics.rows.length > 0 ? (
         <div className="divide-y divide-border/45">
-          {analytics.rows.map((row, index) => {
+          {analytics.rows.map((row) => {
             const displayLabel = analytics.kind === "people" ? formatShortDisplayName(row.label) : row.label;
             const secondaryIsBadgeDuplicate =
               Boolean(row.secondary) &&
               Boolean(row.badges?.length) &&
               row.badges!.every((badge) => row.secondary?.includes(badge.label));
+            const RowIcon = getAnalyticsRowIcon(row.label, analytics.metricLabel);
             return (
               <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-3.5 py-3">
                 <div className="flex min-w-0 items-start gap-3">
@@ -627,9 +655,17 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                       className="mt-0.5 shrink-0 ring-1 ring-border/60"
                       fallbackClassName="text-[11px] font-semibold"
                     />
+                  ) : row.avatarUrl ? (
+                    <EntityAvatar
+                      src={row.avatarUrl}
+                      name={displayLabel}
+                      size={34}
+                      className="mt-0.5 ring-1 ring-border/60"
+                      fallbackClassName="text-[11px] font-semibold"
+                    />
                   ) : (
-                    <div className="mt-0.5 flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/35 text-xs font-semibold text-muted-foreground">
-                      {index + 1}
+                    <div className="mt-0.5 flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/35 text-muted-foreground">
+                      <RowIcon className="h-4 w-4" />
                     </div>
                   )}
                   <div className="min-w-0">
@@ -925,6 +961,8 @@ export function ToShoAiConsole({
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  const historyLoadedRef = useRef(false);
+  const knowledgeLoadedRef = useRef(false);
   const resolvedContext = useMemo(
     () => {
       const currentRouteContext =
@@ -953,6 +991,8 @@ export function ToShoAiConsole({
   const [threadScope, setThreadScope] = useState<"mine" | "queue">("mine");
   const [showRequestList, setShowRequestList] = useState(false);
   const [knowledgeExpanded, setKnowledgeExpanded] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [knowledgeDraft, setKnowledgeDraft] = useState<KnowledgeDraft>(EMPTY_DRAFT);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
@@ -991,19 +1031,44 @@ export function ToShoAiConsole({
     [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
   );
 
+  useEffect(() => {
+    historyLoadedRef.current = historyLoaded;
+  }, [historyLoaded]);
+
+  useEffect(() => {
+    knowledgeLoadedRef.current = knowledgeLoaded;
+  }, [knowledgeLoaded]);
+
   const loadSnapshot = useCallback(
-    async (requestId: string | null = null) => {
+    async (
+      requestId: string | null = null,
+      options: { includeHistory?: boolean; includeKnowledge?: boolean } = {}
+    ) => {
       if (!active) return;
+      const includeHistory = options.includeHistory ?? historyLoadedRef.current;
+      const includeKnowledge = options.includeKnowledge ?? knowledgeLoadedRef.current;
       setLoading(true);
       try {
         setLoadError(null);
         const response = await callToShoAiApi("bootstrap", {
           requestId,
           routeContext: resolvedContext,
+          includeHistory,
+          includeKnowledge,
         });
+        if (includeHistory) setHistoryLoaded(true);
+        if (includeKnowledge) setKnowledgeLoaded(true);
         setSnapshot(response.snapshot);
         setSelectedThreadId(response.snapshot.selectedThread?.id ?? null);
       } catch (error) {
+        if (includeHistory) {
+          historyLoadedRef.current = false;
+          setHistoryLoaded(false);
+        }
+        if (includeKnowledge) {
+          knowledgeLoadedRef.current = false;
+          setKnowledgeLoaded(false);
+        }
         const message = error instanceof Error ? error.message : "Не вдалося завантажити ToSho AI.";
         setLoadError(message);
         toast.error(message);
@@ -1016,9 +1081,15 @@ export function ToShoAiConsole({
 
   useEffect(() => {
     if (!active) return;
+    historyLoadedRef.current = false;
+    knowledgeLoadedRef.current = false;
+    setHistoryLoaded(false);
+    setKnowledgeLoaded(false);
+    setShowRequestList(false);
+    setKnowledgeExpanded(false);
     setSelectedThreadId(initialRequestId ?? null);
     setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
-    void loadSnapshot(initialRequestId ?? null);
+    void loadSnapshot(initialRequestId ?? null, { includeHistory: false, includeKnowledge: false });
   }, [active, initialRequestId, loadSnapshot, resolvedContext.href]);
 
   useEffect(() => {
@@ -1051,12 +1122,55 @@ export function ToShoAiConsole({
     setSelectedThreadId(response.snapshot.selectedThread?.id ?? null);
   }, []);
 
+  const ensureHistoryLoaded = useCallback(
+    (requestId: string | null = selectedThreadId) => {
+      if (historyLoadedRef.current) return;
+      historyLoadedRef.current = true;
+      setHistoryLoaded(true);
+      void loadSnapshot(requestId, {
+        includeHistory: true,
+        includeKnowledge: knowledgeLoadedRef.current,
+      });
+    },
+    [loadSnapshot, selectedThreadId]
+  );
+
+  const ensureKnowledgeLoaded = useCallback(
+    (requestId: string | null = selectedThreadId) => {
+      if (knowledgeLoadedRef.current) return;
+      knowledgeLoadedRef.current = true;
+      setKnowledgeLoaded(true);
+      void loadSnapshot(requestId, {
+        includeHistory: historyLoadedRef.current,
+        includeKnowledge: true,
+      });
+    },
+    [loadSnapshot, selectedThreadId]
+  );
+
+  const handleToggleRequestList = useCallback(() => {
+    const next = !showRequestList;
+    setShowRequestList(next);
+    setKnowledgeExpanded(false);
+    if (next) ensureHistoryLoaded(selectedThreadId);
+  }, [ensureHistoryLoaded, selectedThreadId, showRequestList]);
+
+  const handleToggleKnowledge = useCallback(() => {
+    const next = !knowledgeExpanded;
+    setKnowledgeExpanded(next);
+    setShowRequestList(false);
+    if (next) ensureKnowledgeLoaded(selectedThreadId);
+  }, [ensureKnowledgeLoaded, knowledgeExpanded, selectedThreadId]);
+
   const handleSelectThread = useCallback(
     (requestId: string) => {
       startTransition(() => {
         setSelectedThreadId(requestId);
       });
-      void loadSnapshot(requestId);
+      void loadSnapshot(requestId, {
+        includeHistory: true,
+        includeKnowledge: knowledgeLoadedRef.current,
+      });
     },
     [loadSnapshot]
   );
@@ -1210,6 +1324,8 @@ export function ToShoAiConsole({
         mode: outgoingMode,
         routeContext: resolvedContext,
         attachments: uploaded.attachments,
+        includeHistory: historyLoadedRef.current,
+        includeKnowledge: knowledgeLoadedRef.current,
       });
       applySnapshotResponse(response);
       setComposerValue("");
@@ -1302,6 +1418,8 @@ export function ToShoAiConsole({
           messageId,
           feedback: value,
           routeContext: resolvedContext,
+          includeHistory: historyLoadedRef.current,
+          includeKnowledge: knowledgeLoadedRef.current,
         });
         applySnapshotResponse(response);
       } catch (error) {
@@ -1323,6 +1441,8 @@ export function ToShoAiConsole({
       const response = await callToShoAiApi("upsert_knowledge", {
         requestId: selectedThread?.id ?? null,
         routeContext: resolvedContext,
+        includeHistory: historyLoadedRef.current,
+        includeKnowledge: true,
         knowledge: {
           id: knowledgeDraft.id,
           title: knowledgeDraft.title,
@@ -1359,6 +1479,8 @@ export function ToShoAiConsole({
         const response = await callToShoAiApi("delete_knowledge", {
           requestId: selectedThread?.id ?? null,
           routeContext: resolvedContext,
+          includeHistory: historyLoadedRef.current,
+          includeKnowledge: true,
           knowledge: { id: item.id },
         });
         applySnapshotResponse(response);
@@ -1380,24 +1502,32 @@ export function ToShoAiConsole({
       <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
           <div className="flex min-h-full w-full min-w-0 max-w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                {!selectedThread ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                {selectedThread ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStartNewThread}
+                    className="h-8 rounded-full border-border/60 bg-card/55 px-2.5 sm:px-3"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden min-[420px]:inline">Новий чат</span>
+                    <span className="min-[420px]:hidden">Новий</span>
+                  </Button>
+                ) : (
                   <Badge tone="neutral" size="sm" pill>
                     {resolvedContext.routeLabel}
                   </Badge>
-                ) : null}
-                {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                )}
               </div>
               <div className="ml-auto flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
                 <Button
                   type="button"
                   variant={showRequestList ? "secondary" : "ghost"}
                   size="sm"
-                  onClick={() => {
-                    setShowRequestList((prev) => !prev);
-                    setKnowledgeExpanded(false);
-                  }}
+                  onClick={handleToggleRequestList}
                   className="h-8 rounded-full px-2.5 sm:px-3"
                 >
                   <MessageSquare className="h-4 w-4" />
@@ -1407,21 +1537,12 @@ export function ToShoAiConsole({
                   type="button"
                   variant={knowledgeExpanded ? "secondary" : "ghost"}
                   size="sm"
-                  onClick={() => {
-                    setKnowledgeExpanded((prev) => !prev);
-                    setShowRequestList(false);
-                  }}
+                  onClick={handleToggleKnowledge}
                   className="h-8 rounded-full px-2.5 sm:px-3"
                 >
                   <BookOpen className="h-4 w-4" />
                   <span className="hidden min-[380px]:inline">Знання</span>
                 </Button>
-                {selectedThread ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={handleStartNewThread} className="h-8 rounded-full px-2.5 sm:px-3">
-                    <span className="hidden min-[420px]:inline">Новий чат</span>
-                    <span className="min-[420px]:hidden">Новий</span>
-                  </Button>
-                ) : null}
               </div>
             </div>
 
@@ -1687,7 +1808,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 shadow-inner [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"
