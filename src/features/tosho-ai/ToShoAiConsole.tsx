@@ -71,11 +71,9 @@ import {
   type ToShoAiMentionSuggestion,
   type ToShoAiMessage,
   type ToShoAiMode,
-  type ToShoAiPriority,
   type ToShoAiRequestSummary,
   type ToShoAiRouteContext,
   type ToShoAiSnapshot,
-  type ToShoAiStatus,
 } from "@/lib/toshoAi";
 
 type ToShoAiConsoleProps = {
@@ -237,35 +235,6 @@ const AUTO_MODE_META = {
     "Потрібно передати це далі з нормальним контекстом.",
   ],
 } as const;
-
-const STATUS_META: Record<ToShoAiStatus, { label: string; tone: "neutral" | "info" | "warning" | "success" }> = {
-  open: { label: "Нове", tone: "warning" },
-  in_progress: { label: "В роботі", tone: "info" },
-  waiting_user: { label: "Чекає підтвердження", tone: "neutral" },
-  resolved: { label: "Дотиснуто", tone: "success" },
-};
-
-const PRIORITY_META: Record<
-  ToShoAiPriority,
-  { label: string; tone: "neutral" | "info" | "warning" | "danger" }
-> = {
-  low: { label: "Низький", tone: "neutral" },
-  medium: { label: "Середній", tone: "info" },
-  high: { label: "Високий", tone: "warning" },
-  urgent: { label: "Критичний", tone: "danger" },
-};
-
-const DOMAIN_LABELS: Record<string, string> = {
-  general: "Загальне",
-  overview: "Огляд",
-  orders: "Збут",
-  design: "Дизайн",
-  logistics: "Логістика",
-  catalog: "Каталог",
-  contractors: "Підрядники",
-  team: "Команда",
-  admin: "Адмін",
-};
 
 const EMPTY_DRAFT: KnowledgeDraft = {
   title: "",
@@ -724,17 +693,6 @@ function ThreadCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={STATUS_META[item.status].tone} size="sm" pill>
-              {STATUS_META[item.status].label}
-            </Badge>
-            <Badge tone={PRIORITY_META[item.priority].tone} size="sm" pill>
-              {PRIORITY_META[item.priority].label}
-            </Badge>
-            <Badge tone="neutral" size="sm" pill>
-              {DOMAIN_LABELS[item.domain] ?? DOMAIN_LABELS.general}
-            </Badge>
-          </div>
           <div className="truncate text-[15px] font-semibold leading-5">{item.title}</div>
           {item.summary ? (
             <div className="line-clamp-2 text-sm leading-5 text-muted-foreground">{item.summary}</div>
@@ -746,12 +704,6 @@ function ThreadCard({
         <span>{item.routeLabel || "Без контексту сторінки"}</span>
         <span>•</span>
         <span>{formatDateTime(item.updatedAt)}</span>
-        {item.assigneeLabel ? (
-          <>
-            <span>•</span>
-            <span>{item.assigneeLabel}</span>
-          </>
-        ) : null}
       </div>
     </button>
   );
@@ -1188,7 +1140,6 @@ export function ToShoAiConsole({
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [queueSearch, setQueueSearch] = useState("");
   const deferredQueueSearch = useDeferredValue(queueSearch);
-  const [threadScope, setThreadScope] = useState<"mine" | "queue">("mine");
   const [showRequestList, setShowRequestList] = useState(false);
   const [knowledgeExpanded, setKnowledgeExpanded] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -1206,18 +1157,13 @@ export function ToShoAiConsole({
   const isAiUnavailable = !snapshot && Boolean(loadError);
   const canSendMessage = Boolean((composerValue.trim() || pendingAttachments.length > 0) && !isAiUnavailable);
 
-  const threadItems = useMemo(() => {
-    if (snapshot?.permissions.canManageQueue && threadScope === "queue") {
-      return snapshot.queue ?? [];
-    }
-    return snapshot?.recentRequests ?? [];
-  }, [snapshot?.permissions.canManageQueue, snapshot?.queue, snapshot?.recentRequests, threadScope]);
+  const threadItems = useMemo(() => snapshot?.recentRequests ?? [], [snapshot?.recentRequests]);
 
   const filteredThreads = useMemo(() => {
     if (!queueSearchValue) return threadItems;
     return threadItems.filter((item) => {
       const haystack = normalizeSearch(
-        `${item.title} ${item.summary ?? ""} ${item.routeLabel ?? ""} ${item.assigneeLabel ?? ""} ${item.createdByLabel ?? ""}`
+        `${item.title} ${item.summary ?? ""} ${item.routeLabel ?? ""}`
       );
       return haystack.includes(queueSearchValue);
     });
@@ -1343,12 +1289,6 @@ export function ToShoAiConsole({
       setComposerIntent(selectedThread.mode);
     }
   }, [selectedThread?.id, selectedThread?.mode]);
-
-  useEffect(() => {
-    if (!snapshot?.permissions.canManageQueue && threadScope !== "mine") {
-      setThreadScope("mine");
-    }
-  }, [snapshot?.permissions.canManageQueue, threadScope]);
 
   const applySnapshotResponse = useCallback((response: ToShoAiApiResponse) => {
     setSnapshot(response.snapshot);
@@ -1868,37 +1808,17 @@ export function ToShoAiConsole({
               <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-[var(--shadow-elevated-sm)]">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-foreground">Попередні звернення</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Тільки якщо треба повернутись до старого діалогу.</div>
+                    <div className="text-sm font-semibold text-foreground">Попередні чати</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Тільки твої діалоги з ToSho AI.</div>
                   </div>
-                  <Badge tone={threadScope === "queue" ? "warning" : "neutral"} size="sm" pill>
-                    {threadScope === "queue" ? "Передано в роботу" : "Мої звернення"}
+                  <Badge tone="neutral" size="sm" pill>
+                    Мої чати
                   </Badge>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={threadScope === "mine" ? "primary" : "outline"}
-                    onClick={() => setThreadScope("mine")}
-                  >
-                    Мої
-                  </Button>
-                  {snapshot?.permissions.canManageQueue ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={threadScope === "queue" ? "primary" : "outline"}
-                      onClick={() => setThreadScope("queue")}
-                    >
-                      В роботі
-                    </Button>
-                  ) : null}
                 </div>
                 <Input
                   value={queueSearch}
                   onChange={(event) => setQueueSearch(event.target.value)}
-                  placeholder="Пошук по зверненнях"
+                  placeholder="Пошук по чатах"
                   disabled={historyPanelLoading && !historyLoaded}
                   className="mt-3 rounded-2xl border-border/60 bg-background/70"
                 />
@@ -1917,13 +1837,11 @@ export function ToShoAiConsole({
                   ) : (
                     <EmptyPanel
                       icon={<MessageSquare className="h-5 w-5" />}
-                      title={queueSearchValue ? "Нічого не знайдено" : threadScope === "queue" ? "Поки нічого не передано" : "Поки тихо"}
+                      title={queueSearchValue ? "Нічого не знайдено" : "Поки тихо"}
                       description={
                         queueSearchValue
                           ? "Спробуй інший пошук."
-                          : threadScope === "queue"
-                            ? "Коли ToSho AI передасть щось у роботу, це з’явиться тут."
-                            : "Щойно з’явиться перше звернення, воно оселиться тут."
+                          : "Щойно з’явиться перший чат, він буде тут."
                       }
                     />
                   )}

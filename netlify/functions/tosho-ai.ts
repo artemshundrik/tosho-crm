@@ -4715,47 +4715,19 @@ async function buildSnapshot(params: {
   const { adminClient, auth, routeContext } = params;
   const shouldIncludeHistory = params.includeHistory === true;
   const shouldIncludeKnowledge = params.includeKnowledge === true;
-  const recentBaseQuery = adminClient
+  const recentQuery = adminClient
     .schema("tosho")
     .from("support_requests")
     .select(
       "id,workspace_id,team_id,created_by,created_by_label,assignee_user_id,assignee_label,mode,status,priority,domain,title,summary,route_label,route_href,entity_type,entity_id,context,ai_confidence,escalated_at,resolved_at,last_message_at,created_at,updated_at"
     )
     .eq("workspace_id", auth.workspaceId)
+    .eq("created_by", auth.userId)
     .order("last_message_at", { ascending: false })
     .limit(16);
 
-  const queueBaseQuery = adminClient
-    .schema("tosho")
-    .from("support_requests")
-    .select(
-      "id,workspace_id,team_id,created_by,created_by_label,assignee_user_id,assignee_label,mode,status,priority,domain,title,summary,route_label,route_href,entity_type,entity_id,context,ai_confidence,escalated_at,resolved_at,last_message_at,created_at,updated_at"
-    )
-    .eq("workspace_id", auth.workspaceId)
-    .in("status", ["open", "in_progress", "waiting_user"])
-    .order("updated_at", { ascending: false })
-    .limit(18);
-
-  const recentQuery = auth.canManageQueue
-    ? recentBaseQuery
-    : recentBaseQuery.or(`created_by.eq.${auth.userId},assignee_user_id.eq.${auth.userId}`);
-  const queueQuery = auth.canManageQueue
-    ? queueBaseQuery
-    : adminClient
-        .schema("tosho")
-        .from("support_requests")
-        .select(
-          "id,workspace_id,team_id,created_by,created_by_label,assignee_user_id,assignee_label,mode,status,priority,domain,title,summary,route_label,route_href,entity_type,entity_id,context,ai_confidence,escalated_at,resolved_at,last_message_at,created_at,updated_at"
-        )
-        .eq("workspace_id", auth.workspaceId)
-        .or(`created_by.eq.${auth.userId},assignee_user_id.eq.${auth.userId}`)
-        .in("status", ["open", "in_progress", "waiting_user"])
-        .order("updated_at", { ascending: false })
-        .limit(10);
-
-  const [recentResult, queueResult, knowledgeItems, runtimeErrors] = await Promise.all([
+  const [recentResult, knowledgeItems, runtimeErrors] = await Promise.all([
     shouldIncludeHistory ? recentQuery : Promise.resolve({ data: [], error: null }),
-    shouldIncludeHistory ? queueQuery : Promise.resolve({ data: [], error: null }),
     shouldIncludeKnowledge
       ? listKnowledgeItems(adminClient, auth.workspaceId, auth.canManageKnowledge)
       : Promise.resolve([] as KnowledgeItemRow[]),
@@ -4763,10 +4735,8 @@ async function buildSnapshot(params: {
   ]);
 
   if (recentResult.error) throw new Error(recentResult.error.message);
-  if (queueResult.error) throw new Error(queueResult.error.message);
 
   const recentRequests = ((recentResult.data ?? []) as SupportRequestRow[]).map(mapRequestSummary);
-  const queue = ((queueResult.data ?? []) as SupportRequestRow[]).map(mapRequestSummary);
 
   const selectedRequestId = normalizeText(params.selectedRequestId) || "";
   const selectedThread = selectedRequestId ? await loadThread(adminClient, auth, selectedRequestId) : null;
@@ -4784,11 +4754,11 @@ async function buildSnapshot(params: {
     },
     stats: {
       myOpenCount: recentRequests.filter((row) => row.status !== "resolved").length,
-      queueOpenCount: queue.length,
+      queueOpenCount: 0,
       knowledgeActiveCount: knowledgeItems.filter((item) => item.status === "active").length,
     },
     recentRequests,
-    queue,
+    queue: [],
     selectedThread,
     knowledgeItems: knowledgeItems.map((item) => ({
       id: item.id,
