@@ -241,6 +241,18 @@ type OpenAiDecisionResult = {
   diagnostics: OpenAiDiagnostics;
 };
 
+type KnowledgeRetrievalDiagnostics = {
+  strategy: "embedding" | "keyword";
+  attempted: boolean;
+  ok: boolean;
+  model: string | null;
+  candidateCount: number;
+  selectedCount: number;
+  latencyMs: number | null;
+  totalTokens: number | null;
+  error: string | null;
+};
+
 type AnalyticsResult = {
   title: string;
   summary: string;
@@ -263,6 +275,7 @@ const DEFAULT_ROUTE_CONTEXT = {
 };
 
 const RUNTIME_ERROR_RECENCY_MS = 30 * 60 * 1000;
+const KNOWLEDGE_RETRIEVAL_LIMIT = 64;
 
 class HttpError extends Error {
   statusCode: number;
@@ -943,6 +956,19 @@ function formatQuoteStatusLabel(value: string) {
     "без статусу": "Без статусу",
   };
   return labels[normalized] ?? value.replace(/_/g, " ");
+}
+
+function normalizeQuoteStatus(value?: string | null) {
+  const normalized = normalizeText(value).toLowerCase();
+  const aliases: Record<string, string> = {
+    draft: "new",
+    in_progress: "estimating",
+    sent: "estimated",
+    rejected: "cancelled",
+    completed: "approved",
+    canceled: "cancelled",
+  };
+  return aliases[normalized] ?? (normalized || "без статусу");
 }
 
 function formatOrderStatusLabel(value: string) {
@@ -1691,6 +1717,23 @@ async function listKnowledgeItems(
   return (data ?? []) as KnowledgeItemRow[];
 }
 
+async function listActiveKnowledgeItemsForRetrieval(
+  adminClient: ReturnType<typeof createClient>,
+  workspaceId: string
+) {
+  const { data, error } = await adminClient
+    .schema("tosho")
+    .from("support_knowledge_items")
+    .select("id,workspace_id,title,slug,summary,body,tags,keywords,status,source_label,source_href,updated_at")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "active")
+    .order("updated_at", { ascending: false })
+    .limit(KNOWLEDGE_RETRIEVAL_LIMIT);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as KnowledgeItemRow[];
+}
+
 function scoreKnowledgeItem(item: KnowledgeItemRow, queryText: string, routeLabel: string) {
   const queryTokens = tokenize(queryText);
   const routeTokens = tokenize(routeLabel);
@@ -1760,6 +1803,192 @@ function selectKnowledgeCandidates(items: KnowledgeItemRow[], queryText: string,
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((entry) => entry.item);
+}
+
+function retrievalFallbackDiagnostics(params: {
+  attempted: boolean;
+  candidateCount: number;
+  selectedCount: number;
+  error?: string | null;
+}): KnowledgeRetrievalDiagnostics {
+  return {
+    strategy: "keyword",
+    attempted: params.attempted,
+    ok: params.error ? false : true,
+    model: null,
+    candidateCount: params.candidateCount,
+    selectedCount: params.selectedCount,
+    latencyMs: null,
+    totalTokens: null,
+    error: params.error ?? null,
+  };
+}
+
+function knowledgeItemRetrievalText(item: KnowledgeItemRow) {
+  return trimTo(
+    [
+      `Title: ${item.title}`,
+      item.summary ? `Summary: ${item.summary}` : "",
+      item.tags?.length ? `Tags: ${item.tags.join(", ")}` : "",
+      item.keywords?.length ? `Keywords: ${item.keywords.join(", ")}` : "",
+      `Body: ${item.body}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    1800
+  );
+}
+
+function dotProduct(left: number[], right: number[]) {
+  const length = Math.min(left.length, right.length);
+  let score = 0;
+  for (let index = 0; index < length; index += 1) {
+    score += left[index] * right[index];
+  }
+  return score;
+}
+
+function parseEmbeddingVector(value: unknown) {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "number")
+    ? (value as number[])
+    : null;
+}
+
+async function selectKnowledgeCandidatesForMessage(params: {
+  items: KnowledgeItemRow[];
+  queryText: string;
+  routeLabel: string;
+}): Promise<{ candidates: KnowledgeItemRow[]; diagnostics: KnowledgeRetrievalDiagnostics }> {
+  const keywordCandidates = selectKnowledgeCandidates(params.items, params.queryText, params.routeLabel);
+  const apiKey = normalizeText(process.env.OPENAI_API_KEY);
+  if (!apiKey || params.items.length === 0) {
+    return {
+      candidates: keywordCandidates,
+      diagnostics: retrievalFallbackDiagnostics({
+        attempted: false,
+        candidateCount: params.items.length,
+        selectedCount: keywordCandidates.length,
+        error: apiKey ? null : "OPENAI_API_KEY is not configured.",
+      }),
+    };
+  }
+
+  const startedAt = Date.now();
+  const model = normalizeText(process.env.OPENAI_EMBEDDING_MODEL) || "text-embedding-3-small";
+  const inputs = [
+    trimTo(`${params.routeLabel}\n${params.queryText}`, 1200),
+    ...params.items.map(knowledgeItemRetrievalText),
+  ];
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        input: inputs,
+        encoding_format: "float",
+        dimensions: 512,
+      }),
+    });
+
+    const payload = (await response.json()) as JsonRecord;
+    const latencyMs = Date.now() - startedAt;
+    const usage = payload.usage && typeof payload.usage === "object" ? (payload.usage as JsonRecord) : null;
+    const totalTokens =
+      typeof usage?.total_tokens === "number" && Number.isFinite(usage.total_tokens) ? usage.total_tokens : null;
+
+    if (!response.ok) {
+      const error =
+        payload && typeof payload.error === "object" && payload.error && "message" in payload.error
+          ? (payload.error as { message?: string }).message
+          : "OpenAI embeddings request failed";
+      return {
+        candidates: keywordCandidates,
+        diagnostics: {
+          strategy: "keyword",
+          attempted: true,
+          ok: false,
+          model,
+          candidateCount: params.items.length,
+          selectedCount: keywordCandidates.length,
+          latencyMs,
+          totalTokens,
+          error,
+        },
+      };
+    }
+
+    const data = Array.isArray(payload.data) ? payload.data : [];
+    const queryVector = parseEmbeddingVector((data[0] as { embedding?: unknown } | undefined)?.embedding);
+    if (!queryVector) {
+      return {
+        candidates: keywordCandidates,
+        diagnostics: {
+          strategy: "keyword",
+          attempted: true,
+          ok: false,
+          model,
+          candidateCount: params.items.length,
+          selectedCount: keywordCandidates.length,
+          latencyMs,
+          totalTokens,
+          error: "OpenAI embeddings response did not include a query vector.",
+        },
+      };
+    }
+
+    const keywordIds = new Set(keywordCandidates.map((item) => item.id));
+    const ranked = params.items
+      .map((item, index) => {
+        const vector = parseEmbeddingVector((data[index + 1] as { embedding?: unknown } | undefined)?.embedding);
+        const semanticScore = vector ? dotProduct(queryVector, vector) : -1;
+        const keywordBoost = keywordIds.has(item.id) ? 0.04 : 0;
+        return {
+          item,
+          score: semanticScore + keywordBoost,
+        };
+      })
+      .filter((entry) => entry.score >= 0.16)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map((entry) => entry.item);
+
+    const candidates = ranked.length > 0 ? ranked : keywordCandidates;
+
+    return {
+      candidates,
+      diagnostics: {
+        strategy: ranked.length > 0 ? "embedding" : "keyword",
+        attempted: true,
+        ok: true,
+        model,
+        candidateCount: params.items.length,
+        selectedCount: candidates.length,
+        latencyMs,
+        totalTokens,
+        error: ranked.length > 0 ? null : "Embedding scores were below threshold; used keyword fallback.",
+      },
+    };
+  } catch (error) {
+    return {
+      candidates: keywordCandidates,
+      diagnostics: {
+        strategy: "keyword",
+        attempted: true,
+        ok: false,
+        model,
+        candidateCount: params.items.length,
+        selectedCount: keywordCandidates.length,
+        latencyMs: Date.now() - startedAt,
+        totalTokens: null,
+        error: error instanceof Error ? error.message : "OpenAI embeddings request failed",
+      },
+    };
+  }
 }
 
 async function listRuntimeErrors(
@@ -2314,7 +2543,7 @@ async function buildManagerQuoteAnalytics(params: {
     const member = memberById.get(ownerId);
     const rawLabel = member?.label ?? ownerId.slice(0, 8);
     const label = formatShortPersonName(rawLabel) || rawLabel;
-    const status = normalizeText(row.status) || "без статусу";
+    const status = normalizeQuoteStatus(row.status);
     const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
     const bucket = buckets.get(ownerId) ?? { id: ownerId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, approved: 0, sum: 0, byStatus: {} };
     bucket.total += 1;
@@ -2681,7 +2910,7 @@ async function buildPersonalActionPlanAnalytics(params: {
 
     const quotes = (quoteResult.data ?? []) as Array<{ id: string; status?: string | null; total?: number | string | null; customer_name?: string | null; created_at?: string | null }>;
     const staleQuotes = quotes.filter((quote) => {
-      const status = normalizeText(quote.status);
+      const status = normalizeQuoteStatus(quote.status);
       const createdAt = quote.created_at ? Date.parse(quote.created_at) : Date.now();
       return ["estimated", "awaiting_approval", "estimating"].includes(status) && createdAt < Date.parse(sinceIso);
     });
@@ -2705,7 +2934,7 @@ async function buildPersonalActionPlanAnalytics(params: {
         secondary: hotQuotes.slice(0, 3).map((quote) => normalizeText(quote.customer_name) || quote.id).join(" · ") || "Немає гарячих прорахунків",
         badges: formatAnalyticsBadges(
           hotQuotes.reduce<Record<string, number>>((acc, quote) => {
-            const status = normalizeText(quote.status) || "без статусу";
+            const status = normalizeQuoteStatus(quote.status);
             acc[status] = (acc[status] ?? 0) + 1;
             return acc;
           }, {}),
@@ -2854,7 +3083,7 @@ async function buildCustomerQuoteAnalytics(params: {
     const customerId = normalizeText(row.customer_id);
     const customerName = normalizeText(row.customer_name) || "Без замовника";
     const key = customerId || normalizeAnalyticsName(customerName) || "unknown";
-    const status = normalizeText(row.status) || "без статусу";
+    const status = normalizeQuoteStatus(row.status);
     const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
     const bucket = buckets.get(key) ?? { id: key, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, total: 0, approved: 0, sum: 0, byStatus: {} };
     if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
@@ -3010,7 +3239,7 @@ async function buildManagerCustomerAnalytics(params: {
     if (ownerId !== params.targetMember.userId) continue;
     const customerName = normalizeText(row.customer_name) || "Без замовника";
     const customerId = normalizeText(row.customer_id) || normalizeAnalyticsName(customerName) || "unknown";
-    const status = normalizeText(row.status) || "без статусу";
+    const status = normalizeQuoteStatus(row.status);
     const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
     const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, quoteCount: 0, approved: 0, sum: 0, byStatus: {} };
     if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
@@ -3228,11 +3457,14 @@ async function buildPartyQuoteOrderAnalytics(params: {
 
   const quoteByStatus: Record<string, number> = {};
   let quoteSum = 0;
+  let approvedQuoteSum = 0;
   for (const quote of quotes) {
-    const status = normalizeText(quote.status) || "без статусу";
+    const status = normalizeQuoteStatus(quote.status);
     quoteByStatus[status] = (quoteByStatus[status] ?? 0) + 1;
+    const amount = resolveQuoteAmount(quote, quoteItemTotals, quoteRunTotals);
+    quoteSum += amount;
     if (status === "approved") {
-      quoteSum += resolveQuoteAmount(quote, quoteItemTotals, quoteRunTotals);
+      approvedQuoteSum += amount;
     }
   }
 
@@ -3249,8 +3481,14 @@ async function buildPartyQuoteOrderAnalytics(params: {
   const quoteCount = quotes.length;
   const approvedQuoteCount = quoteByStatus.approved ?? 0;
   const orderCount = orders.length;
+  const quoteSecondary =
+    approvedQuoteCount > 0
+      ? approvedQuoteSum === quoteSum
+        ? `Затверджено ${formatInteger(approvedQuoteCount)} · сума ${formatMoney(approvedQuoteSum)}`
+        : `Затверджено ${formatInteger(approvedQuoteCount)} · затв. сума ${formatMoney(approvedQuoteSum)} · всього ${formatMoney(quoteSum)}`
+      : `Сума ${formatMoney(quoteSum)} · затверджено 0`;
   const summaryParts = [
-    includeQuotes ? `${formatInteger(quoteCount)} прорахунків` : "",
+    includeQuotes ? `${formatInteger(quoteCount)} прорахунків${quoteSum > 0 ? ` на ${formatMoney(quoteSum)}` : ""}` : "",
     includeOrders ? `${formatInteger(orderCount)} замовлень` : "",
   ].filter(Boolean);
   const rows: AnalyticsRow[] = [
@@ -3259,7 +3497,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
           id: "quotes",
           label: "Прорахунки",
           primary: formatInteger(quoteCount),
-          secondary: `Затверджено ${formatInteger(approvedQuoteCount)} · сума ${formatMoney(quoteSum)}`,
+          secondary: quoteSecondary,
           badges: formatAnalyticsBadges(quoteByStatus, formatQuoteStatusLabel),
         }
       : null,
@@ -4673,8 +4911,13 @@ async function handleSend(params: {
     : null;
   const attachments = toSupportAttachments(params.body.attachments);
 
-  const activeKnowledge = await listKnowledgeItems(params.adminClient, params.auth.workspaceId, false);
-  const knowledgeCandidates = selectKnowledgeCandidates(activeKnowledge, message, routeContext.routeLabel);
+  const activeKnowledge = await listActiveKnowledgeItemsForRetrieval(params.adminClient, params.auth.workspaceId);
+  const { candidates: knowledgeCandidates, diagnostics: knowledgeRetrieval } =
+    await selectKnowledgeCandidatesForMessage({
+      items: activeKnowledge,
+      queryText: message,
+      routeLabel: routeContext.routeLabel,
+    });
   const runtimeErrors = await listRuntimeErrors(
     params.adminClient,
     params.auth.teamId,
@@ -4840,6 +5083,7 @@ async function handleSend(params: {
         href: row.href ?? null,
         created_at: row.created_at,
       })),
+      knowledge_retrieval: knowledgeRetrieval,
       openai: openAiDiagnostics,
       last_internal_summary: assistantDecision.internalSummary,
       last_analytics_message: analyticsRequested ? analyticsMessage : previousThreadAnalyticsMessage || null,
@@ -4918,6 +5162,7 @@ async function handleSend(params: {
         usedFallback,
         openAiResponseId: openAiDiagnostics?.responseId ?? null,
         openAi: openAiDiagnostics,
+        knowledgeRetrieval,
         sources: sourceItems,
         analytics: assistantDecision.analytics ?? null,
         suggestedActions: compactSuggestedActions(assistantDecision.suggestedActions ?? []),
