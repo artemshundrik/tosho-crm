@@ -4675,6 +4675,7 @@ async function callOpenAiDecision(params: {
   knowledge: KnowledgeItemRow[];
   recentMessages: SupportMessageRow[];
   attachments: SupportAttachmentInput[];
+  analyticsContext?: AssistantDecision | null;
 }): Promise<OpenAiDecisionResult | null> {
   const apiKey = normalizeText(process.env.OPENAI_API_KEY);
   if (!apiKey) return null;
@@ -4682,14 +4683,35 @@ async function callOpenAiDecision(params: {
   const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
   const startedAt = Date.now();
   const previousResponseId = extractPreviousOpenAiResponseId(params.recentMessages);
-  const crmToolContext = await runCrmToolCalling({
-    adminClient: params.adminClient,
-    auth: params.auth,
-    model,
-    apiKey,
-    message: params.message,
-    routeContext: params.routeContext,
-  });
+  const crmToolContext = params.analyticsContext
+    ? {
+        block: JSON.stringify(
+          [
+            {
+              tool: "get_crm_analytics",
+              query: params.message,
+              result: compactDecisionForToolOutput(params.analyticsContext),
+            },
+          ],
+          null,
+          2
+        ),
+        diagnostics: {
+          attempted: true,
+          requested: ["get_crm_analytics"],
+          executed: ["get_crm_analytics"],
+          latencyMs: 0,
+          error: null,
+        } satisfies CrmToolDiagnostics,
+      }
+    : await runCrmToolCalling({
+        adminClient: params.adminClient,
+        auth: params.auth,
+        model,
+        apiKey,
+        message: params.message,
+        routeContext: params.routeContext,
+      });
   const inferredDomain = deriveDomainFromMessage(params.message, params.routeContext.domainHint);
   const productGuidance = getDomainProductGuidance(inferredDomain);
   const recentMessages = params.recentMessages
@@ -4747,6 +4769,8 @@ async function callOpenAiDecision(params: {
     "Do not start with filler like 'Так, базово' or 'Коротко по суті' unless it adds value.",
     "Do not end with 'якщо хочеш, можу ще...' unless the user explicitly asked for expansion.",
     "Avoid sounding like documentation; answer like a sharp operator inside the CRM.",
+    "When CRM_TOOL_RESULTS includes analytics, do not merely repeat the card. Explain what is okay, what is risky, and the first concrete action.",
+    "If the user asks for a snapshot or analysis, synthesize a management-level takeaway from CRM_TOOL_RESULTS.",
     "Do not talk about routing, owners, or escalation unless you actually decide to escalate.",
     "If mode is fix/route/resolve, bias toward escalation and a concrete route owner.",
     "Built-in product guidance is weaker than curated knowledge but stronger than guessing.",
@@ -4861,6 +4885,8 @@ async function callOpenAiDecision(params: {
       shouldNotify: Boolean(parsed.should_notify),
       knowledgeIds: toPlainList(parsed.knowledge_ids),
       internalSummary: trimTo(parsed.internal_summary || "", 300),
+      analytics: params.analyticsContext?.analytics ?? null,
+      suggestedActions: compactSuggestedActions(params.analyticsContext?.suggestedActions ?? []),
     },
     diagnostics: {
       attempted: true,
@@ -5236,17 +5262,15 @@ async function handleSend(params: {
       : "";
   const analyticsMessage = buildAnalyticsMessageWithContext(message, recentMessages, previousThreadAnalyticsMessage);
   const analyticsRequested = shouldRunAnalytics(analyticsMessage);
+  let analyticsDecision: AssistantDecision | null = null;
 
   if (analyticsRequested) {
-    assistantDecision = await buildAnalyticsDecision({
+    analyticsDecision = await buildAnalyticsDecision({
       adminClient: params.adminClient,
       auth: params.auth,
       message: analyticsMessage,
       routeContext,
     });
-    if (!assistantDecision) {
-      assistantDecision = unsupportedAnalyticsDecision(analyticsMessage);
-    }
   }
 
   if (!assistantDecision) {
@@ -5261,6 +5285,7 @@ async function handleSend(params: {
         knowledge: knowledgeCandidates,
         recentMessages,
         attachments,
+        analyticsContext: analyticsDecision,
       });
       assistantDecision = openAiResult?.decision ?? null;
       openAiDiagnostics = openAiResult?.diagnostics ?? null;
@@ -5282,6 +5307,13 @@ async function handleSend(params: {
         totalTokens: null,
       };
       assistantDecision = null;
+    }
+  }
+
+  if (!assistantDecision) {
+    if (analyticsDecision || analyticsRequested) {
+      usedFallback = true;
+      assistantDecision = analyticsDecision ?? unsupportedAnalyticsDecision(analyticsMessage);
     }
   }
 
