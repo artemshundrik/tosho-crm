@@ -179,6 +179,11 @@ type AnalyticsBadge = {
   value: number | string;
 };
 
+type SuggestedAction = {
+  label: string;
+  text: string;
+};
+
 type AnalyticsRow = {
   id: string;
   label: string;
@@ -212,6 +217,7 @@ type AssistantDecision = {
   knowledgeIds: string[];
   internalSummary: string;
   analytics?: AnalyticsPayload | null;
+  suggestedActions?: SuggestedAction[];
 };
 
 type AnalyticsResult = {
@@ -221,6 +227,7 @@ type AnalyticsResult = {
   domain: ToShoAiDomain;
   confidence: number;
   analytics: AnalyticsPayload;
+  suggestedActions?: SuggestedAction[];
 };
 
 const DEFAULT_ROUTE_CONTEXT = {
@@ -764,16 +771,28 @@ function findAnalyticsPersonMatches(message: string, members: RoutingCandidate[]
     .map((member) => {
       const tokens = personNameTokens(member.label);
       let score = 0;
+      const matchedQueryTokens = new Set<string>();
       for (const queryToken of queryTokens) {
         for (const token of tokens) {
-          if (queryToken === token) score += 12;
-          else if (token.startsWith(queryToken) || queryToken.startsWith(token)) score += 8;
-          else if (queryToken.length >= 4 && token.length >= 4 && levenshteinDistance(queryToken, token) <= 1) score += 5;
+          if (queryToken === token) {
+            score += 12;
+            matchedQueryTokens.add(queryToken);
+          } else if (token.startsWith(queryToken) || queryToken.startsWith(token)) {
+            score += 8;
+            matchedQueryTokens.add(queryToken);
+          } else if (queryToken.length >= 4 && token.length >= 4 && levenshteinDistance(queryToken, token) <= 1) {
+            score += 5;
+            matchedQueryTokens.add(queryToken);
+          }
         }
       }
-      return { member, score };
+      return { member, score, matchedQueryCount: matchedQueryTokens.size };
     })
-    .filter((entry) => entry.score > 0)
+    .filter((entry) => {
+      if (entry.score <= 0) return false;
+      if (queryTokens.length >= 2) return entry.matchedQueryCount >= 2;
+      return entry.score >= 8;
+    })
     .sort((a, b) => b.score - a.score || a.member.label.localeCompare(b.member.label, "uk"))
     .slice(0, 5)
     .map((entry) => entry.member);
@@ -902,6 +921,9 @@ function parsePeriodFromMessage(message: string) {
 
   if (/весь\s+час|за\s+весь\s+час|за\s+всі\s+часи|all\s*time|увесь\s+час/u.test(normalized)) {
     return { sinceIso: null as string | null, label: "за весь час" };
+  }
+  if (/цей\s+рік|цього\s+року|поточн(ий|ого|ому)\s+р(ік|оці)/u.test(normalized)) {
+    return { sinceIso: new Date(now.getFullYear(), 0, 1).toISOString(), label: "за поточний календарний рік" };
   }
 
   const monthCountMatch = normalized.match(
@@ -1164,7 +1186,7 @@ function hasAnalyticsFollowUpSignal(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   if (!normalized || normalized.length > 120) return false;
   return /^(а|і|й|ще|а\s+ще|а\s+за|за|по|тепер|тоді)\b/u.test(normalized) ||
-    /(тижд|місяц|квартал|сьогодні|вчора|днів|дні|замовл|прорах|дизайн|таск|задач|менеджер|замовник|клієнт|контрагент|лід)/u.test(normalized);
+    /(тижд|місяц|квартал|рік|року|років|час|сьогодні|вчора|днів|дні|замовл|прорах|дизайн|таск|задач|менеджер|замовник|клієнт|контрагент|лід)/u.test(normalized);
 }
 
 type AnalyticsMetricIntent = "quotes" | "orders" | "design" | "customers" | null;
@@ -1221,6 +1243,7 @@ function hasPersonAnalyticsContext(message: string) {
 function extractFollowUpPeriodHint(message: string) {
   const normalized = normalizeText(message).replace(/[?!.]+$/g, "");
   if (/весь\s+час|за\s+весь\s+час|за\s+всі\s+часи|увесь\s+час/iu.test(normalized)) return "за весь час";
+  if (/цей\s+рік|цього\s+року|поточн(ий|ого|ому)\s+р(ік|оці)/iu.test(normalized)) return "за цей рік";
   const explicit = normalized.match(
     /\bза\s+(?:останн(?:ій|і|ю)\s+)?(?:(?:\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\s+)?(?:дн(?:і|ів|я)|день|тиждень|тижні|місяць|місяці|місяців|квартал|рік|роки|років)\b/iu
   );
@@ -1234,7 +1257,7 @@ function extractFollowUpPeriodHint(message: string) {
 }
 
 const FOLLOW_UP_PERIOD_FRAGMENT =
-  "(?:за\\s+(?:весь\\s+час|всі\\s+часи|усі\\s+часи|увесь\\s+час)|за\\s+(?:останн(?:ій|і|ю)\\s+)?(?:(?:\\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\\s+)?(?:дн(?:і|ів|я)|день|тиждень|тижні|тижнів|місяць|місяці|місяців|квартал|рік|роки|років)|цього\\s+місяц[яю]|поточн(?:ий|ого|ому)\\s+місяц[яю]|сьогодні|вчора)";
+  "(?:за\\s+(?:весь\\s+час|всі\\s+часи|усі\\s+часи|увесь\\s+час)|за\\s+(?:останн(?:ій|і|ю)\\s+)?(?:(?:\\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\\s+)?(?:дн(?:і|ів|я)|день|тиждень|тижні|тижнів|місяць|місяці|місяців|квартал|рік|роки|років)|цей\\s+рік|цього\\s+року|поточн(?:ий|ого|ому)\\s+р(?:ік|оці)|цього\\s+місяц[яю]|поточн(?:ий|ого|ому)\\s+місяц[яю]|сьогодні|вчора)";
 
 const FOLLOW_UP_PERIOD_RE = new RegExp(`\\s*${FOLLOW_UP_PERIOD_FRAGMENT}(?=\\s|$)`, "giu");
 
@@ -1298,13 +1321,20 @@ function getStoredAnalyticsMessage(message: SupportMessageRow) {
   return shouldRunAnalytics(message.body) ? message.body : "";
 }
 
-function buildAnalyticsMessageWithContext(message: string, recentMessages: SupportMessageRow[]) {
+function buildAnalyticsMessageWithContext(
+  message: string,
+  recentMessages: SupportMessageRow[],
+  fallbackAnalyticsMessage = ""
+) {
   if (shouldRunAnalytics(message)) return message;
   if (!hasAnalyticsFollowUpSignal(message)) return message;
   const previousUserAnalyticsMessage = [...recentMessages].reverse().find((entry) => entry.role === "user" && getStoredAnalyticsMessage(entry));
-  if (!previousUserAnalyticsMessage) return message;
+  const fallbackMessage = normalizeText(fallbackAnalyticsMessage);
+  if (!previousUserAnalyticsMessage && !shouldRunAnalytics(fallbackMessage)) return message;
 
-  const previousMessage = getStoredAnalyticsMessage(previousUserAnalyticsMessage) || previousUserAnalyticsMessage.body;
+  const previousMessage = previousUserAnalyticsMessage
+    ? getStoredAnalyticsMessage(previousUserAnalyticsMessage) || previousUserAnalyticsMessage.body
+    : fallbackMessage;
   const currentMetric = detectAnalyticsMetricIntent(message);
   const previousMetric = detectAnalyticsMetricIntent(previousMessage);
   const metric = currentMetric ?? previousMetric;
@@ -1355,6 +1385,92 @@ function toAnalyticsDecision(result: AnalyticsResult): AssistantDecision {
     knowledgeIds: [],
     internalSummary: result.summary,
     analytics: result.analytics,
+    suggestedActions: result.suggestedActions ?? [],
+  };
+}
+
+function compactSuggestedActions(actions: SuggestedAction[]) {
+  const seen = new Set<string>();
+  return actions
+    .map((action) => ({
+      label: trimTo(action.label, 32),
+      text: normalizeText(action.text),
+    }))
+    .filter((action) => action.label && action.text)
+    .filter((action) => {
+      const key = action.text.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
+}
+
+function periodFollowUpActions(): SuggestedAction[] {
+  return [
+    { label: "За весь час", text: "а за весь час?" },
+    { label: "За цей рік", text: "а за цей рік?" },
+    { label: "За місяць", text: "а за місяць?" },
+  ];
+}
+
+function managerQuoteActions(): SuggestedAction[] {
+  return [
+    ...periodFollowUpActions(),
+    { label: "Усі менеджери", text: "скільки прорахунків по менеджерах за місяць?" },
+  ];
+}
+
+function managerOrderActions(): SuggestedAction[] {
+  return [
+    ...periodFollowUpActions(),
+    { label: "Усі менеджери", text: "скільки замовлень по менеджерах за місяць?" },
+  ];
+}
+
+function designerActions(): SuggestedAction[] {
+  return [
+    ...periodFollowUpActions(),
+    { label: "Усі дизайнери", text: "скільки дизайн-задач зробили дизайнери за місяць?" },
+  ];
+}
+
+function customerActions(): SuggestedAction[] {
+  return [
+    ...periodFollowUpActions(),
+    { label: "По замовниках", text: "скільки прорахунків по замовниках за місяць?" },
+  ];
+}
+
+function unsupportedAnalyticsDecision(message: string): AssistantDecision {
+  return {
+    title: "Поки не рахую цей зріз",
+    summary: "Для цього запиту немає готового точного підрахунку.",
+    answerMarkdown:
+      "Цей зріз поки не можу порахувати точно по CRM-даних. Не буду вигадувати відповідь. Можу порахувати найближчі доступні метрики: прорахунки, замовлення, дизайн-задачі, замовників або адмін-стан.",
+    playfulLine: "Показав доступні точні зрізи.",
+    status: "waiting_user",
+    priority: "low",
+    domain: deriveDomainFromMessage(message, "general"),
+    confidence: 0.76,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "Analytics-like request had no deterministic supported handler.",
+    suggestedActions: compactSuggestedActions([
+      { label: "Прорахунки", text: "скільки прорахунків по менеджерах за місяць?" },
+      { label: "Замовлення", text: "скільки замовлень по менеджерах за місяць?" },
+      { label: "Дизайн", text: "скільки дизайн-задач зробили дизайнери за місяць?" },
+      { label: "Замовники", text: "скільки прорахунків по замовниках за місяць?" },
+    ]),
+    analytics: {
+      kind: "entity",
+      title: "Немає точного сценарію",
+      caption: "Не підставляю фолбек з бази знань",
+      metricLabel: "Дія",
+      rows: [],
+      note: "Для аналітичних запитів без підтриманого сценарію повертаю уточнення, а не випадкову статтю з бази знань.",
+    },
   };
 }
 
@@ -1931,6 +2047,7 @@ async function buildDesignCompletionAnalytics(params: {
     markdown: body,
     domain: "design",
     confidence: 0.94,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(designerActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "people",
       title: params.targetMember
@@ -2032,6 +2149,7 @@ async function buildPartyDesignCompletionAnalytics(params: {
     markdown: body,
     domain: "design",
     confidence: 0.9,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(designerActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "people",
       title: party.name,
@@ -2135,6 +2253,7 @@ async function buildManagerQuoteAnalytics(params: {
     markdown: body,
     domain: "orders",
     confidence: 0.9,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(managerQuoteActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "people",
       title: params.targetMember
@@ -2210,6 +2329,7 @@ async function buildManagerOrderAnalytics(params: {
     markdown: body,
     domain: "orders",
     confidence: 0.9,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(managerOrderActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "people",
       title: params.targetMember
@@ -2662,6 +2782,7 @@ async function buildCustomerQuoteAnalytics(params: {
     markdown: body,
     domain: "orders",
     confidence: 0.9,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(customerActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "entity",
       title: "Прорахунки по замовниках",
@@ -2728,6 +2849,7 @@ async function buildCustomerOrderAnalytics(params: {
     markdown: body,
     domain: "orders",
     confidence: 0.88,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(customerActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "entity",
       title: "Замовлення по замовниках",
@@ -2818,6 +2940,7 @@ async function buildManagerCustomerAnalytics(params: {
         : `За цей період не знайшов замовників із прорахунками у **${targetLabel}**.`,
     domain: "orders",
     confidence: 0.9,
+    suggestedActions: rows.length === 0 ? compactSuggestedActions([...periodFollowUpActions(), { label: "Усі замовники", text: "скільки прорахунків по замовниках за місяць?" }]) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "entity",
       title: `Замовники: ${targetLabel}`,
@@ -2944,6 +3067,11 @@ async function buildPartyQuoteOrderAnalytics(params: {
       markdown: "Можу порахувати прорахунки й замовлення по конкретному ліду або замовнику, але треба назва/ID або відкритий профіль клієнта.\n\nПриклад: `скільки у замовника Nike прорахунків і замовлень?`",
       domain: "orders",
       confidence: 0.72,
+      suggestedActions: compactSuggestedActions([
+        { label: "Вибрати замовника", text: "скільки прорахунків у @замовник: за місяць?" },
+        { label: "По замовниках", text: "скільки прорахунків по замовниках за місяць?" },
+        { label: "Прорахунки менеджерів", text: "скільки прорахунків по менеджерах за місяць?" },
+      ]),
       analytics: {
         kind: "entity",
         title: "Прорахунки і замовлення",
@@ -3052,6 +3180,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
     markdown: `Порахував по ${party.kind === "customer" ? "замовнику" : "ліду"} **${party.name}** ${period.label}: **${summaryParts.join(" і ")}**.`,
     domain: "orders",
     confidence: party.kind === "customer" ? 0.92 : 0.82,
+    suggestedActions: rows.every((row) => row.primary === "0") ? compactSuggestedActions(customerActions()) : compactSuggestedActions(periodFollowUpActions()),
     analytics: {
       kind: "entity",
       title: party.name,
@@ -3093,6 +3222,11 @@ function buildPersonAmbiguityDecision(candidates: RoutingCandidate[]): Assistant
     shouldNotify: false,
     knowledgeIds: [],
     internalSummary: "Analytics person query is ambiguous.",
+    suggestedActions: compactSuggestedActions([
+      { label: "Вибрати менеджера", text: "скільки прорахунків у @менеджер: за місяць?" },
+      { label: "Вибрати дизайнера", text: "скільки дизайн-задач зробив @дизайнер: за місяць?" },
+      { label: "Усі менеджери", text: "скільки прорахунків по менеджерах за місяць?" },
+    ]),
     analytics: {
       kind: "people",
       title: "Кого рахувати?",
@@ -3104,6 +3238,77 @@ function buildPersonAmbiguityDecision(candidates: RoutingCandidate[]): Assistant
   };
 }
 
+function buildPersonMetricMismatchDecision(candidate: RoutingCandidate, requestedMetric: string): AssistantDecision {
+  const label = formatShortPersonName(candidate.label) || candidate.label;
+  const roleLabel = analyticsPersonRoleLabel(candidate);
+  return {
+    title: "Уточни роль",
+    summary: `${candidate.label}: ${roleLabel}, запит був про ${requestedMetric}.`,
+    answerMarkdown: `Знайшов **${label}**, але це **${roleLabel}**. ${requestedMetric} рахую по відповідній ролі, тому не підставляю цю людину автоматично. Уточни роль або напиши іншу метрику.`,
+    playfulLine: "Потрібне уточнення перед підрахунком.",
+    status: "waiting_user",
+    priority: "low",
+    domain: roleLabel === "Дизайнер" ? "design" : roleLabel === "Логіст" ? "logistics" : "team",
+    confidence: 0.82,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "Analytics person metric did not match candidate role.",
+    suggestedActions: compactSuggestedActions([
+      { label: "Прорахунки менеджерів", text: "скільки прорахунків по менеджерах за місяць?" },
+      { label: "Дизайн-задачі", text: `скільки дизайн-задач зробив ${candidate.label} за місяць?` },
+      { label: "Замовлення менеджерів", text: "скільки замовлень по менеджерах за місяць?" },
+    ]),
+    analytics: {
+      kind: "people",
+      title: "Не підставляю автоматично",
+      caption: "Метрика і роль не збігаються",
+      metricLabel: "Роль",
+      rows: [
+        {
+          id: candidate.userId,
+          label,
+          avatarUrl: candidate.avatarUrl,
+          primary: roleLabel,
+          secondary: normalizeText(candidate.jobRole) || normalizeText(candidate.accessRole) || null,
+        },
+      ],
+      note: "Для прорахунків і замовлень беру менеджерів; для дизайну - дизайнерів.",
+    },
+  };
+}
+
+function buildPersonNotFoundDecision(message: string): AssistantDecision {
+  const query = stripAnalyticsQueryTerms(message) || "цю людину";
+  return {
+    title: "Не знайшов людину",
+    summary: `Не знайшов співробітника за запитом: ${query}.`,
+    answerMarkdown: `Не знайшов **${query}** серед співробітників. Не буду підставляти схожий випадковий запис. Напиши ім'я точніше або вибери людину через @підказку.`,
+    playfulLine: "Потрібне точніше ім'я.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "team",
+    confidence: 0.78,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "Analytics person target was not found.",
+    suggestedActions: compactSuggestedActions([
+      { label: "Вибрати менеджера", text: "скільки прорахунків у @менеджер: за місяць?" },
+      { label: "Вибрати дизайнера", text: "скільки дизайн-задач зробив @дизайнер: за місяць?" },
+      { label: "Усі менеджери", text: "скільки прорахунків по менеджерах за місяць?" },
+    ]),
+    analytics: {
+      kind: "people",
+      title: "Кого рахувати?",
+      caption: "Немає точного збігу",
+      metricLabel: "Роль",
+      rows: [],
+      note: "Не підставляю схожі імена без достатнього збігу.",
+    },
+  };
+}
+
 async function buildPersonAnalyticsDecision(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -3111,7 +3316,6 @@ async function buildPersonAnalyticsDecision(params: {
 }) {
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
   const matches = findAnalyticsPersonMatches(params.message, members);
-  if (matches.length === 0) return null;
 
   const normalized = normalizeText(params.message).toLowerCase();
   const explicitlyDesign = /(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized);
@@ -3119,6 +3323,15 @@ async function buildPersonAnalyticsDecision(params: {
   const explicitlyCustomers = /(замовник|клієнт|контрагент)/u.test(normalized);
   const explicitlyOrders = /(замовл|order)/u.test(normalized) && !/(замовник|клієнт|контрагент)/u.test(normalized);
   const explicitlyQuotes = /(прорах|quote|коштор|кп)/u.test(normalized);
+  const hasExplicitPersonContext =
+    hasManagerAnalyticsTerm(normalized) ||
+    hasEmployeeAnalyticsTerm(normalized) ||
+    /(дизайнер|логіст|співробітник|користувач|працівник)/u.test(normalized);
+  if (matches.length === 0) {
+    return hasExplicitPersonContext && stripAnalyticsQueryTerms(params.message)
+      ? buildPersonNotFoundDecision(params.message)
+      : null;
+  }
 
   const relevantMatches = matches.filter((member) => {
     const role = normalizeRole(member.jobRole);
@@ -3129,6 +3342,21 @@ async function buildPersonAnalyticsDecision(params: {
     }
     return true;
   });
+  if (
+    relevantMatches.length === 0 &&
+    (explicitlyDesign || explicitlyLogistics || explicitlyCustomers || explicitlyOrders || explicitlyQuotes || hasManagerAnalyticsTerm(normalized))
+  ) {
+    const requestedMetric = explicitlyDesign
+      ? "дизайн-задачі"
+      : explicitlyLogistics
+        ? "логістику"
+        : explicitlyOrders
+          ? "замовлення"
+          : explicitlyCustomers
+            ? "замовників"
+            : "прорахунки";
+    return buildPersonMetricMismatchDecision(matches[0], requestedMetric);
+  }
   const candidates = relevantMatches.length > 0 ? relevantMatches : matches;
   if (candidates.length > 1) return buildPersonAmbiguityDecision(candidates);
 
@@ -4313,7 +4541,12 @@ async function handleSend(params: {
 
   let assistantDecision: AssistantDecision | null = null;
   let usedFallback = false;
-  const analyticsMessage = buildAnalyticsMessageWithContext(message, recentMessages);
+  const existingContext = (existingRequest?.context ?? {}) as JsonRecord;
+  const previousThreadAnalyticsMessage =
+    typeof existingContext.last_analytics_message === "string"
+      ? normalizeText(existingContext.last_analytics_message)
+      : "";
+  const analyticsMessage = buildAnalyticsMessageWithContext(message, recentMessages, previousThreadAnalyticsMessage);
   const analyticsRequested = shouldRunAnalytics(analyticsMessage);
 
   if (analyticsRequested) {
@@ -4323,6 +4556,9 @@ async function handleSend(params: {
       message: analyticsMessage,
       routeContext,
     });
+    if (!assistantDecision) {
+      assistantDecision = unsupportedAnalyticsDecision(analyticsMessage);
+    }
   }
 
   if (!assistantDecision) {
@@ -4390,6 +4626,7 @@ async function handleSend(params: {
     entity_id: routeContext.entityId,
     ai_confidence: assistantDecision.confidence,
     context: {
+      ...existingContext,
       route_context: routeContext,
       runtime_errors: runtimeErrors.map((row) => ({
         title: row.title ?? null,
@@ -4397,6 +4634,7 @@ async function handleSend(params: {
         created_at: row.created_at,
       })),
       last_internal_summary: assistantDecision.internalSummary,
+      last_analytics_message: analyticsRequested ? analyticsMessage : previousThreadAnalyticsMessage || null,
     },
     escalated_at: assistantDecision.shouldEscalate ? existingRequest?.escalated_at ?? nowIso : existingRequest?.escalated_at ?? null,
     resolved_at:
@@ -4472,6 +4710,7 @@ async function handleSend(params: {
         usedFallback,
         sources: sourceItems,
         analytics: assistantDecision.analytics ?? null,
+        suggestedActions: compactSuggestedActions(assistantDecision.suggestedActions ?? []),
       },
     },
   ]);

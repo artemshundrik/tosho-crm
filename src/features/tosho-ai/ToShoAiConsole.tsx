@@ -154,6 +154,11 @@ type AnalyticsPayload = {
   note?: string | null;
 };
 
+type SuggestedAction = {
+  label: string;
+  text: string;
+};
+
 type ToShoAiComposerIntent = ToShoAiMode | "auto";
 
 const SUPPORT_ATTACHMENT_BUCKET =
@@ -400,6 +405,27 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
     rows: parsedRows,
     note: typeof analytics.note === "string" ? analytics.note : null,
   };
+}
+
+function readSuggestedActions(metadata: Record<string, unknown> | null): SuggestedAction[] {
+  const raw = metadata?.suggestedActions;
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw
+    .flatMap((action): SuggestedAction[] => {
+      if (!isRecord(action) || typeof action.label !== "string" || typeof action.text !== "string") return [];
+      const label = action.label.trim();
+      const text = action.text.trim();
+      if (!label || !text) return [];
+      return [{ label, text }];
+    })
+    .filter((action) => {
+      const key = action.text.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
 }
 
 function getAnalyticsBadgeIcon(label: string) {
@@ -953,14 +979,17 @@ function PersonalQuickPrompts({
 function MessageCard({
   message,
   onFeedback,
+  onSelectAction,
 }: {
   message: ToShoAiMessage;
   onFeedback: (messageId: string, value: "helpful" | "not_helpful") => void;
+  onSelectAction: (value: string) => void;
 }) {
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
   const displayBody = isAssistant ? formatAssistantMessageBody(message.body) : message.body;
   const analytics = isAssistant ? readAnalyticsPayload(message.metadata) : null;
+  const suggestedActions = isAssistant ? readSuggestedActions(message.metadata) : [];
 
   return (
     <div className={cn("flex w-full min-w-0 overflow-hidden px-0.5", isUser ? "justify-end" : "justify-start")}>
@@ -1067,6 +1096,21 @@ function MessageCard({
                   </div>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {suggestedActions.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {suggestedActions.map((action) => (
+                <button
+                  key={`${message.id}:${action.label}:${action.text}`}
+                  type="button"
+                  onClick={() => onSelectAction(action.text)}
+                  className="inline-flex min-h-8 items-center rounded-full border border-border/65 bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-muted/45"
+                >
+                  {action.label}
+                </button>
+              ))}
             </div>
           ) : null}
         </div>
@@ -1581,7 +1625,7 @@ export function ToShoAiConsole({
             })
           : composerIntent;
       const response = await callToShoAiApi("send", {
-        requestId: selectedThreadId,
+        requestId: selectedThread?.id ?? selectedThreadId,
         message: outgoingMessage,
         mode: outgoingMode,
         routeContext: resolvedContext,
@@ -1626,6 +1670,7 @@ export function ToShoAiConsole({
     composerValue,
     pendingAttachments.length,
     resolvedContext,
+    selectedThread?.id,
     selectedThreadId,
     uploadPendingAttachments,
   ]);
@@ -2008,7 +2053,12 @@ export function ToShoAiConsole({
                 <div className="space-y-4">
                   <div className="space-y-4">
                     {selectedThread.messages.map((message) => (
-                      <MessageCard key={message.id} message={message} onFeedback={handleFeedback} />
+                      <MessageCard
+                        key={message.id}
+                        message={message}
+                        onFeedback={handleFeedback}
+                        onSelectAction={handleSelectPromptSuggestion}
+                      />
                     ))}
                     <div ref={chatBottomRef} />
                   </div>
