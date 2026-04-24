@@ -220,6 +220,27 @@ type AssistantDecision = {
   suggestedActions?: SuggestedAction[];
 };
 
+type OpenAiDiagnostics = {
+  attempted: boolean;
+  ok: boolean;
+  model: string | null;
+  responseId: string | null;
+  previousResponseId: string | null;
+  latencyMs: number | null;
+  error: string | null;
+  status: number | null;
+  usedImageInputs: number;
+  promptKnowledgeCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+};
+
+type OpenAiDecisionResult = {
+  decision: AssistantDecision;
+  diagnostics: OpenAiDiagnostics;
+};
+
 type AnalyticsResult = {
   title: string;
   summary: string;
@@ -242,6 +263,19 @@ const DEFAULT_ROUTE_CONTEXT = {
 };
 
 const RUNTIME_ERROR_RECENCY_MS = 30 * 60 * 1000;
+
+class HttpError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+function httpError(statusCode: number, message: string) {
+  return new HttpError(statusCode, message);
+}
 
 const OPENAI_STRUCTURED_SCHEMA = {
   type: "object",
@@ -520,6 +554,70 @@ async function signSupportAttachment(
     ...attachment,
     url: typeof data?.signedUrl === "string" ? data.signedUrl : null,
   };
+}
+
+function isOpenAiImageAttachment(attachment: SupportAttachmentInput) {
+  const mimeType = normalizeText(attachment.mimeType).toLowerCase();
+  if (mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/webp" || mimeType === "image/gif") {
+    return true;
+  }
+  const path = normalizeText(attachment.storagePath).toLowerCase();
+  return /\.(png|jpe?g|webp|gif)$/i.test(path);
+}
+
+async function buildOpenAiImageInputs(
+  adminClient: ReturnType<typeof createClient>,
+  attachments: SupportAttachmentInput[]
+) {
+  const imageAttachments = attachments.filter(isOpenAiImageAttachment).slice(0, 4);
+  const signed = await Promise.all(
+    imageAttachments.map((attachment) => signSupportAttachment(adminClient, attachment).catch(() => null))
+  );
+
+  return signed
+    .filter((attachment): attachment is SupportAttachmentInput & { url: string } =>
+      Boolean(attachment?.url)
+    )
+    .map((attachment) => ({
+      type: "input_image",
+      image_url: attachment.url,
+      detail: "low",
+    }));
+}
+
+function extractUsage(payload: JsonRecord) {
+  const usage = payload.usage && typeof payload.usage === "object" ? (payload.usage as JsonRecord) : null;
+  const toNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  return {
+    inputTokens: toNumber(usage?.input_tokens),
+    outputTokens: toNumber(usage?.output_tokens),
+    totalTokens: toNumber(usage?.total_tokens),
+  };
+}
+
+async function logToShoAiRuntimeSignal(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+  title: string;
+  metadata: JsonRecord;
+}) {
+  await params.adminClient
+    .schema("tosho")
+    .from("runtime_errors")
+    .insert({
+      team_id: params.auth.teamId,
+      user_id: params.auth.userId,
+      actor_name: params.auth.actorLabel,
+      source: "boundary",
+      title: params.title,
+      href: params.routeContext.href,
+      metadata: {
+        source: "tosho_ai",
+        ...params.metadata,
+      },
+    })
+    .throwOnError();
 }
 
 function deriveDomainFromMessage(message: string, fallback: ToShoAiDomain) {
@@ -1480,7 +1578,7 @@ async function resolveAuthContext(
 ): Promise<AuthContext> {
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData?.user) {
-    throw new Error("Unauthorized");
+    throw httpError(401, "Unauthorized");
   }
 
   const user = userData.user;
@@ -1505,7 +1603,7 @@ async function resolveAuthContext(
 
   const workspaceId = normalizeText(membership?.workspace_id);
   if (!workspaceId) {
-    throw new Error("Workspace not found");
+    throw httpError(403, "Workspace not found");
   }
 
   let teamId = workspaceId;
@@ -1682,6 +1780,8 @@ async function listRuntimeErrors(
 
   if (error) return [] as RuntimeErrorRow[];
   const rows = ((data ?? []) as RuntimeErrorRow[]).filter((row) => {
+    const metadata = (row.metadata ?? {}) as JsonRecord;
+    if (metadata.source === "tosho_ai") return false;
     const createdAtMs = Date.parse(row.created_at);
     if (!Number.isFinite(createdAtMs)) return false;
     return Date.now() - createdAtMs <= RUNTIME_ERROR_RECENCY_MS;
@@ -4012,7 +4112,19 @@ function extractResponseOutputText(payload: JsonRecord) {
   return "";
 }
 
+function extractPreviousOpenAiResponseId(messages: SupportMessageRow[]) {
+  for (const message of [...messages].reverse()) {
+    const metadata = (message.metadata ?? {}) as JsonRecord;
+    const responseId = normalizeText(
+      typeof metadata.openAiResponseId === "string" ? metadata.openAiResponseId : null
+    );
+    if (message.role === "assistant" && responseId) return responseId;
+  }
+  return null;
+}
+
 async function callOpenAiDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
   message: string;
   mode: ToShoAiMode;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
@@ -4020,11 +4132,13 @@ async function callOpenAiDecision(params: {
   knowledge: KnowledgeItemRow[];
   recentMessages: SupportMessageRow[];
   attachments: SupportAttachmentInput[];
-}): Promise<AssistantDecision | null> {
+}): Promise<OpenAiDecisionResult | null> {
   const apiKey = normalizeText(process.env.OPENAI_API_KEY);
   if (!apiKey) return null;
 
   const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const startedAt = Date.now();
+  const previousResponseId = extractPreviousOpenAiResponseId(params.recentMessages);
   const inferredDomain = deriveDomainFromMessage(params.message, params.routeContext.domainHint);
   const productGuidance = getDomainProductGuidance(inferredDomain);
   const recentMessages = params.recentMessages
@@ -4065,6 +4179,7 @@ async function callOpenAiDecision(params: {
   const productGuidanceBlock = productGuidance
     ? `SUMMARY: ${productGuidance.summary}\nGUIDANCE:\n${productGuidance.markdown}`
     : "No built-in product guidance for this domain.";
+  const imageInputs = await buildOpenAiImageInputs(params.adminClient, params.attachments);
 
   const developerPrompt = [
     "You are ToSho AI, an embedded CRM command layer for a creative agency.",
@@ -4111,10 +4226,17 @@ async function callOpenAiDecision(params: {
     },
     body: JSON.stringify({
       model,
+      ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
       reasoning: { effort: "medium" },
       input: [
         { role: "developer", content: developerPrompt },
-        { role: "user", content: userPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: userPrompt },
+            ...imageInputs,
+          ],
+        },
       ],
       max_output_tokens: 1600,
       text: {
@@ -4129,12 +4251,30 @@ async function callOpenAiDecision(params: {
   });
 
   const payload = (await response.json()) as JsonRecord;
+  const latencyMs = Date.now() - startedAt;
+  const usage = extractUsage(payload);
   if (!response.ok) {
     const error =
       payload && typeof payload.error === "object" && payload.error && "message" in payload.error
         ? (payload.error as { message?: string }).message
         : "OpenAI request failed";
-    throw new Error(error);
+    const err = new Error(error) as Error & { diagnostics?: OpenAiDiagnostics };
+    err.diagnostics = {
+      attempted: true,
+      ok: false,
+      model,
+      responseId: typeof payload.id === "string" ? payload.id : null,
+      previousResponseId,
+      latencyMs,
+      error,
+      status: response.status,
+      usedImageInputs: imageInputs.length,
+      promptKnowledgeCount: params.knowledge.length,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+    };
+    throw err;
   }
 
   const rawText = extractResponseOutputText(payload);
@@ -4156,18 +4296,35 @@ async function callOpenAiDecision(params: {
   };
 
   return {
-    title: trimTo(parsed.title || "Нове звернення до ToSho AI", 120),
-    summary: trimTo(parsed.summary || "Відповідь підготовлено.", 240),
-    answerMarkdown: normalizeText(parsed.answer_markdown) || "Поки що не вистачає підтвердженого контексту для відповіді.",
-    playfulLine: trimTo(parsed.playful_line || "", 180),
-    status: normalizeStatus(parsed.status),
-    priority: normalizePriority(parsed.priority),
-    domain: normalizeDomain(parsed.domain),
-    confidence: clampConfidence(parsed.confidence),
-    shouldEscalate: Boolean(parsed.should_escalate),
-    shouldNotify: Boolean(parsed.should_notify),
-    knowledgeIds: toPlainList(parsed.knowledge_ids),
-    internalSummary: trimTo(parsed.internal_summary || "", 300),
+    decision: {
+      title: trimTo(parsed.title || "Нове звернення до ToSho AI", 120),
+      summary: trimTo(parsed.summary || "Відповідь підготовлено.", 240),
+      answerMarkdown: normalizeText(parsed.answer_markdown) || "Поки що не вистачає підтвердженого контексту для відповіді.",
+      playfulLine: trimTo(parsed.playful_line || "", 180),
+      status: normalizeStatus(parsed.status),
+      priority: normalizePriority(parsed.priority),
+      domain: normalizeDomain(parsed.domain),
+      confidence: clampConfidence(parsed.confidence),
+      shouldEscalate: Boolean(parsed.should_escalate),
+      shouldNotify: Boolean(parsed.should_notify),
+      knowledgeIds: toPlainList(parsed.knowledge_ids),
+      internalSummary: trimTo(parsed.internal_summary || "", 300),
+    },
+    diagnostics: {
+      attempted: true,
+      ok: true,
+      model,
+      responseId: typeof payload.id === "string" ? payload.id : null,
+      previousResponseId,
+      latencyMs,
+      error: null,
+      status: response.status,
+      usedImageInputs: imageInputs.length,
+      promptKnowledgeCount: params.knowledge.length,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+    },
   };
 }
 
@@ -4507,7 +4664,7 @@ async function handleSend(params: {
   const routeContext = sanitizeRouteContext(params.body.routeContext);
   const message = normalizeText(params.body.message);
   if (!message) {
-    throw new Error("Напиши, що треба зробити або що саме не працює.");
+    throw httpError(400, "Напиши, що треба зробити або що саме не працює.");
   }
 
   const mode = normalizeMode(params.body.mode);
@@ -4541,6 +4698,7 @@ async function handleSend(params: {
 
   let assistantDecision: AssistantDecision | null = null;
   let usedFallback = false;
+  let openAiDiagnostics: OpenAiDiagnostics | null = null;
   const existingContext = (existingRequest?.context ?? {}) as JsonRecord;
   const previousThreadAnalyticsMessage =
     typeof existingContext.last_analytics_message === "string"
@@ -4563,7 +4721,8 @@ async function handleSend(params: {
 
   if (!assistantDecision) {
     try {
-      assistantDecision = await callOpenAiDecision({
+      const openAiResult = await callOpenAiDecision({
+        adminClient: params.adminClient,
         message,
         mode,
         routeContext,
@@ -4572,13 +4731,48 @@ async function handleSend(params: {
         recentMessages,
         attachments,
       });
-    } catch {
+      assistantDecision = openAiResult?.decision ?? null;
+      openAiDiagnostics = openAiResult?.diagnostics ?? null;
+    } catch (error) {
+      openAiDiagnostics = (error as Error & { diagnostics?: OpenAiDiagnostics })?.diagnostics ?? {
+        attempted: true,
+        ok: false,
+        model: normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4",
+        responseId: null,
+        previousResponseId: null,
+        latencyMs: null,
+        error: error instanceof Error ? error.message : "OpenAI request failed",
+        status: null,
+        usedImageInputs: 0,
+        promptKnowledgeCount: knowledgeCandidates.length,
+        inputTokens: null,
+        outputTokens: null,
+        totalTokens: null,
+      };
       assistantDecision = null;
     }
   }
 
   if (!assistantDecision) {
     usedFallback = true;
+    if (!openAiDiagnostics) {
+      const apiKeyConfigured = Boolean(normalizeText(process.env.OPENAI_API_KEY));
+      openAiDiagnostics = {
+        attempted: apiKeyConfigured,
+        ok: false,
+        model: normalizeText(process.env.OPENAI_MODEL) || (apiKeyConfigured ? "gpt-5.4" : null),
+        responseId: null,
+        previousResponseId: null,
+        latencyMs: null,
+        error: apiKeyConfigured ? "OpenAI returned no usable structured decision." : "OPENAI_API_KEY is not configured.",
+        status: null,
+        usedImageInputs: 0,
+        promptKnowledgeCount: knowledgeCandidates.length,
+        inputTokens: null,
+        outputTokens: null,
+        totalTokens: null,
+      };
+    }
     assistantDecision = buildFallbackDecision({
       message,
       mode,
@@ -4588,6 +4782,19 @@ async function handleSend(params: {
       attachments,
       openAiEnabled: Boolean(normalizeText(process.env.OPENAI_API_KEY)),
     });
+  }
+
+  if (openAiDiagnostics?.attempted && !openAiDiagnostics.ok) {
+    await logToShoAiRuntimeSignal({
+      adminClient: params.adminClient,
+      auth: params.auth,
+      routeContext,
+      title: `ToSho AI OpenAI fallback: ${trimTo(openAiDiagnostics.error || "unknown error", 140)}`,
+      metadata: {
+        kind: "openai_fallback",
+        openai: openAiDiagnostics,
+      },
+    }).catch(() => undefined);
   }
 
   const routingCandidates = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
@@ -4633,6 +4840,7 @@ async function handleSend(params: {
         href: row.href ?? null,
         created_at: row.created_at,
       })),
+      openai: openAiDiagnostics,
       last_internal_summary: assistantDecision.internalSummary,
       last_analytics_message: analyticsRequested ? analyticsMessage : previousThreadAnalyticsMessage || null,
     },
@@ -4708,6 +4916,8 @@ async function handleSend(params: {
         internalSummary: assistantDecision.internalSummary,
         playfulLine: assistantDecision.playfulLine,
         usedFallback,
+        openAiResponseId: openAiDiagnostics?.responseId ?? null,
+        openAi: openAiDiagnostics,
         sources: sourceItems,
         analytics: assistantDecision.analytics ?? null,
         suggestedActions: compactSuggestedActions(assistantDecision.suggestedActions ?? []),
@@ -4773,12 +4983,12 @@ async function handleFeedback(params: {
   const messageId = normalizeText(params.body.messageId);
   const feedback = params.body.feedback;
   if (!requestId || !messageId || (feedback !== "helpful" && feedback !== "not_helpful")) {
-    throw new Error("Не вистачає даних для feedback.");
+    throw httpError(400, "Не вистачає даних для feedback.");
   }
 
   const request = await selectAccessibleRequest(params.adminClient, params.auth, requestId);
   if (!request) {
-    throw new Error("Звернення не знайдено або доступ заборонено.");
+    throw httpError(404, "Звернення не знайдено або доступ заборонено.");
   }
 
   const { error: deleteError } = await params.adminClient
@@ -4832,13 +5042,13 @@ async function handleUpdateRequest(params: {
   body: RequestBody;
 }) {
   if (!params.auth.canManageQueue) {
-    throw new Error("Недостатньо прав для зміни черги.");
+    throw httpError(403, "Недостатньо прав для зміни черги.");
   }
 
   const requestId = normalizeText(params.body.requestId);
-  if (!requestId) throw new Error("Не передано requestId.");
+  if (!requestId) throw httpError(400, "Не передано requestId.");
   const request = await selectAccessibleRequest(params.adminClient, params.auth, requestId);
-  if (!request) throw new Error("Звернення не знайдено.");
+  if (!request) throw httpError(404, "Звернення не знайдено.");
 
   const nextStatus = normalizeStatus(params.body.status || request.status);
   const nextPriority = normalizePriority(params.body.priority || request.priority);
@@ -4872,18 +5082,18 @@ async function handleUpsertKnowledge(params: {
   body: RequestBody;
 }) {
   if (!params.auth.canManageKnowledge) {
-    throw new Error("Недостатньо прав для бази знань.");
+    throw httpError(403, "Недостатньо прав для бази знань.");
   }
 
   const knowledge = params.body.knowledge;
   const title = normalizeText(knowledge?.title);
   const body = normalizeText(knowledge?.body);
   if (!title || !body) {
-    throw new Error("Для картки знань потрібні назва і зміст.");
+    throw httpError(400, "Для картки знань потрібні назва і зміст.");
   }
 
   const slug = normalizeSlug(normalizeText(knowledge?.slug) || title);
-  if (!slug) throw new Error("Не вдалося сформувати slug для картки.");
+  if (!slug) throw httpError(400, "Не вдалося сформувати slug для картки.");
 
   const payload = {
     workspace_id: params.auth.workspaceId,
@@ -4935,11 +5145,11 @@ async function handleDeleteKnowledge(params: {
   body: RequestBody;
 }) {
   if (!params.auth.canManageKnowledge) {
-    throw new Error("Недостатньо прав для бази знань.");
+    throw httpError(403, "Недостатньо прав для бази знань.");
   }
 
   const knowledgeId = normalizeText(params.body.knowledge?.id);
-  if (!knowledgeId) throw new Error("Не передано knowledge id.");
+  if (!knowledgeId) throw httpError(400, "Не передано knowledge id.");
 
   const { error } = await params.adminClient
     .schema("tosho")
@@ -5073,7 +5283,8 @@ export const handler = async (event: HttpEvent) => {
         });
     }
   } catch (error) {
-    return jsonResponse(500, {
+    const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    return jsonResponse(statusCode, {
       error: error instanceof Error ? error.message : "ToSho AI request failed",
     });
   }
