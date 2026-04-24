@@ -776,9 +776,9 @@ function MessageCard({
   const analytics = isAssistant ? readAnalyticsPayload(message.metadata) : null;
 
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[96%] min-w-0 space-y-2 sm:max-w-[88%]", isUser && "items-end")}>
-        <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex w-full min-w-0 overflow-hidden px-0.5", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("max-w-[calc(100%-0.25rem)] min-w-0 space-y-2 sm:max-w-[88%]", isUser && "items-end")}>
+        <div className={cn("flex min-w-0 items-center gap-2 text-xs text-muted-foreground", isUser ? "justify-end" : "justify-start")}>
           {!isUser ? (
             <div
               className={cn(
@@ -791,11 +791,11 @@ function MessageCard({
               {isAssistant ? <Bot className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
             </div>
           ) : null}
-          <div className={cn("flex items-center gap-2", isUser && "flex-row-reverse")}>
-            <span className="font-medium text-foreground/80">
+          <div className={cn("flex min-w-0 items-center gap-2", isUser && "flex-row-reverse")}>
+            <span className="truncate font-medium text-foreground/80">
               {message.actorLabel || (isAssistant ? "ToSho AI" : "Користувач")}
             </span>
-            <span>{formatDateTime(message.createdAt)}</span>
+            <span className="shrink-0">{formatDateTime(message.createdAt)}</span>
           </div>
         </div>
         <div
@@ -806,7 +806,7 @@ function MessageCard({
               : "border-border/60 bg-card/88"
           )}
         >
-          <div className="whitespace-pre-wrap text-[15px] leading-6 text-foreground">{displayBody}</div>
+          <div className="whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground [overflow-wrap:anywhere]">{displayBody}</div>
 
           {analytics ? <AnalyticsResultTable analytics={analytics} /> : null}
 

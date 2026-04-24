@@ -744,6 +744,24 @@ function stripAnalyticsQueryTerms(message: string) {
     .trim();
 }
 
+function extractPartySearchQuery(message: string) {
+  const normalized = normalizeText(message)
+    .replace(/[?!.]+$/g, "")
+    .replace(/[ʼ’']/g, "'");
+  const match = normalized.match(
+    /(?:^|\s)(?:у|в|по|для)?\s*(?:замовника|замовнику|клієнта|клієнту|контрагента|контрагенту|ліда|ліду)\s+(.+?)\s*(?:\s+(?:прорахунків|прорахунки|прорахунок|замовлень|замовлення)(?:\s|$)|\s+за\s+(?:останн(?:ій|і|ю)\s+)?(?:день|тиждень|місяць|квартал|рік|[0-9]+\s*дн(?:ів|і)?)|\s+цього\s+місяц[яю]|\s+поточн(?:ий|ого|ому)\s+місяц[яю]|$)/iu
+  );
+  const query = normalizeText(match?.[1]);
+  if (!query) return "";
+  return query
+    .replace(
+      /\b(прорахунків|прорахунки|прорахунок|замовлень|замовлення|скільки|порахуй|рахуй|покажи|дай|і|й|та)\b/giu,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function hasManagerAnalyticsTerm(normalized: string) {
   return /(менеджер|менеджер|менедж|иенедж|mene|manager)/u.test(normalized);
 }
@@ -1531,7 +1549,7 @@ async function resolvePartyForAnalytics(params: {
     }
   }
 
-  const query = stripAnalyticsQueryTerms(params.message);
+  const query = extractPartySearchQuery(params.message) || stripAnalyticsQueryTerms(params.message);
   if (!query) return null;
   const escaped = query.replace(/[%_]/g, "\\$&");
 
