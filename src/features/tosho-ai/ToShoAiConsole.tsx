@@ -559,6 +559,10 @@ function buildPromptSuggestionGroups(input: {
           text: "скільки у замовника @замовник: прорахунків і замовлень?",
         },
         {
+          label: "Без лого",
+          text: "Покажи замовників і лідів без логотипа.",
+        },
+        {
           label: "Зріз по замовниках",
           text: "покажи прорахунки по замовниках за місяць",
         },
@@ -859,6 +863,68 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
           {analytics.note}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function buildMagicThinkingSteps(message: string) {
+  const normalized = normalizeSearch(message);
+  if (/(лого|логотип|logo|бренд|аватар)/u.test(normalized)) {
+    return ["Сканую замовників", "Звіряю logo_url", "Готую список"];
+  }
+  if (/(дизайнер|дизайн|таск|задач)/u.test(normalized)) {
+    return ["Читаю дизайн-задачі", "Групую виконавців", "Збираю рейтинг"];
+  }
+  if (/(backup|бекап|сховище|storage|observability|runtime|баг)/u.test(normalized)) {
+    return ["Читаю observability", "Звіряю backup", "Підсвічую ризики"];
+  }
+  if (/(прорах|quote|замовник|клієнт|лід|менеджер)/u.test(normalized)) {
+    return ["Збираю CRM-зріз", "Перевіряю записи", "Форматую таблицю"];
+  }
+  return ["Збираю контекст", "Перевіряю CRM", "Форматую відповідь"];
+}
+
+function MagicThinkingCard({ message }: { message: string }) {
+  const steps = buildMagicThinkingSteps(message);
+
+  return (
+    <div className="flex w-full min-w-0 justify-start overflow-hidden px-0.5">
+      <div className="max-w-[calc(100%-0.25rem)] min-w-0 space-y-2 sm:max-w-[88%]">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium text-foreground/80">ToSho AI</span>
+            <span className="shrink-0">збирає відповідь</span>
+          </div>
+        </div>
+        <div className="tosho-ai-magic-card rounded-[24px] border px-3.5 py-3 shadow-[var(--shadow-elevated-sm)] sm:rounded-[28px] sm:px-4 sm:py-3.5">
+          <div className="tosho-ai-magic-scan" aria-hidden="true" />
+          <div className="relative flex items-start gap-3">
+            <div className="tosho-ai-magic-pulse mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E6007E]/22 bg-[#E6007E]/10 text-[#E6007E]">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-foreground">Шукаю корисне в CRM</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                Не просто чекаю відповідь, а збираю потрібні дані і перевіряю контекст.
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {steps.map((step, index) => (
+                  <div
+                    key={step}
+                    className="tosho-ai-magic-step rounded-full border border-border/55 bg-background/55 px-3 py-2 text-xs font-medium text-foreground/85"
+                    style={{ animationDelay: `${index * 220}ms` }}
+                  >
+                    {step}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1256,6 +1322,7 @@ export function ToShoAiConsole({
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [composerIntent, setComposerIntent] = useState<ToShoAiComposerIntent>("auto");
   const [composerValue, setComposerValue] = useState("");
+  const [pendingMagicMessage, setPendingMagicMessage] = useState("");
   const [activeMention, setActiveMention] = useState<ActiveMention | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<ToShoAiMentionSuggestion[]>([]);
   const [mentionLoading, setMentionLoading] = useState(false);
@@ -1673,6 +1740,7 @@ export function ToShoAiConsole({
     }
 
     setActionBusy("send");
+    setPendingMagicMessage(outgoingMessage);
     let uploadedStorageFiles: Array<{ bucket: string; path: string }> = [];
     try {
       const uploaded = await uploadPendingAttachments();
@@ -1724,6 +1792,7 @@ export function ToShoAiConsole({
       toast.error(error instanceof Error ? error.message : "Не вдалося відправити запит.");
     } finally {
       setActionBusy(null);
+      setPendingMagicMessage("");
     }
   }, [
     actionBusy,
@@ -2101,6 +2170,7 @@ export function ToShoAiConsole({
                         showDiagnostics={Boolean(snapshot?.permissions.canManageQueue || snapshot?.permissions.canManageKnowledge)}
                       />
                     ))}
+                    {actionBusy === "send" ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
                     <div ref={chatBottomRef} />
                   </div>
 
@@ -2110,6 +2180,7 @@ export function ToShoAiConsole({
                   {!showRequestList && !knowledgeExpanded && !isAiUnavailable ? (
                     <EmptyChatSuggestions groups={promptSuggestionGroups} onSelect={handleSelectPromptSuggestion} />
                   ) : null}
+                  {actionBusy === "send" ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
                   <div ref={chatBottomRef} />
                 </div>
               )}

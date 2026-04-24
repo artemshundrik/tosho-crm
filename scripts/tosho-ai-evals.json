@@ -41,6 +41,27 @@
     }
   },
   {
+    "id": "logo-hygiene-direct-no-openai",
+    "message": "Яких замовників і лідів немає логотипа?",
+    "routeContext": {
+      "pathname": "/orders/customers",
+      "search": "",
+      "href": "/orders/customers",
+      "title": "Замовники",
+      "routeLabel": "Замовники",
+      "domainHint": "orders",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "orders",
+      "requiresAnalytics": true,
+      "directAnalytics": true,
+      "noOpenAi": true,
+      "noKnowledgeRetrieval": true
+    }
+  },
+  {
     "id": "orders-how-to-separate-estimates",
     "message": "чи можна в одному прорахунку рахувати кілька різних товарів?",
     "routeContext": {

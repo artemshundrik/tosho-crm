@@ -1748,11 +1748,80 @@
   color: hsl(var(--destructive));
 }
 
+@keyframes tosho-ai-magic-scan {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.82;
+  }
+  58% {
+    opacity: 0.58;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes tosho-ai-magic-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    border-color: rgb(230 0 126 / 0.22);
+  }
+  50% {
+    transform: scale(1.04);
+    border-color: rgb(230 0 126 / 0.48);
+  }
+}
+
+@keyframes tosho-ai-magic-step {
+  0%,
+  100% {
+    border-color: hsl(var(--border) / 0.55);
+    color: hsl(var(--foreground) / 0.76);
+  }
+  45% {
+    border-color: rgb(230 0 126 / 0.38);
+    color: hsl(var(--foreground));
+  }
+}
+
+.tosho-ai-magic-card {
+  position: relative;
+  overflow: hidden;
+  border-color: hsl(var(--border) / 0.6);
+  background:
+    linear-gradient(110deg, hsl(var(--card) / 0.9), rgb(230 0 126 / 0.055), hsl(var(--card) / 0.86)),
+    hsl(var(--card) / 0.86);
+}
+
+.tosho-ai-magic-scan {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(230 0 126 / 0.16), transparent);
+  animation: tosho-ai-magic-scan 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.tosho-ai-magic-pulse {
+  animation: tosho-ai-magic-pulse 1.8s ease-in-out infinite;
+}
+
+.tosho-ai-magic-step {
+  animation: tosho-ai-magic-step 1.9s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tosho-ai-launcher,
   .tosho-ai-launcher__label,
   .tosho-ai-launcher__liquid,
-  .tosho-ai-feedback-control {
+  .tosho-ai-feedback-control,
+  .tosho-ai-magic-scan,
+  .tosho-ai-magic-pulse,
+  .tosho-ai-magic-step {
     transition: none;
     animation: none;
   }

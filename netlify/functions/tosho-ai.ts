@@ -1305,6 +1305,7 @@ function hasPersonalActionPlanTerm(normalized: string) {
 type SupportedAnalyticsIntent =
   | "admin_health"
   | "personal_focus"
+  | "logo_hygiene"
   | "designer_ranking"
   | "design_completion"
   | "team_role_list"
@@ -1319,6 +1320,7 @@ type SupportedAnalyticsIntent =
 const SUPPORTED_ANALYTICS_INTENTS: Array<{ intent: SupportedAnalyticsIntent; label: string }> = [
   { intent: "admin_health", label: "admin health: observability, runtime errors, backups, storage hygiene" },
   { intent: "personal_focus", label: "personal focus: what the current user should do next" },
+  { intent: "logo_hygiene", label: "customer/lead logo hygiene: missing customer and lead logos" },
   { intent: "designer_ranking", label: "designer ranking by approved/closed design tasks" },
   { intent: "design_completion", label: "design task completion counts and design workload summaries" },
   { intent: "team_role_list", label: "team lists by role: designers, managers, logistics, employees" },
@@ -1351,6 +1353,15 @@ function isDesignerRankingAnalyticsQuery(message: string) {
   );
 }
 
+function isLogoHygieneAnalyticsQuery(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return (
+    /(лого|логотип|logo|бренд|аватар)/u.test(normalized) &&
+    /(нема|немає|відсут|порожн|не\s+встановл|не\s+заповн|missing|без)/u.test(normalized) &&
+    /(замовник|замовників|клієнт|клієнтів|лід|ліди|leads?|customers?)/u.test(normalized)
+  );
+}
+
 function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsIntent | null {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
@@ -1360,6 +1371,7 @@ function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsInte
     /по\s+(менедж|иенедж)/u.test(normalized) ||
     /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
   const hasAdminTerm = hasAdminObservabilityTerm(normalized);
+  if (isLogoHygieneAnalyticsQuery(message)) return "logo_hygiene";
   const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
   const hasQuoteTerm = /(прорах|quote|коштор|кп)/u.test(normalized);
   const hasOrderTerm = /(замовл|order)/u.test(normalized);
@@ -1401,8 +1413,10 @@ function shouldRunAnalytics(message: string) {
 
 function isDirectAnalyticsRequest(message: string) {
   const normalized = normalizeText(message).toLowerCase();
+  const supportedIntent = detectSupportedAnalyticsIntent(message);
+  if (!supportedIntent) return false;
+  if (supportedIntent === "logo_hygiene" && !shouldSynthesizeAnalyticsWithOpenAi(message)) return true;
   return (
-    detectSupportedAnalyticsIntent(message) !== null &&
     /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
       normalized
     ) &&
@@ -3013,6 +3027,103 @@ function buildEmployeeProfileAnalytics(member: AnalyticsPersonTarget): Analytics
   };
 }
 
+function hasUsableLogoValue(value: unknown) {
+  const normalized = normalizeText(typeof value === "string" ? value : null);
+  if (!normalized) return false;
+  if (/^(null|undefined|none|n\/a|-|—)$/iu.test(normalized)) return false;
+  return true;
+}
+
+async function buildLogoHygieneAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+}) {
+  const [customerResult, leadResult] = await Promise.all([
+    params.adminClient
+      .schema("tosho")
+      .from("customers")
+      .select("id,name,legal_name,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .order("name", { ascending: true })
+      .limit(10000),
+    params.adminClient
+      .schema("tosho")
+      .from("leads")
+      .select("id,company_name,legal_name,first_name,last_name,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .order("company_name", { ascending: true })
+      .limit(10000),
+  ]);
+  if (customerResult.error) throw new Error(customerResult.error.message);
+  if (leadResult.error) throw new Error(leadResult.error.message);
+
+  const missingCustomers = ((customerResult.data ?? []) as Array<{
+    id: string;
+    name?: string | null;
+    legal_name?: string | null;
+    logo_url?: string | null;
+  }>)
+    .filter((row) => !hasUsableLogoValue(row.logo_url))
+    .map((row) => ({
+      id: `customer:${row.id}`,
+      label: normalizeText(row.name || row.legal_name) || row.id,
+      primary: "немає лого",
+      secondary: "Замовник · customers.logo_url порожній",
+      badges: [{ label: "Замовник", value: 1 }],
+    }));
+
+  const missingLeads = ((leadResult.data ?? []) as Array<{
+    id: string;
+    company_name?: string | null;
+    legal_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    logo_url?: string | null;
+  }>)
+    .filter((row) => !hasUsableLogoValue(row.logo_url))
+    .map((row) => {
+      const person = [row.first_name, row.last_name].map(normalizeText).filter(Boolean).join(" ");
+      return {
+        id: `lead:${row.id}`,
+        label: normalizeText(row.company_name || row.legal_name || person) || row.id,
+        primary: "немає лого",
+        secondary: "Лід · leads.logo_url порожній",
+        badges: [{ label: "Лід", value: 1 }],
+      };
+    });
+
+  const rows = [...missingCustomers, ...missingLeads].sort((a, b) => a.label.localeCompare(b.label, "uk"));
+  const customerCount = missingCustomers.length;
+  const leadCount = missingLeads.length;
+
+  return {
+    title: "Замовники без логотипів",
+    summary: `Знайдено ${formatInteger(customerCount)} замовників і ${formatInteger(leadCount)} лідів без логотипа.`,
+    markdown:
+      rows.length > 0
+        ? `Знайшов **${formatInteger(customerCount)}** замовників і **${formatInteger(leadCount)}** лідів без логотипа. Це прямий CRM-зріз, без OpenAI.`
+        : "У замовників і лідів не бачу порожніх logo_url. По CRM-зрізу все чисто.",
+    domain: "orders",
+    confidence: 0.96,
+    suggestedActions: compactSuggestedActions([
+      { label: "Поясни пріоритет", text: "Поясни, які логотипи замовників варто виправити першими і чому." },
+      { label: "Прорахунки по замовниках", text: "Покажи прорахунки по замовниках за місяць." },
+      { label: "Каталог", text: "Що в каталозі варто перевірити сьогодні?" },
+    ]),
+    analytics: {
+      kind: "entity",
+      title: "Гігієна логотипів",
+      caption: `${formatInteger(rows.length)} записів без logo_url · замовники ${formatInteger(customerCount)} · ліди ${formatInteger(leadCount)}`,
+      metricLabel: "Лого",
+      rows: rows.slice(0, 80),
+      note:
+        rows.length > 80
+          ? `Показую перші 80 записів із ${formatInteger(rows.length)}. Для повного списку краще додати CSV export.`
+          : "Рахую customers.logo_url і leads.logo_url. Quote snapshots перевіряються окремим sync-аудитом.",
+    },
+  } satisfies AnalyticsResult;
+}
+
 async function buildPersonalActionPlanAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -4368,6 +4479,10 @@ async function buildAnalyticsDecision(params: {
   if (supportedIntent === "personal_focus" && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
     const personalDecision = await buildPersonalActionPlanAnalytics(params);
     if (personalDecision) return toAnalyticsDecision(personalDecision);
+  }
+
+  if (supportedIntent === "logo_hygiene") {
+    return toAnalyticsDecision(await buildLogoHygieneAnalytics(params));
   }
 
   if (supportedIntent === "designer_ranking" || asksForDesignerRanking) {
