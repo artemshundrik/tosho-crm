@@ -1,0 +1,94 @@
+[
+  {
+    "id": "orders-how-to-separate-estimates",
+    "message": "чи можна в одному прорахунку рахувати кілька різних товарів?",
+    "routeContext": {
+      "pathname": "/orders/estimates",
+      "search": "",
+      "href": "/orders/estimates",
+      "title": "Прорахунки",
+      "routeLabel": "Прорахунки",
+      "domainHint": "orders",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "orders",
+      "statusIn": ["waiting_user", "open"],
+      "shouldNotEscalate": true
+    }
+  },
+  {
+    "id": "design-analytics-month",
+    "message": "скільки дизайн-задач зробили дизайнери за місяць?",
+    "routeContext": {
+      "pathname": "/design",
+      "search": "",
+      "href": "/design",
+      "title": "Дизайн",
+      "routeLabel": "Дизайн",
+      "domainHint": "design",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "design",
+      "statusIn": ["waiting_user", "open"],
+      "requiresAnalytics": true
+    }
+  },
+  {
+    "id": "manager-quotes-month",
+    "message": "скільки прорахунків по менеджерах за місяць?",
+    "routeContext": {
+      "pathname": "/orders/estimates",
+      "search": "",
+      "href": "/orders/estimates",
+      "title": "Прорахунки",
+      "routeLabel": "Прорахунки",
+      "domainHint": "orders",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "orders",
+      "requiresAnalytics": true
+    }
+  },
+  {
+    "id": "admin-health",
+    "message": "чи все нормально з observability, runtime errors і backup?",
+    "routeContext": {
+      "pathname": "/admin/observability",
+      "search": "",
+      "href": "/admin/observability",
+      "title": "Admin Observability",
+      "routeLabel": "Observability",
+      "domainHint": "admin",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "admin",
+      "requiresAnalytics": true
+    }
+  },
+  {
+    "id": "image-attachment-support",
+    "message": "подивись скрін, що тут не так?",
+    "routeContext": {
+      "pathname": "/overview",
+      "search": "",
+      "href": "/overview",
+      "title": "Огляд",
+      "routeLabel": "Огляд",
+      "domainHint": "overview",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domainIn": ["overview", "general", "admin"],
+      "statusIn": ["open", "in_progress", "waiting_user"]
+    }
+  }
+]

@@ -144,6 +144,9 @@ type KnowledgeItemRow = {
   status: "active" | "draft" | "archived";
   source_label?: string | null;
   source_href?: string | null;
+  embedding?: unknown;
+  embedding_model?: string | null;
+  embedding_updated_at?: string | null;
   updated_at: string;
 };
 
@@ -239,6 +242,7 @@ type OpenAiDiagnostics = {
 type OpenAiDecisionResult = {
   decision: AssistantDecision;
   diagnostics: OpenAiDiagnostics;
+  crmToolDiagnostics: CrmToolDiagnostics | null;
 };
 
 type KnowledgeRetrievalDiagnostics = {
@@ -248,8 +252,18 @@ type KnowledgeRetrievalDiagnostics = {
   model: string | null;
   candidateCount: number;
   selectedCount: number;
+  persistedCount: number;
+  refreshedCount: number;
   latencyMs: number | null;
   totalTokens: number | null;
+  error: string | null;
+};
+
+type CrmToolDiagnostics = {
+  attempted: boolean;
+  requested: string[];
+  executed: string[];
+  latencyMs: number | null;
   error: string | null;
 };
 
@@ -358,6 +372,10 @@ const OPENAI_STRUCTURED_SCHEMA = {
     },
   },
 };
+
+const KNOWLEDGE_COLUMNS =
+  "id,workspace_id,title,slug,summary,body,tags,keywords,status,source_label,source_href,updated_at";
+const KNOWLEDGE_COLUMNS_WITH_EMBEDDING = `${KNOWLEDGE_COLUMNS},embedding,embedding_model,embedding_updated_at`;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -1704,7 +1722,7 @@ async function listKnowledgeItems(
   let query = adminClient
     .schema("tosho")
     .from("support_knowledge_items")
-    .select("id,workspace_id,title,slug,summary,body,tags,keywords,status,source_label,source_href,updated_at")
+    .select(KNOWLEDGE_COLUMNS)
     .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false });
 
@@ -1721,17 +1739,25 @@ async function listActiveKnowledgeItemsForRetrieval(
   adminClient: ReturnType<typeof createClient>,
   workspaceId: string
 ) {
-  const { data, error } = await adminClient
-    .schema("tosho")
-    .from("support_knowledge_items")
-    .select("id,workspace_id,title,slug,summary,body,tags,keywords,status,source_label,source_href,updated_at")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active")
-    .order("updated_at", { ascending: false })
-    .limit(KNOWLEDGE_RETRIEVAL_LIMIT);
+  const run = (columns: string) =>
+    adminClient
+      .schema("tosho")
+      .from("support_knowledge_items")
+      .select(columns)
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active")
+      .order("updated_at", { ascending: false })
+      .limit(KNOWLEDGE_RETRIEVAL_LIMIT);
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as KnowledgeItemRow[];
+  const withEmbedding = await run(KNOWLEDGE_COLUMNS_WITH_EMBEDDING);
+  if (!withEmbedding.error) return (withEmbedding.data ?? []) as KnowledgeItemRow[];
+  if (!/embedding/i.test(withEmbedding.error.message ?? "")) {
+    throw new Error(withEmbedding.error.message);
+  }
+
+  const fallback = await run(KNOWLEDGE_COLUMNS);
+  if (fallback.error) throw new Error(fallback.error.message);
+  return (fallback.data ?? []) as KnowledgeItemRow[];
 }
 
 function scoreKnowledgeItem(item: KnowledgeItemRow, queryText: string, routeLabel: string) {
@@ -1809,6 +1835,8 @@ function retrievalFallbackDiagnostics(params: {
   attempted: boolean;
   candidateCount: number;
   selectedCount: number;
+  persistedCount?: number;
+  refreshedCount?: number;
   error?: string | null;
 }): KnowledgeRetrievalDiagnostics {
   return {
@@ -1818,6 +1846,8 @@ function retrievalFallbackDiagnostics(params: {
     model: null,
     candidateCount: params.candidateCount,
     selectedCount: params.selectedCount,
+    persistedCount: params.persistedCount ?? 0,
+    refreshedCount: params.refreshedCount ?? 0,
     latencyMs: null,
     totalTokens: null,
     error: params.error ?? null,
@@ -1849,12 +1879,82 @@ function dotProduct(left: number[], right: number[]) {
 }
 
 function parseEmbeddingVector(value: unknown) {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "number")
-    ? (value as number[])
-    : null;
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "number")) return value as number[];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return null;
+  const parsed = trimmed
+    .slice(1, -1)
+    .split(",")
+    .map((entry) => Number(entry.trim()));
+  return parsed.length > 0 && parsed.every((entry) => Number.isFinite(entry)) ? parsed : null;
+}
+
+function formatEmbeddingVector(value: number[]) {
+  return `[${value.map((entry) => (Number.isFinite(entry) ? entry : 0)).join(",")}]`;
+}
+
+async function persistKnowledgeEmbeddings(params: {
+  adminClient: ReturnType<typeof createClient>;
+  model: string;
+  items: Array<{ item: KnowledgeItemRow; vector: number[] }>;
+}) {
+  await Promise.all(
+    params.items.map(({ item, vector }) =>
+      params.adminClient
+        .schema("tosho")
+        .from("support_knowledge_items")
+        .update({
+          embedding: formatEmbeddingVector(vector),
+          embedding_model: params.model,
+          embedding_updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.id)
+        .eq("workspace_id", item.workspace_id)
+        .then(({ error }) => {
+          if (error && !/embedding/i.test(error.message ?? "")) {
+            throw new Error(error.message);
+          }
+        })
+    )
+  );
+}
+
+async function buildKnowledgeEmbedding(item: Pick<KnowledgeItemRow, "title" | "summary" | "body" | "tags" | "keywords">) {
+  const apiKey = normalizeText(process.env.OPENAI_API_KEY);
+  if (!apiKey) return null;
+  const model = normalizeText(process.env.OPENAI_EMBEDDING_MODEL) || "text-embedding-3-small";
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      input: knowledgeItemRetrievalText({
+        id: "preview",
+        workspace_id: "preview",
+        slug: "preview",
+        status: "active",
+        source_label: null,
+        source_href: null,
+        updated_at: new Date().toISOString(),
+        ...item,
+      }),
+      encoding_format: "float",
+      dimensions: 512,
+    }),
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json()) as JsonRecord;
+  const data = Array.isArray(payload.data) ? payload.data : [];
+  const vector = parseEmbeddingVector((data[0] as { embedding?: unknown } | undefined)?.embedding);
+  return vector ? { vector, model } : null;
 }
 
 async function selectKnowledgeCandidatesForMessage(params: {
+  adminClient: ReturnType<typeof createClient>;
   items: KnowledgeItemRow[];
   queryText: string;
   routeLabel: string;
@@ -1868,6 +1968,7 @@ async function selectKnowledgeCandidatesForMessage(params: {
         attempted: false,
         candidateCount: params.items.length,
         selectedCount: keywordCandidates.length,
+        persistedCount: params.items.filter((item) => Boolean(parseEmbeddingVector(item.embedding))).length,
         error: apiKey ? null : "OPENAI_API_KEY is not configured.",
       }),
     };
@@ -1875,9 +1976,20 @@ async function selectKnowledgeCandidatesForMessage(params: {
 
   const startedAt = Date.now();
   const model = normalizeText(process.env.OPENAI_EMBEDDING_MODEL) || "text-embedding-3-small";
+  const persistedVectors = new Map<string, number[]>();
+  const missingItems: KnowledgeItemRow[] = [];
+  for (const item of params.items) {
+    const vector = item.embedding_model === model ? parseEmbeddingVector(item.embedding) : null;
+    if (vector) {
+      persistedVectors.set(item.id, vector);
+    } else {
+      missingItems.push(item);
+    }
+  }
+
   const inputs = [
     trimTo(`${params.routeLabel}\n${params.queryText}`, 1200),
-    ...params.items.map(knowledgeItemRetrievalText),
+    ...missingItems.map(knowledgeItemRetrievalText),
   ];
 
   try {
@@ -1915,6 +2027,8 @@ async function selectKnowledgeCandidatesForMessage(params: {
           model,
           candidateCount: params.items.length,
           selectedCount: keywordCandidates.length,
+          persistedCount: persistedVectors.size,
+          refreshedCount: 0,
           latencyMs,
           totalTokens,
           error,
@@ -1934,6 +2048,8 @@ async function selectKnowledgeCandidatesForMessage(params: {
           model,
           candidateCount: params.items.length,
           selectedCount: keywordCandidates.length,
+          persistedCount: persistedVectors.size,
+          refreshedCount: 0,
           latencyMs,
           totalTokens,
           error: "OpenAI embeddings response did not include a query vector.",
@@ -1941,10 +2057,25 @@ async function selectKnowledgeCandidatesForMessage(params: {
       };
     }
 
+    const refreshedItems: Array<{ item: KnowledgeItemRow; vector: number[] }> = [];
+    for (const [index, item] of missingItems.entries()) {
+      const vector = parseEmbeddingVector((data[index + 1] as { embedding?: unknown } | undefined)?.embedding);
+      if (!vector) continue;
+      persistedVectors.set(item.id, vector);
+      refreshedItems.push({ item, vector });
+    }
+    if (refreshedItems.length > 0) {
+      await persistKnowledgeEmbeddings({
+        adminClient: params.adminClient,
+        model,
+        items: refreshedItems,
+      }).catch(() => undefined);
+    }
+
     const keywordIds = new Set(keywordCandidates.map((item) => item.id));
     const ranked = params.items
-      .map((item, index) => {
-        const vector = parseEmbeddingVector((data[index + 1] as { embedding?: unknown } | undefined)?.embedding);
+      .map((item) => {
+        const vector = persistedVectors.get(item.id) ?? null;
         const semanticScore = vector ? dotProduct(queryVector, vector) : -1;
         const keywordBoost = keywordIds.has(item.id) ? 0.04 : 0;
         return {
@@ -1968,6 +2099,8 @@ async function selectKnowledgeCandidatesForMessage(params: {
         model,
         candidateCount: params.items.length,
         selectedCount: candidates.length,
+        persistedCount: Math.max(0, persistedVectors.size - refreshedItems.length),
+        refreshedCount: refreshedItems.length,
         latencyMs,
         totalTokens,
         error: ranked.length > 0 ? null : "Embedding scores were below threshold; used keyword fallback.",
@@ -1983,6 +2116,8 @@ async function selectKnowledgeCandidatesForMessage(params: {
         model,
         candidateCount: params.items.length,
         selectedCount: keywordCandidates.length,
+        persistedCount: persistedVectors.size,
+        refreshedCount: 0,
         latencyMs: Date.now() - startedAt,
         totalTokens: null,
         error: error instanceof Error ? error.message : "OpenAI embeddings request failed",
@@ -4201,6 +4336,175 @@ async function buildAnalyticsDecision(params: {
   return null;
 }
 
+const CRM_TOOL_DEFINITIONS = [
+  {
+    type: "function",
+    name: "get_crm_analytics",
+    description:
+      "Get a controlled live CRM analytics snapshot for quotes, orders, design tasks, logistics, team, personal focus, or admin health. Use only when the user asks for counts, status, workload, health, statistics, or what to focus on.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["query"],
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "A concise Ukrainian analytics query preserving the user's metric, target person/customer, and period.",
+        },
+      },
+    },
+  },
+];
+
+function extractFunctionCalls(payload: JsonRecord) {
+  const output = Array.isArray(payload.output) ? payload.output : [];
+  return output
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const typed = item as { type?: unknown; name?: unknown; call_id?: unknown; arguments?: unknown };
+      if (typed.type !== "function_call" || typeof typed.name !== "string" || typeof typed.call_id !== "string") {
+        return null;
+      }
+      return {
+        name: typed.name,
+        callId: typed.call_id,
+        argumentsText: typeof typed.arguments === "string" ? typed.arguments : "{}",
+      };
+    })
+    .filter((item): item is { name: string; callId: string; argumentsText: string } => Boolean(item));
+}
+
+function compactDecisionForToolOutput(decision: AssistantDecision | null) {
+  if (!decision) {
+    return {
+      ok: false,
+      message: "No supported CRM analytics snapshot matched this query.",
+    };
+  }
+  return {
+    ok: true,
+    title: decision.title,
+    summary: decision.summary,
+    answerMarkdown: decision.answerMarkdown,
+    status: decision.status,
+    priority: decision.priority,
+    domain: decision.domain,
+    confidence: decision.confidence,
+    analytics: decision.analytics ?? null,
+    suggestedActions: compactSuggestedActions(decision.suggestedActions ?? []),
+  };
+}
+
+async function runCrmToolCalling(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  model: string;
+  apiKey: string;
+  message: string;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+}) {
+  const startedAt = Date.now();
+  const diagnostics: CrmToolDiagnostics = {
+    attempted: true,
+    requested: [],
+    executed: [],
+    latencyMs: null,
+    error: null,
+  };
+
+  try {
+    const toolPrompt = [
+      "You are deciding whether ToSho AI needs live CRM data before answering.",
+      "Call get_crm_analytics only for live counts, statistics, workload, operational health, personal focus, or status summaries.",
+      "Do not call tools for general how-to questions, writing help, or support escalation without a data question.",
+      "Preserve names, @mentions, and time periods in the query argument.",
+    ].join(" ");
+    const input = [
+      { role: "developer", content: toolPrompt },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: [
+              `ROUTE: ${params.routeContext.routeLabel} (${params.routeContext.href})`,
+              `DOMAIN_HINT: ${params.routeContext.domainHint}`,
+              `MESSAGE:\n${params.message}`,
+            ].join("\n\n"),
+          },
+        ],
+      },
+    ];
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: params.model,
+        input,
+        tools: CRM_TOOL_DEFINITIONS,
+        tool_choice: "auto",
+        max_output_tokens: 500,
+      }),
+    });
+    const payload = (await response.json()) as JsonRecord;
+    diagnostics.latencyMs = Date.now() - startedAt;
+    if (!response.ok) {
+      diagnostics.error =
+        payload && typeof payload.error === "object" && payload.error && "message" in payload.error
+          ? (payload.error as { message?: string }).message ?? "CRM tool selection failed"
+          : "CRM tool selection failed";
+      return { block: "No CRM tools were used.", diagnostics };
+    }
+
+    const functionCalls = extractFunctionCalls(payload).slice(0, 2);
+    diagnostics.requested = functionCalls.map((call) => call.name);
+    if (functionCalls.length === 0) {
+      return { block: "No CRM tools were used.", diagnostics };
+    }
+
+    const toolResults = [];
+    for (const call of functionCalls) {
+      if (call.name !== "get_crm_analytics") {
+        toolResults.push({ tool: call.name, ok: false, error: "Unsupported tool." });
+        continue;
+      }
+      let query = params.message;
+      try {
+        const args = JSON.parse(call.argumentsText) as { query?: unknown };
+        query = normalizeText(typeof args.query === "string" ? args.query : "") || params.message;
+      } catch {
+        query = params.message;
+      }
+      const decision = await buildAnalyticsDecision({
+        adminClient: params.adminClient,
+        auth: params.auth,
+        message: query,
+        routeContext: params.routeContext,
+      });
+      diagnostics.executed.push(call.name);
+      toolResults.push({
+        tool: call.name,
+        query,
+        result: compactDecisionForToolOutput(decision),
+      });
+    }
+
+    return {
+      block: JSON.stringify(toolResults, null, 2),
+      diagnostics,
+    };
+  } catch (error) {
+    diagnostics.latencyMs = Date.now() - startedAt;
+    diagnostics.error = error instanceof Error ? error.message : "CRM tool calling failed";
+    return { block: "CRM tool calling failed.", diagnostics };
+  }
+}
+
 function getDomainProductGuidance(domain: ToShoAiDomain) {
   switch (domain) {
     case "catalog":
@@ -4363,6 +4667,7 @@ function extractPreviousOpenAiResponseId(messages: SupportMessageRow[]) {
 
 async function callOpenAiDecision(params: {
   adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
   message: string;
   mode: ToShoAiMode;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
@@ -4377,6 +4682,14 @@ async function callOpenAiDecision(params: {
   const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
   const startedAt = Date.now();
   const previousResponseId = extractPreviousOpenAiResponseId(params.recentMessages);
+  const crmToolContext = await runCrmToolCalling({
+    adminClient: params.adminClient,
+    auth: params.auth,
+    model,
+    apiKey,
+    message: params.message,
+    routeContext: params.routeContext,
+  });
   const inferredDomain = deriveDomainFromMessage(params.message, params.routeContext.domainHint);
   const productGuidance = getDomainProductGuidance(inferredDomain);
   const recentMessages = params.recentMessages
@@ -4453,6 +4766,7 @@ async function callOpenAiDecision(params: {
     `ATTACHMENTS:\n${attachmentBlock}`,
     `PRODUCT_GUIDANCE:\n${productGuidanceBlock}`,
     `CURATED_KNOWLEDGE:\n${knowledgeBlock}`,
+    `CRM_TOOL_RESULTS:\n${crmToolContext.block}`,
     "Return a structured decision for the CRM assistant.",
   ].join("\n\n");
 
@@ -4563,6 +4877,7 @@ async function callOpenAiDecision(params: {
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
     },
+    crmToolDiagnostics: crmToolContext.diagnostics,
   };
 }
 
@@ -4884,6 +5199,7 @@ async function handleSend(params: {
   const activeKnowledge = await listActiveKnowledgeItemsForRetrieval(params.adminClient, params.auth.workspaceId);
   const { candidates: knowledgeCandidates, diagnostics: knowledgeRetrieval } =
     await selectKnowledgeCandidatesForMessage({
+      adminClient: params.adminClient,
       items: activeKnowledge,
       queryText: message,
       routeLabel: routeContext.routeLabel,
@@ -4912,6 +5228,7 @@ async function handleSend(params: {
   let assistantDecision: AssistantDecision | null = null;
   let usedFallback = false;
   let openAiDiagnostics: OpenAiDiagnostics | null = null;
+  let crmToolDiagnostics: CrmToolDiagnostics | null = null;
   const existingContext = (existingRequest?.context ?? {}) as JsonRecord;
   const previousThreadAnalyticsMessage =
     typeof existingContext.last_analytics_message === "string"
@@ -4936,6 +5253,7 @@ async function handleSend(params: {
     try {
       const openAiResult = await callOpenAiDecision({
         adminClient: params.adminClient,
+        auth: params.auth,
         message,
         mode,
         routeContext,
@@ -4946,6 +5264,7 @@ async function handleSend(params: {
       });
       assistantDecision = openAiResult?.decision ?? null;
       openAiDiagnostics = openAiResult?.diagnostics ?? null;
+      crmToolDiagnostics = openAiResult?.crmToolDiagnostics ?? null;
     } catch (error) {
       openAiDiagnostics = (error as Error & { diagnostics?: OpenAiDiagnostics })?.diagnostics ?? {
         attempted: true,
@@ -5055,6 +5374,7 @@ async function handleSend(params: {
       })),
       knowledge_retrieval: knowledgeRetrieval,
       openai: openAiDiagnostics,
+      crm_tools: crmToolDiagnostics,
       last_internal_summary: assistantDecision.internalSummary,
       last_analytics_message: analyticsRequested ? analyticsMessage : previousThreadAnalyticsMessage || null,
     },
@@ -5132,6 +5452,7 @@ async function handleSend(params: {
         usedFallback,
         openAiResponseId: openAiDiagnostics?.responseId ?? null,
         openAi: openAiDiagnostics,
+        crmTools: crmToolDiagnostics,
         knowledgeRetrieval,
         sources: sourceItems,
         analytics: assistantDecision.analytics ?? null,
@@ -5326,19 +5647,44 @@ async function handleUpsertKnowledge(params: {
     source_href: normalizeText(knowledge?.sourceHref) || null,
     updated_by: params.auth.userId,
   };
+  const embedding = await buildKnowledgeEmbedding({
+    title: payload.title,
+    summary: payload.summary,
+    body: payload.body,
+    tags: payload.tags,
+    keywords: payload.keywords,
+  }).catch(() => null);
+  const payloadWithEmbedding = embedding
+    ? {
+        ...payload,
+        embedding: formatEmbeddingVector(embedding.vector),
+        embedding_model: embedding.model,
+        embedding_updated_at: new Date().toISOString(),
+      }
+    : payload;
 
   if (normalizeText(knowledge?.id)) {
-    const { error } = await params.adminClient
-      .schema("tosho")
-      .from("support_knowledge_items")
-      .update(payload)
-      .eq("id", normalizeText(knowledge?.id));
+    const runUpdate = (nextPayload: typeof payload | typeof payloadWithEmbedding) =>
+      params.adminClient
+        .schema("tosho")
+        .from("support_knowledge_items")
+        .update(nextPayload)
+        .eq("id", normalizeText(knowledge?.id));
+    let { error } = await runUpdate(payloadWithEmbedding);
+    if (error && embedding && /embedding/i.test(error.message ?? "")) {
+      ({ error } = await runUpdate(payload));
+    }
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await params.adminClient.schema("tosho").from("support_knowledge_items").insert({
-      ...payload,
-      created_by: params.auth.userId,
-    });
+    const runInsert = (nextPayload: typeof payload | typeof payloadWithEmbedding) =>
+      params.adminClient.schema("tosho").from("support_knowledge_items").insert({
+        ...nextPayload,
+        created_by: params.auth.userId,
+      });
+    let { error } = await runInsert(payloadWithEmbedding);
+    if (error && embedding && /embedding/i.test(error.message ?? "")) {
+      ({ error } = await runInsert(payload));
+    }
     if (error) throw new Error(error.message);
   }
 

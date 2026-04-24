@@ -4,6 +4,8 @@
 
 begin;
 
+create extension if not exists vector with schema extensions;
+
 create table if not exists tosho.support_requests (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null,
@@ -194,6 +196,9 @@ create table if not exists tosho.support_knowledge_items (
   status text not null default 'active',
   source_label text,
   source_href text,
+  embedding vector(512),
+  embedding_model text,
+  embedding_updated_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -211,6 +216,9 @@ alter table tosho.support_knowledge_items
   add column if not exists status text,
   add column if not exists source_label text,
   add column if not exists source_href text,
+  add column if not exists embedding vector(512),
+  add column if not exists embedding_model text,
+  add column if not exists embedding_updated_at timestamptz,
   add column if not exists created_at timestamptz,
   add column if not exists updated_at timestamptz;
 
@@ -270,6 +278,12 @@ create unique index if not exists support_knowledge_items_workspace_slug_idx
 
 create index if not exists support_knowledge_items_workspace_status_idx
   on tosho.support_knowledge_items (workspace_id, status, updated_at desc);
+
+create index if not exists support_knowledge_items_embedding_idx
+  on tosho.support_knowledge_items
+  using ivfflat (embedding vector_cosine_ops)
+  with (lists = 32)
+  where embedding is not null;
 
 create or replace function tosho.touch_support_updated_at()
 returns trigger

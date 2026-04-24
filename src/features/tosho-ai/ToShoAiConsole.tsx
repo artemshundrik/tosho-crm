@@ -397,6 +397,59 @@ function readSuggestedActions(metadata: Record<string, unknown> | null): Suggest
     .slice(0, 4);
 }
 
+function readAiDiagnostics(metadata: Record<string, unknown> | null) {
+  const openAi = isRecord(metadata?.openAi) ? metadata.openAi : null;
+  const retrieval = isRecord(metadata?.knowledgeRetrieval) ? metadata.knowledgeRetrieval : null;
+  const tools = isRecord(metadata?.crmTools) ? metadata.crmTools : null;
+  if (!openAi && !retrieval && !tools) return null;
+
+  const numberValue = (source: Record<string, unknown> | null, key: string) => {
+    const value = source?.[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  };
+  const stringValue = (source: Record<string, unknown> | null, key: string) => {
+    const value = source?.[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  };
+  const stringList = (source: Record<string, unknown> | null, key: string) =>
+    Array.isArray(source?.[key]) ? (source?.[key] as unknown[]).filter((item): item is string => typeof item === "string") : [];
+
+  return {
+    openAi: openAi
+      ? {
+          ok: openAi.ok === true,
+          model: stringValue(openAi, "model"),
+          latencyMs: numberValue(openAi, "latencyMs"),
+          totalTokens: numberValue(openAi, "totalTokens"),
+          imageInputs: numberValue(openAi, "usedImageInputs"),
+          responseId: stringValue(openAi, "responseId"),
+          error: stringValue(openAi, "error"),
+        }
+      : null,
+    retrieval: retrieval
+      ? {
+          strategy: stringValue(retrieval, "strategy"),
+          model: stringValue(retrieval, "model"),
+          candidateCount: numberValue(retrieval, "candidateCount"),
+          selectedCount: numberValue(retrieval, "selectedCount"),
+          persistedCount: numberValue(retrieval, "persistedCount"),
+          refreshedCount: numberValue(retrieval, "refreshedCount"),
+          latencyMs: numberValue(retrieval, "latencyMs"),
+          totalTokens: numberValue(retrieval, "totalTokens"),
+          error: stringValue(retrieval, "error"),
+        }
+      : null,
+    tools: tools
+      ? {
+          requested: stringList(tools, "requested"),
+          executed: stringList(tools, "executed"),
+          latencyMs: numberValue(tools, "latencyMs"),
+          error: stringValue(tools, "error"),
+        }
+      : null,
+  };
+}
+
 function getAnalyticsBadgeIcon(label: string) {
   const normalized = normalizeSearch(label);
   if (normalized.includes("візуал +")) return Layers3;
@@ -932,16 +985,19 @@ function MessageCard({
   message,
   onFeedback,
   onSelectAction,
+  showDiagnostics,
 }: {
   message: ToShoAiMessage;
   onFeedback: (messageId: string, value: "helpful" | "not_helpful") => void;
   onSelectAction: (value: string) => void;
+  showDiagnostics: boolean;
 }) {
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
   const displayBody = isAssistant ? formatAssistantMessageBody(message.body) : message.body;
   const analytics = isAssistant ? readAnalyticsPayload(message.metadata) : null;
   const suggestedActions = isAssistant ? readSuggestedActions(message.metadata) : [];
+  const diagnostics = isAssistant && showDiagnostics ? readAiDiagnostics(message.metadata) : null;
 
   return (
     <div className={cn("flex w-full min-w-0 overflow-hidden px-0.5", isUser ? "justify-end" : "justify-start")}>
@@ -1064,6 +1120,67 @@ function MessageCard({
                 </button>
               ))}
             </div>
+          ) : null}
+
+          {diagnostics ? (
+            <details className="mt-4 rounded-2xl border border-border/60 bg-background/65 px-3 py-2 text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none font-semibold text-foreground/75">AI debug</summary>
+              <div className="mt-2 grid gap-2">
+                {diagnostics.openAi ? (
+                  <div>
+                    <div className="font-semibold text-foreground/75">OpenAI</div>
+                    <div className="mt-1">
+                      {[
+                        diagnostics.openAi.model,
+                        diagnostics.openAi.ok ? "ok" : "fallback",
+                        diagnostics.openAi.latencyMs !== null ? `${diagnostics.openAi.latencyMs} ms` : null,
+                        diagnostics.openAi.totalTokens !== null ? `${diagnostics.openAi.totalTokens} tokens` : null,
+                        diagnostics.openAi.imageInputs ? `${diagnostics.openAi.imageInputs} images` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    {diagnostics.openAi.error ? <div className="mt-1 text-danger-foreground">{diagnostics.openAi.error}</div> : null}
+                    {diagnostics.openAi.responseId ? <div className="mt-1 truncate">response: {diagnostics.openAi.responseId}</div> : null}
+                  </div>
+                ) : null}
+                {diagnostics.retrieval ? (
+                  <div>
+                    <div className="font-semibold text-foreground/75">Knowledge retrieval</div>
+                    <div className="mt-1">
+                      {[
+                        diagnostics.retrieval.strategy,
+                        diagnostics.retrieval.model,
+                        diagnostics.retrieval.latencyMs !== null ? `${diagnostics.retrieval.latencyMs} ms` : null,
+                        diagnostics.retrieval.selectedCount !== null
+                          ? `${diagnostics.retrieval.selectedCount}/${diagnostics.retrieval.candidateCount ?? 0} selected`
+                          : null,
+                        diagnostics.retrieval.persistedCount !== null ? `${diagnostics.retrieval.persistedCount} persisted` : null,
+                        diagnostics.retrieval.refreshedCount ? `${diagnostics.retrieval.refreshedCount} refreshed` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    {diagnostics.retrieval.error ? <div className="mt-1 text-warning-foreground">{diagnostics.retrieval.error}</div> : null}
+                  </div>
+                ) : null}
+                {diagnostics.tools ? (
+                  <div>
+                    <div className="font-semibold text-foreground/75">CRM tools</div>
+                    <div className="mt-1">
+                      {[
+                        diagnostics.tools.requested.length ? `requested: ${diagnostics.tools.requested.join(", ")}` : "no tool",
+                        diagnostics.tools.executed.length ? `executed: ${diagnostics.tools.executed.join(", ")}` : null,
+                        diagnostics.tools.latencyMs !== null ? `${diagnostics.tools.latencyMs} ms` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    {diagnostics.tools.error ? <div className="mt-1 text-warning-foreground">{diagnostics.tools.error}</div> : null}
+                  </div>
+                ) : null}
+              </div>
+            </details>
           ) : null}
         </div>
 
@@ -1976,6 +2093,7 @@ export function ToShoAiConsole({
                         message={message}
                         onFeedback={handleFeedback}
                         onSelectAction={handleSelectPromptSuggestion}
+                        showDiagnostics={Boolean(snapshot?.permissions.canManageQueue || snapshot?.permissions.canManageKnowledge)}
                       />
                     ))}
                     <div ref={chatBottomRef} />

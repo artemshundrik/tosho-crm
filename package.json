@@ -19,6 +19,7 @@
     "audit:catalog-images": "node scripts/audit-catalog-model-images.mjs",
     "audit:customer-logos": "node scripts/audit-customer-lead-logos.mjs",
     "cleanup:attachments": "node scripts/cleanup-attachment-storage.mjs",
+    "eval:tosho-ai": "node scripts/run-tosho-ai-evals.mjs",
     "export:orphan-attachments": "node scripts/export-orphan-attachment-originals.mjs",
     "export:orphan-attachment-summary": "node scripts/export-orphan-attachment-summary.mjs",
     "generate:vapid": "node scripts/generate-vapid-keys.mjs"
