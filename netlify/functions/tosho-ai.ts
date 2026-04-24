@@ -644,6 +644,10 @@ function analyticsPersonRoleLabel(member: AnalyticsPersonTarget) {
   const role = normalizeRole(member.jobRole);
   if (role === "designer" || role === "дизайнер" || member.moduleAccess.design) return "Дизайнер";
   if (role === "manager" || member.moduleAccess.orders) return "Менеджер";
+  if (role === "logistics" || role === "head_of_logistics" || member.moduleAccess.logistics) return "Логіст";
+  if (member.moduleAccess.catalog) return "Каталог";
+  if (member.moduleAccess.contractors) return "Підрядники";
+  if (member.moduleAccess.team) return "Команда";
   if (role === "pm") return "PM";
   if (role === "seo") return "Адмін";
   return "Команда";
@@ -695,6 +699,20 @@ function formatOrderStatusLabel(value: string) {
     completed: "Завершено",
     cancelled: "Скасовано",
     canceled: "Скасовано",
+    "без статусу": "Без статусу",
+  };
+  return labels[normalized] ?? value.replace(/_/g, " ");
+}
+
+function formatDeliveryStatusLabel(value: string) {
+  const normalized = normalizeText(value).toLowerCase();
+  const labels: Record<string, string> = {
+    not_shipped: "Не відвантажено",
+    preparing_shipment: "Готується до відвантаження",
+    shipped: "Відвантажено",
+    delivered: "Доставлено",
+    partially_delivered: "Частково доставлено",
+    unclaimed: "Не забрано",
     "без статусу": "Без статусу",
   };
   return labels[normalized] ?? value.replace(/_/g, " ");
@@ -955,10 +973,18 @@ function hasCustomerAnalyticsTerm(normalized: string) {
   return /(замовник|клієнт|контрагент|customer)/u.test(normalized);
 }
 
+function hasLogisticsAnalyticsTerm(normalized: string) {
+  return /(логіст|логістик|відвантаж|відправ|доставк|ттн|ttn|посил|шип|ship)/u.test(normalized);
+}
+
+function hasEmployeeAnalyticsTerm(normalized: string) {
+  return /(співробітник|співробітниц|користувач|людин|команд|працівник|працівниц|employee|user)/u.test(normalized);
+}
+
 function shouldRunAnalytics(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
-    /(скільки|порах|рахуй|статист|звіт|аналітик|топ|зріз|найбільш|більше\s+всього|по\s+дизайн)/u.test(
+    /(скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
       normalized
     ) ||
     /по\s+(менедж|иенедж)/u.test(normalized) ||
@@ -969,6 +995,8 @@ function shouldRunAnalytics(message: string) {
       normalized
     ) ||
     hasManagerAnalyticsTerm(normalized) ||
+    hasLogisticsAnalyticsTerm(normalized) ||
+    hasEmployeeAnalyticsTerm(normalized) ||
     stripAnalyticsQueryTerms(message).length > 0
   );
 }
@@ -984,6 +1012,7 @@ type AnalyticsMetricIntent = "quotes" | "orders" | "design" | "customers" | null
 
 function detectAnalyticsMetricIntent(message: string): AnalyticsMetricIntent {
   const normalized = normalizeText(message).toLowerCase();
+  if (hasLogisticsAnalyticsTerm(normalized)) return "orders";
   if (/(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized)) return "design";
   if (/(замовл|order)/u.test(normalized) && !/(замовник|замовників|клієнт|контрагент)/u.test(normalized)) {
     return "orders";
@@ -1027,7 +1056,7 @@ function hasPartyAnalyticsContext(message: string) {
 
 function hasPersonAnalyticsContext(message: string) {
   const normalized = normalizeText(message).toLowerCase();
-  return /(менеджер|дизайнер|співробітник|користувач)/u.test(normalized);
+  return /(менеджер|дизайнер|логіст|співробітник|користувач|команд|працівник)/u.test(normalized);
 }
 
 function extractFollowUpPeriodHint(message: string) {
@@ -1939,6 +1968,180 @@ async function buildManagerOrderAnalytics(params: {
   } satisfies AnalyticsResult;
 }
 
+async function buildLogisticsDeliveryAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  targetMember?: AnalyticsPersonTarget | null;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  let query = params.adminClient
+    .schema("tosho")
+    .from("orders")
+    .select("id,total,delivery_status,order_status,created_at")
+    .eq("team_id", params.auth.teamId)
+    .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const byDeliveryStatus: Record<string, number> = {};
+  let totalOrders = 0;
+  let totalSum = 0;
+  let shipped = 0;
+  let delivered = 0;
+  for (const row of (data ?? []) as Array<{ delivery_status?: string | null; order_status?: string | null; total?: number | string | null }>) {
+    totalOrders += 1;
+    const deliveryStatus = normalizeText(row.delivery_status) || "без статусу";
+    const orderStatus = normalizeText(row.order_status) || "без статусу";
+    byDeliveryStatus[deliveryStatus] = (byDeliveryStatus[deliveryStatus] ?? 0) + 1;
+    if (deliveryStatus === "shipped" || orderStatus === "shipped") shipped += 1;
+    if (deliveryStatus === "delivered" || orderStatus === "completed") delivered += 1;
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    if (Number.isFinite(amount)) totalSum += amount;
+  }
+
+  const rows: AnalyticsRow[] = Object.entries(byDeliveryStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => ({
+      id: status,
+      label: formatDeliveryStatusLabel(status),
+      primary: `${formatInteger(count)} замовл.`,
+      secondary: null,
+      badges: status === "без статусу" ? [] : [{ label: "Доставка", value: formatInteger(count) }],
+    }));
+  const targetName = params.targetMember ? formatShortPersonName(params.targetMember.label) || params.targetMember.label : null;
+  const targetNotice = targetName
+    ? ` По **${targetName}** персонально не ділю: у замовленнях немає поля logistics_user_id.`
+    : "";
+
+  return {
+    title: "Логістика: доставка",
+    summary: `Пораховано доставку по замовленнях ${period.label}.`,
+    markdown: `Порахував логістику ${period.label}: **${formatInteger(totalOrders)}** замовлень, **${formatInteger(shipped)}** відвантажено, **${formatInteger(delivered)}** доставлено.${targetNotice}`,
+    domain: "logistics",
+    confidence: params.targetMember ? 0.72 : 0.88,
+    analytics: {
+      kind: "entity",
+      title: params.targetMember ? `Логістика: ${targetName}` : "Логістика",
+      caption: `${formatInteger(totalOrders)} замовлень ${period.label} · сума ${formatMoney(totalSum)}`,
+      avatarUrl: params.targetMember?.avatarUrl ?? null,
+      metricLabel: "Статус",
+      rows,
+      note: `Рахую delivery_status/order_status у замовленнях.${params.targetMember ? " Персонального логіста в orders зараз немає." : ""}`,
+    },
+  } satisfies AnalyticsResult;
+}
+
+function buildEmployeeProfileAnalytics(member: AnalyticsPersonTarget): AnalyticsResult {
+  const roleLabel = analyticsPersonRoleLabel(member);
+  const modules = Object.entries(member.moduleAccess)
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => {
+      const labels: Record<string, string> = {
+        overview: "Огляд",
+        orders: "Збут",
+        design: "Дизайн",
+        logistics: "Логістика",
+        catalog: "Каталог",
+        contractors: "Підрядники",
+        team: "Команда",
+      };
+      return labels[key] ?? key;
+    });
+
+  return {
+    title: `Співробітник: ${formatShortPersonName(member.label) || member.label}`,
+    summary: `${member.label}: ${roleLabel}.`,
+    markdown: `Знайшов **${formatShortPersonName(member.label) || member.label}**. Роль: **${roleLabel}**. Для цієї ролі можу рахувати ті метрики, які є в CRM-даних; якщо потрібен персональний зріз, напиши метрику: прорахунки, замовлення або дизайн-задачі.`,
+    domain: roleLabel === "Логіст" ? "logistics" : roleLabel === "Дизайнер" ? "design" : "team",
+    confidence: 0.82,
+    analytics: {
+      kind: "entity",
+      title: formatShortPersonName(member.label) || member.label,
+      caption: roleLabel,
+      avatarUrl: member.avatarUrl,
+      metricLabel: "Доступ",
+      rows: [
+        {
+          id: "role",
+          label: "Роль",
+          primary: roleLabel,
+          secondary: normalizeText(member.jobRole) || normalizeText(member.accessRole) || null,
+        },
+        {
+          id: "modules",
+          label: "Модулі",
+          primary: modules.length > 0 ? `${formatInteger(modules.length)} активн.` : "0",
+          secondary: modules.join(" · ") || "Немає активних модулів",
+        },
+      ],
+      note: "Для співробітника без конкретної метрики показую профіль, а не підставляю менеджерські прорахунки.",
+    },
+  };
+}
+
+async function buildTeamRoleAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const normalized = normalizeText(params.message).toLowerCase();
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const wantsDesigners = /(дизайнер|дизайнери)/u.test(normalized);
+  const wantsManagers = hasManagerAnalyticsTerm(normalized);
+  const wantsLogistics = hasLogisticsAnalyticsTerm(normalized);
+  const wantsTeam = hasEmployeeAnalyticsTerm(normalized) || /(команд|людей|користувач)/u.test(normalized);
+  const filtered = members.filter((member) => {
+    const role = analyticsPersonRoleLabel(member);
+    if (wantsDesigners) return role === "Дизайнер";
+    if (wantsManagers) return role === "Менеджер" || role === "PM";
+    if (wantsLogistics) return role === "Логіст";
+    if (wantsTeam) return true;
+    return false;
+  });
+  if (filtered.length === 0) return null;
+
+  const byRole: Record<string, number> = {};
+  for (const member of filtered) {
+    const role = analyticsPersonRoleLabel(member);
+    byRole[role] = (byRole[role] ?? 0) + 1;
+  }
+  const title = wantsDesigners
+    ? "Дизайнери"
+    : wantsManagers
+      ? "Менеджери"
+      : wantsLogistics
+        ? "Логісти"
+        : "Співробітники";
+
+  return {
+    title,
+    summary: `${title}: ${formatInteger(filtered.length)} людей.`,
+    markdown: `Знайшов **${formatInteger(filtered.length)}** ${title.toLowerCase()}.`,
+    domain: wantsLogistics ? "logistics" : wantsDesigners ? "design" : "team",
+    confidence: 0.84,
+    analytics: {
+      kind: "people",
+      title,
+      caption: `${formatInteger(filtered.length)} людей`,
+      metricLabel: "Роль",
+      rows: filtered.map((member) => ({
+        id: member.userId,
+        label: formatShortPersonName(member.label) || member.label,
+        avatarUrl: member.avatarUrl,
+        primary: analyticsPersonRoleLabel(member),
+        secondary: normalizeText(member.jobRole) || normalizeText(member.accessRole) || null,
+        badges: Object.entries(member.moduleAccess)
+          .filter(([, enabled]) => enabled)
+          .slice(0, 4)
+          .map(([module]) => ({ label: module, value: "так" })),
+      })),
+      note: `Це зріз по ролях і доступах команди, не операційна продуктивність.`,
+    },
+  };
+}
+
 async function buildCustomerQuoteAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -2421,6 +2624,7 @@ async function buildPersonAnalyticsDecision(params: {
 
   const normalized = normalizeText(params.message).toLowerCase();
   const explicitlyDesign = /(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized);
+  const explicitlyLogistics = hasLogisticsAnalyticsTerm(normalized);
   const explicitlyCustomers = /(замовник|клієнт|контрагент)/u.test(normalized);
   const explicitlyOrders = /(замовл|order)/u.test(normalized) && !/(замовник|клієнт|контрагент)/u.test(normalized);
   const explicitlyQuotes = /(прорах|quote|коштор|кп)/u.test(normalized);
@@ -2428,6 +2632,7 @@ async function buildPersonAnalyticsDecision(params: {
   const relevantMatches = matches.filter((member) => {
     const role = normalizeRole(member.jobRole);
     if (explicitlyDesign) return member.moduleAccess.design || role === "designer" || role === "дизайнер";
+    if (explicitlyLogistics) return member.moduleAccess.logistics || role === "logistics" || role === "head_of_logistics";
     if (explicitlyCustomers || explicitlyOrders || explicitlyQuotes || hasManagerAnalyticsTerm(normalized)) {
       return member.moduleAccess.orders || role === "manager" || role === "pm";
     }
@@ -2439,9 +2644,14 @@ async function buildPersonAnalyticsDecision(params: {
   const target = candidates[0];
   const role = normalizeRole(target.jobRole);
   const looksDesigner = target.moduleAccess.design || role === "designer" || role === "дизайнер";
+  const looksLogistics = target.moduleAccess.logistics || role === "logistics" || role === "head_of_logistics";
+  const looksManager = target.moduleAccess.orders || role === "manager" || role === "pm";
 
   if (explicitlyDesign || (!explicitlyCustomers && !explicitlyOrders && !explicitlyQuotes && looksDesigner)) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyLogistics || (!explicitlyCustomers && !explicitlyOrders && !explicitlyQuotes && looksLogistics)) {
+    return toAnalyticsDecision(await buildLogisticsDeliveryAnalytics({ ...params, targetMember: target }));
   }
   if (explicitlyCustomers) {
     return toAnalyticsDecision(await buildManagerCustomerAnalytics({ ...params, targetMember: target }));
@@ -2449,7 +2659,10 @@ async function buildPersonAnalyticsDecision(params: {
   if (explicitlyOrders) {
     return toAnalyticsDecision(await buildManagerOrderAnalytics({ ...params, targetMember: target }));
   }
-  return toAnalyticsDecision(await buildManagerQuoteAnalytics({ ...params, targetMember: target }));
+  if (explicitlyQuotes || hasManagerAnalyticsTerm(normalized) || looksManager) {
+    return toAnalyticsDecision(await buildManagerQuoteAnalytics({ ...params, targetMember: target }));
+  }
+  return toAnalyticsDecision(buildEmployeeProfileAnalytics(target));
 }
 
 async function buildAnalyticsDecision(params: {
@@ -2465,14 +2678,34 @@ async function buildAnalyticsDecision(params: {
   const hasOrderTerm = /(замовл|order)/u.test(normalized);
   const hasPartyTerm = /(лід|замовник|клієнт|контрагент)/u.test(normalized);
   const hasManagerTerm = hasManagerAnalyticsTerm(normalized);
+  const hasLogisticsTerm = hasLogisticsAnalyticsTerm(normalized);
+  const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
   const stripped = stripAnalyticsQueryTerms(params.message);
   const asksForCustomerBreakdown =
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
     );
+  const asksForPeopleList =
+    /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
+      normalized
+    ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
 
   const personDecision = await buildPersonAnalyticsDecision(params);
   if (personDecision) return personDecision;
+
+  if (asksForPeopleList) {
+    const teamDecision = await buildTeamRoleAnalytics(params);
+    if (teamDecision) return toAnalyticsDecision(teamDecision);
+  }
+
+  if (hasLogisticsTerm && !hasQuoteTerm && !hasDesignTerm && !hasPartyTerm && !hasManagerTerm) {
+    return toAnalyticsDecision(await buildLogisticsDeliveryAnalytics(params));
+  }
+
+  if ((hasEmployeeTerm || hasLogisticsTerm || /дизайнери|менеджери/u.test(normalized)) && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm) {
+    const teamDecision = await buildTeamRoleAnalytics(params);
+    if (teamDecision) return toAnalyticsDecision(teamDecision);
+  }
 
   if (hasDesignTerm) {
     const partyQuery = extractPartySearchQuery(params.message) || stripped;
