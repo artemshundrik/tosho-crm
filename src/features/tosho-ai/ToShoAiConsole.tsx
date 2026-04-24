@@ -889,39 +889,17 @@ function MagicThinkingCard({ message }: { message: string }) {
 
   return (
     <div className="flex w-full min-w-0 justify-start overflow-hidden px-0.5">
-      <div className="max-w-[calc(100%-0.25rem)] min-w-0 space-y-2 sm:max-w-[88%]">
+      <div className="max-w-[calc(100%-0.25rem)] min-w-0 sm:max-w-[88%]">
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
+          <div className="tosho-ai-thinking-orb flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
             <Sparkles className="h-4 w-4" />
           </div>
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium text-foreground/80">ToSho AI</span>
-            <span className="shrink-0">збирає відповідь</span>
-          </div>
-        </div>
-        <div className="tosho-ai-magic-card rounded-[24px] border px-3.5 py-3 shadow-[var(--shadow-elevated-sm)] sm:rounded-[28px] sm:px-4 sm:py-3.5">
-          <div className="tosho-ai-magic-scan" aria-hidden="true" />
-          <div className="relative flex items-start gap-3">
-            <div className="tosho-ai-magic-pulse mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E6007E]/22 bg-[#E6007E]/10 text-[#E6007E]">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-foreground">Шукаю корисне в CRM</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                Не просто чекаю відповідь, а збираю потрібні дані і перевіряю контекст.
-              </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                {steps.map((step, index) => (
-                  <div
-                    key={step}
-                    className="tosho-ai-magic-step rounded-full border border-border/55 bg-background/55 px-3 py-2 text-xs font-medium text-foreground/85"
-                    style={{ animationDelay: `${index * 220}ms` }}
-                  >
-                    {step}
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="tosho-ai-thinking-line min-w-0 text-sm font-medium leading-6 text-muted-foreground">
+            {steps.map((step, index) => (
+              <span key={step} className="tosho-ai-thinking-word" style={{ animationDelay: `${index * 260}ms` }}>
+                {step}
+              </span>
+            ))}
           </div>
         </div>
       </div>

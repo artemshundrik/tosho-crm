@@ -1362,6 +1362,22 @@ function isLogoHygieneAnalyticsQuery(message: string) {
   );
 }
 
+function isGenericManagerAnalyticsQuery(normalized: string) {
+  return (
+    /(менеджерам|менеджерах|менеджери|менеджерів|усі\s+менеджери|всі\s+менеджери|по\s+менеджерам|по\s+менеджерах)/u.test(
+      normalized
+    ) || /аналітик.*менеджер/u.test(normalized)
+  );
+}
+
+function isGenericDesignerAnalyticsQuery(normalized: string) {
+  return (
+    /(дизайнерам|дизайнерах|дизайнери|дизайнерів|усі\s+дизайнери|всі\s+дизайнери|по\s+дизайнерам|по\s+дизайнерах)/u.test(
+      normalized
+    ) || /аналітик.*дизайнер/u.test(normalized)
+  );
+}
+
 function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsIntent | null {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
@@ -1417,7 +1433,7 @@ function isDirectAnalyticsRequest(message: string) {
   if (!supportedIntent) return false;
   if (supportedIntent === "logo_hygiene" && !shouldSynthesizeAnalyticsWithOpenAi(message)) return true;
   return (
-    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
+    /(покажи|показати|дай|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
       normalized
     ) &&
     !shouldSynthesizeAnalyticsWithOpenAi(message)
@@ -4462,6 +4478,8 @@ async function buildAnalyticsDecision(params: {
   const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
   const stripped = stripAnalyticsQueryTerms(params.message);
   const asksForDesignerRanking = isDesignerRankingAnalyticsQuery(params.message);
+  const asksForGenericDesignerAnalytics = isGenericDesignerAnalyticsQuery(normalized);
+  const asksForGenericManagerAnalytics = isGenericManagerAnalyticsQuery(normalized);
   const asksForCustomerBreakdown =
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
@@ -4487,6 +4505,15 @@ async function buildAnalyticsDecision(params: {
 
   if (supportedIntent === "designer_ranking" || asksForDesignerRanking) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
+  }
+
+  if (asksForGenericDesignerAnalytics && !hasQuoteTerm && !hasOrderTerm) {
+    return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
+  }
+
+  if (asksForGenericManagerAnalytics) {
+    if (hasOrderTerm && !hasQuoteTerm) return toAnalyticsDecision(await buildManagerOrderAnalytics(params));
+    return toAnalyticsDecision(await buildManagerQuoteAnalytics(params));
   }
 
   const personDecision = await buildPersonAnalyticsDecision(params);

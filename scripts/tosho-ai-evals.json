@@ -62,6 +62,48 @@
     }
   },
   {
+    "id": "generic-manager-analytics-direct",
+    "message": "дай аналітику по менеджерам",
+    "routeContext": {
+      "pathname": "/orders/estimates",
+      "search": "",
+      "href": "/orders/estimates",
+      "title": "Прорахунки",
+      "routeLabel": "Прорахунки",
+      "domainHint": "orders",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "orders",
+      "requiresAnalytics": true,
+      "directAnalytics": true,
+      "noOpenAi": true,
+      "noKnowledgeRetrieval": true
+    }
+  },
+  {
+    "id": "generic-designer-analytics-direct",
+    "message": "дай аналітику по дизайнерам",
+    "routeContext": {
+      "pathname": "/design",
+      "search": "",
+      "href": "/design",
+      "title": "Дизайн",
+      "routeLabel": "Дизайн",
+      "domainHint": "design",
+      "entityType": null,
+      "entityId": null
+    },
+    "expect": {
+      "domain": "design",
+      "requiresAnalytics": true,
+      "directAnalytics": true,
+      "noOpenAi": true,
+      "noKnowledgeRetrieval": true
+    }
+  },
+  {
     "id": "orders-how-to-separate-estimates",
     "message": "чи можна в одному прорахунку рахувати кілька різних товарів?",
     "routeContext": {
