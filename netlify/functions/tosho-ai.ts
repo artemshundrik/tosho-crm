@@ -795,6 +795,24 @@ function normalizeAnalyticsName(value: string | null | undefined) {
   return normalizeText(value).toLowerCase().replace(/\s+/g, " ");
 }
 
+function normalizeLooseAnalyticsName(value: string | null | undefined) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[«»"“”'ʼ’.,()[\]{}:;|/_\\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looseAnalyticsNameMatches(left: string | null | undefined, right: string | null | undefined) {
+  const leftNormalized = normalizeLooseAnalyticsName(left);
+  const rightNormalized = normalizeLooseAnalyticsName(right);
+  return Boolean(
+    leftNormalized &&
+      rightNormalized &&
+      (leftNormalized.includes(rightNormalized) || rightNormalized.includes(leftNormalized))
+  );
+}
+
 function stripAnalyticsQueryTerms(message: string) {
   return normalizeText(message)
     .replace(/[?!.]+$/g, "")
@@ -1661,6 +1679,113 @@ async function buildDesignCompletionAnalytics(params: {
   } satisfies AnalyticsResult;
 }
 
+async function buildPartyDesignCompletionAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+  routeContext: ReturnType<typeof sanitizeRouteContext>;
+}) {
+  const party = await resolvePartyForAnalytics(params);
+  if (!party) return null;
+
+  const period = parsePeriodFromMessage(params.message);
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const memberById = new Map(members.map((member) => [member.userId, member]));
+
+  const { data: quoteData, error: quoteError } = await params.adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("id,customer_id,customer_name,customer_logo_url")
+    .eq("team_id", params.auth.teamId)
+    .limit(10000);
+  if (quoteError) throw new Error(quoteError.message);
+
+  const quoteIds = new Set<string>();
+  let logoUrl = party.logoUrl;
+  for (const quote of (quoteData ?? []) as Array<{
+    id?: string | null;
+    customer_id?: string | null;
+    customer_name?: string | null;
+    customer_logo_url?: string | null;
+  }>) {
+    const matchesParty =
+      (party.kind === "customer" && quote.customer_id === party.id) ||
+      looseAnalyticsNameMatches(quote.customer_name, party.name);
+    if (!matchesParty || !quote.id) continue;
+    quoteIds.add(quote.id);
+    if (!logoUrl && quote.customer_logo_url) logoUrl = normalizeText(quote.customer_logo_url) || null;
+  }
+
+  let activityQuery = params.adminClient
+    .from("activity_log")
+    .select("entity_id,metadata,created_at")
+    .eq("team_id", params.auth.teamId)
+    .eq("action", "design_task_status")
+    .limit(10000);
+  if (period.sinceIso) activityQuery = activityQuery.gte("created_at", period.sinceIso);
+  const { data, error } = await activityQuery;
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<string, { userId: string; label: string; avatarUrl: string | null; total: number; byType: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{ metadata?: JsonRecord | null }>) {
+    const metadata = row.metadata ?? {};
+    if (metadata.to_status !== "approved") continue;
+
+    const metadataQuoteId = normalizeText(typeof metadata.quote_id === "string" ? metadata.quote_id : "");
+    const metadataCustomerId = normalizeText(typeof metadata.customer_id === "string" ? metadata.customer_id : "");
+    const metadataCustomerName = normalizeText(typeof metadata.customer_name === "string" ? metadata.customer_name : "");
+    const matchesParty =
+      Boolean(metadataQuoteId && quoteIds.has(metadataQuoteId)) ||
+      (party.kind === "customer" && metadataCustomerId === party.id) ||
+      looseAnalyticsNameMatches(metadataCustomerName, party.name);
+    if (!matchesParty) continue;
+
+    const userId = normalizeText(typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : "") || "unassigned";
+    const member = memberById.get(userId);
+    const rawLabel =
+      member?.label ??
+      normalizeText(typeof metadata.assignee_label === "string" ? metadata.assignee_label : "") ??
+      "Без дизайнера";
+    const label = userId === "unassigned" ? "Без дизайнера" : formatShortPersonName(rawLabel) || rawLabel;
+    const taskType = normalizeText(typeof metadata.design_task_type === "string" ? metadata.design_task_type : "") || "без типу";
+    const bucket = buckets.get(userId) ?? { userId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, byType: {} };
+    bucket.total += 1;
+    bucket.byType[taskType] = (bucket.byType[taskType] ?? 0) + 1;
+    buckets.set(userId, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const body =
+    total > 0
+      ? `Порахував дизайн-задачі по **${party.name}** ${period.label}: **${formatInteger(total)}** завершених.`
+      : `По **${party.name}** ${period.label} не знайшов завершених дизайн-задач.`;
+
+  return {
+    title: `${party.kind === "customer" ? "Замовник" : "Лід"}: дизайн-задачі`,
+    summary: `${party.name}: ${formatInteger(total)} завершених дизайн-задач ${period.label}.`,
+    markdown: body,
+    domain: "design",
+    confidence: 0.9,
+    analytics: {
+      kind: "people",
+      title: party.name,
+      caption: `${formatInteger(total)} завершених задач ${period.label}`,
+      avatarUrl: logoUrl,
+      metricLabel: "Завершено",
+      rows: rows.map((row) => ({
+        id: row.userId,
+        label: row.label,
+        avatarUrl: row.avatarUrl,
+        primary: `${formatInteger(row.total)} задач`,
+        secondary: null,
+        badges: formatAnalyticsBadges(row.byType, formatDesignTaskTypeLabel),
+      })),
+      note: `Рахую approved дизайн-задачі по customer_name${quoteIds.size > 0 ? " і пов'язаних quote_id" : ""}.`,
+    },
+  } satisfies AnalyticsResult;
+}
+
 async function buildManagerQuoteAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -1888,6 +2013,71 @@ async function buildCustomerQuoteAnalytics(params: {
   } satisfies AnalyticsResult;
 }
 
+async function buildCustomerOrderAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const period = parsePeriodFromMessage(params.message);
+  let query = params.adminClient
+    .schema("tosho")
+    .from("orders")
+    .select("id,order_status,total,customer_id,customer_name,created_at")
+    .eq("team_id", params.auth.teamId)
+    .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const buckets = new Map<string, { id: string; label: string; total: number; sum: number; byStatus: Record<string, number> }>();
+  for (const row of (data ?? []) as Array<{
+    customer_id?: string | null;
+    customer_name?: string | null;
+    order_status?: string | null;
+    total?: number | string | null;
+  }>) {
+    const customerName = normalizeText(row.customer_name) || "Без замовника";
+    const key = normalizeText(row.customer_id) || normalizeAnalyticsName(customerName) || "unknown";
+    const status = normalizeText(row.order_status) || "без статусу";
+    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const bucket = buckets.get(key) ?? { id: key, label: customerName, total: 0, sum: 0, byStatus: {} };
+    bucket.total += 1;
+    if (Number.isFinite(amount)) bucket.sum += amount;
+    bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
+    buckets.set(key, bucket);
+  }
+
+  const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
+  const totalOrders = rows.reduce((sum, row) => sum + row.total, 0);
+  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const top = rows[0] ?? null;
+  const body = top
+    ? `Готово. Найбільше замовлень ${period.label} у **${top.label}** — ${formatInteger(top.total)}. Загалом знайшов **${formatInteger(totalOrders)}** замовлень по замовниках.`
+    : "За цей період не знайшов замовлень по замовниках.";
+
+  return {
+    title: "Замовлення по замовниках",
+    summary: `Пораховано ${formatInteger(totalOrders)} замовлень по замовниках ${period.label}.`,
+    markdown: body,
+    domain: "orders",
+    confidence: 0.88,
+    analytics: {
+      kind: "entity",
+      title: "Замовлення по замовниках",
+      caption: `${formatInteger(totalOrders)} замовлень ${period.label} · сума ${formatMoney(totalSum)}`,
+      metricLabel: "Замовлення",
+      rows: rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        primary: `${formatInteger(row.total)} замовл.`,
+        secondary: `Сума ${formatMoney(row.sum)}`,
+        badges: formatAnalyticsBadges(row.byStatus, formatOrderStatusLabel),
+      })),
+      note: "Групую замовлення за customer_id, а якщо його немає - за назвою customer_name.",
+    },
+  } satisfies AnalyticsResult;
+}
+
 async function buildManagerCustomerAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -2102,16 +2292,17 @@ async function buildPartyQuoteOrderAnalytics(params: {
   if (quoteResult.error) throw new Error(quoteResult.error.message);
   if (orderResult.error) throw new Error(orderResult.error.message);
 
-  const partyName = normalizeAnalyticsName(party.name);
   const quotes = ((quoteResult.data ?? []) as Array<{ id: string; status?: string | null; total?: number | string | null; customer_id?: string | null; customer_name?: string | null }>).filter((row) => {
-    if (party.kind === "customer") return row.customer_id === party.id;
-    return !row.customer_id && normalizeAnalyticsName(row.customer_name).includes(partyName);
+    const matchesName = looseAnalyticsNameMatches(row.customer_name, party.name);
+    if (party.kind === "customer") return row.customer_id === party.id || matchesName;
+    return matchesName;
   });
   const quoteIds = new Set(quotes.map((quote) => quote.id));
   const orders = ((orderResult.data ?? []) as Array<{ id: string; quote_id?: string | null; order_status?: string | null; total?: number | string | null; customer_id?: string | null; customer_name?: string | null; party_type?: string | null }>).filter((row) => {
+    const matchesName = looseAnalyticsNameMatches(row.customer_name, party.name);
     if (row.quote_id && quoteIds.has(row.quote_id)) return true;
-    if (party.kind === "customer") return row.customer_id === party.id;
-    return row.party_type === "lead" && normalizeAnalyticsName(row.customer_name).includes(partyName);
+    if (party.kind === "customer") return row.customer_id === party.id || matchesName;
+    return matchesName && (row.party_type === "lead" || !row.customer_id);
   });
 
   const quoteByStatus: Record<string, number> = {};
@@ -2176,7 +2367,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
       rows,
       note:
         party.kind === "customer"
-          ? "Замовника рахую по customer_id."
+          ? "Замовника рахую по customer_id, а записи, що зайшли як лід, підхоплюю по customer_name."
           : "Ліда рахую по назві в customer_name і пов'язаних quote_id.",
     },
   } satisfies AnalyticsResult;
@@ -2269,39 +2460,55 @@ async function buildAnalyticsDecision(params: {
 }) {
   if (!shouldRunAnalytics(params.message)) return null;
   const normalized = normalizeText(params.message).toLowerCase();
+  const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
+  const hasQuoteTerm = /(прорах|quote|коштор|кп)/u.test(normalized);
+  const hasOrderTerm = /(замовл|order)/u.test(normalized);
+  const hasPartyTerm = /(лід|замовник|клієнт|контрагент)/u.test(normalized);
+  const hasManagerTerm = hasManagerAnalyticsTerm(normalized);
+  const stripped = stripAnalyticsQueryTerms(params.message);
+  const asksForCustomerBreakdown =
+    /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
+      normalized
+    );
 
   const personDecision = await buildPersonAnalyticsDecision(params);
   if (personDecision) return personDecision;
 
-  if (/(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)) {
+  if (hasDesignTerm) {
+    const partyQuery = extractPartySearchQuery(params.message) || stripped;
+    if (partyQuery) {
+      const partyDesignDecision = await buildPartyDesignCompletionAnalytics(params);
+      if (partyDesignDecision) return toAnalyticsDecision(partyDesignDecision);
+    }
     return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
   }
 
-  if (hasCustomerAnalyticsTerm(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
-    const stripped = stripAnalyticsQueryTerms(params.message);
-    const asksForCustomerBreakdown =
-      /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
-        normalized
-      );
-    if (asksForCustomerBreakdown || !stripped) {
+  if (hasCustomerAnalyticsTerm(normalized)) {
+    if (asksForCustomerBreakdown && hasOrderTerm && !hasQuoteTerm) {
+      return toAnalyticsDecision(await buildCustomerOrderAnalytics(params));
+    }
+    if (asksForCustomerBreakdown || (!stripped && !hasOrderTerm) || (!hasQuoteTerm && !hasOrderTerm)) {
       return toAnalyticsDecision(await buildCustomerQuoteAnalytics(params));
     }
   }
 
-  if (/(лід|замовник|клієнт|контрагент)/u.test(normalized) && /(прорах|замовл|order|quote)/u.test(normalized)) {
+  if ((hasQuoteTerm || hasOrderTerm) && (hasPartyTerm || (stripped && !hasManagerTerm))) {
     return toAnalyticsDecision(await buildPartyQuoteOrderAnalytics(params));
   }
 
-  if (hasManagerAnalyticsTerm(normalized) && /(замовл|order)/u.test(normalized) && !/прорах/u.test(normalized)) {
+  if (hasManagerTerm && hasOrderTerm && !hasQuoteTerm) {
     return toAnalyticsDecision(await buildManagerOrderAnalytics(params));
   }
 
-  if (hasManagerAnalyticsTerm(normalized) && /(прорах|quote|коштор|кп)/u.test(normalized)) {
+  if (hasManagerTerm) {
     return toAnalyticsDecision(await buildManagerQuoteAnalytics(params));
   }
 
-  if (/(прорах|quote|коштор|кп)/u.test(normalized)) {
-    const stripped = stripAnalyticsQueryTerms(params.message);
+  if (hasOrderTerm && !hasQuoteTerm) {
+    return toAnalyticsDecision(await buildManagerOrderAnalytics(params));
+  }
+
+  if (hasQuoteTerm) {
     if (stripped) {
       return toAnalyticsDecision(await buildPartyQuoteOrderAnalytics(params));
     }
