@@ -1947,9 +1947,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <SheetContent
           side="right"
           hideClose
-          className="inset-0 z-[80] h-[100dvh] w-full max-w-none overflow-hidden border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:max-w-[620px]"
+          className="inset-0 z-[80] h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-[620px]"
         >
-          <div className="flex h-full min-h-0 flex-col">
+          <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
             <div className="shrink-0 border-b border-border/70 bg-background/82 px-3 py-3 backdrop-blur-xl sm:px-4 sm:py-4 md:px-5">
               <SheetHeader>
                 <div className="flex items-start justify-between gap-4">
@@ -1967,7 +1967,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 </div>
               </SheetHeader>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden p-0">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-0">
               <ToShoAiConsole
                 key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}`}
                 active={toshoAiOpen}

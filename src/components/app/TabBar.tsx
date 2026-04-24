@@ -90,23 +90,31 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
                 onTouchStart={() => preloadRoute(tab.to)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
-                  "transition-[color,transform,opacity] duration-[var(--tabbar-transition)] ease-out",
-                  active ? "text-primary" : "text-muted-foreground/60"
+                  "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-[11px] font-medium",
+                  "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[var(--tabbar-transition)] ease-out",
+                  active
+                    ? "border border-[hsl(var(--tabbar-active-border)/var(--tabbar-active-border-alpha))] bg-[hsl(var(--tabbar-active-bg)/var(--tabbar-active-bg-alpha))] text-[hsl(var(--tabbar-label-active))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_8px_24px_hsl(0_0%_0%/0.12)] backdrop-blur-xl"
+                    : "border border-transparent text-muted-foreground/60"
                 )}
                 style={{
                   transform: active ? "scale(var(--tabbar-active-scale))" : "scale(1)",
                 }}
               >
+                {active ? (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/35"
+                  />
+                ) : null}
                 <Icon
                   className={cn(
-                    "h-6 w-6",
+                    "relative z-[1] h-5 w-5",
                     active ? "text-[hsl(var(--tabbar-icon-active))]" : "text-[hsl(var(--tabbar-icon))]"
                   )}
                 />
                 <span
                   className={cn(
-                    "h-4 leading-4 transition-opacity duration-[var(--tabbar-transition)]",
+                    "relative z-[1] h-4 leading-4 transition-opacity duration-[var(--tabbar-transition)]",
                     active
                       ? "opacity-100 text-[hsl(var(--tabbar-label-active))]"
                       : "opacity-70 text-[hsl(var(--tabbar-label))]"

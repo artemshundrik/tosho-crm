@@ -97,7 +97,14 @@ type PendingAttachment = {
 type PromptSuggestion = {
   label: string;
   text: string;
-  tone: "design" | "orders" | "team" | "general";
+};
+
+type PromptSuggestionGroup = {
+  id: "managers" | "designers" | "customers" | "employees";
+  label: string;
+  description: string;
+  tone: "design" | "orders" | "customers" | "team" | "general";
+  prompts: PromptSuggestion[];
 };
 
 type AnalyticsBadge = {
@@ -346,59 +353,132 @@ function normalizeRoleText(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function buildPromptSuggestions(input: {
+function buildPromptSuggestionGroups(input: {
   jobRole?: string | null;
   canManageQueue?: boolean;
   domainHint: ToShoAiRouteContext["domainHint"];
-}): PromptSuggestion[] {
+}): PromptSuggestionGroup[] {
   const jobRole = normalizeRoleText(input.jobRole);
   const isDesigner = jobRole === "designer" || jobRole === "дизайнер" || input.domainHint === "design";
   const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager"].includes(jobRole);
   const isOps = jobRole === "pm" || jobRole === "logistics";
   const isAdminLike = input.canManageQueue || jobRole === "seo";
+  const groups: PromptSuggestionGroup[] = [
+    {
+      id: "managers",
+      label: "Менеджери",
+      description: "Прорахунки, замовлення, клієнти по менеджерах.",
+      tone: "orders",
+      prompts: [
+        {
+          label: "Прорахунки за тиждень",
+          text: "дай зріз по менеджерах скільки прорахунків за останній тиждень",
+        },
+        {
+          label: "Замовлення за тиждень",
+          text: "скільки замовлень по менеджерах за останній тиждень?",
+        },
+        {
+          label: "Клієнти менеджера",
+          text: "скільки замовників у Вікторії за місяць?",
+        },
+        {
+          label: "Статистика менеджера",
+          text: "дай статистику по Дар'ї за місяць",
+        },
+      ],
+    },
+    {
+      id: "designers",
+      label: "Дизайнери",
+      description: "Закриті дизайн-задачі, типи робіт, статистика по дизайнеру.",
+      tone: "design",
+      prompts: [
+        {
+          label: "Таски за місяць",
+          text: "скільки тасок зробив кожен дизайнер за останній місяць?",
+        },
+        {
+          label: "Статистика по Ліні",
+          text: "дай статистику по Ліні за останній місяць",
+        },
+        {
+          label: "Візуали та адаптації",
+          text: "скільки візуалізацій і адаптацій зробили дизайнери за місяць?",
+        },
+        {
+          label: "Дизайн за тиждень",
+          text: "скільки дизайн-задач закрили за тиждень?",
+        },
+      ],
+    },
+    {
+      id: "customers",
+      label: "Замовники",
+      description: "Хто дає найбільше прорахунків, замовлень і активності.",
+      tone: "customers",
+      prompts: [
+        {
+          label: "Топ по прорахунках",
+          text: "у якого замовника найбільше прорахунків за тиждень?",
+        },
+        {
+          label: "Конкретний замовник",
+          text: "скільки прорахунків у Авантпрінт?",
+        },
+        {
+          label: "Прорахунки і замовлення",
+          text: "скільки у замовника Авантпрінт прорахунків і замовлень?",
+        },
+        {
+          label: "Зріз по замовниках",
+          text: "покажи прорахунки по замовниках за місяць",
+        },
+      ],
+    },
+    {
+      id: "employees",
+      label: "Співробітник",
+      description: "Запити по конкретному імені, ролі або активності.",
+      tone: "team",
+      prompts: [
+        {
+          label: "Знайти Дар'ю",
+          text: "дай статистику по Дар'ї за місяць",
+        },
+        {
+          label: "Знайти Вікторію",
+          text: "скільки замовників у Вікторії за місяць?",
+        },
+        {
+          label: "Знайти Ліну",
+          text: "скільки дизайнів зробила Ліна за тиждень?",
+        },
+        {
+          label: "Статистика співробітника",
+          text: "дай статистику по Ліні за останній місяць",
+        },
+      ],
+    },
+  ];
 
   if (isDesigner) {
-    return [
-      { label: "Дизайн за тиждень", text: "скільки тасок зробив кожен дизайнер за останній тиждень?", tone: "design" },
-      { label: "Стата по дизайнеру", text: "дай статистику по Ліні за останній місяць", tone: "design" },
-      { label: "Топ по типах", text: "скільки візуалізацій і адаптацій зробили дизайнери за місяць?", tone: "design" },
-      { label: "Де дивитись", text: "де дивитись дизайн-задачі і їх статуси?", tone: "general" },
-    ];
+    return [groups[1], groups[3], groups[2], groups[0]];
   }
 
   if (isManager) {
-    return [
-      { label: "Прорахунки менеджерів", text: "дай зріз по менеджерах скільки прорахунків за останній тиждень", tone: "orders" },
-      { label: "Топ замовників", text: "у якого замовника найбільше прорахунків за тиждень?", tone: "orders" },
-      { label: "Замовники менеджера", text: "скільки замовників у Вікторії за місяць?", tone: "orders" },
-      { label: "Конкретний клієнт", text: "скільки прорахунків у Авантпрінт?", tone: "orders" },
-    ];
+    return [groups[0], groups[2], groups[3], groups[1]];
   }
 
   if (isOps) {
-    return [
-      { label: "Замовлення менеджерів", text: "скільки замовлень по менеджерах за останній тиждень?", tone: "orders" },
-      { label: "Прорахунки", text: "скільки прорахунків по менеджерах за місяць?", tone: "orders" },
-      { label: "Клієнт", text: "скільки у замовника Авантпрінт прорахунків і замовлень?", tone: "orders" },
-      { label: "Дизайн", text: "скільки дизайн-задач закрили за тиждень?", tone: "design" },
-    ];
+    return [groups[0], groups[2], groups[1], groups[3]];
   }
 
   if (isAdminLike) {
-    return [
-      { label: "Менеджери", text: "дай зріз по менеджерах скільки прорахунків за останній тиждень", tone: "orders" },
-      { label: "Дизайнери", text: "скільки тасок зробив кожен дизайнер за останній місяць?", tone: "design" },
-      { label: "Замовники", text: "у якого замовника найбільше прорахунків за місяць?", tone: "orders" },
-      { label: "Людина", text: "дай статистику по Дар'ї за місяць", tone: "team" },
-    ];
+    return groups;
   }
 
-  return [
-    { label: "Що тут?", text: "що тут зараз відбувається?", tone: "general" },
-    { label: "Прорахунки", text: "скільки прорахунків по менеджерах за тиждень?", tone: "orders" },
-    { label: "Замовник", text: "у якого замовника найбільше прорахунків?", tone: "orders" },
-    { label: "Дизайн", text: "скільки дизайн-задач закрили за тиждень?", tone: "design" },
-  ];
+  return [groups[0], groups[2], groups[1], groups[3]];
 }
 
 function inferComposerMode(input: {
@@ -595,18 +675,45 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
 }
 
 function EmptyChatSuggestions({
-  suggestions,
+  groups,
   onSelect,
 }: {
-  suggestions: PromptSuggestion[];
+  groups: PromptSuggestionGroup[];
   onSelect: (value: string) => void;
 }) {
-  const toneClass: Record<PromptSuggestion["tone"], string> = {
-    design: "border-primary/20 bg-primary/8 text-primary hover:bg-primary/12",
-    orders: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/80",
-    team: "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80",
-    general: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
+  const [activeGroupId, setActiveGroupId] = useState<PromptSuggestionGroup["id"] | null>(null);
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
+  const toneClass: Record<PromptSuggestionGroup["tone"], { idle: string; active: string; question: string }> = {
+    design: {
+      idle: "border-primary/20 bg-primary/8 text-primary hover:bg-primary/12",
+      active: "border-primary/30 bg-primary/15 text-primary ring-1 ring-primary/15",
+      question: "border-primary/18 bg-primary/8 text-primary hover:bg-primary/12",
+    },
+    orders: {
+      idle: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/80",
+      active: "border-info-soft-border bg-info-soft/90 text-info-foreground ring-1 ring-info-soft-border",
+      question: "border-info-soft-border bg-info-soft/65 text-info-foreground hover:bg-info-soft/85",
+    },
+    customers: {
+      idle: "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80",
+      active: "border-success-soft-border bg-success-soft/90 text-success-foreground ring-1 ring-success-soft-border",
+      question: "border-success-soft-border bg-success-soft/65 text-success-foreground hover:bg-success-soft/85",
+    },
+    team: {
+      idle: "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80",
+      active: "border-warning-soft-border bg-warning-soft/90 text-warning-foreground ring-1 ring-warning-soft-border",
+      question: "border-warning-soft-border bg-warning-soft/65 text-warning-foreground hover:bg-warning-soft/85",
+    },
+    general: {
+      idle: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
+      active: "border-foreground/18 bg-foreground/8 text-foreground ring-1 ring-foreground/10",
+      question: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
+    },
   };
+
+  if (groups.length === 0) {
+    return null;
+  }
 
   return (
     <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-[var(--shadow-elevated-sm)]">
@@ -616,24 +723,48 @@ function EmptyChatSuggestions({
         </div>
         <div>
           <div className="text-sm font-semibold text-foreground">Можна спитати</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">Підставлю в поле, ти можеш дописати своє.</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Обери тему, а потім конкретне питання.</div>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {suggestions.map((suggestion) => (
-          <button
-            key={`${suggestion.label}:${suggestion.text}`}
-            type="button"
-            onClick={() => onSelect(suggestion.text)}
-            className={cn(
-              "inline-flex min-h-9 items-center rounded-full border px-3 py-2 text-left text-sm font-medium transition-colors",
-              toneClass[suggestion.tone]
-            )}
-          >
-            {suggestion.label}
-          </button>
-        ))}
+        {groups.map((group) => {
+          const isActive = group.id === activeGroupId;
+          const styles = toneClass[group.tone];
+          return (
+            <button
+              key={group.id}
+              type="button"
+              onClick={() => setActiveGroupId(isActive ? null : group.id)}
+              className={cn(
+                "inline-flex min-h-9 items-center rounded-full border px-3 py-2 text-left text-sm font-semibold transition-colors",
+                isActive ? styles.active : styles.idle
+              )}
+            >
+              {group.label}
+            </button>
+          );
+        })}
       </div>
+      {activeGroup ? (
+        <div className="mt-3 rounded-[20px] border border-border/50 bg-background/45 p-3">
+          <div className="text-xs leading-5 text-muted-foreground">{activeGroup.description}</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {activeGroup.prompts.map((suggestion) => (
+              <button
+                key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
+                type="button"
+                onClick={() => onSelect(suggestion.text)}
+                className={cn(
+                  "inline-flex min-h-8 items-center rounded-full border px-3 py-1.5 text-left text-xs font-medium transition-colors",
+                  toneClass[activeGroup.tone].question
+                )}
+              >
+                {suggestion.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -855,9 +986,9 @@ export function ToShoAiConsole({
     });
   }, [queueSearchValue, threadItems]);
 
-  const promptSuggestions = useMemo(
+  const promptSuggestionGroups = useMemo(
     () =>
-      buildPromptSuggestions({
+      buildPromptSuggestionGroups({
         jobRole,
         canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
         domainHint: resolvedContext.domainHint,
@@ -928,14 +1059,6 @@ export function ToShoAiConsole({
     });
     setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
     setComposerIntent("auto");
-  }, []);
-
-  const handleSelectPromptSuggestion = useCallback((value: string) => {
-    setComposerValue(value);
-    setComposerIntent("auto");
-    window.requestAnimationFrame(() => {
-      composerInputRef.current?.focus();
-    });
   }, []);
 
   useEffect(() => {
@@ -1051,21 +1174,10 @@ export function ToShoAiConsole({
     }
   }, [pendingAttachments, teamId, userId]);
 
-  const effectiveMode = useMemo(
-    () =>
-      composerIntent === "auto"
-        ? inferComposerMode({
-            composerValue,
-            hasAttachments: pendingAttachments.length > 0,
-            routeLabel: resolvedContext.routeLabel,
-            domainHint: resolvedContext.domainHint,
-          })
-        : composerIntent,
-    [composerIntent, composerValue, pendingAttachments.length, resolvedContext.domainHint, resolvedContext.routeLabel]
-  );
-
-  const handleSend = useCallback(async () => {
-    if (!composerValue.trim() && pendingAttachments.length === 0) {
+  const handleSend = useCallback(async (messageOverride?: string, forceAutoMode = false) => {
+    if (actionBusy === "send") return;
+    const outgoingMessage = messageOverride ?? composerValue;
+    if (!outgoingMessage.trim() && pendingAttachments.length === 0) {
       toast.error("Напиши запит або прикріпи файл для ToSho AI.");
       return;
     }
@@ -1075,10 +1187,19 @@ export function ToShoAiConsole({
     try {
       const uploaded = await uploadPendingAttachments();
       uploadedStorageFiles = uploaded.uploaded;
+      const outgoingMode =
+        forceAutoMode || composerIntent === "auto"
+          ? inferComposerMode({
+              composerValue: outgoingMessage,
+              hasAttachments: pendingAttachments.length > 0,
+              routeLabel: resolvedContext.routeLabel,
+              domainHint: resolvedContext.domainHint,
+            })
+          : composerIntent;
       const response = await callToShoAiApi("send", {
         requestId: selectedThreadId,
-        message: composerValue,
-        mode: effectiveMode,
+        message: outgoingMessage,
+        mode: outgoingMode,
         routeContext: resolvedContext,
         attachments: uploaded.attachments,
       });
@@ -1111,14 +1232,24 @@ export function ToShoAiConsole({
       setActionBusy(null);
     }
   }, [
+    actionBusy,
     applySnapshotResponse,
+    composerIntent,
     composerValue,
-    effectiveMode,
     pendingAttachments.length,
     resolvedContext,
     selectedThreadId,
     uploadPendingAttachments,
   ]);
+
+  const handleSelectPromptSuggestion = useCallback(
+    (value: string) => {
+      setComposerIntent("auto");
+      setComposerValue(value);
+      void handleSend(value, true);
+    },
+    [handleSend]
+  );
 
   const handleComposerKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -1226,9 +1357,9 @@ export function ToShoAiConsole({
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex min-h-full w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
+      <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+          <div className="flex min-h-full w-full min-w-0 max-w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {!selectedThread ? (
@@ -1465,7 +1596,7 @@ export function ToShoAiConsole({
               ) : (
                 <div className="space-y-4">
                   {!showRequestList && !knowledgeExpanded && !isAiUnavailable ? (
-                    <EmptyChatSuggestions suggestions={promptSuggestions} onSelect={handleSelectPromptSuggestion} />
+                    <EmptyChatSuggestions groups={promptSuggestionGroups} onSelect={handleSelectPromptSuggestion} />
                   ) : null}
                   <div ref={chatBottomRef} />
                 </div>
@@ -1474,8 +1605,8 @@ export function ToShoAiConsole({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border/60 bg-background/92 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
-          <div className="w-full space-y-3 px-0">
+        <div className="shrink-0 border-t border-border/60 bg-background/95 px-3 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+0.25rem)] pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
+          <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden px-0">
             <input
               ref={attachmentInputRef}
               type="file"
@@ -1517,7 +1648,7 @@ export function ToShoAiConsole({
               </div>
             ) : null}
 
-            <div className="flex items-end gap-2 px-0">
+            <div className="flex min-w-0 max-w-full items-end gap-2 overflow-hidden px-0">
               <Button
                 type="button"
                 variant="outline"
@@ -1536,7 +1667,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={intentMeta.placeholder}
-                className="h-11 max-h-[160px] min-h-[44px] flex-1 resize-none overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
+                className="h-11 max-h-[150px] min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
               />
               <Button
                 type="button"
