@@ -1324,6 +1324,21 @@ function shouldRunAnalytics(message: string) {
   );
 }
 
+function isDesignerRankingAnalyticsQuery(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return (
+    /(дизайнер|дизайнери|дизайнерів)/u.test(normalized) &&
+    /(рейтинг|топ|найбільш|найменш|хто|порівн|кільк|скільки|закрит|закрив|заверш|виконан|approved)/u.test(normalized)
+  );
+}
+
+function shouldSynthesizeAnalyticsWithOpenAi(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return /(поясни|проаналіз|аналіз|виснов|ризик|що\s+робити|що\s+зробити|крок|план|пріоритет|найважлив|ceo|директор|операційн)/u.test(
+    normalized
+  );
+}
+
 function hasAnalyticsFollowUpSignal(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   if (!normalized || normalized.length > 120) return false;
@@ -4256,9 +4271,7 @@ async function buildAnalyticsDecision(params: {
   const hasLogisticsTerm = hasLogisticsAnalyticsTerm(normalized);
   const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
   const stripped = stripAnalyticsQueryTerms(params.message);
-  const asksForDesignerRanking =
-    /(дизайнер|дизайнери|дизайнерів)/u.test(normalized) &&
-    /(рейтинг|топ|найбільш|найменш|хто|порівн|кільк|скільки|закрит|закрив|заверш|виконан|approved)/u.test(normalized);
+  const asksForDesignerRanking = isDesignerRankingAnalyticsQuery(params.message);
   const asksForCustomerBreakdown =
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
@@ -4276,6 +4289,10 @@ async function buildAnalyticsDecision(params: {
   if (hasPersonalActionPlanTerm(normalized) && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
     const personalDecision = await buildPersonalActionPlanAnalytics(params);
     if (personalDecision) return toAnalyticsDecision(personalDecision);
+  }
+
+  if (asksForDesignerRanking) {
+    return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
   }
 
   const personDecision = await buildPersonAnalyticsDecision(params);
@@ -5277,6 +5294,16 @@ async function handleSend(params: {
       message: analyticsMessage,
       routeContext,
     });
+    if (analyticsDecision && !shouldSynthesizeAnalyticsWithOpenAi(message)) {
+      assistantDecision = analyticsDecision;
+      crmToolDiagnostics = {
+        attempted: true,
+        requested: ["direct_crm_analytics"],
+        executed: ["direct_crm_analytics"],
+        latencyMs: null,
+        error: null,
+      };
+    }
   }
 
   if (!assistantDecision) {
