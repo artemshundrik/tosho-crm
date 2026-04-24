@@ -4256,6 +4256,9 @@ async function buildAnalyticsDecision(params: {
   const hasLogisticsTerm = hasLogisticsAnalyticsTerm(normalized);
   const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
   const stripped = stripAnalyticsQueryTerms(params.message);
+  const asksForDesignerRanking =
+    /(дизайнер|дизайнери|дизайнерів)/u.test(normalized) &&
+    /(рейтинг|топ|найбільш|найменш|хто|порівн|кільк|скільки|закрит|закрив|заверш|виконан|approved)/u.test(normalized);
   const asksForCustomerBreakdown =
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
@@ -4293,6 +4296,9 @@ async function buildAnalyticsDecision(params: {
   }
 
   if (hasDesignTerm) {
+    if (asksForDesignerRanking) {
+      return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
+    }
     const partyQuery = extractPartySearchQuery(params.message) || stripped;
     if (partyQuery) {
       const partyDesignDecision = await buildPartyDesignCompletionAnalytics(params);
@@ -5282,7 +5288,7 @@ async function handleSend(params: {
         mode,
         routeContext,
         runtimeErrors,
-        knowledge: knowledgeCandidates,
+        knowledge: analyticsDecision ? [] : knowledgeCandidates,
         recentMessages,
         attachments,
         analyticsContext: analyticsDecision,

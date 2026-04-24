@@ -420,6 +420,8 @@ function readAiDiagnostics(metadata: Record<string, unknown> | null) {
           ok: openAi.ok === true,
           model: stringValue(openAi, "model"),
           latencyMs: numberValue(openAi, "latencyMs"),
+          inputTokens: numberValue(openAi, "inputTokens"),
+          outputTokens: numberValue(openAi, "outputTokens"),
           totalTokens: numberValue(openAi, "totalTokens"),
           imageInputs: numberValue(openAi, "usedImageInputs"),
           responseId: stringValue(openAi, "responseId"),
@@ -1134,6 +1136,9 @@ function MessageCard({
                         diagnostics.openAi.model,
                         diagnostics.openAi.ok ? "ok" : "fallback",
                         diagnostics.openAi.latencyMs !== null ? `${diagnostics.openAi.latencyMs} ms` : null,
+                        diagnostics.openAi.inputTokens !== null && diagnostics.openAi.outputTokens !== null
+                          ? `${diagnostics.openAi.inputTokens} in / ${diagnostics.openAi.outputTokens} out`
+                          : null,
                         diagnostics.openAi.totalTokens !== null ? `${diagnostics.openAi.totalTokens} tokens` : null,
                         diagnostics.openAi.imageInputs ? `${diagnostics.openAi.imageInputs} images` : null,
                       ]
