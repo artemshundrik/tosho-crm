@@ -981,6 +981,15 @@ function hasEmployeeAnalyticsTerm(normalized: string) {
   return /(співробітник|співробітниц|користувач|людин|команд|працівник|працівниц|employee|user)/u.test(normalized);
 }
 
+function hasPersonalActionPlanTerm(normalized: string) {
+  return (
+    /(що\s+(мені|робити|далі)|план|задач[іи]|фокус|пріоритет|сьогодні|завтра|дотис|кому\s+(дзвонити|писати|нагадати)|кого\s+(дотиснути|повернути)|мої|моїх|моє)/u.test(
+      normalized
+    ) ||
+    /(зависл|без\s+руху|ризик|просроч|простроч|горить|важлив)/u.test(normalized)
+  );
+}
+
 function shouldRunAnalytics(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
@@ -989,6 +998,7 @@ function shouldRunAnalytics(message: string) {
     ) ||
     /по\s+(менедж|иенедж)/u.test(normalized) ||
     /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
+  if (hasPersonalActionPlanTerm(normalized)) return true;
   if (!hasAnalyticsVerb) return false;
   return (
     /(дизайн|дизайнер|таск|задач|прорах|quote|коштор|замовл|order|лід|замовник|клієнт|контрагент)/u.test(
@@ -2081,6 +2091,201 @@ function buildEmployeeProfileAnalytics(member: AnalyticsPersonTarget): Analytics
   };
 }
 
+async function buildPersonalActionPlanAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const normalizedRole = normalizeRole(params.auth.jobRole);
+  const isDesigner = normalizedRole === "designer" || normalizedRole === "дизайнер";
+  const isLogistics = normalizedRole === "logistics" || normalizedRole === "head_of_logistics";
+  const isManager = normalizedRole === "manager" || normalizedRole === "pm" || params.auth.canManageQueue;
+
+  if (isDesigner) {
+    const { data, error } = await params.adminClient
+      .from("activity_log")
+      .select("entity_id,title,metadata,created_at")
+      .eq("team_id", params.auth.teamId)
+      .eq("action", "design_task")
+      .limit(10000);
+    if (error) throw new Error(error.message);
+
+    const tasks = ((data ?? []) as Array<{ entity_id?: string | null; title?: string | null; metadata?: JsonRecord | null; created_at?: string | null }>)
+      .map((row) => {
+        const metadata = row.metadata ?? {};
+        const assigneeUserId = normalizeText(typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : "");
+        const status = normalizeText(typeof metadata.status === "string" ? metadata.status : "") || "new";
+        return {
+          id: normalizeText(row.entity_id) || normalizeText(typeof metadata.design_task_id === "string" ? metadata.design_task_id : "") || normalizeText(row.title) || "task",
+          label:
+            normalizeText(typeof metadata.customer_name === "string" ? metadata.customer_name : "") ||
+            normalizeText(row.title) ||
+            "Дизайн-задача",
+          status,
+          type: normalizeText(typeof metadata.design_task_type === "string" ? metadata.design_task_type : "") || "без типу",
+          deadline: normalizeText(typeof metadata.design_deadline === "string" ? metadata.design_deadline : "") || normalizeText(typeof metadata.deadline === "string" ? metadata.deadline : ""),
+          assigneeUserId,
+        };
+      })
+      .filter((task) => task.assigneeUserId === params.auth.userId && task.status !== "approved" && task.status !== "cancelled")
+      .sort((a, b) => {
+        const aDeadline = a.deadline ? Date.parse(a.deadline) : Number.POSITIVE_INFINITY;
+        const bDeadline = b.deadline ? Date.parse(b.deadline) : Number.POSITIVE_INFINITY;
+        return aDeadline - bDeadline || a.label.localeCompare(b.label, "uk");
+      })
+      .slice(0, 8);
+
+    return {
+      title: "Мій план по дизайну",
+      summary: `Знайдено ${formatInteger(tasks.length)} активних дизайн-задач.`,
+      markdown:
+        tasks.length > 0
+          ? `На сьогодні я б сфокусувався на **${tasks[0].label}**. Загалом у твоїй черзі **${formatInteger(tasks.length)}** активних задач.`
+          : "У твоїй дизайн-черзі не бачу активних задач.",
+      domain: "design",
+      confidence: 0.86,
+      analytics: {
+        kind: "entity",
+        title: "Фокус дизайнера",
+        caption: `${formatInteger(tasks.length)} активних задач`,
+        metricLabel: "Фокус",
+        rows: tasks.map((task) => ({
+          id: task.id,
+          label: task.label,
+          primary: formatDesignTaskTypeLabel(task.type),
+          secondary: task.deadline ? `Дедлайн ${task.deadline.slice(0, 10)} · ${task.status}` : task.status,
+          badges: [{ label: formatDesignTaskTypeLabel(task.type), value: 1 }],
+        })),
+        note: `Беру активні design_task з assignee_user_id = поточний користувач.`,
+      },
+    } satisfies AnalyticsResult;
+  }
+
+  if (isLogistics) {
+    const result = await buildLogisticsDeliveryAnalytics(params);
+    return {
+      ...result,
+      title: "Мій план по логістиці",
+      markdown: `${result.markdown}\n\nФокус: перевірити **готові до відвантаження**, **готується до відвантаження** і **не забрано**.`,
+      analytics: {
+        ...result.analytics,
+        title: "Фокус логіста",
+        note: `${result.analytics.note ?? ""} Персонального логіста в orders зараз немає, тому показую командний логістичний фокус.`,
+      },
+    } satisfies AnalyticsResult;
+  }
+
+  if (isManager) {
+    const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const [quoteResult, customerResult, leadResult, orderResult] = await Promise.all([
+      params.adminClient
+        .schema("tosho")
+        .from("quotes")
+        .select("id,status,total,customer_id,customer_name,created_at")
+        .eq("team_id", params.auth.teamId)
+        .or(`assigned_to.eq.${params.auth.userId},created_by.eq.${params.auth.userId}`)
+        .order("created_at", { ascending: false })
+        .limit(10000),
+      params.adminClient
+        .schema("tosho")
+        .from("customers")
+        .select("id,name,legal_name,manager_user_id,manager")
+        .eq("team_id", params.auth.teamId)
+        .or(`manager_user_id.eq.${params.auth.userId},manager.ilike.%${escapeIlikeValue(params.auth.actorLabel)}%`)
+        .limit(1000),
+      params.adminClient
+        .schema("tosho")
+        .from("leads")
+        .select("id,company_name,legal_name,first_name,last_name,manager_user_id,manager")
+        .eq("team_id", params.auth.teamId)
+        .or(`manager_user_id.eq.${params.auth.userId},manager.ilike.%${escapeIlikeValue(params.auth.actorLabel)}%`)
+        .limit(1000),
+      params.adminClient
+        .schema("tosho")
+        .from("orders")
+        .select("id,order_status,total,customer_name,manager_user_id,manager_label,created_at")
+        .eq("team_id", params.auth.teamId)
+        .or(`manager_user_id.eq.${params.auth.userId},manager_label.ilike.%${escapeIlikeValue(params.auth.actorLabel)}%`)
+        .order("created_at", { ascending: false })
+        .limit(10000),
+    ]);
+    if (quoteResult.error) throw new Error(quoteResult.error.message);
+    if (customerResult.error) throw new Error(customerResult.error.message);
+    if (leadResult.error) throw new Error(leadResult.error.message);
+    if (orderResult.error) throw new Error(orderResult.error.message);
+
+    const quotes = (quoteResult.data ?? []) as Array<{ id: string; status?: string | null; total?: number | string | null; customer_name?: string | null; created_at?: string | null }>;
+    const staleQuotes = quotes.filter((quote) => {
+      const status = normalizeText(quote.status);
+      const createdAt = quote.created_at ? Date.parse(quote.created_at) : Date.now();
+      return ["estimated", "awaiting_approval", "estimating"].includes(status) && createdAt < Date.parse(sinceIso);
+    });
+    const hotQuotes = quotes.filter((quote) => ["estimated", "awaiting_approval"].includes(normalizeText(quote.status))).slice(0, 6);
+    const customersCount = (customerResult.data ?? []).length;
+    const leadsCount = (leadResult.data ?? []).length;
+    const orders = (orderResult.data ?? []) as Array<{ id: string; order_status?: string | null; total?: number | string | null; customer_name?: string | null }>;
+    const activeOrders = orders.filter((order) => !["completed", "cancelled", "canceled"].includes(normalizeText(order.order_status)));
+
+    const rows: AnalyticsRow[] = [
+      {
+        id: "customers",
+        label: "Мої клієнти",
+        primary: formatInteger(customersCount + leadsCount),
+        secondary: `${formatInteger(customersCount)} замовників · ${formatInteger(leadsCount)} лідів`,
+      },
+      {
+        id: "hot-quotes",
+        label: "Дотиснути прорахунки",
+        primary: formatInteger(hotQuotes.length),
+        secondary: hotQuotes.slice(0, 3).map((quote) => normalizeText(quote.customer_name) || quote.id).join(" · ") || "Немає гарячих прорахунків",
+        badges: formatAnalyticsBadges(
+          hotQuotes.reduce<Record<string, number>>((acc, quote) => {
+            const status = normalizeText(quote.status) || "без статусу";
+            acc[status] = (acc[status] ?? 0) + 1;
+            return acc;
+          }, {}),
+          formatQuoteStatusLabel
+        ),
+      },
+      {
+        id: "stale-quotes",
+        label: "Зависли без руху",
+        primary: formatInteger(staleQuotes.length),
+        secondary: "Прорахунки старші 14 днів у робочих статусах",
+      },
+      {
+        id: "active-orders",
+        label: "Активні замовлення",
+        primary: formatInteger(activeOrders.length),
+        secondary: activeOrders.slice(0, 3).map((order) => normalizeText(order.customer_name) || order.id).join(" · ") || "Немає активних замовлень",
+      },
+    ];
+
+    return {
+      title: "Мій план менеджера",
+      summary: `Клієнтів і лідів: ${formatInteger(customersCount + leadsCount)}, гарячих прорахунків: ${formatInteger(hotQuotes.length)}.`,
+      markdown:
+        hotQuotes.length > 0
+          ? `Фокус на сьогодні: дотиснути **${normalizeText(hotQuotes[0].customer_name) || hotQuotes[0].id}** і пройтись по прорахунках у статусі погодження.`
+          : "На сьогодні не бачу гарячих прорахунків. Варто пройтись по лідах і активних замовленнях.",
+      domain: "orders",
+      confidence: 0.88,
+      analytics: {
+        kind: "entity",
+        title: "Фокус менеджера",
+        caption: `${formatInteger(customersCount + leadsCount)} клієнтів/лідів · ${formatInteger(hotQuotes.length)} гарячих прорахунків`,
+        metricLabel: "Що робити",
+        rows,
+        note: "Персоналізую по assigned_to/created_by у прорахунках і manager_user_id/manager у клієнтах та лідах.",
+      },
+    } satisfies AnalyticsResult;
+  }
+
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const me = members.find((member) => member.userId === params.auth.userId);
+  return me ? buildEmployeeProfileAnalytics(me) : null;
+}
+
 async function buildTeamRoleAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -2689,6 +2894,11 @@ async function buildAnalyticsDecision(params: {
     /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
       normalized
     ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
+
+  if (hasPersonalActionPlanTerm(normalized) && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
+    const personalDecision = await buildPersonalActionPlanAnalytics(params);
+    if (personalDecision) return toAnalyticsDecision(personalDecision);
+  }
 
   const personDecision = await buildPersonAnalyticsDecision(params);
   if (personDecision) return personDecision;

@@ -117,6 +117,12 @@ type PromptSuggestionGroup = {
   prompts: PromptSuggestion[];
 };
 
+type PersonalPromptSuggestion = {
+  label: string;
+  text: string;
+  tone: "focus" | "orders" | "design" | "logistics";
+};
+
 type ActiveMention = {
   start: number;
   end: number;
@@ -554,6 +560,50 @@ function buildPromptSuggestionGroups(input: {
   return [groups[0], groups[2], groups[1], groups[3]];
 }
 
+function buildPersonalPromptSuggestions(input: {
+  jobRole?: string | null;
+  canManageQueue?: boolean;
+  domainHint: ToShoAiRouteContext["domainHint"];
+}): PersonalPromptSuggestion[] {
+  const jobRole = normalizeRoleText(input.jobRole);
+  const isDesigner = jobRole === "designer" || jobRole === "дизайнер" || input.domainHint === "design";
+  const isLogistics = jobRole === "logistics" || jobRole === "head_of_logistics" || input.domainHint === "logistics";
+  const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager", "pm"].includes(jobRole) || input.domainHint === "orders";
+
+  if (isDesigner) {
+    return [
+      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
+      { label: "План на день", text: "дай мені план на день", tone: "design" },
+      { label: "Що горить?", text: "що горить у моїй черзі?", tone: "design" },
+      { label: "Що дотиснути?", text: "що мені дотиснути сьогодні?", tone: "focus" },
+    ];
+  }
+
+  if (isLogistics) {
+    return [
+      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
+      { label: "План логістики", text: "дай мені план по логістиці на день", tone: "logistics" },
+      { label: "Що відвантажити?", text: "що сьогодні треба відвантажити?", tone: "logistics" },
+      { label: "Ризики доставки", text: "які ризики по доставці?", tone: "focus" },
+    ];
+  }
+
+  if (isManager || input.canManageQueue) {
+    return [
+      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
+      { label: "План на день", text: "дай мені план на день", tone: "orders" },
+      { label: "Клієнти зависли", text: "мої клієнти зависли?", tone: "orders" },
+      { label: "Кому написати?", text: "кому мені сьогодні написати?", tone: "focus" },
+    ];
+  }
+
+  return [
+    { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
+    { label: "План на день", text: "дай мені план на день", tone: "focus" },
+    { label: "Моя роль", text: "що я можу тут робити?", tone: "orders" },
+  ];
+}
+
 function inferComposerMode(input: {
   composerValue: string;
   hasAttachments: boolean;
@@ -856,6 +906,44 @@ function EmptyChatSuggestions({
   );
 }
 
+function PersonalQuickPrompts({
+  prompts,
+  disabled,
+  onSelect,
+}: {
+  prompts: PersonalPromptSuggestion[];
+  disabled?: boolean;
+  onSelect: (value: string) => void;
+}) {
+  const toneClass: Record<PersonalPromptSuggestion["tone"], string> = {
+    focus: "border-[#E6007E]/24 bg-[#E6007E]/10 text-[#E6007E] hover:bg-[#E6007E]/14",
+    orders: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/85",
+    design: "border-violet-500/25 bg-violet-500/10 text-violet-600 hover:bg-violet-500/14 dark:text-violet-300",
+    logistics: "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/85",
+  };
+
+  if (prompts.length === 0) return null;
+
+  return (
+    <div className="flex max-w-full gap-2 overflow-x-auto px-0 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {prompts.map((prompt) => (
+        <button
+          key={`${prompt.label}:${prompt.text}`}
+          type="button"
+          disabled={disabled}
+          onClick={() => onSelect(prompt.text)}
+          className={cn(
+            "inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 sm:h-10 sm:px-3.5 sm:text-sm",
+            toneClass[prompt.tone]
+          )}
+        >
+          {prompt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MessageCard({
   message,
   onFeedback,
@@ -1088,6 +1176,16 @@ export function ToShoAiConsole({
   const promptSuggestionGroups = useMemo(
     () =>
       buildPromptSuggestionGroups({
+        jobRole,
+        canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
+        domainHint: resolvedContext.domainHint,
+      }),
+    [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
+  );
+
+  const personalPromptSuggestions = useMemo(
+    () =>
+      buildPersonalPromptSuggestions({
         jobRole,
         canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
         domainHint: resolvedContext.domainHint,
@@ -1537,6 +1635,17 @@ export function ToShoAiConsole({
     [syncActiveMention]
   );
 
+  const handleSelectPersonalPrompt = useCallback(
+    (value: string) => {
+      setComposerIntent("auto");
+      setComposerValue("");
+      setActiveMention(null);
+      setMentionSuggestions([]);
+      void handleSend(value, true);
+    },
+    [handleSend]
+  );
+
   const handleComposerKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key !== "Enter" || event.shiftKey) return;
@@ -1941,6 +2050,14 @@ export function ToShoAiConsole({
                   </div>
                 ))}
               </div>
+            ) : null}
+
+            {!isAiUnavailable ? (
+              <PersonalQuickPrompts
+                prompts={personalPromptSuggestions}
+                disabled={actionBusy === "send"}
+                onSelect={handleSelectPersonalPrompt}
+              />
             ) : null}
 
             {activeMention ? (
