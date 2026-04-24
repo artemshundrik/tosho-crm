@@ -885,7 +885,19 @@ function buildMagicThinkingSteps(message: string) {
 }
 
 function MagicThinkingCard({ message }: { message: string }) {
-  const steps = buildMagicThinkingSteps(message);
+  const steps = useMemo(() => buildMagicThinkingSteps(message), [message]);
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveStepIndex(0);
+    if (steps.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveStepIndex((current) => (current + 1) % steps.length);
+    }, 1450);
+    return () => window.clearInterval(timer);
+  }, [steps]);
+
+  const activeStep = steps[activeStepIndex] ?? steps[0] ?? "Збираю контекст";
 
   return (
     <div className="flex w-full min-w-0 justify-start overflow-hidden px-0.5">
@@ -894,12 +906,10 @@ function MagicThinkingCard({ message }: { message: string }) {
           <div className="tosho-ai-thinking-orb flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
             <Sparkles className="h-4 w-4" />
           </div>
-          <div className="tosho-ai-thinking-line min-w-0 text-sm font-medium leading-6 text-muted-foreground">
-            {steps.map((step, index) => (
-              <span key={step} className="tosho-ai-thinking-word" style={{ animationDelay: `${index * 260}ms` }}>
-                {step}
-              </span>
-            ))}
+          <div className="tosho-ai-thinking-line min-w-0 text-sm font-medium leading-6">
+            <span key={activeStep} className="tosho-ai-thinking-word">
+              {activeStep}
+            </span>
           </div>
         </div>
       </div>

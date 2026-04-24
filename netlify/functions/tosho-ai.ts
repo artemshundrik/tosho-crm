@@ -1378,6 +1378,17 @@ function isGenericDesignerAnalyticsQuery(normalized: string) {
   );
 }
 
+function isSelfAnalyticsQuery(normalized: string) {
+  const hasSelfReference =
+    /(в\s+мене|у\s+мене|мої|моїх|моє|мій|мною)/u.test(normalized) ||
+    /\bя\s+(зробив|зробила|закрив|закрила|маю|порахував|порахувала)/u.test(normalized);
+  const hasMetricReference =
+    /(скільки|покажи|дай|аналітик|статист|зробив|зробила|закрив|закрила|прорах|дизайн|задач|таск|замовл|клієнт|замовник)/u.test(
+      normalized
+    );
+  return hasSelfReference && hasMetricReference;
+}
+
 function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsIntent | null {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
@@ -1388,6 +1399,7 @@ function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsInte
     /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
   const hasAdminTerm = hasAdminObservabilityTerm(normalized);
   if (isLogoHygieneAnalyticsQuery(message)) return "logo_hygiene";
+  if (isSelfAnalyticsQuery(normalized)) return "personal_focus";
   const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
   const hasQuoteTerm = /(прорах|quote|коштор|кп)/u.test(normalized);
   const hasOrderTerm = /(замовл|order)/u.test(normalized);
@@ -2793,7 +2805,19 @@ async function buildManagerQuoteAnalytics(params: {
     quotes.map((row) => row.id)
   );
 
-  const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }>();
+  const buckets = new Map<
+    string,
+    {
+      id: string;
+      label: string;
+      avatarUrl: string | null;
+      total: number;
+      approved: number;
+      totalSum: number;
+      approvedSum: number;
+      byStatus: Record<string, number>;
+    }
+  >();
   for (const row of quotes) {
     const ownerId = normalizeText(row.assigned_to || row.created_by || "");
     if (!ownerId) continue;
@@ -2803,11 +2827,14 @@ async function buildManagerQuoteAnalytics(params: {
     const label = formatShortPersonName(rawLabel) || rawLabel;
     const status = normalizeQuoteStatus(row.status);
     const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
-    const bucket = buckets.get(ownerId) ?? { id: ownerId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, approved: 0, sum: 0, byStatus: {} };
+    const bucket =
+      buckets.get(ownerId) ??
+      { id: ownerId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, approved: 0, totalSum: 0, approvedSum: 0, byStatus: {} };
     bucket.total += 1;
+    bucket.totalSum += amount;
     if (status === "approved") {
       bucket.approved += 1;
-      bucket.sum += amount;
+      bucket.approvedSum += amount;
     }
     bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
     buckets.set(ownerId, bucket);
@@ -2816,12 +2843,13 @@ async function buildManagerQuoteAnalytics(params: {
   const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
   const totalQuotes = rows.reduce((sum, row) => sum + row.total, 0);
   const approvedQuotes = rows.reduce((sum, row) => sum + row.approved, 0);
-  const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
+  const totalQuoteSum = rows.reduce((sum, row) => sum + row.totalSum, 0);
+  const approvedQuoteSum = rows.reduce((sum, row) => sum + row.approvedSum, 0);
   const body =
     rows.length > 0
       ? params.targetMember
-        ? `Готово. **${rows[0].label}** має ${formatInteger(totalQuotes)} прорахунків ${period.label}: ${formatInteger(approvedQuotes)} затверджено, сума ${formatMoney(totalSum)}.`
-        : `Готово. ${period.label} знайшов **${formatInteger(totalQuotes)}** прорахунків по менеджерах: **${formatInteger(approvedQuotes)}** затверджено, сума **${formatMoney(totalSum)}**.`
+        ? `Готово. **${rows[0].label}** має ${formatInteger(totalQuotes)} прорахунків ${period.label}: сума всіх **${formatMoney(totalQuoteSum)}**, затверджено ${formatInteger(approvedQuotes)} на **${formatMoney(approvedQuoteSum)}**.`
+        : `Готово. ${period.label} знайшов **${formatInteger(totalQuotes)}** прорахунків по менеджерах: сума всіх **${formatMoney(totalQuoteSum)}**, затверджено **${formatInteger(approvedQuotes)}** на **${formatMoney(approvedQuoteSum)}**.`
       : params.targetMember
         ? `За цей період не знайшов прорахунків у **${formatShortPersonName(params.targetMember.label) || params.targetMember.label}**.`
         : "За цей період не знайшов прорахунків.";
@@ -2830,7 +2858,7 @@ async function buildManagerQuoteAnalytics(params: {
     label: row.label,
     avatarUrl: row.avatarUrl,
     primary: `${formatInteger(row.total)} прорах.`,
-    secondary: `Затверджено ${formatInteger(row.approved)} · сума ${formatMoney(row.sum)}`,
+    secondary: `Сума всіх ${formatMoney(row.totalSum)} · затв. ${formatInteger(row.approved)} на ${formatMoney(row.approvedSum)}`,
     badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
   }));
 
@@ -2846,10 +2874,10 @@ async function buildManagerQuoteAnalytics(params: {
       title: params.targetMember
         ? `Прорахунки: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
         : "Прорахунки по менеджерах",
-      caption: `${formatInteger(totalQuotes)} прорахунків ${period.label}`,
+      caption: `${formatInteger(totalQuotes)} прорахунків ${period.label} · сума всіх ${formatMoney(totalQuoteSum)} · затв. ${formatInteger(approvedQuotes)} на ${formatMoney(approvedQuoteSum)}`,
       metricLabel: "Прорахунки",
       rows: analyticsRows,
-      note: "Менеджер береться з assigned_to, якщо його немає - з created_by.",
+      note: "Сума всіх рахується з quotes.total, а якщо там 0 - з quote_items або quote_item_runs. Затверджено рахується тільки для статусу approved.",
     },
   } satisfies AnalyticsResult;
 }
@@ -4077,6 +4105,45 @@ async function buildPersonAnalyticsDecision(params: {
   return toAnalyticsDecision(buildEmployeeProfileAnalytics(target));
 }
 
+async function buildCurrentUserAnalyticsDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}) {
+  const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+  const target = members.find((member) => member.userId === params.auth.userId);
+  if (!target) return null;
+
+  const normalized = normalizeText(params.message).toLowerCase();
+  const role = normalizeRole(target.jobRole);
+  const looksDesigner = role === "designer" || role === "дизайнер";
+  const looksLogistics = role === "logistics" || role === "head_of_logistics";
+  const looksManager = role === "manager" || role === "менеджер" || role === "sales_manager" || role === "junior_sales_manager" || role === "pm";
+  const explicitlyDesign = /(дизайн|дизайнер|дизайнів|таск|тасок|задач)/u.test(normalized);
+  const explicitlyLogistics = hasLogisticsAnalyticsTerm(normalized);
+  const explicitlyCustomers = /(замовник|клієнт|контрагент)/u.test(normalized);
+  const explicitlyOrders = /(замовл|order)/u.test(normalized) && !/(замовник|клієнт|контрагент)/u.test(normalized);
+  const explicitlyQuotes = /(прорах|quote|коштор|кп)/u.test(normalized);
+
+  if (explicitlyDesign || (!explicitlyQuotes && !explicitlyOrders && !explicitlyCustomers && looksDesigner)) {
+    return toAnalyticsDecision(await buildDesignCompletionAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyLogistics || (!explicitlyQuotes && !explicitlyOrders && !explicitlyCustomers && looksLogistics)) {
+    return toAnalyticsDecision(await buildLogisticsDeliveryAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyCustomers) {
+    return toAnalyticsDecision(await buildManagerCustomerAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyOrders) {
+    return toAnalyticsDecision(await buildManagerOrderAnalytics({ ...params, targetMember: target }));
+  }
+  if (explicitlyQuotes || looksManager) {
+    return toAnalyticsDecision(await buildManagerQuoteAnalytics({ ...params, targetMember: target }));
+  }
+
+  return toAnalyticsDecision(buildEmployeeProfileAnalytics(target));
+}
+
 function formatBytesCompact(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0 B";
   if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -4480,6 +4547,7 @@ async function buildAnalyticsDecision(params: {
   const asksForDesignerRanking = isDesignerRankingAnalyticsQuery(params.message);
   const asksForGenericDesignerAnalytics = isGenericDesignerAnalyticsQuery(normalized);
   const asksForGenericManagerAnalytics = isGenericManagerAnalyticsQuery(normalized);
+  const asksForSelfAnalytics = isSelfAnalyticsQuery(normalized);
   const asksForCustomerBreakdown =
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
@@ -4492,6 +4560,11 @@ async function buildAnalyticsDecision(params: {
   if (supportedIntent === "admin_health" && hasAdminTerm && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasPartyTerm && !hasManagerTerm) {
     const adminDecision = await buildAdminObservabilityAnalytics(params);
     if (adminDecision) return toAnalyticsDecision(adminDecision);
+  }
+
+  if (asksForSelfAnalytics) {
+    const selfDecision = await buildCurrentUserAnalyticsDecision(params);
+    if (selfDecision) return selfDecision;
   }
 
   if (supportedIntent === "personal_focus" && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
