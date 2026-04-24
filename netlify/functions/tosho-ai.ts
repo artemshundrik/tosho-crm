@@ -562,6 +562,145 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(value);
 }
 
+function toFiniteAmount(value: number | string | null | undefined) {
+  const amount = typeof value === "number" ? value : value ? Number(value) : 0;
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function resolveQuoteAmount(
+  quote: { id: string; total?: number | string | null },
+  itemTotalsByQuoteId: Map<string, number>,
+  runTotalsByQuoteId: Map<string, number>
+) {
+  const explicitAmount = toFiniteAmount(quote.total);
+  const fallbackAmount = itemTotalsByQuoteId.get(quote.id) ?? 0;
+  const runFallbackAmount = runTotalsByQuoteId.get(quote.id) ?? 0;
+  return explicitAmount || fallbackAmount || runFallbackAmount;
+}
+
+async function loadQuoteItemTotals(
+  adminClient: ReturnType<typeof createClient>,
+  teamId: string,
+  quoteIds: string[]
+) {
+  const uniqueQuoteIds = Array.from(new Set(quoteIds.map((quoteId) => normalizeText(quoteId)).filter(Boolean)));
+  const totals = new Map<string, number>();
+  if (uniqueQuoteIds.length === 0) return totals;
+
+  const chunkSize = 500;
+  for (let start = 0; start < uniqueQuoteIds.length; start += chunkSize) {
+    const chunk = uniqueQuoteIds.slice(start, start + chunkSize);
+
+    const readRows = async (withTeamFilter: boolean) => {
+      type QuoteItemsQuery = {
+        eq: (column: string, value: string) => QuoteItemsQuery;
+        in: (column: string, values: string[]) => QuoteItemsQuery;
+        then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+      };
+      type QuoteItemsTable = {
+        select: (columns: string) => QuoteItemsQuery;
+      };
+
+      const table = adminClient.schema("tosho").from("quote_items") as unknown as QuoteItemsTable;
+      let query = table.select("quote_id,line_total").in("quote_id", chunk);
+      if (withTeamFilter) {
+        query = query.eq("team_id", teamId);
+      }
+      return await query;
+    };
+
+    let data: unknown[] | null = null;
+    let error: { message?: string | null } | null = null;
+    {
+      const result = await readRows(true);
+      data = (result.data as unknown[] | null) ?? null;
+      error = result.error;
+    }
+    if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+      const result = await readRows(false);
+      data = (result.data as unknown[] | null) ?? null;
+      error = result.error;
+    }
+    if (error) throw new Error(error.message ?? "Failed to load quote items");
+
+    for (const row of (data ?? []) as Array<{ quote_id?: string | null; line_total?: number | string | null }>) {
+      const quoteId = normalizeText(row.quote_id);
+      if (!quoteId) continue;
+      totals.set(quoteId, (totals.get(quoteId) ?? 0) + toFiniteAmount(row.line_total));
+    }
+  }
+
+  return totals;
+}
+
+async function loadQuoteRunTotals(
+  adminClient: ReturnType<typeof createClient>,
+  teamId: string,
+  quoteIds: string[]
+) {
+  const uniqueQuoteIds = Array.from(new Set(quoteIds.map((quoteId) => normalizeText(quoteId)).filter(Boolean)));
+  const totals = new Map<string, number>();
+  if (uniqueQuoteIds.length === 0) return totals;
+
+  const chunkSize = 500;
+  for (let start = 0; start < uniqueQuoteIds.length; start += chunkSize) {
+    const chunk = uniqueQuoteIds.slice(start, start + chunkSize);
+
+    const readRows = async (withTeamFilter: boolean) => {
+      type QuoteRunsQuery = {
+        eq: (column: string, value: string) => QuoteRunsQuery;
+        in: (column: string, values: string[]) => QuoteRunsQuery;
+        then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+      };
+      type QuoteRunsTable = {
+        select: (columns: string) => QuoteRunsQuery;
+      };
+
+      const table = adminClient.schema("tosho").from("quote_item_runs") as unknown as QuoteRunsTable;
+      let query = table
+        .select("quote_id,quantity,unit_price_model,unit_price_print,logistics_cost")
+        .in("quote_id", chunk);
+      if (withTeamFilter) {
+        query = query.eq("team_id", teamId);
+      }
+      return await query;
+    };
+
+    let data: unknown[] | null = null;
+    let error: { message?: string | null } | null = null;
+    {
+      const result = await readRows(true);
+      data = (result.data as unknown[] | null) ?? null;
+      error = result.error;
+    }
+    if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+      const result = await readRows(false);
+      data = (result.data as unknown[] | null) ?? null;
+      error = result.error;
+    }
+    if (error) throw new Error(error.message ?? "Failed to load quote runs");
+
+    for (const row of (data ?? []) as Array<{
+      quote_id?: string | null;
+      quantity?: number | string | null;
+      unit_price_model?: number | string | null;
+      unit_price_print?: number | string | null;
+      logistics_cost?: number | string | null;
+    }>) {
+      const quoteId = normalizeText(row.quote_id);
+      if (!quoteId) continue;
+      const quantity = Math.max(0, toFiniteAmount(row.quantity));
+      const model = toFiniteAmount(row.unit_price_model);
+      const print = toFiniteAmount(row.unit_price_print);
+      const logistics = toFiniteAmount(row.logistics_cost);
+      const runTotal = (model + print) * quantity + logistics;
+      totals.set(quoteId, (totals.get(quoteId) ?? 0) + runTotal);
+    }
+  }
+
+  return totals;
+}
+
 function formatShortPersonName(value: string) {
   const normalized = normalizeText(value);
   if (!normalized) return "";
@@ -1931,9 +2070,26 @@ async function buildManagerQuoteAnalytics(params: {
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
+  const quotes = (data ?? []) as Array<{
+    id: string;
+    assigned_to?: string | null;
+    created_by?: string | null;
+    status?: string | null;
+    total?: number | string | null;
+  }>;
+  const quoteItemTotals = await loadQuoteItemTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
+  const quoteRunTotals = await loadQuoteRunTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
 
   const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }>();
-  for (const row of (data ?? []) as Array<{ assigned_to?: string | null; created_by?: string | null; status?: string | null; total?: number | string | null }>) {
+  for (const row of quotes) {
     const ownerId = normalizeText(row.assigned_to || row.created_by || "");
     if (!ownerId) continue;
     if (params.targetMember && ownerId !== params.targetMember.userId) continue;
@@ -1941,11 +2097,13 @@ async function buildManagerQuoteAnalytics(params: {
     const rawLabel = member?.label ?? ownerId.slice(0, 8);
     const label = formatShortPersonName(rawLabel) || rawLabel;
     const status = normalizeText(row.status) || "без статусу";
-    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
     const bucket = buckets.get(ownerId) ?? { id: ownerId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, approved: 0, sum: 0, byStatus: {} };
     bucket.total += 1;
-    if (status === "approved") bucket.approved += 1;
-    if (Number.isFinite(amount)) bucket.sum += amount;
+    if (status === "approved") {
+      bucket.approved += 1;
+      bucket.sum += amount;
+    }
     bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
     buckets.set(ownerId, bucket);
   }
@@ -2449,28 +2607,42 @@ async function buildCustomerQuoteAnalytics(params: {
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-
-  const buckets = new Map<
-    string,
-    { id: string; label: string; logoUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }
-  >();
-  for (const row of (data ?? []) as Array<{
+  const quotes = (data ?? []) as Array<{
+    id: string;
     customer_id?: string | null;
     customer_name?: string | null;
     customer_logo_url?: string | null;
     status?: string | null;
     total?: number | string | null;
-  }>) {
+  }>;
+  const quoteItemTotals = await loadQuoteItemTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
+  const quoteRunTotals = await loadQuoteRunTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
+
+  const buckets = new Map<
+    string,
+    { id: string; label: string; logoUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }
+  >();
+  for (const row of quotes) {
     const customerId = normalizeText(row.customer_id);
     const customerName = normalizeText(row.customer_name) || "Без замовника";
     const key = customerId || normalizeAnalyticsName(customerName) || "unknown";
     const status = normalizeText(row.status) || "без статусу";
-    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
+    const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
     const bucket = buckets.get(key) ?? { id: key, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, total: 0, approved: 0, sum: 0, byStatus: {} };
     if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
     bucket.total += 1;
-    if (status === "approved") bucket.approved += 1;
-    if (Number.isFinite(amount)) bucket.sum += amount;
+    if (status === "approved") {
+      bucket.approved += 1;
+      bucket.sum += amount;
+    }
     bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
     buckets.set(key, bucket);
   }
@@ -2589,9 +2761,8 @@ async function buildManagerCustomerAnalytics(params: {
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-
-  const customers = new Map<string, { id: string; label: string; logoUrl: string | null; quoteCount: number; sum: number; byStatus: Record<string, number> }>();
-  for (const row of (data ?? []) as Array<{
+  const quotes = (data ?? []) as Array<{
+    id: string;
     assigned_to?: string | null;
     created_by?: string | null;
     customer_id?: string | null;
@@ -2599,17 +2770,33 @@ async function buildManagerCustomerAnalytics(params: {
     customer_logo_url?: string | null;
     status?: string | null;
     total?: number | string | null;
-  }>) {
+  }>;
+  const quoteItemTotals = await loadQuoteItemTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
+  const quoteRunTotals = await loadQuoteRunTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((row) => row.id)
+  );
+
+  const customers = new Map<string, { id: string; label: string; logoUrl: string | null; quoteCount: number; approved: number; sum: number; byStatus: Record<string, number> }>();
+  for (const row of quotes) {
     const ownerId = normalizeText(row.assigned_to || row.created_by || "");
     if (ownerId !== params.targetMember.userId) continue;
     const customerName = normalizeText(row.customer_name) || "Без замовника";
     const customerId = normalizeText(row.customer_id) || normalizeAnalyticsName(customerName) || "unknown";
     const status = normalizeText(row.status) || "без статусу";
-    const amount = typeof row.total === "number" ? row.total : row.total ? Number(row.total) : 0;
-    const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, quoteCount: 0, sum: 0, byStatus: {} };
+    const amount = resolveQuoteAmount(row, quoteItemTotals, quoteRunTotals);
+    const bucket = customers.get(customerId) ?? { id: customerId, label: customerName, logoUrl: normalizeText(row.customer_logo_url) || null, quoteCount: 0, approved: 0, sum: 0, byStatus: {} };
     if (!bucket.logoUrl && row.customer_logo_url) bucket.logoUrl = normalizeText(row.customer_logo_url) || null;
     bucket.quoteCount += 1;
-    if (Number.isFinite(amount)) bucket.sum += amount;
+    if (status === "approved") {
+      bucket.approved += 1;
+      bucket.sum += amount;
+    }
     bucket.byStatus[status] = (bucket.byStatus[status] ?? 0) + 1;
     customers.set(customerId, bucket);
   }
@@ -2618,6 +2805,7 @@ async function buildManagerCustomerAnalytics(params: {
     (a, b) => b.quoteCount - a.quoteCount || a.label.localeCompare(b.label, "uk")
   );
   const totalQuotes = rows.reduce((sum, row) => sum + row.quoteCount, 0);
+  const totalApproved = rows.reduce((sum, row) => sum + row.approved, 0);
   const totalSum = rows.reduce((sum, row) => sum + row.sum, 0);
   const targetLabel = formatShortPersonName(params.targetMember.label) || params.targetMember.label;
 
@@ -2633,14 +2821,14 @@ async function buildManagerCustomerAnalytics(params: {
     analytics: {
       kind: "entity",
       title: `Замовники: ${targetLabel}`,
-      caption: `${formatInteger(rows.length)} замовників · ${formatInteger(totalQuotes)} прорахунків · сума ${formatMoney(totalSum)}`,
+      caption: `${formatInteger(rows.length)} замовників · ${formatInteger(totalQuotes)} прорахунків · затверджено ${formatInteger(totalApproved)} · сума ${formatMoney(totalSum)}`,
       metricLabel: "Прорахунки",
       rows: rows.map((row) => ({
         id: row.id,
         label: row.label,
         avatarUrl: row.logoUrl,
         primary: `${formatInteger(row.quoteCount)} прорах.`,
-        secondary: `Сума ${formatMoney(row.sum)}`,
+        secondary: `Затверджено ${formatInteger(row.approved)} · сума ${formatMoney(row.sum)}`,
         badges: formatAnalyticsBadges(row.byStatus, formatQuoteStatusLabel),
       })),
       note: "Замовників менеджера рахую по прорахунках: assigned_to, fallback created_by.",
@@ -2792,6 +2980,16 @@ async function buildPartyQuoteOrderAnalytics(params: {
     if (party.kind === "customer") return row.customer_id === party.id || matchesName;
     return matchesName;
   });
+  const quoteItemTotals = await loadQuoteItemTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((quote) => quote.id)
+  );
+  const quoteRunTotals = await loadQuoteRunTotals(
+    params.adminClient,
+    params.auth.teamId,
+    quotes.map((quote) => quote.id)
+  );
   const quoteIds = new Set(quotes.map((quote) => quote.id));
   const orders = ((orderResult.data ?? []) as Array<{ id: string; quote_id?: string | null; order_status?: string | null; total?: number | string | null; customer_id?: string | null; customer_name?: string | null; party_type?: string | null }>).filter((row) => {
     const matchesName = looseAnalyticsNameMatches(row.customer_name, party.name);
@@ -2805,8 +3003,9 @@ async function buildPartyQuoteOrderAnalytics(params: {
   for (const quote of quotes) {
     const status = normalizeText(quote.status) || "без статусу";
     quoteByStatus[status] = (quoteByStatus[status] ?? 0) + 1;
-    const amount = typeof quote.total === "number" ? quote.total : quote.total ? Number(quote.total) : 0;
-    if (Number.isFinite(amount)) quoteSum += amount;
+    if (status === "approved") {
+      quoteSum += resolveQuoteAmount(quote, quoteItemTotals, quoteRunTotals);
+    }
   }
 
   const orderByStatus: Record<string, number> = {};
@@ -2818,9 +3017,9 @@ async function buildPartyQuoteOrderAnalytics(params: {
     if (Number.isFinite(amount)) orderSum += amount;
   }
 
-  const quoteStatusLine = formatAnalyticsBadgeLine(quoteByStatus, formatQuoteStatusLabel) || "немає статусів";
   const orderStatusLine = formatAnalyticsBadgeLine(orderByStatus, formatOrderStatusLabel) || "немає статусів";
   const quoteCount = quotes.length;
+  const approvedQuoteCount = quoteByStatus.approved ?? 0;
   const orderCount = orders.length;
   const summaryParts = [
     includeQuotes ? `${formatInteger(quoteCount)} прорахунків` : "",
@@ -2832,7 +3031,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
           id: "quotes",
           label: "Прорахунки",
           primary: formatInteger(quoteCount),
-          secondary: `Сума ${formatMoney(quoteSum)} · ${quoteStatusLine}`,
+          secondary: `Затверджено ${formatInteger(approvedQuoteCount)} · сума ${formatMoney(quoteSum)}`,
           badges: formatAnalyticsBadges(quoteByStatus, formatQuoteStatusLabel),
         }
       : null,
