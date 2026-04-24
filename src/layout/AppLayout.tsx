@@ -579,6 +579,8 @@ function reminderKeyFromHref(href?: string | null) {
 
 const TOSHO_AI_OPEN_PARAM = "tosho_ai";
 const TOSHO_AI_REQUEST_PARAM = "tosho_ai_request";
+const FLOATING_LAUNCHER_BLOCKING_SURFACE_SELECTOR =
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 function readToShoAiIntent(search: string) {
   const params = new URLSearchParams(search);
@@ -726,6 +728,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [toshoAiOpen, setToshoAiOpen] = useState(false);
   const [toshoAiRequestedThreadId, setToshoAiRequestedThreadId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("app_sidebar_collapsed") === "1";
@@ -777,6 +780,36 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     }
     return keys;
   }, [session]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    let animationFrame = 0;
+
+    const syncFloatingLauncherBlocked = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const hasBlockingSurface = Boolean(
+          document.querySelector(FLOATING_LAUNCHER_BLOCKING_SURFACE_SELECTOR)
+        );
+        setFloatingLauncherBlocked((prev) => (prev === hasBlockingSurface ? prev : hasBlockingSurface));
+      });
+    };
+
+    syncFloatingLauncherBlocked();
+
+    const observer = new MutationObserver(syncFloatingLauncherBlocked);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-state", "role"],
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -1324,6 +1357,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const unreadNotifications = notifications.filter((n) => !n.read);
+  const hideToShoAiLauncher = toshoAiOpen || mobileMenuOpen || cmdkOpen || floatingLauncherBlocked;
 
   const markAllRead = async () => {
     if (!userId || unreadCount === 0) return;
@@ -1980,7 +2014,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </SheetContent>
       </Sheet>
 
-      {!toshoAiOpen ? (
+      {!hideToShoAiLauncher ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55] flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
           <div className="flex flex-col items-end gap-2">
             <ToShoAiLauncherButton
