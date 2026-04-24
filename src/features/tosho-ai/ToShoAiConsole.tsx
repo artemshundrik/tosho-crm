@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent as ReactChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   startTransition,
@@ -54,16 +55,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { uploadAttachmentWithVariants, removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { cn } from "@/lib/utils";
 import {
   buildToShoAiRouteContext,
   callToShoAiApi,
+  callToShoAiMentionSuggestions,
   readToShoAiLastContext,
   type ToShoAiAttachment,
   type ToShoAiApiResponse,
   type ToShoAiKnowledgeItem,
+  type ToShoAiMentionKind,
+  type ToShoAiMentionSuggestion,
   type ToShoAiMessage,
   type ToShoAiMode,
   type ToShoAiPriority,
@@ -110,6 +115,14 @@ type PromptSuggestionGroup = {
   description: string;
   tone: "design" | "orders" | "customers" | "team" | "general";
   prompts: PromptSuggestion[];
+};
+
+type ActiveMention = {
+  start: number;
+  end: number;
+  query: string;
+  kind: ToShoAiMentionKind | null;
+  marker: string;
 };
 
 type AnalyticsBadge = {
@@ -283,6 +296,50 @@ function normalizeSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
+function mentionKindFromMarker(value: string): ToShoAiMentionKind | null {
+  const normalized = normalizeSearch(value);
+  if (["замовник", "замовники", "клієнт", "клієнти", "customer"].includes(normalized)) return "customer";
+  if (["лід", "ліди", "lead"].includes(normalized)) return "lead";
+  if (["менеджер", "менеджери", "manager"].includes(normalized)) return "manager";
+  if (["дизайнер", "дизайнери", "designer"].includes(normalized)) return "designer";
+  if (["співробітник", "співробітники", "користувач", "користувачі", "employee", "user"].includes(normalized)) {
+    return "employee";
+  }
+  return null;
+}
+
+function getMentionKindLabel(kind: ToShoAiMentionKind | null) {
+  if (kind === "customer") return "замовника";
+  if (kind === "lead") return "ліда";
+  if (kind === "manager") return "менеджера";
+  if (kind === "designer") return "дизайнера";
+  if (kind === "employee") return "співробітника";
+  return "з CRM";
+}
+
+function getActiveMention(value: string, cursorPosition: number | null | undefined): ActiveMention | null {
+  if (typeof cursorPosition !== "number") return null;
+  const beforeCursor = value.slice(0, cursorPosition);
+  const start = beforeCursor.lastIndexOf("@");
+  if (start < 0) return null;
+  const fragment = beforeCursor.slice(start);
+  if (fragment.length > 80 || /[\n?!]/u.test(fragment)) return null;
+  const raw = fragment.slice(1);
+  const colonIndex = raw.indexOf(":");
+  const marker = colonIndex >= 0 ? raw.slice(0, colonIndex) : "";
+  const query = colonIndex >= 0 ? raw.slice(colonIndex + 1) : raw;
+  const kind = colonIndex >= 0 ? mentionKindFromMarker(marker) : null;
+  if (colonIndex >= 0 && marker && !kind) return null;
+  if (query.includes("@")) return null;
+  return {
+    start,
+    end: cursorPosition,
+    query: query.trimStart(),
+    kind,
+    marker,
+  };
+}
+
 function formatAssistantMessageBody(body: string) {
   return body
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -396,11 +453,11 @@ function buildPromptSuggestionGroups(input: {
         },
         {
           label: "Клієнти менеджера",
-          text: "скільки замовників у [імʼя менеджера] за місяць?",
+          text: "скільки замовників у @менеджер: за місяць?",
         },
         {
           label: "Прорахунки менеджера",
-          text: "скільки прорахунків у [імʼя менеджера] за місяць?",
+          text: "скільки прорахунків у @менеджер: за місяць?",
         },
       ],
     },
@@ -416,7 +473,7 @@ function buildPromptSuggestionGroups(input: {
         },
         {
           label: "Дизайнер за місяць",
-          text: "скільки дизайнів зробив/зробила [імʼя дизайнера] за місяць?",
+          text: "скільки дизайнів зробив/зробила @дизайнер: за місяць?",
         },
         {
           label: "Візуали та адаптації",
@@ -440,11 +497,11 @@ function buildPromptSuggestionGroups(input: {
         },
         {
           label: "Конкретний замовник",
-          text: "скільки прорахунків у замовника [назва замовника] за місяць?",
+          text: "скільки прорахунків у замовника @замовник: за місяць?",
         },
         {
           label: "Прорахунки і замовлення",
-          text: "скільки у замовника [назва замовника] прорахунків і замовлень?",
+          text: "скільки у замовника @замовник: прорахунків і замовлень?",
         },
         {
           label: "Зріз по замовниках",
@@ -460,19 +517,19 @@ function buildPromptSuggestionGroups(input: {
       prompts: [
         {
           label: "Статистика",
-          text: "дай статистику по [імʼя або прізвище] за місяць",
+          text: "дай статистику по @співробітник: за місяць",
         },
         {
           label: "Як менеджер",
-          text: "скільки прорахунків у [імʼя менеджера] за місяць?",
+          text: "скільки прорахунків у @менеджер: за місяць?",
         },
         {
           label: "Як дизайнер",
-          text: "скільки дизайнів зробив/зробила [імʼя дизайнера] за тиждень?",
+          text: "скільки дизайнів зробив/зробила @дизайнер: за тиждень?",
         },
         {
           label: "Клієнти менеджера",
-          text: "скільки замовників у [імʼя менеджера] за місяць?",
+          text: "скільки замовників у @менеджер: за місяць?",
         },
       ],
     },
@@ -963,6 +1020,8 @@ export function ToShoAiConsole({
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
   const historyLoadedRef = useRef(false);
   const knowledgeLoadedRef = useRef(false);
+  const historyLoadingRef = useRef(false);
+  const knowledgeLoadingRef = useRef(false);
   const resolvedContext = useMemo(
     () => {
       const currentRouteContext =
@@ -985,6 +1044,9 @@ export function ToShoAiConsole({
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [composerIntent, setComposerIntent] = useState<ToShoAiComposerIntent>("auto");
   const [composerValue, setComposerValue] = useState("");
+  const [activeMention, setActiveMention] = useState<ActiveMention | null>(null);
+  const [mentionSuggestions, setMentionSuggestions] = useState<ToShoAiMentionSuggestion[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [queueSearch, setQueueSearch] = useState("");
   const deferredQueueSearch = useDeferredValue(queueSearch);
@@ -993,6 +1055,8 @@ export function ToShoAiConsole({
   const [knowledgeExpanded, setKnowledgeExpanded] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
+  const [historyPanelLoading, setHistoryPanelLoading] = useState(false);
+  const [knowledgePanelLoading, setKnowledgePanelLoading] = useState(false);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [knowledgeDraft, setKnowledgeDraft] = useState<KnowledgeDraft>(EMPTY_DRAFT);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
@@ -1056,8 +1120,14 @@ export function ToShoAiConsole({
           includeHistory,
           includeKnowledge,
         });
-        if (includeHistory) setHistoryLoaded(true);
-        if (includeKnowledge) setKnowledgeLoaded(true);
+        if (includeHistory) {
+          historyLoadedRef.current = true;
+          setHistoryLoaded(true);
+        }
+        if (includeKnowledge) {
+          knowledgeLoadedRef.current = true;
+          setKnowledgeLoaded(true);
+        }
         setSnapshot(response.snapshot);
         setSelectedThreadId(response.snapshot.selectedThread?.id ?? null);
       } catch (error) {
@@ -1083,8 +1153,12 @@ export function ToShoAiConsole({
     if (!active) return;
     historyLoadedRef.current = false;
     knowledgeLoadedRef.current = false;
+    historyLoadingRef.current = false;
+    knowledgeLoadingRef.current = false;
     setHistoryLoaded(false);
     setKnowledgeLoaded(false);
+    setHistoryPanelLoading(false);
+    setKnowledgePanelLoading(false);
     setShowRequestList(false);
     setKnowledgeExpanded(false);
     setSelectedThreadId(initialRequestId ?? null);
@@ -1124,12 +1198,15 @@ export function ToShoAiConsole({
 
   const ensureHistoryLoaded = useCallback(
     (requestId: string | null = selectedThreadId) => {
-      if (historyLoadedRef.current) return;
-      historyLoadedRef.current = true;
-      setHistoryLoaded(true);
+      if (historyLoadedRef.current || historyLoadingRef.current) return;
+      historyLoadingRef.current = true;
+      setHistoryPanelLoading(true);
       void loadSnapshot(requestId, {
         includeHistory: true,
         includeKnowledge: knowledgeLoadedRef.current,
+      }).finally(() => {
+        historyLoadingRef.current = false;
+        setHistoryPanelLoading(false);
       });
     },
     [loadSnapshot, selectedThreadId]
@@ -1137,12 +1214,15 @@ export function ToShoAiConsole({
 
   const ensureKnowledgeLoaded = useCallback(
     (requestId: string | null = selectedThreadId) => {
-      if (knowledgeLoadedRef.current) return;
-      knowledgeLoadedRef.current = true;
-      setKnowledgeLoaded(true);
+      if (knowledgeLoadedRef.current || knowledgeLoadingRef.current) return;
+      knowledgeLoadingRef.current = true;
+      setKnowledgePanelLoading(true);
       void loadSnapshot(requestId, {
         includeHistory: historyLoadedRef.current,
         includeKnowledge: true,
+      }).finally(() => {
+        knowledgeLoadingRef.current = false;
+        setKnowledgePanelLoading(false);
       });
     },
     [loadSnapshot, selectedThreadId]
@@ -1182,6 +1262,73 @@ export function ToShoAiConsole({
     setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
     setComposerIntent("auto");
   }, []);
+
+  const syncActiveMention = useCallback((value: string, cursorPosition?: number | null) => {
+    setActiveMention(getActiveMention(value, cursorPosition));
+  }, []);
+
+  const handleComposerChange = useCallback(
+    (event: ReactChangeEvent<HTMLTextAreaElement>) => {
+      const nextValue = event.target.value;
+      setComposerValue(nextValue);
+      syncActiveMention(nextValue, event.target.selectionStart);
+    },
+    [syncActiveMention]
+  );
+
+  const handleComposerCursorActivity = useCallback(() => {
+    const textarea = composerInputRef.current;
+    if (!textarea) return;
+    syncActiveMention(textarea.value, textarea.selectionStart);
+  }, [syncActiveMention]);
+
+  useEffect(() => {
+    if (!activeMention) {
+      setMentionSuggestions([]);
+      setMentionLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      setMentionLoading(true);
+      callToShoAiMentionSuggestions({
+        query: activeMention.query,
+        kind: activeMention.kind,
+        routeContext: resolvedContext,
+      })
+        .then((response) => {
+          if (!cancelled) setMentionSuggestions(response.suggestions);
+        })
+        .catch(() => {
+          if (!cancelled) setMentionSuggestions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setMentionLoading(false);
+        });
+    }, 160);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeMention, resolvedContext]);
+
+  const handleSelectMentionSuggestion = useCallback(
+    (suggestion: ToShoAiMentionSuggestion) => {
+      if (!activeMention) return;
+      const nextValue = `${composerValue.slice(0, activeMention.start)}${suggestion.insertText}${composerValue.slice(activeMention.end)}`;
+      const nextCursor = activeMention.start + suggestion.insertText.length;
+      setComposerValue(nextValue);
+      setActiveMention(null);
+      setMentionSuggestions([]);
+      window.requestAnimationFrame(() => {
+        composerInputRef.current?.focus();
+        composerInputRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+    },
+    [activeMention, composerValue]
+  );
 
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
@@ -1329,6 +1476,8 @@ export function ToShoAiConsole({
       });
       applySnapshotResponse(response);
       setComposerValue("");
+      setActiveMention(null);
+      setMentionSuggestions([]);
       setPendingAttachments((prev) => {
         prev.forEach((attachment) => {
           if (attachment.previewUrl) {
@@ -1370,20 +1519,22 @@ export function ToShoAiConsole({
     (value: string) => {
       setComposerIntent("auto");
       setComposerValue(value);
+      composerInputRef.current?.focus();
       window.requestAnimationFrame(() => {
-        composerInputRef.current?.focus();
-        const placeholderMatch = /\[[^\]]+\]/u.exec(value);
-        if (placeholderMatch && composerInputRef.current) {
-          composerInputRef.current.setSelectionRange(
-            placeholderMatch.index,
-            placeholderMatch.index + placeholderMatch[0].length
-          );
+        const textarea = composerInputRef.current;
+        textarea?.focus();
+        const mentionMatch = /@(?:замовник|клієнт|лід|менеджер|дизайнер|співробітник|користувач):/iu.exec(value);
+        if (mentionMatch && textarea) {
+          const cursor = mentionMatch.index + mentionMatch[0].length;
+          textarea.setSelectionRange(cursor, cursor);
+          syncActiveMention(value, cursor);
           return;
         }
-        composerInputRef.current?.setSelectionRange(value.length, value.length);
+        textarea?.setSelectionRange(value.length, value.length);
+        syncActiveMention(value, value.length);
       });
     },
-    []
+    [syncActiveMention]
   );
 
   const handleComposerKeyDown = useCallback(
@@ -1503,25 +1654,21 @@ export function ToShoAiConsole({
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
           <div className="flex min-h-full w-full min-w-0 max-w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                {selectedThread ? (
+              {selectedThread ? (
+                <div className="flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={handleStartNewThread}
-                    className="h-8 rounded-full border-border/60 bg-card/55 px-2.5 sm:px-3"
+                    className="h-8 rounded-full px-2.5 sm:px-3"
                   >
                     <Plus className="h-4 w-4" />
                     <span className="hidden min-[420px]:inline">Новий чат</span>
                     <span className="min-[420px]:hidden">Новий</span>
                   </Button>
-                ) : (
-                  <Badge tone="neutral" size="sm" pill>
-                    {resolvedContext.routeLabel}
-                  </Badge>
-                )}
-              </div>
+                </div>
+              ) : null}
               <div className="ml-auto flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
                 <Button
                   type="button"
@@ -1581,10 +1728,13 @@ export function ToShoAiConsole({
                   value={queueSearch}
                   onChange={(event) => setQueueSearch(event.target.value)}
                   placeholder="Пошук по зверненнях"
+                  disabled={historyPanelLoading && !historyLoaded}
                   className="mt-3 rounded-2xl border-border/60 bg-background/70"
                 />
                 <div className="mt-3 space-y-3">
-                  {filteredThreads.length > 0 ? (
+                  {historyPanelLoading && !historyLoaded ? (
+                    <HistoryListSkeleton />
+                  ) : filteredThreads.length > 0 ? (
                     filteredThreads.map((item) => (
                       <ThreadCard
                         key={item.id}
@@ -1618,11 +1768,15 @@ export function ToShoAiConsole({
                     <div className="mt-1 text-sm text-muted-foreground">Що вже знає ToSho AI і звідки він це бере.</div>
                   </div>
                   <Badge tone="neutral" size="sm" pill>
-                    Активних: {snapshot?.stats.knowledgeActiveCount ?? 0}
+                    {knowledgePanelLoading && !knowledgeLoaded
+                      ? "Завантаження"
+                      : `Активних: ${snapshot?.stats.knowledgeActiveCount ?? 0}`}
                   </Badge>
                 </div>
                 <div className="mt-3 space-y-3">
-                  {(snapshot?.knowledgeItems ?? []).length > 0 ? (
+                  {knowledgePanelLoading && !knowledgeLoaded ? (
+                    <KnowledgeListSkeleton />
+                  ) : (snapshot?.knowledgeItems ?? []).length > 0 ? (
                     (snapshot?.knowledgeItems ?? []).map((item) => (
                       <div key={item.id} className="rounded-[22px] border border-border/60 bg-background/65 px-4 py-4">
                         <div className="flex items-start justify-between gap-3">
@@ -1789,6 +1943,15 @@ export function ToShoAiConsole({
               </div>
             ) : null}
 
+            {activeMention ? (
+              <MentionSuggestionPanel
+                activeMention={activeMention}
+                loading={mentionLoading}
+                suggestions={mentionSuggestions}
+                onSelect={handleSelectMentionSuggestion}
+              />
+            ) : null}
+
             <div className="flex min-w-0 max-w-full items-end gap-2 overflow-hidden px-0">
               <Button
                 type="button"
@@ -1803,8 +1966,11 @@ export function ToShoAiConsole({
               <Textarea
                 ref={composerInputRef}
                 value={composerValue}
-                onChange={(event) => setComposerValue(event.target.value)}
+                onChange={handleComposerChange}
                 onKeyDown={handleComposerKeyDown}
+                onKeyUp={handleComposerCursorActivity}
+                onClick={handleComposerCursorActivity}
+                onSelect={handleComposerCursorActivity}
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
@@ -1949,6 +2115,135 @@ function EmptyPanel({
       </div>
       <div className="mt-3 text-[15px] font-semibold text-foreground">{title}</div>
       <div className="mt-1 text-sm leading-6 text-muted-foreground">{description}</div>
+    </div>
+  );
+}
+
+function MentionSuggestionPanel({
+  activeMention,
+  suggestions,
+  loading,
+  onSelect,
+}: {
+  activeMention: ActiveMention;
+  suggestions: ToShoAiMentionSuggestion[];
+  loading: boolean;
+  onSelect: (suggestion: ToShoAiMentionSuggestion) => void;
+}) {
+  const title = `Підставити ${getMentionKindLabel(activeMention.kind)}`;
+  return (
+    <div className="rounded-[20px] border border-border/60 bg-card/95 p-2 shadow-[var(--shadow-elevated-sm)]">
+      <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </div>
+      <div className="max-h-[220px] space-y-1 overflow-y-auto">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <div key={`mention-loading:${index}`} className="flex items-center gap-2 rounded-2xl px-2 py-2">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-2/3 rounded-full" />
+                <Skeleton className="h-3 w-1/3 rounded-full" />
+              </div>
+            </div>
+          ))
+        ) : suggestions.length > 0 ? (
+          suggestions.map((suggestion) => {
+            const isPerson = suggestion.kind === "manager" || suggestion.kind === "designer" || suggestion.kind === "employee";
+            return (
+              <button
+                key={`${suggestion.kind}:${suggestion.id}`}
+                type="button"
+                onClick={() => onSelect(suggestion)}
+                className="flex w-full min-w-0 items-center gap-2 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-muted/35"
+              >
+                {isPerson ? (
+                  <PlayerAvatar
+                    src={suggestion.avatarUrl}
+                    name={suggestion.label}
+                    size={32}
+                    className="shrink-0 ring-1 ring-border/60"
+                    fallbackClassName="text-[11px] font-semibold"
+                  />
+                ) : (
+                  <EntityAvatar
+                    src={suggestion.avatarUrl}
+                    name={suggestion.label}
+                    size={32}
+                    className="shrink-0 ring-1 ring-border/60"
+                    fallbackClassName="text-[11px] font-semibold"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-foreground">{suggestion.label}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{suggestion.subtitle ?? "CRM"}</div>
+                </div>
+              </button>
+            );
+          })
+        ) : (
+          <div className="px-2 py-3 text-sm text-muted-foreground">
+            Немає збігів. Допиши ще кілька символів.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryListSkeleton() {
+  return (
+    <div className="space-y-3" aria-label="Завантаження історії">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={`history-skeleton:${index}`}
+          className="rounded-[22px] border border-border/60 bg-background/55 px-4 py-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-16 rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-14 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-3/5 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full rounded-full" />
+                <Skeleton className="h-3 w-4/5 rounded-full" />
+              </div>
+            </div>
+            <Skeleton className="h-4 w-4 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KnowledgeListSkeleton() {
+  return (
+    <div className="space-y-3" aria-label="Завантаження бази знань">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div
+          key={`knowledge-skeleton:${index}`}
+          className="rounded-[22px] border border-border/60 bg-background/55 px-4 py-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-2/3 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full rounded-full" />
+                <Skeleton className="h-3 w-5/6 rounded-full" />
+              </div>
+            </div>
+            <Skeleton className="h-8 w-20 rounded-full" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

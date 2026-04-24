@@ -30,7 +30,8 @@ type RequestBody = {
     | "feedback"
     | "update_request"
     | "upsert_knowledge"
-    | "delete_knowledge";
+    | "delete_knowledge"
+    | "mention_suggestions";
   requestId?: string;
   messageId?: string;
   message?: string;
@@ -47,6 +48,10 @@ type RequestBody = {
   };
   includeHistory?: boolean;
   includeKnowledge?: boolean;
+  mention?: {
+    query?: string;
+    kind?: "customer" | "lead" | "manager" | "designer" | "employee" | null;
+  };
   feedback?: "helpful" | "not_helpful";
   status?: ToShoAiStatus;
   priority?: ToShoAiPriority;
@@ -713,29 +718,61 @@ function parsePeriodFromMessage(message: string) {
   const now = new Date();
   let start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   let label = "за останні 30 днів";
+  const wordToNumber: Record<string, number> = {
+    "один": 1,
+    "одна": 1,
+    "одно": 1,
+    "два": 2,
+    "дві": 2,
+    "три": 3,
+    "чотири": 4,
+    "п'ять": 5,
+    "пять": 5,
+    "шість": 6,
+    "сім": 7,
+    "вісім": 8,
+    "дев'ять": 9,
+    "девять": 9,
+    "десять": 10,
+  };
+  const parseCount = (digits?: string, word?: string, fallback = 1) => {
+    const rawCount = digits ? Number(digits) : wordToNumber[word ?? ""] ?? fallback;
+    return Math.max(1, Math.min(3650, Number.isFinite(rawCount) ? rawCount : fallback));
+  };
+
+  if (/весь\s+час|за\s+весь\s+час|за\s+всі\s+часи|all\s*time|увесь\s+час/u.test(normalized)) {
+    return { sinceIso: null as string | null, label: "за весь час" };
+  }
+
   const monthCountMatch = normalized.match(
-    /(?:за\s+)?(?:(\d+)|(два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))\s+місяц/iu
+    /(?:за\s+)?(?:(\d+)|(один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))\s+місяц/iu
+  );
+  const dayCountMatch = normalized.match(
+    /(?:за\s+)?(?:(\d+)|(один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))\s+д(?:ень|ні|ня|нів)/iu
+  );
+  const weekCountMatch = normalized.match(
+    /(?:за\s+)?(?:(\d+)|(один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))\s+тиж/u
+  );
+  const yearCountMatch = normalized.match(
+    /(?:за\s+)?(?:(\d+)|(один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять))?\s*(?:рік|роки|років)\b/iu
   );
 
   if (monthCountMatch) {
-    const wordToNumber: Record<string, number> = {
-      "два": 2,
-      "дві": 2,
-      "три": 3,
-      "чотири": 4,
-      "п'ять": 5,
-      "пять": 5,
-      "шість": 6,
-      "сім": 7,
-      "вісім": 8,
-      "дев'ять": 9,
-      "девять": 9,
-      "десять": 10,
-    };
-    const rawCount = monthCountMatch[1] ? Number(monthCountMatch[1]) : wordToNumber[monthCountMatch[2] ?? ""] ?? 2;
-    const monthCount = Math.max(1, Math.min(12, Number.isFinite(rawCount) ? rawCount : 2));
+    const monthCount = Math.min(120, parseCount(monthCountMatch[1], monthCountMatch[2], 1));
     start = new Date(now.getTime() - monthCount * 30 * 24 * 60 * 60 * 1000);
-    label = `за останні ${monthCount} міс.`;
+    label = monthCount === 1 ? "за останній місяць" : `за останні ${monthCount} міс.`;
+  } else if (dayCountMatch) {
+    const dayCount = parseCount(dayCountMatch[1], dayCountMatch[2], 1);
+    start = new Date(now.getTime() - dayCount * 24 * 60 * 60 * 1000);
+    label = dayCount === 1 ? "за останній день" : `за останні ${dayCount} днів`;
+  } else if (weekCountMatch) {
+    const weekCount = parseCount(weekCountMatch[1], weekCountMatch[2], 1);
+    start = new Date(now.getTime() - weekCount * 7 * 24 * 60 * 60 * 1000);
+    label = weekCount === 1 ? "за останній тиждень" : `за останні ${weekCount} тиж.`;
+  } else if (yearCountMatch) {
+    const yearCount = parseCount(yearCountMatch[1], yearCountMatch[2], 1);
+    start = new Date(now.getTime() - yearCount * 365 * 24 * 60 * 60 * 1000);
+    label = yearCount === 1 ? "за останній рік" : `за останні ${yearCount} роки`;
   } else if (/сьогодні|today/u.test(normalized)) {
     start = new Date(now);
     start.setHours(0, 0, 0, 0);
@@ -751,7 +788,7 @@ function parsePeriodFromMessage(message: string) {
     label = "за останні 90 днів";
   }
 
-  return { sinceIso: start.toISOString(), label };
+  return { sinceIso: start.toISOString() as string | null, label };
 }
 
 function normalizeAnalyticsName(value: string | null | undefined) {
@@ -762,7 +799,7 @@ function stripAnalyticsQueryTerms(message: string) {
   return normalizeText(message)
     .replace(/[?!.]+$/g, "")
     .replace(
-      /\b(а|і|й|ще|скільки|порахуй|порахувати|рахуй|покажи|дай|зріз|статистика|статистику|стату|за|останній|останні|місяць|місяці|місяців|днів|день|тиждень|поточний|цього|найбільше|більше|всього|якого|яким|яких|у|в|ліда|лід|замовника|замовник|замовників|замовниках|замовники|клієнта|клієнт|клієнтів|клієнтах|клієнти|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|менеджера|иенеджерам|иенеджерах|иенеджери|дизайнерам|дизайнерах|дизайнери|дизайнів|дизайни|дизайн|тасок|задач|зробив|зробила|зробили|кожен|кожного|по)\b/giu,
+      /\b(а|і|й|ще|скільки|порахуй|порахувати|рахуй|покажи|дай|зріз|статистика|статистику|стату|за|останній|останні|весь|всі|час|рік|роки|років|місяць|місяці|місяців|днів|день|дні|тиждень|тижні|поточний|цього|найбільше|більше|всього|якого|яким|яких|у|в|ліда|лід|замовника|замовник|замовників|замовниках|замовники|клієнта|клієнт|клієнтів|клієнтах|клієнти|прорахунків|прорахунки|прорахунок|замовлень|замовлення|менеджерам|менеджерах|менеджери|менеджера|иенеджерам|иенеджерах|иенеджери|дизайнерам|дизайнерах|дизайнери|дизайнів|дизайни|дизайн|тасок|задач|зробив|зробила|зробили|кожен|кожного|по)\b/giu,
       " "
     )
     .replace(/\s+/g, " ")
@@ -774,7 +811,7 @@ function extractPartySearchQuery(message: string) {
     .replace(/[?!.]+$/g, "")
     .replace(/[ʼ’']/g, "'");
   const match = normalized.match(
-    /(?:^|\s)(?:у|в|по|для)?\s*(?:замовника|замовнику|клієнта|клієнту|контрагента|контрагенту|ліда|ліду)\s+(.+?)\s*(?:\s+(?:прорахунків|прорахунки|прорахунок|замовлень|замовлення)(?:\s|$)|\s+за\s+(?:останн(?:ій|і|ю)\s+)?(?:день|тиждень|місяць|квартал|рік|[0-9]+\s*дн(?:ів|і)?)|\s+цього\s+місяц[яю]|\s+поточн(?:ий|ого|ому)\s+місяц[яю]|$)/iu
+    /(?:^|\s)(?:у|в|по|для)?\s*(?:замовника|замовнику|клієнта|клієнту|контрагента|контрагенту|ліда|ліду)\s+(.+?)\s*(?:\s+(?:прорахунків|прорахунки|прорахунок|замовлень|замовлення)(?:\s|$)|\s+за\s+(?:весь\s+час|всі\s+часи|(?:останн(?:ій|і|ю)\s+)?(?:день|дні|днів|тиждень|тижні|місяць|місяці|місяців|квартал|рік|роки|років|[0-9]+\s*(?:дн(?:ів|і)?|місяц(?:ь|і|ів)?|тиж(?:день|ні)?|рок(?:и|ів)?)))|\s+цього\s+місяц[яю]|\s+поточн(?:ий|ого|ому)\s+місяц[яю]|$)/iu
   );
   const query = normalizeText(match?.[1]);
   if (!query) return "";
@@ -977,8 +1014,9 @@ function hasPersonAnalyticsContext(message: string) {
 
 function extractFollowUpPeriodHint(message: string) {
   const normalized = normalizeText(message).replace(/[?!.]+$/g, "");
+  if (/весь\s+час|за\s+весь\s+час|за\s+всі\s+часи|увесь\s+час/iu.test(normalized)) return "за весь час";
   const explicit = normalized.match(
-    /\bза\s+(?:останн(?:ій|і|ю)\s+)?(?:(?:\d+|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\s+)?(?:дн(?:і|ів|я)|тиждень|тижні|місяць|місяці|місяців|квартал|рік)\b/iu
+    /\bза\s+(?:останн(?:ій|і|ю)\s+)?(?:(?:\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\s+)?(?:дн(?:і|ів|я)|день|тиждень|тижні|місяць|місяці|місяців|квартал|рік|роки|років)\b/iu
   );
   if (explicit?.[0]) return explicit[0];
   if (/сьогодні|today/iu.test(normalized)) return "за сьогодні";
@@ -1385,6 +1423,169 @@ function rankRoutingRecipients(candidates: RoutingCandidate[], domain: ToShoAiDo
     .map((entry) => entry.candidate);
 }
 
+type MentionKind = NonNullable<NonNullable<RequestBody["mention"]>["kind"]>;
+
+function normalizeMentionKind(value: unknown): MentionKind | null {
+  if (
+    value === "customer" ||
+    value === "lead" ||
+    value === "manager" ||
+    value === "designer" ||
+    value === "employee"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function scoreMentionText(label: string, query: string) {
+  const normalizedLabel = normalizeAnalyticsName(label);
+  const normalizedQuery = normalizeAnalyticsName(query);
+  if (!normalizedQuery) return 1;
+  if (normalizedLabel === normalizedQuery) return 100;
+  if (normalizedLabel.startsWith(normalizedQuery)) return 80;
+  if (normalizedLabel.includes(normalizedQuery)) return 50;
+  return 0;
+}
+
+function memberMatchesMentionKind(member: RoutingCandidate, kind: MentionKind | null) {
+  if (!kind || kind === "employee") return true;
+  const role = normalizeRole(member.jobRole);
+  if (kind === "designer") return member.moduleAccess.design || role === "designer" || role === "дизайнер";
+  if (kind === "manager") return member.moduleAccess.orders || role === "manager" || role === "pm";
+  return false;
+}
+
+async function handleMentionSuggestions(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  body: RequestBody;
+}) {
+  const query = normalizeText(params.body.mention?.query).slice(0, 80);
+  const kind = normalizeMentionKind(params.body.mention?.kind);
+  const suggestions: Array<{
+    id: string;
+    kind: MentionKind;
+    label: string;
+    subtitle: string | null;
+    avatarUrl: string | null;
+    insertText: string;
+  }> = [];
+
+  if (!kind || kind === "manager" || kind === "designer" || kind === "employee") {
+    const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
+    suggestions.push(
+      ...members
+        .filter((member) => memberMatchesMentionKind(member, kind))
+        .map((member) => ({
+          member,
+          score: scoreMentionText(member.label, query),
+        }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || a.member.label.localeCompare(b.member.label, "uk"))
+        .slice(0, 8)
+        .map(({ member }) => {
+          const roleLabel = analyticsPersonRoleLabel(member);
+          return {
+            id: member.userId,
+            kind: roleLabel === "Дизайнер" ? "designer" as const : roleLabel === "Менеджер" ? "manager" as const : "employee" as const,
+            label: member.label,
+            subtitle: roleLabel,
+            avatarUrl: member.avatarUrl,
+            insertText: member.label,
+          };
+        })
+    );
+  }
+
+  if (!kind || kind === "customer") {
+    const variants = buildPartySearchVariants(query);
+    const customerFilter = variants.length > 0 ? buildPartyOrFilter(["name", "legal_name"], variants) : "";
+    let customerQuery = params.adminClient
+      .schema("tosho")
+      .from("customers")
+      .select("id,name,legal_name,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .limit(8);
+    if (customerFilter) customerQuery = customerQuery.or(customerFilter);
+    const { data } = await customerQuery;
+    suggestions.push(
+      ...((data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }>)
+        .map((row) => ({
+          row,
+          score: scorePartySearchCandidate(`${row.name ?? ""} ${row.legal_name ?? ""}`, variants.length > 0 ? variants : [query]),
+        }))
+        .filter((entry) => !query || entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map(({ row }) => {
+          const label = normalizeText(row.name || row.legal_name) || row.id;
+          return {
+            id: row.id,
+            kind: "customer" as const,
+            label,
+            subtitle: "Замовник",
+            avatarUrl: normalizeText(row.logo_url) || null,
+            insertText: label,
+          };
+        })
+    );
+  }
+
+  if (!kind || kind === "lead") {
+    const variants = buildPartySearchVariants(query);
+    const leadFilter = variants.length > 0 ? buildPartyOrFilter(["company_name", "legal_name", "first_name", "last_name"], variants) : "";
+    let leadQuery = params.adminClient
+      .schema("tosho")
+      .from("leads")
+      .select("id,company_name,legal_name,first_name,last_name,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .limit(8);
+    if (leadFilter) leadQuery = leadQuery.or(leadFilter);
+    const { data } = await leadQuery;
+    suggestions.push(
+      ...((data ?? []) as Array<{
+        id: string;
+        company_name?: string | null;
+        legal_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        logo_url?: string | null;
+      }>)
+        .map((row) => ({
+          row,
+          score: scorePartySearchCandidate(
+            `${row.company_name ?? ""} ${row.legal_name ?? ""} ${row.first_name ?? ""} ${row.last_name ?? ""}`,
+            variants.length > 0 ? variants : [query]
+          ),
+        }))
+        .filter((entry) => !query || entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map(({ row }) => {
+          const person = [row.first_name, row.last_name].map(normalizeText).filter(Boolean).join(" ");
+          const label = normalizeText(row.company_name || row.legal_name || person) || row.id;
+          return {
+            id: row.id,
+            kind: "lead" as const,
+            label,
+            subtitle: "Лід",
+            avatarUrl: normalizeText(row.logo_url) || null,
+            insertText: label,
+          };
+        })
+    );
+  }
+
+  const deduped = new Map<string, (typeof suggestions)[number]>();
+  for (const suggestion of suggestions) {
+    const key = `${suggestion.kind}:${suggestion.id}`;
+    if (!deduped.has(key)) deduped.set(key, suggestion);
+  }
+
+  return { suggestions: Array.from(deduped.values()).slice(0, 10) };
+}
+
 async function buildDesignCompletionAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -1395,13 +1596,14 @@ async function buildDesignCompletionAnalytics(params: {
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
   const memberById = new Map(members.map((member) => [member.userId, member]));
 
-  const { data, error } = await params.adminClient
+  let query = params.adminClient
     .from("activity_log")
     .select("entity_id,metadata,created_at")
     .eq("team_id", params.auth.teamId)
     .eq("action", "design_task_status")
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const buckets = new Map<string, { userId: string; label: string; avatarUrl: string | null; total: number; byType: Record<string, number> }>();
@@ -1469,13 +1671,14 @@ async function buildManagerQuoteAnalytics(params: {
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
   const memberById = new Map(members.map((member) => [member.userId, member]));
 
-  const { data, error } = await params.adminClient
+  let query = params.adminClient
     .schema("tosho")
     .from("quotes")
     .select("id,status,total,assigned_to,created_by,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; approved: number; sum: number; byStatus: Record<string, number> }>();
@@ -1546,13 +1749,14 @@ async function buildManagerOrderAnalytics(params: {
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
   const memberById = new Map(members.map((member) => [member.userId, member]));
 
-  const { data, error } = await params.adminClient
+  let query = params.adminClient
     .schema("tosho")
     .from("orders")
     .select("id,total,manager_user_id,manager_label,order_status,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const buckets = new Map<string, { id: string; label: string; avatarUrl: string | null; total: number; sum: number; byStatus: Record<string, number> }>();
@@ -1616,13 +1820,14 @@ async function buildCustomerQuoteAnalytics(params: {
   message: string;
 }) {
   const period = parsePeriodFromMessage(params.message);
-  const { data, error } = await params.adminClient
+  let query = params.adminClient
     .schema("tosho")
     .from("quotes")
     .select("id,status,total,customer_id,customer_name,customer_logo_url,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const buckets = new Map<
@@ -1690,13 +1895,14 @@ async function buildManagerCustomerAnalytics(params: {
   targetMember: AnalyticsPersonTarget;
 }) {
   const period = parsePeriodFromMessage(params.message);
-  const { data, error } = await params.adminClient
+  let query = params.adminClient
     .schema("tosho")
     .from("quotes")
     .select("id,status,total,customer_id,customer_name,customer_logo_url,assigned_to,created_by,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const customers = new Map<string, { id: string; label: string; logoUrl: string | null; quoteCount: number; sum: number; byStatus: Record<string, number> }>();
@@ -1876,21 +2082,21 @@ async function buildPartyQuoteOrderAnalytics(params: {
     } satisfies AnalyticsResult;
   }
 
-  const quoteQuery = params.adminClient
+  let quoteQuery = params.adminClient
     .schema("tosho")
     .from("quotes")
     .select("id,status,total,customer_id,customer_name,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) quoteQuery = quoteQuery.gte("created_at", period.sinceIso);
 
-  const orderQuery = params.adminClient
+  let orderQuery = params.adminClient
     .schema("tosho")
     .from("orders")
     .select("id,quote_id,order_status,total,customer_id,customer_name,party_type,created_at")
     .eq("team_id", params.auth.teamId)
-    .gte("created_at", period.sinceIso)
     .limit(10000);
+  if (period.sinceIso) orderQuery = orderQuery.gte("created_at", period.sinceIso);
 
   const [quoteResult, orderResult] = await Promise.all([quoteQuery, orderQuery]);
   if (quoteResult.error) throw new Error(quoteResult.error.message);
@@ -3275,6 +3481,15 @@ export const handler = async (event: HttpEvent) => {
         return jsonResponse(
           200,
           await handleDeleteKnowledge({
+            adminClient,
+            auth,
+            body,
+          })
+        );
+      case "mention_suggestions":
+        return jsonResponse(
+          200,
+          await handleMentionSuggestions({
             adminClient,
             auth,
             body,

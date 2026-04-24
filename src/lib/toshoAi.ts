@@ -121,6 +121,17 @@ export type ToShoAiSnapshot = {
   knowledgeItems: ToShoAiKnowledgeItem[];
 };
 
+export type ToShoAiMentionKind = "customer" | "lead" | "manager" | "designer" | "employee";
+
+export type ToShoAiMentionSuggestion = {
+  id: string;
+  kind: ToShoAiMentionKind;
+  label: string;
+  subtitle: string | null;
+  avatarUrl: string | null;
+  insertText: string;
+};
+
 export type ToShoAiApiResponse = {
   snapshot: ToShoAiSnapshot;
   meta?: {
@@ -311,6 +322,27 @@ export async function callToShoAiApi(
   action: string,
   payload: Record<string, unknown>
 ): Promise<ToShoAiApiResponse> {
+  return callToShoAiFunction(action, payload) as Promise<ToShoAiApiResponse>;
+}
+
+export async function callToShoAiMentionSuggestions(payload: {
+  query: string;
+  kind: ToShoAiMentionKind | null;
+  routeContext?: ToShoAiRouteContext;
+}): Promise<{ suggestions: ToShoAiMentionSuggestion[] }> {
+  return callToShoAiFunction("mention_suggestions", {
+    mention: {
+      query: payload.query,
+      kind: payload.kind,
+    },
+    routeContext: payload.routeContext,
+  }) as Promise<{ suggestions: ToShoAiMentionSuggestion[] }>;
+}
+
+async function callToShoAiFunction(
+  action: string,
+  payload: Record<string, unknown>
+): Promise<unknown> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) {
@@ -343,5 +375,5 @@ export async function callToShoAiApi(
     throw new Error(getErrorMessage(parsed));
   }
 
-  return parsed as ToShoAiApiResponse;
+  return parsed;
 }
