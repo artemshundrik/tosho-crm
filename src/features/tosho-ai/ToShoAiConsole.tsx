@@ -380,11 +380,11 @@ function buildPromptSuggestionGroups(input: {
         },
         {
           label: "Клієнти менеджера",
-          text: "скільки замовників у Вікторії за місяць?",
+          text: "скільки замовників у [імʼя менеджера] за місяць?",
         },
         {
-          label: "Статистика менеджера",
-          text: "дай статистику по Дар'ї за місяць",
+          label: "Прорахунки менеджера",
+          text: "скільки прорахунків у [імʼя менеджера] за місяць?",
         },
       ],
     },
@@ -399,8 +399,8 @@ function buildPromptSuggestionGroups(input: {
           text: "скільки тасок зробив кожен дизайнер за останній місяць?",
         },
         {
-          label: "Статистика по Ліні",
-          text: "дай статистику по Ліні за останній місяць",
+          label: "Дизайнер за місяць",
+          text: "скільки дизайнів зробив/зробила [імʼя дизайнера] за місяць?",
         },
         {
           label: "Візуали та адаптації",
@@ -424,11 +424,11 @@ function buildPromptSuggestionGroups(input: {
         },
         {
           label: "Конкретний замовник",
-          text: "скільки прорахунків у Авантпрінт?",
+          text: "скільки прорахунків у замовника [назва замовника] за місяць?",
         },
         {
           label: "Прорахунки і замовлення",
-          text: "скільки у замовника Авантпрінт прорахунків і замовлень?",
+          text: "скільки у замовника [назва замовника] прорахунків і замовлень?",
         },
         {
           label: "Зріз по замовниках",
@@ -443,20 +443,20 @@ function buildPromptSuggestionGroups(input: {
       tone: "team",
       prompts: [
         {
-          label: "Знайти Дар'ю",
-          text: "дай статистику по Дар'ї за місяць",
+          label: "Статистика",
+          text: "дай статистику по [імʼя або прізвище] за місяць",
         },
         {
-          label: "Знайти Вікторію",
-          text: "скільки замовників у Вікторії за місяць?",
+          label: "Як менеджер",
+          text: "скільки прорахунків у [імʼя менеджера] за місяць?",
         },
         {
-          label: "Знайти Ліну",
-          text: "скільки дизайнів зробила Ліна за тиждень?",
+          label: "Як дизайнер",
+          text: "скільки дизайнів зробив/зробила [імʼя дизайнера] за тиждень?",
         },
         {
-          label: "Статистика співробітника",
-          text: "дай статистику по Ліні за останній місяць",
+          label: "Клієнти менеджера",
+          text: "скільки замовників у [імʼя менеджера] за місяць?",
         },
       ],
     },
@@ -683,31 +683,26 @@ function EmptyChatSuggestions({
 }) {
   const [activeGroupId, setActiveGroupId] = useState<PromptSuggestionGroup["id"] | null>(null);
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
-  const toneClass: Record<PromptSuggestionGroup["tone"], { idle: string; active: string; question: string }> = {
+  const toneClass: Record<PromptSuggestionGroup["tone"], { idle: string; active: string }> = {
     design: {
-      idle: "border-primary/20 bg-primary/8 text-primary hover:bg-primary/12",
-      active: "border-primary/30 bg-primary/15 text-primary ring-1 ring-primary/15",
-      question: "border-primary/18 bg-primary/8 text-primary hover:bg-primary/12",
+      idle: "border-violet-500/25 bg-violet-500/10 text-violet-600 hover:bg-violet-500/14 dark:text-violet-300",
+      active: "border-violet-500/35 bg-violet-500/18 text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-200",
     },
     orders: {
       idle: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/80",
       active: "border-info-soft-border bg-info-soft/90 text-info-foreground ring-1 ring-info-soft-border",
-      question: "border-info-soft-border bg-info-soft/65 text-info-foreground hover:bg-info-soft/85",
     },
     customers: {
       idle: "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80",
       active: "border-success-soft-border bg-success-soft/90 text-success-foreground ring-1 ring-success-soft-border",
-      question: "border-success-soft-border bg-success-soft/65 text-success-foreground hover:bg-success-soft/85",
     },
     team: {
       idle: "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80",
       active: "border-warning-soft-border bg-warning-soft/90 text-warning-foreground ring-1 ring-warning-soft-border",
-      question: "border-warning-soft-border bg-warning-soft/65 text-warning-foreground hover:bg-warning-soft/85",
     },
     general: {
       idle: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
       active: "border-foreground/18 bg-foreground/8 text-foreground ring-1 ring-foreground/10",
-      question: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
     },
   };
 
@@ -723,7 +718,7 @@ function EmptyChatSuggestions({
         </div>
         <div>
           <div className="text-sm font-semibold text-foreground">Можна спитати</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">Обери тему, а потім конкретне питання.</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Обери тему, а питання підставлю в поле.</div>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -754,10 +749,9 @@ function EmptyChatSuggestions({
                 key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
                 type="button"
                 onClick={() => onSelect(suggestion.text)}
-                className={cn(
-                  "inline-flex min-h-8 items-center rounded-full border px-3 py-1.5 text-left text-xs font-medium transition-colors",
-                  toneClass[activeGroup.tone].question
-                )}
+                className={
+                  "inline-flex min-h-8 items-center rounded-full border border-border/60 bg-card/70 px-3 py-1.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted/35"
+                }
               >
                 {suggestion.label}
               </button>
@@ -963,6 +957,7 @@ export function ToShoAiConsole({
   const [knowledgeDraft, setKnowledgeDraft] = useState<KnowledgeDraft>(EMPTY_DRAFT);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [isMobileComposer, setIsMobileComposer] = useState(false);
 
   const selectedThread = snapshot?.selectedThread ?? null;
   const queueSearchValue = normalizeSearch(deferredQueueSearch);
@@ -1025,6 +1020,19 @@ export function ToShoAiConsole({
     setSnapshot((prev) => (prev?.selectedThread ? { ...prev, selectedThread: null } : prev));
     void loadSnapshot(initialRequestId ?? null);
   }, [active, initialRequestId, loadSnapshot, resolvedContext.href]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const syncMobileComposer = () => setIsMobileComposer(mediaQuery.matches);
+    syncMobileComposer();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncMobileComposer);
+      return () => mediaQuery.removeEventListener("change", syncMobileComposer);
+    }
+    mediaQuery.addListener(syncMobileComposer);
+    return () => mediaQuery.removeListener(syncMobileComposer);
+  }, []);
 
   useEffect(() => {
     if (selectedThread?.mode) {
@@ -1246,9 +1254,20 @@ export function ToShoAiConsole({
     (value: string) => {
       setComposerIntent("auto");
       setComposerValue(value);
-      void handleSend(value, true);
+      window.requestAnimationFrame(() => {
+        composerInputRef.current?.focus();
+        const placeholderMatch = /\[[^\]]+\]/u.exec(value);
+        if (placeholderMatch && composerInputRef.current) {
+          composerInputRef.current.setSelectionRange(
+            placeholderMatch.index,
+            placeholderMatch.index + placeholderMatch[0].length
+          );
+          return;
+        }
+        composerInputRef.current?.setSelectionRange(value.length, value.length);
+      });
     },
-    [handleSend]
+    []
   );
 
   const handleComposerKeyDown = useCallback(
@@ -1354,6 +1373,7 @@ export function ToShoAiConsole({
   );
 
   const intentMeta = composerIntent === "auto" ? AUTO_MODE_META : MODE_META[composerIntent];
+  const composerPlaceholder = isMobileComposer ? "Напиши запит..." : intentMeta.placeholder;
 
   return (
     <>
@@ -1666,8 +1686,8 @@ export function ToShoAiConsole({
                 onKeyDown={handleComposerKeyDown}
                 enterKeyHint="send"
                 rows={1}
-                placeholder={intentMeta.placeholder}
-                className="h-11 max-h-[150px] min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
+                placeholder={composerPlaceholder}
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-sm leading-5 shadow-inner sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3"
               />
               <Button
                 type="button"
