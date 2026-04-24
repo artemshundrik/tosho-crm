@@ -1094,26 +1094,94 @@ function extractFollowUpPeriodHint(message: string) {
   return "";
 }
 
+const FOLLOW_UP_PERIOD_FRAGMENT =
+  "(?:за\\s+(?:весь\\s+час|всі\\s+часи|усі\\s+часи|увесь\\s+час)|за\\s+(?:останн(?:ій|і|ю)\\s+)?(?:(?:\\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|девять|десять)\\s+)?(?:дн(?:і|ів|я)|день|тиждень|тижні|тижнів|місяць|місяці|місяців|квартал|рік|роки|років)|цього\\s+місяц[яю]|поточн(?:ий|ого|ому)\\s+місяц[яю]|сьогодні|вчора)";
+
+const FOLLOW_UP_PERIOD_RE = new RegExp(`\\s*${FOLLOW_UP_PERIOD_FRAGMENT}(?=\\s|$)`, "giu");
+
+function withQuestionMark(message: string) {
+  const cleaned = normalizeText(message).replace(/[?!.]+$/g, "").replace(/\s+/g, " ").trim();
+  return cleaned ? `${cleaned}?` : message;
+}
+
+function replaceAnalyticsPeriodInMessage(previousMessage: string, periodTail: string) {
+  const withoutPreviousPeriod = normalizeText(previousMessage)
+    .replace(/[?!.]+$/g, "")
+    .replace(FOLLOW_UP_PERIOD_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return withQuestionMark(`${withoutPreviousPeriod} ${periodTail}`);
+}
+
+function replaceAnalyticsMetricInMessage(previousMessage: string, metric: AnalyticsMetricIntent) {
+  if (!metric) return previousMessage;
+  let nextMessage = normalizeText(previousMessage).replace(/[?!.]+$/g, "");
+  const replaceTerms = (input: string, terms: string, replacement: string) =>
+    input.replace(
+      new RegExp(`(^|[\\s.,!?;:()«»"'])(${terms})(?=$|[\\s.,!?;:()«»"'])`, "giu"),
+      (_match, prefix) => `${prefix}${replacement}`
+    );
+  if (metric === "orders") {
+    nextMessage = replaceTerms(
+      replaceTerms(nextMessage, "прорахунків|прорахунки|прорахунок|quote|quotes|кошторисів|кошториси|кошторис|кп", "замовлень"),
+      "дизайн-задач|дизайнів|дизайни|дизайн|тасок|таски|задач",
+      "замовлень"
+    );
+  } else if (metric === "quotes") {
+    nextMessage = replaceTerms(
+      replaceTerms(nextMessage, "замовлень|замовлення|orders|order", "прорахунків"),
+      "дизайн-задач|дизайнів|дизайни|дизайн|тасок|таски|задач",
+      "прорахунків"
+    );
+  } else if (metric === "design") {
+    nextMessage = replaceTerms(
+      nextMessage,
+      "прорахунків|прорахунки|прорахунок|quote|quotes|кошторисів|кошториси|кошторис|кп|замовлень|замовлення|orders|order",
+      "дизайн-задач"
+    );
+  } else if (metric === "customers") {
+    nextMessage = replaceTerms(
+      nextMessage,
+      "прорахунків|прорахунки|прорахунок|quote|quotes|кошторисів|кошториси|кошторис|кп|замовлень|замовлення|orders|order",
+      "замовників"
+    );
+  }
+  return withQuestionMark(nextMessage);
+}
+
+function getStoredAnalyticsMessage(message: SupportMessageRow) {
+  const metadata = message.metadata;
+  const analyticsMessage =
+    metadata && typeof metadata === "object" && typeof metadata.analyticsMessage === "string"
+      ? normalizeText(metadata.analyticsMessage)
+      : "";
+  if (analyticsMessage && shouldRunAnalytics(analyticsMessage)) return analyticsMessage;
+  return shouldRunAnalytics(message.body) ? message.body : "";
+}
+
 function buildAnalyticsMessageWithContext(message: string, recentMessages: SupportMessageRow[]) {
   if (shouldRunAnalytics(message)) return message;
   if (!hasAnalyticsFollowUpSignal(message)) return message;
-  const previousUserAnalyticsMessage = [...recentMessages]
-    .reverse()
-    .find((entry) => entry.role === "user" && shouldRunAnalytics(entry.body));
+  const previousUserAnalyticsMessage = [...recentMessages].reverse().find((entry) => entry.role === "user" && getStoredAnalyticsMessage(entry));
   if (!previousUserAnalyticsMessage) return message;
 
-  const previousMessage = previousUserAnalyticsMessage.body;
+  const previousMessage = getStoredAnalyticsMessage(previousUserAnalyticsMessage) || previousUserAnalyticsMessage.body;
   const currentMetric = detectAnalyticsMetricIntent(message);
   const previousMetric = detectAnalyticsMetricIntent(previousMessage);
   const metric = currentMetric ?? previousMetric;
   const target = extractFollowUpTarget(message);
+  const periodTail = extractFollowUpPeriodHint(message);
+
+  if (!target && periodTail) {
+    const metricMessage = currentMetric ? replaceAnalyticsMetricInMessage(previousMessage, currentMetric) : previousMessage;
+    return replaceAnalyticsPeriodInMessage(metricMessage, periodTail);
+  }
 
   if (target) {
     const targetPrefix =
       hasPartyAnalyticsContext(previousMessage) && !hasPersonAnalyticsContext(previousMessage)
         ? "у замовника"
         : "у";
-    const periodTail = extractFollowUpPeriodHint(message);
     return `скільки ${metricIntentPhrase(metric)} ${targetPrefix} ${target}${periodTail ? ` ${periodTail}` : ""}?`;
   }
 
@@ -1127,6 +1195,7 @@ function buildAnalyticsMessageWithContext(message: string, recentMessages: Suppo
       const periodTail = extractFollowUpPeriodHint(message) || extractFollowUpPeriodHint(previousMessage);
       return `скільки ${metricIntentPhrase(currentMetric)} ${targetPrefix} ${previousTarget}${periodTail ? ` ${periodTail}` : ""}?`;
     }
+    return replaceAnalyticsMetricInMessage(previousMessage, currentMetric);
   }
 
   return `${previousMessage}\n${message}`;
@@ -3940,6 +4009,7 @@ async function handleSend(params: {
         mode,
         routeContext,
         attachments,
+        analyticsMessage: analyticsRequested ? analyticsMessage : null,
       },
     },
     {
