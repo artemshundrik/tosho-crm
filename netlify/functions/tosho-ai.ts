@@ -642,14 +642,17 @@ function findAnalyticsPersonMatches(message: string, members: RoutingCandidate[]
 
 function analyticsPersonRoleLabel(member: AnalyticsPersonTarget) {
   const role = normalizeRole(member.jobRole);
-  if (role === "designer" || role === "дизайнер" || member.moduleAccess.design) return "Дизайнер";
-  if (role === "manager" || member.moduleAccess.orders) return "Менеджер";
-  if (role === "logistics" || role === "head_of_logistics" || member.moduleAccess.logistics) return "Логіст";
+  if (role === "designer" || role === "дизайнер") return "Дизайнер";
+  if (role === "manager" || role === "менеджер" || role === "sales_manager" || role === "junior_sales_manager") return "Менеджер";
+  if (role === "pm") return "PM";
+  if (role === "logistics" || role === "head_of_logistics") return "Логіст";
+  if (role === "seo") return "Адмін";
+  if (member.moduleAccess.design) return "Дизайн";
+  if (member.moduleAccess.orders) return "Збут";
+  if (member.moduleAccess.logistics) return "Логістика";
   if (member.moduleAccess.catalog) return "Каталог";
   if (member.moduleAccess.contractors) return "Підрядники";
   if (member.moduleAccess.team) return "Команда";
-  if (role === "pm") return "PM";
-  if (role === "seo") return "Адмін";
   return "Команда";
 }
 
@@ -981,6 +984,12 @@ function hasEmployeeAnalyticsTerm(normalized: string) {
   return /(співробітник|співробітниц|користувач|людин|команд|працівник|працівниц|employee|user)/u.test(normalized);
 }
 
+function hasAdminObservabilityTerm(normalized: string) {
+  return /(адмін|admin|observability|обсерваб|перформанс|performance|runtime|error|errors|помилк|баг|bug|bugs|сховищ|storage|вкладенн|attachment|backup|бекап|чи\s+все\s+норм|стан\s+систем)/u.test(
+    normalized
+  );
+}
+
 function hasPersonalActionPlanTerm(normalized: string) {
   return (
     /(що\s+(мені|робити|далі)|план|задач[іи]|фокус|пріоритет|сьогодні|завтра|дотис|кому\s+(дзвонити|писати|нагадати)|кого\s+(дотиснути|повернути)|мої|моїх|моє)/u.test(
@@ -998,6 +1007,7 @@ function shouldRunAnalytics(message: string) {
     ) ||
     /по\s+(менедж|иенедж)/u.test(normalized) ||
     /у\s+якого\s+(замовник|клієнт)/u.test(normalized);
+  if (hasAdminObservabilityTerm(normalized)) return true;
   if (hasPersonalActionPlanTerm(normalized)) return true;
   if (!hasAnalyticsVerb) return false;
   return (
@@ -1508,8 +1518,8 @@ function scoreMentionText(label: string, query: string) {
 function memberMatchesMentionKind(member: RoutingCandidate, kind: MentionKind | null) {
   if (!kind || kind === "employee") return true;
   const role = normalizeRole(member.jobRole);
-  if (kind === "designer") return member.moduleAccess.design || role === "designer" || role === "дизайнер";
-  if (kind === "manager") return member.moduleAccess.orders || role === "manager" || role === "pm";
+  if (kind === "designer") return role === "designer" || role === "дизайнер";
+  if (kind === "manager") return role === "manager" || role === "менеджер" || role === "sales_manager" || role === "junior_sales_manager" || role === "pm";
   return false;
 }
 
@@ -1543,9 +1553,17 @@ async function handleMentionSuggestions(params: {
         .slice(0, 8)
         .map(({ member }) => {
           const roleLabel = analyticsPersonRoleLabel(member);
+          const suggestionKind =
+            kind === "manager" || kind === "designer"
+              ? kind
+              : roleLabel === "Дизайнер"
+                ? "designer"
+                : roleLabel === "Менеджер" || roleLabel === "PM"
+                  ? "manager"
+                  : "employee";
           return {
             id: member.userId,
-            kind: roleLabel === "Дизайнер" ? "designer" as const : roleLabel === "Менеджер" ? "manager" as const : "employee" as const,
+            kind: suggestionKind,
             label: member.label,
             subtitle: roleLabel,
             avatarUrl: member.avatarUrl,
@@ -2836,10 +2854,10 @@ async function buildPersonAnalyticsDecision(params: {
 
   const relevantMatches = matches.filter((member) => {
     const role = normalizeRole(member.jobRole);
-    if (explicitlyDesign) return member.moduleAccess.design || role === "designer" || role === "дизайнер";
-    if (explicitlyLogistics) return member.moduleAccess.logistics || role === "logistics" || role === "head_of_logistics";
+    if (explicitlyDesign) return role === "designer" || role === "дизайнер";
+    if (explicitlyLogistics) return role === "logistics" || role === "head_of_logistics";
     if (explicitlyCustomers || explicitlyOrders || explicitlyQuotes || hasManagerAnalyticsTerm(normalized)) {
-      return member.moduleAccess.orders || role === "manager" || role === "pm";
+      return role === "manager" || role === "менеджер" || role === "sales_manager" || role === "junior_sales_manager" || role === "pm";
     }
     return true;
   });
@@ -2848,9 +2866,9 @@ async function buildPersonAnalyticsDecision(params: {
 
   const target = candidates[0];
   const role = normalizeRole(target.jobRole);
-  const looksDesigner = target.moduleAccess.design || role === "designer" || role === "дизайнер";
-  const looksLogistics = target.moduleAccess.logistics || role === "logistics" || role === "head_of_logistics";
-  const looksManager = target.moduleAccess.orders || role === "manager" || role === "pm";
+  const looksDesigner = role === "designer" || role === "дизайнер";
+  const looksLogistics = role === "logistics" || role === "head_of_logistics";
+  const looksManager = role === "manager" || role === "менеджер" || role === "sales_manager" || role === "junior_sales_manager" || role === "pm";
 
   if (explicitlyDesign || (!explicitlyCustomers && !explicitlyOrders && !explicitlyQuotes && looksDesigner)) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics({ ...params, targetMember: target }));
@@ -2870,6 +2888,141 @@ async function buildPersonAnalyticsDecision(params: {
   return toAnalyticsDecision(buildEmployeeProfileAnalytics(target));
 }
 
+function formatBytesCompact(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${Math.round(value)} B`;
+}
+
+async function buildAdminObservabilityAnalytics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+}) {
+  const accessRole = normalizeRole(params.auth.accessRole);
+  const jobRole = normalizeRole(params.auth.jobRole);
+  const canViewAdminHealth = accessRole === "owner" || accessRole === "admin" || jobRole === "seo";
+  if (!canViewAdminHealth) return null;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [{ data: snapshotRows }, { data: runtimeRows }] = await Promise.all([
+    params.adminClient
+      .schema("tosho")
+      .from("admin_observability_snapshots")
+      .select(
+        "captured_at,captured_for_date,database_size_bytes,attachments_bucket_bytes,avatars_bucket_bytes,storage_today_bytes,storage_today_objects,quote_attachments_today,design_tasks_today,design_task_attachments_today,design_output_uploads_today,design_output_selection_today,attachment_possible_orphan_original_count,attachment_missing_variants_count,attachment_safe_reclaimable_count,attachment_safe_reclaimable_bytes,database_stats,dead_tuple_tables"
+      )
+      .eq("team_id", params.auth.teamId)
+      .order("captured_for_date", { ascending: false })
+      .limit(1),
+    params.adminClient
+      .schema("tosho")
+      .from("runtime_errors")
+      .select("title,href,created_at,metadata")
+      .eq("team_id", params.auth.teamId)
+      .gte("created_at", todayStart.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(25),
+  ]);
+
+  const snapshot = (snapshotRows?.[0] ?? null) as
+    | {
+        captured_at?: string | null;
+        captured_for_date?: string | null;
+        database_size_bytes?: number | null;
+        attachments_bucket_bytes?: number | null;
+        avatars_bucket_bytes?: number | null;
+        storage_today_bytes?: number | null;
+        storage_today_objects?: number | null;
+        quote_attachments_today?: number | null;
+        design_tasks_today?: number | null;
+        design_task_attachments_today?: number | null;
+        design_output_uploads_today?: number | null;
+        design_output_selection_today?: number | null;
+        attachment_possible_orphan_original_count?: number | null;
+        attachment_missing_variants_count?: number | null;
+        attachment_safe_reclaimable_count?: number | null;
+        attachment_safe_reclaimable_bytes?: number | null;
+        database_stats?: JsonRecord | null;
+        dead_tuple_tables?: unknown[] | null;
+      }
+    | null;
+
+  const runtimeErrorCount = (runtimeRows ?? []).length;
+  const latestRuntimeError = ((runtimeRows ?? []) as RuntimeErrorRow[])[0] ?? null;
+  const dbSize = Number(snapshot?.database_size_bytes ?? 0);
+  const attachmentsSize = Number(snapshot?.attachments_bucket_bytes ?? 0);
+  const storageTodayBytes = Number(snapshot?.storage_today_bytes ?? 0);
+  const storageTodayObjects = Number(snapshot?.storage_today_objects ?? 0);
+  const orphanCount = Number(snapshot?.attachment_possible_orphan_original_count ?? 0);
+  const missingVariants = Number(snapshot?.attachment_missing_variants_count ?? 0);
+  const reclaimableCount = Number(snapshot?.attachment_safe_reclaimable_count ?? 0);
+  const reclaimableBytes = Number(snapshot?.attachment_safe_reclaimable_bytes ?? 0);
+  const deadTupleTables = Array.isArray(snapshot?.dead_tuple_tables) ? snapshot?.dead_tuple_tables.length ?? 0 : 0;
+  const capturedLabel = snapshot?.captured_at ? new Date(snapshot.captured_at).toLocaleString("uk-UA") : null;
+  const hasRisks = runtimeErrorCount > 0 || orphanCount > 0 || missingVariants > 0 || deadTupleTables > 0;
+
+  const rows: AnalyticsRow[] = [
+    {
+      id: "runtime-errors",
+      label: "Runtime errors",
+      primary: formatInteger(runtimeErrorCount),
+      secondary: latestRuntimeError ? trimTo(latestRuntimeError.title || "Остання помилка", 120) : "Сьогодні нових помилок не бачу",
+      badges: latestRuntimeError?.href ? [{ label: "Останній route", value: trimTo(latestRuntimeError.href, 28) }] : [],
+    },
+    {
+      id: "activity-today",
+      label: "Активність сьогодні",
+      primary: formatInteger(Number(snapshot?.design_tasks_today ?? 0)),
+      secondary: `Дизайн-задачі · вкладень у прорахунках ${formatInteger(Number(snapshot?.quote_attachments_today ?? 0))}`,
+      badges: [
+        { label: "Design files", value: formatInteger(Number(snapshot?.design_task_attachments_today ?? 0)) },
+        { label: "Outputs", value: formatInteger(Number(snapshot?.design_output_uploads_today ?? 0)) },
+      ],
+    },
+    {
+      id: "storage",
+      label: "Сховище",
+      primary: formatBytesCompact(storageTodayBytes),
+      secondary: `Сьогодні ${formatInteger(storageTodayObjects)} об'єктів · attachments ${formatBytesCompact(attachmentsSize)}`,
+      badges: [{ label: "DB", value: formatBytesCompact(dbSize) }],
+    },
+    {
+      id: "hygiene",
+      label: "Гігієна attachments",
+      primary: hasRisks ? "є ризики" : "нормально",
+      secondary: `orphan ${formatInteger(orphanCount)} · missing variants ${formatInteger(missingVariants)}`,
+      badges: [
+        { label: "Reclaimable", value: `${formatInteger(reclaimableCount)} / ${formatBytesCompact(reclaimableBytes)}` },
+        { label: "Dead tuples", value: formatInteger(deadTupleTables) },
+      ],
+    },
+  ];
+
+  return {
+    title: "Адмін-зріз",
+    summary: hasRisks ? "Є що перевірити в observability." : "Критичних сигналів у сьогоднішньому зрізі не бачу.",
+    markdown: hasRisks
+      ? "Є кілька сигналів, які варто перевірити в observability: runtime errors, attachments або таблиці з dead tuples."
+      : "По сьогоднішньому зрізу все виглядає спокійно: нових runtime errors не бачу, а основні storage/attachment метрики нижче.",
+    domain: "admin",
+    confidence: snapshot || runtimeErrorCount > 0 ? 0.9 : 0.74,
+    analytics: {
+      kind: "entity",
+      title: "Observability",
+      caption: capturedLabel ? `Останній snapshot: ${capturedLabel}` : "Snapshot ще не знайдено",
+      metricLabel: "Стан",
+      rows,
+      note: snapshot
+        ? "Зріз беру з admin_observability_snapshots і runtime_errors за сьогодні."
+        : "Snapshot ще не створений. Runtime errors рахую напряму за сьогодні.",
+    },
+  } satisfies AnalyticsResult;
+}
+
 async function buildAnalyticsDecision(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
@@ -2878,6 +3031,7 @@ async function buildAnalyticsDecision(params: {
 }) {
   if (!shouldRunAnalytics(params.message)) return null;
   const normalized = normalizeText(params.message).toLowerCase();
+  const hasAdminTerm = hasAdminObservabilityTerm(normalized);
   const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
   const hasQuoteTerm = /(прорах|quote|коштор|кп)/u.test(normalized);
   const hasOrderTerm = /(замовл|order)/u.test(normalized);
@@ -2894,6 +3048,11 @@ async function buildAnalyticsDecision(params: {
     /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
       normalized
     ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
+
+  if (hasAdminTerm && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasPartyTerm && !hasManagerTerm) {
+    const adminDecision = await buildAdminObservabilityAnalytics(params);
+    if (adminDecision) return toAnalyticsDecision(adminDecision);
+  }
 
   if (hasPersonalActionPlanTerm(normalized) && !hasQuoteTerm && !hasOrderTerm && !hasDesignTerm && !hasManagerTerm) {
     const personalDecision = await buildPersonalActionPlanAnalytics(params);

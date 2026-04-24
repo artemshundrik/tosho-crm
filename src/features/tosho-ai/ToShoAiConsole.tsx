@@ -120,7 +120,6 @@ type PromptSuggestionGroup = {
 type PersonalPromptSuggestion = {
   label: string;
   text: string;
-  tone: "focus" | "orders" | "design" | "logistics";
 };
 
 type ActiveMention = {
@@ -563,44 +562,57 @@ function buildPromptSuggestionGroups(input: {
 function buildPersonalPromptSuggestions(input: {
   jobRole?: string | null;
   canManageQueue?: boolean;
+  isSuperAdmin?: boolean;
+  isAdmin?: boolean;
+  isSeo?: boolean;
   domainHint: ToShoAiRouteContext["domainHint"];
 }): PersonalPromptSuggestion[] {
   const jobRole = normalizeRoleText(input.jobRole);
   const isDesigner = jobRole === "designer" || jobRole === "дизайнер" || input.domainHint === "design";
   const isLogistics = jobRole === "logistics" || jobRole === "head_of_logistics" || input.domainHint === "logistics";
   const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager", "pm"].includes(jobRole) || input.domainHint === "orders";
+  const isAdminLike = input.isSuperAdmin || input.isAdmin || input.isSeo;
+
+  if (isAdminLike) {
+    return [
+      { label: "Що сьогодні?", text: "дай адмін-зріз по дню: баги, observability і ризики" },
+      { label: "Чи є баги?", text: "чи є сьогодні баги або runtime errors?" },
+      { label: "Перформанс", text: "покажи стан перформансу і бази сьогодні" },
+      { label: "Сховище", text: "що зі сховищем і вкладеннями сьогодні?" },
+    ];
+  }
 
   if (isDesigner) {
     return [
-      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
-      { label: "План на день", text: "дай мені план на день", tone: "design" },
-      { label: "Що горить?", text: "що горить у моїй черзі?", tone: "design" },
-      { label: "Що дотиснути?", text: "що мені дотиснути сьогодні?", tone: "focus" },
+      { label: "Що робити?", text: "що мені робити сьогодні?" },
+      { label: "План на день", text: "дай мені план на день" },
+      { label: "Що горить?", text: "що горить у моїй черзі?" },
+      { label: "Що дотиснути?", text: "що мені дотиснути сьогодні?" },
     ];
   }
 
   if (isLogistics) {
     return [
-      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
-      { label: "План логістики", text: "дай мені план по логістиці на день", tone: "logistics" },
-      { label: "Що відвантажити?", text: "що сьогодні треба відвантажити?", tone: "logistics" },
-      { label: "Ризики доставки", text: "які ризики по доставці?", tone: "focus" },
+      { label: "Що робити?", text: "що мені робити сьогодні?" },
+      { label: "План логістики", text: "дай мені план по логістиці на день" },
+      { label: "Що відвантажити?", text: "що сьогодні треба відвантажити?" },
+      { label: "Ризики доставки", text: "які ризики по доставці?" },
     ];
   }
 
   if (isManager || input.canManageQueue) {
     return [
-      { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
-      { label: "План на день", text: "дай мені план на день", tone: "orders" },
-      { label: "Клієнти зависли", text: "мої клієнти зависли?", tone: "orders" },
-      { label: "Кому написати?", text: "кому мені сьогодні написати?", tone: "focus" },
+      { label: "Що робити?", text: "що мені робити сьогодні?" },
+      { label: "План на день", text: "дай мені план на день" },
+      { label: "Клієнти зависли", text: "мої клієнти зависли?" },
+      { label: "Кому написати?", text: "кому мені сьогодні написати?" },
     ];
   }
 
   return [
-    { label: "Що робити?", text: "що мені робити сьогодні?", tone: "focus" },
-    { label: "План на день", text: "дай мені план на день", tone: "focus" },
-    { label: "Моя роль", text: "що я можу тут робити?", tone: "orders" },
+    { label: "Що робити?", text: "що мені робити сьогодні?" },
+    { label: "План на день", text: "дай мені план на день" },
+    { label: "Моя роль", text: "що я можу тут робити?" },
   ];
 }
 
@@ -915,13 +927,6 @@ function PersonalQuickPrompts({
   disabled?: boolean;
   onSelect: (value: string) => void;
 }) {
-  const toneClass: Record<PersonalPromptSuggestion["tone"], string> = {
-    focus: "border-[#E6007E]/24 bg-[#E6007E]/10 text-[#E6007E] hover:bg-[#E6007E]/14",
-    orders: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/85",
-    design: "border-violet-500/25 bg-violet-500/10 text-violet-600 hover:bg-violet-500/14 dark:text-violet-300",
-    logistics: "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/85",
-  };
-
   if (prompts.length === 0) return null;
 
   return (
@@ -934,7 +939,7 @@ function PersonalQuickPrompts({
           onClick={() => onSelect(prompt.text)}
           className={cn(
             "inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 sm:h-10 sm:px-3.5 sm:text-sm",
-            toneClass[prompt.tone]
+            "border-border/70 bg-muted/35 text-foreground/85 hover:bg-muted/55"
           )}
         >
           {prompt.label}
@@ -1188,9 +1193,20 @@ export function ToShoAiConsole({
       buildPersonalPromptSuggestions({
         jobRole,
         canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
+        isSuperAdmin: permissions.isSuperAdmin,
+        isAdmin: permissions.isAdmin,
+        isSeo: permissions.isSeo,
         domainHint: resolvedContext.domainHint,
       }),
-    [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
+    [
+      jobRole,
+      permissions.canManageMembers,
+      permissions.isAdmin,
+      permissions.isSeo,
+      permissions.isSuperAdmin,
+      resolvedContext.domainHint,
+      snapshot?.permissions.canManageQueue,
+    ]
   );
 
   useEffect(() => {
