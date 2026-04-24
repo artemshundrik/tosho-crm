@@ -579,6 +579,7 @@ function buildPersonalPromptSuggestions(input: {
       { label: "Чи є баги?", text: "чи є сьогодні баги або runtime errors?" },
       { label: "Перформанс", text: "покажи стан перформансу і бази сьогодні" },
       { label: "Сховище", text: "що зі сховищем і вкладеннями сьогодні?" },
+      { label: "Бекапи", text: "покажи стан storage backup і database backup" },
     ];
   }
 

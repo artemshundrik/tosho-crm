@@ -2965,36 +2965,217 @@ function formatBytesCompact(value: number) {
   return `${Math.round(value)} B`;
 }
 
+function formatDateTimeShort(value?: string | null) {
+  if (!value) return "немає дати";
+  try {
+    return new Intl.DateTimeFormat("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Kiev",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function getKyivDayWindow(now = new Date()) {
+  const kyivNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kiev" }));
+  const utcNow = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
+  const offsetMs = kyivNow.getTime() - utcNow.getTime();
+  const year = kyivNow.getFullYear();
+  const month = kyivNow.getMonth();
+  const day = kyivNow.getDate();
+  const localMidnightAsUtc = Date.UTC(year, month, day, 0, 0, 0, 0);
+  const start = new Date(localMidnightAsUtc - offsetMs);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { startIso: start.toISOString(), endIso: end.toISOString(), date };
+}
+
+function storageObjectSize(row: { metadata?: JsonRecord | null }) {
+  const raw = row.metadata?.size;
+  const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : 0;
+  return Number.isFinite(value) ? value : 0;
+}
+
+function isOriginalStoragePath(value: string | null | undefined) {
+  const normalized = normalizeText(value).toLowerCase();
+  return Boolean(normalized && !normalized.includes("__thumb.") && !normalized.includes("__preview."));
+}
+
+type LiveAdminMetrics = {
+  storageTodayBytes: number;
+  storageTodayObjects: number;
+  quoteAttachmentsToday: number;
+  designTasksToday: number;
+  designTaskAttachmentsToday: number;
+  designOutputUploadsToday: number;
+  designOutputSelectionToday: number;
+};
+
+async function loadLiveAdminMetrics(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  startIso: string;
+  endIso: string;
+}): Promise<LiveAdminMetrics> {
+  const empty: LiveAdminMetrics = {
+    storageTodayBytes: 0,
+    storageTodayObjects: 0,
+    quoteAttachmentsToday: 0,
+    designTasksToday: 0,
+    designTaskAttachmentsToday: 0,
+    designOutputUploadsToday: 0,
+    designOutputSelectionToday: 0,
+  };
+
+  const [activityResult, storageResult] = await Promise.all([
+    params.adminClient
+      .from("activity_log")
+      .select("action,metadata")
+      .eq("team_id", params.auth.teamId)
+      .gte("created_at", params.startIso)
+      .lt("created_at", params.endIso)
+      .in("action", ["design_task_created", "design_task", "design_output_selection"])
+      .limit(10000),
+    params.adminClient
+      .schema("storage")
+      .from("objects")
+      .select("bucket_id,name,metadata")
+      .gte("created_at", params.startIso)
+      .lt("created_at", params.endIso)
+      .limit(10000),
+  ]);
+
+  const activityRows = (activityResult.data ?? []) as Array<{ action?: string | null; metadata?: JsonRecord | null }>;
+  for (const row of activityRows) {
+    if (row.action === "design_output_selection") {
+      empty.designOutputSelectionToday += 1;
+      continue;
+    }
+    if (row.action === "design_task_created") {
+      empty.designTasksToday += 1;
+      continue;
+    }
+    if (row.action === "design_task") {
+      const source = normalizeText(typeof row.metadata?.source === "string" ? row.metadata.source : "");
+      if (source === "design_task_created_manual" || source === "design_task_created") {
+        empty.designTasksToday += 1;
+      }
+    }
+  }
+
+  const storageRows = (storageResult.data ?? []) as Array<{
+    bucket_id?: string | null;
+    name?: string | null;
+    metadata?: JsonRecord | null;
+  }>;
+  empty.storageTodayObjects = storageRows.length;
+  empty.storageTodayBytes = storageRows.reduce((sum, row) => sum + storageObjectSize(row), 0);
+
+  const teamPrefix = `teams/${params.auth.teamId}/`;
+  for (const row of storageRows) {
+    const bucket = normalizeText(row.bucket_id);
+    const name = normalizeText(row.name);
+    if (bucket !== "attachments" || !name.startsWith(teamPrefix) || !isOriginalStoragePath(name)) continue;
+    if (name.startsWith(`${teamPrefix}quote-attachments/`)) empty.quoteAttachmentsToday += 1;
+    if (name.startsWith(`${teamPrefix}design-brief-files/`)) empty.designTaskAttachmentsToday += 1;
+    if (name.startsWith(`${teamPrefix}design-outputs/`)) empty.designOutputUploadsToday += 1;
+  }
+
+  return empty;
+}
+
+type BackupRunRow = {
+  id?: string | null;
+  section?: string | null;
+  status?: "success" | "failed" | string | null;
+  schedule?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  archive_name?: string | null;
+  archive_size_bytes?: number | null;
+  dropbox_path?: string | null;
+  error_message?: string | null;
+  machine_name?: string | null;
+};
+
+function buildBackupHealth(runs: BackupRunRow[], subjectLabel: string) {
+  const latestRun = runs[0] ?? null;
+  const latestSuccessfulRun = runs.find((row) => row.status === "success") ?? null;
+  const finishedAtMs = latestSuccessfulRun?.finished_at ? new Date(latestSuccessfulRun.finished_at).getTime() : NaN;
+  const ageHours = Number.isFinite(finishedAtMs) ? Math.max(0, (Date.now() - finishedAtMs) / (1000 * 60 * 60)) : null;
+  const tone =
+    latestRun?.status === "failed"
+      ? "danger"
+      : ageHours === null
+        ? "warning"
+        : ageHours <= 8 * 24
+          ? "good"
+          : ageHours <= 16 * 24
+            ? "warning"
+            : "danger";
+  const primary = tone === "good" ? "актуальний" : tone === "danger" ? "увага" : "перевірити";
+  const message = latestRun
+    ? latestRun.status === "failed"
+      ? `Останній backup ${subjectLabel} впав ${formatDateTimeShort(latestRun.finished_at)}.${latestRun.error_message ? ` ${latestRun.error_message}` : ""}`
+      : `Останній успішний backup ${subjectLabel}: ${formatDateTimeShort(latestRun.finished_at)} · ${latestRun.archive_name ?? "архів"}${
+          latestRun.archive_size_bytes ? ` · ${formatBytesCompact(latestRun.archive_size_bytes)}` : ""
+        }.`
+    : `Ще немає жодного записаного backup-run по ${subjectLabel}.`;
+
+  return { latestRun, latestSuccessfulRun, ageHours, tone, primary, message };
+}
+
 async function buildAdminObservabilityAnalytics(params: {
   adminClient: ReturnType<typeof createClient>;
   auth: AuthContext;
+  message: string;
 }) {
   const accessRole = normalizeRole(params.auth.accessRole);
   const jobRole = normalizeRole(params.auth.jobRole);
   const canViewAdminHealth = accessRole === "owner" || accessRole === "admin" || jobRole === "seo";
   if (!canViewAdminHealth) return null;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const dayWindow = getKyivDayWindow();
+  const scopeIds = Array.from(new Set([params.auth.workspaceId, params.auth.teamId].map(normalizeText).filter(Boolean)));
 
-  const [{ data: snapshotRows }, { data: runtimeRows }] = await Promise.all([
+  const [{ data: snapshotRows }, { data: runtimeRows }, liveMetrics, { data: backupRows }] = await Promise.all([
     params.adminClient
       .schema("tosho")
       .from("admin_observability_snapshots")
       .select(
         "captured_at,captured_for_date,database_size_bytes,attachments_bucket_bytes,avatars_bucket_bytes,storage_today_bytes,storage_today_objects,quote_attachments_today,design_tasks_today,design_task_attachments_today,design_output_uploads_today,design_output_selection_today,attachment_possible_orphan_original_count,attachment_missing_variants_count,attachment_safe_reclaimable_count,attachment_safe_reclaimable_bytes,database_stats,dead_tuple_tables"
       )
-      .eq("team_id", params.auth.teamId)
+      .in("team_id", scopeIds)
       .order("captured_for_date", { ascending: false })
       .limit(1),
     params.adminClient
       .schema("tosho")
       .from("runtime_errors")
       .select("title,href,created_at,metadata")
-      .eq("team_id", params.auth.teamId)
-      .gte("created_at", todayStart.toISOString())
+      .in("team_id", scopeIds)
+      .gte("created_at", dayWindow.startIso)
+      .lt("created_at", dayWindow.endIso)
       .order("created_at", { ascending: false })
       .limit(25),
+    loadLiveAdminMetrics({
+      adminClient: params.adminClient,
+      auth: params.auth,
+      startIso: dayWindow.startIso,
+      endIso: dayWindow.endIso,
+    }),
+    params.adminClient
+      .schema("tosho")
+      .from("backup_runs")
+      .select("id,section,status,schedule,started_at,finished_at,archive_name,archive_size_bytes,dropbox_path,error_message,machine_name")
+      .eq("workspace_id", params.auth.workspaceId)
+      .in("section", ["storage", "database"])
+      .order("finished_at", { ascending: false })
+      .limit(20),
   ]);
 
   const snapshot = (snapshotRows?.[0] ?? null) as
@@ -3020,19 +3201,52 @@ async function buildAdminObservabilityAnalytics(params: {
       }
     | null;
 
+  const snapshotIsToday = snapshot?.captured_for_date === dayWindow.date;
   const runtimeErrorCount = (runtimeRows ?? []).length;
   const latestRuntimeError = ((runtimeRows ?? []) as RuntimeErrorRow[])[0] ?? null;
   const dbSize = Number(snapshot?.database_size_bytes ?? 0);
   const attachmentsSize = Number(snapshot?.attachments_bucket_bytes ?? 0);
-  const storageTodayBytes = Number(snapshot?.storage_today_bytes ?? 0);
-  const storageTodayObjects = Number(snapshot?.storage_today_objects ?? 0);
+  const storageTodayBytes = Math.max(snapshotIsToday ? Number(snapshot?.storage_today_bytes ?? 0) : 0, liveMetrics.storageTodayBytes);
+  const storageTodayObjects = Math.max(snapshotIsToday ? Number(snapshot?.storage_today_objects ?? 0) : 0, liveMetrics.storageTodayObjects);
+  const quoteAttachmentsToday = Math.max(snapshotIsToday ? Number(snapshot?.quote_attachments_today ?? 0) : 0, liveMetrics.quoteAttachmentsToday);
+  const designTasksToday = Math.max(snapshotIsToday ? Number(snapshot?.design_tasks_today ?? 0) : 0, liveMetrics.designTasksToday);
+  const designTaskAttachmentsToday = Math.max(
+    snapshotIsToday ? Number(snapshot?.design_task_attachments_today ?? 0) : 0,
+    liveMetrics.designTaskAttachmentsToday
+  );
+  const designOutputUploadsToday = Math.max(
+    snapshotIsToday ? Number(snapshot?.design_output_uploads_today ?? 0) : 0,
+    liveMetrics.designOutputUploadsToday
+  );
+  const designOutputSelectionToday = Math.max(
+    snapshotIsToday ? Number(snapshot?.design_output_selection_today ?? 0) : 0,
+    liveMetrics.designOutputSelectionToday
+  );
+  const activityTodayTotal =
+    designTasksToday +
+    quoteAttachmentsToday +
+    designTaskAttachmentsToday +
+    designOutputUploadsToday +
+    designOutputSelectionToday;
   const orphanCount = Number(snapshot?.attachment_possible_orphan_original_count ?? 0);
   const missingVariants = Number(snapshot?.attachment_missing_variants_count ?? 0);
   const reclaimableCount = Number(snapshot?.attachment_safe_reclaimable_count ?? 0);
   const reclaimableBytes = Number(snapshot?.attachment_safe_reclaimable_bytes ?? 0);
   const deadTupleTables = Array.isArray(snapshot?.dead_tuple_tables) ? snapshot?.dead_tuple_tables.length ?? 0 : 0;
   const capturedLabel = snapshot?.captured_at ? new Date(snapshot.captured_at).toLocaleString("uk-UA") : null;
-  const hasRisks = runtimeErrorCount > 0 || orphanCount > 0 || missingVariants > 0 || deadTupleTables > 0;
+  const backupRuns = ((backupRows ?? []) as BackupRunRow[]).filter((row) => row.section === "storage" || row.section === "database");
+  const storageBackupHealth = buildBackupHealth(
+    backupRuns.filter((row) => row.section === "storage"),
+    "файлів"
+  );
+  const databaseBackupHealth = buildBackupHealth(
+    backupRuns.filter((row) => row.section === "database"),
+    "бази"
+  );
+  const hasBackupRisk = storageBackupHealth.tone !== "good" || databaseBackupHealth.tone !== "good";
+  const hasRisks = runtimeErrorCount > 0 || orphanCount > 0 || missingVariants > 0 || deadTupleTables > 0 || hasBackupRisk;
+  const normalizedMessage = normalizeText(params.message).toLowerCase();
+  const backupFocused = /(backup|бекап|резерв|database backup|storage backup|бд backup|db backup)/u.test(normalizedMessage);
 
   const rows: AnalyticsRow[] = [
     {
@@ -3045,11 +3259,12 @@ async function buildAdminObservabilityAnalytics(params: {
     {
       id: "activity-today",
       label: "Активність сьогодні",
-      primary: formatInteger(Number(snapshot?.design_tasks_today ?? 0)),
-      secondary: `Дизайн-задачі · вкладень у прорахунках ${formatInteger(Number(snapshot?.quote_attachments_today ?? 0))}`,
+      primary: formatInteger(activityTodayTotal),
+      secondary: `Дизайн-задачі ${formatInteger(designTasksToday)} · вкладень у прорахунках ${formatInteger(quoteAttachmentsToday)}`,
       badges: [
-        { label: "Design files", value: formatInteger(Number(snapshot?.design_task_attachments_today ?? 0)) },
-        { label: "Outputs", value: formatInteger(Number(snapshot?.design_output_uploads_today ?? 0)) },
+        { label: "Design files", value: formatInteger(designTaskAttachmentsToday) },
+        { label: "Outputs", value: formatInteger(designOutputUploadsToday) },
+        { label: "Selections", value: formatInteger(designOutputSelectionToday) },
       ],
     },
     {
@@ -3069,25 +3284,57 @@ async function buildAdminObservabilityAnalytics(params: {
         { label: "Dead tuples", value: formatInteger(deadTupleTables) },
       ],
     },
+    {
+      id: "backup-storage",
+      label: "Backup файлів",
+      primary: storageBackupHealth.primary,
+      secondary: storageBackupHealth.message,
+      badges: [
+        storageBackupHealth.latestSuccessfulRun?.archive_size_bytes
+          ? { label: "Archive", value: formatBytesCompact(storageBackupHealth.latestSuccessfulRun.archive_size_bytes) }
+          : null,
+        storageBackupHealth.latestSuccessfulRun?.dropbox_path
+          ? { label: "Dropbox", value: trimTo(storageBackupHealth.latestSuccessfulRun.dropbox_path, 28) }
+          : null,
+      ].filter((item): item is AnalyticsBadge => Boolean(item)),
+    },
+    {
+      id: "backup-database",
+      label: "Backup бази",
+      primary: databaseBackupHealth.primary,
+      secondary: databaseBackupHealth.message,
+      badges: [
+        databaseBackupHealth.latestSuccessfulRun?.archive_size_bytes
+          ? { label: "Archive", value: formatBytesCompact(databaseBackupHealth.latestSuccessfulRun.archive_size_bytes) }
+          : null,
+        databaseBackupHealth.latestSuccessfulRun?.dropbox_path
+          ? { label: "Dropbox", value: trimTo(databaseBackupHealth.latestSuccessfulRun.dropbox_path, 28) }
+          : null,
+      ].filter((item): item is AnalyticsBadge => Boolean(item)),
+    },
   ];
 
   return {
-    title: "Адмін-зріз",
+    title: backupFocused ? "Backup-зріз" : "Адмін-зріз",
     summary: hasRisks ? "Є що перевірити в observability." : "Критичних сигналів у сьогоднішньому зрізі не бачу.",
-    markdown: hasRisks
-      ? "Є кілька сигналів, які варто перевірити в observability: runtime errors, attachments або таблиці з dead tuples."
-      : "По сьогоднішньому зрізу все виглядає спокійно: нових runtime errors не бачу, а основні storage/attachment метрики нижче.",
+    markdown: backupFocused
+      ? `Подивився backup-и: storage backup ${storageBackupHealth.primary}, database backup ${databaseBackupHealth.primary}.`
+      : hasRisks
+        ? "Є кілька сигналів, які варто перевірити в observability: runtime errors, attachments, backup або таблиці з dead tuples."
+        : "По сьогоднішньому зрізу все виглядає спокійно: нових runtime errors не бачу, а основні storage/attachment і backup-метрики нижче.",
     domain: "admin",
-    confidence: snapshot || runtimeErrorCount > 0 ? 0.9 : 0.74,
+    confidence: snapshot || runtimeErrorCount > 0 || backupRuns.length > 0 || storageTodayObjects > 0 ? 0.9 : 0.74,
     analytics: {
       kind: "entity",
       title: "Observability",
-      caption: capturedLabel ? `Останній snapshot: ${capturedLabel}` : "Snapshot ще не знайдено",
+      caption: capturedLabel
+        ? `Останній snapshot: ${capturedLabel}${snapshotIsToday ? "" : " · today-метрики рахую live"}`
+        : "Snapshot ще не знайдено · today-метрики рахую live",
       metricLabel: "Стан",
       rows,
       note: snapshot
-        ? "Зріз беру з admin_observability_snapshots і runtime_errors за сьогодні."
-        : "Snapshot ще не створений. Runtime errors рахую напряму за сьогодні.",
+        ? "Snapshot беру з admin_observability_snapshots по workspace_id; today-активність і backup доповнюю live-даними."
+        : "Snapshot ще не створений. Today-активність, runtime errors і backup_runs рахую напряму.",
     },
   } satisfies AnalyticsResult;
 }
