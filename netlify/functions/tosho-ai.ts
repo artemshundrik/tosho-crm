@@ -1305,7 +1305,7 @@ function hasPersonalActionPlanTerm(normalized: string) {
 function shouldRunAnalytics(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
-    /(скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
+    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
       normalized
     ) ||
     /по\s+(менедж|иенедж)/u.test(normalized) ||
@@ -5245,14 +5245,6 @@ async function handleSend(params: {
     : null;
   const attachments = toSupportAttachments(params.body.attachments);
 
-  const activeKnowledge = await listActiveKnowledgeItemsForRetrieval(params.adminClient, params.auth.workspaceId);
-  const { candidates: knowledgeCandidates, diagnostics: knowledgeRetrieval } =
-    await selectKnowledgeCandidatesForMessage({
-      adminClient: params.adminClient,
-      items: activeKnowledge,
-      queryText: message,
-      routeLabel: routeContext.routeLabel,
-    });
   const runtimeErrors = await listRuntimeErrors(
     params.adminClient,
     params.auth.teamId,
@@ -5278,6 +5270,8 @@ async function handleSend(params: {
   let usedFallback = false;
   let openAiDiagnostics: OpenAiDiagnostics | null = null;
   let crmToolDiagnostics: CrmToolDiagnostics | null = null;
+  let knowledgeCandidates: KnowledgeItemRow[] = [];
+  let knowledgeRetrieval: KnowledgeRetrievalDiagnostics | null = null;
   const existingContext = (existingRequest?.context ?? {}) as JsonRecord;
   const previousThreadAnalyticsMessage =
     typeof existingContext.last_analytics_message === "string"
@@ -5308,6 +5302,17 @@ async function handleSend(params: {
 
   if (!assistantDecision) {
     try {
+      if (!analyticsDecision) {
+        const activeKnowledge = await listActiveKnowledgeItemsForRetrieval(params.adminClient, params.auth.workspaceId);
+        const retrievalResult = await selectKnowledgeCandidatesForMessage({
+          adminClient: params.adminClient,
+          items: activeKnowledge,
+          queryText: message,
+          routeLabel: routeContext.routeLabel,
+        });
+        knowledgeCandidates = retrievalResult.candidates;
+        knowledgeRetrieval = retrievalResult.diagnostics;
+      }
       const openAiResult = await callOpenAiDecision({
         adminClient: params.adminClient,
         auth: params.auth,
@@ -5315,7 +5320,7 @@ async function handleSend(params: {
         mode,
         routeContext,
         runtimeErrors,
-        knowledge: analyticsDecision ? [] : knowledgeCandidates,
+        knowledge: knowledgeCandidates,
         recentMessages,
         attachments,
         analyticsContext: analyticsDecision,
