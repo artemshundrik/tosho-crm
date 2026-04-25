@@ -809,7 +809,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
     <div className="mt-4 overflow-hidden rounded-[22px] border border-border/65 bg-background/55">
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          {analytics.kind === "entity" && !isQuoteDraft ? (
+          {analytics.kind === "entity" ? (
             <EntityAvatar
               src={analytics.avatarUrl ?? null}
               name={analytics.title}
@@ -1846,6 +1846,17 @@ export function ToShoAiConsole({
     [syncActiveMention]
   );
 
+  const handleSelectSuggestedAction = useCallback(
+    (value: string) => {
+      setComposerIntent("auto");
+      setComposerValue("");
+      setActiveMention(null);
+      setMentionSuggestions([]);
+      void handleSend(value, true);
+    },
+    [handleSend]
+  );
+
   const handleSelectPersonalPrompt = useCallback(
     (value: string) => {
       setComposerIntent("auto");
@@ -2184,7 +2195,7 @@ export function ToShoAiConsole({
                         key={message.id}
                         message={message}
                         onFeedback={handleFeedback}
-                        onSelectAction={handleSelectPromptSuggestion}
+                        onSelectAction={handleSelectSuggestedAction}
                         showDiagnostics={Boolean(snapshot?.permissions.canManageQueue || snapshot?.permissions.canManageKnowledge)}
                       />
                     ))}

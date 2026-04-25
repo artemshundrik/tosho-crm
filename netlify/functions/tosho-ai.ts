@@ -211,8 +211,12 @@ type QuotePackDraftItem = {
   id: string;
   productName: string;
   quantity: number;
+  quantities?: number[];
   unit: string;
   decoration: string | null;
+  decorationRaw: string | null;
+  decorationMethodIds: string[];
+  decorationMatchStatus: "matched" | "partial" | "raw";
   catalogMatchStatus: "matched" | "candidate" | "missing";
   catalogModelId: string | null;
   catalogTypeId: string | null;
@@ -854,8 +858,8 @@ function isQuotePackRequest(message: string) {
     /(створи|створити|зроби|підготуй|потрібно|треба|потрібні).*(прорах|кп|коштор|quote)/u.test(normalized) ||
     /(зроби|створи|підготуй)\s+прорахунки?\s+для\s+.+\b(?:треба|потрібно|потрібні)\b/u.test(normalized) ||
     (/(для\s+.+\s+(треба|потрібно|потрібні))/u.test(normalized) &&
-      /(\d+\s*(шт\.?|штук|од\.?|pcs?)|^\s*\d+[.)])/u.test(normalized) &&
-      /(нанес|вишив|друк|шеврон|лого|принт|dtf|шовк|термо|спереду|збоку|ззаду)/u.test(normalized))
+      /(\d+\s*(шт\.?|штук|од\.?|pcs?)|тираж(?:і|и|у)?|наклад[иів]?|^\s*\d+[.)])/u.test(normalized) &&
+      /(нанес|вишив|друк|шеврон|лого|принт|dtf|шовк|термо|спереду|збоку|ззаду|тираж|наклад)/u.test(normalized))
   );
 }
 
@@ -901,7 +905,7 @@ function splitQuotePackSegments(body: string) {
       /\s*(?:;|,(?=\s*(?:\d+[.)]|(?:кепк[аиу]?|футболк[аиу]?|худі|чашк[аиу]?|ручк[аиу]?|поло|шапк[аиу]?|сумк[аиу]?|блокнот|термос|пляшк[аиу]?|парасол[яі])(?:\s|$))))\s*/iu
     )
     .map((item) => normalizeText(item))
-    .filter((item) => /\d+\s*(шт\.?|штук|од\.?|pcs?)/iu.test(item));
+    .filter((item) => Boolean(extractQuotePackQuantities(item)));
 }
 
 function extractBaseProductName(message: string) {
@@ -912,16 +916,88 @@ function extractBaseProductName(message: string) {
   return normalizeQuotePackProductName(raw);
 }
 
+function parseQuotePackQuantityList(value: string) {
+  return Array.from(
+    new Set(
+      Array.from(value.matchAll(/\d+/gu))
+        .map((match) => Number(match[0]))
+        .filter((quantity) => Number.isFinite(quantity) && quantity > 0)
+    )
+  );
+}
+
+function extractQuotePackQuantities(segment: string) {
+  const normalized = normalizeText(segment);
+  const listWithLabel = normalized.match(
+    /(?:тираж(?:і|и|у)?|наклад[иів]?|кільк(?:ість)?)[^\d]{0,24}((?:\d+\s*(?:[,/]|і|та|and)\s*)+\d+)\s*(?:шт\.?|штук|од\.?|pcs?)?/iu
+  );
+  if (listWithLabel?.index !== undefined && listWithLabel[1]) {
+    const quantities = parseQuotePackQuantityList(listWithLabel[1]);
+    if (quantities.length > 0) {
+      return {
+        quantities,
+        matchIndex: listWithLabel.index,
+        matchEnd: listWithLabel.index + listWithLabel[0].length,
+      };
+    }
+  }
+
+  const listBeforeUnit = normalized.match(/((?:\d+\s*(?:[,/]|і|та|and)\s*)+\d+)\s*(?:шт\.?|штук|од\.?|pcs?)/iu);
+  if (listBeforeUnit?.index !== undefined && listBeforeUnit[1]) {
+    const quantities = parseQuotePackQuantityList(listBeforeUnit[1]);
+    if (quantities.length > 0) {
+      return {
+        quantities,
+        matchIndex: listBeforeUnit.index,
+        matchEnd: listBeforeUnit.index + listBeforeUnit[0].length,
+      };
+    }
+  }
+
+  const quantityMatch = normalized.match(/(\d+)\s*(шт\.?|штук|од\.?|pcs?)/iu);
+  const quantity = Number(quantityMatch?.[1] ?? 0);
+  if (quantityMatch?.index === undefined || !Number.isFinite(quantity) || quantity <= 0) return null;
+  return {
+    quantities: [quantity],
+    matchIndex: quantityMatch.index,
+    matchEnd: quantityMatch.index + quantityMatch[0].length,
+  };
+}
+
+function getQuotePackItemQuantities(item: QuotePackDraftItem) {
+  const quantities = Array.isArray(item.quantities)
+    ? item.quantities.filter((quantity) => Number.isFinite(quantity) && quantity > 0)
+    : [];
+  return quantities.length > 0 ? Array.from(new Set(quantities)) : [item.quantity].filter((quantity) => quantity > 0);
+}
+
+function formatQuotePackItemQuantities(item: QuotePackDraftItem) {
+  const quantities = getQuotePackItemQuantities(item);
+  if (quantities.length <= 1) return `${formatInteger(quantities[0] ?? item.quantity)} ${item.unit}`;
+  return `${quantities.map((quantity) => formatInteger(quantity)).join(" / ")} ${item.unit}`;
+}
+
+function quotePackDraftCanBeBuilt(items: QuotePackDraftItem[]) {
+  return items.length >= 2 || items.some((item) => getQuotePackItemQuantities(item).length >= 2);
+}
+
+function formatQuotePackDraftScope(items: QuotePackDraftItem[]) {
+  const runCount = items.reduce((sum, item) => sum + getQuotePackItemQuantities(item).length, 0);
+  if (items.length === 1 && runCount > 1) return `1 прорахунок з ${formatInteger(runCount)} тиражами`;
+  return `${formatInteger(items.length)} окремі прорахунки`;
+}
+
 function parseQuotePackItems(message: string): QuotePackDraftItem[] {
   const baseProductName = extractBaseProductName(message);
   const segments = splitQuotePackSegments(extractQuotePackBody(message));
   return segments
     .map((segment, index) => {
-      const quantityMatch = segment.match(/(\d+)\s*(шт\.?|штук|од\.?|pcs?)/iu);
-      const quantity = Number(quantityMatch?.[1] ?? 0);
+      const quantityInfo = extractQuotePackQuantities(segment);
+      if (!quantityInfo) return null;
+      const [quantity] = quantityInfo.quantities;
       if (!Number.isFinite(quantity) || quantity <= 0) return null;
-      const beforeQty = normalizeText(segment.slice(0, quantityMatch?.index ?? 0)).replace(/^[.)\d\s]+/g, "");
-      const afterQty = normalizeText(segment.slice((quantityMatch?.index ?? 0) + (quantityMatch?.[0].length ?? 0)));
+      const beforeQty = normalizeText(segment.slice(0, quantityInfo.matchIndex)).replace(/^[.)\d\s]+/g, "");
+      const afterQty = normalizeText(segment.slice(quantityInfo.matchEnd));
       const cleanBefore = stripLeadingQuotePackBaseProduct(beforeQty, baseProductName);
       const productName = normalizeText(
         cleanBefore ? `${capitalizeWord(baseProductName)} ${cleanBefore}` : capitalizeWord(baseProductName)
@@ -931,8 +1007,12 @@ function parseQuotePackItems(message: string): QuotePackDraftItem[] {
         id: `draft-${index + 1}`,
         productName: productName || `Позиція ${index + 1}`,
         quantity,
+        quantities: quantityInfo.quantities,
         unit: "шт.",
         decoration,
+        decorationRaw: decoration,
+        decorationMethodIds: [],
+        decorationMatchStatus: "raw",
         catalogMatchStatus: "missing",
         catalogModelId: null,
         catalogTypeId: null,
@@ -1002,6 +1082,66 @@ function scoreCatalogModelForQuotePackItem(modelName: string | null | undefined,
   const hits = meaningfulTokens.filter((token) => [token, ...getQuotePackTokenAliases(token)].some((variant) => model.includes(variant))).length;
   const score = scorePartySearchCandidate(modelName ?? "", getQuotePackCatalogSearchTerms(item)) + hits * 25;
   return { hits, score };
+}
+
+function splitQuotePackDecorationTerms(value: string | null) {
+  const normalized = normalizeText(value)
+    .replace(/^[·:;,\s]+/u, "")
+    .replace(/\s+/g, " ");
+  if (!normalized) return [];
+  return normalized
+    .split(/\s*(?:\+|,|;|\bта\b|\bі\b|\band\b)\s*/iu)
+    .map((item) => normalizeText(item).replace(/^[·:;,\s]+/u, ""))
+    .filter((item) => item.length >= 2);
+}
+
+function normalizeDecorationName(value: string | null | undefined) {
+  return normalizeLooseAnalyticsName(value)
+    .replace(/\b3\s*d\b/giu, "3d")
+    .replace(/\bдтф\b/giu, "dtf")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreDecorationMethod(term: string, methodName: string | null | undefined) {
+  const normalizedTerm = normalizeDecorationName(term);
+  const normalizedMethod = normalizeDecorationName(methodName);
+  if (!normalizedTerm || !normalizedMethod) return 0;
+  if (normalizedTerm === normalizedMethod) return 100;
+  if (normalizedMethod.includes(normalizedTerm) || normalizedTerm.includes(normalizedMethod)) return 70 + Math.min(normalizedTerm.length, normalizedMethod.length);
+  const termTokens = normalizedTerm.split(/\s+/u).filter((token) => token.length >= 2);
+  const methodTokens = normalizedMethod.split(/\s+/u).filter((token) => token.length >= 2);
+  const hits = termTokens.filter((token) => methodTokens.some((methodToken) => methodToken === token || methodToken.includes(token) || token.includes(methodToken))).length;
+  return hits > 0 ? hits * 24 : 0;
+}
+
+function normalizeQuotePackDecoration(params: {
+  item: QuotePackDraftItem;
+  methods: Array<{ id: string; kind_id?: string | null; name?: string | null }>;
+}) {
+  const terms = splitQuotePackDecorationTerms(params.item.decorationRaw ?? params.item.decoration);
+  if (terms.length === 0) return params.item;
+  const preferredMethods = params.item.catalogKindId
+    ? params.methods.filter((method) => method.kind_id === params.item.catalogKindId)
+    : params.methods;
+  const fallbackMethods = preferredMethods.length > 0 ? preferredMethods : params.methods;
+  const matchedIds: string[] = [];
+  const labels = terms.map((term) => {
+    const match = fallbackMethods
+      .map((method) => ({ method, score: scoreDecorationMethod(term, method.name) }))
+      .filter((entry) => entry.score >= 45)
+      .sort((a, b) => b.score - a.score)[0]?.method;
+    if (!match) return term;
+    matchedIds.push(match.id);
+    return normalizeText(match.name) || term;
+  });
+  const uniqueIds = Array.from(new Set(matchedIds));
+  return {
+    ...params.item,
+    decoration: labels.join(" + "),
+    decorationMethodIds: uniqueIds,
+    decorationMatchStatus: uniqueIds.length === terms.length ? "matched" : uniqueIds.length > 0 ? "partial" : "raw",
+  } satisfies QuotePackDraftItem;
 }
 
 async function resolveQuotePackParty(params: {
@@ -1117,11 +1257,16 @@ async function enrichQuotePackItemsWithCatalog(params: {
     }>
   ).filter((row) => row.id);
   const kindIds = Array.from(new Set(models.map((row) => normalizeText(row.kind_id)).filter(Boolean)));
-  const { data: kindRows } =
+  const [{ data: kindRows }, { data: methodRows }] = await Promise.all([
     kindIds.length > 0
-      ? await params.adminClient.schema("tosho").from("catalog_kinds").select("id,type_id").eq("team_id", params.auth.teamId).in("id", kindIds)
-      : { data: [] as Array<{ id: string; type_id?: string | null }> };
+      ? params.adminClient.schema("tosho").from("catalog_kinds").select("id,type_id").eq("team_id", params.auth.teamId).in("id", kindIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; type_id?: string | null }> }),
+    params.items.some((item) => Boolean(item.decorationRaw || item.decoration))
+      ? params.adminClient.schema("tosho").from("catalog_methods").select("id,kind_id,name").eq("team_id", params.auth.teamId).limit(1000)
+      : Promise.resolve({ data: [] as Array<{ id: string; kind_id?: string | null; name?: string | null }> }),
+  ]);
   const kindById = new Map(((kindRows ?? []) as Array<{ id: string; type_id?: string | null }>).map((row) => [row.id, row]));
+  const methods = (methodRows ?? []) as Array<{ id: string; kind_id?: string | null; name?: string | null }>;
 
   return params.items.map((item) => {
     const rankedModels = models
@@ -1133,7 +1278,7 @@ async function enrichQuotePackItemsWithCatalog(params: {
     const match = rankedModels.find((entry) => catalogModelMatchesQuotePackItem(entry.row.name, item))?.row;
     const candidate = !match ? rankedModels.find((entry) => entry.hits > 0 && entry.score >= 25)?.row : null;
     if (!match) {
-      return candidate
+      const nextItem = candidate
         ? {
             ...item,
             catalogMatchStatus: "candidate",
@@ -1142,9 +1287,10 @@ async function enrichQuotePackItemsWithCatalog(params: {
             catalogCandidateImageUrl: normalizeText(candidate.thumb_url || candidate.preview_url || candidate.image_url) || null,
           }
         : item;
+      return normalizeQuotePackDecoration({ item: nextItem, methods });
     }
     const kind = match.kind_id ? kindById.get(match.kind_id) : null;
-    return {
+    const nextItem = {
       ...item,
       catalogMatchStatus: "matched",
       catalogModelId: match.id,
@@ -1153,7 +1299,8 @@ async function enrichQuotePackItemsWithCatalog(params: {
       catalogModelName: normalizeText(match.name) || null,
       catalogImageUrl: normalizeText(match.thumb_url || match.preview_url || match.image_url) || null,
       unitPrice: toFiniteAmount(match.price),
-    };
+    } satisfies QuotePackDraftItem;
+    return normalizeQuotePackDecoration({ item: nextItem, methods });
   });
 }
 
@@ -1162,6 +1309,7 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
     kind: "entity",
     variant: "quote_draft",
     title: "Draft прорахунків",
+    avatarUrl: draft.party?.logoUrl ?? null,
     caption: draft.party
       ? `${draft.party.name} · ${formatInteger(draft.items.length)} прорах.`
       : `${formatInteger(draft.items.length)} прорах. · замовника треба уточнити`,
@@ -1170,7 +1318,7 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
       id: item.id,
       label: item.productName,
       avatarUrl: item.catalogImageUrl || item.catalogCandidateImageUrl,
-      primary: `${formatInteger(item.quantity)} ${item.unit}`,
+      primary: formatQuotePackItemQuantities(item),
       secondary: item.decoration ?? "Нанесення не вказано",
       badges: [
         item.catalogMatchStatus === "matched" && item.catalogModelId
@@ -1178,6 +1326,9 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
           : item.catalogMatchStatus === "candidate" && item.catalogCandidateModelName
             ? { label: "Схоже", value: item.catalogCandidateModelName }
           : { label: "Каталог", value: "без товару" },
+        item.decorationMethodIds.length > 0
+          ? { label: item.decorationMatchStatus === "matched" ? "Нанесення" : "Нанесення?", value: item.decorationMethodIds.length }
+          : { label: "Нанесення", value: "текст" },
         item.unitPrice > 0 ? { label: "Ціна", value: formatMoney(item.unitPrice) } : { label: "Ціна", value: "0" },
       ],
     })),
@@ -1192,7 +1343,7 @@ async function buildQuotePackDraftDecision(params: {
 }): Promise<AssistantDecision | null> {
   if (!params.auth.canManageQueue) return null;
   const parsedItems = parseQuotePackItems(params.message);
-  if (parsedItems.length < 2) return null;
+  if (!quotePackDraftCanBeBuilt(parsedItems)) return null;
 
   const partyQuery = extractQuotePackPartyQuery(params.message);
   const party = partyQuery ? await resolveQuotePackParty({ adminClient: params.adminClient, auth: params.auth, query: partyQuery }) : null;
@@ -1208,8 +1359,8 @@ async function buildQuotePackDraftDecision(params: {
   const missingCatalogCount = items.filter((item) => !item.catalogModelId).length;
   const zeroPriceCount = items.filter((item) => item.unitPrice <= 0).length;
   const intro = party
-    ? `Зібрав draft для **${party.name}**: **${formatInteger(items.length)}** окремі прорахунки.`
-    : `Зібрав draft на **${formatInteger(items.length)}** окремі прорахунки, але замовника не зміг підтвердити.`;
+    ? `Зібрав draft для **${party.name}**: **${formatQuotePackDraftScope(items)}**.`
+    : `Зібрав draft на **${formatQuotePackDraftScope(items)}**, але замовника не зміг підтвердити.`;
   const itemLines = items
     .map((item, index) => {
       const catalogLabel =
@@ -1219,13 +1370,16 @@ async function buildQuotePackDraftDecision(params: {
             ? `схожий товар: ${item.catalogCandidateModelName}, треба підтвердити`
             : "без товару в каталозі";
       const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
-      return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
+      return `${index + 1}. **${item.productName}** — ${formatQuotePackItemQuantities(item)}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
     })
     .join("\n");
   const warningLines = [
     !party ? "- Спочатку уточни замовника: напиши назву точно або відкрий картку замовника." : "",
     items.some((item) => item.catalogMatchStatus === "candidate")
       ? "- Є схожі товари з каталогу, але я не привʼязую їх автоматично без підтвердження."
+      : "",
+    items.some((item) => item.decorationMatchStatus === "partial")
+      ? "- Частину нанесень підтягнув із каталогу, частину залишив текстом."
       : "",
     missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
     zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
@@ -1234,7 +1388,7 @@ async function buildQuotePackDraftDecision(params: {
   return {
     title: "Draft кількох прорахунків",
     summary: party
-      ? `Готовий створити ${formatInteger(items.length)} прорахунки для ${party.name}.`
+      ? `Готовий створити ${formatQuotePackDraftScope(items)} для ${party.name}.`
       : "Зібрав draft, але замовника треба уточнити перед створенням.",
     answerMarkdown: `${intro}\n\n${itemLines}${warningLines.length > 0 ? `\n\nЩо перевірити перед створенням:\n${warningLines.join("\n")}` : ""}`,
     playfulLine: party ? "Draft готовий до підтвердження." : "Draft є, бракує точного замовника.",
@@ -1283,7 +1437,7 @@ async function buildQuotePackPartyClarificationDecision(params: {
             ? `схожий товар: ${item.catalogCandidateModelName}, треба підтвердити`
             : "без товару в каталозі";
       const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
-      return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
+      return `${index + 1}. **${item.productName}** — ${formatQuotePackItemQuantities(item)}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
     })
     .join("\n");
 
@@ -1310,6 +1464,9 @@ async function buildQuotePackPartyClarificationDecision(params: {
   const warningLines = [
     items.some((item) => item.catalogMatchStatus === "candidate")
       ? "- Є схожі товари з каталогу, але я не привʼязую їх автоматично без підтвердження."
+      : "",
+    items.some((item) => item.decorationMatchStatus === "partial")
+      ? "- Частину нанесень підтягнув із каталогу, частину залишив текстом."
       : "",
     missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
     zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
@@ -1347,8 +1504,11 @@ async function insertAiQuote(params: {
 }) {
   const quoteId = crypto.randomUUID();
   const number = formatQuoteNumber(params.monthCode, params.sequence);
+  const quantities = getQuotePackItemQuantities(params.item);
+  const primaryQuantity = quantities[0] ?? params.item.quantity;
   const comment = [
     params.item.decoration ? `Нанесення: ${params.item.decoration}` : "",
+    quantities.length > 1 ? `Тиражі: ${quantities.map((quantity) => formatInteger(quantity)).join(", ")} ${params.item.unit}` : "",
     !params.item.catalogModelId ? "AI draft: товар не знайдено в каталозі." : "",
     params.item.unitPrice <= 0 ? "AI draft: ціну треба дозаповнити." : "",
   ].filter(Boolean).join("\n");
@@ -1380,37 +1540,54 @@ async function insertAiQuote(params: {
     position: 1,
     name: params.item.catalogModelName || params.item.productName,
     description: params.item.decoration,
-    qty: params.item.quantity,
+    qty: primaryQuantity,
     unit: params.item.unit,
     unit_price: params.item.unitPrice,
-    line_total: params.item.quantity * params.item.unitPrice,
+    line_total: primaryQuantity * params.item.unitPrice,
     catalog_type_id: params.item.catalogTypeId,
     catalog_kind_id: params.item.catalogKindId,
     catalog_model_id: params.item.catalogModelId,
-    methods: null,
+    methods:
+      params.item.decorationMethodIds.length > 0
+        ? params.item.decorationMethodIds.map((methodId) => ({
+            method_id: methodId,
+            count: 1,
+            print_position_id: null,
+            print_width_mm: null,
+            print_height_mm: null,
+          }))
+        : null,
     metadata: {
       source: "tosho_ai_quote_pack",
       aiDraft: !params.item.catalogModelId || params.item.unitPrice <= 0,
       originalPrompt: params.draft.sourceMessage,
       decoration: params.item.decoration,
+      decorationRaw: params.item.decorationRaw,
+      decorationMatchStatus: params.item.decorationMatchStatus,
+      quantities,
     },
   });
   if (itemError) throw new Error(itemError.message);
 
-  const { error: runError } = await params.adminClient.schema("tosho").from("quote_item_runs").insert({
-    id: crypto.randomUUID(),
-    quote_id: quoteId,
-    quote_item_id: itemId,
-    quantity: params.item.quantity,
-    unit_price_model: params.item.unitPrice,
-    unit_price_print: 0,
-    logistics_cost: 0,
-    desired_manager_income: 0,
-    manager_rate: DEFAULT_MANAGER_RATE,
-    fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-    vat_rate: DEFAULT_VAT_RATE,
-    team_id: params.auth.teamId,
-  });
+  const { error: runError } = await params.adminClient
+    .schema("tosho")
+    .from("quote_item_runs")
+    .insert(
+      quantities.map((quantity) => ({
+        id: crypto.randomUUID(),
+        quote_id: quoteId,
+        quote_item_id: itemId,
+        quantity,
+        unit_price_model: params.item.unitPrice,
+        unit_price_print: 0,
+        logistics_cost: 0,
+        desired_manager_income: 0,
+        manager_rate: DEFAULT_MANAGER_RATE,
+        fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+        vat_rate: DEFAULT_VAT_RATE,
+        team_id: params.auth.teamId,
+      }))
+    );
   if (runError) throw new Error(runError.message);
 
   return { id: quoteId, number };
@@ -1463,8 +1640,34 @@ async function createQuotePackFromDraft(params: {
   if (!params.draft.party) {
     throw httpError(400, "Перед створенням треба підтвердити замовника.");
   }
-  if (params.draft.items.length < 2) {
-    throw httpError(400, "Для batch-створення потрібно щонайменше 2 позиції.");
+  if (!quotePackDraftCanBeBuilt(params.draft.items)) {
+    throw httpError(400, "Для AI-створення потрібно щонайменше 2 позиції або кілька тиражів для однієї позиції.");
+  }
+  const candidateItems = params.draft.items.filter((item) => item.catalogMatchStatus === "candidate");
+  if (candidateItems.length > 0) {
+    const lines = candidateItems
+      .map((item, index) => `${index + 1}. **${item.productName}**: схоже на **${item.catalogCandidateModelName ?? "товар з каталогу"}**, але не підтверджено.`)
+      .join("\n");
+    return {
+      title: "Потрібне підтвердження товару",
+      summary: "Не створюю прорахунки, бо є схожі товари без підтвердження.",
+      answerMarkdown: `Ще не створюю прорахунки.\n\nЄ схожі товари, які не можна підставляти автоматично:\n${lines}\n\nСпочатку підтверди товар або виправ назву в запиті. Інакше прорахунок створиться як ручна позиція без привʼязаного catalog_model.`,
+      playfulLine: "Зупинив створення: треба підтвердити товар.",
+      status: "waiting_user",
+      priority: "low",
+      domain: "orders",
+      confidence: 0.88,
+      shouldEscalate: false,
+      shouldNotify: false,
+      knowledgeIds: [],
+      internalSummary: `Quote pack creation blocked by catalog candidates: ${candidateItems.length}.`,
+      analytics: buildQuotePackAnalytics(params.draft),
+      suggestedActions: compactSuggestedActions([
+        { label: "Не створювати", text: "не створюй ці прорахунки" },
+        { label: "Уточнити товар", text: "уточнити товар у draft прорахунків" },
+      ]),
+      quotePackDraft: params.draft,
+    };
   }
 
   const monthCode = getQuoteMonthCode();
@@ -1499,8 +1702,8 @@ async function createQuotePackFromDraft(params: {
 
   return {
     title: "Прорахунки створено",
-    summary: `Створено ${formatInteger(created.length)} прорахунки для ${params.draft.party.name}.`,
-    answerMarkdown: `Готово. Створив **${formatInteger(created.length)}** окремі прорахунки для **${params.draft.party.name}**.${quoteSetId ? "\n\nТакож об'єднав їх у набір прорахунків." : ""}\n\n${links}${
+    summary: `Створено ${formatQuotePackDraftScope(params.draft.items)} для ${params.draft.party.name}.`,
+    answerMarkdown: `Готово. Створив **${formatQuotePackDraftScope(params.draft.items)}** для **${params.draft.party.name}**.${quoteSetId ? "\n\nТакож об'єднав їх у набір прорахунків." : ""}\n\n${links}${
       zeroPriceCount > 0 || missingCatalogCount > 0
         ? `\n\nЩо ще треба дозаповнити:\n${missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції без товару з каталогу\n` : ""}${zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції з ціною 0` : ""}`
         : ""
