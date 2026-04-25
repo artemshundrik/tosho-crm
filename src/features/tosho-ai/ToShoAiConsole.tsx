@@ -144,6 +144,7 @@ type AnalyticsRow = {
 
 type AnalyticsPayload = {
   kind: "people" | "entity";
+  variant?: string | null;
   title: string;
   caption: string;
   avatarUrl?: string | null;
@@ -359,6 +360,7 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
   });
 
   const kind = analytics.kind === "entity" ? "entity" : "people";
+  const variant = typeof analytics.variant === "string" ? analytics.variant : null;
   const title = typeof analytics.title === "string" ? analytics.title : "";
   const caption = typeof analytics.caption === "string" ? analytics.caption : "";
   const avatarUrl = typeof analytics.avatarUrl === "string" ? analytics.avatarUrl : null;
@@ -367,6 +369,7 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
 
   return {
     kind,
+    variant,
     title: title || "Підрахунок",
     caption,
     avatarUrl,
@@ -801,11 +804,12 @@ function ThreadCard({
 }
 
 function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
+  const isQuoteDraft = analytics.variant === "quote_draft";
   return (
     <div className="mt-4 overflow-hidden rounded-[22px] border border-border/65 bg-background/55">
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          {analytics.kind === "entity" ? (
+          {analytics.kind === "entity" && !isQuoteDraft ? (
             <EntityAvatar
               src={analytics.avatarUrl ?? null}
               name={analytics.title}
@@ -845,15 +849,29 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                       fallbackClassName="text-[11px] font-semibold"
                     />
                   ) : row.avatarUrl ? (
-                    <EntityAvatar
-                      src={row.avatarUrl}
-                      name={displayLabel}
-                      size={34}
-                      className="mt-0.5 ring-1 ring-border/60"
-                      fallbackClassName="text-[11px] font-semibold"
-                    />
+                    isQuoteDraft ? (
+                      <img
+                        src={row.avatarUrl}
+                        alt=""
+                        className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover shadow-sm sm:h-[72px] sm:w-[72px]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <EntityAvatar
+                        src={row.avatarUrl}
+                        name={displayLabel}
+                        size={34}
+                        className="mt-0.5 ring-1 ring-border/60"
+                        fallbackClassName="text-[11px] font-semibold"
+                      />
+                    )
                   ) : (
-                    <div className="mt-0.5 flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/35 text-muted-foreground">
+                    <div
+                      className={cn(
+                        "mt-0.5 flex shrink-0 items-center justify-center border border-border/70 bg-muted/35 text-muted-foreground",
+                        isQuoteDraft ? "h-16 w-16 rounded-xl sm:h-[72px] sm:w-[72px]" : "h-[34px] w-[34px] rounded-full"
+                      )}
+                    >
                       <RowIcon className="h-4 w-4" />
                     </div>
                   )}

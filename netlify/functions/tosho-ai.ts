@@ -198,6 +198,7 @@ type AnalyticsRow = {
 
 type AnalyticsPayload = {
   kind: "people" | "entity";
+  variant?: string | null;
   title: string;
   caption: string;
   avatarUrl?: string | null;
@@ -212,11 +213,15 @@ type QuotePackDraftItem = {
   quantity: number;
   unit: string;
   decoration: string | null;
+  catalogMatchStatus: "matched" | "candidate" | "missing";
   catalogModelId: string | null;
   catalogTypeId: string | null;
   catalogKindId: string | null;
   catalogModelName: string | null;
   catalogImageUrl: string | null;
+  catalogCandidateModelId: string | null;
+  catalogCandidateModelName: string | null;
+  catalogCandidateImageUrl: string | null;
   unitPrice: number;
 };
 
@@ -928,11 +933,15 @@ function parseQuotePackItems(message: string): QuotePackDraftItem[] {
         quantity,
         unit: "шт.",
         decoration,
+        catalogMatchStatus: "missing",
         catalogModelId: null,
         catalogTypeId: null,
         catalogKindId: null,
         catalogModelName: null,
         catalogImageUrl: null,
+        catalogCandidateModelId: null,
+        catalogCandidateModelName: null,
+        catalogCandidateImageUrl: null,
         unitPrice: 0,
       } satisfies QuotePackDraftItem;
     })
@@ -984,6 +993,15 @@ function catalogModelMatchesQuotePackItem(modelName: string | null | undefined, 
   if (meaningfulTokens.length === 0) return looseAnalyticsNameMatches(modelName, item.productName);
   const hits = meaningfulTokens.filter((token) => [token, ...getQuotePackTokenAliases(token)].some((variant) => model.includes(variant))).length;
   return hits >= Math.min(2, meaningfulTokens.length);
+}
+
+function scoreCatalogModelForQuotePackItem(modelName: string | null | undefined, item: QuotePackDraftItem) {
+  const model = normalizeLooseAnalyticsName(modelName);
+  if (!model) return { hits: 0, score: 0 };
+  const meaningfulTokens = getQuotePackMeaningfulTokens(item.productName);
+  const hits = meaningfulTokens.filter((token) => [token, ...getQuotePackTokenAliases(token)].some((variant) => model.includes(variant))).length;
+  const score = scorePartySearchCandidate(modelName ?? "", getQuotePackCatalogSearchTerms(item)) + hits * 25;
+  return { hits, score };
 }
 
 async function resolveQuotePackParty(params: {
@@ -1106,15 +1124,29 @@ async function enrichQuotePackItemsWithCatalog(params: {
   const kindById = new Map(((kindRows ?? []) as Array<{ id: string; type_id?: string | null }>).map((row) => [row.id, row]));
 
   return params.items.map((item) => {
-    const variants = getQuotePackCatalogSearchTerms(item);
-    const match = models
-      .filter((row) => catalogModelMatchesQuotePackItem(row.name, item))
-      .map((row) => ({ row, score: scorePartySearchCandidate(row.name ?? "", variants) }))
-      .sort((a, b) => b.score - a.score)[0]?.row;
-    if (!match) return item;
+    const rankedModels = models
+      .map((row) => ({
+        row,
+        ...scoreCatalogModelForQuotePackItem(row.name, item),
+      }))
+      .sort((a, b) => b.score - a.score);
+    const match = rankedModels.find((entry) => catalogModelMatchesQuotePackItem(entry.row.name, item))?.row;
+    const candidate = !match ? rankedModels.find((entry) => entry.hits > 0 && entry.score >= 25)?.row : null;
+    if (!match) {
+      return candidate
+        ? {
+            ...item,
+            catalogMatchStatus: "candidate",
+            catalogCandidateModelId: candidate.id,
+            catalogCandidateModelName: normalizeText(candidate.name) || null,
+            catalogCandidateImageUrl: normalizeText(candidate.thumb_url || candidate.preview_url || candidate.image_url) || null,
+          }
+        : item;
+    }
     const kind = match.kind_id ? kindById.get(match.kind_id) : null;
     return {
       ...item,
+      catalogMatchStatus: "matched",
       catalogModelId: match.id,
       catalogKindId: match.kind_id ?? null,
       catalogTypeId: kind?.type_id ?? null,
@@ -1128,6 +1160,7 @@ async function enrichQuotePackItemsWithCatalog(params: {
 function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
   return {
     kind: "entity",
+    variant: "quote_draft",
     title: "Draft прорахунків",
     caption: draft.party
       ? `${draft.party.name} · ${formatInteger(draft.items.length)} прорах.`
@@ -1136,12 +1169,14 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
     rows: draft.items.map((item) => ({
       id: item.id,
       label: item.productName,
-      avatarUrl: item.catalogImageUrl,
+      avatarUrl: item.catalogImageUrl || item.catalogCandidateImageUrl,
       primary: `${formatInteger(item.quantity)} ${item.unit}`,
       secondary: item.decoration ?? "Нанесення не вказано",
       badges: [
-        item.catalogModelId
+        item.catalogMatchStatus === "matched" && item.catalogModelId
           ? { label: "Каталог", value: item.catalogModelName ?? "знайдено" }
+          : item.catalogMatchStatus === "candidate" && item.catalogCandidateModelName
+            ? { label: "Схоже", value: item.catalogCandidateModelName }
           : { label: "Каталог", value: "без товару" },
         item.unitPrice > 0 ? { label: "Ціна", value: formatMoney(item.unitPrice) } : { label: "Ціна", value: "0" },
       ],
@@ -1177,13 +1212,21 @@ async function buildQuotePackDraftDecision(params: {
     : `Зібрав draft на **${formatInteger(items.length)}** окремі прорахунки, але замовника не зміг підтвердити.`;
   const itemLines = items
     .map((item, index) => {
-      const catalogLabel = item.catalogModelId ? `каталог: ${item.catalogModelName ?? "знайдено"}` : "без товару в каталозі";
+      const catalogLabel =
+        item.catalogMatchStatus === "matched" && item.catalogModelId
+          ? `каталог: ${item.catalogModelName ?? "знайдено"}`
+          : item.catalogMatchStatus === "candidate" && item.catalogCandidateModelName
+            ? `схожий товар: ${item.catalogCandidateModelName}, треба підтвердити`
+            : "без товару в каталозі";
       const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
       return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
     })
     .join("\n");
   const warningLines = [
     !party ? "- Спочатку уточни замовника: напиши назву точно або відкрий картку замовника." : "",
+    items.some((item) => item.catalogMatchStatus === "candidate")
+      ? "- Є схожі товари з каталогу, але я не привʼязую їх автоматично без підтвердження."
+      : "",
     missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
     zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
   ].filter(Boolean);
@@ -1233,7 +1276,12 @@ async function buildQuotePackPartyClarificationDecision(params: {
   const zeroPriceCount = items.filter((item) => item.unitPrice <= 0).length;
   const itemLines = items
     .map((item, index) => {
-      const catalogLabel = item.catalogModelId ? `каталог: ${item.catalogModelName ?? "знайдено"}` : "без товару в каталозі";
+      const catalogLabel =
+        item.catalogMatchStatus === "matched" && item.catalogModelId
+          ? `каталог: ${item.catalogModelName ?? "знайдено"}`
+          : item.catalogMatchStatus === "candidate" && item.catalogCandidateModelName
+            ? `схожий товар: ${item.catalogCandidateModelName}, треба підтвердити`
+            : "без товару в каталозі";
       const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
       return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
     })
@@ -1260,6 +1308,9 @@ async function buildQuotePackPartyClarificationDecision(params: {
   }
 
   const warningLines = [
+    items.some((item) => item.catalogMatchStatus === "candidate")
+      ? "- Є схожі товари з каталогу, але я не привʼязую їх автоматично без підтвердження."
+      : "",
     missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
     zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
   ].filter(Boolean);
