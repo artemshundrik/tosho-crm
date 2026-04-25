@@ -216,6 +216,7 @@ type QuotePackDraftItem = {
   catalogTypeId: string | null;
   catalogKindId: string | null;
   catalogModelName: string | null;
+  catalogImageUrl: string | null;
   unitPrice: number;
 };
 
@@ -788,6 +789,36 @@ function normalizeQuotePackProductName(value: string) {
   return labels[normalized] ?? normalized.replace(/и$/u, "а");
 }
 
+const QUOTE_PACK_GENERIC_PRODUCT_TOKENS = new Set([
+  "tm",
+  "тм",
+  "для",
+  "кепка",
+  "кепки",
+  "кепок",
+  "кепку",
+  "футболка",
+  "футболки",
+  "футболок",
+  "футболку",
+  "худі",
+  "чашка",
+  "чашки",
+  "чашок",
+  "чашку",
+  "ручка",
+  "ручки",
+  "ручок",
+  "ручку",
+  "поло",
+  "шапка",
+  "шапки",
+  "шапку",
+  "сумка",
+  "сумки",
+  "сумку",
+]);
+
 function capitalizeWord(value: string) {
   const normalized = normalizeText(value);
   return normalized ? `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}` : "";
@@ -844,7 +875,9 @@ function splitQuotePackSegments(body: string) {
     .filter(Boolean);
   if (numbered.length > 0) return numbered;
   return normalized
-    .split(/\s*[;,]\s*/u)
+    .split(
+      /\s*(?:;|,(?=\s*(?:\d+[.)]|\b(?:кепк[аиу]?|футболк[аиу]?|худі|чашк[аиу]?|ручк[аиу]?|поло|шапк[аиу]?|сумк[аиу]?|блокнот|термос|пляшк[аиу]?|парасол[яі]))))\s*/iu
+    )
     .map((item) => normalizeText(item))
     .filter((item) => /\d+\s*(шт\.?|штук|од\.?|pcs?)/iu.test(item));
 }
@@ -885,10 +918,35 @@ function parseQuotePackItems(message: string): QuotePackDraftItem[] {
         catalogTypeId: null,
         catalogKindId: null,
         catalogModelName: null,
+        catalogImageUrl: null,
         unitPrice: 0,
       } satisfies QuotePackDraftItem;
     })
     .filter((item): item is QuotePackDraftItem => Boolean(item));
+}
+
+function getQuotePackMeaningfulTokens(value: string) {
+  return Array.from(
+    new Set(
+      normalizeLooseAnalyticsName(value)
+        .split(/\s+/u)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3 && !/^\d+$/u.test(token) && !QUOTE_PACK_GENERIC_PRODUCT_TOKENS.has(token))
+    )
+  );
+}
+
+function getQuotePackCatalogSearchTerms(item: QuotePackDraftItem) {
+  return Array.from(new Set([item.productName, ...getQuotePackMeaningfulTokens(item.productName)].map(normalizeText).filter((value) => value.length >= 3)));
+}
+
+function catalogModelMatchesQuotePackItem(modelName: string | null | undefined, item: QuotePackDraftItem) {
+  const model = normalizeLooseAnalyticsName(modelName);
+  if (!model) return false;
+  const meaningfulTokens = getQuotePackMeaningfulTokens(item.productName);
+  if (meaningfulTokens.length === 0) return looseAnalyticsNameMatches(modelName, item.productName);
+  const hits = meaningfulTokens.filter((token) => model.includes(token)).length;
+  return hits >= Math.min(2, meaningfulTokens.length);
 }
 
 async function resolveQuotePackParty(params: {
@@ -957,12 +1015,7 @@ async function enrichQuotePackItemsWithCatalog(params: {
   items: QuotePackDraftItem[];
 }) {
   const searchTerms = Array.from(
-    new Set(
-      params.items
-        .flatMap((item) => [item.productName, item.productName.split(/\s+/u)[0] ?? ""])
-        .map(normalizeText)
-        .filter((item) => item.length >= 3)
-    )
+    new Set(params.items.flatMap(getQuotePackCatalogSearchTerms).map(normalizeText).filter((item) => item.length >= 3))
   ).slice(0, 8);
   if (searchTerms.length === 0) return params.items;
 
@@ -972,13 +1025,21 @@ async function enrichQuotePackItemsWithCatalog(params: {
   const { data: modelRows } = await params.adminClient
     .schema("tosho")
     .from("catalog_models")
-    .select("id,name,price,kind_id")
+    .select("id,name,price,kind_id,image_url,thumb_url:metadata->imageAsset->>thumbUrl,preview_url:metadata->imageAsset->>previewUrl")
     .eq("team_id", params.auth.teamId)
     .or(filter)
     .limit(30);
-  const models = ((modelRows ?? []) as Array<{ id: string; name?: string | null; price?: number | string | null; kind_id?: string | null }>).filter(
-    (row) => row.id
-  );
+  const models = (
+    (modelRows ?? []) as Array<{
+      id: string;
+      name?: string | null;
+      price?: number | string | null;
+      kind_id?: string | null;
+      image_url?: string | null;
+      thumb_url?: string | null;
+      preview_url?: string | null;
+    }>
+  ).filter((row) => row.id);
   const kindIds = Array.from(new Set(models.map((row) => normalizeText(row.kind_id)).filter(Boolean)));
   const { data: kindRows } =
     kindIds.length > 0
@@ -987,8 +1048,9 @@ async function enrichQuotePackItemsWithCatalog(params: {
   const kindById = new Map(((kindRows ?? []) as Array<{ id: string; type_id?: string | null }>).map((row) => [row.id, row]));
 
   return params.items.map((item) => {
-    const variants = [item.productName, item.productName.split(/\s+/u)[0] ?? ""].map(normalizeText).filter(Boolean);
+    const variants = getQuotePackCatalogSearchTerms(item);
     const match = models
+      .filter((row) => catalogModelMatchesQuotePackItem(row.name, item))
       .map((row) => ({ row, score: scorePartySearchCandidate(row.name ?? "", variants) }))
       .sort((a, b) => b.score - a.score)[0]?.row;
     if (!match) return item;
@@ -999,6 +1061,7 @@ async function enrichQuotePackItemsWithCatalog(params: {
       catalogKindId: match.kind_id ?? null,
       catalogTypeId: kind?.type_id ?? null,
       catalogModelName: normalizeText(match.name) || null,
+      catalogImageUrl: normalizeText(match.thumb_url || match.preview_url || match.image_url) || null,
       unitPrice: toFiniteAmount(match.price),
     };
   });
@@ -1015,6 +1078,7 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
     rows: draft.items.map((item) => ({
       id: item.id,
       label: item.productName,
+      avatarUrl: item.catalogImageUrl,
       primary: `${formatInteger(item.quantity)} ${item.unit}`,
       secondary: item.decoration ?? "Нанесення не вказано",
       badges: [
