@@ -1288,7 +1288,7 @@ function hasEmployeeAnalyticsTerm(normalized: string) {
 }
 
 function hasAdminObservabilityTerm(normalized: string) {
-  return /(адмін|admin|observability|обсерваб|перформанс|performance|runtime|error|errors|помилк|баг|bug|bugs|сховищ|storage|вкладенн|attachment|backup|бекап|чи\s+все\s+норм|стан\s+систем)/u.test(
+  return /(адмін|admin|observability|обсерваб|перформанс|performance|runtime|error|errors|помилк|баг|bug|bugs|сховищ|storage|вкладенн|attachment|backup|бекап|активн|що\s+було|чи\s+все\s+норм|стан\s+систем)/u.test(
     normalized
   );
 }
@@ -1392,7 +1392,7 @@ function isSelfAnalyticsQuery(normalized: string) {
 function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsIntent | null {
   const normalized = normalizeText(message).toLowerCase();
   const hasAnalyticsVerb =
-    /(покажи|показати|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
+    /(покажи|показати|рейтинг|скільки|хто|яка|який|які|порах|рахуй|статист|звіт|аналітик|активн|топ|зріз|список|перелік|найбільш|більше\s+всього|по\s+дизайн)/u.test(
       normalized
     ) ||
     /по\s+(менедж|иенедж)/u.test(normalized) ||
@@ -1445,7 +1445,7 @@ function isDirectAnalyticsRequest(message: string) {
   if (!supportedIntent) return false;
   if (supportedIntent === "logo_hygiene" && !shouldSynthesizeAnalyticsWithOpenAi(message)) return true;
   return (
-    /(покажи|показати|дай|рейтинг|скільки|хто|порах|рахуй|статист|звіт|аналітик|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
+    /(покажи|показати|дай|рейтинг|скільки|хто|яка|який|які|порах|рахуй|статист|звіт|аналітик|активн|топ|зріз|список|перелік|найбільш|більше\s+всього)/u.test(
       normalized
     ) &&
     !shouldSynthesizeAnalyticsWithOpenAi(message)
@@ -4182,6 +4182,15 @@ function getKyivDayWindow(now = new Date()) {
   return { startIso: start.toISOString(), endIso: end.toISOString(), date };
 }
 
+function getKyivDayWindowForMessage(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  const now = new Date();
+  if (/вчора|yesterday/u.test(normalized)) {
+    return { ...getKyivDayWindow(new Date(now.getTime() - 24 * 60 * 60 * 1000)), label: "вчора" };
+  }
+  return { ...getKyivDayWindow(now), label: "сьогодні" };
+}
+
 function storageObjectSize(row: { metadata?: JsonRecord | null }) {
   const raw = row.metadata?.size;
   const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : 0;
@@ -4327,7 +4336,7 @@ async function buildAdminObservabilityAnalytics(params: {
   const canViewAdminHealth = accessRole === "owner" || accessRole === "admin" || jobRole === "seo";
   if (!canViewAdminHealth) return null;
 
-  const dayWindow = getKyivDayWindow();
+  const dayWindow = getKyivDayWindowForMessage(params.message);
   const scopeIds = Array.from(new Set([params.auth.workspaceId, params.auth.teamId].map(normalizeText).filter(Boolean)));
 
   const [{ data: snapshotRows }, { data: runtimeRows }, liveMetrics, { data: backupRows }] = await Promise.all([
@@ -4338,6 +4347,7 @@ async function buildAdminObservabilityAnalytics(params: {
         "captured_at,captured_for_date,database_size_bytes,attachments_bucket_bytes,avatars_bucket_bytes,storage_today_bytes,storage_today_objects,quote_attachments_today,design_tasks_today,design_task_attachments_today,design_output_uploads_today,design_output_selection_today,attachment_possible_orphan_original_count,attachment_missing_variants_count,attachment_safe_reclaimable_count,attachment_safe_reclaimable_bytes,database_stats,dead_tuple_tables"
       )
       .in("team_id", scopeIds)
+      .eq("captured_for_date", dayWindow.date)
       .order("captured_for_date", { ascending: false })
       .limit(1),
     params.adminClient
@@ -4434,6 +4444,10 @@ async function buildAdminObservabilityAnalytics(params: {
   const hasRisks = runtimeErrorCount > 0 || orphanCount > 0 || missingVariants > 0 || deadTupleTables > 0 || hasBackupRisk;
   const normalizedMessage = normalizeText(params.message).toLowerCase();
   const backupFocused = /(backup|бекап|резерв|database backup|storage backup|бд backup|db backup)/u.test(normalizedMessage);
+  const activityFocused = /(активн|що\s+було)/u.test(normalizedMessage) && !backupFocused;
+  const periodLabel = dayWindow.label;
+  const periodTitle = periodLabel === "вчора" ? "вчора" : "сьогодні";
+  const periodTitleCapitalized = periodLabel === "вчора" ? "Вчора" : "Сьогодні";
 
   const rows: AnalyticsRow[] = [
     {
@@ -4445,7 +4459,7 @@ async function buildAdminObservabilityAnalytics(params: {
     },
     {
       id: "activity-today",
-      label: "Активність сьогодні",
+      label: `Активність ${periodTitle}`,
       primary: formatInteger(activityTodayTotal),
       secondary: `Дизайн-задачі ${formatInteger(designTasksToday)} · вкладень у прорахунках ${formatInteger(quoteAttachmentsToday)}`,
       badges: [
@@ -4458,7 +4472,7 @@ async function buildAdminObservabilityAnalytics(params: {
       id: "storage",
       label: "Сховище",
       primary: formatBytesCompact(storageTodayBytes),
-      secondary: `Сьогодні ${formatInteger(storageTodayObjects)} об'єктів · attachments ${formatBytesCompact(attachmentsSize)}`,
+      secondary: `${periodTitleCapitalized} ${formatInteger(storageTodayObjects)} об'єктів · attachments ${formatBytesCompact(attachmentsSize)}`,
       badges: [{ label: "DB", value: formatBytesCompact(dbSize) }],
     },
     {
@@ -4502,26 +4516,28 @@ async function buildAdminObservabilityAnalytics(params: {
   ];
 
   return {
-    title: backupFocused ? "Backup-зріз" : "Адмін-зріз",
-    summary: hasRisks ? "Є що перевірити в observability." : "Критичних сигналів у сьогоднішньому зрізі не бачу.",
+    title: backupFocused ? "Backup-зріз" : activityFocused ? `Активність ${periodTitle}` : "Адмін-зріз",
+    summary: hasRisks ? "Є що перевірити в observability." : `Критичних сигналів у зрізі ${periodTitle} не бачу.`,
     markdown: backupFocused
       ? `Подивився backup-и: storage backup ${storageBackupHealth.primary}, database backup ${databaseBackupHealth.primary}.`
+      : activityFocused
+        ? `За ${periodTitle} бачу **${formatInteger(activityTodayTotal)}** активностей у контрольованому CRM-зрізі: дизайн-задачі **${formatInteger(designTasksToday)}**, вкладення у прорахунках **${formatInteger(quoteAttachmentsToday)}**, design files **${formatInteger(designTaskAttachmentsToday)}**, outputs **${formatInteger(designOutputUploadsToday)}**, selections **${formatInteger(designOutputSelectionToday)}**.`
       : hasRisks
         ? "Є кілька сигналів, які варто перевірити в observability: runtime errors, attachments, backup або таблиці з dead tuples."
-        : "По сьогоднішньому зрізу все виглядає спокійно: нових runtime errors не бачу, а основні storage/attachment і backup-метрики нижче.",
+        : `По зрізу ${periodTitle} все виглядає спокійно: нових runtime errors не бачу, а основні storage/attachment і backup-метрики нижче.`,
     domain: "admin",
     confidence: snapshot || runtimeErrorCount > 0 || backupRuns.length > 0 || storageTodayObjects > 0 ? 0.9 : 0.74,
     analytics: {
       kind: "entity",
       title: "Observability",
       caption: capturedLabel
-        ? `Останній snapshot: ${capturedLabel}${snapshotIsToday ? "" : " · today-метрики рахую live"}`
-        : "Snapshot ще не знайдено · today-метрики рахую live",
+        ? `Snapshot за ${dayWindow.date}: ${capturedLabel}${snapshotIsToday ? "" : " · метрики періоду рахую live"}`
+        : `Snapshot за ${dayWindow.date} ще не знайдено · метрики періоду рахую live`,
       metricLabel: "Стан",
       rows,
       note: snapshot
-        ? "Snapshot беру з admin_observability_snapshots по workspace_id; today-активність і backup доповнюю live-даними."
-        : "Snapshot ще не створений. Today-активність, runtime errors і backup_runs рахую напряму.",
+        ? "Snapshot беру з admin_observability_snapshots по workspace_id; активність періоду і backup доповнюю live-даними."
+        : "Snapshot за цей день ще не створений. Активність періоду, runtime errors і backup_runs рахую напряму.",
     },
   } satisfies AnalyticsResult;
 }

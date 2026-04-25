@@ -1797,7 +1797,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: linear-gradient(90deg, rgb(157 23 77), rgb(219 39 119), rgb(251 207 232), rgb(190 24 93));
+  background: linear-gradient(90deg, rgb(230 0 126 / 0.58), rgb(230 0 126), rgb(255 76 174), rgb(230 0 126 / 0.72));
   background-size: 240% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -1806,7 +1806,7 @@
 }
 
 .dark .tosho-ai-thinking-word {
-  background-image: linear-gradient(90deg, rgb(244 114 182), rgb(249 168 212), rgb(219 39 119), rgb(251 207 232));
+  background-image: linear-gradient(90deg, rgb(230 0 126 / 0.62), rgb(255 76 174), rgb(230 0 126), rgb(230 0 126 / 0.78));
 }
 
 @media (prefers-reduced-motion: reduce) {

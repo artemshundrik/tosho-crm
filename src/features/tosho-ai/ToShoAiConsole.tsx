@@ -108,7 +108,7 @@ type PromptSuggestion = {
 };
 
 type PromptSuggestionGroup = {
-  id: "managers" | "designers" | "customers" | "employees";
+  id: "operations" | "managers" | "designers" | "customers" | "employees";
   label: string;
   description: string;
   tone: "design" | "orders" | "customers" | "team" | "general";
@@ -493,11 +493,39 @@ function buildPromptSuggestionGroups(input: {
   const isAdminLike = input.canManageQueue || jobRole === "seo";
   const groups: PromptSuggestionGroup[] = [
     {
+      id: "operations",
+      label: "Контроль",
+      description: "Стан CRM, ризики, сховище і технічна гігієна.",
+      tone: "general",
+      prompts: [
+        {
+          label: "Що сьогодні?",
+          text: "дай адмін-зріз по дню: баги, observability і ризики",
+        },
+        {
+          label: "Чи є баги?",
+          text: "чи є сьогодні баги або runtime errors?",
+        },
+        {
+          label: "Замовники без лого",
+          text: "Покажи замовників і лідів без логотипа.",
+        },
+        {
+          label: "Сховище",
+          text: "що зі сховищем і вкладеннями сьогодні?",
+        },
+      ],
+    },
+    {
       id: "managers",
       label: "Менеджери",
       description: "Прорахунки, замовлення, клієнти по менеджерах.",
       tone: "orders",
       prompts: [
+        {
+          label: "Мої прорахунки",
+          text: "мої прорахунки за тиждень",
+        },
         {
           label: "Прорахунки за тиждень",
           text: "дай зріз по менеджерах скільки прорахунків за останній тиждень",
@@ -522,6 +550,10 @@ function buildPromptSuggestionGroups(input: {
       description: "Закриті дизайн-задачі, типи робіт, статистика по дизайнеру.",
       tone: "design",
       prompts: [
+        {
+          label: "Мої дизайн-задачі",
+          text: "скільки в мене дизайн-задач за місяць?",
+        },
         {
           label: "Таски за місяць",
           text: "скільки тасок зробив кожен дизайнер за останній місяць?",
@@ -595,22 +627,22 @@ function buildPromptSuggestionGroups(input: {
   ];
 
   if (isDesigner) {
-    return [groups[1], groups[3], groups[2], groups[0]];
+    return [groups[2], groups[4], groups[3], groups[1]];
   }
 
   if (isManager) {
-    return [groups[0], groups[2], groups[3], groups[1]];
+    return [groups[1], groups[3], groups[4], groups[2]];
   }
 
   if (isOps) {
-    return [groups[0], groups[2], groups[1], groups[3]];
+    return [groups[0], groups[1], groups[3], groups[2], groups[4]];
   }
 
   if (isAdminLike) {
-    return groups;
+    return [groups[0], groups[3], groups[1], groups[2], groups[4]];
   }
 
-  return [groups[0], groups[2], groups[1], groups[3]];
+  return [groups[1], groups[3], groups[2], groups[4]];
 }
 
 function buildPersonalPromptSuggestions(input: {
@@ -902,7 +934,7 @@ function MagicThinkingCard({ message }: { message: string }) {
   return (
     <div className="flex w-full min-w-0 justify-start overflow-hidden px-0.5">
       <div className="max-w-[calc(100%-0.25rem)] min-w-0 sm:max-w-[88%]">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2 text-xs">
           <div className="tosho-ai-thinking-orb flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
             <Sparkles className="h-4 w-4" />
           </div>
@@ -925,29 +957,7 @@ function EmptyChatSuggestions({
   onSelect: (value: string) => void;
 }) {
   const [activeGroupId, setActiveGroupId] = useState<PromptSuggestionGroup["id"] | null>(null);
-  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
-  const toneClass: Record<PromptSuggestionGroup["tone"], { idle: string; active: string }> = {
-    design: {
-      idle: "border-violet-500/25 bg-violet-500/10 text-violet-600 hover:bg-violet-500/14 dark:text-violet-300",
-      active: "border-violet-500/35 bg-violet-500/18 text-violet-700 ring-1 ring-violet-500/20 dark:text-violet-200",
-    },
-    orders: {
-      idle: "border-info-soft-border bg-info-soft text-info-foreground hover:bg-info-soft/80",
-      active: "border-info-soft-border bg-info-soft/90 text-info-foreground ring-1 ring-info-soft-border",
-    },
-    customers: {
-      idle: "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80",
-      active: "border-success-soft-border bg-success-soft/90 text-success-foreground ring-1 ring-success-soft-border",
-    },
-    team: {
-      idle: "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80",
-      active: "border-warning-soft-border bg-warning-soft/90 text-warning-foreground ring-1 ring-warning-soft-border",
-    },
-    general: {
-      idle: "border-border/60 bg-card/70 text-foreground hover:bg-muted/35",
-      active: "border-foreground/18 bg-foreground/8 text-foreground ring-1 ring-foreground/10",
-    },
-  };
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0] ?? null;
 
   if (groups.length === 0) {
     return null;
@@ -955,27 +965,46 @@ function EmptyChatSuggestions({
 
   return (
     <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-[var(--shadow-elevated-sm)]">
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
           <Sparkles className="h-4 w-4" />
         </div>
-        <div>
-          <div className="text-sm font-semibold text-foreground">Можна спитати</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">Обери тему, а питання підставлю в поле.</div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-foreground">Що можу швидко перевірити</div>
+          <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{activeGroup?.description}</div>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+
+      {activeGroup ? (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {activeGroup.prompts.slice(0, 4).map((suggestion) => (
+            <button
+              key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
+              type="button"
+              onClick={() => onSelect(suggestion.text)}
+              className="group flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#E6007E]/16 bg-[#E6007E]/5 px-3.5 py-2.5 text-left transition-colors hover:border-[#E6007E]/28 hover:bg-[#E6007E]/10"
+            >
+              <span className="min-w-0 text-sm font-semibold text-foreground">{suggestion.label}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-[#E6007E] transition-transform group-hover:translate-x-0.5" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/45 pt-3">
         {groups.map((group) => {
           const isActive = group.id === activeGroupId;
-          const styles = toneClass[group.tone];
+          const isDefault = !activeGroupId && group.id === groups[0]?.id;
           return (
             <button
               key={group.id}
               type="button"
               onClick={() => setActiveGroupId(isActive ? null : group.id)}
               className={cn(
-                "inline-flex min-h-9 items-center rounded-full border px-3 py-2 text-left text-sm font-semibold transition-colors",
-                isActive ? styles.active : styles.idle
+                "inline-flex min-h-8 items-center rounded-full border px-3 py-1.5 text-left text-xs font-semibold transition-colors",
+                isActive || isDefault
+                  ? "border-[#E6007E]/24 bg-[#E6007E]/10 text-[#E6007E]"
+                  : "border-border/60 bg-card/60 text-muted-foreground hover:border-[#E6007E]/20 hover:text-foreground"
               )}
             >
               {group.label}
@@ -983,25 +1012,6 @@ function EmptyChatSuggestions({
           );
         })}
       </div>
-      {activeGroup ? (
-        <div className="mt-3 rounded-[20px] border border-border/50 bg-background/45 p-3">
-          <div className="text-xs leading-5 text-muted-foreground">{activeGroup.description}</div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {activeGroup.prompts.map((suggestion) => (
-              <button
-                key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
-                type="button"
-                onClick={() => onSelect(suggestion.text)}
-                className={
-                  "inline-flex min-h-8 items-center rounded-full border border-border/60 bg-card/70 px-3 py-1.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted/35"
-                }
-              >
-                {suggestion.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1019,7 +1029,7 @@ function PersonalQuickPrompts({
 
   return (
     <div className="flex max-w-full gap-2 overflow-x-auto px-0 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {prompts.map((prompt) => (
+      {prompts.slice(0, 4).map((prompt) => (
         <button
           key={`${prompt.label}:${prompt.text}`}
           type="button"
@@ -1328,10 +1338,12 @@ export function ToShoAiConsole({
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [isMobileComposer, setIsMobileComposer] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   const selectedThread = snapshot?.selectedThread ?? null;
   const queueSearchValue = normalizeSearch(deferredQueueSearch);
   const isAiUnavailable = !snapshot && Boolean(loadError);
+  const isSendingMessage = actionBusy === "send";
   const canSendMessage = Boolean((composerValue.trim() || pendingAttachments.length > 0) && !isAiUnavailable);
 
   const threadItems = useMemo(() => snapshot?.recentRequests ?? [], [snapshot?.recentRequests]);
@@ -2158,17 +2170,17 @@ export function ToShoAiConsole({
                         showDiagnostics={Boolean(snapshot?.permissions.canManageQueue || snapshot?.permissions.canManageKnowledge)}
                       />
                     ))}
-                    {actionBusy === "send" ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
+                    {isSendingMessage ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
                     <div ref={chatBottomRef} />
                   </div>
 
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {!showRequestList && !knowledgeExpanded && !isAiUnavailable ? (
+                <div className={cn("space-y-4", isSendingMessage && "flex min-h-full flex-col justify-end pb-2")}>
+                  {!isSendingMessage && !showRequestList && !knowledgeExpanded && !isAiUnavailable ? (
                     <EmptyChatSuggestions groups={promptSuggestionGroups} onSelect={handleSelectPromptSuggestion} />
                   ) : null}
-                  {actionBusy === "send" ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
+                  {isSendingMessage ? <MagicThinkingCard message={pendingMagicMessage || composerValue} /> : null}
                   <div ref={chatBottomRef} />
                 </div>
               )}
@@ -2176,7 +2188,12 @@ export function ToShoAiConsole({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border/60 bg-background/95 px-3 pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+0.25rem)] pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
+        <div
+          className={cn(
+            "shrink-0 border-t border-border/60 bg-background/95 px-3 pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5",
+            isMobileComposer && composerFocused ? "pb-2" : "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+0.25rem)]"
+          )}
+        >
           <div className="w-full min-w-0 max-w-full space-y-3 overflow-hidden px-0">
             <input
               ref={attachmentInputRef}
@@ -2219,7 +2236,7 @@ export function ToShoAiConsole({
               </div>
             ) : null}
 
-            {!isAiUnavailable ? (
+            {!isSendingMessage && !isAiUnavailable ? (
               <PersonalQuickPrompts
                 prompts={personalPromptSuggestions}
                 disabled={actionBusy === "send"}
@@ -2255,6 +2272,8 @@ export function ToShoAiConsole({
                 onKeyUp={handleComposerCursorActivity}
                 onClick={handleComposerCursorActivity}
                 onSelect={handleComposerCursorActivity}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
