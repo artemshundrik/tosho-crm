@@ -987,6 +987,14 @@ function formatQuotePackDraftScope(items: QuotePackDraftItem[]) {
   return `${formatInteger(items.length)} окремі прорахунки`;
 }
 
+function omitKeys<T extends JsonRecord>(value: T, keys: string[]) {
+  const next = { ...value };
+  keys.forEach((key) => {
+    delete next[key];
+  });
+  return next;
+}
+
 function parseQuotePackItems(message: string): QuotePackDraftItem[] {
   const baseProductName = extractBaseProductName(message);
   const segments = splitQuotePackSegments(extractQuotePackBody(message));
@@ -1532,65 +1540,106 @@ async function insertAiQuote(params: {
   const { error: quoteError } = await params.adminClient.schema("tosho").from("quotes").insert(quotePayload);
   if (quoteError) throw new Error(quoteError.message);
 
-  const itemId = crypto.randomUUID();
-  const { error: itemError } = await params.adminClient.schema("tosho").from("quote_items").insert({
-    id: itemId,
-    team_id: params.auth.teamId,
-    quote_id: quoteId,
-    position: 1,
-    name: params.item.catalogModelName || params.item.productName,
-    description: params.item.decoration,
-    qty: primaryQuantity,
-    unit: params.item.unit,
-    unit_price: params.item.unitPrice,
-    line_total: primaryQuantity * params.item.unitPrice,
-    catalog_type_id: params.item.catalogTypeId,
-    catalog_kind_id: params.item.catalogKindId,
-    catalog_model_id: params.item.catalogModelId,
-    methods:
-      params.item.decorationMethodIds.length > 0
-        ? params.item.decorationMethodIds.map((methodId) => ({
-            method_id: methodId,
-            count: 1,
-            print_position_id: null,
-            print_width_mm: null,
-            print_height_mm: null,
-          }))
-        : null,
-    metadata: {
-      source: "tosho_ai_quote_pack",
-      aiDraft: !params.item.catalogModelId || params.item.unitPrice <= 0,
-      originalPrompt: params.draft.sourceMessage,
-      decoration: params.item.decoration,
-      decorationRaw: params.item.decorationRaw,
-      decorationMatchStatus: params.item.decorationMatchStatus,
-      quantities,
-    },
-  });
-  if (itemError) throw new Error(itemError.message);
+  try {
+    const itemId = crypto.randomUUID();
+    const itemPayload: JsonRecord = {
+      id: itemId,
+      team_id: params.auth.teamId,
+      quote_id: quoteId,
+      position: 1,
+      name: params.item.catalogModelName || params.item.productName,
+      description: params.item.decoration,
+      qty: primaryQuantity,
+      unit: params.item.unit,
+      unit_price: params.item.unitPrice,
+      line_total: primaryQuantity * params.item.unitPrice,
+      catalog_type_id: params.item.catalogTypeId,
+      catalog_kind_id: params.item.catalogKindId,
+      catalog_model_id: params.item.catalogModelId,
+      methods:
+        params.item.decorationMethodIds.length > 0
+          ? params.item.decorationMethodIds.map((methodId) => ({
+              method_id: methodId,
+              count: 1,
+              print_position_id: null,
+              print_width_mm: null,
+              print_height_mm: null,
+            }))
+          : null,
+      metadata: {
+        source: "tosho_ai_quote_pack",
+        aiDraft: !params.item.catalogModelId || params.item.unitPrice <= 0,
+        originalPrompt: params.draft.sourceMessage,
+        decoration: params.item.decoration,
+        decorationRaw: params.item.decorationRaw,
+        decorationMatchStatus: params.item.decorationMatchStatus,
+        quantities,
+      },
+    };
+    let { error: itemError } = await params.adminClient.schema("tosho").from("quote_items").insert(itemPayload);
+    if (itemError && /column/i.test(itemError.message ?? "") && /metadata/i.test(itemError.message ?? "")) {
+      ({ error: itemError } = await params.adminClient
+        .schema("tosho")
+        .from("quote_items")
+        .insert(omitKeys(itemPayload, ["metadata"])));
+    }
+    if (itemError && /column/i.test(itemError.message ?? "") && /methods/i.test(itemError.message ?? "")) {
+      ({ error: itemError } = await params.adminClient
+        .schema("tosho")
+        .from("quote_items")
+        .insert(omitKeys(itemPayload, ["metadata", "methods"])));
+    }
+    if (itemError) throw new Error(itemError.message);
 
-  const { error: runError } = await params.adminClient
-    .schema("tosho")
-    .from("quote_item_runs")
-    .insert(
-      quantities.map((quantity) => ({
-        id: crypto.randomUUID(),
-        quote_id: quoteId,
-        quote_item_id: itemId,
-        quantity,
-        unit_price_model: params.item.unitPrice,
-        unit_price_print: 0,
-        logistics_cost: 0,
-        desired_manager_income: 0,
-        manager_rate: DEFAULT_MANAGER_RATE,
-        fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-        vat_rate: DEFAULT_VAT_RATE,
-        team_id: params.auth.teamId,
-      }))
-    );
-  if (runError) throw new Error(runError.message);
+    const runRows = quantities.map((quantity) => ({
+      id: crypto.randomUUID(),
+      quote_id: quoteId,
+      quote_item_id: itemId,
+      quantity,
+      unit_price_model: params.item.unitPrice,
+      unit_price_print: 0,
+      logistics_cost: 0,
+      desired_manager_income: 0,
+      manager_rate: DEFAULT_MANAGER_RATE,
+      fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+      vat_rate: DEFAULT_VAT_RATE,
+      team_id: params.auth.teamId,
+    }));
+    let { error: runError } = await params.adminClient.schema("tosho").from("quote_item_runs").insert(runRows);
+    if (runError && /column/i.test(runError.message ?? "") && /team_id/i.test(runError.message ?? "")) {
+      ({ error: runError } = await params.adminClient
+        .schema("tosho")
+        .from("quote_item_runs")
+        .insert(runRows.map(({ team_id: _teamId, ...row }) => row)));
+    }
+    if (
+      runError &&
+      /column/i.test(runError.message ?? "") &&
+      /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(runError.message ?? "")
+    ) {
+      ({ error: runError } = await params.adminClient
+        .schema("tosho")
+        .from("quote_item_runs")
+        .insert(
+          runRows.map(({ team_id: _teamId, desired_manager_income: _income, manager_rate: _managerRate, fixed_cost_rate: _fixedRate, vat_rate: _vatRate, ...row }) => row)
+        ));
+    }
+    if (runError) throw new Error(runError.message);
+  } catch (error) {
+    await cleanupAiQuoteRows(params.adminClient, [quoteId]);
+    throw error;
+  }
 
   return { id: quoteId, number };
+}
+
+async function cleanupAiQuoteRows(adminClient: ReturnType<typeof createClient>, quoteIds: string[]) {
+  const ids = Array.from(new Set(quoteIds.filter(Boolean)));
+  if (ids.length === 0) return;
+  await adminClient.schema("tosho").from("quote_item_runs").delete().in("quote_id", ids);
+  await adminClient.schema("tosho").from("quote_items").delete().in("quote_id", ids);
+  await adminClient.schema("tosho").from("quote_set_items").delete().in("quote_id", ids);
+  await adminClient.schema("tosho").from("quotes").delete().in("id", ids);
 }
 
 async function createQuoteSetForAiPack(params: {
@@ -1673,25 +1722,30 @@ async function createQuotePackFromDraft(params: {
   const monthCode = getQuoteMonthCode();
   let sequence = await getNextQuoteSequence(params.adminClient, params.auth.teamId, monthCode);
   const created: Array<{ id: string; number: string }> = [];
-  for (const item of params.draft.items) {
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        const quote = await insertAiQuote({ ...params, item, monthCode, sequence });
-        created.push(quote);
-        sequence += 1;
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error;
-        if (error instanceof Error && /duplicate|23505|number/i.test(error.message)) {
+  try {
+    for (const item of params.draft.items) {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          const quote = await insertAiQuote({ ...params, item, monthCode, sequence });
+          created.push(quote);
           sequence += 1;
-          continue;
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (error instanceof Error && /duplicate|23505|number/i.test(error.message)) {
+            sequence += 1;
+            continue;
+          }
+          throw error;
         }
-        throw error;
       }
+      if (lastError) throw lastError;
     }
-    if (lastError) throw lastError;
+  } catch (error) {
+    await cleanupAiQuoteRows(params.adminClient, created.map((row) => row.id));
+    throw error;
   }
 
   const quoteIds = created.map((row) => row.id);

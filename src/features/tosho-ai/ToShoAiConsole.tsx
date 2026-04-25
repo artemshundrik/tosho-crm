@@ -1197,7 +1197,11 @@ function MessageCard({
                 <button
                   key={`${message.id}:${action.label}:${action.text}`}
                   type="button"
-                  onClick={() => onSelectAction(action.text)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSelectAction(action.text);
+                  }}
                   className="inline-flex min-h-8 items-center rounded-full border border-border/65 bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-muted/45"
                 >
                   {action.label}
