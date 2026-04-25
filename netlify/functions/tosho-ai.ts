@@ -1504,6 +1504,7 @@ async function buildQuotePackPartyClarificationDecision(params: {
 
 async function insertAiQuote(params: {
   adminClient: ReturnType<typeof createClient>;
+  userClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   draft: QuotePackDraft;
   item: QuotePackDraftItem;
@@ -1537,7 +1538,7 @@ async function insertAiQuote(params: {
     created_by: params.auth.userId,
   };
 
-  const { error: quoteError } = await params.adminClient.schema("tosho").from("quotes").insert(quotePayload);
+  const { error: quoteError } = await params.userClient.schema("tosho").from("quotes").insert(quotePayload);
   if (quoteError) throw new Error(quoteError.message);
 
   try {
@@ -1576,15 +1577,15 @@ async function insertAiQuote(params: {
         quantities,
       },
     };
-    let { error: itemError } = await params.adminClient.schema("tosho").from("quote_items").insert(itemPayload);
+    let { error: itemError } = await params.userClient.schema("tosho").from("quote_items").insert(itemPayload);
     if (itemError && /column/i.test(itemError.message ?? "") && /metadata/i.test(itemError.message ?? "")) {
-      ({ error: itemError } = await params.adminClient
+      ({ error: itemError } = await params.userClient
         .schema("tosho")
         .from("quote_items")
         .insert(omitKeys(itemPayload, ["metadata"])));
     }
     if (itemError && /column/i.test(itemError.message ?? "") && /methods/i.test(itemError.message ?? "")) {
-      ({ error: itemError } = await params.adminClient
+      ({ error: itemError } = await params.userClient
         .schema("tosho")
         .from("quote_items")
         .insert(omitKeys(itemPayload, ["metadata", "methods"])));
@@ -1605,9 +1606,9 @@ async function insertAiQuote(params: {
       vat_rate: DEFAULT_VAT_RATE,
       team_id: params.auth.teamId,
     }));
-    let { error: runError } = await params.adminClient.schema("tosho").from("quote_item_runs").insert(runRows);
+    let { error: runError } = await params.userClient.schema("tosho").from("quote_item_runs").insert(runRows);
     if (runError && /column/i.test(runError.message ?? "") && /team_id/i.test(runError.message ?? "")) {
-      ({ error: runError } = await params.adminClient
+      ({ error: runError } = await params.userClient
         .schema("tosho")
         .from("quote_item_runs")
         .insert(runRows.map(({ team_id: _teamId, ...row }) => row)));
@@ -1617,7 +1618,7 @@ async function insertAiQuote(params: {
       /column/i.test(runError.message ?? "") &&
       /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(runError.message ?? "")
     ) {
-      ({ error: runError } = await params.adminClient
+      ({ error: runError } = await params.userClient
         .schema("tosho")
         .from("quote_item_runs")
         .insert(
@@ -1626,20 +1627,20 @@ async function insertAiQuote(params: {
     }
     if (runError) throw new Error(runError.message);
   } catch (error) {
-    await cleanupAiQuoteRows(params.adminClient, [quoteId]);
+    await cleanupAiQuoteRows(params.userClient, [quoteId]);
     throw error;
   }
 
   return { id: quoteId, number };
 }
 
-async function cleanupAiQuoteRows(adminClient: ReturnType<typeof createClient>, quoteIds: string[]) {
+async function cleanupAiQuoteRows(client: ReturnType<typeof createClient>, quoteIds: string[]) {
   const ids = Array.from(new Set(quoteIds.filter(Boolean)));
   if (ids.length === 0) return;
-  await adminClient.schema("tosho").from("quote_item_runs").delete().in("quote_id", ids);
-  await adminClient.schema("tosho").from("quote_items").delete().in("quote_id", ids);
-  await adminClient.schema("tosho").from("quote_set_items").delete().in("quote_id", ids);
-  await adminClient.schema("tosho").from("quotes").delete().in("id", ids);
+  await client.schema("tosho").from("quote_item_runs").delete().in("quote_id", ids);
+  await client.schema("tosho").from("quote_items").delete().in("quote_id", ids);
+  await client.schema("tosho").from("quote_set_items").delete().in("quote_id", ids);
+  await client.schema("tosho").from("quotes").delete().in("id", ids);
 }
 
 async function createQuoteSetForAiPack(params: {
@@ -1680,6 +1681,7 @@ async function createQuoteSetForAiPack(params: {
 
 async function createQuotePackFromDraft(params: {
   adminClient: ReturnType<typeof createClient>;
+  userClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   draft: QuotePackDraft;
 }): Promise<AssistantDecision> {
@@ -1744,7 +1746,7 @@ async function createQuotePackFromDraft(params: {
       if (lastError) throw lastError;
     }
   } catch (error) {
-    await cleanupAiQuoteRows(params.adminClient, created.map((row) => row.id));
+    await cleanupAiQuoteRows(params.userClient, created.map((row) => row.id));
     throw error;
   }
 
@@ -6664,6 +6666,7 @@ async function notifyRoutingRecipients(params: {
 
 async function handleSend(params: {
   adminClient: ReturnType<typeof createClient>;
+  userClient: ReturnType<typeof createClient>;
   auth: AuthContext;
   body: RequestBody;
 }) {
@@ -6721,6 +6724,7 @@ async function handleSend(params: {
   } else if (existingQuotePackDraft && isQuotePackConfirmation(message)) {
     assistantDecision = await createQuotePackFromDraft({
       adminClient: params.adminClient,
+      userClient: params.userClient,
       auth: params.auth,
       draft: existingQuotePackDraft,
     });
@@ -7316,6 +7320,7 @@ export const handler = async (event: HttpEvent) => {
           200,
           await handleSend({
             adminClient,
+            userClient,
             auth,
             body,
           })
