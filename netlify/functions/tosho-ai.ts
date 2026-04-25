@@ -834,6 +834,7 @@ function isQuotePackRequest(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   return (
     /(створи|створити|зроби|підготуй|потрібно|треба|потрібні).*(прорах|кп|коштор|quote)/u.test(normalized) ||
+    /(зроби|створи|підготуй)\s+прорахунки?\s+для\s+.+\b(?:треба|потрібно|потрібні)\b/u.test(normalized) ||
     (/(для\s+.+\s+(треба|потрібно|потрібні))/u.test(normalized) &&
       /(\d+\s*(шт\.?|штук|од\.?|pcs?)|^\s*\d+[.)])/u.test(normalized) &&
       /(нанес|вишив|друк|шеврон|лого|принт|dtf|шовк|термо|спереду|збоку|ззаду)/u.test(normalized))
