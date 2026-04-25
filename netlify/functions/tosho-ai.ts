@@ -789,6 +789,10 @@ function normalizeQuotePackProductName(value: string) {
   return labels[normalized] ?? normalized.replace(/и$/u, "а");
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const QUOTE_PACK_GENERIC_PRODUCT_TOKENS = new Set([
   "tm",
   "тм",
@@ -818,6 +822,15 @@ const QUOTE_PACK_GENERIC_PRODUCT_TOKENS = new Set([
   "сумки",
   "сумку",
 ]);
+
+const QUOTE_PACK_TOKEN_ALIASES: Record<string, string[]> = {
+  golf: ["гольф"],
+  гольф: ["golf"],
+  over: ["овер"],
+  овер: ["over"],
+  floyd: ["флойд"],
+  флойд: ["floyd"],
+};
 
 function capitalizeWord(value: string) {
   const normalized = normalizeText(value);
@@ -857,9 +870,12 @@ function isQuotePackCancellation(message: string) {
 function extractQuotePackPartyQuery(message: string) {
   const normalized = normalizeText(message).replace(/[?!.]+$/g, "");
   const match = normalized.match(
-    /(?:^|\s)для\s+(.+?)\s+(?:треба|потрібно|потрібні|зроби|створи|підготуй|на|треба\s+зробити)\b/iu
+    /(?:^|\s)для\s+(.+?)\s+(?:треба|потрібно|потрібні|зроби|створи|підготуй|на|треба\s+зробити)(?:\s|$)/iu
   );
-  return normalizeText(match?.[1]).replace(/\b(замовника|клієнта|компанії)\b/giu, " ").replace(/\s+/g, " ").trim();
+  return normalizeText(match?.[1])
+    .replace(/(?:^|\s)(?:замовника|клієнта|компанії)(?=\s|$)/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractQuotePackBody(message: string) {
@@ -901,10 +917,7 @@ function parseQuotePackItems(message: string): QuotePackDraftItem[] {
       if (!Number.isFinite(quantity) || quantity <= 0) return null;
       const beforeQty = normalizeText(segment.slice(0, quantityMatch?.index ?? 0)).replace(/^[.)\d\s]+/g, "");
       const afterQty = normalizeText(segment.slice((quantityMatch?.index ?? 0) + (quantityMatch?.[0].length ?? 0)));
-      const cleanBefore = beforeQty
-        .replace(new RegExp(`\\b${baseProductName}\\b`, "giu"), " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const cleanBefore = stripLeadingQuotePackBaseProduct(beforeQty, baseProductName);
       const productName = normalizeText(
         cleanBefore ? `${capitalizeWord(baseProductName)} ${cleanBefore}` : capitalizeWord(baseProductName)
       );
@@ -926,6 +939,26 @@ function parseQuotePackItems(message: string): QuotePackDraftItem[] {
     .filter((item): item is QuotePackDraftItem => Boolean(item));
 }
 
+function stripLeadingQuotePackBaseProduct(value: string, baseProductName: string) {
+  const normalizedBase = normalizeQuotePackProductName(baseProductName);
+  const patterns: Record<string, RegExp> = {
+    кепка: /^(?:кепк[аиу]?|кепок)\s+/iu,
+    футболка: /^(?:футболк[аиу]?|футболок)\s+/iu,
+    чашка: /^(?:чашк[аиу]?|чашок)\s+/iu,
+    ручка: /^(?:ручк[аиу]?|ручок)\s+/iu,
+    худі: /^(?:худі)\s+/iu,
+  };
+  return normalizeText(value).replace(patterns[normalizedBase] ?? new RegExp(`^${escapeRegExp(normalizedBase)}\\s+`, "iu"), "").trim();
+}
+
+function getQuotePackTokenAliases(token: string) {
+  const normalized = normalizeLooseAnalyticsName(token);
+  const aliases = new Set<string>(QUOTE_PACK_TOKEN_ALIASES[normalized] ?? []);
+  const transliterated = transliterateLatinToUkrainian(normalized);
+  if (transliterated && transliterated !== normalized) aliases.add(transliterated);
+  return Array.from(aliases).filter((item) => item.length >= 3);
+}
+
 function getQuotePackMeaningfulTokens(value: string) {
   return Array.from(
     new Set(
@@ -938,7 +971,10 @@ function getQuotePackMeaningfulTokens(value: string) {
 }
 
 function getQuotePackCatalogSearchTerms(item: QuotePackDraftItem) {
-  return Array.from(new Set([item.productName, ...getQuotePackMeaningfulTokens(item.productName)].map(normalizeText).filter((value) => value.length >= 3)));
+  const tokens = getQuotePackMeaningfulTokens(item.productName);
+  return Array.from(
+    new Set([item.productName, ...tokens, ...tokens.flatMap(getQuotePackTokenAliases)].map(normalizeText).filter((value) => value.length >= 3))
+  );
 }
 
 function catalogModelMatchesQuotePackItem(modelName: string | null | undefined, item: QuotePackDraftItem) {
@@ -946,7 +982,7 @@ function catalogModelMatchesQuotePackItem(modelName: string | null | undefined, 
   if (!model) return false;
   const meaningfulTokens = getQuotePackMeaningfulTokens(item.productName);
   if (meaningfulTokens.length === 0) return looseAnalyticsNameMatches(modelName, item.productName);
-  const hits = meaningfulTokens.filter((token) => model.includes(token)).length;
+  const hits = meaningfulTokens.filter((token) => [token, ...getQuotePackTokenAliases(token)].some((variant) => model.includes(variant))).length;
   return hits >= Math.min(2, meaningfulTokens.length);
 }
 
@@ -959,21 +995,40 @@ async function resolveQuotePackParty(params: {
   if (!query) return null;
   const variants = buildPartySearchVariants(query);
   if (variants.length === 0) return null;
-  const customerFilter = buildPartyOrFilter(["name", "legal_name"], variants);
-  const leadFilter = buildPartyOrFilter(["company_name", "legal_name", "first_name", "last_name"], variants);
+  const customerFilter = buildPartyOrFilter(["name", "legal_name", "website", "contact_email", "tax_id"], variants);
+  const leadFilter = buildPartyOrFilter(["company_name", "legal_name", "first_name", "last_name", "website", "email"], variants);
   const [customerResult, leadResult] = await Promise.all([
-    params.adminClient.schema("tosho").from("customers").select("id,name,legal_name,logo_url").eq("team_id", params.auth.teamId).or(customerFilter).limit(8),
+    params.adminClient
+      .schema("tosho")
+      .from("customers")
+      .select("id,name,legal_name,website,contact_email,tax_id,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .or(customerFilter)
+      .limit(8),
     params.adminClient
       .schema("tosho")
       .from("leads")
-      .select("id,company_name,legal_name,first_name,last_name,logo_url")
+      .select("id,company_name,legal_name,first_name,last_name,website,email,logo_url")
       .eq("team_id", params.auth.teamId)
       .or(leadFilter)
       .limit(8),
   ]);
 
-  const customer = ((customerResult.data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }>)
-    .map((row) => ({ row, score: scorePartySearchCandidate(`${row.name ?? ""} ${row.legal_name ?? ""}`, variants) }))
+  const customer = (
+    (customerResult.data ?? []) as Array<{
+      id: string;
+      name?: string | null;
+      legal_name?: string | null;
+      website?: string | null;
+      contact_email?: string | null;
+      tax_id?: string | null;
+      logo_url?: string | null;
+    }>
+  )
+    .map((row) => ({
+      row,
+      score: scorePartySearchCandidate(`${row.name ?? ""} ${row.legal_name ?? ""} ${row.website ?? ""} ${row.contact_email ?? ""} ${row.tax_id ?? ""}`, variants),
+    }))
     .sort((a, b) => b.score - a.score)[0]?.row;
   if (customer) {
     return {
@@ -990,12 +1045,14 @@ async function resolveQuotePackParty(params: {
     legal_name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    website?: string | null;
+    email?: string | null;
     logo_url?: string | null;
   }>)
     .map((row) => ({
       row,
       score: scorePartySearchCandidate(
-        `${row.company_name ?? ""} ${row.legal_name ?? ""} ${row.first_name ?? ""} ${row.last_name ?? ""}`,
+        `${row.company_name ?? ""} ${row.legal_name ?? ""} ${row.first_name ?? ""} ${row.last_name ?? ""} ${row.website ?? ""} ${row.email ?? ""}`,
         variants
       ),
     }))
@@ -1154,6 +1211,78 @@ async function buildQuotePackDraftDecision(params: {
         ])
       : compactSuggestedActions([{ label: "Уточнити замовника", text: "для якого замовника створити ці прорахунки?" }]),
     quotePackDraft: draft,
+  };
+}
+
+async function buildQuotePackPartyClarificationDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  draft: QuotePackDraft;
+  message: string;
+}): Promise<AssistantDecision> {
+  const party = await resolveQuotePackParty({ adminClient: params.adminClient, auth: params.auth, query: params.message });
+  const reparsedItems = parseQuotePackItems(params.draft.sourceMessage);
+  const baseItems = reparsedItems.length === params.draft.items.length ? reparsedItems : params.draft.items;
+  const items = await enrichQuotePackItemsWithCatalog({ adminClient: params.adminClient, auth: params.auth, items: baseItems });
+  const nextDraft: QuotePackDraft = {
+    ...params.draft,
+    party,
+    items,
+  };
+  const missingCatalogCount = items.filter((item) => !item.catalogModelId).length;
+  const zeroPriceCount = items.filter((item) => item.unitPrice <= 0).length;
+  const itemLines = items
+    .map((item, index) => {
+      const catalogLabel = item.catalogModelId ? `каталог: ${item.catalogModelName ?? "знайдено"}` : "без товару в каталозі";
+      const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
+      return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
+    })
+    .join("\n");
+
+  if (!party) {
+    return {
+      title: "Уточнення замовника",
+      summary: "Не знайшов точну картку замовника для draft прорахунків.",
+      answerMarkdown: `Не знайшов точну картку замовника за **${params.message}**.\n\nDraft зберігаю, але перед створенням треба вибрати або написати назву/сайт так, як він є в CRM.\n\n${itemLines}`,
+      playfulLine: "Draft є, шукаю точного замовника.",
+      status: "waiting_user",
+      priority: "low",
+      domain: "orders",
+      confidence: 0.68,
+      shouldEscalate: false,
+      shouldNotify: false,
+      knowledgeIds: [],
+      internalSummary: `Quote pack party clarification failed for: ${params.message}.`,
+      analytics: buildQuotePackAnalytics(nextDraft),
+      suggestedActions: compactSuggestedActions([{ label: "Уточнити замовника", text: "Belok.ua" }]),
+      quotePackDraft: nextDraft,
+    };
+  }
+
+  const warningLines = [
+    missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
+    zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
+  ].filter(Boolean);
+
+  return {
+    title: "Замовника підтверджено",
+    summary: `Підтвердив ${party.name}; draft готовий до створення.`,
+    answerMarkdown: `Підтвердив замовника: **${party.name}**.\n\n${itemLines}${warningLines.length > 0 ? `\n\nЩо ще перевірити:\n${warningLines.join("\n")}` : ""}`,
+    playfulLine: "Замовник привʼязаний, draft готовий.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "orders",
+    confidence: 0.9,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: `Quote pack party clarified: ${party.name}; items=${items.length}.`,
+    analytics: buildQuotePackAnalytics(nextDraft),
+    suggestedActions: compactSuggestedActions([
+      { label: `Створити ${items.length} прорах.`, text: "створити ці прорахунки" },
+      { label: "Не створювати", text: "не створюй ці прорахунки" },
+    ]),
+    quotePackDraft: nextDraft,
   };
 }
 
@@ -6286,6 +6415,13 @@ async function handleSend(params: {
       adminClient: params.adminClient,
       auth: params.auth,
       draft: existingQuotePackDraft,
+    });
+  } else if (existingQuotePackDraft && !existingQuotePackDraft.party) {
+    assistantDecision = await buildQuotePackPartyClarificationDecision({
+      adminClient: params.adminClient,
+      auth: params.auth,
+      draft: existingQuotePackDraft,
+      message,
     });
   } else if (isQuotePackRequest(message)) {
     assistantDecision = await buildQuotePackDraftDecision({
