@@ -206,6 +206,38 @@ type AnalyticsPayload = {
   note?: string | null;
 };
 
+type QuotePackDraftItem = {
+  id: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  decoration: string | null;
+  catalogModelId: string | null;
+  catalogTypeId: string | null;
+  catalogKindId: string | null;
+  catalogModelName: string | null;
+  unitPrice: number;
+};
+
+type QuotePackDraft = {
+  kind: "quote_pack";
+  sourceMessage: string;
+  party: {
+    kind: "customer" | "lead";
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  } | null;
+  items: QuotePackDraftItem[];
+  createdAt: string;
+};
+
+type QuotePackCreationResult = {
+  quoteIds: string[];
+  quoteNumbers: string[];
+  quoteSetId: string | null;
+};
+
 type AssistantDecision = {
   title: string;
   summary: string;
@@ -221,6 +253,9 @@ type AssistantDecision = {
   internalSummary: string;
   analytics?: AnalyticsPayload | null;
   suggestedActions?: SuggestedAction[];
+  quotePackDraft?: QuotePackDraft | null;
+  quotePackCreated?: QuotePackCreationResult | null;
+  quotePackCleared?: boolean;
 };
 
 type OpenAiDiagnostics = {
@@ -696,6 +731,573 @@ function formatInteger(value: number) {
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(value);
+}
+
+const DEFAULT_MANAGER_RATE = 10;
+const DEFAULT_FIXED_COST_RATE = 30;
+const DEFAULT_VAT_RATE = 20;
+
+function getQuoteMonthCode(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}${year}`;
+}
+
+function formatQuoteNumber(monthCode: string, sequence: number) {
+  return `TS-${monthCode}-${String(sequence).padStart(4, "0")}`;
+}
+
+async function getNextQuoteSequence(adminClient: ReturnType<typeof createClient>, teamId: string, monthCode: string) {
+  const { data, error } = await adminClient
+    .schema("tosho")
+    .from("quotes")
+    .select("number")
+    .eq("team_id", teamId)
+    .like("number", `TS-${monthCode}-%`)
+    .order("number", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+
+  const lastNumber = ((data ?? []) as Array<{ number?: string | null }>)[0]?.number ?? null;
+  if (!lastNumber) return 1;
+  const parsed = Number.parseInt(lastNumber.split("-")[2] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed + 1 : 1;
+}
+
+function normalizeQuotePackProductName(value: string) {
+  const normalized = normalizeText(value).toLowerCase();
+  const labels: Record<string, string> = {
+    кепки: "кепка",
+    кепок: "кепка",
+    кепку: "кепка",
+    кепка: "кепка",
+    футболки: "футболка",
+    футболок: "футболка",
+    футболку: "футболка",
+    футболка: "футболка",
+    худі: "худі",
+    чашки: "чашка",
+    чашок: "чашка",
+    чашку: "чашка",
+    чашка: "чашка",
+    ручки: "ручка",
+    ручок: "ручка",
+    ручку: "ручка",
+    ручка: "ручка",
+  };
+  return labels[normalized] ?? normalized.replace(/и$/u, "а");
+}
+
+function capitalizeWord(value: string) {
+  const normalized = normalizeText(value);
+  return normalized ? `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}` : "";
+}
+
+function isQuotePackDraft(value: unknown): value is QuotePackDraft {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const draft = value as QuotePackDraft;
+  return draft.kind === "quote_pack" && Array.isArray(draft.items);
+}
+
+function isQuotePackRequest(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return (
+    /(створи|створити|зроби|підготуй|потрібно|треба|потрібні).*(прорах|кп|коштор|quote)/u.test(normalized) ||
+    (/(для\s+.+\s+(треба|потрібно|потрібні))/u.test(normalized) &&
+      /(\d+\s*(шт\.?|штук|од\.?|pcs?)|^\s*\d+[.)])/u.test(normalized) &&
+      /(нанес|вишив|друк|шеврон|лого|принт|dtf|шовк|термо|спереду|збоку|ззаду)/u.test(normalized))
+  );
+}
+
+function isQuotePackConfirmation(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  if (/^(не|ні|скасуй|відміна|не\s+треба)|не\s+створ/u.test(normalized)) return false;
+  return /(створи|створити|підтверджую|так|ок|окей|запускай|створюй).*(прорах|ці|усе|все)|^(так|ок|окей|створюй)$/u.test(
+    normalized
+  );
+}
+
+function isQuotePackCancellation(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return /^(не|ні|скасуй|відміна|не\s+треба)|не\s+створ/u.test(normalized);
+}
+
+function extractQuotePackPartyQuery(message: string) {
+  const normalized = normalizeText(message).replace(/[?!.]+$/g, "");
+  const match = normalized.match(
+    /(?:^|\s)для\s+(.+?)\s+(?:треба|потрібно|потрібні|зроби|створи|підготуй|на|треба\s+зробити)\b/iu
+  );
+  return normalizeText(match?.[1]).replace(/\b(замовника|клієнта|компанії)\b/giu, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractQuotePackBody(message: string) {
+  const normalized = normalizeText(message);
+  const colonIndex = normalized.indexOf(":");
+  if (colonIndex >= 0 && colonIndex < normalized.length - 1) return normalized.slice(colonIndex + 1);
+  return normalized.replace(/^.*?\b(?:треба|потрібно|потрібні)\b/iu, "");
+}
+
+function splitQuotePackSegments(body: string) {
+  const normalized = normalizeText(body).replace(/\s+/g, " ");
+  const numbered = Array.from(normalized.matchAll(/(?:^|\s)(\d+)[.)]\s*([^]+?)(?=(?:\s\d+[.)]\s)|$)/giu))
+    .map((match) => normalizeText(match[2]))
+    .filter(Boolean);
+  if (numbered.length > 0) return numbered;
+  return normalized
+    .split(/\s*[;,]\s*/u)
+    .map((item) => normalizeText(item))
+    .filter((item) => /\d+\s*(шт\.?|штук|од\.?|pcs?)/iu.test(item));
+}
+
+function extractBaseProductName(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  const match = normalized.match(/(?:^|\s)(?:треба|потрібно|потрібні)\s+(?:\d+\s+)?([а-яіїєґa-z-]{3,})/iu);
+  const raw = normalizeText(match?.[1]);
+  if (!raw || /(різн|для|прорах|кп)/iu.test(raw)) return "позиція";
+  return normalizeQuotePackProductName(raw);
+}
+
+function parseQuotePackItems(message: string): QuotePackDraftItem[] {
+  const baseProductName = extractBaseProductName(message);
+  const segments = splitQuotePackSegments(extractQuotePackBody(message));
+  return segments
+    .map((segment, index) => {
+      const quantityMatch = segment.match(/(\d+)\s*(шт\.?|штук|од\.?|pcs?)/iu);
+      const quantity = Number(quantityMatch?.[1] ?? 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) return null;
+      const beforeQty = normalizeText(segment.slice(0, quantityMatch?.index ?? 0)).replace(/^[.)\d\s]+/g, "");
+      const afterQty = normalizeText(segment.slice((quantityMatch?.index ?? 0) + (quantityMatch?.[0].length ?? 0)));
+      const cleanBefore = beforeQty
+        .replace(new RegExp(`\\b${baseProductName}\\b`, "giu"), " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const productName = normalizeText(
+        cleanBefore ? `${capitalizeWord(baseProductName)} ${cleanBefore}` : capitalizeWord(baseProductName)
+      );
+      const decoration = afterQty || null;
+      return {
+        id: `draft-${index + 1}`,
+        productName: productName || `Позиція ${index + 1}`,
+        quantity,
+        unit: "шт.",
+        decoration,
+        catalogModelId: null,
+        catalogTypeId: null,
+        catalogKindId: null,
+        catalogModelName: null,
+        unitPrice: 0,
+      } satisfies QuotePackDraftItem;
+    })
+    .filter((item): item is QuotePackDraftItem => Boolean(item));
+}
+
+async function resolveQuotePackParty(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  query: string;
+}) {
+  const query = normalizeText(params.query);
+  if (!query) return null;
+  const variants = buildPartySearchVariants(query);
+  if (variants.length === 0) return null;
+  const customerFilter = buildPartyOrFilter(["name", "legal_name"], variants);
+  const leadFilter = buildPartyOrFilter(["company_name", "legal_name", "first_name", "last_name"], variants);
+  const [customerResult, leadResult] = await Promise.all([
+    params.adminClient.schema("tosho").from("customers").select("id,name,legal_name,logo_url").eq("team_id", params.auth.teamId).or(customerFilter).limit(8),
+    params.adminClient
+      .schema("tosho")
+      .from("leads")
+      .select("id,company_name,legal_name,first_name,last_name,logo_url")
+      .eq("team_id", params.auth.teamId)
+      .or(leadFilter)
+      .limit(8),
+  ]);
+
+  const customer = ((customerResult.data ?? []) as Array<{ id: string; name?: string | null; legal_name?: string | null; logo_url?: string | null }>)
+    .map((row) => ({ row, score: scorePartySearchCandidate(`${row.name ?? ""} ${row.legal_name ?? ""}`, variants) }))
+    .sort((a, b) => b.score - a.score)[0]?.row;
+  if (customer) {
+    return {
+      kind: "customer" as const,
+      id: customer.id,
+      name: normalizeText(customer.name || customer.legal_name) || customer.id,
+      logoUrl: normalizeText(customer.logo_url) || null,
+    };
+  }
+
+  const lead = ((leadResult.data ?? []) as Array<{
+    id: string;
+    company_name?: string | null;
+    legal_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    logo_url?: string | null;
+  }>)
+    .map((row) => ({
+      row,
+      score: scorePartySearchCandidate(
+        `${row.company_name ?? ""} ${row.legal_name ?? ""} ${row.first_name ?? ""} ${row.last_name ?? ""}`,
+        variants
+      ),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.row;
+  if (!lead) return null;
+  const person = [lead.first_name, lead.last_name].map(normalizeText).filter(Boolean).join(" ");
+  return {
+    kind: "lead" as const,
+    id: lead.id,
+    name: normalizeText(lead.company_name || lead.legal_name || person) || lead.id,
+    logoUrl: normalizeText(lead.logo_url) || null,
+  };
+}
+
+async function enrichQuotePackItemsWithCatalog(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  items: QuotePackDraftItem[];
+}) {
+  const searchTerms = Array.from(
+    new Set(
+      params.items
+        .flatMap((item) => [item.productName, item.productName.split(/\s+/u)[0] ?? ""])
+        .map(normalizeText)
+        .filter((item) => item.length >= 3)
+    )
+  ).slice(0, 8);
+  if (searchTerms.length === 0) return params.items;
+
+  const filter = searchTerms.map(escapeIlikeValue).filter(Boolean).map((term) => `name.ilike.%${term}%`).join(",");
+  if (!filter) return params.items;
+
+  const { data: modelRows } = await params.adminClient
+    .schema("tosho")
+    .from("catalog_models")
+    .select("id,name,price,kind_id")
+    .eq("team_id", params.auth.teamId)
+    .or(filter)
+    .limit(30);
+  const models = ((modelRows ?? []) as Array<{ id: string; name?: string | null; price?: number | string | null; kind_id?: string | null }>).filter(
+    (row) => row.id
+  );
+  const kindIds = Array.from(new Set(models.map((row) => normalizeText(row.kind_id)).filter(Boolean)));
+  const { data: kindRows } =
+    kindIds.length > 0
+      ? await params.adminClient.schema("tosho").from("catalog_kinds").select("id,type_id").eq("team_id", params.auth.teamId).in("id", kindIds)
+      : { data: [] as Array<{ id: string; type_id?: string | null }> };
+  const kindById = new Map(((kindRows ?? []) as Array<{ id: string; type_id?: string | null }>).map((row) => [row.id, row]));
+
+  return params.items.map((item) => {
+    const variants = [item.productName, item.productName.split(/\s+/u)[0] ?? ""].map(normalizeText).filter(Boolean);
+    const match = models
+      .map((row) => ({ row, score: scorePartySearchCandidate(row.name ?? "", variants) }))
+      .sort((a, b) => b.score - a.score)[0]?.row;
+    if (!match) return item;
+    const kind = match.kind_id ? kindById.get(match.kind_id) : null;
+    return {
+      ...item,
+      catalogModelId: match.id,
+      catalogKindId: match.kind_id ?? null,
+      catalogTypeId: kind?.type_id ?? null,
+      catalogModelName: normalizeText(match.name) || null,
+      unitPrice: toFiniteAmount(match.price),
+    };
+  });
+}
+
+function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
+  return {
+    kind: "entity",
+    title: "Draft прорахунків",
+    caption: draft.party
+      ? `${draft.party.name} · ${formatInteger(draft.items.length)} прорах.`
+      : `${formatInteger(draft.items.length)} прорах. · замовника треба уточнити`,
+    metricLabel: "Кількість",
+    rows: draft.items.map((item) => ({
+      id: item.id,
+      label: item.productName,
+      primary: `${formatInteger(item.quantity)} ${item.unit}`,
+      secondary: item.decoration ?? "Нанесення не вказано",
+      badges: [
+        item.catalogModelId
+          ? { label: "Каталог", value: item.catalogModelName ?? "знайдено" }
+          : { label: "Каталог", value: "без товару" },
+        item.unitPrice > 0 ? { label: "Ціна", value: formatMoney(item.unitPrice) } : { label: "Ціна", value: "0" },
+      ],
+    })),
+    note: "Це preview. Записи в базі створюються тільки після підтвердження.",
+  };
+}
+
+async function buildQuotePackDraftDecision(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  message: string;
+}): Promise<AssistantDecision | null> {
+  if (!params.auth.canManageQueue) return null;
+  const parsedItems = parseQuotePackItems(params.message);
+  if (parsedItems.length < 2) return null;
+
+  const partyQuery = extractQuotePackPartyQuery(params.message);
+  const party = partyQuery ? await resolveQuotePackParty({ adminClient: params.adminClient, auth: params.auth, query: partyQuery }) : null;
+  const items = await enrichQuotePackItemsWithCatalog({ adminClient: params.adminClient, auth: params.auth, items: parsedItems });
+  const draft: QuotePackDraft = {
+    kind: "quote_pack",
+    sourceMessage: params.message,
+    party,
+    items,
+    createdAt: new Date().toISOString(),
+  };
+
+  const missingCatalogCount = items.filter((item) => !item.catalogModelId).length;
+  const zeroPriceCount = items.filter((item) => item.unitPrice <= 0).length;
+  const intro = party
+    ? `Зібрав draft для **${party.name}**: **${formatInteger(items.length)}** окремі прорахунки.`
+    : `Зібрав draft на **${formatInteger(items.length)}** окремі прорахунки, але замовника не зміг підтвердити.`;
+  const itemLines = items
+    .map((item, index) => {
+      const catalogLabel = item.catalogModelId ? `каталог: ${item.catalogModelName ?? "знайдено"}` : "без товару в каталозі";
+      const priceLabel = item.unitPrice > 0 ? `ціна ${formatMoney(item.unitPrice)}` : "ціна 0";
+      return `${index + 1}. **${item.productName}** — ${formatInteger(item.quantity)} ${item.unit}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
+    })
+    .join("\n");
+  const warningLines = [
+    !party ? "- Спочатку уточни замовника: напиши назву точно або відкрий картку замовника." : "",
+    missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції підуть без catalog_model_id, як ручні позиції прорахунку.` : "",
+    zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції мають ціну 0, їх треба буде дозаповнити.` : "",
+  ].filter(Boolean);
+
+  return {
+    title: "Draft кількох прорахунків",
+    summary: party
+      ? `Готовий створити ${formatInteger(items.length)} прорахунки для ${party.name}.`
+      : "Зібрав draft, але замовника треба уточнити перед створенням.",
+    answerMarkdown: `${intro}\n\n${itemLines}${warningLines.length > 0 ? `\n\nЩо перевірити перед створенням:\n${warningLines.join("\n")}` : ""}`,
+    playfulLine: party ? "Draft готовий до підтвердження." : "Draft є, бракує точного замовника.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "orders",
+    confidence: party ? 0.9 : 0.72,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: `Quote pack draft: ${items.length} items; party=${party?.name ?? "missing"}.`,
+    analytics: buildQuotePackAnalytics(draft),
+    suggestedActions: party
+      ? compactSuggestedActions([
+          { label: `Створити ${items.length} прорах.`, text: "створити ці прорахунки" },
+          { label: "Не створювати", text: "не створюй ці прорахунки" },
+        ])
+      : compactSuggestedActions([{ label: "Уточнити замовника", text: "для якого замовника створити ці прорахунки?" }]),
+    quotePackDraft: draft,
+  };
+}
+
+async function insertAiQuote(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  draft: QuotePackDraft;
+  item: QuotePackDraftItem;
+  sequence: number;
+  monthCode: string;
+}) {
+  const quoteId = crypto.randomUUID();
+  const number = formatQuoteNumber(params.monthCode, params.sequence);
+  const comment = [
+    params.item.decoration ? `Нанесення: ${params.item.decoration}` : "",
+    !params.item.catalogModelId ? "AI draft: товар не знайдено в каталозі." : "",
+    params.item.unitPrice <= 0 ? "AI draft: ціну треба дозаповнити." : "",
+  ].filter(Boolean).join("\n");
+
+  const quotePayload = {
+    id: quoteId,
+    team_id: params.auth.teamId,
+    customer_id: params.draft.party?.kind === "customer" ? params.draft.party.id : null,
+    customer_name: params.draft.party?.name ?? null,
+    customer_logo_url: params.draft.party?.logoUrl ?? null,
+    title: params.draft.party?.kind === "lead" ? params.draft.party.name : null,
+    comment: comment || null,
+    design_brief: comment || null,
+    currency: "UAH",
+    assigned_to: params.auth.userId,
+    quote_type: "merch",
+    number,
+    created_by: params.auth.userId,
+  };
+
+  const { error: quoteError } = await params.adminClient.schema("tosho").from("quotes").insert(quotePayload);
+  if (quoteError) throw new Error(quoteError.message);
+
+  const itemId = crypto.randomUUID();
+  const { error: itemError } = await params.adminClient.schema("tosho").from("quote_items").insert({
+    id: itemId,
+    team_id: params.auth.teamId,
+    quote_id: quoteId,
+    position: 1,
+    name: params.item.catalogModelName || params.item.productName,
+    description: params.item.decoration,
+    qty: params.item.quantity,
+    unit: params.item.unit,
+    unit_price: params.item.unitPrice,
+    line_total: params.item.quantity * params.item.unitPrice,
+    catalog_type_id: params.item.catalogTypeId,
+    catalog_kind_id: params.item.catalogKindId,
+    catalog_model_id: params.item.catalogModelId,
+    methods: null,
+    metadata: {
+      source: "tosho_ai_quote_pack",
+      aiDraft: !params.item.catalogModelId || params.item.unitPrice <= 0,
+      originalPrompt: params.draft.sourceMessage,
+      decoration: params.item.decoration,
+    },
+  });
+  if (itemError) throw new Error(itemError.message);
+
+  const { error: runError } = await params.adminClient.schema("tosho").from("quote_item_runs").insert({
+    id: crypto.randomUUID(),
+    quote_id: quoteId,
+    quote_item_id: itemId,
+    quantity: params.item.quantity,
+    unit_price_model: params.item.unitPrice,
+    unit_price_print: 0,
+    logistics_cost: 0,
+    desired_manager_income: 0,
+    manager_rate: DEFAULT_MANAGER_RATE,
+    fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+    vat_rate: DEFAULT_VAT_RATE,
+    team_id: params.auth.teamId,
+  });
+  if (runError) throw new Error(runError.message);
+
+  return { id: quoteId, number };
+}
+
+async function createQuoteSetForAiPack(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  draft: QuotePackDraft;
+  quoteIds: string[];
+}) {
+  if (params.draft.party?.kind !== "customer" || params.quoteIds.length < 2) return null;
+  const insertSet = async (payload: JsonRecord) =>
+    await params.adminClient.schema("tosho").from("quote_sets").insert(payload).select("id").maybeSingle();
+  let { data, error } = await insertSet({
+    team_id: params.auth.teamId,
+    customer_id: params.draft.party.id,
+    name: `AI набір: ${params.draft.party.name}`,
+    kind: "set",
+    created_by: params.auth.userId,
+  });
+  if (error && /column/i.test(error.message ?? "") && /kind|created_by/i.test(error.message ?? "")) {
+    ({ data, error } = await insertSet({
+      team_id: params.auth.teamId,
+      customer_id: params.draft.party.id,
+      name: `AI набір: ${params.draft.party.name}`,
+    }));
+  }
+  if (error || !data?.id) return null;
+  const setId = String(data.id);
+  const { error: itemError } = await params.adminClient.schema("tosho").from("quote_set_items").insert(
+    params.quoteIds.map((quoteId, index) => ({
+      team_id: params.auth.teamId,
+      quote_set_id: setId,
+      quote_id: quoteId,
+      sort_order: index,
+    }))
+  );
+  return itemError ? null : setId;
+}
+
+async function createQuotePackFromDraft(params: {
+  adminClient: ReturnType<typeof createClient>;
+  auth: AuthContext;
+  draft: QuotePackDraft;
+}): Promise<AssistantDecision> {
+  if (!params.auth.canManageQueue) {
+    throw httpError(403, "Недостатньо прав для створення прорахунків.");
+  }
+  if (!params.draft.party) {
+    throw httpError(400, "Перед створенням треба підтвердити замовника.");
+  }
+  if (params.draft.items.length < 2) {
+    throw httpError(400, "Для batch-створення потрібно щонайменше 2 позиції.");
+  }
+
+  const monthCode = getQuoteMonthCode();
+  let sequence = await getNextQuoteSequence(params.adminClient, params.auth.teamId, monthCode);
+  const created: Array<{ id: string; number: string }> = [];
+  for (const item of params.draft.items) {
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const quote = await insertAiQuote({ ...params, item, monthCode, sequence });
+        created.push(quote);
+        sequence += 1;
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof Error && /duplicate|23505|number/i.test(error.message)) {
+          sequence += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (lastError) throw lastError;
+  }
+
+  const quoteIds = created.map((row) => row.id);
+  const quoteSetId = await createQuoteSetForAiPack({ adminClient: params.adminClient, auth: params.auth, draft: params.draft, quoteIds });
+  const links = created.map((row) => `- [${row.number}](/orders/estimates/${row.id})`).join("\n");
+  const zeroPriceCount = params.draft.items.filter((item) => item.unitPrice <= 0).length;
+  const missingCatalogCount = params.draft.items.filter((item) => !item.catalogModelId).length;
+
+  return {
+    title: "Прорахунки створено",
+    summary: `Створено ${formatInteger(created.length)} прорахунки для ${params.draft.party.name}.`,
+    answerMarkdown: `Готово. Створив **${formatInteger(created.length)}** окремі прорахунки для **${params.draft.party.name}**.${quoteSetId ? "\n\nТакож об'єднав їх у набір прорахунків." : ""}\n\n${links}${
+      zeroPriceCount > 0 || missingCatalogCount > 0
+        ? `\n\nЩо ще треба дозаповнити:\n${missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції без товару з каталогу\n` : ""}${zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції з ціною 0` : ""}`
+        : ""
+    }`,
+    playfulLine: "Batch-прорахунки створено.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "orders",
+    confidence: 0.96,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: `Created AI quote pack: ${created.length} quotes.`,
+    suggestedActions: compactSuggestedActions([
+      { label: "Мої прорахунки", text: "мої прорахунки за тиждень" },
+      { label: "Створити дизайн-задачі", text: "створи дизайн-задачі для цих прорахунків" },
+    ]),
+    quotePackCreated: {
+      quoteIds,
+      quoteNumbers: created.map((row) => row.number),
+      quoteSetId,
+    },
+  };
+}
+
+function buildQuotePackCancelledDecision(): AssistantDecision {
+  return {
+    title: "Draft скасовано",
+    summary: "Чернетку batch-прорахунків очищено.",
+    answerMarkdown: "Добре, не створюю ці прорахунки. Draft очистив, у базу нічого не записував.",
+    playfulLine: "Нічого не створено.",
+    status: "waiting_user",
+    priority: "low",
+    domain: "orders",
+    confidence: 0.96,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "AI quote pack draft cancelled by user.",
+    suggestedActions: compactSuggestedActions([{ label: "Новий batch", text: "створи кілька прорахунків з тексту" }]),
+    quotePackCleared: true,
+  };
 }
 
 function toFiniteAmount(value: number | string | null | undefined) {
@@ -5603,6 +6205,7 @@ async function handleSend(params: {
   let knowledgeCandidates: KnowledgeItemRow[] = [];
   let knowledgeRetrieval: KnowledgeRetrievalDiagnostics | null = null;
   const existingContext = (existingRequest?.context ?? {}) as JsonRecord;
+  const existingQuotePackDraft = isQuotePackDraft(existingContext.quote_pack_draft) ? existingContext.quote_pack_draft : null;
   const previousThreadAnalyticsMessage =
     typeof existingContext.last_analytics_message === "string"
       ? normalizeText(existingContext.last_analytics_message)
@@ -5611,7 +6214,23 @@ async function handleSend(params: {
   const analyticsRequested = shouldRunAnalytics(analyticsMessage);
   let analyticsDecision: AssistantDecision | null = null;
 
-  if (analyticsRequested) {
+  if (existingQuotePackDraft && isQuotePackCancellation(message)) {
+    assistantDecision = buildQuotePackCancelledDecision();
+  } else if (existingQuotePackDraft && isQuotePackConfirmation(message)) {
+    assistantDecision = await createQuotePackFromDraft({
+      adminClient: params.adminClient,
+      auth: params.auth,
+      draft: existingQuotePackDraft,
+    });
+  } else if (isQuotePackRequest(message)) {
+    assistantDecision = await buildQuotePackDraftDecision({
+      adminClient: params.adminClient,
+      auth: params.auth,
+      message,
+    });
+  }
+
+  if (!assistantDecision && analyticsRequested) {
     analyticsDecision = await buildAnalyticsDecision({
       adminClient: params.adminClient,
       auth: params.auth,
@@ -5775,6 +6394,10 @@ async function handleSend(params: {
       knowledge_retrieval: knowledgeRetrieval,
       openai: openAiDiagnostics,
       crm_tools: crmToolDiagnostics,
+      quote_pack_draft: assistantDecision.quotePackCreated || assistantDecision.quotePackCleared
+        ? null
+        : assistantDecision.quotePackDraft ?? existingQuotePackDraft ?? null,
+      quote_pack_created: assistantDecision.quotePackCreated ?? null,
       last_internal_summary: assistantDecision.internalSummary,
       last_analytics_message: analyticsRequested ? analyticsMessage : previousThreadAnalyticsMessage || null,
     },
@@ -5857,6 +6480,9 @@ async function handleSend(params: {
         sources: sourceItems,
         analytics: assistantDecision.analytics ?? null,
         suggestedActions: compactSuggestedActions(assistantDecision.suggestedActions ?? []),
+        quotePackDraft: assistantDecision.quotePackDraft ?? null,
+        quotePackCreated: assistantDecision.quotePackCreated ?? null,
+        quotePackCleared: assistantDecision.quotePackCleared ?? false,
       },
     },
   ]);
