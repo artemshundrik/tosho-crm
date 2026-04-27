@@ -143,10 +143,13 @@ import {
   ChevronDown,
   Loader2,
   Package,
-  Shirt,
   Image,
   Lock,
   Calculator,
+  TrendingUp,
+  Wallet,
+  Receipt,
+  PlusCircle,
   Palette,
   Bold,
   Italic,
@@ -214,6 +217,8 @@ type QuoteDetailsPageProps = {
   teamId: string;
   quoteId: string;
 };
+
+type QuotePageTab = "products" | "design" | "deadlines" | "discussion" | "details";
 
 type QuoteDetailsCachePayload = {
   quote: QuoteSummaryRow;
@@ -739,11 +744,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [runsSaving, setRunsSaving] = useState(false);
+  const [runsLoaded, setRunsLoaded] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunIdByItem, setSelectedRunIdByItem] = useState<Record<string, string>>({});
 
   const [comments, setComments] = useState<QuoteComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
   const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
   const [commentText, setCommentText] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
@@ -1148,12 +1156,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [currentManagerRate, effectiveManagerId]);
 
   // Runs (tirages)
-  const addRun = () => {
+  const addRun = (quoteItemId?: string | null) => {
     const newId = crypto.randomUUID();
+    const resolvedQuoteItemId = quoteItemId ?? (items.length === 1 ? items[0]?.id ?? null : null);
     setRuns((prev) => [
       ...prev,
       {
         id: newId,
+        quote_item_id: resolvedQuoteItemId,
         quantity: 1,
         unit_price_model: 0,
         unit_price_print: 0,
@@ -1165,6 +1175,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       },
     ]);
     setSelectedRunId(newId);
+    if (resolvedQuoteItemId) {
+      setSelectedRunIdByItem((prev) => ({ ...prev, [resolvedQuoteItemId]: newId }));
+    }
   };
 
   const updateRun = (index: number, field: keyof QuoteRun, value: number) => {
@@ -1194,11 +1207,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   };
 
-  const saveRuns = async (nextRuns?: QuoteRun[] | unknown) => {
+  const saveRuns = async (nextRuns?: QuoteRun[] | unknown, options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     if (quoteRequirements.length > 0) {
       const message = `Щоб зберегти розрахунок, заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`;
       setRunsError(message);
-      toast.error(message);
+      if (!silent) toast.error(message);
       return;
     }
     const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
@@ -1230,17 +1244,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       await upsertQuoteRuns(quoteId, sanitized);
       await loadRuns();
-      await logActivity({
-        teamId,
-        action: "прорахував тиражі",
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
-        href: `/orders/estimates/${quoteId}`,
-        metadata: { source: "quote_runs" },
-      });
-      await loadActivityLog();
-      toast.success("Тиражі збережено");
+      if (!silent) {
+        await logActivity({
+          teamId,
+          action: "прорахував тиражі",
+          entityType: "quotes",
+          entityId: quoteId,
+          title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
+          href: `/orders/estimates/${quoteId}`,
+          metadata: { source: "quote_runs" },
+        });
+        await loadActivityLog();
+        toast.success("Тиражі збережено");
+      }
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося зберегти тиражі.");
       if (/record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)) {
@@ -1250,11 +1266,52 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } else {
         setRunsError(message);
       }
-      toast.error("Помилка збереження");
+      if (!silent) toast.error("Помилка збереження");
     } finally {
       setRunsSaving(false);
     }
   };
+
+  const saveRunsRef = useRef(saveRuns);
+  saveRunsRef.current = saveRuns;
+
+  const runsAutosaveSignature = useMemo(
+    () =>
+      JSON.stringify(
+        runs.map((run) => ({
+          id: run.id ?? "",
+          quote_item_id: run.quote_item_id ?? "",
+          quantity: Math.max(1, Number(run.quantity) || 1),
+          unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+          unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
+          logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
+          desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
+          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+        }))
+      ),
+    [currentManagerRate, runs]
+  );
+
+  const runsOriginalAutosaveSignature = useMemo(
+    () =>
+      JSON.stringify(
+        runsOriginal.map((run) => ({
+          id: run.id ?? "",
+          quote_item_id: run.quote_item_id ?? "",
+          quantity: Math.max(1, Number(run.quantity) || 1),
+          unit_price_model: Math.max(0, Number(run.unit_price_model) || 0),
+          unit_price_print: Math.max(0, Number(run.unit_price_print) || 0),
+          logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
+          desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
+          manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
+          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+        }))
+      ),
+    [currentManagerRate, runsOriginal]
+  );
 
   const removeRun = async (index: number) => {
     if (quoteRequirements.length > 0) {
@@ -1268,6 +1325,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setRuns(next);
     if (removed?.id && removed.id === selectedRunId) {
       setSelectedRunId(next[0]?.id ?? null);
+    }
+    if (removed?.id && removed.quote_item_id) {
+      const nextItemRun = next.find((run) => run.quote_item_id === removed.quote_item_id);
+      setSelectedRunIdByItem((prev) => ({
+        ...prev,
+        [removed.quote_item_id as string]: nextItemRun?.id ?? "",
+      }));
     }
     await saveRuns(next);
   };
@@ -1350,10 +1414,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     () => runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null,
     [runs, selectedRunId]
   );
-  const selectedRunIndex = useMemo(
-    () => runs.findIndex((run) => run === selectedRun),
-    [runs, selectedRun]
-  );
 
   const selectedRunPricing = useMemo(() => getRunPricing(selectedRun), [getRunPricing, selectedRun]);
 
@@ -1367,7 +1427,99 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return modelPrice + printPrice + logistics / qty;
   }, [selectedRun]);
 
-  const [runsLoaded, setRunsLoaded] = useState(false);
+  const getSelectedRunForItem = useCallback(
+    (itemId: string) => {
+      const itemRuns = runs.filter((run) =>
+        run.quote_item_id ? run.quote_item_id === itemId : items.length === 1
+      );
+      if (itemRuns.length === 0) return null;
+      const selectedForItem = selectedRunIdByItem[itemId];
+      return itemRuns.find((run) => run.id && run.id === selectedForItem) ?? itemRuns[0] ?? null;
+    },
+    [items.length, runs, selectedRunIdByItem]
+  );
+
+  const getRunIndex = useCallback(
+    (targetRun: QuoteRun | null) => runs.findIndex((run) => run === targetRun),
+    [runs]
+  );
+
+  const selectRunForItem = useCallback((run: QuoteRun, itemId?: string | null) => {
+    setSelectedRunId(run.id ?? null);
+    if (itemId && run.id) {
+      setSelectedRunIdByItem((prev) => ({ ...prev, [itemId]: run.id ?? "" }));
+    }
+  }, []);
+
+  const activeRunPricingSummaries = useMemo(() => {
+    const itemSummaries = items
+      .map((item) => {
+        const run = getSelectedRunForItem(item.id);
+        if (!run) return null;
+        return {
+          itemId: item.id,
+          title: item.title,
+          run,
+          pricing: getRunPricing(run),
+        };
+      })
+      .filter(
+        (
+          summary
+        ): summary is {
+          itemId: string;
+          title: string;
+          run: QuoteRun;
+          pricing: ReturnType<typeof getRunPricing>;
+        } => Boolean(summary)
+      );
+
+    if (itemSummaries.length > 0) return itemSummaries;
+    if (!selectedRun) return [];
+
+    return [
+      {
+        itemId: "",
+        title: "Активний тираж",
+        run: selectedRun,
+        pricing: getRunPricing(selectedRun),
+      },
+    ];
+  }, [getRunPricing, getSelectedRunForItem, items, selectedRun]);
+
+  const activeRunPricingTotals = useMemo(
+    () =>
+      activeRunPricingSummaries.reduce(
+        (totals, summary) => ({
+          costTotal: totals.costTotal + summary.pricing.costTotal,
+          requiredGrossProfit: totals.requiredGrossProfit + summary.pricing.requiredGrossProfit,
+          fixedCosts: totals.fixedCosts + summary.pricing.fixedCosts,
+          vatAmount: totals.vatAmount + summary.pricing.vatAmount,
+          markupTotal: totals.markupTotal + summary.pricing.markupTotal,
+          saleTotal: totals.saleTotal + summary.pricing.saleTotal,
+        }),
+        {
+          costTotal: 0,
+          requiredGrossProfit: 0,
+          fixedCosts: 0,
+          vatAmount: 0,
+          markupTotal: 0,
+          saleTotal: 0,
+        }
+      ),
+    [activeRunPricingSummaries]
+  );
+
+  const hasMultipleActiveProductSummaries = items.length > 1;
+  const activeManagerRateLabel = useMemo(() => {
+    const rates = Array.from(
+      new Set(activeRunPricingSummaries.map((summary) => summary.pricing.managerRate))
+    );
+    if (rates.length === 0) return `${selectedRunPricing.managerRate}%`;
+    if (rates.length === 1) return `${rates[0]}%`;
+    return "Змішано";
+  }, [activeRunPricingSummaries, selectedRunPricing.managerRate]);
+
   const quoteSectionsBootstrapping =
     (!itemsLoaded && items.length === 0) || (!runsLoaded && runs.length === 0);
 
@@ -1803,6 +1955,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteRequirementsHint = quoteRequirements.length
     ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
     : null;
+
+  useEffect(() => {
+    if (!runsLoaded || runsSaving || quoteRequirements.length > 0) return;
+    if (runsAutosaveSignature === runsOriginalAutosaveSignature) return;
+
+    const timer = window.setTimeout(() => {
+      void saveRunsRef.current(undefined, { silent: true });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    quoteRequirements.length,
+    runsAutosaveSignature,
+    runsLoaded,
+    runsOriginalAutosaveSignature,
+    runsSaving,
+  ]);
+
   const shortTaskText = briefText.trim();
   const designBriefPreview = [ 
     designDeadlineDate
@@ -2037,13 +2207,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [activityEvents]);
 
   const totals = useMemo(() => {
-    const subtotal = runs.length > 0 ? selectedRunPricing.saleTotal : itemsSubtotal;
+    const subtotal = activeRunPricingSummaries.length > 0 ? activeRunPricingTotals.saleTotal : itemsSubtotal;
     return {
       subtotal,
       discountAmount: 0,
       total: Math.max(0, subtotal),
     };
-  }, [itemsSubtotal, runs.length, selectedRunPricing.saleTotal]);
+  }, [activeRunPricingSummaries.length, activeRunPricingTotals.saleTotal, itemsSubtotal]);
 
   const catalogSelectionIndex = useMemo(() => {
     const typeIdByKindId = new Map<string, string>();
@@ -2080,6 +2250,81 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     },
     [catalogSelectionIndex]
   );
+
+  const runSections = useMemo(() => {
+    const indexedRuns = runs.map((run, index) => ({ run, index }));
+    type RunSection = {
+      key: string;
+      item: QuoteItem | null;
+      title: string;
+      meta: string;
+      imageUrl: string | null;
+      zoomImageUrl: string | null;
+      runs: Array<{ run: QuoteRun; index: number }>;
+    };
+
+    const getItemSectionMeta = (item: QuoteItem, fallbackIndex: number): RunSection => {
+      const { typeId: resolvedTypeId, kindId: resolvedKindId, modelId: resolvedModelId } =
+        resolveCatalogSelection({
+          typeId: item.catalogTypeId ?? item.productTypeId ?? undefined,
+          kindId: item.catalogKindId ?? item.productKindId ?? undefined,
+          modelId: item.catalogModelId ?? item.productModelId ?? undefined,
+        });
+      const typeLabel = item.resolvedTypeName ?? getTypeLabel(catalogTypes, resolvedTypeId);
+      const kindLabel = item.resolvedKindName ?? getKindLabel(catalogTypes, resolvedTypeId, resolvedKindId);
+      const modelLabel =
+        item.resolvedModelName ?? getModelLabel(catalogTypes, resolvedTypeId, resolvedKindId, resolvedModelId);
+      const catalogZoomImage =
+        item.resolvedModelImageUrl ?? getModelImage(catalogTypes, resolvedTypeId, resolvedKindId, resolvedModelId);
+      const catalogImage = item.resolvedModelThumbUrl ?? catalogZoomImage;
+      const attachmentImage =
+        !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
+          ? item.attachment.url
+          : null;
+
+      return {
+        key: item.id,
+        item,
+        title: item.title || modelLabel || `Товар ${fallbackIndex + 1}`,
+        meta: [typeLabel, kindLabel].filter(Boolean).join(" / "),
+        imageUrl: catalogImage ?? attachmentImage ?? null,
+        zoomImageUrl: catalogZoomImage ?? attachmentImage ?? catalogImage ?? null,
+        runs: indexedRuns.filter(({ run }) =>
+          run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
+        ),
+      };
+    };
+
+    if (items.length === 0) {
+      return [
+        {
+          key: "all",
+          item: null,
+          title: "Тиражі прорахунку",
+          meta: "",
+          imageUrl: null,
+          zoomImageUrl: null,
+          runs: indexedRuns,
+        },
+      ];
+    }
+
+    const sections: RunSection[] = items.map(getItemSectionMeta);
+    const unassignedRuns = indexedRuns.filter(({ run }) => !run.quote_item_id);
+    if (items.length > 1 && unassignedRuns.length > 0) {
+      sections.push({
+        key: "unassigned",
+        item: null,
+        title: "Без прив'язки до товару",
+        meta: "Старі або імпортовані тиражі",
+        imageUrl: null,
+        zoomImageUrl: null,
+        runs: unassignedRuns,
+      });
+    }
+
+    return sections;
+  }, [catalogTypes, items, resolveCatalogSelection, runs]);
 
   const resolvedItemSelection = useMemo(
     () =>
@@ -3305,12 +3550,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!runsLoaded) return;
     if (runs.length === 0) {
       setSelectedRunId(null);
+      setSelectedRunIdByItem({});
       return;
     }
     if (!selectedRunId || !runs.some((run) => run.id === selectedRunId)) {
       setSelectedRunId(runs[0]?.id ?? null);
     }
   }, [runsLoaded, runs, selectedRunId]);
+
+  useEffect(() => {
+    if (!runsLoaded || items.length === 0) return;
+    setSelectedRunIdByItem((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      items.forEach((item) => {
+        const itemRuns = runs.filter((run) =>
+          run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
+        );
+        const currentId = prev[item.id];
+        const currentStillExists = currentId && itemRuns.some((run) => run.id === currentId);
+        const fallbackId = itemRuns.find((run) => run.id)?.id;
+        if (currentStillExists) {
+          next[item.id] = currentId;
+        } else if (fallbackId) {
+          next[item.id] = fallbackId;
+          changed = true;
+        } else if (currentId) {
+          changed = true;
+        }
+      });
+      if (Object.keys(prev).length !== Object.keys(next).length) changed = true;
+      return changed ? next : prev;
+    });
+  }, [items, runs, runsLoaded]);
 
   const loadHistory = async () => {
     setHistoryLoading(true);
@@ -5200,6 +5472,60 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     );
   }
 
+  const deadlineTabBadge = quote.deadline_at ? buildDeadlineBadgePreview(quote.deadline_at).label : "Не вказано";
+  const discussionCount = comments.length + attachments.length;
+  const designBadge = designTask
+    ? "Задача"
+    : quote.design_brief?.trim()
+    ? "ТЗ"
+    : designVisualizations.length > 0
+    ? String(designVisualizations.length)
+    : null;
+  const quotePageTabs: Array<{
+    value: QuotePageTab;
+    label: string;
+    icon: LucideIcon;
+    badge?: string | number | null;
+    attention?: boolean;
+    mobileOnly?: boolean;
+  }> = [
+    {
+      value: "products",
+      label: "Товари",
+      icon: Package,
+      badge: items.length || null,
+      attention: Boolean(itemsError || runsError || quoteRequirements.length > 0),
+    },
+    {
+      value: "design",
+      label: "Дизайн",
+      icon: Palette,
+      badge: designBadge,
+      attention: Boolean(designTaskError),
+    },
+    {
+      value: "deadlines",
+      label: "Дедлайни",
+      icon: Calendar,
+      badge: deadlineTabBadge,
+      attention: Boolean(deadlineError || !quote.deadline_at),
+    },
+    {
+      value: "discussion",
+      label: "Обговорення",
+      icon: MessageSquare,
+      badge: discussionCount || null,
+      attention: Boolean(commentsError || attachmentsError || activityError || historyError),
+    },
+    {
+      value: "details",
+      label: "Деталі",
+      icon: FileText,
+      badge: canViewSummarySection ? formatCurrency(totals.total, quote.currency) : null,
+      mobileOnly: true,
+    },
+  ];
+
   return (
     <div className="text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-transparent">
@@ -5236,6 +5562,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </div>
                     );
                   })()}
+                  {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
+                    <>
+                      {quoteSetMembership.kp_names.map((name) => (
+                        <QuoteKindBadge key={`header-kp-${name}`} kind="kp" label={name} />
+                      ))}
+                      {quoteSetMembership.set_names.map((name) => (
+                        <QuoteKindBadge key={`header-set-${name}`} kind="set" label={name} />
+                      ))}
+                    </>
+                  ) : null}
                   <Badge className={cn("border", statusClasses[currentStatus] ?? statusClasses.new)}>
                     {formatStatusLabel(currentStatus)}
                   </Badge>
@@ -5361,10 +5697,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       </header>
 
-      <div className="flex w-full flex-col gap-6 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex-row xl:gap-6 2xl:gap-8">
-        <main className="min-w-0 flex-1">
+      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
+        <main className="min-w-0 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pb-8 2xl:px-8">
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:sticky xl:top-0 xl:z-30 2xl:-mx-8 2xl:px-8">
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {quotePageTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeQuoteTab === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setActiveQuoteTab(tab.value)}
+                    className={cn(
+                      "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      isActive
+                        ? "border-primary/35 bg-primary/10 text-primary"
+                        : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground",
+                      tab.mobileOnly && "xl:hidden"
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                    {tab.badge ? (
+                      <span
+                        className={cn(
+                          "max-w-[96px] truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none",
+                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {tab.badge}
+                      </span>
+                    ) : null}
+                    {tab.attention ? (
+                      <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="space-y-6">
-            {quoteLockedByOther || statusError || quoteRequirementsHint || (quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0)) ? (
+            {quoteLockedByOther || statusError || quoteRequirementsHint ? (
               <div className="space-y-3">
                 {quoteLockedByOther ? (
                   <div className="tone-warning rounded-lg border px-4 py-3 text-sm">
@@ -5387,48 +5762,35 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 ) : null}
 
-                {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
-                  <div className="flex flex-wrap gap-2">
-                    {quoteSetMembership.kp_names.map((name) => (
-                      <QuoteKindBadge key={`kp-${name}`} kind="kp" label={name} />
-                    ))}
-                    {quoteSetMembership.set_names.map((name) => (
-                      <QuoteKindBadge key={`set-${name}`} kind="set" label={name} />
-                    ))}
-                  </div>
-                ) : null}
               </div>
             ) : null}
 
-            <details open className="group py-2">
-              <summary className="mb-3 flex cursor-pointer list-none items-center justify-between gap-3">
+            <section className={cn("py-2", activeQuoteTab !== "products" && "hidden")}>
+              <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-2xl font-semibold tracking-tight text-foreground">Товари і тиражі</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {items.length} {items.length === 1 ? "товар" : "товари"} · {runs.length} тиражів · фіксовано
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Package className="h-4 w-4" />
-                  </div>
-                  <div className="text-base font-semibold tracking-tight text-foreground">Специфікація</div>
-                  <div className="relative">
-                    <button
+                  {canEditQuoteContent ? (
+                    <Button
                       type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Інформація про специфікацію"
-                      onClick={(event) => event.preventDefault()}
+                      variant="outline"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openNewItem();
+                      }}
+                      className="h-10 gap-2 rounded-xl"
                     >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Зафіксована модель і параметри позиції. Щоб змінити специфікацію, створіть новий прорахунок.
-                    </div>
-                  </div>
+                      <Plus className="h-4 w-4" />
+                      Додати товар
+                    </Button>
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    <Lock className="h-3.5 w-3.5" />
-                    Зафіксовано
-                  </Badge>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                </div>
-              </summary>
+              </div>
 
               {quoteSectionsBootstrapping ? (
                 <AppSectionLoader label="Завантаження..." />
@@ -5450,7 +5812,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               ) : (
                 <div>
-                  {items.slice(0, 1).map((item) => {
+                  {items.map((item, itemIndex) => {
                     const { typeId: resolvedTypeId, kindId: resolvedKindId, modelId: resolvedModelId } =
                       resolveCatalogSelection({
                         typeId: item.catalogTypeId ?? item.productTypeId ?? undefined,
@@ -5505,26 +5867,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
                     const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
-                    const isNoteBlocksProduct = printProductConfig?.productKind === "note_blocks";
-                    const packageSizeHint =
-                      printProductConfig?.productKind === "package" &&
-                      printProductConfig.packageType === "custom" &&
-                      printProductConfig.widthMm &&
-                      printProductConfig.heightMm &&
-                      printProductConfig.lengthMm
-                        ? "Ш × В × Г"
-                        : null;
+                    const packageSizeHint = null;
                     const shouldShowDescription =
                       item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
                     const isMerchQuote = (quote?.quote_type ?? "") === "merch";
-                    const specRuns = runs.length > 0
-                      ? runs
-                          .map((run) => Number(run.quantity) || 0)
-                          .filter((qty) => qty > 0)
-                      : item.qty > 0
-                      ? [item.qty]
-                      : [];
-
+                    const itemRuns = runs.filter((run) =>
+                      run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
+                    );
                     const specHighlights = [
                       ...(!isMerchQuote
                         ? [
@@ -5588,23 +5937,55 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       ...methodSections,
                     ].filter((section): section is { title: string; fields: Array<{ label: string; value: string }> } => Boolean(section));
                     const renderedSections = packageSections.length > 0 ? packageSections : defaultSpecSections;
+                    const printSummaryPriority = [
+                      "Розмір (Ш × В × Г)",
+                      "Формат",
+                      "Матеріал",
+                      "Папір",
+                      "Папір блоку",
+                      "Щільність",
+                      "Щільність блоку",
+                      "Кількість аркушів",
+                      "Тип нанесення",
+                      "Друк",
+                      "Друк обкладинки",
+                      "Друк блоку",
+                      "Ламінація",
+                      "Додаткове оздоблення",
+                      "Вибірковий лак",
+                    ];
+                    const printDetailFields = packageSections.flatMap((section) =>
+                      section.fields.map((field) => ({ ...field, section: section.title }))
+                    );
+                    const compactPrintFields = printDetailFields
+                      .filter((field) => printSummaryPriority.includes(field.label))
+                      .sort(
+                        (a, b) =>
+                          printSummaryPriority.indexOf(a.label) - printSummaryPriority.indexOf(b.label)
+                      )
+                      .slice(0, 6);
 
                     return (
-                      <div key={item.id} className="py-5">
-                        <div className="flex items-start gap-4">
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "overflow-hidden rounded-[22px] border border-border/60 bg-background shadow-sm",
+                          itemIndex > 0 && "mt-4"
+                        )}
+                      >
+                        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:gap-6">
                           <div className="shrink-0">
                             {productPreview?.type === "image" ? (
-                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-muted/20">
-                                <KanbanImageZoomPreview
-                                  imageUrl={productPreview.url}
-                                  zoomImageUrl={productPreview.zoomUrl}
-                                  alt={modelLabel ?? "Товар"}
-                                  loadStrategy="eager"
-                                  className="h-16 w-16 rounded-xl object-cover"
-                                />
-                              </div>
+                              <KanbanImageZoomPreview
+                                imageUrl={productPreview.url}
+                                zoomImageUrl={productPreview.zoomUrl}
+                                alt={modelLabel ?? "Товар"}
+                                loadStrategy="eager"
+                                className="h-20 w-20 rounded-2xl border-border/50 bg-muted/20 [&>div]:rounded-2xl"
+                                imageClassName="object-cover"
+                              />
                             ) : (
-                              <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-border/40 bg-muted/40">
+                              <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-border/40 bg-muted/40">
                                 <Package className="h-6 w-6 text-muted-foreground/50" />
                               </div>
                             )}
@@ -5613,86 +5994,108 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="truncate text-base font-semibold text-foreground">{item.title}</div>
+                                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                  <div className="truncate text-xl font-semibold tracking-tight text-foreground">{item.title}</div>
+                                  {metaLine ? (
+                                    <div className="text-sm text-muted-foreground">{metaLine}</div>
+                                  ) : null}
                                   {packageSizeHint ? (
                                     <span className="rounded-md border border-border/50 bg-muted/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                                       {packageSizeHint}
                                     </span>
                                   ) : null}
                                 </div>
-                                {metaLine ? (
-                                  <div className="mt-1 text-sm text-muted-foreground">{metaLine}</div>
-                                ) : null}
                               </div>
 
-                              <div className="flex flex-wrap justify-end gap-2">
-                                {specRuns.map((qty, index) => {
-                                  const isActiveRun =
-                                    selectedRun && (Number(selectedRun.quantity) || 0) === qty;
-                                  return (
-                                    <div
-                                      key={`${item.id}:spec-run:${qty}:${index}`}
-                                      className={cn(
-                                        "rounded-lg border px-3 py-2",
-                                        isActiveRun
-                                          ? "border-primary/40 bg-primary/10"
-                                          : "border-border/50 bg-muted/10"
-                                      )}
-                                    >
-                                      <div className="flex items-baseline gap-1.5">
-                                        <div className="text-lg font-semibold tabular-nums text-foreground">
-                                          {qty}
-                                        </div>
-                                        <div className="text-[11px] font-medium text-muted-foreground">
-                                          {normalizeUnitLabel(item.unit)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Badge variant="secondary" className="h-7 gap-1 rounded-lg px-2 text-xs">
+                                  <Lock className="h-3.5 w-3.5" />
+                                  Фіксовано
+                                </Badge>
                               </div>
                             </div>
 
-                            {renderedSections.length > 0 ? (
-                              <div className="mt-5 grid gap-6 lg:grid-cols-3">
+                            {packageSections.length > 0 ? (
+                              <div className="mt-4 space-y-3">
+                                {compactPrintFields.length > 0 ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {compactPrintFields.map((field) => (
+                                      <span
+                                        key={`print-summary:${field.label}:${field.value}`}
+                                        className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
+                                        title={`${field.label}: ${field.value}`}
+                                      >
+                                        <span className="text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-muted-foreground">
+                                          {field.label === "Розмір (Ш × В × Г)" ? "Розмір" : field.label}
+                                        </span>
+                                        <span className="max-w-full truncate text-base font-semibold leading-none text-foreground/90">
+                                          {field.value}
+                                        </span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+
+                                <details className="group rounded-xl border border-border/50 bg-muted/[0.04]">
+                                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                                    <div>
+                                      <div className="text-sm font-semibold text-foreground">Специфікація поліграфії</div>
+                                      <div className="mt-0.5 text-xs text-muted-foreground">
+                                        {printDetailFields.length} параметрів у {packageSections.length} секціях
+                                      </div>
+                                    </div>
+                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                                  </summary>
+                                  <div className="grid gap-3 border-t border-border/50 p-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {packageSections.map((section) => (
+                                      <div
+                                        key={section.title}
+                                        className="rounded-lg border border-border/40 bg-background/60 p-3"
+                                      >
+                                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                          {section.title}
+                                        </div>
+                                        <div className="space-y-2">
+                                          {section.fields.map((field) => (
+                                            <div
+                                              key={`${section.title}:${field.label}`}
+                                              className="grid grid-cols-[minmax(96px,0.8fr)_minmax(0,1.2fr)] gap-3 text-sm"
+                                            >
+                                              <div className="min-w-0 text-muted-foreground">{field.label}</div>
+                                              <div className="min-w-0 font-semibold leading-snug text-foreground">
+                                                {field.value}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              </div>
+                            ) : renderedSections.length > 0 ? (
+                              <div className="mt-4 flex flex-wrap gap-2">
                                 {renderedSections.map((section) => (
                                   <div
                                     key={section.title}
-                                    className={cn(
-                                      "min-w-0 space-y-3",
-                                      isNoteBlocksProduct && section.fields.length > 3 ? "lg:col-span-3" : undefined
-                                    )}
+                                    className="contents"
                                   >
-                                    <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                      {section.title}
-                                    </div>
-                                    <div
-                                      className={cn(
-                                        isNoteBlocksProduct
-                                          ? "grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3"
-                                          : "space-y-3"
-                                      )}
-                                    >
-                                      {section.fields.map((field) => (
-                                        <div
-                                          key={`${section.title}:${field.label}`}
-                                          className={cn(
-                                            "space-y-1",
-                                            isNoteBlocksProduct
-                                              ? "flex min-h-[88px] flex-col justify-between rounded-xl border border-border/50 bg-muted/[0.08] p-4"
-                                              : undefined
-                                          )}
-                                        >
-                                          <span className="text-xs font-medium text-muted-foreground">
-                                            {field.label}
-                                          </span>
-                                          <div className="text-sm font-semibold text-foreground">
+                                    {section.fields.map((field) => (
+                                      <span
+                                        key={`${section.title}:${field.label}`}
+                                        className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
+                                        title={field.value ? `${field.label}: ${field.value}` : field.label}
+                                      >
+                                        <span className="text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-muted-foreground">
+                                          {field.label}
+                                        </span>
+                                        {field.value ? (
+                                          <span className="max-w-full truncate text-base font-semibold leading-none text-foreground/90">
                                             {field.value}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                    ))}
                                   </div>
                                 ))}
                               </div>
@@ -5718,6 +6121,267 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 </div>
                               </div>
                             ) : null}
+
+                            <div className="mt-5 -mx-5 border-t border-border/50 px-5 pt-4 pb-0 sm:mr-0 sm:-ml-[6.5rem] sm:w-[calc(100%+6.5rem)] sm:px-0">
+                              {(() => {
+                                const activeItemRun = getSelectedRunForItem(item.id);
+                                const activeItemRunIndex = getRunIndex(activeItemRun);
+                                const activePricing = getRunPricing(activeItemRun);
+
+                                return (
+                                  <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center gap-2.5">
+                                      <div className="mr-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                        Тиражі
+                                      </div>
+                                      {itemRuns.map((run, runIndex) => {
+                                        const qty = Number(run.quantity) || 0;
+                                        const isSelected = !!run.id && activeItemRun?.id === run.id;
+                                        return (
+                                          <button
+                                            key={run.id ?? `${item.id}:run-pill:${runIndex}`}
+                                            type="button"
+                                            onClick={() => selectRunForItem(run, item.id)}
+                                            className={cn(
+                                              "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                                              isSelected
+                                                ? "border-primary bg-primary text-primary-foreground"
+                                                : "border-border/60 bg-background hover:bg-muted/40"
+                                            )}
+                                          >
+                                            <span className="font-mono text-base tabular-nums">{qty}</span>
+                                            <span className={cn("text-xs", isSelected ? "text-primary-foreground/75" : "text-muted-foreground")}>
+                                              {normalizeUnitLabel(item.unit)}
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                      {canEditRuns ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => addRun(item.id)}
+                                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-border/70 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                                          aria-label="Додати тираж"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </button>
+                                      ) : null}
+                                    </div>
+
+                                    {itemRuns.length === 0 ? (
+                                      <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                        Для цього товару ще немає тиражів
+                                      </div>
+                                    ) : activeItemRun && activeItemRunIndex >= 0 ? (
+                                      <div className="rounded-xl border border-border/60 bg-muted/[0.03] p-4">
+                                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                            <span className="h-2.5 w-2.5 rounded-full bg-foreground" />
+                                            <span className="text-sm font-semibold text-foreground">Активний тираж</span>
+                                            <span className="text-sm text-muted-foreground">·</span>
+                                            <div className="relative h-8 w-32">
+                                              <Input
+                                                type="number"
+                                                value={activeItemRun.quantity ?? ""}
+                                                disabled={!canEditRuns}
+                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "quantity", e.target.value)}
+                                                onFocus={(e) => {
+                                                  if (activeItemRun.quantity === 0) e.target.select();
+                                                }}
+                                                min={1}
+                                                className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left font-mono text-sm font-semibold tabular-nums"
+                                                aria-label="Кількість активного тиражу"
+                                              />
+                                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                                {normalizeUnitLabel(item.unit)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          {canEditRuns ? (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                                              onClick={() => void removeRun(activeItemRunIndex)}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                              Видалити
+                                            </Button>
+                                          ) : null}
+                                        </div>
+
+                                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="space-y-2">
+                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                              Собівартість / од.
+                                            </Label>
+                                            <div className="relative">
+                                              <Input
+                                                type="number"
+                                                value={activeItemRun.unit_price_model ?? ""}
+                                                disabled={!canEditRuns}
+                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_model", e.target.value)}
+                                                onFocus={(e) => {
+                                                  if (activeItemRun.unit_price_model === 0) e.target.select();
+                                                }}
+                                                min={0}
+                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
+                                                aria-label="Собівартість за одиницю"
+                                              />
+                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
+                                                {quote.currency}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                              В-ть нанесення
+                                            </Label>
+                                            <div className="relative">
+                                              <Input
+                                                type="number"
+                                                value={activeItemRun.unit_price_print ?? ""}
+                                                disabled={!canEditRuns}
+                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_print", e.target.value)}
+                                                onFocus={(e) => {
+                                                  if (activeItemRun.unit_price_print === 0) e.target.select();
+                                                }}
+                                                min={0}
+                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
+                                                aria-label="Вартість нанесення"
+                                              />
+                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
+                                                {quote.currency}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                              Логістика
+                                            </Label>
+                                            <div className="relative">
+                                              <Input
+                                                type="number"
+                                                value={activeItemRun.logistics_cost ?? ""}
+                                                disabled={!canEditRuns}
+                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "logistics_cost", e.target.value)}
+                                                onFocus={(e) => {
+                                                  if (!activeItemRun.logistics_cost || Number(activeItemRun.logistics_cost) === 0) e.target.select();
+                                                }}
+                                                min={0}
+                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
+                                                aria-label="Логістика"
+                                              />
+                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
+                                                {quote.currency}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                              Бажаний заробіток
+                                            </Label>
+                                            <Input
+                                              type="number"
+                                              value={activeItemRun.desired_manager_income ?? ""}
+                                              disabled={!canEditRuns}
+                                              onChange={(e) => updateRunRaw(activeItemRunIndex, "desired_manager_income", e.target.value)}
+                                              onFocus={(e) => {
+                                                if ((Number(activeItemRun.desired_manager_income) || 0) === 0) e.target.select();
+                                              }}
+                                              className="h-11 rounded-xl bg-background font-mono text-lg tabular-nums"
+                                              placeholder="0"
+                                              min="0"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        <div className="my-4 border-t border-border/60" />
+
+                                        <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_1.2fr]">
+                                          <div className="rounded-xl p-2">
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                              Собівартість
+                                            </div>
+                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-foreground">
+                                              {formatCurrency(activePricing.costTotal, quote.currency)}
+                                            </div>
+                                          </div>
+                                          <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+                                              Ціна продажу / од.
+                                            </div>
+                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
+                                              {activePricing.saleUnitPrice === null
+                                                ? "—"
+                                                : formatCurrency(activePricing.saleUnitPrice, quote.currency)}
+                                            </div>
+                                          </div>
+                                          <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+                                              Сума продажу
+                                            </div>
+                                            <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
+                                              {formatCurrency(activePricing.saleTotal, quote.currency)}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <details className="group mt-3 rounded-xl border border-border/50 bg-muted/[0.03] px-3 py-2">
+                                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                                            <div className="min-w-0">
+                                              <div className="text-xs font-semibold text-foreground">Деталі ціни</div>
+                                              <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                Надцінка {formatCurrency(activePricing.markupTotal, quote.currency)}
+                                              </div>
+                                            </div>
+                                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                                          </summary>
+                                          <div className="mt-3 grid gap-2 border-t border-border/50 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+                                            <div>
+                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Потрібний ВП
+                                              </div>
+                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
+                                                {formatCurrency(activePricing.requiredGrossProfit, quote.currency)}
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Сталі витрати
+                                              </div>
+                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
+                                                {formatCurrency(activePricing.fixedCosts, quote.currency)}
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                ПДВ
+                                              </div>
+                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
+                                                {formatCurrency(activePricing.vatAmount, quote.currency)}
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Надцінка
+                                              </div>
+                                              <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
+                                                {formatCurrency(activePricing.markupTotal, quote.currency)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </details>
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                        Оберіть або додайте тираж
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -5726,9 +6390,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               )}
 
-            </details>
+            </section>
 
-            <details open className="group py-2">
+            <details open className="hidden">
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -5750,8 +6414,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {canEditRuns ? (
-                    <Button variant="ghost" size="sm" onClick={addRun} className="h-8 gap-1.5 px-2.5 text-xs">
+                  {canEditRuns && items.length <= 1 ? (
+                    <Button variant="ghost" size="sm" onClick={() => addRun()} className="h-8 gap-1.5 px-2.5 text-xs">
                       <Plus className="h-3.5 w-3.5" />
                       Додати тираж
                     </Button>
@@ -5772,7 +6436,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               ) : runsError ? (
                 <div className="py-4 text-sm text-destructive">{runsError}</div>
-              ) : runs.length === 0 ? (
+              ) : runs.length === 0 && items.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60">
                     <Package className="h-4 w-4 text-muted-foreground" />
@@ -5782,7 +6446,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <p className="mt-0.5 text-xs text-muted-foreground">Додайте тираж для розрахунку вартості</p>
                   </div>
                   {canEditRuns ? (
-                    <Button size="sm" variant="outline" onClick={addRun} className="mt-1 h-8 gap-1.5 text-xs">
+                    <Button size="sm" variant="outline" onClick={() => addRun()} className="mt-1 h-8 gap-1.5 text-xs">
                       <Plus className="h-3.5 w-3.5" />
                       Додати тираж
                     </Button>
@@ -5790,22 +6454,68 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <div className="hidden xl:block">
-                      <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        <div className="grid min-w-0 flex-1 items-center gap-2 xl:grid-cols-[132px_76px_96px_112px_96px] 2xl:gap-3 2xl:grid-cols-[132px_minmax(84px,98px)_minmax(104px,122px)_minmax(126px,148px)_minmax(96px,116px)]">
-                          <div>Тираж</div>
-                          <div>Кількість</div>
-                          <div>{`Модель (${quote.currency})`}</div>
-                          <div>{`Нанесення (${quote.currency})`}</div>
-                          <div>{`Доставка (${quote.currency})`}</div>
+                  <div className="space-y-4">
+                    {runSections.map((section) => (
+                      <div key={section.key} className="rounded-2xl border border-border/50 bg-background/40 p-3">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {section.imageUrl ? (
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/20">
+                                <KanbanImageZoomPreview
+                                  imageUrl={section.imageUrl}
+                                  zoomImageUrl={section.zoomImageUrl ?? section.imageUrl}
+                                  alt={section.title}
+                                  loadStrategy="eager"
+                                  className="h-11 w-11 rounded-xl object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-muted/30">
+                                <Package className="h-5 w-5 text-muted-foreground/60" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-foreground">{section.title}</div>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                {section.meta ? <span>{section.meta}</span> : null}
+                                <span className="tabular-nums">{section.runs.length} тиражів</span>
+                              </div>
+                            </div>
+                          </div>
+                          {canEditRuns && section.item ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => addRun(section.item?.id ?? null)}
+                              className="h-8 gap-1.5 px-2.5 text-xs"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Додати тираж
+                            </Button>
+                          ) : null}
                         </div>
-                        <div className="w-[120px] text-right 2xl:w-[132px]">Сума</div>
-                        <div className="w-7" />
-                      </div>
-                    </div>
 
-                    {runs.map((run, idx) => {
+                        {section.runs.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+                            Для цього товару ще немає тиражів
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="hidden xl:block">
+                              <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                <div className="grid min-w-0 flex-1 items-center gap-2 xl:grid-cols-[132px_76px_96px_112px_96px] 2xl:gap-3 2xl:grid-cols-[132px_minmax(84px,98px)_minmax(104px,122px)_minmax(126px,148px)_minmax(96px,116px)]">
+                                  <div>Тираж</div>
+                                  <div className="whitespace-nowrap">Кількість</div>
+                                  <div className="whitespace-nowrap">{`В-ть за одиницю (${quote.currency})`}</div>
+                                  <div className="whitespace-nowrap">{`В-ть нанесення (${quote.currency})`}</div>
+                                  <div className="whitespace-nowrap">{`Логістика (${quote.currency})`}</div>
+                                </div>
+                                <div className="w-[120px] text-right 2xl:w-[132px]">Сума</div>
+                                <div className="w-7" />
+                              </div>
+                            </div>
+
+                            {section.runs.map(({ run, index: idx }, sectionRunIndex) => {
                       const qty = Number(run.quantity) || 0;
                       const modelPrice = Number(run.unit_price_model) || 0;
                       const printPrice = Number(run.unit_price_print) || 0;
@@ -5836,7 +6546,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   )}
                                 />
                                 <div className="min-w-0">
-                                  <div className="text-base font-semibold text-foreground">{`Тираж ${idx + 1}`}</div>
+                                  <div className="text-base font-semibold text-foreground">{`Тираж ${sectionRunIndex + 1}`}</div>
                                   {isSelected ? (
                                     <div className="mt-0.5 text-[11px] font-medium text-primary">Активний</div>
                                   ) : null}
@@ -5899,7 +6609,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <div className="text-[11px] font-medium text-muted-foreground">{`Доставка · ${quote.currency}`}</div>
+                                <div className="text-[11px] font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <Input
                                   type="number"
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
@@ -5948,7 +6658,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   />
                                   <div>
                                     <div className="text-sm font-semibold text-foreground">
-                                      {`Тираж ${idx + 1}`}
+                                      {`Тираж ${sectionRunIndex + 1}`}
                                     </div>
                                     {isSelected ? (
                                       <div className="mt-0.5 text-[11px] font-medium text-primary">
@@ -6047,8 +6757,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -6069,7 +6783,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={saveRuns}
+                        onClick={() => void saveRuns()}
                         disabled={runsSaving || quoteRequirements.length > 0}
                         className="h-8 gap-1.5 text-xs"
                       >
@@ -6086,7 +6800,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               )}
             </details>
 
-            <details open className="group py-2">
+            <details open className={cn("group py-2", activeQuoteTab !== "deadlines" && "hidden")}>
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -6449,7 +7163,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               {updatedMinutes !== null && <></>}
             </details>
 
-            <details open className="group py-2">
+            <details open className={cn("group py-2", activeQuoteTab !== "design" && "hidden")}>
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -6941,7 +7655,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </Tabs>
             </details>
 
-            <details open className="group py-2">
+            <details open className={cn("group py-2", activeQuoteTab !== "discussion" && "hidden")}>
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -7429,342 +8143,201 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
         </main>
 
-        <aside className="block w-full min-w-0 xl:w-[min(28vw,340px)] xl:min-w-[280px] xl:shrink xl:self-start 2xl:w-[min(32vw,380px)] 2xl:min-w-[320px] 2xl:shrink-0">
-          <div className="space-y-4 xl:sticky xl:top-[4.5rem]">
-            <details open className="group pb-2">
-              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
-                    <Building2 className="h-4.5 w-4.5" />
-                  </div>
-                  <div className="text-base font-semibold tracking-tight text-foreground">Контекст замовлення</div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Інформація про контекст замовлення"
-                      onClick={(event) => event.preventDefault()}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                      Основні дані по прорахунку, контакту і процесу.
-                    </div>
-                  </div>
-                </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
-
-              <div>
-                <div className="flex items-center gap-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setPartyCardOpen(true)}
-                    className="flex min-w-0 flex-1 items-center gap-4 rounded-xl border border-transparent py-1 text-left transition-colors hover:border-border/60 hover:bg-muted/20"
-                  >
+        <aside
+          className={cn(
+            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))] xl:w-[min(28vw,360px)] xl:min-w-[300px] xl:shrink-0 xl:px-0 xl:pb-0 xl:pt-0",
+            activeQuoteTab !== "details" && "max-xl:hidden"
+          )}
+        >
+          <div className="space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:px-6 xl:pr-8 xl:pt-6 xl:pb-8">
+            <section>
+              <div className="design-task-side-heading">Деталі</div>
+              <div className="design-task-detail-list">
+                <button
+                  type="button"
+                  onClick={() => setPartyCardOpen(true)}
+                  className="group design-task-detail-row w-full text-left focus-visible:outline-none"
+                  data-interactive="true"
+                >
+                  <span className="design-task-detail-label">
+                    <Building2 className="h-4 w-4 text-muted-foreground/70" />
+                    Замовник
+                  </span>
+                  <div className="design-task-detail-value">
                     <EntityAvatar
                       src={quote.customer_logo_url ?? null}
                       name={quote.customer_name ?? "Замовник / Лід"}
                       fallback={getInitials(quote.customer_name)}
-                      size={44}
+                      size={24}
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-muted-foreground">
-                        {quote.customer_id ? "Замовник" : "Лід"}
-                      </div>
-                      <div className="mt-0.5 truncate text-base font-semibold text-foreground">
-                        {quote.customer_name ?? "Не вказано"}
-                      </div>
-                    </div>
-                  </button>
+                    <span className="truncate">{quote.customer_name ?? "Не вказано"}</span>
+                  </div>
+                </button>
+
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <User className="h-4 w-4 text-muted-foreground/70" />
+                    Менеджер
+                  </span>
+                  <div className="design-task-detail-value">
+                    <AvatarBase
+                      src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
+                      name={quote.assigned_to ? memberById.get(quote.assigned_to) ?? quote.assigned_to : "Не призначено"}
+                      fallback={quote.assigned_to ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to) : "Не вказано"}
+                      size={24}
+                      className="shrink-0 border-border/60"
+                    />
+                    <span className="truncate">
+                      {quote.assigned_to ? memberById.get(quote.assigned_to) ?? quote.assigned_to : "Не призначено"}
+                    </span>
+                  </div>
                 </div>
 
-                <dl className="mt-1 space-y-0.5">
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Менеджер</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
-                      <div className="flex items-center justify-end gap-2">
-                        <AvatarBase
-                          src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
-                          name={
-                            quote.assigned_to
-                              ? memberById.get(quote.assigned_to) ?? quote.assigned_to
-                              : "Не призначено"
-                          }
-                          fallback={
-                            quote.assigned_to
-                              ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
-                              : "Не вказано"
-                          }
-                          size={20}
-                          className="text-[9px] font-semibold"
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Truck className="h-4 w-4 text-muted-foreground/70" />
+                    Доставка
+                  </span>
+                  <span className="design-task-detail-value">{formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}</span>
+                </div>
+
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Calendar className="h-4 w-4 text-muted-foreground/70" />
+                    Дедлайн клієнта
+                  </span>
+                  <span className="design-task-detail-value">
+                    {quote.customer_deadline_at ? formatDeadlineLabel(quote.customer_deadline_at) : "Не вказано"}
+                  </span>
+                </div>
+
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Clock className="h-4 w-4 text-muted-foreground/70" />
+                    Нагадування
+                  </span>
+                  <span className="design-task-detail-value">
+                    {formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null) ?? "Без нагадування"}
+                  </span>
+                </div>
+
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Calendar className="h-4 w-4 text-muted-foreground/70" />
+                    Створено
+                  </span>
+                  <span className="design-task-detail-value">
+                    {quote.created_at
+                      ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })
+                      : "Не вказано"}
+                  </span>
+                </div>
+
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Clock className="h-4 w-4 text-muted-foreground/70" />
+                    Внутр. дедлайн
+                  </span>
+                  <span className="design-task-detail-value">
+                    {(() => {
+                      const preview = buildDeadlineBadgePreview(quote?.deadline_at ?? null);
+                      return (
+                        <QuoteDeadlineBadge
+                          tone={preview.tone}
+                          label={preview.label}
+                          title={preview.title}
+                          compact
+                          className="justify-end"
                         />
-                        <span className="truncate">
-                          {quote.assigned_to
-                            ? memberById.get(quote.assigned_to) ?? quote.assigned_to
-                            : "Не призначено"}
-                        </span>
-                      </div>
-                    </dd>
-                  </div>
+                      );
+                    })()}
+                  </span>
+                </div>
 
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      {(() => {
-                        const Icon = quoteTypeIcon(quote.quote_type);
-                        return Icon ? (
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Shirt className="h-4 w-4 text-muted-foreground" />
-                        );
-                      })()}
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Тип прорахунку</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
-                      <div className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
-                        {(() => {
-                          const Icon = quoteTypeIcon(quote.quote_type);
-                          return Icon ? <Icon className="h-3 w-3" /> : null;
-                        })()}
-                        {quoteTypeLabel(quote.quote_type)}
-                      </div>
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Truck className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Доставка</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
-                      {formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн замовника</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
-                      {quote.customer_deadline_at ? (
-                        (() => {
-                          const badge = getDeadlineBadge(quote.customer_deadline_at);
-                          const parsed = parseDeadlineDate(quote.customer_deadline_at);
-                          const hasTime = /T\d{2}:\d{2}/.test(quote.customer_deadline_at ?? "");
-                          const timeLabel = parsed && hasTime
-                            ? parsed.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-                            : null;
-                          return (
-                            <QuoteDeadlineBadge
-                              tone={badge.tone}
-                              label={timeLabel ? `${badge.label} · ${timeLabel}` : badge.label}
-                              title={formatDeadlineLabel(quote.customer_deadline_at)}
-                              compact
-                              className="justify-end"
-                            />
-                          );
-                        })()
-                      ) : (
-                        <span className="text-sm font-semibold text-foreground">Не вказано</span>
-                      )}
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Нагадування</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
-                      {formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null) ?? "Без нагадування"}
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Створено</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
-                      {quote.created_at
-                        ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })
-                        : "Не вказано"}
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Внутрішній дедлайн</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right 2xl:max-w-[52%]">
-                      {(() => {
-                        const preview = buildDeadlineBadgePreview(quote?.deadline_at ?? null);
-                        return (
-                          <QuoteDeadlineBadge
-                            tone={preview.tone}
-                            label={preview.label}
-                            title={preview.title}
-                            compact
-                            className="justify-end"
-                          />
-                        );
-                      })()}
-                    </dd>
-                  </div>
-
-                  <div className="flex items-start gap-3 py-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                      <Palette className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <dt className="min-w-0 flex-1 pt-1.5 text-sm font-medium text-muted-foreground">Дедлайн дизайну</dt>
-                    <dd className="min-w-0 max-w-[60%] text-right text-sm font-semibold text-foreground 2xl:max-w-[52%]">
-                      {quote?.design_deadline_at
-                        ? formatDeadlineLabel(quote.design_deadline_at)
-                        : "Не вказано"}
-                    </dd>
-                  </div>
-                </dl>
+                <div className="design-task-detail-row">
+                  <span className="design-task-detail-label">
+                    <Palette className="h-4 w-4 text-muted-foreground/70" />
+                    Дизайн
+                  </span>
+                  <span className="design-task-detail-value">
+                    {quote?.design_deadline_at ? formatDeadlineLabel(quote.design_deadline_at) : "Не вказано"}
+                  </span>
+                </div>
               </div>
-            </details>
+            </section>
 
             {canViewSummarySection ? (
-              <details open className="group pb-1">
-                <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
-                      <Calculator className="h-4 w-4" />
+              <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
+                <div className="design-task-panel-card" data-strong="true">
+                  <div>
+                    <div className="design-task-side-heading text-primary">
+                      {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
                     </div>
-                    <div className="text-base font-semibold tracking-tight text-foreground">Підсумок</div>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label="Інформація про підсумок"
-                        onClick={(event) => event.preventDefault()}
-                      >
-                        <CircleHelp className="h-3.5 w-3.5" />
-                      </button>
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                        Фінальний підсумок по вибраному тиражу: собівартість, бажаний заробіток, націнка та ціна продажу.
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                </summary>
-
-                <div className="space-y-3 px-0 py-0">
-                  <div className="flex items-center justify-between py-1 text-sm">
-                    <span className="text-muted-foreground">Собівартість</span>
-                    <span className="font-mono font-semibold tabular-nums">
-                      {formatCurrency(runs.length > 0 ? selectedRunPricing.costTotal : totals.subtotal, quote.currency)}
-                    </span>
-                  </div>
-
-                {selectedRun ? (
-                  <>
-                    <div className="rounded-xl border border-border/50 bg-muted/[0.08] p-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Бажаний заробіток
-                          </Label>
-                          <Input
-                            type="number"
-                            value={selectedRun.desired_manager_income ?? ""}
-                            onChange={(e) => updateRunRaw(selectedRunIndex, "desired_manager_income", e.target.value)}
-                            onFocus={(e) => {
-                              if ((Number(selectedRun.desired_manager_income) || 0) === 0) {
-                                e.target.select();
-                              }
-                            }}
-                            className="h-8 border-transparent bg-muted/20 px-2 text-sm hover:border-border focus:border-border focus:bg-background"
-                            placeholder="0"
-                            min="0"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Ціна продажу / од.
-                          </Label>
-                          <div className="flex h-8 items-center rounded-md border border-border/50 bg-background px-2 font-mono text-sm font-semibold tabular-nums text-primary">
-                            {selectedRunPricing.saleUnitPrice === null
-                              ? "—"
-                              : formatCurrency(selectedRunPricing.saleUnitPrice, quote.currency)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid gap-3 sm:grid-cols-1">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">% менеджера</Label>
-                          <div className="flex h-8 items-center rounded-md border border-border/50 bg-background px-2 font-mono text-sm font-semibold tabular-nums">
-                            {selectedRunPricing.managerRate}%
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between py-1 text-sm">
-                      <span className="text-muted-foreground">Потрібний валовий прибуток</span>
-                      <span className="font-mono font-medium tabular-nums">
-                        {formatCurrency(selectedRunPricing.requiredGrossProfit, quote.currency)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between py-1 text-sm">
-                      <span className="text-muted-foreground">Сталі витрати</span>
-                      <span className="font-mono font-medium tabular-nums">
-                        {formatCurrency(selectedRunPricing.fixedCosts, quote.currency)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between py-1 text-sm">
-                      <span className="text-muted-foreground">ПДВ</span>
-                      <span className="tone-text-success font-mono font-medium tabular-nums">
-                        +{formatCurrency(selectedRunPricing.vatAmount, quote.currency)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between py-1 text-sm">
-                      <span className="text-muted-foreground">Націнка</span>
-                      <span className="font-mono font-medium tabular-nums text-primary">
-                        +{formatCurrency(selectedRunPricing.markupTotal, quote.currency)}
-                      </span>
-                    </div>
-                  </>
-                ) : null}
-
-                <div className="border-t border-border/50 pt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{selectedRun ? "Сума продажу" : "Загальна сума"}</span>
-                    <span className="font-mono text-2xl font-bold tabular-nums text-primary">
+                    <div className="mt-4 font-mono text-[24px] font-semibold leading-none tabular-nums text-primary">
                       {formatCurrency(totals.total, quote.currency)}
-                    </span>
+                    </div>
                   </div>
                 </div>
 
-                  <div className="space-y-1 border-t border-border/40 pt-3">
-                    <div className="text-[11px] text-muted-foreground/60">
-                      Джерело: {runs.length > 0 ? "Обраний тираж" : "Позиції"}
-                    </div>
-                    {items.length > 0 && (
-                      <div className="flex justify-between text-[11px] text-muted-foreground/60">
-                        <span>Позицій:</span>
-                        <span className="font-medium text-muted-foreground">{items.length}</span>
-                      </div>
-                    )}
+                <div className="design-task-detail-list mt-3">
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <Calculator className="h-4 w-4 text-muted-foreground/70" />
+                      Собівартість
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">
+                      {formatCurrency(activeRunPricingTotals.costTotal, quote.currency)}
+                    </span>
+                  </div>
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <TrendingUp className="h-4 w-4 text-muted-foreground/70" />
+                      Потрібний ВП
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">
+                      {formatCurrency(activeRunPricingTotals.requiredGrossProfit, quote.currency)}
+                    </span>
+                  </div>
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <Wallet className="h-4 w-4 text-muted-foreground/70" />
+                      Сталі витрати
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">
+                      {formatCurrency(activeRunPricingTotals.fixedCosts, quote.currency)}
+                    </span>
+                  </div>
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <Receipt className="h-4 w-4 text-muted-foreground/70" />
+                      ПДВ
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">
+                      {formatCurrency(activeRunPricingTotals.vatAmount, quote.currency)}
+                    </span>
+                  </div>
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <PlusCircle className="h-4 w-4 text-muted-foreground/70" />
+                      Надцінка
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">
+                      {formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}
+                    </span>
+                  </div>
+                  <div className="design-task-detail-row">
+                    <span className="design-task-detail-label">
+                      <User className="h-4 w-4 text-muted-foreground/70" />
+                      % менеджера
+                    </span>
+                    <span className="design-task-detail-value font-mono tabular-nums">{activeManagerRateLabel}</span>
                   </div>
                 </div>
-              </details>
+              </section>
             ) : null}
           </div>
         </aside>

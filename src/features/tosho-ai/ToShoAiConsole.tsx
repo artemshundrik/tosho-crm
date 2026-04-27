@@ -115,11 +115,6 @@ type PromptSuggestionGroup = {
   prompts: PromptSuggestion[];
 };
 
-type PersonalPromptSuggestion = {
-  label: string;
-  text: string;
-};
-
 type ActiveMention = {
   start: number;
   end: number;
@@ -648,64 +643,6 @@ function buildPromptSuggestionGroups(input: {
   return [groups[1], groups[3], groups[2], groups[4]];
 }
 
-function buildPersonalPromptSuggestions(input: {
-  jobRole?: string | null;
-  canManageQueue?: boolean;
-  isSuperAdmin?: boolean;
-  isAdmin?: boolean;
-  isSeo?: boolean;
-  domainHint: ToShoAiRouteContext["domainHint"];
-}): PersonalPromptSuggestion[] {
-  const jobRole = normalizeRoleText(input.jobRole);
-  const isDesigner = jobRole === "designer" || jobRole === "дизайнер" || input.domainHint === "design";
-  const isLogistics = jobRole === "logistics" || jobRole === "head_of_logistics" || input.domainHint === "logistics";
-  const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager", "pm"].includes(jobRole) || input.domainHint === "orders";
-  const isAdminLike = input.isSuperAdmin || input.isAdmin || input.isSeo;
-
-  if (isAdminLike) {
-    return [
-      { label: "Що сьогодні?", text: "дай адмін-зріз по дню: баги, observability і ризики" },
-      { label: "Чи є баги?", text: "чи є сьогодні баги або runtime errors?" },
-      { label: "Перформанс", text: "покажи стан перформансу і бази сьогодні" },
-      { label: "Сховище", text: "що зі сховищем і вкладеннями сьогодні?" },
-      { label: "Бекапи", text: "покажи стан storage backup і database backup" },
-    ];
-  }
-
-  if (isDesigner) {
-    return [
-      { label: "Що робити?", text: "що мені робити сьогодні?" },
-      { label: "План на день", text: "дай мені план на день" },
-      { label: "Що горить?", text: "що горить у моїй черзі?" },
-      { label: "Що дотиснути?", text: "що мені дотиснути сьогодні?" },
-    ];
-  }
-
-  if (isLogistics) {
-    return [
-      { label: "Що робити?", text: "що мені робити сьогодні?" },
-      { label: "План логістики", text: "дай мені план по логістиці на день" },
-      { label: "Що відвантажити?", text: "що сьогодні треба відвантажити?" },
-      { label: "Ризики доставки", text: "які ризики по доставці?" },
-    ];
-  }
-
-  if (isManager || input.canManageQueue) {
-    return [
-      { label: "Що робити?", text: "що мені робити сьогодні?" },
-      { label: "План на день", text: "дай мені план на день" },
-      { label: "Клієнти зависли", text: "мої клієнти зависли?" },
-      { label: "Кому написати?", text: "кому мені сьогодні написати?" },
-    ];
-  }
-
-  return [
-    { label: "Що робити?", text: "що мені робити сьогодні?" },
-    { label: "План на день", text: "дай мені план на день" },
-    { label: "Моя роль", text: "що я можу тут робити?" },
-  ];
-}
-
 function inferComposerMode(input: {
   composerValue: string;
   hasAttachments: boolean;
@@ -1034,37 +971,6 @@ function EmptyChatSuggestions({
   );
 }
 
-function PersonalQuickPrompts({
-  prompts,
-  disabled,
-  onSelect,
-}: {
-  prompts: PersonalPromptSuggestion[];
-  disabled?: boolean;
-  onSelect: (value: string) => void;
-}) {
-  if (prompts.length === 0) return null;
-
-  return (
-    <div className="flex max-w-full gap-2 overflow-x-auto px-0 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {prompts.slice(0, 4).map((prompt) => (
-        <button
-          key={`${prompt.label}:${prompt.text}`}
-          type="button"
-          disabled={disabled}
-          onClick={() => onSelect(prompt.text)}
-          className={cn(
-            "inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-xs font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 sm:h-10 sm:px-3.5 sm:text-sm",
-            "border-border/70 bg-muted/35 text-foreground/85 hover:bg-muted/55"
-          )}
-        >
-          {prompt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function MessageCard({
   message,
   onFeedback,
@@ -1388,27 +1294,6 @@ export function ToShoAiConsole({
         domainHint: resolvedContext.domainHint,
       }),
     [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
-  );
-
-  const personalPromptSuggestions = useMemo(
-    () =>
-      buildPersonalPromptSuggestions({
-        jobRole,
-        canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
-        isSuperAdmin: permissions.isSuperAdmin,
-        isAdmin: permissions.isAdmin,
-        isSeo: permissions.isSeo,
-        domainHint: resolvedContext.domainHint,
-      }),
-    [
-      jobRole,
-      permissions.canManageMembers,
-      permissions.isAdmin,
-      permissions.isSeo,
-      permissions.isSuperAdmin,
-      resolvedContext.domainHint,
-      snapshot?.permissions.canManageQueue,
-    ]
   );
 
   useEffect(() => {
@@ -1861,17 +1746,6 @@ export function ToShoAiConsole({
     [handleSend]
   );
 
-  const handleSelectPersonalPrompt = useCallback(
-    (value: string) => {
-      setComposerIntent("auto");
-      setComposerValue("");
-      setActiveMention(null);
-      setMentionSuggestions([]);
-      void handleSend(value, true);
-    },
-    [handleSend]
-  );
-
   const handleComposerKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key !== "Enter" || event.shiftKey) return;
@@ -2267,14 +2141,6 @@ export function ToShoAiConsole({
                   </div>
                 ))}
               </div>
-            ) : null}
-
-            {!isSendingMessage && !isAiUnavailable ? (
-              <PersonalQuickPrompts
-                prompts={personalPromptSuggestions}
-                disabled={actionBusy === "send"}
-                onSelect={handleSelectPersonalPrompt}
-              />
             ) : null}
 
             {activeMention ? (

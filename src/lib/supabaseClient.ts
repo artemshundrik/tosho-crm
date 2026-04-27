@@ -22,7 +22,13 @@ export function getSupabaseClient(): AnySupabaseClient {
   const url = requireEnv("VITE_SUPABASE_URL");
   const key = requireEnv("VITE_SUPABASE_ANON_KEY");
 
-  cachedSupabase = createClient(url, key);
+  cachedSupabase = createClient(url, key, {
+    global: {
+      headers: {
+        apikey: key,
+      },
+    },
+  });
   return cachedSupabase;
 }
 
@@ -47,7 +53,8 @@ export function getDbClient(): AnyPostgrestClient {
 export const supabase: AnySupabaseClient = new Proxy({} as AnySupabaseClient, {
   get(_target, prop) {
     const client = getSupabaseClient();
-    return Reflect.get(client as object, prop);
+    const value = Reflect.get(client as object, prop);
+    return typeof value === "function" ? value.bind(client) : value;
   },
 }) as AnySupabaseClient;
 
@@ -64,7 +71,8 @@ if (import.meta.env.DEV) {
 export const db: AnyPostgrestClient = new Proxy({} as AnyPostgrestClient, {
   get(_target, prop) {
     const client = getDbClient();
-    return Reflect.get(client as object, prop);
+    const value = Reflect.get(client as object, prop);
+    return typeof value === "function" ? value.bind(client) : value;
   },
 }) as AnyPostgrestClient;
 

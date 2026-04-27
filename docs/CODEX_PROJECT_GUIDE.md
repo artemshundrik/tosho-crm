@@ -106,6 +106,8 @@ When changing a route or top-level module, these files often all matter:
 - [src/pages/OrdersEstimateDetailsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/OrdersEstimateDetailsPage.tsx)
 - [src/pages/QuotesPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/QuotesPage.tsx)
 - [src/pages/QuoteDetailsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/QuoteDetailsPage.tsx)
+- [src/components/quotes/NewQuoteDialog.tsx](/Users/artem/Projects/tosho-crm/src/components/quotes/NewQuoteDialog.tsx) is the existing single-quote create/edit dialog.
+- [src/components/quotes/QuoteBatchBuilderDialog.tsx](/Users/artem/Projects/tosho-crm/src/components/quotes/QuoteBatchBuilderDialog.tsx) is the multi-product builder: one product creates one quote; two or more products create separate quotes and group them as a `quote_sets.kind = 'kp'` КП.
 - [src/features/quotes/quotes-page/config.ts](/Users/artem/Projects/tosho-crm/src/features/quotes/quotes-page/config.ts)
 - [src/features/quotes/quote-details/config.tsx](/Users/artem/Projects/tosho-crm/src/features/quotes/quote-details/config.tsx)
 - [src/lib/toshoApi.ts](/Users/artem/Projects/tosho-crm/src/lib/toshoApi.ts)

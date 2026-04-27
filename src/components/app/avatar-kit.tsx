@@ -80,6 +80,8 @@ type EntityAvatarProps = {
   fallbackClassName?: string;
 };
 
+const failedEntityAvatarSrcs = new Set<string>();
+
 const ENTITY_AVATAR_TONES = [
   { shell: "entity-avatar-shell-tone-1", fallback: "entity-avatar-fallback-tone-1" },
   { shell: "entity-avatar-shell-tone-2", fallback: "entity-avatar-fallback-tone-2" },
@@ -137,7 +139,7 @@ export function AvatarBase({
     setErrored(false);
     refreshAttemptedForSrcRef.current = null;
     setShouldResolve(loading === "eager");
-  }, [src]);
+  }, [loading, src]);
 
   React.useEffect(() => {
     if (!src || shouldResolve || loading === "eager") return;
@@ -229,7 +231,7 @@ export function AvatarBase({
       }
       setErrored(true);
     });
-  }, [assetVariant, computedSize, resolvedSrc, src]);
+  }, [assetVariant, resolvedSrc, src]);
 
   return (
     <span className="relative inline-flex shrink-0 align-middle" title={statusTitle || undefined}>
@@ -320,11 +322,13 @@ export function EntityAvatar({
   const tone = getEntityAvatarTone(name ?? fallback ?? "");
   const rawSrc = src?.trim() || null;
   const normalizedSrc = rawSrc && rawSrc.toLowerCase().startsWith("data:") ? null : rawSrc;
-  const [errored, setErrored] = React.useState(false);
+  const [errored, setErrored] = React.useState(() =>
+    normalizedSrc ? failedEntityAvatarSrcs.has(normalizedSrc) : false
+  );
   const hasLogo = Boolean(normalizedSrc) && !errored;
 
   React.useEffect(() => {
-    setErrored(false);
+    setErrored(normalizedSrc ? failedEntityAvatarSrcs.has(normalizedSrc) : false);
   }, [normalizedSrc]);
 
   return (
@@ -338,7 +342,10 @@ export function EntityAvatar({
           alt={name ?? "Logo"}
           className="object-cover"
           loading="lazy"
-          onError={() => setErrored(true)}
+          onError={() => {
+            if (normalizedSrc) failedEntityAvatarSrcs.add(normalizedSrc);
+            setErrored(true);
+          }}
         />
       ) : null}
       <AvatarFallback className={cn("text-xs font-semibold", tone.fallback, fallbackClassName)}>

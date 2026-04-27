@@ -229,6 +229,15 @@ type QuotePackDraftItem = {
   unitPrice: number;
 };
 
+type QuotePackDeadlineField = "deadline_at" | "customer_deadline_at" | "design_deadline_at";
+
+type QuotePackDeadline = {
+  raw: string;
+  value: string;
+  field: QuotePackDeadlineField;
+  label: string;
+};
+
 type QuotePackDraft = {
   kind: "quote_pack";
   sourceMessage: string;
@@ -238,6 +247,7 @@ type QuotePackDraft = {
     name: string;
     logoUrl: string | null;
   } | null;
+  deadline?: QuotePackDeadline | null;
   items: QuotePackDraftItem[];
   createdAt: string;
 };
@@ -894,6 +904,187 @@ function extractQuotePackBody(message: string) {
   return normalized.replace(/^.*?\b(?:треба|потрібно|потрібні)\b/iu, "");
 }
 
+const QUOTE_PACK_MONTHS: Record<string, number> = {
+  січня: 1,
+  січень: 1,
+  лютого: 2,
+  лютий: 2,
+  березня: 3,
+  березень: 3,
+  квітня: 4,
+  квітень: 4,
+  травня: 5,
+  травень: 5,
+  червня: 6,
+  червень: 6,
+  липня: 7,
+  липень: 7,
+  серпня: 8,
+  серпень: 8,
+  вересня: 9,
+  вересень: 9,
+  жовтня: 10,
+  жовтень: 10,
+  листопада: 11,
+  листопад: 11,
+  грудня: 12,
+  грудень: 12,
+};
+
+const QUOTE_PACK_DEADLINE_PREFIX = String.raw`(?:[,;]\s*)?(?:дедлайн|deadline)(?:\s+(замовника|клієнта|дизайну|внутрішн(?:ій|ього)))?\s*[-:—–]?\s*`;
+const QUOTE_PACK_DEADLINE_WORD_REGEX = new RegExp(
+  `${QUOTE_PACK_DEADLINE_PREFIX}(сьогодні|завтра|післязавтра)`,
+  "iu"
+);
+const QUOTE_PACK_DEADLINE_MONTH_REGEX = new RegExp(
+  `${QUOTE_PACK_DEADLINE_PREFIX}(\\d{1,2})\\s+(${Object.keys(QUOTE_PACK_MONTHS).join("|")})(?:\\s+(\\d{4}))?`,
+  "iu"
+);
+const QUOTE_PACK_DEADLINE_NUMERIC_REGEX = new RegExp(
+  `${QUOTE_PACK_DEADLINE_PREFIX}(\\d{1,2})[./-](\\d{1,2})(?:[./-](\\d{2,4}))?`,
+  "iu"
+);
+const QUOTE_PACK_DEADLINE_ISO_REGEX = new RegExp(
+  `${QUOTE_PACK_DEADLINE_PREFIX}(\\d{4})-(\\d{1,2})-(\\d{1,2})`,
+  "iu"
+);
+const QUOTE_PACK_DUE_WORD_REGEX = /\s*(?:[,;]\s*)?(?:до|на)\s+(сьогодні|завтра|післязавтра)\b/iu;
+const QUOTE_PACK_DUE_MONTH_REGEX = new RegExp(
+  `\\s*(?:[,;]\\s*)?(?:до|на)\\s+(\\d{1,2})\\s+(${Object.keys(QUOTE_PACK_MONTHS).join("|")})(?:\\s+(\\d{4}))?`,
+  "iu"
+);
+const QUOTE_PACK_DUE_NUMERIC_REGEX = /\s*(?:[,;]\s*)?(?:до|на)\s+(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?/iu;
+
+function getKyivTodayUtcDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Kiev",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? new Date().getUTCFullYear());
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? 1);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? 1);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildIsoDate(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return formatIsoDate(date);
+}
+
+function formatQuotePackDeadlineLabel(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) return value;
+  return `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.${year}`;
+}
+
+function normalizeQuotePackDeadlineField(value?: string | null): QuotePackDeadlineField {
+  const normalized = normalizeText(value).toLowerCase();
+  if (/дизайн/u.test(normalized)) return "design_deadline_at";
+  if (/замовник|клієнт/u.test(normalized)) return "customer_deadline_at";
+  return "deadline_at";
+}
+
+function normalizeQuotePackDeadlineYear(rawYear?: string | null) {
+  if (!rawYear) return getKyivTodayUtcDate().getUTCFullYear();
+  const year = Number(rawYear);
+  if (!Number.isFinite(year)) return getKyivTodayUtcDate().getUTCFullYear();
+  return year < 100 ? 2000 + year : year;
+}
+
+function extractQuotePackDeadline(message: string): QuotePackDeadline | null {
+  const normalized = normalizeText(message);
+  const today = getKyivTodayUtcDate();
+  const fromMatch = (match: RegExpMatchArray | null, value: string | null, fieldToken?: string | null): QuotePackDeadline | null => {
+    if (!match?.[0] || !value) return null;
+    return {
+      raw: match[0],
+      value,
+      field: normalizeQuotePackDeadlineField(fieldToken),
+      label: formatQuotePackDeadlineLabel(value),
+    };
+  };
+
+  const relativeMatch = normalized.match(QUOTE_PACK_DEADLINE_WORD_REGEX);
+  if (relativeMatch) {
+    const word = normalizeText(relativeMatch[2]).toLowerCase();
+    const offset = word === "післязавтра" ? 2 : word === "завтра" ? 1 : 0;
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return fromMatch(relativeMatch, formatIsoDate(date), relativeMatch[1]);
+  }
+
+  const isoMatch = normalized.match(QUOTE_PACK_DEADLINE_ISO_REGEX);
+  if (isoMatch) {
+    const value = buildIsoDate(Number(isoMatch[2]), Number(isoMatch[3]), Number(isoMatch[4]));
+    return fromMatch(isoMatch, value, isoMatch[1]);
+  }
+
+  const monthMatch = normalized.match(QUOTE_PACK_DEADLINE_MONTH_REGEX);
+  if (monthMatch) {
+    const day = Number(monthMatch[2]);
+    const month = QUOTE_PACK_MONTHS[normalizeText(monthMatch[3]).toLowerCase()];
+    const value = month ? buildIsoDate(normalizeQuotePackDeadlineYear(monthMatch[4]), month, day) : null;
+    return fromMatch(monthMatch, value, monthMatch[1]);
+  }
+
+  const numericMatch = normalized.match(QUOTE_PACK_DEADLINE_NUMERIC_REGEX);
+  if (numericMatch) {
+    const day = Number(numericMatch[2]);
+    const month = Number(numericMatch[3]);
+    const value = buildIsoDate(normalizeQuotePackDeadlineYear(numericMatch[4]), month, day);
+    return fromMatch(numericMatch, value, numericMatch[1]);
+  }
+
+  const dueRelativeMatch = normalized.match(QUOTE_PACK_DUE_WORD_REGEX);
+  if (dueRelativeMatch) {
+    const word = normalizeText(dueRelativeMatch[1]).toLowerCase();
+    const offset = word === "післязавтра" ? 2 : word === "завтра" ? 1 : 0;
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return fromMatch(dueRelativeMatch, formatIsoDate(date));
+  }
+
+  const dueMonthMatch = normalized.match(QUOTE_PACK_DUE_MONTH_REGEX);
+  if (dueMonthMatch) {
+    const day = Number(dueMonthMatch[1]);
+    const month = QUOTE_PACK_MONTHS[normalizeText(dueMonthMatch[2]).toLowerCase()];
+    const value = month ? buildIsoDate(normalizeQuotePackDeadlineYear(dueMonthMatch[3]), month, day) : null;
+    return fromMatch(dueMonthMatch, value);
+  }
+
+  const dueNumericMatch = normalized.match(QUOTE_PACK_DUE_NUMERIC_REGEX);
+  if (dueNumericMatch) {
+    const day = Number(dueNumericMatch[1]);
+    const month = Number(dueNumericMatch[2]);
+    const value = buildIsoDate(normalizeQuotePackDeadlineYear(dueNumericMatch[3]), month, day);
+    return fromMatch(dueNumericMatch, value);
+  }
+
+  return null;
+}
+
+function stripQuotePackDeadline(value: string) {
+  return normalizeText(value)
+    .replace(QUOTE_PACK_DEADLINE_WORD_REGEX, " ")
+    .replace(QUOTE_PACK_DEADLINE_ISO_REGEX, " ")
+    .replace(QUOTE_PACK_DEADLINE_MONTH_REGEX, " ")
+    .replace(QUOTE_PACK_DEADLINE_NUMERIC_REGEX, " ")
+    .replace(QUOTE_PACK_DUE_WORD_REGEX, " ")
+    .replace(QUOTE_PACK_DUE_MONTH_REGEX, " ")
+    .replace(QUOTE_PACK_DUE_NUMERIC_REGEX, " ")
+    .replace(/\s*([,;])\s*/gu, "$1 ")
+    .replace(/\s+/gu, " ")
+    .replace(/[,;]\s*$/u, "")
+    .trim();
+}
+
 function splitQuotePackSegments(body: string) {
   const normalized = normalizeText(body).replace(/\s+/g, " ");
   const numbered = Array.from(normalized.matchAll(/(?:^|\s)(\d+)[.)]\s*([^]+?)(?=(?:\s\d+[.)]\s)|$)/giu))
@@ -987,6 +1178,17 @@ function formatQuotePackDraftScope(items: QuotePackDraftItem[]) {
   return `${formatInteger(items.length)} окремі прорахунки`;
 }
 
+function formatQuotePackDeadlineText(deadline?: QuotePackDeadline | null) {
+  if (!deadline) return null;
+  if (deadline.field === "customer_deadline_at") return `дедлайн замовника ${deadline.label}`;
+  if (deadline.field === "design_deadline_at") return `дедлайн дизайну ${deadline.label}`;
+  return `дедлайн ${deadline.label}`;
+}
+
+function getQuotePackDeadlinePayloadValue(deadline: QuotePackDeadline) {
+  return deadline.field === "deadline_at" ? deadline.value : `${deadline.value}T09:00:00`;
+}
+
 function omitKeys<T extends JsonRecord>(value: T, keys: string[]) {
   const next = { ...value };
   keys.forEach((key) => {
@@ -996,8 +1198,9 @@ function omitKeys<T extends JsonRecord>(value: T, keys: string[]) {
 }
 
 function parseQuotePackItems(message: string): QuotePackDraftItem[] {
-  const baseProductName = extractBaseProductName(message);
-  const segments = splitQuotePackSegments(extractQuotePackBody(message));
+  const cleanedMessage = stripQuotePackDeadline(message);
+  const baseProductName = extractBaseProductName(cleanedMessage);
+  const segments = splitQuotePackSegments(extractQuotePackBody(cleanedMessage));
   return segments
     .map((segment, index) => {
       const quantityInfo = extractQuotePackQuantities(segment);
@@ -1313,14 +1516,15 @@ async function enrichQuotePackItemsWithCatalog(params: {
 }
 
 function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
+  const deadlineText = formatQuotePackDeadlineText(draft.deadline);
   return {
     kind: "entity",
     variant: "quote_draft",
     title: "Draft прорахунків",
     avatarUrl: draft.party?.logoUrl ?? null,
     caption: draft.party
-      ? `${draft.party.name} · ${formatInteger(draft.items.length)} прорах.`
-      : `${formatInteger(draft.items.length)} прорах. · замовника треба уточнити`,
+      ? `${draft.party.name} · ${formatInteger(draft.items.length)} прорах.${deadlineText ? ` · ${deadlineText}` : ""}`
+      : `${formatInteger(draft.items.length)} прорах. · замовника треба уточнити${deadlineText ? ` · ${deadlineText}` : ""}`,
     metricLabel: "Кількість",
     rows: draft.items.map((item) => ({
       id: item.id,
@@ -1340,7 +1544,9 @@ function buildQuotePackAnalytics(draft: QuotePackDraft): AnalyticsPayload {
         item.unitPrice > 0 ? { label: "Ціна", value: formatMoney(item.unitPrice) } : { label: "Ціна", value: "0" },
       ],
     })),
-    note: "Це preview. Записи в базі створюються тільки після підтвердження.",
+    note: deadlineText
+      ? `Це preview. Записи в базі створюються тільки після підтвердження. ${capitalizeWord(deadlineText)}.`
+      : "Це preview. Записи в базі створюються тільки після підтвердження.",
   };
 }
 
@@ -1350,6 +1556,7 @@ async function buildQuotePackDraftDecision(params: {
   message: string;
 }): Promise<AssistantDecision | null> {
   if (!params.auth.canManageQueue) return null;
+  const deadline = extractQuotePackDeadline(params.message);
   const parsedItems = parseQuotePackItems(params.message);
   if (!quotePackDraftCanBeBuilt(parsedItems)) return null;
 
@@ -1360,6 +1567,7 @@ async function buildQuotePackDraftDecision(params: {
     kind: "quote_pack",
     sourceMessage: params.message,
     party,
+    deadline,
     items,
     createdAt: new Date().toISOString(),
   };
@@ -1369,6 +1577,7 @@ async function buildQuotePackDraftDecision(params: {
   const intro = party
     ? `Зібрав draft для **${party.name}**: **${formatQuotePackDraftScope(items)}**.`
     : `Зібрав draft на **${formatQuotePackDraftScope(items)}**, але замовника не зміг підтвердити.`;
+  const deadlineLine = formatQuotePackDeadlineText(deadline);
   const itemLines = items
     .map((item, index) => {
       const catalogLabel =
@@ -1398,7 +1607,9 @@ async function buildQuotePackDraftDecision(params: {
     summary: party
       ? `Готовий створити ${formatQuotePackDraftScope(items)} для ${party.name}.`
       : "Зібрав draft, але замовника треба уточнити перед створенням.",
-    answerMarkdown: `${intro}\n\n${itemLines}${warningLines.length > 0 ? `\n\nЩо перевірити перед створенням:\n${warningLines.join("\n")}` : ""}`,
+    answerMarkdown: `${intro}${deadlineLine ? `\n\n${capitalizeWord(deadlineLine)}.` : ""}\n\n${itemLines}${
+      warningLines.length > 0 ? `\n\nЩо перевірити перед створенням:\n${warningLines.join("\n")}` : ""
+    }`,
     playfulLine: party ? "Draft готовий до підтвердження." : "Draft є, бракує точного замовника.",
     status: "waiting_user",
     priority: "low",
@@ -1426,12 +1637,14 @@ async function buildQuotePackPartyClarificationDecision(params: {
   message: string;
 }): Promise<AssistantDecision> {
   const party = await resolveQuotePackParty({ adminClient: params.adminClient, auth: params.auth, query: params.message });
+  const deadline = params.draft.deadline ?? extractQuotePackDeadline(params.draft.sourceMessage);
   const reparsedItems = parseQuotePackItems(params.draft.sourceMessage);
   const baseItems = reparsedItems.length === params.draft.items.length ? reparsedItems : params.draft.items;
   const items = await enrichQuotePackItemsWithCatalog({ adminClient: params.adminClient, auth: params.auth, items: baseItems });
   const nextDraft: QuotePackDraft = {
     ...params.draft,
     party,
+    deadline,
     items,
   };
   const missingCatalogCount = items.filter((item) => !item.catalogModelId).length;
@@ -1448,12 +1661,15 @@ async function buildQuotePackPartyClarificationDecision(params: {
       return `${index + 1}. **${item.productName}** — ${formatQuotePackItemQuantities(item)}; ${item.decoration ?? "нанесення не вказано"}; ${catalogLabel}; ${priceLabel}.`;
     })
     .join("\n");
+  const deadlineLine = formatQuotePackDeadlineText(deadline);
 
   if (!party) {
     return {
       title: "Уточнення замовника",
       summary: "Не знайшов точну картку замовника для draft прорахунків.",
-      answerMarkdown: `Не знайшов точну картку замовника за **${params.message}**.\n\nDraft зберігаю, але перед створенням треба вибрати або написати назву/сайт так, як він є в CRM.\n\n${itemLines}`,
+      answerMarkdown: `Не знайшов точну картку замовника за **${params.message}**.\n\nDraft зберігаю, але перед створенням треба вибрати або написати назву/сайт так, як він є в CRM.${
+        deadlineLine ? `\n\n${capitalizeWord(deadlineLine)}.` : ""
+      }\n\n${itemLines}`,
       playfulLine: "Draft є, шукаю точного замовника.",
       status: "waiting_user",
       priority: "low",
@@ -1483,7 +1699,9 @@ async function buildQuotePackPartyClarificationDecision(params: {
   return {
     title: "Замовника підтверджено",
     summary: `Підтвердив ${party.name}; draft готовий до створення.`,
-    answerMarkdown: `Підтвердив замовника: **${party.name}**.\n\n${itemLines}${warningLines.length > 0 ? `\n\nЩо ще перевірити:\n${warningLines.join("\n")}` : ""}`,
+    answerMarkdown: `Підтвердив замовника: **${party.name}**.${deadlineLine ? `\n\n${capitalizeWord(deadlineLine)}.` : ""}\n\n${itemLines}${
+      warningLines.length > 0 ? `\n\nЩо ще перевірити:\n${warningLines.join("\n")}` : ""
+    }`,
     playfulLine: "Замовник привʼязаний, draft готовий.",
     status: "waiting_user",
     priority: "low",
@@ -1515,9 +1733,11 @@ async function insertAiQuote(params: {
   const number = formatQuoteNumber(params.monthCode, params.sequence);
   const quantities = getQuotePackItemQuantities(params.item);
   const primaryQuantity = quantities[0] ?? params.item.quantity;
+  const deadlineText = formatQuotePackDeadlineText(params.draft.deadline);
   const comment = [
     params.item.decoration ? `Нанесення: ${params.item.decoration}` : "",
     quantities.length > 1 ? `Тиражі: ${quantities.map((quantity) => formatInteger(quantity)).join(", ")} ${params.item.unit}` : "",
+    deadlineText ? capitalizeWord(deadlineText) : "",
     !params.item.catalogModelId ? "AI draft: товар не знайдено в каталозі." : "",
     params.item.unitPrice <= 0 ? "AI draft: ціну треба дозаповнити." : "",
   ].filter(Boolean).join("\n");
@@ -1536,6 +1756,19 @@ async function insertAiQuote(params: {
     quote_type: "merch",
     number,
     created_by: params.auth.userId,
+    deadline_at:
+      params.draft.deadline?.field === "deadline_at"
+        ? getQuotePackDeadlinePayloadValue(params.draft.deadline)
+        : null,
+    customer_deadline_at:
+      params.draft.deadline?.field === "customer_deadline_at"
+        ? getQuotePackDeadlinePayloadValue(params.draft.deadline)
+        : null,
+    design_deadline_at:
+      params.draft.deadline?.field === "design_deadline_at"
+        ? getQuotePackDeadlinePayloadValue(params.draft.deadline)
+        : null,
+    deadline_note: params.draft.deadline ? `AI: ${formatQuotePackDeadlineText(params.draft.deadline)}` : null,
   };
 
   const { error: quoteError } = await params.userClient.schema("tosho").from("quotes").insert(quotePayload);
@@ -1571,6 +1804,7 @@ async function insertAiQuote(params: {
         source: "tosho_ai_quote_pack",
         aiDraft: !params.item.catalogModelId || params.item.unitPrice <= 0,
         originalPrompt: params.draft.sourceMessage,
+        deadline: params.draft.deadline ?? null,
         decoration: params.item.decoration,
         decorationRaw: params.item.decorationRaw,
         decorationMatchStatus: params.item.decorationMatchStatus,
@@ -1755,11 +1989,14 @@ async function createQuotePackFromDraft(params: {
   const links = created.map((row) => `- [${row.number}](/orders/estimates/${row.id})`).join("\n");
   const zeroPriceCount = params.draft.items.filter((item) => item.unitPrice <= 0).length;
   const missingCatalogCount = params.draft.items.filter((item) => !item.catalogModelId).length;
+  const deadlineText = formatQuotePackDeadlineText(params.draft.deadline);
 
   return {
     title: "Прорахунки створено",
     summary: `Створено ${formatQuotePackDraftScope(params.draft.items)} для ${params.draft.party.name}.`,
-    answerMarkdown: `Готово. Створив **${formatQuotePackDraftScope(params.draft.items)}** для **${params.draft.party.name}**.${quoteSetId ? "\n\nТакож об'єднав їх у набір прорахунків." : ""}\n\n${links}${
+    answerMarkdown: `Готово. Створив **${formatQuotePackDraftScope(params.draft.items)}** для **${params.draft.party.name}**.${
+      deadlineText ? `\n\n${capitalizeWord(deadlineText)}.` : ""
+    }${quoteSetId ? "\n\nТакож об'єднав їх у набір прорахунків." : ""}\n\n${links}${
       zeroPriceCount > 0 || missingCatalogCount > 0
         ? `\n\nЩо ще треба дозаповнити:\n${missingCatalogCount > 0 ? `- ${formatInteger(missingCatalogCount)} позиції без товару з каталогу\n` : ""}${zeroPriceCount > 0 ? `- ${formatInteger(zeroPriceCount)} позиції з ціною 0` : ""}`
         : ""

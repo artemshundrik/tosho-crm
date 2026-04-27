@@ -45,10 +45,9 @@ const DialogContent = React.forwardRef<
         "max-h-[calc(100dvh-1.5rem)]",
         "rounded-[24px] border border-border/40 bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5 outline-none",
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
-        // ✅ м’яка анімація: fade + slide зверху, без zoom
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2",
-        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2",
-        "duration-200",
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        "duration-150",
         className
       )}
       translate="no"

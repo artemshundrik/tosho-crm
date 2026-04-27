@@ -21,6 +21,7 @@ import {
   Copy,
   BookOpen,
   StickyNote,
+  Printer,
 } from "lucide-react";
 
 export type ConfiguratorProductOption = {
@@ -421,17 +422,19 @@ export function PrintProductConfigurator({
           ];
 
   const completedSteps = steps.filter((step) => step.done).length;
+  const hasSelectedProduct = Boolean(selectedConfiguratorProduct && productKind);
 
   return (
     <div className="space-y-6 rounded-[22px] border border-border/40 bg-background/30 p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Поліграфія
-          </div>
-          <div className="text-base font-semibold text-foreground">{selectionLabel || "Конфігурація виробу"}</div>
+        <div className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border/50 bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
+            <Printer />
+          </span>
+          <span>{selectionLabel || "Конфігурація виробу"}</span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {hasSelectedProduct ? (
+          <div className="flex flex-wrap gap-2">
           {steps.map((step) => (
             <div
               key={step.label}
@@ -444,7 +447,8 @@ export function PrintProductConfigurator({
           <div className="inline-flex items-center rounded-full border border-border/50 bg-background/40 px-3 py-1.5 text-xs text-muted-foreground">
             {completedSteps}/{steps.length}
           </div>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -460,11 +464,13 @@ export function PrintProductConfigurator({
               label: option.productLabel,
             }))}
             placeholder="Оберіть вид продукції"
-            icon={resolveProductIcon(productKind)}
+            icon={hasSelectedProduct ? resolveProductIcon(productKind) : <Package />}
           />
         </ConfigField>
       </div>
 
+      {!hasSelectedProduct ? null : (
+      <>
       {productKind === "notebook" ? (
         <>
           <ProductSection title="Обкладинка" done={isNotebookCoverComplete}>
@@ -1079,6 +1085,8 @@ export function PrintProductConfigurator({
           </ProductSection>
         </>
       ) : null}
+      </>
+      )}
     </div>
   );
 }

@@ -60,6 +60,7 @@ export function useEntityLock({
     error: null,
   });
   const hasLockRef = useRef(false);
+  const disabledAfterErrorRef = useRef(false);
 
   const isEnabled = useMemo(
     () => !!enabled && !!teamId && !!entityId && !!userId,
@@ -80,8 +81,10 @@ export function useEntityLock({
     }
 
     let alive = true;
+    disabledAfterErrorRef.current = false;
 
     const attemptAcquire = async () => {
+      if (disabledAfterErrorRef.current) return;
       try {
         const effectiveUserLabel = userLabel?.trim() || (await fallbackUserLabelFromAuth());
         const result = await acquireEntityLock({
@@ -103,6 +106,7 @@ export function useEntityLock({
         });
       } catch (error: unknown) {
         if (!alive) return;
+        disabledAfterErrorRef.current = true;
         hasLockRef.current = false;
         setState({
           loading: false,
@@ -118,6 +122,7 @@ export function useEntityLock({
     void attemptAcquire();
 
     const interval = window.setInterval(() => {
+      if (disabledAfterErrorRef.current) return;
       void attemptAcquire();
     }, heartbeatMs);
 

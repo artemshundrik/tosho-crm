@@ -63,8 +63,8 @@ import {
   type LeadSearchRow,
 } from "@/lib/toshoApi";
 import { mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
-import { NewQuoteDialog } from "@/components/quotes";
-import type { NewQuoteFormData } from "@/components/quotes";
+import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
+import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
 import {
   getCreatedCustomerLeadLabel,
   toQuotePartyOption,
@@ -182,6 +182,7 @@ type CatalogModel = {
   id: string;
   name: string;
   price?: number;
+  imageUrl?: string;
   metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
 };
 type CatalogModelRow = {
@@ -189,6 +190,8 @@ type CatalogModelRow = {
   kind_id: string;
   name: string;
   price?: number | null;
+  image_url?: string | null;
+  thumb_url?: string | null;
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
@@ -402,6 +405,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [batchBuilderOpen, setBatchBuilderOpen] = useState(false);
+  const [batchBuilderError, setBatchBuilderError] = useState<string | null>(null);
+  const [batchCreating, setBatchCreating] = useState(false);
   const [customers, setCustomers] = useState<QuotePartyOption[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
@@ -960,7 +966,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, [currentUserId, teamId]);
 
   useEffect(() => {
-    if (!createOpen && !editDialogOpen) return;
+    if (!createOpen && !editDialogOpen && !batchBuilderOpen) return;
     const id = window.setTimeout(async () => {
       setCustomersLoading(true);
       try {
@@ -989,10 +995,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [customerSearch, createOpen, editDialogOpen, teamId]);
+  }, [batchBuilderOpen, customerSearch, createOpen, editDialogOpen, teamId]);
 
   useEffect(() => {
-    if ((!createOpen && !editDialogOpen) || !teamId) return;
+    if ((!createOpen && !editDialogOpen && !batchBuilderOpen) || !teamId) return;
     let cancelled = false;
 
     const loadCatalog = async () => {
@@ -1024,15 +1030,29 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const kindIds = (kindRows ?? []).map((row) => row.id);
 
-        const { data: modelRows, error: modelError } = kindIds.length
-          ? await supabase
-              .schema("tosho")
-              .from("catalog_models")
-              .select("id,kind_id,name,price,configuratorPreset:metadata->>configuratorPreset")
-              .eq("team_id", teamId)
-              .in("kind_id", kindIds)
-              .order("name", { ascending: true })
-          : { data: [], error: null };
+        const loadModelRows = async (withImage: boolean) =>
+          kindIds.length
+            ? await supabase
+                .schema("tosho")
+                .from("catalog_models")
+                .select(
+                  withImage
+                    ? "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset"
+                    : "id,kind_id,name,price,configuratorPreset:metadata->>configuratorPreset"
+                )
+                .eq("team_id", teamId)
+                .in("kind_id", kindIds)
+                .order("name", { ascending: true })
+            : { data: [], error: null };
+
+        let { data: modelRows, error: modelError } = await loadModelRows(true);
+        if (
+          modelError &&
+          /column|schema cache|could not find/i.test(modelError.message ?? "") &&
+          /image_url/i.test(modelError.message ?? "")
+        ) {
+          ({ data: modelRows, error: modelError } = await loadModelRows(false));
+        }
         if (modelError) throw modelError;
 
         const { data: methodRows, error: methodError } = kindIds.length
@@ -1065,12 +1085,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         });
 
         const modelsByKind = new Map<string, CatalogModel[]>();
-        ((modelRows ?? []) as CatalogModelRow[]).forEach((row) => {
+        (((modelRows ?? []) as unknown) as CatalogModelRow[]).forEach((row) => {
           const list = modelsByKind.get(row.kind_id) ?? [];
           list.push({
             id: row.id,
             name: row.name,
             price: row.price ?? undefined,
+            imageUrl: row.image_url ?? undefined,
             metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
           });
           modelsByKind.set(row.kind_id, list);
@@ -1130,7 +1151,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [createOpen, editDialogOpen, teamId]);
+  }, [batchBuilderOpen, createOpen, editDialogOpen, teamId]);
 
   const loadQuotes = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!teamId) return;
@@ -1569,6 +1590,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     loadCatalog();
   }, [loadCatalog, pendingAttachments]);
 
+  const openBatchBuilder = useCallback(() => {
+    setBatchBuilderOpen(true);
+    setBatchBuilderError(null);
+    setCustomerSearch("");
+    setCustomers([]);
+    setAttachmentsError(null);
+  }, []);
+
   const handleCustomerSearchChange = async (search: string) => {
     if (!search.trim()) {
       setCustomers([]);
@@ -1968,6 +1997,464 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     } finally {
       creatingRef.current = false;
       setCreating(false);
+    }
+  };
+
+  const handleBatchBuilderSubmit = async (data: QuoteBatchBuilderFormData) => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setBatchCreating(true);
+    setBatchBuilderError(null);
+
+    const createdQuoteIds: string[] = [];
+    let completed = false;
+
+    try {
+      if (!teamId) {
+        throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
+      }
+      if (data.products.length === 0) {
+        throw new Error("Додайте хоча б один товар.");
+      }
+
+      const productGroups = [
+        {
+          key: "merch",
+          quoteType: "merch",
+          products: data.products.filter((product) => product.quoteType === "merch"),
+        },
+        {
+          key: "print",
+          quoteType: "print",
+          products: data.products.filter((product) => product.quoteType === "print"),
+        },
+        ...data.products
+          .filter((product) => product.quoteType === "other")
+          .map((product, index) => ({
+            key: `other-${product.id || index}`,
+            quoteType: "other",
+            products: [product],
+          })),
+      ].filter((group) => group.products.length > 0);
+
+      if (productGroups.length > 1 && data.customerType !== "customer") {
+        throw new Error("КП з кількох прорахунків зараз можна створити тільки для замовника, не ліда.");
+      }
+
+      const selectedParty = customers.find(
+        (item) => item.id === data.customerId && (item.entityType ?? "customer") === data.customerType
+      );
+      const customerIdForQuote = data.customerType === "lead" ? null : data.customerId;
+      const customerName =
+        (selectedParty?.name || selectedParty?.legal_name || "").trim() ||
+        (data.customerType === "lead" ? "Лід" : "Замовник");
+      const customerLogoUrl = selectedParty?.logo_url ?? null;
+      const quoteTitleFromLead = data.customerType === "lead" ? customerName : null;
+      const managerRate = await getManagerRateForUser(data.managerId?.trim() || userId);
+      const isUuid = (value?: string | null) =>
+        typeof value === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          value
+        );
+      const omitPayloadKeys = (row: Record<string, unknown>, keys: string[]) => {
+        const next = { ...row };
+        keys.forEach((key) => {
+          delete next[key];
+        });
+        return next;
+      };
+
+      const createdProductLabels: string[] = [];
+      const attachmentWarnings: string[] = [];
+      let createdDesignTaskCount = 0;
+
+      const getProductIndex = (productId: string) =>
+        Math.max(0, data.products.findIndex((item) => item.id === productId)) + 1;
+
+      const getDeliveryLabel = (product: QuoteBatchBuilderFormData["products"][number]) => {
+        if (!product.deliveryType) return null;
+        const deliveryName =
+          product.deliveryType === "nova_poshta"
+            ? "Нова пошта"
+            : product.deliveryType === "pickup"
+              ? "Самовивіз"
+              : product.deliveryType === "taxi"
+                ? "Таксі / Uklon"
+                : product.deliveryType === "cargo"
+                  ? "Вантажне перевезення"
+                  : product.deliveryType;
+        const details = product.deliveryDetails;
+        const detailParts = details
+          ? [
+              details.region,
+              details.city,
+              details.address,
+              details.street,
+              details.npDeliveryType,
+              details.payer ? `платить: ${details.payer}` : null,
+            ].filter((value): value is string => Boolean(value?.trim()))
+          : [];
+        return [deliveryName, detailParts.join(", ")].filter(Boolean).join(" · ");
+      };
+
+      const getGroupDelivery = (products: QuoteBatchBuilderFormData["products"]) => {
+        const deliveryProducts = products.filter((product) => product.deliveryType);
+        if (deliveryProducts.length !== products.length || deliveryProducts.length === 0) {
+          return { deliveryType: null, deliveryDetails: null };
+        }
+        const [first] = deliveryProducts;
+        const firstKey = JSON.stringify({
+          deliveryType: first.deliveryType,
+          deliveryDetails: first.deliveryDetails ?? null,
+        });
+        const allSame = deliveryProducts.every(
+          (product) =>
+            JSON.stringify({
+              deliveryType: product.deliveryType,
+              deliveryDetails: product.deliveryDetails ?? null,
+            }) === firstKey
+        );
+        return allSame
+          ? { deliveryType: first.deliveryType, deliveryDetails: first.deliveryDetails ?? null }
+          : { deliveryType: null, deliveryDetails: null };
+      };
+
+      const getPackageItemName = (packageConfig: NonNullable<QuoteBatchBuilderFormData["products"][number]["printPackageConfig"]>) => {
+        if (packageConfig.productKind === "notebook") {
+          return `Блокнот${packageConfig.notebookFormat === "other" ? "" : ` ${packageConfig.notebookFormat.toUpperCase()}`}`;
+        }
+        if (packageConfig.productKind === "note_blocks") {
+          return `Блоки для записів${
+            packageConfig.noteBlockFormat && packageConfig.noteBlockFormat !== "other"
+              ? ` ${packageConfig.noteBlockFormat}`
+              : ""
+          }`;
+        }
+        return `Пакет${
+          packageConfig.packageType === "ready"
+            ? " готовий"
+            : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
+              ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
+              : ""
+        }`;
+      };
+
+      for (const group of productGroups) {
+        const groupDelivery = getGroupDelivery(group.products);
+        const groupNotes = group.products
+          .map((product) => {
+            const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
+            const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
+            const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
+            const label = model?.name ?? `Товар ${getProductIndex(product.id)}`;
+            const lines = [
+              product.managerNote.trim() ? product.managerNote.trim() : null,
+              getDeliveryLabel(product) ? `Логістика: ${getDeliveryLabel(product)}` : null,
+            ].filter(Boolean);
+            return lines.length > 0 ? `${label}: ${lines.join("\n")}` : null;
+          })
+          .filter((value): value is string => Boolean(value));
+        const quoteComment = [data.comment, ...groupNotes].filter((value) => value.trim()).join("\n\n") || null;
+        const designBriefForQuote =
+          group.products
+            .map((product) => product.designBrief || product.managerNote)
+            .filter((value) => value.trim())
+            .join("\n\n") ||
+          data.comment ||
+          null;
+        const created = await createQuote({
+          teamId,
+          customerId: customerIdForQuote,
+          customerName,
+          customerLogoUrl,
+          title: quoteTitleFromLead,
+          quoteType: group.quoteType,
+          deliveryType: groupDelivery.deliveryType,
+          deliveryDetails: groupDelivery.deliveryDetails,
+          comment: quoteComment,
+          designBrief: designBriefForQuote,
+          currency: data.currency,
+          assignedTo: data.managerId || null,
+          deadlineAt: data.deadlineAt,
+          deadlineNote: data.deadlineNote || null,
+        });
+
+        if (!created?.id) {
+          throw new Error("Не вдалося створити прорахунок.");
+        }
+        createdQuoteIds.push(created.id);
+
+        const designProducts: Array<{
+          itemName: string;
+          product: QuoteBatchBuilderFormData["products"][number];
+          methodsCount: number;
+        }> = [];
+
+        for (const [groupProductIndex, product] of group.products.entries()) {
+          const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
+          const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
+          const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
+          const productIndex = getProductIndex(product.id);
+          const productConfiguratorPreset =
+            product.productConfiguratorPreset ?? model?.metadata?.configuratorPreset ?? null;
+          const isPrintPackageQuote = product.quoteType === "print" && Boolean(productConfiguratorPreset);
+          const packageConfig =
+            isPrintPackageQuote && product.printPackageConfig && productConfiguratorPreset
+              ? {
+                  ...product.printPackageConfig,
+                  productKind:
+                    product.printPackageConfig.productKind || getProductKindFromPreset(productConfiguratorPreset),
+                }
+              : null;
+          const primaryRunQuantity = product.runs[0]?.quantity ?? 0;
+
+          if ((!model && !isPrintPackageQuote) || primaryRunQuantity <= 0) {
+            throw new Error(`Товар ${productIndex}: оберіть модель і додайте тираж.`);
+          }
+
+          const packageItemDescription =
+            packageConfig && isPrintPackageQuote
+              ? formatPrintProductSummary(packageConfig).join(" • ")
+              : null;
+          const packageItemMetadata: QuoteItemMetadata | null =
+            isPrintPackageQuote && packageConfig && productConfiguratorPreset
+              ? {
+                  configuratorPreset: productConfiguratorPreset,
+                  printProduct: {
+                    ...packageConfig,
+                    productKind:
+                      packageConfig.productKind || getProductKindFromPreset(productConfiguratorPreset),
+                  },
+                }
+              : null;
+          const itemMetadata = {
+            ...(packageItemMetadata ?? {}),
+            ...(product.deliveryType
+              ? {
+                  delivery: {
+                    type: product.deliveryType,
+                    details: product.deliveryDetails ?? null,
+                  },
+                }
+              : {}),
+          } as QuoteItemMetadata & {
+            delivery?: { type: string; details: Record<string, unknown> | null };
+          };
+          const packageItemName = packageConfig ? getPackageItemName(packageConfig) : null;
+          const itemName = packageItemName ?? model?.name ?? "Позиція";
+          createdProductLabels.push(itemName);
+
+          const methodsPayload =
+            !isPrintPackageQuote && product.printApplications.length > 0
+              ? product.printApplications.map((app) => ({
+                  method_id: isUuid(app.method) ? app.method : null,
+                  count: 1,
+                  print_position_id: isUuid(app.position) ? app.position : null,
+                  print_width_mm: app.width.trim() ? Number(app.width) : null,
+                  print_height_mm: app.height.trim() ? Number(app.height) : null,
+                }))
+              : null;
+          const primaryPrint = methodsPayload?.[0] ?? null;
+          const basePrice = isPrintPackageQuote ? 0 : model?.price ?? 0;
+          const itemId = crypto.randomUUID();
+          const itemPayload = {
+            id: itemId,
+            team_id: teamId,
+            quote_id: created.id,
+            position: groupProductIndex + 1,
+            name: itemName,
+            description: packageItemDescription,
+            qty: primaryRunQuantity,
+            unit_price: basePrice,
+            line_total: primaryRunQuantity * basePrice,
+            catalog_type_id: product.categoryId || null,
+            catalog_kind_id: product.kindId || null,
+            catalog_model_id: product.modelId || null,
+            print_position_id: primaryPrint?.print_position_id ?? null,
+            print_width_mm: primaryPrint?.print_width_mm ?? null,
+            print_height_mm: primaryPrint?.print_height_mm ?? null,
+            methods: methodsPayload,
+            metadata: Object.keys(itemMetadata).length > 0 ? itemMetadata : null,
+            unit: normalizeUnitLabel(product.quantityUnit),
+          };
+
+          let { error: itemError } = await supabase.schema("tosho").from("quote_items").insert(itemPayload);
+          if (
+            itemError &&
+            /column|schema cache|could not find/i.test(itemError.message ?? "") &&
+            /metadata/i.test(itemError.message ?? "")
+          ) {
+            const fallbackItemPayload = omitPayloadKeys(itemPayload, ["metadata"]);
+            ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
+          }
+          if (
+            itemError &&
+            /column|schema cache|could not find/i.test(itemError.message ?? "") &&
+            /(methods|print_position_id|print_width_mm|print_height_mm)/i.test(itemError.message ?? "")
+          ) {
+            const fallbackItemPayload = omitPayloadKeys(itemPayload, [
+              "methods",
+              "metadata",
+              "print_position_id",
+              "print_width_mm",
+              "print_height_mm",
+            ]);
+            ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
+          }
+          if (itemError) throw itemError;
+
+          const runRows = product.runs.map((run) => ({
+            id: crypto.randomUUID(),
+            quote_id: created.id,
+            quote_item_id: itemId,
+            quantity: run.quantity,
+            unit_price_model: 0,
+            unit_price_print: 0,
+            logistics_cost: 0,
+            desired_manager_income: 0,
+            manager_rate: managerRate,
+            fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
+            vat_rate: DEFAULT_VAT_RATE,
+            team_id: teamId,
+          }));
+
+          let runRowsToInsert: Array<Record<string, unknown>> = runRows;
+          let { error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert);
+          if (
+            runsError &&
+            /column/i.test(runsError.message ?? "") &&
+            /team_id/i.test(runsError.message ?? "")
+          ) {
+            runRowsToInsert = runRowsToInsert.map((row) => omitPayloadKeys(row, ["team_id"]));
+            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert));
+          }
+          if (
+            runsError &&
+            /column/i.test(runsError.message ?? "") &&
+            /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(runsError.message ?? "")
+          ) {
+            runRowsToInsert = runRowsToInsert.map((row) =>
+              omitPayloadKeys(row, [
+                "desired_manager_income",
+                "manager_rate",
+                "fixed_cost_rate",
+                "vat_rate",
+              ])
+            );
+            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert));
+          }
+          if (runsError) throw runsError;
+
+          if (product.files.length > 0) {
+            try {
+              await uploadFilesForQuote(created.id, product.files);
+            } catch (attachmentError: unknown) {
+              attachmentWarnings.push(`${itemName}: ${getErrorMessage(attachmentError, "файли не завантажено")}`);
+            }
+          }
+
+          if (product.createDesignTask) {
+            designProducts.push({
+              itemName,
+              product,
+              methodsCount: isPrintPackageQuote ? 1 : product.printApplications.length,
+            });
+          }
+        }
+
+        if (designProducts.length > 0) {
+          const firstDesignProduct = designProducts[0];
+          const designTaskType = firstDesignProduct.product.designTaskType;
+          if (!designTaskType) {
+            throw new Error(`${firstDesignProduct.itemName}: оберіть тип дизайнерської задачі.`);
+          }
+          const designBrief = designProducts
+            .map(({ itemName, product }) => {
+              const brief = product.designBrief || product.managerNote;
+              return brief.trim() ? `${itemName}:\n${brief.trim()}` : itemName;
+            })
+            .join("\n\n");
+          const designTaskId = await ensureDesignTaskForQuote({
+            quoteId: created.id,
+            quoteType: group.quoteType,
+            modelName: designProducts.map((item) => item.itemName).join(", "),
+            methodsCount: designProducts.reduce((total, item) => total + item.methodsCount, 0),
+            designBrief: designBrief || null,
+            designDeadline: data.deadlineAt,
+            assigneeUserId: firstDesignProduct.product.designAssigneeId,
+            collaboratorUserIds: Array.from(
+              new Set(
+                designProducts.flatMap((item) =>
+                  item.product.designCollaboratorIds.filter(
+                    (userId) => userId && userId !== firstDesignProduct.product.designAssigneeId
+                  )
+                )
+              )
+            ),
+            designTaskType,
+            hasFiles: designProducts.some((item) => item.product.files.length > 0),
+          });
+          if (designTaskId) createdDesignTaskCount += 1;
+        }
+      }
+
+      let createdSetId: string | null = null;
+      if (createdQuoteIds.length > 1) {
+        const createdSet = await createQuoteSet({
+          teamId,
+          quoteIds: createdQuoteIds,
+          name: `КП ${customerName} ${new Date().toLocaleDateString("uk-UA")}`,
+          kind: "kp",
+        });
+        createdSetId = createdSet.id;
+      }
+
+      completed = true;
+      setBatchBuilderOpen(false);
+      setBatchBuilderError(null);
+      setSelectedIds(new Set());
+      await Promise.all([loadQuotes(), loadQuoteSets()]);
+
+      if (createdSetId) {
+        setContentView("sets");
+        toast.success("КП створено", {
+          description: `${createdQuoteIds.length} прорахунки · ${customerName}`,
+        });
+      } else {
+        const quoteId = createdQuoteIds[0];
+        toast.success("Прорахунок створено", {
+          description: [
+            customerName,
+            createdProductLabels[0],
+            createdDesignTaskCount ? "дизайн-задача створена" : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          action: quoteId
+            ? {
+                label: "Відкрити",
+                onClick: () => navigate(`/orders/estimates/${quoteId}`),
+              }
+            : undefined,
+        });
+        if (quoteId) navigate(`/orders/estimates/${quoteId}`);
+      }
+
+      if (attachmentWarnings.length > 0) {
+        toast.error("Не всі файли завантажено", {
+          description: attachmentWarnings.slice(0, 2).join("\n"),
+        });
+      }
+    } catch (e: unknown) {
+      if (!completed && createdQuoteIds.length > 0) {
+        await Promise.allSettled(createdQuoteIds.map((quoteId) => deleteQuote(quoteId, teamId)));
+      }
+      const message = getErrorMessage(e, "Не вдалося створити прорахунок.");
+      setBatchBuilderError(message);
+      toast.error("Помилка створення", { description: message });
+    } finally {
+      creatingRef.current = false;
+      setBatchCreating(false);
     }
   };
 
@@ -4447,6 +4934,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         topRight={
           <>
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
+            <Button
+              onClick={openBatchBuilder}
+              variant="outline"
+              size="icon"
+              className={cn(TOOLBAR_ACTION_BUTTON, "w-10 px-0")}
+              title="Білдер прорахунку / КП"
+              aria-label="Білдер прорахунку / КП"
+            >
+              <PlusIcon className="h-4 w-4" />
+            </Button>
             <Button onClick={openCreate} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
@@ -4635,6 +5132,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     loading,
     managerFilter,
     managerFilterOptions,
+    openBatchBuilder,
     openCreate,
     quoteListMode,
     quoteSetKindFilter,
@@ -5975,6 +6473,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         onSubmit={handleNewFormSubmit}
         submitting={creating}
         teamId={teamId}
+        customers={customers}
+        customersLoading={customersLoading}
+        onCustomerSearch={handleCustomerSearchChange}
+        onCreateCustomer={(name) => {
+          customerLeadCreate.openCustomerCreate(name || "");
+        }}
+        onCreateLead={(name) => {
+          customerLeadCreate.openLeadCreate(name || "");
+        }}
+        teamMembers={teamMembers}
+        catalogTypes={catalogTypes}
+        currentUserId={currentUserId}
+        restrictPartySelectionToOwn={isManagerUser}
+        currentManagerLabel={currentUserManagerLabel}
+      />
+
+      <QuoteBatchBuilderDialog
+        open={batchBuilderOpen}
+        onOpenChange={(open) => {
+          if (batchCreating) return;
+          setBatchBuilderOpen(open);
+          if (!open) {
+            setBatchBuilderError(null);
+            setCustomerSearch("");
+          }
+        }}
+        onSubmit={handleBatchBuilderSubmit}
+        submitting={batchCreating}
+        submitError={batchBuilderError}
         customers={customers}
         customersLoading={customersLoading}
         onCustomerSearch={handleCustomerSearchChange}

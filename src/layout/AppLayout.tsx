@@ -139,6 +139,8 @@ function getFxSourceText(sourceLabel: string | null, hasRates: boolean) {
 const FX_RATES_STORAGE_KEY = "tosho_fx_rates";
 const FX_RATES_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const FX_RATES_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+const FX_INTERBANK_UPDATE_GRACE_HOUR = 10;
+const FX_INTERBANK_UPDATE_GRACE_MINUTE = 30;
 
 function parseFxSourceLabel(label: string | null) {
   if (!label) return null;
@@ -157,11 +159,50 @@ function parseFxSourceLabel(label: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isWeekend(date: Date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+function getPreviousBusinessDay(date: Date) {
+  const previous = startOfLocalDay(date);
+  do {
+    previous.setDate(previous.getDate() - 1);
+  } while (isWeekend(previous));
+  return previous;
+}
+
+function getExpectedMinfinInterbankDate(now = new Date()) {
+  const today = startOfLocalDay(now);
+  if (isWeekend(today)) return getPreviousBusinessDay(today);
+
+  const afterDailyUpdateGrace =
+    now.getHours() > FX_INTERBANK_UPDATE_GRACE_HOUR ||
+    (now.getHours() === FX_INTERBANK_UPDATE_GRACE_HOUR &&
+      now.getMinutes() >= FX_INTERBANK_UPDATE_GRACE_MINUTE);
+
+  return afterDailyUpdateGrace ? today : getPreviousBusinessDay(today);
+}
+
+function compareLocalDateOnly(a: Date, b: Date) {
+  const aTime = startOfLocalDay(a).getTime();
+  const bTime = startOfLocalDay(b).getTime();
+  return aTime === bTime ? 0 : aTime > bTime ? 1 : -1;
+}
+
 function getFxStaleWarning(sourceLabel: string | null) {
   const parsed = parseFxSourceLabel(sourceLabel);
   if (!parsed) return null;
   if (Date.now() - parsed.getTime() <= FX_RATES_STALE_AFTER_MS) return null;
-  return `Дані Мінфіну застаріли (${sourceLabel}). Перевір парсер у /.netlify/functions/fx-rates або саму сторінку джерела.`;
+  if (compareLocalDateOnly(parsed, getExpectedMinfinInterbankDate()) >= 0) return null;
+  return [
+    `Мінфін показує останнє оновлення ${sourceLabel}.`,
+    "Сторінка джерела могла ще не оновитися або змінити формат даних.",
+  ].join(" ");
 }
 
 function getFxErrorMessage(error: unknown) {
