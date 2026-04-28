@@ -70,6 +70,14 @@ export type QuoteItemPreviewRow = {
   catalog_model_id?: string | null;
 };
 
+export type QuoteRunPreviewRow = {
+  id: string;
+  quote_id?: string | null;
+  quote_item_id?: string | null;
+  quantity?: number | null;
+  created_at?: string | null;
+};
+
 export type CatalogModelLookupRow = {
   id: string;
   name?: string | null;
@@ -1905,6 +1913,47 @@ export async function listQuoteItemPreviewsForQuotes(params: {
 
   handleError(error);
   return ((data ?? []) as unknown) as QuoteItemPreviewRow[];
+}
+
+export async function listQuoteRunPreviewsForQuotes(params: {
+  teamId: string;
+  quoteIds: string[];
+}): Promise<QuoteRunPreviewRow[]> {
+  const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  if (uniqueQuoteIds.length === 0) return [];
+
+  const readRows = async (withTeamFilter: boolean) => {
+    type QuoteRunsQuery = {
+      eq: (column: string, value: string) => QuoteRunsQuery;
+      in: (column: string, values: string[]) => QuoteRunsQuery;
+      order: (column: string, options: { ascending: boolean }) => QuoteRunsQuery;
+      then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+    };
+    type QuoteRunsTable = {
+      select: (columns: string) => QuoteRunsQuery;
+    };
+
+    const quoteRunsTable = supabase.schema("tosho").from("quote_item_runs") as unknown as QuoteRunsTable;
+    let query = quoteRunsTable
+      .select("id,quote_id,quote_item_id,quantity,created_at")
+      .in("quote_id", uniqueQuoteIds)
+      .order("quote_id", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (withTeamFilter) {
+      query = query.eq("team_id", params.teamId);
+    }
+
+    return await query;
+  };
+
+  let { data, error } = await readRows(true);
+  if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+    ({ data, error } = await readRows(false));
+  }
+
+  handleError(error);
+  return ((data ?? []) as unknown) as QuoteRunPreviewRow[];
 }
 
 export async function listQuoteSetItems(teamId: string, quoteSetId: string): Promise<QuoteSetItemRow[]> {

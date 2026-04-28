@@ -34,6 +34,7 @@ import {
   findQuoteSetsByExactComposition,
   listCustomerQuotes,
   listQuoteItemPreviewsForQuotes,
+  listQuoteRunPreviewsForQuotes,
   listQuoteItemsForQuotes,
   updateQuoteSetName,
   deleteQuoteSet,
@@ -57,6 +58,7 @@ import {
   type CustomerQuoteRow,
   type QuoteItemExportRow,
   type QuoteItemPreviewRow,
+  type QuoteRunPreviewRow,
   type QuoteRun,
   type TeamMemberRow,
   type CustomerRow,
@@ -263,6 +265,11 @@ type KanbanProductPreview = {
     id: string;
     name: string;
     qtyLabel: string;
+    runLabels?: Array<{
+      id: string;
+      label: string;
+      active?: boolean;
+    }>;
     imageUrl: string | null;
     zoomImageUrl?: string | null;
   }>;
@@ -3180,13 +3187,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const loadKanbanPreviews = async () => {
       if (!cancelled) setKanbanPreviewsLoading(true);
       try {
-        const itemRows = await listQuoteItemPreviewsForQuotes({ teamId, quoteIds });
+        const [itemRows, runRows] = await Promise.all([
+          listQuoteItemPreviewsForQuotes({ teamId, quoteIds }),
+          listQuoteRunPreviewsForQuotes({ teamId, quoteIds }),
+        ]);
         if (cancelled) return;
 
         const countByQuoteId: Record<string, number> = {};
         const firstItemByQuoteId = new Map<string, QuoteItemPreviewRow>();
         const itemsByQuoteId = new Map<string, QuoteItemPreviewRow[]>();
         const itemNamesByQuoteId = new Map<string, string[]>();
+        const runsByItemId = new Map<string, QuoteRunPreviewRow[]>();
+        const sharedRunsByQuoteId = new Map<string, QuoteRunPreviewRow[]>();
 
         itemRows.forEach((row) => {
           const quoteId = row.quote_id?.trim();
@@ -3203,6 +3215,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           itemNamesByQuoteId.set(quoteId, names);
           if (!firstItemByQuoteId.has(quoteId)) {
             firstItemByQuoteId.set(quoteId, row);
+          }
+        });
+
+        runRows.forEach((run) => {
+          const quoteId = run.quote_id?.trim();
+          const itemId = run.quote_item_id?.trim();
+          if (itemId) {
+            const itemRuns = runsByItemId.get(itemId) ?? [];
+            itemRuns.push(run);
+            runsByItemId.set(itemId, itemRuns);
+            return;
+          }
+          if (quoteId) {
+            const quoteRuns = sharedRunsByQuoteId.get(quoteId) ?? [];
+            quoteRuns.push(run);
+            sharedRunsByQuoteId.set(quoteId, quoteRuns);
           }
         });
 
@@ -3231,6 +3259,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           return `${qtyLabel} ${normalizeUnitLabel(unit)}`;
         };
 
+        const formatRunLabel = (quantity: number | null | undefined, unit: string | null | undefined) =>
+          formatQtyLabel(quantity, unit);
+
         const nextMap: Record<string, KanbanProductPreview> = {};
         quoteIds.forEach((quoteId) => {
           const firstItem = firstItemByQuoteId.get(quoteId);
@@ -3249,10 +3280,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               ? modelImageById.get(item.catalog_model_id) ?? null
               : null;
 
+            const itemRuns = runsByItemId.get(item.id) ?? [];
+            const sharedRuns = quoteItems.length === 1 ? sharedRunsByQuoteId.get(quoteId) ?? [] : [];
+            const runLabels = (itemRuns.length > 0 ? itemRuns : sharedRuns)
+              .filter((run) => Number(run.quantity ?? 0) > 0)
+              .map((run) => ({
+                id: run.id,
+                label: formatRunLabel(run.quantity, item.unit),
+                active: false,
+              }));
+
             return {
               id: item.id,
               name: item.name?.trim() || "Товар без назви",
               qtyLabel: formatQtyLabel(item.qty, item.unit),
+              runLabels,
               imageUrl: attachmentImage || catalogImage?.imageUrl || null,
               zoomImageUrl: attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
             };
@@ -6427,6 +6469,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                 id: "loading",
                                                 name: productPreview?.itemName ?? "Завантаження товару...",
                                                 qtyLabel: productPreview?.qtyLabel ?? " ",
+                                                runLabels: [],
                                                 imageUrl: productPreview?.imageUrl ?? null,
                                                 zoomImageUrl: productPreview?.zoomImageUrl ?? null,
                                               },
@@ -6462,9 +6505,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               <div className="truncate text-[14px] font-medium" title={product.name}>
                                                 {product.name}
                                               </div>
-                                              <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">
-                                                {product.qtyLabel}
-                                              </div>
+                                              {product.runLabels?.length ? (
+                                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                                  {product.runLabels.map((runLabel) => (
+                                                    <span
+                                                      key={runLabel.id}
+                                                      className={cn(
+                                                        "inline-flex h-5 items-center rounded-md border px-1.5 text-[11px] leading-none",
+                                                        runLabel.active
+                                                          ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
+                                                          : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
+                                                      )}
+                                                    >
+                                                      {runLabel.label}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">
+                                                  {product.qtyLabel}
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         ))}

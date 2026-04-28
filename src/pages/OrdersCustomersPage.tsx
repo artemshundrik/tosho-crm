@@ -899,6 +899,23 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const previousPathnameRef = useRef(location.pathname);
   const rowsRef = useRef<CustomerRow[]>([]);
   const leadsRef = useRef<LeadRow[]>([]);
+  const customerDeepLink = useMemo(() => {
+    const customerId = searchParams.get("customerId")?.trim() ?? "";
+    const leadId = searchParams.get("leadId")?.trim() ?? "";
+    const customerName = searchParams.get("customerName")?.trim() ?? "";
+    const leadName = searchParams.get("leadName")?.trim() ?? "";
+    const tab = searchParams.get("tab")?.trim() ?? "";
+    const key = searchParams.toString();
+    return {
+      customerId,
+      leadId,
+      customerName,
+      leadName,
+      tab,
+      key: customerId || leadId || customerName || leadName ? key : "",
+    };
+  }, [searchParams]);
+  const shouldPrioritizeDeepLink = Boolean(customerDeepLink.key && handledDeepLink !== customerDeepLink.key);
 
   const defaultManagerName = useMemo(() => {
     const resolved = buildUserNameFromMetadata(
@@ -1937,15 +1954,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   useEffect(() => {
     if (!teamMembersReady) return;
+    if (shouldPrioritizeDeepLink) return;
     const delay = search.trim() ? 250 : 0;
     const timeoutId = window.setTimeout(() => {
       void loadCustomers();
       void loadLeads();
     }, delay);
     return () => window.clearTimeout(timeoutId);
-  }, [teamMembersReady, customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search]);
+  }, [teamMembersReady, customerManagerFilter, leadManagerFilter, loadCustomers, loadLeads, search, shouldPrioritizeDeepLink]);
 
   useEffect(() => {
+    if (shouldPrioritizeDeepLink) return;
     if (!search.trim()) return;
     if (activeTab === "customers") {
       if (customersLoading || customersRefreshing) return;
@@ -1972,13 +1991,18 @@ function CustomersPage({ teamId }: { teamId: string }) {
     leadsHasMore,
     leadsLoading,
     leadsRefreshing,
+    customerManagerFilter,
+    leadManagerFilter,
     loadCustomers,
     loadLeads,
     rows.length,
     search,
+    shouldPrioritizeDeepLink,
+    teamId,
   ]);
 
   useEffect(() => {
+    if (shouldPrioritizeDeepLink) return;
     const activeManagerFilter =
       activeTab === "customers" ? customerManagerFilter : leadManagerFilter;
     if (activeManagerFilter === ALL_MANAGERS_FILTER) return;
@@ -2013,6 +2037,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     loadCustomers,
     loadLeads,
     rows.length,
+    shouldPrioritizeDeepLink,
+    teamId,
   ]);
 
   useEffect(() => {
@@ -2034,12 +2060,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   ]);
 
   useEffect(() => {
-    const customerId = searchParams.get("customerId")?.trim() ?? "";
-    const leadId = searchParams.get("leadId")?.trim() ?? "";
-    const customerName = searchParams.get("customerName")?.trim() ?? "";
-    const leadName = searchParams.get("leadName")?.trim() ?? "";
-    const tab = searchParams.get("tab")?.trim() ?? "";
-    const linkKey = searchParams.toString();
+    const { customerId, leadId, customerName, leadName, tab, key: linkKey } = customerDeepLink;
     if (!customerId && !leadId && !customerName && !leadName) {
       if (handledDeepLink !== null) setHandledDeepLink(null);
       return;
@@ -2048,49 +2069,49 @@ function CustomersPage({ teamId }: { teamId: string }) {
     let cancelled = false;
 
     const openDeepLinkedEntity = async () => {
-      if (leadId) {
-        setActiveTab("leads");
-        const localLead = leads.find((row) => row.id === leadId);
-        const lead = localLead ?? (await fetchLeadById(leadId));
-        if (!lead || cancelled) return;
-        openEditLead(lead);
-        setHandledDeepLink(linkKey);
-        return;
-      }
+      try {
+        if (leadId) {
+          setActiveTab("leads");
+          const localLead = leadsRef.current.find((row) => row.id === leadId);
+          const lead = localLead ?? (await fetchLeadById(leadId));
+          if (!lead || cancelled) return;
+          openEditLead(lead);
+          return;
+        }
 
-      if (leadName) {
-        setActiveTab("leads");
-        const normalizedLeadName = normalizePartyMatch(leadName);
-        const localLead = leads.find((row) =>
-          [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedLeadName)
-        );
-        const lead = localLead ?? (await fetchLeadByName(leadName));
-        if (!lead || cancelled) return;
-        openEditLead(lead);
-        setHandledDeepLink(linkKey);
-        return;
-      }
+        if (leadName) {
+          setActiveTab("leads");
+          const normalizedLeadName = normalizePartyMatch(leadName);
+          const localLead = leadsRef.current.find((row) =>
+            [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedLeadName)
+          );
+          const lead = localLead ?? (await fetchLeadByName(leadName));
+          if (!lead || cancelled) return;
+          openEditLead(lead);
+          return;
+        }
 
-      if (customerId) {
-        if (tab === "customers" || !tab) setActiveTab("customers");
-        const localCustomer = rows.find((row) => row.id === customerId);
-        const customer = localCustomer ?? (await fetchCustomerById(customerId));
-        if (!customer || cancelled) return;
-        openEdit(customer);
-        setHandledDeepLink(linkKey);
-        return;
-      }
+        if (customerId) {
+          if (tab === "customers" || !tab) setActiveTab("customers");
+          const localCustomer = rowsRef.current.find((row) => row.id === customerId);
+          const customer = localCustomer ?? (await fetchCustomerById(customerId));
+          if (!customer || cancelled) return;
+          openEdit(customer);
+          return;
+        }
 
-      if (customerName) {
-        setActiveTab("customers");
-        const normalizedCustomerName = normalizePartyMatch(customerName);
-        const localCustomer = rows.find((row) =>
-          [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
-        );
-        const customer = localCustomer ?? (await fetchCustomerByName(customerName));
-        if (!customer || cancelled) return;
-        openEdit(customer);
-        setHandledDeepLink(linkKey);
+        if (customerName) {
+          setActiveTab("customers");
+          const normalizedCustomerName = normalizePartyMatch(customerName);
+          const localCustomer = rowsRef.current.find((row) =>
+            [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedCustomerName)
+          );
+          const customer = localCustomer ?? (await fetchCustomerByName(customerName));
+          if (!customer || cancelled) return;
+          openEdit(customer);
+        }
+      } finally {
+        if (!cancelled) setHandledDeepLink(linkKey);
       }
     };
 
@@ -2105,11 +2126,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
     fetchLeadById,
     fetchLeadByName,
     handledDeepLink,
-    leads,
     openEdit,
     openEditLead,
-    rows,
-    searchParams,
+    customerDeepLink,
   ]);
 
   useEffect(() => {
