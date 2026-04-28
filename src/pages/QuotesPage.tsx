@@ -255,9 +255,17 @@ type CommercialDocument = {
 type KanbanProductPreview = {
   itemCount: number;
   itemName: string;
+  itemNames?: string[];
   qtyLabel: string;
   imageUrl: string | null;
   zoomImageUrl?: string | null;
+  products?: Array<{
+    id: string;
+    name: string;
+    qtyLabel: string;
+    imageUrl: string | null;
+    zoomImageUrl?: string | null;
+  }>;
 };
 
 type QuotesPageCachePayload = {
@@ -1240,15 +1248,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ...nextPageRows.filter((row) => !previousById.has(row.id)),
           ]
         : nextPageRows;
+      const mergedQuoteIds = mergedRows.map((row) => row.id).filter(Boolean);
+      let nextMembershipByQuoteId = new Map<string, QuoteSetMembershipInfo>();
+      if (mergedQuoteIds.length > 0) {
+        try {
+          const membershipMap = await listQuoteSetMemberships(teamId, mergedQuoteIds);
+          if (requestId !== quotesLoadRequestIdRef.current) return;
+          nextMembershipByQuoteId = new Map();
+          mergedQuoteIds.forEach((id) => {
+            const membership = membershipMap.get(id);
+            if (membership) {
+              nextMembershipByQuoteId.set(id, membership);
+            }
+          });
+          fetchedQuoteMembershipIdsRef.current = new Set(mergedQuoteIds);
+          inflightQuoteMembershipIdsRef.current = new Set();
+        } catch {
+          if (!append) {
+            nextMembershipByQuoteId = new Map();
+            fetchedQuoteMembershipIdsRef.current = new Set();
+            inflightQuoteMembershipIdsRef.current = new Set();
+          }
+        }
+      }
       if (requestId !== quotesLoadRequestIdRef.current) return;
       setHasMoreQuotes(fetchAll ? false : nextHasMore);
       if (!append) {
         fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
       }
       setRows(mergedRows);
-      setQuoteMembershipByQuoteId(new Map());
-      fetchedQuoteMembershipIdsRef.current = new Set();
-      inflightQuoteMembershipIdsRef.current = new Set();
+      setQuoteMembershipByQuoteId(nextMembershipByQuoteId);
       setAttachmentCounts({});
 
       try {
@@ -1257,7 +1286,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           JSON.stringify({
             rows: mergedRows,
             attachmentCounts: {},
-            quoteMembershipEntries: [],
+            quoteMembershipEntries: Array.from(nextMembershipByQuoteId.entries()),
             kanbanProductEntries: [],
             cachedAt: Date.now(),
           })
@@ -3156,11 +3185,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const countByQuoteId: Record<string, number> = {};
         const firstItemByQuoteId = new Map<string, QuoteItemPreviewRow>();
+        const itemsByQuoteId = new Map<string, QuoteItemPreviewRow[]>();
+        const itemNamesByQuoteId = new Map<string, string[]>();
 
         itemRows.forEach((row) => {
           const quoteId = row.quote_id?.trim();
           if (!quoteId) return;
           countByQuoteId[quoteId] = (countByQuoteId[quoteId] ?? 0) + 1;
+          const quoteItems = itemsByQuoteId.get(quoteId) ?? [];
+          quoteItems.push(row);
+          itemsByQuoteId.set(quoteId, quoteItems);
+          const names = itemNamesByQuoteId.get(quoteId) ?? [];
+          const itemName = row.name?.trim();
+          if (itemName) {
+            names.push(itemName);
+          }
+          itemNamesByQuoteId.set(quoteId, names);
           if (!firstItemByQuoteId.has(quoteId)) {
             firstItemByQuoteId.set(quoteId, row);
           }
@@ -3168,7 +3208,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const modelIds = Array.from(
           new Set(
-            Array.from(firstItemByQuoteId.values())
+            itemRows
               .map((row) => row.catalog_model_id?.trim() ?? "")
               .filter(Boolean)
           )
@@ -3194,25 +3234,41 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const nextMap: Record<string, KanbanProductPreview> = {};
         quoteIds.forEach((quoteId) => {
           const firstItem = firstItemByQuoteId.get(quoteId);
+          const quoteItems = itemsByQuoteId.get(quoteId) ?? [];
           const itemCount = countByQuoteId[quoteId] ?? 0;
           if (!firstItem || itemCount === 0) return;
 
-          const attachmentImage =
-            firstItem.attachment &&
-            typeof firstItem.attachment === "object" &&
-            typeof (firstItem.attachment as Record<string, unknown>).url === "string"
-              ? String((firstItem.attachment as Record<string, unknown>).url)
+          const toProductPreview = (item: QuoteItemPreviewRow) => {
+            const attachmentImage =
+              item.attachment &&
+              typeof item.attachment === "object" &&
+              typeof (item.attachment as Record<string, unknown>).url === "string"
+                ? String((item.attachment as Record<string, unknown>).url)
+                : null;
+            const catalogImage = item.catalog_model_id
+              ? modelImageById.get(item.catalog_model_id) ?? null
               : null;
-          const catalogImage = firstItem.catalog_model_id
-            ? modelImageById.get(firstItem.catalog_model_id) ?? null
-            : null;
+
+            return {
+              id: item.id,
+              name: item.name?.trim() || "Товар без назви",
+              qtyLabel: formatQtyLabel(item.qty, item.unit),
+              imageUrl: attachmentImage || catalogImage?.imageUrl || null,
+              zoomImageUrl: attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
+            };
+          };
+
+          const products = quoteItems.map(toProductPreview);
+          const primaryProduct = products[0] ?? toProductPreview(firstItem);
 
           nextMap[quoteId] = {
             itemCount,
-            itemName: firstItem.name?.trim() || "Товар без назви",
+            itemName: primaryProduct.name,
+            itemNames: itemNamesByQuoteId.get(quoteId) ?? [],
             qtyLabel: formatQtyLabel(firstItem.qty, firstItem.unit),
-            imageUrl: attachmentImage || catalogImage?.imageUrl || null,
-            zoomImageUrl: attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
+            imageUrl: primaryProduct.imageUrl,
+            zoomImageUrl: primaryProduct.zoomImageUrl,
+            products,
           };
         });
 
@@ -5766,31 +5822,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </div>
                     </div>
 
-                    {membership ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {membership.kp_count > 0 ? (
-                          <Badge
-                            variant="outline"
-                            title={membership.kp_names.join(", ")}
-                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
-                          >
-                            <FileText className="h-3 w-3" />
-                            КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                          </Badge>
-                        ) : null}
-                        {membership.set_count > 0 ? (
-                          <Badge
-                            variant="outline"
-                            title={membership.set_names.join(", ")}
-                            className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
-                          >
-                            <Layers className="h-3 w-3" />
-                            Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    ) : null}
-
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <QuoteDeadlineBadge tone={deadlineBadge.tone} label={deadlineBadge.label} />
                       <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
@@ -5800,6 +5831,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         })()}
                         {quoteTypeLabel(row.quote_type)}
                       </div>
+                      {membership?.kp_count ? (
+                        <Badge
+                          variant="outline"
+                          title={membership.kp_names.join(", ")}
+                          className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                        >
+                          <FileText className="h-3 w-3" />
+                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                        </Badge>
+                      ) : null}
+                      {membership?.set_count ? (
+                        <Badge
+                          variant="outline"
+                          title={membership.set_names.join(", ")}
+                          className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                        >
+                          <Layers className="h-3 w-3" />
+                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -5900,18 +5951,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <TableCell className="font-mono font-semibold text-sm whitespace-nowrap min-w-[140px]">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              {membership ? (
-                                <div
-                                  className={cn(
-                                    "h-5 w-1.5 rounded-full",
-                                    membership.kp_count > 0
-                                      ? "quote-kind-stripe-kp"
-                                      : membership.set_count > 0
-                                      ? "quote-kind-stripe-set"
-                                      : "bg-transparent"
-                                  )}
-                                />
-                              ) : null}
+                              <div
+                                className={cn(
+                                  "h-5 w-1.5 shrink-0 rounded-full",
+                                  membership?.kp_count
+                                    ? "quote-kind-stripe-kp"
+                                    : membership?.set_count
+                                    ? "quote-kind-stripe-set"
+                                    : "bg-transparent"
+                                )}
+                              />
                               <HoverCopyText
                                 value={row.number}
                                 textClassName="font-mono font-semibold group-hover:underline underline-offset-2"
@@ -5930,30 +5979,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                 </div>
                               ) : null}
                             </div>
-                            {membership ? (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {membership.kp_count > 0 ? (
-                                  <Badge
-                                    variant="outline"
-                                    title={membership.kp_names.join(", ")}
-                                    className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                    КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                  </Badge>
-                                ) : null}
-                                {membership.set_count > 0 ? (
-                                  <Badge
-                                    variant="outline"
-                                    title={membership.set_names.join(", ")}
-                                    className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
-                                  >
-                                    <Layers className="h-3 w-3" />
-                                    Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                  </Badge>
-                                ) : null}
-                              </div>
-                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
@@ -6053,9 +6078,31 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           {(() => {
                             const Icon = quoteTypeIcon(row.quote_type);
                             return (
-                              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
-                                {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                                {quoteTypeLabel(row.quote_type)}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-xs font-semibold">
+                                  {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                                  {quoteTypeLabel(row.quote_type)}
+                                </div>
+                                {membership?.kp_count ? (
+                                  <Badge
+                                    variant="outline"
+                                    title={membership.kp_names.join(", ")}
+                                    className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                  </Badge>
+                                ) : null}
+                                {membership?.set_count ? (
+                                  <Badge
+                                    variant="outline"
+                                    title={membership.set_names.join(", ")}
+                                    className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                  >
+                                    <Layers className="h-3 w-3" />
+                                    Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                  </Badge>
+                                ) : null}
                               </div>
                             );
                           })()}
@@ -6311,11 +6358,31 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         {row.number ?? "Не вказано"}
                                       </HoverCopyText>
                                     </div>
-                                    <div className="flex items-center gap-1.5 shrink-0">
+                                    <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
                                       <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
                                         {Icon ? <Icon className="h-3 w-3" /> : null}
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
+                                      {membership?.kp_count ? (
+                                        <Badge
+                                          variant="outline"
+                                          title={membership.kp_names.join(", ")}
+                                          className="h-6 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                        >
+                                          <FileText className="h-3 w-3" />
+                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
+                                      {membership?.set_count ? (
+                                        <Badge
+                                          variant="outline"
+                                          title={membership.set_names.join(", ")}
+                                          className="h-6 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                        >
+                                          <Layers className="h-3 w-3" />
+                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+                                        </Badge>
+                                      ) : null}
                                       {!canOpen ? (
                                         <div
                                           className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-[10px] font-semibold text-muted-foreground"
@@ -6327,28 +6394,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       ) : null}
                                     </div>
                                   </div>
-                                  {membership && (membership.kp_count > 0 || membership.set_count > 0) ? (
-                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                      {membership.kp_count > 0 ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
-                                        >
-                                          <FileText className="h-3 w-3" />
-                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
-                                      {membership.set_count > 0 ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="h-5 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
-                                        >
-                                          <Layers className="h-3 w-3" />
-                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
                                   <div className="mt-3 space-y-3">
                                     <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
                                       <EntityAvatar
@@ -6372,39 +6417,57 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-secondary px-3 py-2.5">
                                       <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                         <Package className="h-3.5 w-3.5" />
-                                        Товар
+                                        {productPreview && productPreview.itemCount > 1 ? "Товари" : "Товар"}
                                       </div>
-                                      <div className="flex items-center gap-2.5">
-                                        {productPreview?.imageUrl ? (
-                                          <KanbanImageZoomPreview
-                                            imageUrl={productPreview.imageUrl}
-                                            zoomImageUrl={productPreview.zoomImageUrl ?? undefined}
-                                            alt={productPreview.itemName}
-                                            loadStrategy={
-                                              index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
-                                                ? "eager"
-                                                : "visible"
-                                            }
-                                          />
-                                        ) : (
-                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-secondary">
-                                            <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                                              {kanbanPreviewsLoading ? (
-                                                <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />
-                                              ) : (
-                                                <Package className="h-4 w-4" />
-                                              )}
+                                      <div className="divide-y divide-border/50">
+                                        {(productPreview?.products?.length
+                                          ? productPreview.products
+                                          : [
+                                              {
+                                                id: "loading",
+                                                name: productPreview?.itemName ?? "Завантаження товару...",
+                                                qtyLabel: productPreview?.qtyLabel ?? " ",
+                                                imageUrl: productPreview?.imageUrl ?? null,
+                                                zoomImageUrl: productPreview?.zoomImageUrl ?? null,
+                                              },
+                                            ]
+                                        ).map((product, productIndex) => (
+                                          <div
+                                            key={product.id}
+                                            className={cn("flex items-center gap-2.5", productIndex > 0 && "pt-2", productIndex < (productPreview?.products?.length ?? 1) - 1 && "pb-2")}
+                                          >
+                                            {product.imageUrl ? (
+                                              <KanbanImageZoomPreview
+                                                imageUrl={product.imageUrl}
+                                                zoomImageUrl={product.zoomImageUrl ?? undefined}
+                                                alt={product.name}
+                                                loadStrategy={
+                                                  index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
+                                                    ? "eager"
+                                                    : "visible"
+                                                }
+                                              />
+                                            ) : (
+                                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-secondary">
+                                                <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+                                                  {kanbanPreviewsLoading ? (
+                                                    <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />
+                                                  ) : (
+                                                    <Package className="h-4 w-4" />
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                              <div className="truncate text-[14px] font-medium" title={product.name}>
+                                                {product.name}
+                                              </div>
+                                              <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">
+                                                {product.qtyLabel}
+                                              </div>
                                             </div>
                                           </div>
-                                        )}
-                                        <div className="min-w-0">
-                                          <div className="truncate text-[14px] font-medium">
-                                            {productPreview?.itemName ?? "Завантаження товару..."}
-                                          </div>
-                                          <div className="text-[13px] font-normal text-muted-foreground">
-                                            {productPreview?.qtyLabel ?? " "}
-                                          </div>
-                                        </div>
+                                        ))}
                                       </div>
                                     </div>
                                   ) : null}

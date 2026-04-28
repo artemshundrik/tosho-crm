@@ -5697,9 +5697,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
-        <main className="min-w-0 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pb-8 2xl:px-8">
-          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:sticky xl:top-0 xl:z-30 2xl:-mx-8 2xl:px-8">
+      <div className="grid grid-cols-1 xl:h-[calc(100dvh-112px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
+        <main className="min-w-0 px-4 pb-10 pt-0 md:px-5 lg:px-6 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-8">
+          <div className="mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 xl:shrink-0 2xl:-mx-8 2xl:px-8">
             <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {quotePageTabs.map((tab) => {
                 const Icon = tab.icon;
@@ -5738,7 +5738,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               })}
             </div>
           </div>
-          <div className="space-y-6">
+          <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
             {quoteLockedByOther || statusError || quoteRequirementsHint ? (
               <div className="space-y-3">
                 {quoteLockedByOther ? (
