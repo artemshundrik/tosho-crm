@@ -2033,17 +2033,20 @@ export default function DesignPage() {
   const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
 
   useEffect(() => {
+    const hasImplicitManagerFilter = isManagerUser && !!userId;
     const filterKey = [
       "filters",
       effectiveTeamId ?? "",
       effectiveDesignerFilter,
       managerFilter,
       isManagerUser ? "manager-user" : "not-manager-user",
+      hasImplicitManagerFilter ? userId : "",
     ].join(":");
     if (!effectiveTeamId) return;
     if (
       effectiveDesignerFilter === ALL_DESIGNERS_FILTER &&
-      (isManagerUser || managerFilter === ALL_MANAGERS_FILTER)
+      managerFilter === ALL_MANAGERS_FILTER &&
+      !hasImplicitManagerFilter
     ) {
       return;
     }
@@ -2060,6 +2063,7 @@ export default function DesignPage() {
     managerFilter,
     refreshing,
     tasks.length,
+    userId,
   ]);
 
   const filteredTasks = useMemo(() => {
