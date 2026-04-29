@@ -73,6 +73,7 @@ import {
   Car,
   Ruler,
   Palette,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -487,6 +488,20 @@ export interface NewQuoteDialogProps {
   onCreateLead?: (name?: string) => void;
   teamMembers?: TeamMember[];
   catalogTypes?: CatalogType[];
+  onCreateCatalogModel?: (input: {
+    typeId: string;
+    kindId: string;
+    name: string;
+    sku?: string | null;
+    price: number | null;
+    imageUrl?: string | null;
+  }) => Promise<{
+    id: string;
+    name: string;
+    sku?: string | null;
+    price?: number | null;
+    imageUrl?: string | null;
+  } | null | undefined>;
   currentUserId?: string;
   restrictPartySelectionToOwn?: boolean;
   currentManagerLabel?: string;
@@ -547,6 +562,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   onCreateLead,
   teamMembers = [],
   catalogTypes = [],
+  onCreateCatalogModel,
   currentUserId,
   restrictPartySelectionToOwn = false,
   currentManagerLabel,
@@ -592,6 +608,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
   const [files, setFiles] = React.useState<File[]>([]);
   const [filesDragActive, setFilesDragActive] = React.useState(false);
+  const [quickModelName, setQuickModelName] = React.useState("");
+  const [quickModelSku, setQuickModelSku] = React.useState("");
+  const [quickModelPrice, setQuickModelPrice] = React.useState("");
+  const [quickModelImageUrl, setQuickModelImageUrl] = React.useState("");
+  const [quickModelSaving, setQuickModelSaving] = React.useState(false);
+  const [quickModelError, setQuickModelError] = React.useState<string | null>(null);
 
   // Popover states
   const [statusPopoverOpen, setStatusPopoverOpen] = React.useState(false);
@@ -683,6 +705,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
   const activeConfiguratorPreset =
     selectedModelMetadata?.configuratorPreset ?? selectedModel?.metadata?.configuratorPreset ?? null;
+  const selectedModelSku = selectedModelMetadata?.sku ?? selectedModel?.metadata?.sku ?? null;
   const isPrintPackageMode = activeConfiguratorPreset !== null;
   const configuratorProductOptions = React.useMemo<ConfiguratorProductOption[]>(() => {
     return catalogTypes.flatMap((type) =>
@@ -897,6 +920,61 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     modelId,
     quoteType,
   ]);
+
+  const resetQuickModelDraft = React.useCallback(() => {
+    setQuickModelName("");
+    setQuickModelSku("");
+    setQuickModelPrice("");
+    setQuickModelImageUrl("");
+    setQuickModelError(null);
+  }, []);
+
+  React.useEffect(() => {
+    resetQuickModelDraft();
+  }, [kindId, resetQuickModelDraft]);
+
+  const handleQuickCreateModel = React.useCallback(async () => {
+    if (!onCreateCatalogModel) return;
+    const name = quickModelName.trim();
+    if (!categoryId || !kindId) {
+      setQuickModelError("Оберіть категорію і вид товару.");
+      return;
+    }
+    if (!name) {
+      setQuickModelError("Вкажіть назву товару.");
+      return;
+    }
+    const parsedPrice = quickModelPrice.trim() ? Number(quickModelPrice) : 0;
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      setQuickModelError("Ціна має бути додатним числом або 0.");
+      return;
+    }
+
+    setQuickModelSaving(true);
+    setQuickModelError(null);
+    try {
+      const created = await onCreateCatalogModel({
+        typeId: categoryId,
+        kindId,
+        name,
+        sku: quickModelSku.trim() || null,
+        price: parsedPrice,
+        imageUrl: quickModelImageUrl.trim() || null,
+      });
+      if (created?.id) {
+        setModelId(created.id);
+        resetQuickModelDraft();
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Не вдалося створити товар. Спробуйте ще раз.";
+      setQuickModelError(message);
+    } finally {
+      setQuickModelSaving(false);
+    }
+  }, [categoryId, kindId, onCreateCatalogModel, quickModelImageUrl, quickModelName, quickModelPrice, quickModelSku, resetQuickModelDraft]);
 
   React.useEffect(() => {
     if (!isPrintPackageMode || printPackageConfig.productKind !== "package") return;
@@ -1944,19 +2022,95 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="text-xs text-muted-foreground">Модель</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs text-muted-foreground">Модель</div>
+                            {kindId && onCreateCatalogModel ? (
+                              <span className="text-[11px] text-muted-foreground">Немає в списку?</span>
+                            ) : null}
+                          </div>
                           <ChipDropdown
                             value={modelId}
                             onChange={setModelId}
                             disabled={!kindId}
                             options={availableModels.map((model) => ({
                               value: model.id,
-                              label: model.name,
+                              label: model.metadata?.sku?.trim()
+                                ? `${model.name} · ${model.metadata.sku.trim()}`
+                                : model.name,
                             }))}
                             placeholder="Оберіть модель"
                             icon={<Shirt className="h-3.5 w-3.5" />}
                             popoverClassName="w-[320px]"
                           />
+                          {selectedModelSku?.trim() ? (
+                            <div className="text-xs text-muted-foreground">
+                              Артикул: <span className="font-medium text-foreground/80">{selectedModelSku.trim()}</span>
+                            </div>
+                          ) : null}
+                          {kindId && onCreateCatalogModel ? (
+                            <div className="mt-2 rounded-[16px] border border-dashed border-border/60 bg-background/35 p-3">
+                              <div className="grid gap-2">
+                                <Input
+                                  value={quickModelName}
+                                  onChange={(event) => {
+                                    setQuickModelName(event.target.value);
+                                    if (quickModelError) setQuickModelError(null);
+                                  }}
+                                  placeholder="Назва нового товару"
+                                  className="h-9"
+                                  disabled={quickModelSaving}
+                                />
+                                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px]">
+                                  <Input
+                                    value={quickModelSku}
+                                    onChange={(event) => {
+                                      setQuickModelSku(event.target.value);
+                                      if (quickModelError) setQuickModelError(null);
+                                    }}
+                                    placeholder="Артикул"
+                                    className="h-9"
+                                    disabled={quickModelSaving}
+                                  />
+                                  <Input
+                                    value={quickModelPrice}
+                                    onChange={(event) => {
+                                      setQuickModelPrice(event.target.value);
+                                      if (quickModelError) setQuickModelError(null);
+                                    }}
+                                    inputMode="decimal"
+                                    placeholder="Ціна"
+                                    className="h-9"
+                                    disabled={quickModelSaving}
+                                  />
+                                  <Input
+                                    value={quickModelImageUrl}
+                                    onChange={(event) => setQuickModelImageUrl(event.target.value)}
+                                    placeholder="Фото URL, необов'язково"
+                                    className="h-9"
+                                    disabled={quickModelSaving}
+                                  />
+                                </div>
+                                {quickModelError ? (
+                                  <div className="text-xs text-destructive">{quickModelError}</div>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full gap-2"
+                                  onClick={handleQuickCreateModel}
+                                  disabled={quickModelSaving || !quickModelName.trim()}
+                                >
+                                  {quickModelSaving ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Plus className="h-4 w-4" />
+                                  )}
+                                  Створити і вибрати товар
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                         {quoteType === "print" ? (
                           <div className="space-y-1.5 xl:col-span-1">

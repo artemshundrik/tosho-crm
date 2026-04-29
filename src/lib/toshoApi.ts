@@ -65,6 +65,7 @@ export type QuoteItemPreviewRow = {
   quote_id?: string | null;
   position?: number | null;
   name?: string | null;
+  metadata?: Record<string, unknown> | null;
   qty?: number | null;
   unit?: string | null;
   attachment?: unknown;
@@ -84,9 +85,11 @@ export type CatalogModelLookupRow = {
   name?: string | null;
   image_url?: string | null;
   thumb_url?: string | null;
+  sku?: string | null;
 };
 
 export type CatalogModelMetadataLookup = {
+  sku?: string | null;
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
 };
 
@@ -214,7 +217,9 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
   const missingIds = normalizedIds.filter((id) => !catalogModelLookupCache.has(id));
   if (missingIds.length > 0) {
     const loadModels = async (withImage: boolean) => {
-      const columns = withImage ? "id,name,image_url,thumb_url:metadata->imageAsset->>thumbUrl" : "id,name";
+      const columns = withImage
+        ? "id,name,image_url,thumb_url:metadata->imageAsset->>thumbUrl,sku:metadata->>sku"
+        : "id,name,sku:metadata->>sku";
       return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", missingIds);
     };
 
@@ -234,6 +239,7 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
         name: typeof row.name === "string" ? row.name : null,
         image_url: typeof row.image_url === "string" ? row.image_url : null,
         thumb_url: typeof row.thumb_url === "string" ? row.thumb_url : null,
+        sku: typeof row.sku === "string" ? row.sku : null,
       });
     });
     missingIds.forEach((id) => {
@@ -1886,7 +1892,7 @@ export async function listQuoteItemPreviewsForQuotes(params: {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   if (uniqueQuoteIds.length === 0) return [];
 
-  const readRows = async (withTeamFilter: boolean) => {
+  const readRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
     type QuoteItemsQuery = {
       eq: (column: string, value: string) => QuoteItemsQuery;
       in: (column: string, values: string[]) => QuoteItemsQuery;
@@ -1899,7 +1905,11 @@ export async function listQuoteItemPreviewsForQuotes(params: {
 
     const quoteItemsTable = supabase.schema("tosho").from("quote_items") as unknown as QuoteItemsTable;
     let query = quoteItemsTable
-      .select("id,quote_id,position,name,qty,unit,attachment,catalog_model_id")
+      .select(
+        withMetadata
+          ? "id,quote_id,position,name,metadata,qty,unit,attachment,catalog_model_id"
+          : "id,quote_id,position,name,qty,unit,attachment,catalog_model_id"
+      )
       .in("quote_id", uniqueQuoteIds)
       .order("quote_id", { ascending: true })
       .order("position", { ascending: true });
@@ -1911,9 +1921,15 @@ export async function listQuoteItemPreviewsForQuotes(params: {
     return await query;
   };
 
-  let { data, error } = await readRows(true);
+  let { data, error } = await readRows(true, true);
+  if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+    ({ data, error } = await readRows(true, false));
+  }
   if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
-    ({ data, error } = await readRows(false));
+    ({ data, error } = await readRows(false, true));
+    if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
+      ({ data, error } = await readRows(false, false));
+    }
   }
 
   handleError(error);

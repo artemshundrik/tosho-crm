@@ -193,6 +193,20 @@ export function BasicInfoTab({
             className="bg-background/60 border-border/60"
           />
         </div>
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Артикул</Label>
+          <Input
+            value={draftMetadata.sku ?? ""}
+            onChange={(e) =>
+              onMetadataChange({
+                ...draftMetadata,
+                sku: e.target.value.trim() || null,
+              })
+            }
+            placeholder="Напр. TS-TSHIRT-160-BLK"
+            className="bg-background/60 border-border/60"
+          />
+        </div>
         {showConfiguratorPreset ? (
           <div className="space-y-2">
             <Label className="text-sm font-medium">Preset конфігуратора</Label>

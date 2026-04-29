@@ -36,6 +36,7 @@ export function SimpleModelCard({
   const [imageErrored, setImageErrored] = useState(false);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;
+  const sku = model.metadata?.sku?.trim();
 
   // Map kindName to product type for placeholder
   const getProductTypeLabel = (kind: string): string => {
@@ -153,6 +154,12 @@ export function SimpleModelCard({
         <h3 className="font-semibold text-base leading-tight line-clamp-2">
           {model.name}
         </h3>
+
+        {sku ? (
+          <div className="text-xs font-medium text-muted-foreground">
+            Артикул: <span className="text-foreground/80">{sku}</span>
+          </div>
+        ) : null}
 
         {/* Category */}
         <p className="text-sm text-muted-foreground">

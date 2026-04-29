@@ -61,6 +61,7 @@ export type PrintProductConfig = {
 export type PrintPackageConfig = PrintProductConfig;
 
 export type QuoteItemMetadata = {
+  sku?: string | null;
   configuratorPreset?: PrintConfiguratorPreset | null;
   printProduct?: PrintProductConfig | null;
   printPackage?: PrintProductConfig | null;

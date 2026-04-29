@@ -52,6 +52,7 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
       results = results.filter(
         (item) =>
           normalize(item.model.name).includes(query) ||
+          normalize(item.model.metadata?.sku ?? "").includes(query) ||
           normalize(item.typeName).includes(query) ||
           normalize(item.kindName).includes(query)
       );

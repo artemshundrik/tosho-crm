@@ -186,7 +186,10 @@ type CatalogModel = {
   name: string;
   price?: number;
   imageUrl?: string;
-  metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
+  metadata?: {
+    sku?: string | null;
+    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  };
 };
 type CatalogModelRow = {
   id: string;
@@ -195,6 +198,7 @@ type CatalogModelRow = {
   price?: number | null;
   image_url?: string | null;
   thumb_url?: string | null;
+  sku?: string | null;
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
@@ -265,6 +269,7 @@ type KanbanProductPreview = {
   products?: Array<{
     id: string;
     name: string;
+    sku?: string | null;
     qtyLabel: string;
     runLabels?: Array<{
       id: string;
@@ -1058,8 +1063,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 .from("catalog_models")
                 .select(
                   withImage
-                    ? "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset"
-                    : "id,kind_id,name,price,configuratorPreset:metadata->>configuratorPreset"
+                    ? "id,kind_id,name,price,image_url,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset"
+                    : "id,kind_id,name,price,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset"
                 )
                 .eq("team_id", teamId)
                 .in("kind_id", kindIds)
@@ -1113,7 +1118,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             name: row.name,
             price: row.price ?? undefined,
             imageUrl: row.image_url ?? undefined,
-            metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
+            metadata:
+              row.configuratorPreset || row.sku
+                ? { configuratorPreset: row.configuratorPreset ?? null, sku: row.sku ?? null }
+                : undefined,
           });
           modelsByKind.set(row.kind_id, list);
         });
@@ -1586,19 +1594,121 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           kinds:catalog_kinds!inner(
             id,
             name,
-            models:catalog_models!inner(id, name, price)
+            models:catalog_models!inner(id, name, price, image_url, sku:metadata->>sku, configuratorPreset:metadata->>configuratorPreset)
           )
         `)
         .eq("team_id", teamId)
         .order("name");
       if (error) throw error;
-      setCatalogTypes(((data as unknown) as CatalogType[]) ?? []);
+      const normalizedCatalog = (((data as unknown) as Array<{
+        id: string;
+        name: string;
+        quote_type?: string | null;
+        kinds?: Array<{
+          id: string;
+          name: string;
+          models?: CatalogModelRow[];
+        }>;
+      }>) ?? []).map((type) => ({
+        ...type,
+        kinds: (type.kinds ?? []).map((kind) => ({
+          ...kind,
+          modelCount: kind.models?.length ?? 0,
+          methods: [],
+          printPositions: [],
+          models: (kind.models ?? []).map((model) => ({
+            id: model.id,
+            name: model.name,
+            price: model.price ?? undefined,
+            imageUrl: model.image_url ?? model.thumb_url ?? undefined,
+            metadata:
+              model.configuratorPreset || model.sku
+                ? { configuratorPreset: model.configuratorPreset ?? null, sku: model.sku ?? null }
+                : undefined,
+          })),
+        })),
+      }));
+      setCatalogTypes(normalizedCatalog);
     } catch (e: unknown) {
       setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
     } finally {
       setCatalogLoading(false);
     }
   }, [teamId]);
+
+  const handleCreateCatalogModelFromQuote = useCallback(
+    async (input: {
+      typeId: string;
+      kindId: string;
+      name: string;
+      sku?: string | null;
+      price: number | null;
+      imageUrl?: string | null;
+    }) => {
+      const name = input.name.trim();
+      if (!teamId) throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
+      if (!input.kindId || !name) throw new Error("Оберіть вид і вкажіть назву товару.");
+
+      const imageUrl = input.imageUrl?.trim() || null;
+      const sku = input.sku?.trim() || null;
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_models")
+        .insert({
+          team_id: teamId,
+          kind_id: input.kindId,
+          name,
+          price: Math.max(0, Number(input.price ?? 0) || 0),
+          image_url: imageUrl,
+          metadata: sku ? { sku } : null,
+        })
+        .select("id,kind_id,name,price,image_url,sku:metadata->>sku")
+        .single();
+
+      if (error || !data) {
+        const message = error?.message?.toLowerCase() ?? "";
+        if (message.includes("duplicate key") || message.includes("catalog_models_kind_id_name_key")) {
+          throw new Error("У цьому виді вже є товар з такою назвою.");
+        }
+        throw error ?? new Error("Не вдалося створити товар.");
+      }
+
+      const createdModel: CatalogModel = {
+        id: data.id as string,
+        name: (data.name as string) ?? name,
+        price: data.price == null ? undefined : Number(data.price),
+        imageUrl: typeof data.image_url === "string" && data.image_url.trim() ? data.image_url.trim() : undefined,
+        metadata: data.sku ? { sku: data.sku as string } : undefined,
+      };
+
+      setCatalogTypes((current) =>
+        current.map((type) =>
+          type.id !== input.typeId
+            ? type
+            : {
+                ...type,
+                kinds: type.kinds.map((kind) =>
+                  kind.id !== input.kindId
+                    ? kind
+                    : {
+                        ...kind,
+                        modelCount: kind.models.some((model) => model.id === createdModel.id)
+                          ? kind.modelCount
+                          : kind.modelCount + 1,
+                        models: [
+                          ...kind.models.filter((model) => model.id !== createdModel.id),
+                          createdModel,
+                        ].sort((a, b) => a.name.localeCompare(b.name, "uk", { sensitivity: "base" })),
+                      }
+                ),
+              }
+        )
+      );
+      toast.success("Товар створено і вибрано в прорахунку.");
+      return createdModel;
+    },
+    [teamId]
+  );
 
   const openCreate = useCallback(() => {
     revokeAttachmentPreviews(pendingAttachments);
@@ -1740,6 +1850,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const type = catalogTypes.find((t) => t.id === data.categoryId);
       const kind = type?.kinds.find((k) => k.id === data.kindId);
       const model = kind?.models.find((m) => m.id === data.modelId);
+      const modelSku = model?.metadata?.sku?.trim() || null;
       const packageConfig = data.printPackageConfig;
       const packageItemDescription =
         packageConfig && isPrintPackageQuote
@@ -1754,6 +1865,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 productKind:
                   packageConfig.productKind || getProductKindFromPreset(data.productConfiguratorPreset),
               },
+            }
+          : null;
+      const quoteItemMetadata: QuoteItemMetadata | null =
+        modelSku || packageItemMetadata
+          ? {
+              ...(packageItemMetadata ?? {}),
+              ...(modelSku ? { sku: modelSku } : {}),
             }
           : null;
       const packageItemName =
@@ -1814,7 +1932,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           print_width_mm: primaryPrint?.print_width_mm ?? null,
           print_height_mm: primaryPrint?.print_height_mm ?? null,
           methods: isPrintPackageQuote ? null : methodsPayload,
-          metadata: packageItemMetadata,
+          metadata: quoteItemMetadata,
           unit: normalizeUnitLabel(data.quantityUnit),
         };
         let { error: itemError } = await supabase
@@ -2237,6 +2355,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           const productIndex = getProductIndex(product.id);
           const productConfiguratorPreset =
             product.productConfiguratorPreset ?? model?.metadata?.configuratorPreset ?? null;
+          const modelSku = model?.metadata?.sku?.trim() || null;
           const isPrintPackageQuote = product.quoteType === "print" && Boolean(productConfiguratorPreset);
           const packageConfig =
             isPrintPackageQuote && product.printPackageConfig && productConfiguratorPreset
@@ -2277,6 +2396,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   },
                 }
               : {}),
+            ...(modelSku ? { sku: modelSku } : {}),
           } as QuoteItemMetadata & {
             delivery?: { type: string; details: Record<string, unknown> | null };
           };
@@ -3269,14 +3389,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               .filter(Boolean)
           )
         );
-        const modelImageById = new Map<string, { imageUrl: string; zoomImageUrl?: string | null }>();
+        const modelImageById = new Map<string, { imageUrl: string | null; zoomImageUrl?: string | null; sku?: string | null }>();
         if (modelIds.length > 0) {
           const modelRows = await listCatalogModelsByIds(modelIds);
           modelRows.forEach((row, id) => {
             const zoomImageUrl = row.image_url?.trim() || null;
             const imageUrl = row.thumb_url?.trim() || zoomImageUrl;
-            if (!imageUrl) return;
-            modelImageById.set(id, { imageUrl, zoomImageUrl });
+            const sku = row.sku?.trim() || null;
+            if (!imageUrl && !sku) return;
+            modelImageById.set(id, { imageUrl, zoomImageUrl, sku });
           });
         }
 
@@ -3307,6 +3428,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             const catalogImage = item.catalog_model_id
               ? modelImageById.get(item.catalog_model_id) ?? null
               : null;
+            const metadataSku =
+              item.metadata && typeof item.metadata.sku === "string"
+                ? item.metadata.sku.trim() || null
+                : null;
+            const sku = metadataSku || catalogImage?.sku || null;
 
             const itemRuns = runsByItemId.get(item.id) ?? [];
             const sharedRuns = quoteItems.length === 1 ? sharedRunsByQuoteId.get(quoteId) ?? [] : [];
@@ -3321,6 +3447,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             return {
               id: item.id,
               name: item.name?.trim() || "Товар без назви",
+              sku,
               qtyLabel: formatQtyLabel(item.qty, item.unit),
               runLabels,
               imageUrl: attachmentImage || catalogImage?.imageUrl || null,
@@ -6518,6 +6645,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               {
                                                 id: "loading",
                                                 name: productPreview?.itemName ?? "Завантаження товару...",
+                                                sku: null,
                                                 qtyLabel: productPreview?.qtyLabel ?? " ",
                                                 runLabels: [],
                                                 imageUrl: productPreview?.imageUrl ?? null,
@@ -6555,6 +6683,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               <div className="truncate text-[14px] font-medium" title={product.name}>
                                                 {product.name}
                                               </div>
+                                              {product.sku ? (
+                                                <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
+                                                  Артикул: {product.sku}
+                                                </div>
+                                              ) : null}
                                               {product.runLabels?.length ? (
                                                 <div className="mt-1 flex flex-wrap items-center gap-1">
                                                   {product.runLabels.map((runLabel) => (
@@ -6658,6 +6791,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }}
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
+        onCreateCatalogModel={handleCreateCatalogModelFromQuote}
         currentUserId={currentUserId}
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}
@@ -7473,6 +7607,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         onCustomerSearch={handleCustomerSearchChange}
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
+        onCreateCatalogModel={handleCreateCatalogModelFromQuote}
         currentUserId={currentUserId}
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}

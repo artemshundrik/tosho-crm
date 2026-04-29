@@ -61,6 +61,7 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
+          sku?: string | null;
           configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
         }>;
         modelMethods: Array<{ model_id: string; method_id: string }>;
@@ -95,7 +96,10 @@ export function useCatalogData(teamId: string | null) {
           name: row.name,
           price: row.price ?? undefined,
           imageUrl: row.image_url ?? undefined,
-          metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
+          metadata:
+            row.configuratorPreset || row.sku
+              ? { configuratorPreset: row.configuratorPreset ?? null, sku: row.sku ?? null }
+              : undefined,
           methodIds: methodIdsByModel.get(row.id) ?? [],
           priceTiers: tiersByModel.get(row.id),
         });
@@ -121,7 +125,7 @@ export function useCatalogData(teamId: string | null) {
       let modelsQuery = supabase
         .schema("tosho")
         .from("catalog_models")
-        .select("id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset")
+        .select("id,kind_id,name,price,image_url,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset")
         .eq("team_id", teamId)
         .order("name", { ascending: true });
 
@@ -151,6 +155,7 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
+          sku?: string | null;
           configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
         }>,
         modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
