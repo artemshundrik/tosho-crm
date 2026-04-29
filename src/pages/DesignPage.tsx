@@ -443,6 +443,7 @@ const sanitizeImageReference = (value?: string | null) => {
 const LOAD_TASKS_RESOURCE_COOLDOWN_MS = 30_000;
 const DESIGN_PAGE_CACHE_FRESH_MS = 5 * 60 * 1000;
 const DESIGN_PAGE_BACKGROUND_REFRESH_DELAY_MS = 1200;
+const DESIGN_PAGE_REFRESH_INDICATOR_DELAY_MS = 900;
 
 const isResourceExhaustionLikeError = (error: unknown) => {
   const message = getErrorMessage(error, "").toLowerCase();
@@ -777,6 +778,7 @@ export default function DesignPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
   const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
@@ -2178,6 +2180,19 @@ export default function DesignPage() {
     assigneeSpotlight,
     completedPeriod,
   ]);
+
+  useEffect(() => {
+    if (!refreshing) {
+      setShowRefreshIndicator(false);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setShowRefreshIndicator(true);
+    }, DESIGN_PAGE_REFRESH_INDICATOR_DELAY_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [refreshing]);
 
   useEffect(() => {
     const hasActive = Object.values(timerSummaryByTaskId).some((summary) => !!summary.activeStartedAt);
@@ -4189,7 +4204,7 @@ export default function DesignPage() {
             ) : null}
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
-              {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+              {(loading || showRefreshIndicator) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
           </>
         }
@@ -4213,8 +4228,8 @@ export default function DesignPage() {
       managerFilterOptions,
       renderDesignerFilterValue,
       renderManagerFilterValue,
-      refreshing,
       search,
+      showRefreshIndicator,
       standaloneTasksCount,
       statusFilter,
       tasks.length,

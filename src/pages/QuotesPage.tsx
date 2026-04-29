@@ -168,6 +168,7 @@ const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 const QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT = 5;
 const QUOTES_KANBAN_PREVIEW_SCROLL_STEP_PX = 260;
 const QUOTES_KANBAN_PREVIEW_BATCH_SIZE = 4;
+const QUOTES_PAGE_REFRESH_INDICATOR_DELAY_MS = 900;
 
 const isManagerFilterMember = (member: Pick<TeamMemberRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
@@ -392,6 +393,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
   const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
@@ -1412,7 +1414,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       void loadQuotes();
     }, delay);
     return () => window.clearTimeout(id);
-// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, status, search, quotesFetchLimit, loadQuotes]);
 
   useEffect(() => {
@@ -1424,7 +1425,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       fetchAll: true,
       fullFetchKey: `search:${teamId}:${status}:${search.trim().toLowerCase()}`,
     });
-  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, teamId]);
+  }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, status, teamId]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -5041,6 +5042,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     );
   }, [bulkAddAvailableSets, bulkAddExistingOpen]);
 
+  useEffect(() => {
+    if (!refreshing) {
+      setShowRefreshIndicator(false);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setShowRefreshIndicator(true);
+    }, QUOTES_PAGE_REFRESH_INDICATOR_DELAY_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [refreshing]);
+
   const estimatesHeaderActions = useMemo(() => (
       <UnifiedPageToolbar
         topLeft={
@@ -5107,7 +5121,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <X className="h-4 w-4" />
               </Button>
             ) : null}
-            {(loading || refreshing) && contentView !== "sets" && search ? (
+            {(loading || showRefreshIndicator) && contentView !== "sets" && search ? (
               <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
@@ -5248,7 +5262,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             ) : null}
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
-              {(loading || refreshing) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+              {(loading || showRefreshIndicator) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
             </div>
           </>
         }
@@ -5274,9 +5288,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetSearch,
     quoteSetSetCount,
     renderManagerFilterValue,
-    refreshing,
     rows.length,
     search,
+    showRefreshIndicator,
     status,
     viewMode,
     filteredQuoteSets.length,
