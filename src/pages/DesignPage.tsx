@@ -176,6 +176,11 @@ type DesignPageFiltersState = {
   cachedAt?: number;
 };
 
+type DesignTaskServerFilters = {
+  managerUserId?: string | null;
+  status?: DesignStatus | null;
+};
+
 const isDesignerRole = (value?: string | null) => {
   const normalized = (value ?? "").trim().toLowerCase();
   return normalized === "designer" || normalized === "дизайнер";
@@ -1320,6 +1325,15 @@ export default function DesignPage() {
         ? DESIGN_SEARCH_FETCH_PAGE_SIZE
         : tasksFetchLimit;
     const offset = append ? tasksLengthRef.current : 0;
+    const serverFilters: DesignTaskServerFilters = {
+      managerUserId:
+        isManagerUser && userId
+          ? userId
+          : managerFilter !== ALL_MANAGERS_FILTER
+            ? managerFilter
+            : null,
+      status: statusFilter !== "all" && statusFilter !== "new" ? statusFilter : null,
+    };
 
     loadTasksInFlightRef.current = true;
     if (tasksLengthRef.current > 0) {
@@ -1341,13 +1355,19 @@ export default function DesignPage() {
 
       while (true) {
         const fetchLimit = pageSize + 1;
-        const { data, error: fetchError } = await supabase
+        let query = supabase
           .from("activity_log")
           .select("id,entity_id,metadata,title,created_at")
           .eq("team_id", effectiveTeamId)
           .eq("action", "design_task")
-          .order("created_at", { ascending: false })
-          .range(nextOffset, nextOffset + fetchLimit - 1);
+          .order("created_at", { ascending: false });
+        if (serverFilters.managerUserId) {
+          query = query.eq("metadata->>manager_user_id", serverFilters.managerUserId);
+        }
+        if (serverFilters.status) {
+          query = query.eq("metadata->>status", serverFilters.status);
+        }
+        const { data, error: fetchError } = await query.range(nextOffset, nextOffset + fetchLimit - 1);
         if (fetchError) throw fetchError;
 
         const pageRows = (data ?? []) as Array<{
@@ -1787,6 +1807,9 @@ export default function DesignPage() {
     }
   }, [
     effectiveTeamId,
+    isManagerUser,
+    managerFilter,
+    statusFilter,
     tasksFetchLimit,
     userId,
     viewMode,
@@ -1795,9 +1818,8 @@ export default function DesignPage() {
   useEffect(() => {
     const hasBlockingFilters =
       search.trim().length > 0 ||
-      statusFilter !== "all" ||
-      designerFilter !== ALL_DESIGNERS_FILTER ||
-      (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER);
+      statusFilter === "new" ||
+      designerFilter !== ALL_DESIGNERS_FILTER;
 
     if (hasBlockingFilters) {
       if (tasks.length === 0) {
@@ -1883,32 +1905,34 @@ export default function DesignPage() {
 
         const { data, error: fetchError } = await supabase
           .from("activity_log")
-          .select("entity_id,metadata,created_at")
+          .select("entity_id,created_at,to_status:metadata->>to_status,assignee_user_id:metadata->>assignee_user_id,design_task_type:metadata->>design_task_type")
           .eq("team_id", effectiveTeamId)
           .eq("action", "design_task_status")
           .in("entity_id", taskIds)
+          .eq("metadata->>to_status", "approved")
           .gte("created_at", since);
         if (fetchError) throw fetchError;
 
         const taskById = new Map(tasks.map((task) => [task.id, task]));
         const nextSummary: Record<string, { total: number; byType: Partial<Record<DesignTaskType, number>> }> = {};
 
-        ((data ?? []) as Array<{ entity_id?: string | null; metadata?: Record<string, unknown> | null }>).forEach((row) => {
-          const metadata = row.metadata ?? {};
-          if (metadata.to_status !== "approved") return;
-
+        ((data ?? []) as Array<{
+          entity_id?: string | null;
+          assignee_user_id?: string | null;
+          design_task_type?: string | null;
+        }>).forEach((row) => {
           const taskId = typeof row.entity_id === "string" ? row.entity_id.trim() : "";
           const task = taskById.get(taskId);
           const assigneeUserId =
-            (typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id.trim()
-              ? metadata.assignee_user_id.trim()
+            (typeof row.assignee_user_id === "string" && row.assignee_user_id.trim()
+              ? row.assignee_user_id.trim()
               : null) ??
             task?.assigneeUserId ??
             null;
           if (!assigneeUserId) return;
 
           const taskType =
-            parseDesignTaskType(metadata.design_task_type) ??
+            parseDesignTaskType(row.design_task_type) ??
             task?.designTaskType ??
             null;
           const bucket = nextSummary[assigneeUserId] ?? { total: 0, byType: {} };
@@ -2043,11 +2067,15 @@ export default function DesignPage() {
       hasImplicitManagerFilter ? userId : "",
     ].join(":");
     if (!effectiveTeamId) return;
-    if (
-      effectiveDesignerFilter === ALL_DESIGNERS_FILTER &&
-      managerFilter === ALL_MANAGERS_FILTER &&
-      !hasImplicitManagerFilter
-    ) {
+    const hasServerSideOnlyFilters =
+      (managerFilter !== ALL_MANAGERS_FILTER ||
+        hasImplicitManagerFilter ||
+        (statusFilter !== "all" && statusFilter !== "new")) &&
+      effectiveDesignerFilter === ALL_DESIGNERS_FILTER;
+    if (hasServerSideOnlyFilters) {
+      return;
+    }
+    if (effectiveDesignerFilter === ALL_DESIGNERS_FILTER && managerFilter === ALL_MANAGERS_FILTER) {
       return;
     }
     if (loading || refreshing) return;
@@ -2062,6 +2090,7 @@ export default function DesignPage() {
     loading,
     managerFilter,
     refreshing,
+    statusFilter,
     tasks.length,
     userId,
   ]);

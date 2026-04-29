@@ -9,6 +9,7 @@ type ListQuotesParams = {
   teamId: string;
   search?: string;
   status?: string;
+  managerUserId?: string | null;
   limit?: number;
   offset?: number;
 };
@@ -297,7 +298,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 }
 
 export async function listQuotes(params: ListQuotesParams) {
-  const { teamId, search, status, limit, offset } = params;
+  const { teamId, search, status, managerUserId, limit, offset } = params;
   const q = search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
 
@@ -375,6 +376,10 @@ export async function listQuotes(params: ListQuotesParams) {
 
       if (status && status !== "all") {
         query = query.eq("status", status);
+      }
+
+      if (managerUserId?.trim()) {
+        query = query.eq("assigned_to", managerUserId.trim());
       }
 
       if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {

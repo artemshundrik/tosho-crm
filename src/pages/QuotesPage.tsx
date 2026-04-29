@@ -574,6 +574,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const quotesLoadRequestIdRef = useRef(0);
   const fetchedQuoteMembershipIdsRef = useRef<Set<string>>(new Set());
   const inflightQuoteMembershipIdsRef = useRef<Set<string>>(new Set());
+  const fetchedKanbanPreviewQuoteIdsRef = useRef<Set<string>>(
+    new Set(Object.keys(Object.fromEntries(initialCache?.kanbanProductEntries ?? [])))
+  );
+  const inflightKanbanPreviewQuoteIdsRef = useRef<Set<string>>(new Set());
   const cacheKey = `quotes-page-cache:${teamId}`;
 
   // Get current user ID
@@ -1194,7 +1198,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let nextHasMore = false;
 
       while (true) {
-        const data = await listQuotes({ teamId, search, status, limit: pageSize + 1, offset: nextOffset });
+        const data = await listQuotes({
+          teamId,
+          search,
+          status,
+          managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+          limit: pageSize + 1,
+          offset: nextOffset,
+        });
         const visibleData = data.slice(0, pageSize);
         fetchedRows.push(...visibleData);
         nextHasMore = data.length > pageSize;
@@ -1311,13 +1322,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       fetchedQuoteMembershipIdsRef.current = new Set();
       inflightQuoteMembershipIdsRef.current = new Set();
       setKanbanProductByQuoteId({});
+      fetchedKanbanPreviewQuoteIdsRef.current = new Set();
+      inflightKanbanPreviewQuoteIdsRef.current = new Set();
     } finally {
       if (requestId === quotesLoadRequestIdRef.current) {
         setLoading(false);
         setRefreshing(false);
       }
     }
-  }, [cacheKey, quotesFetchLimit, search, status, teamId, viewMode]);
+  }, [cacheKey, managerFilter, quotesFetchLimit, search, status, teamId, viewMode]);
 
   const loadQuoteSets = async () => {
     if (!teamId) return;
@@ -1415,18 +1428,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   useEffect(() => {
     if (!teamId) return;
-    if (managerFilter === ALL_MANAGERS_FILTER) return;
-    if (loading || refreshing) return;
-    if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
-    void loadQuotes({
-      fetchAll: true,
-      fullFetchKey: `manager:${teamId}:${status}:${managerFilter}`,
-    });
-  }, [hasMoreQuotes, loadQuotes, loading, managerFilter, refreshing, rows.length, teamId]);
-
-  useEffect(() => {
     setQuotesFetchLimit(viewMode === "kanban" ? QUOTES_KANBAN_INITIAL_PAGE_SIZE : QUOTES_TABLE_PAGE_SIZE);
-  }, [search, status, teamId, viewMode]);
+  }, [managerFilter, search, status, teamId, viewMode]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -3178,9 +3181,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const quoteIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
     if (quoteIds.length === 0) {
       setKanbanProductByQuoteId({});
+      fetchedKanbanPreviewQuoteIdsRef.current = new Set();
+      inflightKanbanPreviewQuoteIdsRef.current = new Set();
       setKanbanPreviewsLoading(false);
       return;
     }
+
+    const quoteIdSet = new Set(quoteIds);
+    setKanbanProductByQuoteId((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([quoteId]) => quoteIdSet.has(quoteId)));
+      const currentKeys = Object.keys(current);
+      const nextKeys = Object.keys(next);
+      const hasSameKeys = currentKeys.length === nextKeys.length && currentKeys.every((quoteId) => quoteIdSet.has(quoteId));
+      return hasSameKeys ? current : next;
+    });
+    fetchedKanbanPreviewQuoteIdsRef.current = new Set(
+      Array.from(fetchedKanbanPreviewQuoteIdsRef.current).filter((quoteId) => quoteIdSet.has(quoteId))
+    );
+    const missingQuoteIds = quoteIds.filter(
+      (quoteId) =>
+        !fetchedKanbanPreviewQuoteIdsRef.current.has(quoteId) &&
+        !inflightKanbanPreviewQuoteIdsRef.current.has(quoteId)
+    );
+    if (missingQuoteIds.length === 0) {
+      setKanbanPreviewsLoading(false);
+      return;
+    }
+    missingQuoteIds.forEach((quoteId) => inflightKanbanPreviewQuoteIdsRef.current.add(quoteId));
 
     let cancelled = false;
 
@@ -3188,8 +3215,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!cancelled) setKanbanPreviewsLoading(true);
       try {
         const [itemRows, runRows] = await Promise.all([
-          listQuoteItemPreviewsForQuotes({ teamId, quoteIds }),
-          listQuoteRunPreviewsForQuotes({ teamId, quoteIds }),
+          listQuoteItemPreviewsForQuotes({ teamId, quoteIds: missingQuoteIds }),
+          listQuoteRunPreviewsForQuotes({ teamId, quoteIds: missingQuoteIds }),
         ]);
         if (cancelled) return;
 
@@ -3263,7 +3290,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           formatQtyLabel(quantity, unit);
 
         const nextMap: Record<string, KanbanProductPreview> = {};
-        quoteIds.forEach((quoteId) => {
+        missingQuoteIds.forEach((quoteId) => {
           const firstItem = firstItemByQuoteId.get(quoteId);
           const quoteItems = itemsByQuoteId.get(quoteId) ?? [];
           const itemCount = countByQuoteId[quoteId] ?? 0;
@@ -3315,28 +3342,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         });
 
         if (!cancelled) {
-          setKanbanProductByQuoteId(nextMap);
-          try {
-            sessionStorage.setItem(
-              cacheKey,
-              JSON.stringify({
-                rows,
-                attachmentCounts,
-                quoteMembershipEntries: Array.from(quoteMembershipByQuoteId.entries()),
-                kanbanProductEntries: Object.entries(nextMap),
-                cachedAt: Date.now(),
-              })
-            );
-          } catch {
-            // ignore cache persistence failures
-          }
+          missingQuoteIds.forEach((quoteId) => fetchedKanbanPreviewQuoteIdsRef.current.add(quoteId));
+          setKanbanProductByQuoteId((current) => {
+            const mergedMap = {
+              ...Object.fromEntries(Object.entries(current).filter(([quoteId]) => quoteIdSet.has(quoteId))),
+              ...nextMap,
+            };
+            try {
+              sessionStorage.setItem(
+                cacheKey,
+                JSON.stringify({
+                  rows,
+                  attachmentCounts,
+                  quoteMembershipEntries: Array.from(quoteMembershipByQuoteId.entries()),
+                  kanbanProductEntries: Object.entries(mergedMap),
+                  cachedAt: Date.now(),
+                })
+              );
+            } catch {
+              // ignore cache persistence failures
+            }
+            return mergedMap;
+          });
           setKanbanPreviewsLoading(false);
         }
       } catch {
         if (!cancelled) {
-          setKanbanProductByQuoteId({});
           setKanbanPreviewsLoading(false);
         }
+      } finally {
+        missingQuoteIds.forEach((quoteId) => inflightKanbanPreviewQuoteIdsRef.current.delete(quoteId));
       }
     };
 
@@ -3344,8 +3379,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
     return () => {
       cancelled = true;
+      missingQuoteIds.forEach((quoteId) => inflightKanbanPreviewQuoteIdsRef.current.delete(quoteId));
     };
-  }, [filteredAndSortedRows, teamId, viewMode]);
+  }, [attachmentCounts, cacheKey, filteredAndSortedRows, quoteMembershipByQuoteId, rows, teamId, viewMode]);
 
   const bulkAddAvailableSets = useMemo(() => {
     if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
