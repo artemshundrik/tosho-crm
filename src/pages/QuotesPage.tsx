@@ -189,6 +189,21 @@ type CatalogModel = {
   imageUrl?: string;
   metadata?: {
     sku?: string | null;
+    variants?: Array<{
+      id: string;
+      name: string;
+      sku?: string | null;
+      colorHex?: string | null;
+      imageUrl?: string | null;
+      imageAsset?: {
+        bucket: string;
+        path: string;
+        originalUrl?: string | null;
+        previewUrl?: string | null;
+        thumbUrl?: string | null;
+      } | null;
+      active?: boolean;
+    }>;
     configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
     imageAsset?: {
       bucket: string;
@@ -208,6 +223,7 @@ type CatalogModelRow = {
   thumb_url?: string | null;
   sku?: string | null;
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  metadata?: CatalogModel["metadata"] | null;
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
 type CatalogKind = {
@@ -294,6 +310,9 @@ type KanbanProductPreview = {
     id: string;
     name: string;
     sku?: string | null;
+    variantName?: string | null;
+    variantColorHex?: string | null;
+    variantImageUrl?: string | null;
     qtyLabel: string;
     runLabels?: Array<{
       id: string;
@@ -1087,8 +1106,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 .from("catalog_models")
                 .select(
                   withImage
-                    ? "id,kind_id,name,price,image_url,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset"
-                    : "id,kind_id,name,price,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset"
+                    ? "id,kind_id,name,price,image_url,metadata"
+                    : "id,kind_id,name,price,metadata"
                 )
                 .eq("team_id", teamId)
                 .in("kind_id", kindIds)
@@ -1137,15 +1156,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const modelsByKind = new Map<string, CatalogModel[]>();
         (((modelRows ?? []) as unknown) as CatalogModelRow[]).forEach((row) => {
           const list = modelsByKind.get(row.kind_id) ?? [];
+          const metadata =
+            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+              ? row.metadata
+              : undefined;
           list.push({
             id: row.id,
             name: row.name,
             price: row.price ?? undefined,
             imageUrl: row.image_url ?? undefined,
-            metadata:
-              row.configuratorPreset || row.sku
-                ? { configuratorPreset: row.configuratorPreset ?? null, sku: row.sku ?? null }
-                : undefined,
+            metadata,
           });
           modelsByKind.set(row.kind_id, list);
         });
@@ -1618,7 +1638,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           kinds:catalog_kinds!inner(
             id,
             name,
-            models:catalog_models!inner(id, name, price, image_url, sku:metadata->>sku, configuratorPreset:metadata->>configuratorPreset)
+            models:catalog_models!inner(id, name, price, image_url, metadata)
           )
         `)
         .eq("team_id", teamId)
@@ -1646,8 +1666,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             price: model.price ?? undefined,
             imageUrl: model.image_url ?? model.thumb_url ?? undefined,
             metadata:
-              model.configuratorPreset || model.sku
-                ? { configuratorPreset: model.configuratorPreset ?? null, sku: model.sku ?? null }
+              model.metadata && typeof model.metadata === "object" && !Array.isArray(model.metadata)
+                ? model.metadata
                 : undefined,
           })),
         })),
@@ -2490,6 +2510,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           const productConfiguratorPreset =
             product.productConfiguratorPreset ?? model?.metadata?.configuratorPreset ?? null;
           const modelSku = model?.metadata?.sku?.trim() || null;
+          const productVariant = product.catalogVariant ?? null;
+          const productSku = productVariant?.sku?.trim() || modelSku;
           const isPrintPackageQuote = product.quoteType === "print" && Boolean(productConfiguratorPreset);
           const packageConfig =
             isPrintPackageQuote && product.printPackageConfig && productConfiguratorPreset
@@ -2530,7 +2552,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   },
                 }
               : {}),
-            ...(modelSku ? { sku: modelSku } : {}),
+            ...(productSku ? { sku: productSku } : {}),
+            ...(productVariant ? { catalogVariant: productVariant } : {}),
           } as QuoteItemMetadata & {
             delivery?: { type: string; details: Record<string, unknown> | null };
           };
@@ -3566,6 +3589,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               item.metadata && typeof item.metadata.sku === "string"
                 ? item.metadata.sku.trim() || null
                 : null;
+            const metadataVariant =
+              item.metadata &&
+              typeof item.metadata.catalogVariant === "object" &&
+              item.metadata.catalogVariant !== null
+                ? (item.metadata.catalogVariant as {
+                    name?: unknown;
+                    sku?: unknown;
+                    colorHex?: unknown;
+                    imageUrl?: unknown;
+                  })
+                : null;
+            const variantName = typeof metadataVariant?.name === "string" ? metadataVariant.name.trim() || null : null;
+            const variantColorHex =
+              typeof metadataVariant?.colorHex === "string" ? metadataVariant.colorHex.trim() || null : null;
+            const variantImageUrl =
+              typeof metadataVariant?.imageUrl === "string" ? metadataVariant.imageUrl.trim() || null : null;
             const sku = metadataSku || catalogImage?.sku || null;
 
             const itemRuns = runsByItemId.get(item.id) ?? [];
@@ -3582,10 +3621,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               id: item.id,
               name: item.name?.trim() || "Товар без назви",
               sku,
+              variantName,
+              variantColorHex,
+              variantImageUrl,
               qtyLabel: formatQtyLabel(item.qty, item.unit),
               runLabels,
-              imageUrl: attachmentImage || catalogImage?.imageUrl || null,
-              zoomImageUrl: attachmentImage || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
+              imageUrl: attachmentImage || variantImageUrl || catalogImage?.imageUrl || null,
+              zoomImageUrl: attachmentImage || variantImageUrl || catalogImage?.zoomImageUrl || catalogImage?.imageUrl || null,
             };
           };
 
@@ -6769,13 +6811,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                 id: "loading",
                                                 name: productPreview?.itemName ?? "Завантаження товару...",
                                                 sku: null,
+                                                variantName: null,
+                                                variantColorHex: null,
+                                                variantImageUrl: null,
                                                 qtyLabel: productPreview?.qtyLabel ?? " ",
                                                 runLabels: [],
                                                 imageUrl: productPreview?.imageUrl ?? null,
                                                 zoomImageUrl: productPreview?.zoomImageUrl ?? null,
                                               },
                                             ]
-                                        ).map((product, productIndex) => (
+                                        ).map((product, productIndex) => {
+                                          const displayName = product.variantName
+                                            ? `${product.name} · ${product.variantName}`
+                                            : product.name;
+                                          return (
                                           <div
                                             key={product.id}
                                             className={cn("flex items-center gap-2.5", productIndex > 0 && "pt-2", productIndex < (productPreview?.products?.length ?? 1) - 1 && "pb-2")}
@@ -6784,7 +6833,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               <KanbanImageZoomPreview
                                                 imageUrl={product.imageUrl}
                                                 zoomImageUrl={product.zoomImageUrl ?? undefined}
-                                                alt={product.name}
+                                                alt={displayName}
                                                 loadStrategy={
                                                   index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
                                                     ? "eager"
@@ -6803,8 +6852,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               </div>
                                             )}
                                             <div className="min-w-0 flex-1">
-                                              <div className="truncate text-[14px] font-medium" title={product.name}>
-                                                {product.name}
+                                              <div className="truncate text-[14px] font-medium" title={displayName}>
+                                                {displayName}
                                               </div>
                                               {product.sku ? (
                                                 <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
@@ -6834,7 +6883,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               )}
                                             </div>
                                           </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   ) : null}

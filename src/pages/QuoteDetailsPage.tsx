@@ -571,8 +571,32 @@ const normalizePartyMatch = (value?: string | null) =>
     .replace(/[«»"'`]/g, "");
 
 const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
-  if (!isPrintPackageMetadata(value)) return null;
-  return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (isPrintPackageMetadata(value)) return value;
+
+  const record = value as Record<string, unknown>;
+  const metadata: QuoteItemMetadata = {};
+  if (typeof record.sku === "string" && record.sku.trim()) {
+    metadata.sku = record.sku.trim();
+  }
+
+  const rawVariant = record.catalogVariant;
+  if (rawVariant && typeof rawVariant === "object" && !Array.isArray(rawVariant)) {
+    const variantRecord = rawVariant as Record<string, unknown>;
+    const id = typeof variantRecord.id === "string" ? variantRecord.id.trim() : "";
+    const name = typeof variantRecord.name === "string" ? variantRecord.name.trim() : "";
+    if (id && name) {
+      metadata.catalogVariant = {
+        id,
+        name,
+        sku: typeof variantRecord.sku === "string" ? variantRecord.sku.trim() || null : null,
+        colorHex: typeof variantRecord.colorHex === "string" ? variantRecord.colorHex.trim() || null : null,
+        imageUrl: typeof variantRecord.imageUrl === "string" ? variantRecord.imageUrl.trim() || null : null,
+      };
+    }
+  }
+
+  return metadata.sku || metadata.catalogVariant ? metadata : null;
 };
 
 function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCachePayload | null {
@@ -5857,17 +5881,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       !resolvedModelId && item.attachment?.url && item.attachment.type.startsWith("image/")
                         ? item.attachment.url
                         : null;
-                    const productPreview = catalogImage || attachmentImage
+                    const variantImageUrl = item.metadata?.catalogVariant?.imageUrl?.trim() || null;
+                    const productPreview = variantImageUrl || catalogImage || attachmentImage
                       ? {
                           type: "image" as const,
-                          url: catalogImage ?? attachmentImage ?? "",
-                          zoomUrl: catalogZoomImage ?? attachmentImage ?? catalogImage ?? "",
+                          url: variantImageUrl ?? catalogImage ?? attachmentImage ?? "",
+                          zoomUrl: variantImageUrl ?? catalogZoomImage ?? attachmentImage ?? catalogImage ?? "",
                         }
                       : null;
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
                     const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
                     const packageSizeHint = null;
+                    const catalogVariant =
+                      item.metadata?.catalogVariant?.name.trim()
+                        ? {
+                            name: item.metadata.catalogVariant.name.trim(),
+                            sku: item.metadata.catalogVariant.sku?.trim() || null,
+                            colorHex: item.metadata.catalogVariant.colorHex?.trim() || null,
+                            imageUrl: item.metadata.catalogVariant.imageUrl?.trim() || null,
+                          }
+                        : null;
+                    const itemSku = item.metadata?.sku?.trim() || catalogVariant?.sku || null;
                     const shouldShowDescription =
                       item.description && (!packageSummary.length || item.description !== packageSummary.join(" • "));
                     const isMerchQuote = (quote?.quote_type ?? "") === "merch";
@@ -6005,6 +6040,26 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     </span>
                                   ) : null}
                                 </div>
+                                {catalogVariant || itemSku ? (
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                    {catalogVariant ? (
+                                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-2 py-1">
+                                        {catalogVariant.colorHex ? (
+                                          <span
+                                            className="h-3 w-3 shrink-0 rounded-full border border-border/70"
+                                            style={{ backgroundColor: catalogVariant.colorHex }}
+                                          />
+                                        ) : null}
+                                        <span className="truncate">{catalogVariant.name}</span>
+                                      </span>
+                                    ) : null}
+                                    {itemSku ? (
+                                      <span className="inline-flex items-center rounded-lg border border-border/50 bg-muted/20 px-2 py-1">
+                                        Артикул: {itemSku}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </div>
 
                               <div className="flex shrink-0 items-center gap-2">

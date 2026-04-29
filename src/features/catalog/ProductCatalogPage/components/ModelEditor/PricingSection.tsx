@@ -35,31 +35,31 @@ export function PricingSection({
   void draftFixedPrice;
   void onFixedPriceChange;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between pb-2">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-1 rounded-full tone-dot-success"></div>
-          <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            <Layers className="h-4 w-4" /> Ціноутворення
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Layers className="h-4 w-4 text-muted-foreground" /> Ціноутворення
           </h3>
+          <p className="mt-1 text-xs text-muted-foreground">Правила ціни для прорахунку.</p>
         </div>
         <ToggleGroup
           type="single"
           value={draftPriceMode}
           onValueChange={(v) => v && onPriceModeChange(v as PriceMode)}
-          className="border rounded-lg p-1 bg-muted/20 shadow-sm"
+          className="rounded-lg border bg-background/70 p-1"
         >
-          <ToggleGroupItem value="fixed" size="sm" className="text-xs px-4 py-1.5">
+          <ToggleGroupItem value="fixed" size="sm" className="px-3 py-1.5 text-xs">
             Фіксована
           </ToggleGroupItem>
-          <ToggleGroupItem value="tiers" size="sm" className="text-xs px-4 py-1.5">
+          <ToggleGroupItem value="tiers" size="sm" className="px-3 py-1.5 text-xs">
             Тиражі
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
 
       {draftPriceMode === "fixed" ? (
-        <div className="bg-gradient-to-br from-muted/20 to-muted/5 p-5 rounded-xl border border-border/40">
+        <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 p-4">
           <p className="text-sm text-muted-foreground">
             Фіксована ціна буде встановлюватись під час створення прорахунку замовлення.
           </p>

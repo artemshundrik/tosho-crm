@@ -498,6 +498,8 @@ export default function ProductCatalogPage() {
         onImageUrlChange={modelEditor.setDraftImageUrl}
         onImageUploadModeChange={modelEditor.setImageUploadMode}
         onImageFileUpload={modelEditor.handleImageFileUpload}
+        onVariantImageUrlChange={modelEditor.handleVariantImageUrlChange}
+        onVariantImageFileUpload={modelEditor.handleVariantImageFileUpload}
         onSave={modelEditor.handleSaveModel}
         onDelete={() => {
           if (modelEditor.editingModelId) {

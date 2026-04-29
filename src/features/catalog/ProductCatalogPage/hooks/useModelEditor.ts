@@ -14,8 +14,10 @@ import {
   uploadAttachmentWithVariants,
 } from "@/lib/attachmentPreview";
 import type {
+  CatalogImageAsset,
   CatalogModel,
   CatalogModelMetadata,
+  CatalogModelVariant,
   CatalogPriceTier,
   CatalogType,
   PriceMode,
@@ -84,6 +86,8 @@ export function useModelEditor({
   const [draftMethodIds, setDraftMethodIds] = useState<string[]>([]);
   const [draftImageUrl, setDraftImageUrl] = useState("");
   const [draftImageFile, setDraftImageFile] = useState<File | null>(null);
+  const [variantImageFiles, setVariantImageFiles] = useState<Record<string, File>>({});
+  const [persistedVariantImageAssets, setPersistedVariantImageAssets] = useState<Record<string, CatalogImageAsset | null>>({});
   const [draftMetadata, setDraftMetadata] = useState<CatalogModelMetadata>({});
   const [imageUploadMode, setImageUploadMode] = useState<ImageUploadMode>("url");
 
@@ -125,9 +129,6 @@ export function useModelEditor({
     [teamId]
   );
 
-  const getPublicStorageUrl = (bucket: string, path: string) =>
-    supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-
   const sanitizeFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
 
   const getCatalogImportErrorMessage = (error: unknown) => {
@@ -162,8 +163,51 @@ export function useModelEditor({
     );
   };
 
+  const getVariantImageAssetMap = (metadata?: CatalogModelMetadata | null) => {
+    const map: Record<string, CatalogImageAsset | null> = {};
+    (metadata?.variants ?? []).forEach((variant) => {
+      if (variant.id) {
+        map[variant.id] = variant.imageAsset ?? null;
+      }
+    });
+    return map;
+  };
+
+  const normalizeVariantForSave = (variant: CatalogModelVariant): CatalogModelVariant => ({
+    ...variant,
+    name: variant.name.trim(),
+    sku: variant.sku?.trim() || null,
+    colorHex: variant.colorHex?.trim() || null,
+    imageUrl: variant.imageUrl?.trim() || null,
+    imageAsset: variant.imageAsset ?? null,
+  });
+
+  const hasPersistableVariantFields = (variant: CatalogModelVariant) =>
+    Boolean(variant.name || variant.sku || variant.imageUrl);
+
+  const getCatalogAssetPayload = useCallback((storagePath: string) => {
+    const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+    const previewUrl = supabase.storage
+      .from(CATALOG_IMAGE_BUCKET)
+      .getPublicUrl(getAttachmentVariantPath(storagePath, "preview")).data.publicUrl;
+    const thumbUrl = supabase.storage
+      .from(CATALOG_IMAGE_BUCKET)
+      .getPublicUrl(getAttachmentVariantPath(storagePath, "thumb")).data.publicUrl;
+
+    return {
+      imageUrl: previewUrl,
+      imageAsset: {
+        bucket: CATALOG_IMAGE_BUCKET,
+        path: storagePath,
+        originalUrl,
+        previewUrl,
+        thumbUrl,
+      },
+    };
+  }, []);
+
   const importCatalogImageFromUrl = useCallback(
-    async (params: { sourceUrl: string; persistedModelId: string }) => {
+    async (params: { sourceUrl: string; persistedModelId: string; storageSubdir?: string }) => {
       const sourceUrl = params.sourceUrl.trim();
       const fileNameFromUrl = (() => {
         try {
@@ -173,7 +217,12 @@ export function useModelEditor({
         }
       })();
       const safeName = sanitizeFileName(fileNameFromUrl.replace(/\?.*$/, "") || "catalog-image");
-      const storagePath = `teams/${teamId}/catalog-models/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+      const storageSubdir = params.storageSubdir?.trim().replace(/^\/+|\/+$/g, "");
+      const storagePrefix = [
+        `teams/${teamId}/catalog-models/${params.persistedModelId}`,
+        storageSubdir,
+      ].filter(Boolean).join("/");
+      const storagePath = `${storagePrefix}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -206,31 +255,8 @@ export function useModelEditor({
         assetPayload: getCatalogAssetPayload(resolvedStoragePath),
       };
     },
-    [teamId]
+    [getCatalogAssetPayload, teamId]
   );
-
-  const getCatalogAssetPayload = (storagePath: string) => {
-    const originalUrl = getPublicStorageUrl(CATALOG_IMAGE_BUCKET, storagePath);
-    const previewUrl = getPublicStorageUrl(
-      CATALOG_IMAGE_BUCKET,
-      getAttachmentVariantPath(storagePath, "preview")
-    );
-    const thumbUrl = getPublicStorageUrl(
-      CATALOG_IMAGE_BUCKET,
-      getAttachmentVariantPath(storagePath, "thumb")
-    );
-
-    return {
-      imageUrl: previewUrl,
-      imageAsset: {
-        bucket: CATALOG_IMAGE_BUCKET,
-        path: storagePath,
-        originalUrl,
-        previewUrl,
-        thumbUrl,
-      },
-    };
-  };
 
   const loadFullModelMedia = useCallback(
     async (modelId: string) => {
@@ -277,6 +303,8 @@ export function useModelEditor({
     setDraftMethodIds([]);
     setDraftImageUrl("");
     setDraftImageFile(null);
+    setVariantImageFiles({});
+    setPersistedVariantImageAssets({});
     setDraftMetadata({});
     setImageUploadMode("url");
     setDrawerOpen(true);
@@ -335,6 +363,8 @@ export function useModelEditor({
     setDraftMethodIds(model.methodIds ?? []);
     setDraftImageUrl(fullImageUrl);
     setDraftImageFile(null);
+    setVariantImageFiles({});
+    setPersistedVariantImageAssets(getVariantImageAssetMap(fullMetadata));
     setDraftMetadata(fullMetadata);
     setImageUploadMode("url");
 
@@ -721,6 +751,47 @@ export function useModelEditor({
     }
   };
 
+  const handleVariantImageUrlChange = (variantId: string, value: string) => {
+    setVariantImageFiles((prev) => {
+      const next = { ...prev };
+      delete next[variantId];
+      return next;
+    });
+    setDraftMetadata((prev) => ({
+      ...prev,
+      variants: (prev.variants ?? []).map((variant) =>
+        variant.id === variantId
+          ? {
+              ...variant,
+              imageUrl: value,
+            }
+          : variant
+      ),
+    }));
+  };
+
+  const handleVariantImageFileUpload = async (
+    variantId: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const dataUrl = await readImageFile(file);
+    setVariantImageFiles((prev) => ({ ...prev, [variantId]: file }));
+    setDraftMetadata((prev) => ({
+      ...prev,
+      variants: (prev.variants ?? []).map((variant) =>
+        variant.id === variantId
+          ? {
+              ...variant,
+              imageUrl: dataUrl,
+            }
+          : variant
+      ),
+    }));
+  };
+
   /**
    * Saves the model (create or update)
    */
@@ -749,6 +820,44 @@ export function useModelEditor({
     const existingImageAsset = draftMetadata.imageAsset ?? null;
     const nextMetadata: CatalogModelMetadata = { ...(draftMetadata ?? {}) };
     delete nextMetadata.imageAsset;
+    const normalizedBaseVariantName =
+      nextMetadata.baseVariantName?.trim() || nextMetadata.variants?.[0]?.name?.trim() || null;
+    if (normalizedBaseVariantName) {
+      nextMetadata.baseVariantName = normalizedBaseVariantName;
+    } else {
+      delete nextMetadata.baseVariantName;
+    }
+    const normalizedVariants = (nextMetadata.variants ?? [])
+      .map(normalizeVariantForSave)
+      .filter(hasPersistableVariantFields);
+    if (normalizedVariants.length > 0) {
+      nextMetadata.variants = normalizedVariants;
+    } else {
+      delete nextMetadata.variants;
+    }
+
+    const getInitialVariantMetadata = (variants?: CatalogModelVariant[]) =>
+      variants?.map((variant) => {
+        const hasFile = Boolean(variantImageFiles[variant.id]);
+        const imageUrl = variant.imageUrl?.trim() || null;
+        const imageAsset = variant.imageAsset ?? null;
+        const shouldKeepManagedImage =
+          !hasFile &&
+          Boolean(imageUrl) &&
+          !isInlineImageDataUrl(imageUrl) &&
+          isManagedCatalogImageUrl(imageUrl, imageAsset);
+
+        return {
+          ...variant,
+          imageUrl: shouldKeepManagedImage ? imageUrl : null,
+          imageAsset: shouldKeepManagedImage ? imageAsset : null,
+        };
+      });
+
+    const initialVariants = getInitialVariantMetadata(nextMetadata.variants);
+    if (initialVariants && initialVariants.length > 0) {
+      nextMetadata.variants = initialVariants;
+    }
 
     const nextModel: CatalogModel = {
       id: modelId,
@@ -896,6 +1005,120 @@ export function useModelEditor({
         if (error) throw error;
       }
 
+      const uploadedVariantAssetPaths: string[] = [];
+      try {
+        const finalVariants = await Promise.all(
+          normalizedVariants.map(async (variant) => {
+            const sourceImageUrl = variant.imageUrl?.trim() || null;
+            const variantFile = variantImageFiles[variant.id] ?? null;
+            const existingVariantAsset =
+              variant.imageAsset ?? persistedVariantImageAssets[variant.id] ?? null;
+            const currentBaseImageAsset = currentMetadata.imageAsset ?? null;
+            const usesBaseDraftImage =
+              Boolean(sourceImageUrl) &&
+              Boolean(normalizedImageUrl) &&
+              sourceImageUrl === normalizedImageUrl;
+            const usesBaseManagedAsset =
+              Boolean(existingVariantAsset?.path) &&
+              Boolean(currentBaseImageAsset?.path) &&
+              existingVariantAsset?.path === currentBaseImageAsset?.path;
+            const baseVariant: CatalogModelVariant = {
+              ...variant,
+              imageUrl: null,
+              imageAsset: null,
+            };
+
+            if (variantFile) {
+              const safeName = sanitizeFileName(variantFile.name);
+              const storagePath = `teams/${teamId}/catalog-models/${persistedModelId}/variants/${variant.id}/${Date.now()}-${safeName}`;
+              const uploadResult = await uploadAttachmentWithVariants({
+                bucket: CATALOG_IMAGE_BUCKET,
+                storagePath,
+                file: variantFile,
+                cacheControl: "31536000, immutable",
+              });
+              uploadedVariantAssetPaths.push(uploadResult.storagePath);
+              const assetPayload = getCatalogAssetPayload(uploadResult.storagePath);
+              return {
+                ...baseVariant,
+                imageUrl: assetPayload.imageUrl,
+                imageAsset: assetPayload.imageAsset,
+              };
+            }
+
+            if (!variantFile && (usesBaseDraftImage || usesBaseManagedAsset) && currentImageUrl) {
+              return {
+                ...baseVariant,
+                imageUrl: currentImageUrl,
+                imageAsset: currentBaseImageAsset,
+              };
+            }
+
+            if (
+              sourceImageUrl &&
+              !isInlineImageDataUrl(sourceImageUrl) &&
+              isManagedCatalogImageUrl(sourceImageUrl, existingVariantAsset)
+            ) {
+              return {
+                ...baseVariant,
+                imageUrl: sourceImageUrl,
+                imageAsset: existingVariantAsset,
+              };
+            }
+
+            if (sourceImageUrl && !isInlineImageDataUrl(sourceImageUrl)) {
+              const imported = await importCatalogImageFromUrl({
+                sourceUrl: sourceImageUrl,
+                persistedModelId,
+                storageSubdir: `variants/${variant.id}`,
+              });
+              uploadedVariantAssetPaths.push(imported.storagePath);
+              return {
+                ...baseVariant,
+                imageUrl: imported.assetPayload.imageUrl,
+                imageAsset: imported.assetPayload.imageAsset,
+              };
+            }
+
+            return baseVariant;
+          })
+        );
+
+        currentMetadata = { ...currentMetadata };
+        if (finalVariants.length > 0) {
+          currentMetadata.variants = finalVariants;
+        } else {
+          delete currentMetadata.variants;
+        }
+
+        const { error } = await supabase
+          .schema("tosho")
+          .from("catalog_models")
+          .update({
+            metadata: Object.keys(currentMetadata).length > 0 ? currentMetadata : null,
+          })
+          .eq("id", persistedModelId)
+          .eq("team_id", teamId);
+
+        if (error) throw error;
+      } catch (variantImageError) {
+        await Promise.all(
+          uploadedVariantAssetPaths.map((path) => removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, path))
+        );
+        if (!editingModelId) {
+          if (uploadedAssetPath) {
+            await removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, uploadedAssetPath);
+          }
+          await supabase
+            .schema("tosho")
+            .from("catalog_models")
+            .delete()
+            .eq("id", persistedModelId)
+            .eq("team_id", teamId);
+        }
+        throw variantImageError;
+      }
+
       // Update price tiers
       await supabase
         .schema("tosho")
@@ -982,8 +1205,18 @@ export function useModelEditor({
         void removeAttachmentWithVariants(existingImageAsset.bucket, existingImageAsset.path);
       }
 
+      const currentVariantImageAssets = getVariantImageAssetMap(currentMetadata);
+      Object.entries(persistedVariantImageAssets).forEach(([variantId, previousAsset]) => {
+        const nextAsset = currentVariantImageAssets[variantId] ?? null;
+        if (previousAsset?.bucket && previousAsset.path && previousAsset.path !== nextAsset?.path) {
+          void removeAttachmentWithVariants(previousAsset.bucket, previousAsset.path);
+        }
+      });
+
       setDrawerOpen(false);
       setDraftImageFile(null);
+      setVariantImageFiles({});
+      setPersistedVariantImageAssets(getVariantImageAssetMap(currentMetadata));
       toast.success(editingModelId ? "Номенклатуру оновлено." : "Номенклатуру створено.");
     } catch (error) {
       console.error("save model failed", error);
@@ -1018,9 +1251,14 @@ export function useModelEditor({
     if (!teamId || !modelToDelete) return;
 
     let imageAssetToRemove: CatalogModelMetadata["imageAsset"] | null = null;
+    let variantImageAssetsToRemove: CatalogImageAsset[] = [];
     try {
       const model = await loadFullModelMedia(modelToDelete);
-      imageAssetToRemove = ((model?.metadata as CatalogModelMetadata | null)?.imageAsset ?? null);
+      const metadata = (model?.metadata as CatalogModelMetadata | null) ?? null;
+      imageAssetToRemove = metadata?.imageAsset ?? null;
+      variantImageAssetsToRemove = (metadata?.variants ?? [])
+        .map((variant) => variant.imageAsset)
+        .filter((asset): asset is CatalogImageAsset => Boolean(asset?.bucket && asset.path));
     } catch (error) {
       console.error("load model media before delete failed", error);
     }
@@ -1054,6 +1292,9 @@ export function useModelEditor({
     if (imageAssetToRemove?.bucket && imageAssetToRemove.path) {
       void removeAttachmentWithVariants(imageAssetToRemove.bucket, imageAssetToRemove.path);
     }
+    variantImageAssetsToRemove.forEach((asset) => {
+      void removeAttachmentWithVariants(asset.bucket, asset.path);
+    });
   };
 
   /**
@@ -1244,6 +1485,8 @@ export function useModelEditor({
     handleDeletePrintPosition,
     handleUpdatePrintPosition,
     handleImageFileUpload,
+    handleVariantImageUrlChange,
+    handleVariantImageFileUpload,
     handleSaveModel,
     confirmDeleteModel,
     handleDeleteModel,

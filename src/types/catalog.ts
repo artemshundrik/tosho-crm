@@ -37,16 +37,30 @@ export type CatalogModel = {
   metadata?: CatalogModelMetadata;
 };
 
+export type CatalogImageAsset = {
+  bucket: string;
+  path: string;
+  originalUrl?: string | null;
+  previewUrl?: string | null;
+  thumbUrl?: string | null;
+};
+
 export type CatalogModelMetadata = {
   sku?: string | null;
+  baseVariantName?: string | null;
+  variants?: CatalogModelVariant[];
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
-  imageAsset?: {
-    bucket: string;
-    path: string;
-    originalUrl?: string | null;
-    previewUrl?: string | null;
-    thumbUrl?: string | null;
-  } | null;
+  imageAsset?: CatalogImageAsset | null;
+};
+
+export type CatalogModelVariant = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  colorHex?: string | null;
+  imageUrl?: string | null;
+  imageAsset?: CatalogImageAsset | null;
+  active?: boolean;
 };
 
 /**

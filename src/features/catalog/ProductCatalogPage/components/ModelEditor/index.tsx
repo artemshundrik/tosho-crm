@@ -13,8 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { BasicInfoTab } from "./BasicInfoTab";
 import { PricingSection } from "./PricingSection";
@@ -64,6 +62,8 @@ interface ModelEditorProps {
   onImageUrlChange: (value: string) => void;
   onImageUploadModeChange: (mode: ImageUploadMode) => void;
   onImageFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onVariantImageUrlChange: (variantId: string, value: string) => void;
+  onVariantImageFileUpload: (variantId: string, e: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: () => void;
   onDelete: () => void;
 }
@@ -105,6 +105,8 @@ export function ModelEditor({
   onImageUrlChange,
   onImageUploadModeChange,
   onImageFileUpload,
+  onVariantImageUrlChange,
+  onVariantImageFileUpload,
   onSave,
   onDelete,
 }: ModelEditorProps) {
@@ -114,100 +116,20 @@ export function ModelEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 gap-0 max-h-[90vh] overflow-hidden border border-border/60 bg-card top-1/2 translate-y-[-50%]">
-        <div className="px-6 py-5 border-b border-border/40 bg-muted/5">
+      <DialogContent className="!w-[min(1120px,calc(100vw-1.5rem))] !max-w-none !gap-0 !overflow-hidden !p-0 sm:!p-0 max-h-[92vh] border border-border/60 bg-background shadow-2xl">
+        <div className="border-b border-border/60 bg-muted/10 px-4 py-3 pr-14">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">
-              {editingModelId ? "Редагування моделі" : "Створення моделі"}
+            <DialogTitle className="text-xl font-semibold tracking-normal">
+              {editingModelId ? "Редагування товару" : "Новий товар"}
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground/80">
-              Налаштуйте параметри моделі та її ціноутворення
+            <DialogDescription className="text-sm text-muted-foreground">
+              Фото, артикули, варіанти та параметри для прорахунків.
             </DialogDescription>
           </DialogHeader>
-
-          {/* Progress Steps */}
-          <div className="flex items-center gap-3 mt-5">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
-                  draftName.trim()
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                1
-              </div>
-              <span
-                className={cn(
-                  "text-sm font-medium transition-colors",
-                  draftName.trim() ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                Базова інфо
-              </span>
-            </div>
-
-            <div
-              className={cn(
-                "h-0.5 w-12 transition-all",
-                draftName.trim() && draftKindId ? "bg-primary" : "bg-border"
-              )}
-            />
-
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
-                  draftName.trim() && draftKindId
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                2
-              </div>
-              <span
-                className={cn(
-                  "text-sm font-medium transition-colors",
-                  draftName.trim() && draftKindId ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                Ціни
-              </span>
-            </div>
-
-            <div
-              className={cn(
-                "h-0.5 w-12 transition-all",
-                draftMethodIds.length > 0 ? "bg-primary" : "bg-border"
-              )}
-            />
-
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
-                  draftMethodIds.length > 0
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                3
-              </div>
-              <span
-                className={cn(
-                  "text-sm font-medium transition-colors",
-                  draftMethodIds.length > 0 ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                Методи
-              </span>
-            </div>
-          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <div className="px-6 py-6 space-y-8">
+        <div className="max-h-[calc(92vh-132px)] flex-1 overflow-y-auto">
+          <div className="space-y-4 px-4 py-4">
             <BasicInfoTab
               catalog={catalog}
               draftTypeId={draftTypeId}
@@ -223,41 +145,45 @@ export function ModelEditor({
               onImageUrlChange={onImageUrlChange}
               onImageUploadModeChange={onImageUploadModeChange}
               onImageFileUpload={onImageFileUpload}
+              onVariantImageUrlChange={onVariantImageUrlChange}
+              onVariantImageFileUpload={onVariantImageFileUpload}
             />
 
-            <Separator className="bg-border/40" />
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-xl border border-border/50 bg-card/70 p-4">
+                <PricingSection
+                  draftPriceMode={draftPriceMode}
+                  draftFixedPrice={draftFixedPrice}
+                  draftTiers={draftTiers}
+                  onPriceModeChange={onPriceModeChange}
+                  onFixedPriceChange={onFixedPriceChange}
+                  onTierUpdate={onTierUpdate}
+                  onAddTier={onAddTier}
+                  onRemoveTier={onRemoveTier}
+                />
+              </div>
 
-            <PricingSection
-              draftPriceMode={draftPriceMode}
-              draftFixedPrice={draftFixedPrice}
-              draftTiers={draftTiers}
-              onPriceModeChange={onPriceModeChange}
-              onFixedPriceChange={onFixedPriceChange}
-              onTierUpdate={onTierUpdate}
-              onAddTier={onAddTier}
-              onRemoveTier={onRemoveTier}
-            />
-
-            <Separator className="bg-border/40" />
-
-            <MethodsSection
-              draftKindId={draftKindId}
-              draftKindName={draftKind?.name}
-              availableMethods={availableMethods}
-              selectedMethodIds={draftMethodIds}
-              newMethodName={newMethodName}
-              newMethodPrice={newMethodPrice}
-              methodSaving={methodSaving}
-              methodError={methodError}
-              onMethodNameChange={onMethodNameChange}
-              onMethodPriceChange={onMethodPriceChange}
-              onAddMethod={onAddMethod}
-              onToggleMethod={onMethodToggle}
-            />
+              <div className="rounded-xl border border-border/50 bg-card/70 p-4">
+                <MethodsSection
+                  draftKindId={draftKindId}
+                  draftKindName={draftKind?.name}
+                  availableMethods={availableMethods}
+                  selectedMethodIds={draftMethodIds}
+                  newMethodName={newMethodName}
+                  newMethodPrice={newMethodPrice}
+                  methodSaving={methodSaving}
+                  methodError={methodError}
+                  onMethodNameChange={onMethodNameChange}
+                  onMethodPriceChange={onMethodPriceChange}
+                  onAddMethod={onAddMethod}
+                  onToggleMethod={onMethodToggle}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-border/40 bg-muted/5 shrink-0 sm:justify-between">
+        <DialogFooter className="shrink-0 border-t border-border/60 bg-background/95 px-4 py-3 sm:justify-between">
           {editingModelId ? (
             <Button
               variant="ghost"
@@ -281,7 +207,7 @@ export function ModelEditor({
             <Button
               onClick={onSave}
               disabled={!draftName.trim() || !draftKindId || savingModel}
-              className="shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all disabled:opacity-50"
+              className="transition-all disabled:opacity-50"
             >
               {savingModel
                 ? "Збереження..."

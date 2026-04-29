@@ -53,6 +53,12 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
         (item) =>
           normalize(item.model.name).includes(query) ||
           normalize(item.model.metadata?.sku ?? "").includes(query) ||
+          (item.model.metadata?.variants ?? []).some(
+            (variant) =>
+              normalize(variant.name).includes(query) ||
+              normalize(variant.sku ?? "").includes(query) ||
+              normalize(variant.imageUrl ?? "").includes(query)
+          ) ||
           normalize(item.typeName).includes(query) ||
           normalize(item.kindName).includes(query)
       );

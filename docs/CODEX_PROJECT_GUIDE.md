@@ -140,6 +140,14 @@ When changing a route or top-level module, these files often all matter:
 - [src/features/catalog/ProductCatalogPage/index.tsx](/Users/artem/Projects/tosho-crm/src/features/catalog/ProductCatalogPage/index.tsx)
 - catalog hooks and components under [src/features/catalog/ProductCatalogPage](/Users/artem/Projects/tosho-crm/src/features/catalog/ProductCatalogPage)
 
+Current catalog variant contract:
+
+- Product modifications are stored on `catalog_models.metadata.variants`, not a separate table.
+- A single-product modification label is stored on `catalog_models.metadata.baseVariantName`; when variants are added, the first variant should inherit that label.
+- Each variant can carry `name`, `sku`, `colorHex`, `imageUrl`, and `imageAsset`.
+- Variant photos must use the same `public-assets` catalog image pipeline as model photos: original plus generated preview/thumb WebP variants.
+- Quote creation stores the selected variant snapshot in `quote_items.metadata.catalogVariant`, including its SKU, color, and preview image URL for stable quote display.
+
 ### Contractors
 
 - [src/pages/ContractorsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ContractorsPage.tsx)

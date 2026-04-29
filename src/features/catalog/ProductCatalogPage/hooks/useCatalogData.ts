@@ -11,6 +11,7 @@ import type {
   CatalogType,
   CatalogKind,
   CatalogModel,
+  CatalogModelMetadata,
   CatalogMethod,
   CatalogPrintPosition,
   CatalogPriceTier,
@@ -40,7 +41,7 @@ const normalizeCatalogModelCounts = (catalog: CatalogType[]) =>
   }));
 
 export function useCatalogData(teamId: string | null) {
-  const cacheKey = useMemo(() => (teamId ? `catalog:${teamId}` : "catalog:none"), [teamId]);
+  const cacheKey = useMemo(() => (teamId ? `catalog:v2:${teamId}` : "catalog:v2:none"), [teamId]);
   const { cached, setCache, isStale } = usePageCache<CatalogType[]>(cacheKey);
   const [catalog, setCatalog] = useState<CatalogType[]>(() =>
     cached ? normalizeCatalogModelCounts(cached) : INITIAL_CATALOG
@@ -61,8 +62,7 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
-          sku?: string | null;
-          configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+          metadata?: unknown;
         }>;
         modelMethods: Array<{ model_id: string; method_id: string }>;
         tiers: Array<{ id: string; model_id: string; min_qty: number; max_qty: number | null; price: number }>;
@@ -91,15 +91,16 @@ export function useCatalogData(teamId: string | null) {
       const modelsByKind = new Map<string, CatalogModel[]>();
       payload.models.forEach((row) => {
         const list = modelsByKind.get(row.kind_id) ?? [];
+        const metadata =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? (row.metadata as CatalogModelMetadata)
+            : undefined;
         list.push({
           id: row.id,
           name: row.name,
           price: row.price ?? undefined,
           imageUrl: row.image_url ?? undefined,
-          metadata:
-            row.configuratorPreset || row.sku
-              ? { configuratorPreset: row.configuratorPreset ?? null, sku: row.sku ?? null }
-              : undefined,
+          metadata,
           methodIds: methodIdsByModel.get(row.id) ?? [],
           priceTiers: tiersByModel.get(row.id),
         });
@@ -125,7 +126,7 @@ export function useCatalogData(teamId: string | null) {
       let modelsQuery = supabase
         .schema("tosho")
         .from("catalog_models")
-        .select("id,kind_id,name,price,image_url,sku:metadata->>sku,configuratorPreset:metadata->>configuratorPreset")
+        .select("id,kind_id,name,price,image_url,metadata")
         .eq("team_id", teamId)
         .order("name", { ascending: true });
 
@@ -155,8 +156,7 @@ export function useCatalogData(teamId: string | null) {
           name: string;
           price: number | null;
           image_url: string | null;
-          sku?: string | null;
-          configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+          metadata?: unknown;
         }>,
         modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
         tiers: [],

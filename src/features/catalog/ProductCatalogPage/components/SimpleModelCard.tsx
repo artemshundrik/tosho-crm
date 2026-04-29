@@ -4,7 +4,7 @@
  * Simplified model card matching the reference design with product type placeholder
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,9 +34,26 @@ export function SimpleModelCard({
   const { model, kindName, validation } = item;
   const [isHovered, setIsHovered] = useState(false);
   const [imageErrored, setImageErrored] = useState(false);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;
   const sku = model.metadata?.sku?.trim();
+  const variants = (model.metadata?.variants ?? []).filter(
+    (variant) =>
+      variant.active !== false &&
+      Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
+  );
+  const selectedVariant =
+    variants.find((variant) => variant.id === selectedVariantId) ?? variants[0] ?? null;
+  const selectedVariantImageUrl =
+    selectedVariant?.imageUrl?.trim() ||
+    selectedVariant?.imageAsset?.thumbUrl ||
+    selectedVariant?.imageAsset?.previewUrl ||
+    null;
+  const selectedVariantSku = selectedVariant?.sku?.trim();
+  const displayImageUrl = selectedVariantImageUrl || model.imageUrl || null;
+  const displayTitle = model.name;
+  const displaySku = selectedVariantSku || sku || null;
 
   // Map kindName to product type for placeholder
   const getProductTypeLabel = (kind: string): string => {
@@ -54,7 +71,17 @@ export function SimpleModelCard({
 
   useEffect(() => {
     setImageErrored(false);
-  }, [model.id, model.imageUrl]);
+  }, [model.id, displayImageUrl]);
+
+  useEffect(() => {
+    if (variants.length === 0) {
+      setSelectedVariantId(null);
+      return;
+    }
+    if (!selectedVariantId || !variants.some((variant) => variant.id === selectedVariantId)) {
+      setSelectedVariantId(variants[0].id);
+    }
+  }, [selectedVariantId, variants]);
 
   // Get actual method names from the kind's methods
   const getMethodNames = () => {
@@ -71,21 +98,34 @@ export function SimpleModelCard({
   const allMethodNames = getMethodNames();
   const methodNames = allMethodNames.slice(0, 2);
   const extraMethodsCount = allMethodNames.length > 2 ? allMethodNames.length - 2 : 0;
+  const openEditor = () => onEdit(model.id);
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openEditor();
+  };
+  const stopCardClick = (event: MouseEvent) => {
+    event.stopPropagation();
+  };
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "group relative flex flex-col rounded-xl border transition-all duration-200",
-        "hover:shadow-lg",
+        "group relative flex cursor-pointer flex-col rounded-xl border transition-all duration-200",
+        "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
         !validation.isValid
           ? "tone-warning-subtle"
           : "border-border/60 bg-card hover:border-primary/30"
       )}
+      onClick={openEditor}
+      onKeyDown={handleCardKeyDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Three Dots Menu - Top Right (on hover) */}
-      <div className="absolute top-3 right-3 z-20">
+      <div className="absolute top-3 right-3 z-20" onClick={stopCardClick}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -117,25 +157,65 @@ export function SimpleModelCard({
         </DropdownMenu>
       </div>
 
-      {/* Image / Placeholder */}
-      <div className="relative w-full aspect-square bg-gradient-to-br from-muted/30 to-muted/10 rounded-t-xl overflow-hidden">
-        {model.imageUrl && !imageErrored ? (
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-xl bg-gradient-to-br from-muted/30 to-muted/10">
+        {displayImageUrl && !imageErrored ? (
           <img
-            src={model.imageUrl}
-            alt={model.name}
-            className="w-full h-full object-cover"
+            src={displayImageUrl}
+            alt={displayTitle}
+            className="h-full w-full object-cover"
             onError={() => setImageErrored(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center">
             <span className="text-4xl font-bold text-muted-foreground/30 tracking-tight">
               {productTypeLabel}
             </span>
           </div>
         )}
+
+        {variants.length > 0 ? (
+          <div className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-1.5 overflow-x-auto">
+            {variants.slice(0, 7).map((variant) => {
+              const imageUrl =
+                variant.imageUrl?.trim() ||
+                variant.imageAsset?.thumbUrl ||
+                variant.imageAsset?.previewUrl ||
+                null;
+              const selected = variant.id === selectedVariant?.id;
+              return (
+                <button
+                  key={variant.id}
+                  type="button"
+                  title={variant.sku?.trim() ? `${variant.name || "Модифікація"} · ${variant.sku}` : variant.name}
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur transition-all",
+                    selected ? "border-primary ring-2 ring-primary/35" : "border-border/60 hover:border-primary/45"
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedVariantId(variant.id);
+                  }}
+                >
+                  {imageUrl ? (
+                    <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <span
+                      className="h-full w-full"
+                      style={{ backgroundColor: variant.colorHex?.trim() || "hsl(var(--muted))" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+            {variants.length > 7 ? (
+              <span className="flex h-9 shrink-0 items-center rounded-md border border-border/60 bg-background/90 px-2 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+                +{variants.length - 7}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         
-        {/* Tiers Badge - Bottom Right (on image) */}
-        {hasTiers && (
+        {hasTiers && variants.length === 0 ? (
           <div className="absolute right-3 bottom-3 z-10">
             <Badge
               variant="secondary"
@@ -145,29 +225,38 @@ export function SimpleModelCard({
               {model.priceTiers?.length} тиражів
             </Badge>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Content */}
-      <div className="p-4 space-y-2 flex-1 flex flex-col">
-        {/* Title */}
-        <h3 className="font-semibold text-base leading-tight line-clamp-2">
-          {model.name}
-        </h3>
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="space-y-1.5">
+          <h3 className="line-clamp-2 text-base font-semibold leading-tight">
+            {displayTitle}
+          </h3>
 
-        {sku ? (
-          <div className="text-xs font-medium text-muted-foreground">
-            Артикул: <span className="text-foreground/80">{sku}</span>
-          </div>
-        ) : null}
+          {displaySku ? (
+            <div className="text-xs font-medium text-muted-foreground">
+              Артикул: <span className="text-foreground/80">{displaySku}</span>
+            </div>
+          ) : null}
+        </div>
 
-        {/* Category */}
-        <p className="text-sm text-muted-foreground">
-          {kindName}
-        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate text-sm text-muted-foreground">{kindName}</span>
+          {variants.length > 0 ? (
+            <Badge variant="outline" className="h-6 shrink-0 px-2 text-xs">
+              {variants.length} модиф.
+            </Badge>
+          ) : null}
+          {hasTiers ? (
+            <Badge variant="secondary" className="h-6 shrink-0 gap-1 px-2 text-xs">
+              <Layers className="h-3 w-3" />
+              {model.priceTiers?.length}
+            </Badge>
+          ) : null}
+        </div>
 
-        {/* Methods Tags */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
+        <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
           {hasNoMethods ? (
             <span className="text-xs text-muted-foreground italic">
               Методи не вказані

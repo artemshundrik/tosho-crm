@@ -62,6 +62,13 @@ export type PrintPackageConfig = PrintProductConfig;
 
 export type QuoteItemMetadata = {
   sku?: string | null;
+  catalogVariant?: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    colorHex?: string | null;
+    imageUrl?: string | null;
+  } | null;
   configuratorPreset?: PrintConfiguratorPreset | null;
   printProduct?: PrintProductConfig | null;
   printPackage?: PrintProductConfig | null;

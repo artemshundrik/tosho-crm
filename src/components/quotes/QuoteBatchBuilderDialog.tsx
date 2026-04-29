@@ -64,7 +64,7 @@ import {
 } from "@/components/quotes/PrintPackageConfigurator";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import type { CatalogType } from "@/types/catalog";
+import type { CatalogModel, CatalogModelVariant, CatalogType } from "@/types/catalog";
 
 const QUOTE_TYPES = [
   { value: "merch", label: "Мерч", icon: Shirt },
@@ -135,6 +135,8 @@ export type QuoteBatchProductSubmitData = {
   categoryId: string;
   kindId: string;
   modelId: string;
+  variantId?: string | null;
+  catalogVariant?: Pick<CatalogModelVariant, "id" | "name" | "sku" | "colorHex" | "imageUrl"> | null;
   productConfiguratorPreset?: PrintConfiguratorPreset | null;
   printPackageConfig?: PrintPackageConfig;
   deliveryType: string | null;
@@ -244,6 +246,7 @@ const createProductDraft = (seed?: Partial<ProductDraft>): ProductDraft => ({
   categoryId: seed?.categoryId ?? "",
   kindId: seed?.kindId ?? "",
   modelId: seed?.modelId ?? "",
+  variantId: seed?.variantId ?? null,
   productConfiguratorPreset: seed?.productConfiguratorPreset ?? null,
   printPackageConfig: normalizeProductPrintPackageConfig(seed ?? {}, seed?.productConfiguratorPreset ?? null),
   deliveryType: seed?.deliveryType ?? null,
@@ -344,18 +347,41 @@ const getCatalogRefs = (catalogTypes: CatalogType[], product: ProductDraft) => {
   const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
   const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
   const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
-  return { type, kind, model };
+  const variants = (model?.metadata?.variants ?? []).filter(
+    (variant) =>
+      variant.active !== false &&
+      Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
+  );
+  const variant = variants.find((item) => item.id === product.variantId) ?? null;
+  return { type, kind, model, variants, variant };
 };
 
 const getProductLabel = (catalogTypes: CatalogType[], product: ProductDraft) => {
-  const { model, kind, type } = getCatalogRefs(catalogTypes, product);
+  const { model, kind, type, variant } = getCatalogRefs(catalogTypes, product);
+  const variantLabel = variant?.name.trim() || variant?.sku?.trim() || null;
+  if (model?.name && variantLabel) return `${model.name} · ${variantLabel}`;
   return model?.name ?? kind?.name ?? type?.name ?? "Новий товар";
 };
 
 const getProductImageUrl = (catalogTypes: CatalogType[], product: ProductDraft) => {
-  const { model } = getCatalogRefs(catalogTypes, product);
+  const { model, variant } = getCatalogRefs(catalogTypes, product);
+  const variantImageUrl =
+    variant?.imageUrl?.trim() ||
+    variant?.imageAsset?.thumbUrl ||
+    variant?.imageAsset?.previewUrl ||
+    null;
+  if (variantImageUrl) return variantImageUrl;
   return model?.imageUrl?.trim() || model?.metadata?.imageAsset?.thumbUrl || model?.metadata?.imageAsset?.previewUrl || null;
 };
+
+const getCatalogModelImageUrl = (model: CatalogModel) =>
+  model.imageUrl?.trim() || model.metadata?.imageAsset?.thumbUrl || model.metadata?.imageAsset?.previewUrl || null;
+
+const getCatalogVariantImageUrl = (variant: CatalogModelVariant) =>
+  variant.imageUrl?.trim() || variant.imageAsset?.thumbUrl || variant.imageAsset?.previewUrl || null;
+
+const getActiveProductModelOptionValue = (product: ProductDraft) =>
+  product.variantId ? `${product.modelId}::${product.variantId}` : product.modelId;
 
 const getProductConfiguratorPreset = (catalogTypes: CatalogType[], product: ProductDraft) => {
   const { model } = getCatalogRefs(catalogTypes, product);
@@ -402,7 +428,13 @@ const getInitials = (label: string) => {
 const ChipDropdown: React.FC<{
   value: string;
   onChange: (value: string) => void;
-  options: ReadonlyArray<{ value: string; label: string; imageUrl?: string | null }>;
+  options: ReadonlyArray<{
+    value: string;
+    label: string;
+    description?: string | null;
+    imageUrl?: string | null;
+    colorHex?: string | null;
+  }>;
   placeholder: string;
   icon: React.ReactNode;
   disabled?: boolean;
@@ -432,13 +464,20 @@ const ChipDropdown: React.FC<{
             <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
               <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
             </span>
+          ) : selected?.colorHex ? (
+            <span
+              className="mr-2 h-5 w-5 shrink-0 rounded-full border border-border/60"
+              style={{ backgroundColor: selected.colorHex }}
+            />
           ) : (
             <span className={cn("mr-2 shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", active ? "text-primary" : "text-muted-foreground")}>
               {icon}
             </span>
           )}
-          <span className={cn("min-w-0 flex-1 truncate text-left font-medium", !active && "text-muted-foreground")}>
-            {selected?.label ?? placeholder}
+          <span className="min-w-0 flex-1 text-left">
+            <span className={cn("block truncate font-medium", !active && "text-muted-foreground")}>
+              {selected?.label ?? placeholder}
+            </span>
           </span>
           <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </button>
@@ -467,12 +506,24 @@ const ChipDropdown: React.FC<{
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
                       <img src={option.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </span>
+                  ) : option.colorHex ? (
+                    <span
+                      className="h-8 w-8 shrink-0 rounded-full border border-border/60"
+                      style={{ backgroundColor: option.colorHex }}
+                    />
                   ) : (
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-muted-foreground">
                       {icon}
                     </span>
                   )}
-                  <span className="truncate">{option.label}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{option.label}</span>
+                    {option.description ? (
+                      <span className="block truncate text-xs font-normal text-muted-foreground">
+                        {option.description}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
                 {selectedOption ? <Check className="h-4 w-4" /> : null}
               </Button>
@@ -958,7 +1009,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       const productConfiguratorPreset = getProductConfiguratorPreset(catalogTypes, product);
       const isPrintPackageProduct = product.quoteType === "print" && Boolean(productConfiguratorPreset);
       const hasDesignSurface = productHasDesignSurface(product);
+      const { variants } = getCatalogRefs(catalogTypes, product);
       if (!product.modelId) issues.push("оберіть товар");
+      if (product.modelId && variants.length > 0 && !product.variantId) issues.push("оберіть модифікацію");
       if (getSelectedRuns(product).length === 0) issues.push("додайте тираж");
       const deliveryIssue = getDeliveryIssues(product.deliveryType, product.deliveryDetails);
       if (deliveryIssue) issues.push(deliveryIssue);
@@ -1055,6 +1108,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       categoryId: "",
       kindId: "",
       modelId: "",
+      variantId: null,
       productConfiguratorPreset: null,
       printPackageConfig: normalizeProductPrintPackageConfig({}, null),
       printApplications: [],
@@ -1072,6 +1126,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       categoryId,
       kindId: "",
       modelId: "",
+      variantId: null,
       productConfiguratorPreset: null,
       printPackageConfig: normalizeProductPrintPackageConfig({}, null),
       printApplications: [],
@@ -1083,24 +1138,37 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     updateActiveProduct({
       kindId,
       modelId: "",
+      variantId: null,
       productConfiguratorPreset: null,
       printPackageConfig: normalizeProductPrintPackageConfig({}, null),
       printApplications: [],
     });
   };
 
-  const setProductModel = (modelId: string) => {
+  const setProductModel = React.useCallback((selectionValue: string) => {
     if (!activeProduct) return;
+    const [modelId, variantId = null] = selectionValue.split("::");
     const preset = getConfiguratorPresetForSelection(activeProduct.categoryId, activeProduct.kindId, modelId);
+    const selectedModel =
+      catalogTypes
+        .find((item) => item.id === activeProduct.categoryId)
+        ?.kinds.find((item) => item.id === activeProduct.kindId)
+        ?.models.find((item) => item.id === modelId) ?? null;
+    const variants = (selectedModel?.metadata?.variants ?? []).filter(
+      (variant) =>
+        variant.active !== false &&
+        Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
+    );
     updateActiveProduct({
       modelId,
+      variantId: variantId || (variants.length === 1 ? variants[0].id : null),
       productConfiguratorPreset: preset,
       printPackageConfig: normalizeProductPrintPackageConfig(activeProduct, preset),
       ...(preset
         ? { printApplications: [], createDesignTask: true }
         : {}),
     });
-  };
+  }, [activeProduct, catalogTypes, getConfiguratorPresetForSelection, updateActiveProduct]);
 
   const handleQuickCreateModel = React.useCallback(async () => {
     if (!activeProduct || !onCreateCatalogModel) return;
@@ -1270,8 +1338,22 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       const productConfiguratorPreset = getProductConfiguratorPreset(catalogTypes, product);
       const isPrintPackageProduct = product.quoteType === "print" && Boolean(productConfiguratorPreset);
       const hasDesignSurface = productHasDesignSurface(product);
+      const { variant } = getCatalogRefs(catalogTypes, product);
       return {
         ...product,
+        catalogVariant: variant
+          ? {
+              id: variant.id,
+              name: variant.name.trim() || variant.sku?.trim() || "Модифікація",
+              sku: variant.sku ?? null,
+              colorHex: variant.colorHex ?? null,
+              imageUrl:
+                variant.imageUrl?.trim() ||
+                variant.imageAsset?.thumbUrl ||
+                variant.imageAsset?.previewUrl ||
+                null,
+            }
+          : null,
         productConfiguratorPreset: isPrintPackageProduct ? productConfiguratorPreset : null,
         printPackageConfig:
           isPrintPackageProduct && productConfiguratorPreset
@@ -1341,12 +1423,42 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   );
   const shouldShowIssues = hasAttemptedSubmit && (Boolean(localError || submitError) || allIssues.length > 0);
 
-  const activeRefs = activeProduct ? getCatalogRefs(catalogTypes, activeProduct) : { type: null, kind: null, model: null };
+  const activeRefs = activeProduct
+    ? getCatalogRefs(catalogTypes, activeProduct)
+    : { type: null, kind: null, model: null, variants: [], variant: null };
   const filteredTypes = activeProduct
     ? catalogTypes.filter((type) => !type.quote_type || type.quote_type === activeProduct.quoteType)
     : [];
   const availableKinds = activeRefs.type?.kinds ?? [];
   const availableModels = activeRefs.kind?.models ?? [];
+  const availableModelOptions = availableModels.flatMap((model) => {
+    const variants = (model.metadata?.variants ?? []).filter(
+      (variant) =>
+        variant.active !== false &&
+        Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
+    );
+    if (variants.length === 0) {
+      return [
+        {
+          value: model.id,
+          label: model.name,
+          description: model.metadata?.sku?.trim() ? `Артикул: ${model.metadata.sku.trim()}` : null,
+          imageUrl: getCatalogModelImageUrl(model),
+        },
+      ];
+    }
+    return variants.map((variant) => ({
+      value: `${model.id}::${variant.id}`,
+      label: `${model.name} · ${variant.name.trim() || "Модифікація"}`,
+      description: variant.sku?.trim()
+        ? `Артикул: ${variant.sku.trim()}`
+        : model.metadata?.sku?.trim()
+        ? `Артикул: ${model.metadata.sku.trim()}`
+        : null,
+      imageUrl: getCatalogVariantImageUrl(variant) || getCatalogModelImageUrl(model),
+      colorHex: variant.colorHex ?? null,
+    }));
+  });
   const availableMethods = activeRefs.kind?.methods ?? [];
   const availablePositions = activeRefs.kind?.printPositions ?? [];
   const fallbackPrintPositions = (() => {
@@ -1873,32 +1985,14 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         <div className="space-y-1.5">
                           <div className="text-xs font-medium text-muted-foreground">Модель</div>
                           <ChipDropdown
-                            value={activeProduct.modelId}
+                            value={getActiveProductModelOptionValue(activeProduct)}
                             onChange={setProductModel}
                             disabled={!activeProduct.kindId || availableModels.length === 0}
-                            options={availableModels.map((model) => ({
-                              value: model.id,
-                              label: model.metadata?.sku?.trim()
-                                ? `${model.name} · ${model.metadata.sku.trim()}`
-                                : model.name,
-                              imageUrl:
-                                model.imageUrl?.trim() ||
-                                model.metadata?.imageAsset?.thumbUrl ||
-                                model.metadata?.imageAsset?.previewUrl ||
-                                null,
-                            }))}
+                            options={availableModelOptions}
                             placeholder="Оберіть модель"
                             icon={<Shirt className="h-3.5 w-3.5" />}
                             popoverClassName="w-[360px]"
                           />
-                          {activeRefs.model?.metadata?.sku?.trim() ? (
-                            <div className="text-xs text-muted-foreground">
-                              Артикул:{" "}
-                              <span className="font-medium text-foreground/80">
-                                {activeRefs.model.metadata.sku.trim()}
-                              </span>
-                            </div>
-                          ) : null}
                           {activeProduct.kindId && onCreateCatalogModel ? (
                             <Popover open={quickModelPopoverOpen} onOpenChange={setQuickModelPopoverOpen}>
                               <PopoverTrigger asChild>

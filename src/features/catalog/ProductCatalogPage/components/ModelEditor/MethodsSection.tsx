@@ -44,17 +44,14 @@ export function MethodsSection({
   void newMethodPrice;
   void onMethodPriceChange;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2">
-        <div className="h-1 w-1 rounded-full tone-dot-warning"></div>
-        <div>
-          <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            <Coins className="h-4 w-4" /> Доступні методи
-          </h3>
-          <p className="text-[11px] text-muted-foreground/60 mt-1">
-            Оберіть методи, доступні для цієї моделі
-          </p>
-        </div>
+    <div className="space-y-3">
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <Coins className="h-4 w-4 text-muted-foreground" /> Доступні методи
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Оберіть методи, доступні для цієї моделі
+        </p>
       </div>
 
       {!draftKindId ? (
@@ -64,7 +61,7 @@ export function MethodsSection({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+          <div className="rounded-lg border border-border/50 bg-muted/10 p-3">
             <div className="flex gap-3 items-end">
               <div className="flex-1 space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground">Назва методу</Label>
@@ -79,6 +76,7 @@ export function MethodsSection({
                 onClick={() => onAddMethod()}
                 disabled={!newMethodName.trim() || methodSaving}
                 className="gap-2"
+                size="sm"
               >
                 <Plus className="h-4 w-4" />
                 {methodSaving ? "Додавання..." : "Додати метод"}
