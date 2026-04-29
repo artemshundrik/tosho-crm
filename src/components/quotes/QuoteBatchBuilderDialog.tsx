@@ -196,6 +196,20 @@ export interface QuoteBatchBuilderDialogProps {
   onCreateLead?: (name?: string) => void;
   teamMembers?: QuoteBatchTeamMember[];
   catalogTypes?: CatalogType[];
+  onCreateCatalogModel?: (input: {
+    typeId: string;
+    kindId: string;
+    name: string;
+    sku?: string | null;
+    price: number | null;
+    imageUrl?: string | null;
+  }) => Promise<{
+    id: string;
+    name: string;
+    sku?: string | null;
+    price?: number | null;
+    imageUrl?: string | null;
+  } | null | undefined>;
   currentUserId?: string;
   restrictPartySelectionToOwn?: boolean;
   currentManagerLabel?: string;
@@ -728,6 +742,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   onCreateLead,
   teamMembers = [],
   catalogTypes = [],
+  onCreateCatalogModel,
   currentUserId,
   restrictPartySelectionToOwn = false,
   currentManagerLabel,
@@ -745,6 +760,13 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [activeProductId, setActiveProductId] = React.useState(products[0]?.id ?? "");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = React.useState(false);
+  const [quickModelName, setQuickModelName] = React.useState("");
+  const [quickModelSku, setQuickModelSku] = React.useState("");
+  const [quickModelImageUrl, setQuickModelImageUrl] = React.useState("");
+  const [quickModelImageErrored, setQuickModelImageErrored] = React.useState(false);
+  const [quickModelSaving, setQuickModelSaving] = React.useState(false);
+  const [quickModelError, setQuickModelError] = React.useState<string | null>(null);
+  const [quickModelPopoverOpen, setQuickModelPopoverOpen] = React.useState(false);
   const [contentReady, setContentReady] = React.useState(false);
   const wasOpenRef = React.useRef(false);
 
@@ -773,6 +795,12 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setActiveProductId(firstProduct.id);
     setLocalError(null);
     setHasAttemptedSubmit(false);
+    setQuickModelName("");
+    setQuickModelSku("");
+    setQuickModelImageUrl("");
+    setQuickModelImageErrored(false);
+    setQuickModelError(null);
+    setQuickModelPopoverOpen(false);
     setContentReady(true);
   }, [contentReady, currentUserId, open]);
 
@@ -906,6 +934,23 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     },
     [activeProduct, updateProduct]
   );
+
+  const resetQuickModelDraft = React.useCallback(() => {
+    setQuickModelName("");
+    setQuickModelSku("");
+    setQuickModelImageUrl("");
+    setQuickModelImageErrored(false);
+    setQuickModelError(null);
+    setQuickModelPopoverOpen(false);
+  }, []);
+
+  React.useEffect(() => {
+    resetQuickModelDraft();
+  }, [activeProduct?.id, activeProduct?.kindId, resetQuickModelDraft]);
+
+  React.useEffect(() => {
+    setQuickModelImageErrored(false);
+  }, [quickModelImageUrl]);
 
   const getProductIssues = React.useCallback(
     (product: ProductDraft) => {
@@ -1056,6 +1101,52 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
         : {}),
     });
   };
+
+  const handleQuickCreateModel = React.useCallback(async () => {
+    if (!activeProduct || !onCreateCatalogModel) return;
+    const name = quickModelName.trim();
+    if (!activeProduct.categoryId || !activeProduct.kindId) {
+      setQuickModelError("Оберіть категорію і вид товару.");
+      return;
+    }
+    if (!name) {
+      setQuickModelError("Вкажіть назву товару.");
+      return;
+    }
+    setQuickModelSaving(true);
+    setQuickModelError(null);
+    try {
+      const created = await onCreateCatalogModel({
+        typeId: activeProduct.categoryId,
+        kindId: activeProduct.kindId,
+        name,
+        sku: quickModelSku.trim() || null,
+        price: 0,
+        imageUrl: quickModelImageUrl.trim() || null,
+      });
+      if (created?.id) {
+        setProductModel(created.id);
+        resetQuickModelDraft();
+        setQuickModelPopoverOpen(false);
+      }
+    } catch (error) {
+      setQuickModelError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Не вдалося створити товар. Спробуйте ще раз."
+      );
+    } finally {
+      setQuickModelSaving(false);
+    }
+  }, [
+    activeProduct,
+    onCreateCatalogModel,
+    quickModelImageUrl,
+    quickModelName,
+    quickModelSku,
+    resetQuickModelDraft,
+    setProductModel,
+  ]);
 
   const updateRun = (runId: string, value: string) => {
     if (!activeProduct) return;
@@ -1787,7 +1878,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             disabled={!activeProduct.kindId || availableModels.length === 0}
                             options={availableModels.map((model) => ({
                               value: model.id,
-                              label: model.name,
+                              label: model.metadata?.sku?.trim()
+                                ? `${model.name} · ${model.metadata.sku.trim()}`
+                                : model.name,
                               imageUrl:
                                 model.imageUrl?.trim() ||
                                 model.metadata?.imageAsset?.thumbUrl ||
@@ -1798,6 +1891,112 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             icon={<Shirt className="h-3.5 w-3.5" />}
                             popoverClassName="w-[360px]"
                           />
+                          {activeRefs.model?.metadata?.sku?.trim() ? (
+                            <div className="text-xs text-muted-foreground">
+                              Артикул:{" "}
+                              <span className="font-medium text-foreground/80">
+                                {activeRefs.model.metadata.sku.trim()}
+                              </span>
+                            </div>
+                          ) : null}
+                          {activeProduct.kindId && onCreateCatalogModel ? (
+                            <Popover open={quickModelPopoverOpen} onOpenChange={setQuickModelPopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  <Plus className="mr-1 h-3.5 w-3.5" />
+                                  Створити товар
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="start" className="w-[420px] p-3">
+                                <div className="space-y-3">
+                                  <div>
+                                    <div className="text-sm font-medium text-foreground">Новий товар</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Додамо в каталог і одразу виберемо.
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-[112px_minmax(0,1fr)]">
+                                    <div className="aspect-square overflow-hidden rounded-[14px] border border-border/60 bg-muted/20">
+                                      {quickModelImageUrl.trim() && !quickModelImageErrored ? (
+                                        <img
+                                          src={quickModelImageUrl.trim()}
+                                          alt={quickModelName.trim() || "Прев'ю товару"}
+                                          className="h-full w-full object-cover"
+                                          onError={() => setQuickModelImageErrored(true)}
+                                        />
+                                      ) : (
+                                        <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+                                          <div className="text-center">
+                                            <Package className="mx-auto h-5 w-5" />
+                                            <div className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em]">
+                                              Прев'ю
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Input
+                                        value={quickModelName}
+                                        onChange={(event) => {
+                                          setQuickModelName(event.target.value);
+                                          if (quickModelError) setQuickModelError(null);
+                                        }}
+                                        placeholder="Назва товару"
+                                        className="h-9"
+                                        disabled={quickModelSaving}
+                                      />
+                                      <Input
+                                        value={quickModelSku}
+                                        onChange={(event) => {
+                                          setQuickModelSku(event.target.value);
+                                          if (quickModelError) setQuickModelError(null);
+                                        }}
+                                        placeholder="Артикул"
+                                        className="h-9"
+                                        disabled={quickModelSaving}
+                                      />
+                                      <Input
+                                        value={quickModelImageUrl}
+                                        onChange={(event) => setQuickModelImageUrl(event.target.value)}
+                                        placeholder="Фото URL, необов'язково"
+                                        className="h-9"
+                                        disabled={quickModelSaving}
+                                      />
+                                    </div>
+                                  </div>
+                                  {quickModelImageUrl.trim() && quickModelImageErrored ? (
+                                    <div className="text-xs text-warning-foreground">
+                                      Фото не завантажилось. Перевірте URL або вставте пряме посилання на зображення.
+                                    </div>
+                                  ) : null}
+                                  {quickModelError ? (
+                                    <div className="text-xs text-destructive">{quickModelError}</div>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full gap-2"
+                                    onClick={handleQuickCreateModel}
+                                    disabled={quickModelSaving || !quickModelName.trim()}
+                                  >
+                                    {quickModelSaving ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Plus className="h-4 w-4" />
+                                    )}
+                                    Створити і вибрати
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          ) : null}
                         </div>
                       </div>
                     )}

@@ -80,7 +80,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
-import { getSignedAttachmentUrl, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
+import { getAttachmentVariantPath, getSignedAttachmentUrl, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { 
   Search,
   X,
@@ -169,6 +169,7 @@ const QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT = 5;
 const QUOTES_KANBAN_PREVIEW_SCROLL_STEP_PX = 260;
 const QUOTES_KANBAN_PREVIEW_BATCH_SIZE = 4;
 const QUOTES_PAGE_REFRESH_INDICATOR_DELAY_MS = 900;
+const CATALOG_IMAGE_BUCKET = "public-assets";
 
 const isManagerFilterMember = (member: Pick<TeamMemberRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
@@ -189,6 +190,13 @@ type CatalogModel = {
   metadata?: {
     sku?: string | null;
     configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+    imageAsset?: {
+      bucket: string;
+      path: string;
+      originalUrl?: string | null;
+      previewUrl?: string | null;
+      thumbUrl?: string | null;
+    } | null;
   };
 };
 type CatalogModelRow = {
@@ -212,6 +220,22 @@ type CatalogKind = {
 };
 type CatalogType = { id: string; name: string; quote_type?: string | null; kinds: CatalogKind[] };
 void DELIVERY_TYPE_OPTIONS;
+
+const sanitizeCatalogFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
+
+const getCatalogImageImportErrorMessage = (error: unknown) => {
+  const message = getErrorMessage(error, "Не вдалося підготувати фото товару.");
+  if (/(404|responded with 404|source responded with 404)/i.test(message)) {
+    return "За цим посиланням фото не знайдено. Перевірте URL.";
+  }
+  if (/\((403|429)\)/.test(message)) {
+    return "Сайт із цим фото не дав завантажити картинку. Вставте пряме посилання на зображення.";
+  }
+  if (/did not return an image/i.test(message)) {
+    return "Потрібне пряме посилання саме на картинку, а не на сторінку.";
+  }
+  return message;
+};
 
 type PendingAttachment = {
   id: string;
@@ -1636,6 +1660,73 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   }, [teamId]);
 
+  const getCatalogAssetPayload = useCallback((storagePath: string) => {
+    const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+    const previewUrl = supabase.storage
+      .from(CATALOG_IMAGE_BUCKET)
+      .getPublicUrl(getAttachmentVariantPath(storagePath, "preview")).data.publicUrl;
+    const thumbUrl = supabase.storage
+      .from(CATALOG_IMAGE_BUCKET)
+      .getPublicUrl(getAttachmentVariantPath(storagePath, "thumb")).data.publicUrl;
+
+    return {
+      imageUrl: previewUrl,
+      imageAsset: {
+        bucket: CATALOG_IMAGE_BUCKET,
+        path: storagePath,
+        originalUrl,
+        previewUrl,
+        thumbUrl,
+      },
+    };
+  }, []);
+
+  const importCatalogImageFromUrl = useCallback(
+    async (params: { sourceUrl: string; persistedModelId: string }) => {
+      const sourceUrl = params.sourceUrl.trim();
+      const fileNameFromUrl = (() => {
+        try {
+          return new URL(sourceUrl).pathname.split("/").pop() ?? "catalog-image";
+        } catch {
+          return "catalog-image";
+        }
+      })();
+      const safeName = sanitizeCatalogFileName(fileNameFromUrl.replace(/\?.*$/, "") || "catalog-image");
+      const storagePath = `teams/${teamId}/catalog-models/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error("Не вдалося підтвердити сесію для імпорту фото товару.");
+      }
+
+      const response = await fetch("/.netlify/functions/catalog-image-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bucket: CATALOG_IMAGE_BUCKET,
+          storagePath,
+          sourceUrl,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string; storagePath?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || `Не вдалося завантажити фото товару за URL (${response.status}).`);
+      }
+
+      const resolvedStoragePath = payload?.storagePath?.trim() || storagePath;
+      return {
+        storagePath: resolvedStoragePath,
+        assetPayload: getCatalogAssetPayload(resolvedStoragePath),
+      };
+    },
+    [getCatalogAssetPayload, teamId]
+  );
+
   const handleCreateCatalogModelFromQuote = useCallback(
     async (input: {
       typeId: string;
@@ -1649,8 +1740,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (!teamId) throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       if (!input.kindId || !name) throw new Error("Оберіть вид і вкажіть назву товару.");
 
-      const imageUrl = input.imageUrl?.trim() || null;
+      const sourceImageUrl = input.imageUrl?.trim() || null;
       const sku = input.sku?.trim() || null;
+      const initialMetadata = sku ? { sku } : null;
       const { data, error } = await supabase
         .schema("tosho")
         .from("catalog_models")
@@ -1659,8 +1751,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           kind_id: input.kindId,
           name,
           price: Math.max(0, Number(input.price ?? 0) || 0),
-          image_url: imageUrl,
-          metadata: sku ? { sku } : null,
+          image_url: null,
+          metadata: initialMetadata,
         })
         .select("id,kind_id,name,price,image_url,sku:metadata->>sku")
         .single();
@@ -1673,12 +1765,54 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         throw error ?? new Error("Не вдалося створити товар.");
       }
 
+      let imageUrl: string | null = null;
+      let imageAsset: NonNullable<NonNullable<CatalogModel["metadata"]>["imageAsset"]> | null = null;
+      if (sourceImageUrl) {
+        try {
+          const imported = await importCatalogImageFromUrl({
+            sourceUrl: sourceImageUrl,
+            persistedModelId: data.id as string,
+          });
+          imageUrl = imported.assetPayload.imageUrl;
+          imageAsset = imported.assetPayload.imageAsset;
+
+          const { error: updateError } = await supabase
+            .schema("tosho")
+            .from("catalog_models")
+            .update({
+              image_url: imageUrl,
+              metadata: {
+                ...(sku ? { sku } : {}),
+                imageAsset,
+              },
+            })
+            .eq("id", data.id)
+            .eq("team_id", teamId);
+
+          if (updateError) throw updateError;
+        } catch (importError) {
+          await supabase
+            .schema("tosho")
+            .from("catalog_models")
+            .delete()
+            .eq("id", data.id)
+            .eq("team_id", teamId);
+          throw new Error(getCatalogImageImportErrorMessage(importError));
+        }
+      }
+
       const createdModel: CatalogModel = {
         id: data.id as string,
         name: (data.name as string) ?? name,
         price: data.price == null ? undefined : Number(data.price),
-        imageUrl: typeof data.image_url === "string" && data.image_url.trim() ? data.image_url.trim() : undefined,
-        metadata: data.sku ? { sku: data.sku as string } : undefined,
+        imageUrl: imageUrl ?? undefined,
+        metadata:
+          sku || imageAsset
+            ? {
+                ...(sku ? { sku } : {}),
+                ...(imageAsset ? { imageAsset } : {}),
+              }
+            : undefined,
       };
 
       setCatalogTypes((current) =>
@@ -1707,7 +1841,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.success("Товар створено і вибрано в прорахунку.");
       return createdModel;
     },
-    [teamId]
+    [importCatalogImageFromUrl, teamId]
   );
 
   const openCreate = useCallback(() => {
@@ -5209,17 +5343,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         topRight={
           <>
             <EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />
-            <Button
-              onClick={openBatchBuilder}
-              variant="outline"
-              size="icon"
-              className={cn(TOOLBAR_ACTION_BUTTON, "w-10 px-0")}
-              title="Білдер прорахунку / КП"
-              aria-label="Білдер прорахунку / КП"
-            >
-              <PlusIcon className="h-4 w-4" />
-            </Button>
-            <Button onClick={openCreate} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
+            <Button onClick={openBatchBuilder} className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}>
               <PlusIcon className="h-4 w-4" />
               Новий прорахунок
             </Button>
@@ -5408,7 +5532,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     managerFilter,
     managerFilterOptions,
     openBatchBuilder,
-    openCreate,
     quoteListMode,
     quoteSetKindFilter,
     quoteSetKpCount,
@@ -5794,7 +5917,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
-                <Button onClick={openCreate} variant="outline" className="gap-2">
+                <Button onClick={openBatchBuilder} variant="outline" className="gap-2">
                   <PlusIcon className="h-4 w-4" />
                   Створити прорахунок
                 </Button>
@@ -6416,7 +6539,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 {search ? "Спробуйте змінити пошуковий запит" : "Створіть перший прорахунок для замовника"}
               </p>
               {!search && (
-                <Button onClick={openCreate} variant="outline" className="gap-2">
+                <Button onClick={openBatchBuilder} variant="outline" className="gap-2">
                   <PlusIcon className="h-4 w-4" />
                   Створити прорахунок
                 </Button>
@@ -6773,30 +6896,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </div>
       )}
 
-      {/* ✨ New Linear-style Quote Form */}
-      <NewQuoteDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSubmit={handleNewFormSubmit}
-        submitting={creating}
-        teamId={teamId}
-        customers={customers}
-        customersLoading={customersLoading}
-        onCustomerSearch={handleCustomerSearchChange}
-        onCreateCustomer={(name) => {
-          customerLeadCreate.openCustomerCreate(name || "");
-        }}
-        onCreateLead={(name) => {
-          customerLeadCreate.openLeadCreate(name || "");
-        }}
-        teamMembers={teamMembers}
-        catalogTypes={catalogTypes}
-        onCreateCatalogModel={handleCreateCatalogModelFromQuote}
-        currentUserId={currentUserId}
-        restrictPartySelectionToOwn={isManagerUser}
-        currentManagerLabel={currentUserManagerLabel}
-      />
-
       <QuoteBatchBuilderDialog
         open={batchBuilderOpen}
         onOpenChange={(open) => {
@@ -6821,6 +6920,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }}
         teamMembers={teamMembers}
         catalogTypes={catalogTypes}
+        onCreateCatalogModel={handleCreateCatalogModelFromQuote}
         currentUserId={currentUserId}
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}
