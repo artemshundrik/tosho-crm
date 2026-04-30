@@ -331,7 +331,7 @@ export default function ProductCatalogPage() {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо каталог продукції." />;
   }
 
-  if (catalogError) {
+  if (catalogError && catalog.length === 0) {
     return <div className="p-6 text-sm text-destructive">{catalogError}</div>;
   }
 
@@ -388,6 +388,12 @@ export default function ProductCatalogPage() {
 
             {/* Models Grid */}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {catalogError ? (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{catalogError}</span>
+                </div>
+              ) : null}
               <SimpleModelGrid
                 filteredModels={filters.filteredGlobalModels}
                 globalSearch={filters.globalSearch}
