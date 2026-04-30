@@ -83,7 +83,7 @@ function isDeliverableProfile(profile?: ProfileRow) {
 }
 
 export const config = {
-  schedule: "*/5 * * * *",
+  schedule: "* * * * *",
 };
 
 export const handler = async (event: HttpEvent) => {

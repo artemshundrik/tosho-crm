@@ -16,6 +16,7 @@ import {
   ingestCustomerLogoFromUrl,
   normalizeCustomerLogoUrl,
 } from "@/lib/customerLogo";
+import { buildReminderAtIso } from "@/lib/reminderDateTime";
 
 type MemberOption = {
   id: string;
@@ -276,10 +277,7 @@ export const useCustomerLeadCreate = ({
       legal_entities: legalEntities.length > 0 ? legalEntities : null,
       signatory_name: primaryLegalEntity?.signatory_name ?? null,
       signatory_position: primaryLegalEntity?.signatory_position ?? null,
-      reminder_at:
-        customerForm.reminderDate && customerForm.reminderTime
-          ? `${customerForm.reminderDate}T${customerForm.reminderTime}:00`
-          : null,
+      reminder_at: buildReminderAtIso(customerForm.reminderDate, customerForm.reminderTime),
       reminder_comment: customerForm.reminderComment.trim() || null,
       event_name: customerForm.eventName.trim() || null,
       event_at: customerForm.eventDate || null,
@@ -440,10 +438,7 @@ export const useCustomerLeadCreate = ({
       iban: leadForm.iban.trim() || null,
       signatory_name: leadForm.signatoryName.trim() || null,
       signatory_position: leadForm.signatoryPosition.trim() || null,
-      reminder_at:
-        leadForm.reminderDate && leadForm.reminderTime
-          ? `${leadForm.reminderDate}T${leadForm.reminderTime}:00`
-          : null,
+      reminder_at: buildReminderAtIso(leadForm.reminderDate, leadForm.reminderTime),
       reminder_comment: leadForm.reminderComment.trim() || null,
       event_name: leadForm.eventName.trim() || null,
       event_at: leadForm.eventDate || null,

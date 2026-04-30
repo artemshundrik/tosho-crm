@@ -52,6 +52,11 @@ import {
   normalizeCompanyNameLooseKey,
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
+import {
+  buildReminderAtIso,
+  getLocalReminderDateInputValue,
+  getLocalReminderTimeInputValue,
+} from "@/lib/reminderDateTime";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -1487,8 +1492,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       logoUploadMode: "url",
       legalEntities: parseCustomerLegalEntities(row),
       contacts,
-      reminderDate: row.reminder_at ? row.reminder_at.slice(0, 10) : "",
-      reminderTime: row.reminder_at ? row.reminder_at.slice(11, 16) : "",
+      reminderDate: getLocalReminderDateInputValue(row.reminder_at),
+      reminderTime: getLocalReminderTimeInputValue(row.reminder_at),
       reminderComment: row.reminder_comment ?? "",
       eventName: row.event_name ?? "",
       eventDate: row.event_at ? row.event_at.slice(0, 10) : "",
@@ -1532,8 +1537,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       iban: lead.iban ?? "",
       signatoryName: lead.signatory_name ?? "",
       signatoryPosition: lead.signatory_position ?? "",
-      reminderDate: lead.reminder_at ? lead.reminder_at.slice(0, 10) : "",
-      reminderTime: lead.reminder_at ? lead.reminder_at.slice(11, 16) : "",
+      reminderDate: getLocalReminderDateInputValue(lead.reminder_at),
+      reminderTime: getLocalReminderTimeInputValue(lead.reminder_at),
       reminderComment: lead.reminder_comment ?? "",
       eventName: lead.event_name ?? "",
       eventDate: lead.event_at ? lead.event_at.slice(0, 10) : "",
@@ -2248,10 +2253,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       contact_birthday: primaryContact?.birthday || null,
       signatory_name: primaryLegalEntity?.signatory_name ?? null,
       signatory_position: primaryLegalEntity?.signatory_position ?? null,
-      reminder_at:
-        form.reminderDate && form.reminderTime
-          ? `${form.reminderDate}T${form.reminderTime}:00`
-          : null,
+      reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
       reminder_comment: form.reminderComment.trim() || null,
       event_name: form.eventName.trim() || null,
       event_at: form.eventDate || null,
@@ -2434,10 +2436,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       iban: leadForm.iban.trim() || null,
       signatory_name: leadForm.signatoryName.trim() || null,
       signatory_position: leadForm.signatoryPosition.trim() || null,
-      reminder_at:
-        leadForm.reminderDate && leadForm.reminderTime
-          ? `${leadForm.reminderDate}T${leadForm.reminderTime}:00`
-          : null,
+      reminder_at: buildReminderAtIso(leadForm.reminderDate, leadForm.reminderTime),
       reminder_comment: leadForm.reminderComment.trim() || null,
       event_name: leadForm.eventName.trim() || null,
       event_at: leadForm.eventDate || null,

@@ -36,6 +36,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import {
+  buildReminderAtIso,
+  getLocalReminderDateInputValue,
+  getLocalReminderTimeInputValue,
+} from "@/lib/reminderDateTime";
+import {
   Building2,
   FilterX,
   Loader2,
@@ -153,8 +158,8 @@ function normalizeFormFromRow(row?: ContractorRow | null): ContractorFormState {
       phone: contact,
       address: normalizeMultilineValue(row?.address),
       deliveryInfo: normalizeMultilineValue(row?.delivery_info),
-      reminderDate: row?.reminder_at ? row.reminder_at.slice(0, 10) : "",
-      reminderTime: row?.reminder_at ? row.reminder_at.slice(11, 16) : "",
+      reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
+      reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
       reminderComment: normalizeMultilineValue(row?.reminder_comment),
       notes: normalizeMultilineValue(row?.notes),
     };
@@ -167,8 +172,8 @@ function normalizeFormFromRow(row?: ContractorRow | null): ContractorFormState {
     phone,
     address: normalizeMultilineValue(row?.address),
     deliveryInfo: normalizeMultilineValue(row?.delivery_info),
-    reminderDate: row?.reminder_at ? row.reminder_at.slice(0, 10) : "",
-    reminderTime: row?.reminder_at ? row.reminder_at.slice(11, 16) : "",
+    reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
+    reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
     reminderComment: normalizeMultilineValue(row?.reminder_comment),
     notes: normalizeMultilineValue(row?.notes),
   };
@@ -478,10 +483,7 @@ export default function ContractorsPage() {
       phone: form.phone.trim() || null,
       address: form.address.trim() || null,
       delivery_info: form.deliveryInfo.trim() || null,
-      reminder_at:
-        form.reminderDate && form.reminderTime
-          ? `${form.reminderDate}T${form.reminderTime}:00`
-          : null,
+      reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
       reminder_comment: form.reminderComment.trim() || null,
       notes: form.notes.trim() || null,
       updated_at: new Date().toISOString(),
