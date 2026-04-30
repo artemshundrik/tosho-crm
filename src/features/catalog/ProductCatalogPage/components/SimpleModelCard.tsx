@@ -8,7 +8,7 @@ import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Layers, MoreVertical } from "lucide-react";
+import { Image as ImageIcon, Layers, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,10 +38,18 @@ export function SimpleModelCard({
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;
   const sku = model.metadata?.sku?.trim();
-  const variants = (model.metadata?.variants ?? []).filter(
-    (variant) =>
+  const rawVariants = model.metadata?.variants ?? [];
+  const variants = rawVariants.filter(
+    (variant, index) =>
       variant.active !== false &&
-      Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
+      (Boolean(
+        variant.name.trim() ||
+          variant.sku?.trim() ||
+          variant.imageUrl?.trim() ||
+          variant.imageAsset?.thumbUrl ||
+          variant.imageAsset?.previewUrl
+      ) ||
+        (index === 0 && rawVariants.length > 1))
   );
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0] ?? null;
@@ -51,8 +59,9 @@ export function SimpleModelCard({
     selectedVariant?.imageAsset?.previewUrl ||
     null;
   const selectedVariantSku = selectedVariant?.sku?.trim();
+  const selectedVariantName = selectedVariant?.name.trim();
   const displayImageUrl = selectedVariantImageUrl || model.imageUrl || null;
-  const displayTitle = model.name;
+  const displayTitle = selectedVariantName ? `${model.name} · ${selectedVariantName}` : model.name;
   const displaySku = selectedVariantSku || sku || null;
 
   // Map kindName to product type for placeholder
@@ -174,7 +183,7 @@ export function SimpleModelCard({
         )}
 
         {variants.length > 0 ? (
-          <div className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-1.5 overflow-x-auto">
+          <div className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-2 overflow-x-auto">
             {variants.slice(0, 7).map((variant) => {
               const imageUrl =
                 variant.imageUrl?.trim() ||
@@ -188,8 +197,10 @@ export function SimpleModelCard({
                   type="button"
                   title={variant.sku?.trim() ? `${variant.name || "Модифікація"} · ${variant.sku}` : variant.name}
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur transition-all",
-                    selected ? "border-primary ring-2 ring-primary/35" : "border-border/60 hover:border-primary/45"
+                    "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-white transition-all",
+                    selected
+                      ? "border-primary"
+                      : "border-muted-foreground/35 hover:border-muted-foreground/50"
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -197,12 +208,12 @@ export function SimpleModelCard({
                   }}
                 >
                   {imageUrl ? (
-                    <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    <>
+                      <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      {!selected ? <span className="absolute inset-0 bg-white/45" /> : null}
+                    </>
                   ) : (
-                    <span
-                      className="h-full w-full"
-                      style={{ backgroundColor: variant.colorHex?.trim() || "hsl(var(--muted))" }}
-                    />
+                    <ImageIcon className="h-4 w-4 text-muted-foreground/60" />
                   )}
                 </button>
               );
@@ -241,7 +252,7 @@ export function SimpleModelCard({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className={cn("flex min-w-0 flex-wrap items-center gap-2", !displaySku && "-mt-1")}>
           <span className="truncate text-sm text-muted-foreground">{kindName}</span>
           {variants.length > 0 ? (
             <Badge variant="outline" className="h-6 shrink-0 px-2 text-xs">

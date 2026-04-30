@@ -136,7 +136,7 @@ export type QuoteBatchProductSubmitData = {
   kindId: string;
   modelId: string;
   variantId?: string | null;
-  catalogVariant?: Pick<CatalogModelVariant, "id" | "name" | "sku" | "colorHex" | "imageUrl"> | null;
+  catalogVariant?: Pick<CatalogModelVariant, "id" | "name" | "sku" | "imageUrl"> | null;
   productConfiguratorPreset?: PrintConfiguratorPreset | null;
   printPackageConfig?: PrintPackageConfig;
   deliveryType: string | null;
@@ -343,15 +343,29 @@ const normalizeDeadlineInput = (value: string) => {
   return trimmed.length === 16 ? `${trimmed}:00` : trimmed;
 };
 
+const hasCatalogVariantDisplayData = (variant: CatalogModelVariant) =>
+  Boolean(
+    variant.name.trim() ||
+      variant.sku?.trim() ||
+      variant.imageUrl?.trim() ||
+      variant.imageAsset?.thumbUrl ||
+      variant.imageAsset?.previewUrl
+  );
+
+const getVisibleCatalogVariants = (model?: CatalogModel | null) => {
+  const variants = model?.metadata?.variants ?? [];
+  return variants.filter(
+    (variant, index) =>
+      variant.active !== false &&
+      (hasCatalogVariantDisplayData(variant) || (index === 0 && variants.length > 1))
+  );
+};
+
 const getCatalogRefs = (catalogTypes: CatalogType[], product: ProductDraft) => {
   const type = catalogTypes.find((item) => item.id === product.categoryId) ?? null;
   const kind = type?.kinds.find((item) => item.id === product.kindId) ?? null;
   const model = kind?.models.find((item) => item.id === product.modelId) ?? null;
-  const variants = (model?.metadata?.variants ?? []).filter(
-    (variant) =>
-      variant.active !== false &&
-      Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
-  );
+  const variants = getVisibleCatalogVariants(model);
   const variant = variants.find((item) => item.id === product.variantId) ?? null;
   return { type, kind, model, variants, variant };
 };
@@ -433,7 +447,6 @@ const ChipDropdown: React.FC<{
     label: string;
     description?: string | null;
     imageUrl?: string | null;
-    colorHex?: string | null;
   }>;
   placeholder: string;
   icon: React.ReactNode;
@@ -464,11 +477,6 @@ const ChipDropdown: React.FC<{
             <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
               <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
             </span>
-          ) : selected?.colorHex ? (
-            <span
-              className="mr-2 h-5 w-5 shrink-0 rounded-full border border-border/60"
-              style={{ backgroundColor: selected.colorHex }}
-            />
           ) : (
             <span className={cn("mr-2 shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", active ? "text-primary" : "text-muted-foreground")}>
               {icon}
@@ -506,11 +514,6 @@ const ChipDropdown: React.FC<{
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
                       <img src={option.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </span>
-                  ) : option.colorHex ? (
-                    <span
-                      className="h-8 w-8 shrink-0 rounded-full border border-border/60"
-                      style={{ backgroundColor: option.colorHex }}
-                    />
                   ) : (
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-muted-foreground">
                       {icon}
@@ -1154,11 +1157,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
         .find((item) => item.id === activeProduct.categoryId)
         ?.kinds.find((item) => item.id === activeProduct.kindId)
         ?.models.find((item) => item.id === modelId) ?? null;
-    const variants = (selectedModel?.metadata?.variants ?? []).filter(
-      (variant) =>
-        variant.active !== false &&
-        Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
-    );
+    const variants = getVisibleCatalogVariants(selectedModel);
     updateActiveProduct({
       modelId,
       variantId: variantId || (variants.length === 1 ? variants[0].id : null),
@@ -1344,9 +1343,8 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
         catalogVariant: variant
           ? {
               id: variant.id,
-              name: variant.name.trim() || variant.sku?.trim() || "Модифікація",
+              name: variant.name.trim(),
               sku: variant.sku ?? null,
-              colorHex: variant.colorHex ?? null,
               imageUrl:
                 variant.imageUrl?.trim() ||
                 variant.imageAsset?.thumbUrl ||
@@ -1432,11 +1430,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const availableKinds = activeRefs.type?.kinds ?? [];
   const availableModels = activeRefs.kind?.models ?? [];
   const availableModelOptions = availableModels.flatMap((model) => {
-    const variants = (model.metadata?.variants ?? []).filter(
-      (variant) =>
-        variant.active !== false &&
-        Boolean(variant.name.trim() || variant.sku?.trim() || variant.imageUrl?.trim())
-    );
+    const variants = getVisibleCatalogVariants(model);
     if (variants.length === 0) {
       return [
         {
@@ -1447,17 +1441,19 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
         },
       ];
     }
-    return variants.map((variant) => ({
-      value: `${model.id}::${variant.id}`,
-      label: `${model.name} · ${variant.name.trim() || "Модифікація"}`,
-      description: variant.sku?.trim()
-        ? `Артикул: ${variant.sku.trim()}`
-        : model.metadata?.sku?.trim()
-        ? `Артикул: ${model.metadata.sku.trim()}`
-        : null,
-      imageUrl: getCatalogVariantImageUrl(variant) || getCatalogModelImageUrl(model),
-      colorHex: variant.colorHex ?? null,
-    }));
+    return variants.map((variant) => {
+      const variantName = variant.name.trim();
+      return {
+        value: `${model.id}::${variant.id}`,
+        label: variantName ? `${model.name} · ${variantName}` : model.name,
+        description: variant.sku?.trim()
+          ? `Артикул: ${variant.sku.trim()}`
+          : model.metadata?.sku?.trim()
+          ? `Артикул: ${model.metadata.sku.trim()}`
+          : null,
+        imageUrl: getCatalogVariantImageUrl(variant) || getCatalogModelImageUrl(model),
+      };
+    });
   });
   const availableMethods = activeRefs.kind?.methods ?? [];
   const availablePositions = activeRefs.kind?.printPositions ?? [];

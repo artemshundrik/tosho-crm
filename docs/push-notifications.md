@@ -10,6 +10,8 @@
   - `netlify/functions/notify-users.ts`
   - `netlify/functions/quote-comments.ts`
   - `netlify/functions/quote-deadline-reminders.ts`
+  - `netlify/functions/customer-lead-reminders.ts`
+  - `netlify/functions/contractor-reminders.ts`
   - `netlify/functions/team-events-reminders.ts`
 
 ## Local/frontend env
@@ -70,3 +72,19 @@ Copy:
   - vacation start dates happening today
   - vacation end dates happening today
 - reminders are deduped by event key in notification `href`
+
+## Quote, customer, and lead reminders
+
+- `netlify/functions/quote-deadline-reminders.ts` runs every 5 minutes for quote deadlines
+- quote deadline reminders use a 30-day catch-up window and scan upcoming deadlines so “за 1 день” reminders are not skipped
+- `netlify/functions/customer-lead-reminders.ts` runs every 5 minutes
+- sends due reminders from customer and lead communication tabs to the assigned manager
+- reminders are deduped by event key in notification `href`
+- the scheduled job has a 30-day catch-up window so reminders are not lost when the browser was closed
+
+## Contractor and supplier reminders
+
+- `netlify/functions/contractor-reminders.ts` runs every 5 minutes
+- sends due contractor/supplier reminders to active workspace members
+- reminders are deduped by event key in notification `href`
+- the scheduled job has a 30-day catch-up window

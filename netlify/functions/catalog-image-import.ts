@@ -57,6 +57,56 @@ function isAllowedImageContentType(contentType: string) {
   );
 }
 
+function getSourceOrigin(sourceUrl: string) {
+  try {
+    return new URL(sourceUrl).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function getBrowserLikeHeaders(sourceUrl: string, includeReferer: boolean) {
+  const origin = getSourceOrigin(sourceUrl);
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
+  };
+
+  if (includeReferer && origin) {
+    headers.Referer = `${origin}/`;
+  }
+
+  return headers;
+}
+
+async function fetchSourceImage(sourceUrl: string) {
+  let lastResponse: Response | null = null;
+  let lastError: unknown = null;
+
+  for (const includeReferer of [false, true]) {
+    try {
+      const response = await fetch(sourceUrl, {
+        redirect: "follow",
+        headers: getBrowserLikeHeaders(sourceUrl, includeReferer),
+      });
+
+      if (response.ok) return response;
+      lastResponse = response;
+
+      if (![403, 404, 429].includes(response.status)) {
+        break;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastError ?? new Error("Failed to fetch source image");
+}
+
 async function renderVariant(buffer: Buffer, maxSize: number) {
   return sharp(buffer)
     .resize({
@@ -123,13 +173,7 @@ export const handler = async (event: HttpEvent) => {
 
   let response: Response;
   try {
-    response = await fetch(sourceUrl, {
-      redirect: "follow",
-      headers: {
-        "User-Agent": "ToSho CRM catalog importer",
-        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      },
-    });
+    response = await fetchSourceImage(sourceUrl);
   } catch {
     return jsonResponse(502, { error: "Failed to fetch source image" });
   }

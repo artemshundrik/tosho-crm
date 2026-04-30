@@ -51,14 +51,12 @@ import {
   supabase,
 } from "@/lib/supabaseClient";
 import { getAgencyLogo } from "@/lib/agencyAssets";
-import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
-import { buildUserNameFromMetadata } from "@/lib/userName";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT,
@@ -105,7 +103,6 @@ type HeaderConfig = {
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
 const FALLBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
-const REMINDER_POLL_INTERVAL_MS = 10 * 60 * 1000;
 
 function isDocumentVisible() {
   if (typeof document === "undefined") return true;
@@ -591,33 +588,6 @@ function applyTheme(mode: ThemeMode) {
   }
 }
 
-function formatDateTimeUA(iso: string) {
-  const d = new Date(iso);
-  const date = new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(d);
-  const time = new Intl.DateTimeFormat("uk-UA", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-  return `${date} • ${time}`;
-}
-
-function normalizeIdentity(value?: string | null) {
-  return (value ?? "").trim().toLowerCase();
-}
-
-function reminderKeyFromHref(href?: string | null) {
-  if (!href) return null;
-  const queryIndex = href.indexOf("?");
-  if (queryIndex === -1) return null;
-  const params = new URLSearchParams(href.slice(queryIndex + 1));
-  const value = params.get("reminder");
-  return value?.trim() || null;
-}
-
 const TOSHO_AI_OPEN_PARAM = "tosho_ai";
 const TOSHO_AI_REQUEST_PARAM = "tosho_ai_request";
 const FLOATING_LAUNCHER_BLOCKING_SURFACE_SELECTOR =
@@ -801,27 +771,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [fxError, setFxError] = useState<string | null>(null);
   const [fxStaleWarning, setFxStaleWarning] = useState<string | null>(null);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
-  const reminderAssigneeKeys = useMemo(() => {
-    const keys = new Set<string>();
-    const resolvedName = buildUserNameFromMetadata(
-      session?.user?.user_metadata as Record<string, unknown> | undefined,
-      session?.user?.email
-    );
-    if (resolvedName.displayName) {
-      keys.add(normalizeIdentity(resolvedName.displayName));
-    }
-    if (resolvedName.fullName) {
-      keys.add(normalizeIdentity(resolvedName.fullName));
-    }
-    const email = session?.user?.email ?? "";
-    if (email) {
-      keys.add(normalizeIdentity(email));
-      const localPart = email.split("@")[0];
-      if (localPart) keys.add(normalizeIdentity(localPart));
-    }
-    return keys;
-  }, [session]);
-
   useEffect(() => {
     if (typeof document === "undefined") return;
     let animationFrame = 0;
@@ -1095,150 +1044,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
-
-  useEffect(() => {
-    if (!userId || !teamId || reminderAssigneeKeys.size === 0) return;
-
-    let disposed = false;
-    let inFlight = false;
-
-    const run = async () => {
-      if (disposed || inFlight) return;
-      inFlight = true;
-      try {
-        const now = new Date();
-        const nowIso = now.toISOString();
-        const fromIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-        const [customersResult, leadsResult, existingResult] = await Promise.all([
-          supabase
-            .schema("tosho")
-            .from("customers")
-            .select("id,name,manager,manager_user_id,reminder_at,reminder_comment")
-            .eq("team_id", teamId)
-            .not("reminder_at", "is", null)
-            .lte("reminder_at", nowIso)
-            .gte("reminder_at", fromIso)
-            .order("reminder_at", { ascending: false })
-            .limit(100),
-          supabase
-            .schema("tosho")
-            .from("leads")
-            .select("id,company_name,manager,manager_user_id,reminder_at,reminder_comment")
-            .eq("team_id", teamId)
-            .not("reminder_at", "is", null)
-            .lte("reminder_at", nowIso)
-            .gte("reminder_at", fromIso)
-            .order("reminder_at", { ascending: false })
-            .limit(100),
-          supabase
-            .from("notifications")
-            .select("href")
-            .eq("user_id", userId)
-            .not("href", "is", null)
-            .like("href", "/orders/customers%")
-            .gte("created_at", fromIso)
-            .limit(500),
-        ]);
-
-        if (customersResult.error || leadsResult.error || existingResult.error) return;
-
-        const existingKeys = new Set(
-          (((existingResult.data ?? []) as Array<{ href?: string | null }>).map((row) =>
-            reminderKeyFromHref(row.href)
-          ).filter((value): value is string => Boolean(value)))
-        );
-
-        const toInsert: Array<{
-          user_id: string;
-          title: string;
-          body: string;
-          href: string;
-          type: "warning";
-        }> = [];
-
-        const pushReminder = (kind: "customer" | "lead", id: string, name: string, reminderAt: string, comment?: string) => {
-          const key = `${kind}:${id}:${reminderAt}`;
-          if (existingKeys.has(key)) return;
-          existingKeys.add(key);
-          const title = `Нагадування: ${name}`;
-          const description = comment?.trim()
-            ? `${comment.trim()}\nЗаплановано на ${formatDateTimeUA(reminderAt)}`
-            : `Заплановано на ${formatDateTimeUA(reminderAt)}`;
-          const params = new URLSearchParams({
-            reminder: key,
-            tab: kind === "lead" ? "leads" : "customers",
-            [kind === "lead" ? "leadId" : "customerId"]: id,
-          });
-          const href = `/orders/customers?${params.toString()}`;
-          toInsert.push({
-            user_id: userId,
-            title,
-            body: description,
-            href,
-            type: "warning",
-          });
-        };
-
-        for (const row of (customersResult.data ?? []) as Array<{
-          id: string;
-          name?: string | null;
-          manager?: string | null;
-          manager_user_id?: string | null;
-          reminder_at?: string | null;
-          reminder_comment?: string | null;
-        }>) {
-          if (!row.reminder_at) continue;
-          if (row.manager_user_id && row.manager_user_id !== userId) continue;
-          const manager = normalizeIdentity(row.manager);
-          if (manager && !reminderAssigneeKeys.has(manager)) continue;
-          pushReminder("customer", row.id, row.name?.trim() || "Замовник", row.reminder_at, row.reminder_comment ?? "");
-        }
-
-        for (const row of (leadsResult.data ?? []) as Array<{
-          id: string;
-          company_name?: string | null;
-          manager?: string | null;
-          manager_user_id?: string | null;
-          reminder_at?: string | null;
-          reminder_comment?: string | null;
-        }>) {
-          if (!row.reminder_at) continue;
-          if (row.manager_user_id && row.manager_user_id !== userId) continue;
-          const manager = normalizeIdentity(row.manager);
-          if (manager && !reminderAssigneeKeys.has(manager)) continue;
-          pushReminder("lead", row.id, row.company_name?.trim() || "Лід", row.reminder_at, row.reminder_comment ?? "");
-        }
-
-        if (toInsert.length > 0) {
-          await Promise.all(
-            toInsert.map((row) =>
-              notifyUsers({
-                userIds: [row.user_id],
-                title: row.title,
-                body: row.body,
-                href: row.href,
-                type: row.type,
-              })
-            )
-          );
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void run();
-    const intervalId = window.setInterval(() => {
-      if (!isDocumentVisible()) return;
-      void run();
-    }, REMINDER_POLL_INTERVAL_MS);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-    };
-  }, [reminderAssigneeKeys, teamId, userId]);
 
   useEffect(() => {
     loadActivityUnread();

@@ -57,7 +57,6 @@ export type CatalogModelVariant = {
   id: string;
   name: string;
   sku?: string | null;
-  colorHex?: string | null;
   imageUrl?: string | null;
   imageAsset?: CatalogImageAsset | null;
   active?: boolean;

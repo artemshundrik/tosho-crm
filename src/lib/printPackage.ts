@@ -66,7 +66,6 @@ export type QuoteItemMetadata = {
     id: string;
     name: string;
     sku?: string | null;
-    colorHex?: string | null;
     imageUrl?: string | null;
   } | null;
   configuratorPreset?: PrintConfiguratorPreset | null;

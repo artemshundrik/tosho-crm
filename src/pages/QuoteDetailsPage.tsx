@@ -590,7 +590,6 @@ const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
         id,
         name,
         sku: typeof variantRecord.sku === "string" ? variantRecord.sku.trim() || null : null,
-        colorHex: typeof variantRecord.colorHex === "string" ? variantRecord.colorHex.trim() || null : null,
         imageUrl: typeof variantRecord.imageUrl === "string" ? variantRecord.imageUrl.trim() || null : null,
       };
     }
@@ -5898,7 +5897,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         ? {
                             name: item.metadata.catalogVariant.name.trim(),
                             sku: item.metadata.catalogVariant.sku?.trim() || null,
-                            colorHex: item.metadata.catalogVariant.colorHex?.trim() || null,
                             imageUrl: item.metadata.catalogVariant.imageUrl?.trim() || null,
                           }
                         : null;
@@ -6044,12 +6042,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                     {catalogVariant ? (
                                       <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-2 py-1">
-                                        {catalogVariant.colorHex ? (
-                                          <span
-                                            className="h-3 w-3 shrink-0 rounded-full border border-border/70"
-                                            style={{ backgroundColor: catalogVariant.colorHex }}
-                                          />
-                                        ) : null}
                                         <span className="truncate">{catalogVariant.name}</span>
                                       </span>
                                     ) : null}

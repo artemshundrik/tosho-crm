@@ -193,7 +193,6 @@ type CatalogModel = {
       id: string;
       name: string;
       sku?: string | null;
-      colorHex?: string | null;
       imageUrl?: string | null;
       imageAsset?: {
         bucket: string;
@@ -311,7 +310,6 @@ type KanbanProductPreview = {
     name: string;
     sku?: string | null;
     variantName?: string | null;
-    variantColorHex?: string | null;
     variantImageUrl?: string | null;
     qtyLabel: string;
     runLabels?: Array<{
@@ -3595,14 +3593,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               item.metadata.catalogVariant !== null
                 ? (item.metadata.catalogVariant as {
                     name?: unknown;
-                    sku?: unknown;
-                    colorHex?: unknown;
-                    imageUrl?: unknown;
-                  })
-                : null;
+                  sku?: unknown;
+                  imageUrl?: unknown;
+                })
+              : null;
             const variantName = typeof metadataVariant?.name === "string" ? metadataVariant.name.trim() || null : null;
-            const variantColorHex =
-              typeof metadataVariant?.colorHex === "string" ? metadataVariant.colorHex.trim() || null : null;
             const variantImageUrl =
               typeof metadataVariant?.imageUrl === "string" ? metadataVariant.imageUrl.trim() || null : null;
             const sku = metadataSku || catalogImage?.sku || null;
@@ -3622,7 +3617,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               name: item.name?.trim() || "Товар без назви",
               sku,
               variantName,
-              variantColorHex,
               variantImageUrl,
               qtyLabel: formatQtyLabel(item.qty, item.unit),
               runLabels,
@@ -6812,7 +6806,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                 name: productPreview?.itemName ?? "Завантаження товару...",
                                                 sku: null,
                                                 variantName: null,
-                                                variantColorHex: null,
                                                 variantImageUrl: null,
                                                 qtyLabel: productPreview?.qtyLabel ?? " ",
                                                 runLabels: [],

@@ -67,6 +67,12 @@ export function useModelEditor({
     return fallback;
   };
 
+  const dataUrlToFile = async (dataUrl: string, fileName: string) => {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    return new File([blob], fileName, { type: blob.type || "image/png" });
+  };
+
   // Dialog state
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -174,16 +180,34 @@ export function useModelEditor({
   };
 
   const normalizeVariantForSave = (variant: CatalogModelVariant): CatalogModelVariant => ({
-    ...variant,
+    id: variant.id,
     name: variant.name.trim(),
     sku: variant.sku?.trim() || null,
-    colorHex: variant.colorHex?.trim() || null,
     imageUrl: variant.imageUrl?.trim() || null,
     imageAsset: variant.imageAsset ?? null,
+    active: variant.active,
   });
 
   const hasPersistableVariantFields = (variant: CatalogModelVariant) =>
-    Boolean(variant.name || variant.sku || variant.imageUrl);
+    Boolean(variant.name || variant.sku || variant.imageUrl || variant.imageAsset?.path);
+
+  const syncPrimaryVariantImage = (imageUrl: string) => {
+    setDraftMetadata((prev) => {
+      if (!prev.variants || prev.variants.length === 0) return prev;
+      return {
+        ...prev,
+        variants: prev.variants.map((variant, index) =>
+          index === 0
+            ? {
+                ...variant,
+                imageUrl: imageUrl.trim() || null,
+                imageAsset: null,
+              }
+            : variant
+        ),
+      };
+    });
+  };
 
   const getCatalogAssetPayload = useCallback((storagePath: string) => {
     const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
@@ -279,6 +303,7 @@ export function useModelEditor({
   const handleDraftImageUrlChange = (value: string) => {
     setDraftImageFile(null);
     setDraftImageUrl(value);
+    syncPrimaryVariantImage(value);
   };
 
   const handleImageUploadModeChange = (mode: ImageUploadMode) => {
@@ -286,6 +311,7 @@ export function useModelEditor({
     if (mode === "url" && draftImageFile) {
       setDraftImageFile(null);
       setDraftImageUrl("");
+      syncPrimaryVariantImage("");
     }
   };
 
@@ -748,6 +774,7 @@ export function useModelEditor({
       const dataUrl = await readImageFile(file);
       setDraftImageFile(file);
       setDraftImageUrl(dataUrl);
+      syncPrimaryVariantImage(dataUrl);
     }
   };
 
@@ -820,16 +847,29 @@ export function useModelEditor({
     const existingImageAsset = draftMetadata.imageAsset ?? null;
     const nextMetadata: CatalogModelMetadata = { ...(draftMetadata ?? {}) };
     delete nextMetadata.imageAsset;
+    const normalizedDraftVariants = (nextMetadata.variants ?? []).map(normalizeVariantForSave);
     const normalizedBaseVariantName =
-      nextMetadata.baseVariantName?.trim() || nextMetadata.variants?.[0]?.name?.trim() || null;
+      nextMetadata.baseVariantName?.trim() || normalizedDraftVariants[0]?.name?.trim() || null;
     if (normalizedBaseVariantName) {
       nextMetadata.baseVariantName = normalizedBaseVariantName;
     } else {
       delete nextMetadata.baseVariantName;
     }
-    const normalizedVariants = (nextMetadata.variants ?? [])
-      .map(normalizeVariantForSave)
-      .filter(hasPersistableVariantFields);
+
+    const normalizedSku = nextMetadata.sku?.trim() || normalizedDraftVariants[0]?.sku?.trim() || null;
+    if (normalizedSku) {
+      nextMetadata.sku = normalizedSku;
+    } else {
+      delete nextMetadata.sku;
+    }
+
+    const persistableSecondaryVariants = normalizedDraftVariants.slice(1).filter(hasPersistableVariantFields);
+    const normalizedVariants =
+      persistableSecondaryVariants.length > 0
+        ? [normalizedDraftVariants[0], ...persistableSecondaryVariants].filter(
+            (variant): variant is CatalogModelVariant => Boolean(variant)
+          )
+        : [];
     if (normalizedVariants.length > 0) {
       nextMetadata.variants = normalizedVariants;
     } else {
@@ -919,16 +959,18 @@ export function useModelEditor({
         Boolean(normalizedImageUrl) &&
         !isInlineImageDataUrl(normalizedImageUrl) &&
         !isManagedCatalogImageUrl(normalizedImageUrl, existingImageAsset);
+      const shouldUploadInlineImage = !draftImageFile && isInlineImageDataUrl(normalizedImageUrl);
 
-      if (draftImageFile || shouldImportImageFromUrl) {
+      if (draftImageFile || shouldUploadInlineImage || shouldImportImageFromUrl) {
         try {
-          if (draftImageFile) {
-            const safeName = sanitizeFileName(draftImageFile.name);
+          if (draftImageFile || shouldUploadInlineImage) {
+            const imageFile = draftImageFile ?? (await dataUrlToFile(normalizedImageUrl, "catalog-image.png"));
+            const safeName = sanitizeFileName(imageFile.name);
             const storagePath = `teams/${teamId}/catalog-models/${persistedModelId}/${Date.now()}-${safeName}`;
             const uploadResult = await uploadAttachmentWithVariants({
               bucket: CATALOG_IMAGE_BUCKET,
               storagePath,
-              file: draftImageFile,
+              file: imageFile,
               cacheControl: "31536000, immutable",
             });
             uploadedAssetPath = uploadResult.storagePath;
@@ -1200,15 +1242,21 @@ export function useModelEditor({
         existingImageAsset?.bucket &&
         existingImageAsset.path &&
         existingImageAsset.path !== uploadedAssetPath &&
-        (draftImageFile || shouldImportImageFromUrl || !currentImageUrl)
+        (draftImageFile || shouldUploadInlineImage || shouldImportImageFromUrl || !currentImageUrl)
       ) {
         void removeAttachmentWithVariants(existingImageAsset.bucket, existingImageAsset.path);
       }
 
       const currentVariantImageAssets = getVariantImageAssetMap(currentMetadata);
+      const currentMainImageAssetPath = currentMetadata.imageAsset?.path ?? null;
       Object.entries(persistedVariantImageAssets).forEach(([variantId, previousAsset]) => {
         const nextAsset = currentVariantImageAssets[variantId] ?? null;
-        if (previousAsset?.bucket && previousAsset.path && previousAsset.path !== nextAsset?.path) {
+        if (
+          previousAsset?.bucket &&
+          previousAsset.path &&
+          previousAsset.path !== nextAsset?.path &&
+          previousAsset.path !== currentMainImageAssetPath
+        ) {
           void removeAttachmentWithVariants(previousAsset.bucket, previousAsset.path);
         }
       });

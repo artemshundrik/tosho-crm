@@ -19,6 +19,10 @@ type QuoteReminderRow = {
   deadline_reminder_comment?: string | null;
 };
 
+const REMINDER_LOOKBACK_DAYS = 30;
+const DEADLINE_SCAN_AHEAD_DAYS = 35;
+const EXISTING_NOTIFICATION_LOOKBACK_DAYS = 45;
+
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -108,9 +112,9 @@ export const handler = async (event: HttpEvent) => {
 
   try {
     const now = new Date();
-    const fromIso = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
-    const deadlineLowerBoundIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    const deadlineUpperBoundIso = new Date(now.getTime() + 26 * 60 * 60 * 1000).toISOString();
+    const reminderFromIso = new Date(now.getTime() - REMINDER_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const deadlineLowerBoundIso = reminderFromIso;
+    const deadlineUpperBoundIso = new Date(now.getTime() + DEADLINE_SCAN_AHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const [quotes, existingNotificationsResult] = await Promise.all([
       loadQuotes(adminClient, deadlineLowerBoundIso, deadlineUpperBoundIso),
@@ -119,7 +123,7 @@ export const handler = async (event: HttpEvent) => {
         .select("user_id,href")
         .not("href", "is", null)
         .like("href", "/orders/estimates/%?reminder=quote-deadline:%")
-        .gte("created_at", new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString())
+        .gte("created_at", new Date(now.getTime() - EXISTING_NOTIFICATION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString())
         .limit(2000),
     ]);
 
@@ -156,7 +160,7 @@ export const handler = async (event: HttpEvent) => {
       const reminderAt = new Date(deadline.getTime() - offsetMinutes * 60 * 1000);
       if (Number.isNaN(reminderAt.getTime())) continue;
       if (reminderAt.getTime() > now.getTime()) continue;
-      if (reminderAt.getTime() < new Date(fromIso).getTime()) continue;
+      if (reminderAt.getTime() < new Date(reminderFromIso).getTime()) continue;
 
       const recipientIds = Array.from(
         new Set(

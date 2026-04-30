@@ -149,21 +149,8 @@ export function ModelEditor({
               onVariantImageFileUpload={onVariantImageFileUpload}
             />
 
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="rounded-xl border border-border/50 bg-card/70 p-4">
-                <PricingSection
-                  draftPriceMode={draftPriceMode}
-                  draftFixedPrice={draftFixedPrice}
-                  draftTiers={draftTiers}
-                  onPriceModeChange={onPriceModeChange}
-                  onFixedPriceChange={onFixedPriceChange}
-                  onTierUpdate={onTierUpdate}
-                  onAddTier={onAddTier}
-                  onRemoveTier={onRemoveTier}
-                />
-              </div>
-
-              <div className="rounded-xl border border-border/50 bg-card/70 p-4">
+            <div className="space-y-4">
+              <section className="rounded-xl border border-border/50 bg-card/70 p-4">
                 <MethodsSection
                   draftKindId={draftKindId}
                   draftKindName={draftKind?.name}
@@ -178,7 +165,20 @@ export function ModelEditor({
                   onAddMethod={onAddMethod}
                   onToggleMethod={onMethodToggle}
                 />
-              </div>
+              </section>
+
+              <section className="rounded-xl border border-border/50 bg-card/70 p-4">
+                <PricingSection
+                  draftPriceMode={draftPriceMode}
+                  draftFixedPrice={draftFixedPrice}
+                  draftTiers={draftTiers}
+                  onPriceModeChange={onPriceModeChange}
+                  onFixedPriceChange={onFixedPriceChange}
+                  onTierUpdate={onTierUpdate}
+                  onAddTier={onAddTier}
+                  onRemoveTier={onRemoveTier}
+                />
+              </section>
             </div>
           </div>
         </div>
