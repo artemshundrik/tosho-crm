@@ -1100,6 +1100,87 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [loadNotifications, realtimeDisabled, userId]);
 
   useEffect(() => {
+    loadActivityUnread();
+  }, [loadActivityUnread]);
+
+  useEffect(() => {
+    if (!teamId || !userId) return;
+    if (!realtimeDisabled) return;
+    const intervalId = window.setInterval(() => {
+      if (!isDocumentVisible()) return;
+      void loadActivityUnread();
+    }, FALLBACK_POLL_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [loadActivityUnread, realtimeDisabled, teamId, userId]);
+
+  useEffect(() => {
+    const handler = () => {
+      loadActivityUnread();
+    };
+    window.addEventListener("activity_read", handler);
+    return () => {
+      window.removeEventListener("activity_read", handler);
+    };
+  }, [loadActivityUnread]);
+
+  const handleToShoAiOpenChange = React.useCallback((open: boolean) => {
+    setToshoAiOpen(open);
+    if (!open) {
+      setToshoAiRequestedThreadId(null);
+    }
+  }, []);
+
+  const openNotification = React.useCallback(async (n: NotificationItem) => {
+    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+    if (!n.read) {
+      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
+    }
+    if (n.href) navigate(n.href);
+  }, [navigate]);
+
+  const showInAppNotificationToast = React.useCallback(
+    (item: NotificationItem, options?: { skipRouteSuppression?: boolean }) => {
+      if (typeof window === "undefined") return;
+      if (!inAppNotificationsEnabled) return;
+      if (location.pathname.startsWith("/notifications")) return;
+      if (document.visibilityState !== "visible") return;
+
+      const currentRoute = `${location.pathname}${location.search}`;
+      if (!options?.skipRouteSuppression && shouldSuppressInAppNotificationToast(currentRoute, item.href)) return;
+
+      const toastId = `notification:${item.id}`;
+      if (shownInAppNotificationIdsRef.current.has(toastId)) return;
+      shownInAppNotificationIdsRef.current.add(toastId);
+
+      const description = trimNotificationDescription(item.description);
+      toast.custom(
+        (t) =>
+          renderInAppToastContent({
+            title: item.title?.trim() || "Нове сповіщення",
+            description,
+            tone: item.tone,
+            actionLabel: item.href ? getNotificationActionLabel(item.href) : undefined,
+            onAction: item.href
+              ? () => {
+                  void openNotification(item);
+                }
+              : undefined,
+            onClose: () => toast.dismiss(t),
+          }),
+        {
+        id: toastId,
+        position: "top-right",
+        duration: getInAppNotificationDuration(item.tone),
+        className: "!border-0 !bg-transparent !p-0 !shadow-none",
+        }
+      );
+
+      void playInAppNotificationSound();
+    },
+    [inAppNotificationsEnabled, location.pathname, location.search, openNotification, playInAppNotificationSound]
+  );
+
+  useEffect(() => {
     if (!userId || !teamId || activeReminderAssigneeKeys.size === 0) return;
 
     let disposed = false;
@@ -1127,6 +1208,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           type: "warning",
         });
       }
+    };
+
+    const shouldShowLocalReminderToast = (href: string) => {
+      if (realtimeDisabled) return true;
+      const currentRoute = `${location.pathname}${location.search}`;
+      return shouldSuppressInAppNotificationToast(currentRoute, href);
     };
 
     const run = async () => {
@@ -1253,7 +1340,24 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           });
         }
 
-        await Promise.all(pendingRows.map((row) => deliverActiveReminder(row)));
+        await Promise.all(
+          pendingRows.map(async (row) => {
+            await deliverActiveReminder(row);
+            if (!shouldShowLocalReminderToast(row.href)) return;
+            showInAppNotificationToast(
+              {
+                id: `active-reminder:${row.href}`,
+                title: row.title,
+                description: row.body,
+                time: formatDateTimeUA(new Date().toISOString()),
+                href: row.href,
+                read: false,
+                tone: "warning",
+              },
+              { skipRouteSuppression: true }
+            );
+          })
+        );
         if (pendingRows.length > 0) {
           void loadNotifications();
         }
@@ -1271,88 +1375,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       disposed = true;
       window.clearInterval(intervalId);
     };
-  }, [activeReminderAssigneeKeys, loadNotifications, teamId, userId]);
-
-  useEffect(() => {
-    loadActivityUnread();
-  }, [loadActivityUnread]);
-
-  useEffect(() => {
-    if (!teamId || !userId) return;
-    if (!realtimeDisabled) return;
-    const intervalId = window.setInterval(() => {
-      if (!isDocumentVisible()) return;
-      void loadActivityUnread();
-    }, FALLBACK_POLL_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [loadActivityUnread, realtimeDisabled, teamId, userId]);
-
-  useEffect(() => {
-    const handler = () => {
-      loadActivityUnread();
-    };
-    window.addEventListener("activity_read", handler);
-    return () => {
-      window.removeEventListener("activity_read", handler);
-    };
-  }, [loadActivityUnread]);
-
-  const handleToShoAiOpenChange = React.useCallback((open: boolean) => {
-    setToshoAiOpen(open);
-    if (!open) {
-      setToshoAiRequestedThreadId(null);
-    }
-  }, []);
-
-  const openNotification = React.useCallback(async (n: NotificationItem) => {
-    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
-    if (!n.read) {
-      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
-    }
-    if (n.href) navigate(n.href);
-  }, [navigate]);
-
-  const showInAppNotificationToast = React.useCallback(
-    (item: NotificationItem) => {
-      if (typeof window === "undefined") return;
-      if (!inAppNotificationsEnabled) return;
-      if (location.pathname.startsWith("/notifications")) return;
-      if (document.visibilityState !== "visible") return;
-
-      const currentRoute = `${location.pathname}${location.search}`;
-      if (shouldSuppressInAppNotificationToast(currentRoute, item.href)) return;
-
-      const toastId = `notification:${item.id}`;
-      if (shownInAppNotificationIdsRef.current.has(toastId)) return;
-      shownInAppNotificationIdsRef.current.add(toastId);
-
-      const description = trimNotificationDescription(item.description);
-      toast.custom(
-        (t) =>
-          renderInAppToastContent({
-            title: item.title?.trim() || "Нове сповіщення",
-            description,
-            tone: item.tone,
-            actionLabel: item.href ? getNotificationActionLabel(item.href) : undefined,
-            onAction: item.href
-              ? () => {
-                  void openNotification(item);
-                }
-              : undefined,
-            onClose: () => toast.dismiss(t),
-          }),
-        {
-        id: toastId,
-        position: "top-right",
-        duration: getInAppNotificationDuration(item.tone),
-        className: "!border-0 !bg-transparent !p-0 !shadow-none",
-        }
-      );
-
-      void playInAppNotificationSound();
-    },
-    [inAppNotificationsEnabled, location.pathname, location.search, openNotification, playInAppNotificationSound]
-  );
+  }, [
+    activeReminderAssigneeKeys,
+    loadNotifications,
+    location.pathname,
+    location.search,
+    realtimeDisabled,
+    showInAppNotificationToast,
+    teamId,
+    userId,
+  ]);
 
   useEffect(() => {
     if (realtimeDisabled) return;
