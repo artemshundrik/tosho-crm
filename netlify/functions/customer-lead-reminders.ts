@@ -61,7 +61,7 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
 }
 
 function normalizeIdentity(value?: string | null) {
-  return (value ?? "").trim().toLowerCase();
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function formatDateTimeUA(value: string) {
@@ -98,10 +98,27 @@ function memberIdentityKeys(profile: MemberProfileRow) {
   const firstName = profile.first_name?.trim() ?? "";
   const lastName = profile.last_name?.trim() ?? "";
   const combined = [firstName, lastName].filter(Boolean).join(" ");
+  const reversed = [lastName, firstName].filter(Boolean).join(" ");
+  const shortForward = firstName && lastName ? `${firstName} ${lastName[0]}.` : "";
+  const shortReversed = firstName && lastName ? `${lastName} ${firstName[0]}.` : "";
+  const fullNameParts = fullName.split(/\s+/).filter(Boolean);
+  const shortFromFullName =
+    fullNameParts.length >= 2 ? `${fullNameParts[0]} ${fullNameParts[1][0]}.` : "";
   const email = profile.email?.trim() ?? "";
   const emailLocalPart = email.split("@")[0] ?? "";
 
-  return [fullName, combined, firstName, lastName, email, emailLocalPart]
+  return [
+    fullName,
+    combined,
+    reversed,
+    shortForward,
+    shortReversed,
+    shortFromFullName,
+    firstName,
+    lastName,
+    email,
+    emailLocalPart,
+  ]
     .map(normalizeIdentity)
     .filter(Boolean);
 }

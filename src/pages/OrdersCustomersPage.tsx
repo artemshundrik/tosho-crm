@@ -2170,9 +2170,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setFormError(null);
 
     const managerValue = form.manager.trim();
+    const selectedManagerMember = resolveManagerMember(form.managerId, managerValue);
     const selectedManagerLabel = form.managerId
       ? memberById.get(form.managerId)?.label ?? managerValue
-      : managerValue;
+      : selectedManagerMember?.label ?? managerValue;
+    const selectedManagerUserId = selectedManagerMember?.userId ?? (form.managerId.trim() || null);
     const contacts = form.contacts
       .map((contact) => ({
         name: contact.name.trim(),
@@ -2237,7 +2239,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       manager: editingId
         ? (selectedManagerLabel || null)
         : (selectedManagerLabel || currentManagerLabel || defaultManagerName || null),
-      manager_user_id: form.managerId || null,
+      manager_user_id: selectedManagerUserId,
       ownership_type: primaryLegalEntity?.ownership_type ?? null,
       vat_rate: primaryLegalEntity?.vat_rate ?? null,
       tax_id: primaryLegalEntity?.tax_id ?? null,
@@ -2416,9 +2418,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
 
     const managerValue = leadForm.manager.trim();
+    const selectedManagerMember = resolveManagerMember(leadForm.managerId, managerValue);
     const selectedManagerLabel = leadForm.managerId
       ? memberById.get(leadForm.managerId)?.label ?? managerValue
-      : managerValue;
+      : selectedManagerMember?.label ?? managerValue;
+    const selectedManagerUserId = selectedManagerMember?.userId ?? (leadForm.managerId.trim() || null);
     const payload: Record<string, unknown> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
@@ -2432,7 +2436,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       source: leadForm.source.trim(),
       website: leadForm.website.trim() || null,
       manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
-      manager_user_id: leadForm.managerId || null,
+      manager_user_id: selectedManagerUserId,
       iban: leadForm.iban.trim() || null,
       signatory_name: leadForm.signatoryName.trim() || null,
       signatory_position: leadForm.signatoryPosition.trim() || null,

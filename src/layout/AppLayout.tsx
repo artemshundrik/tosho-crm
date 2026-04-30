@@ -51,12 +51,14 @@ import {
   supabase,
 } from "@/lib/supabaseClient";
 import { getAgencyLogo } from "@/lib/agencyAssets";
+import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
+import { buildUserNameFromMetadata } from "@/lib/userName";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   IN_APP_NOTIFICATION_PREFERENCES_UPDATED_EVENT,
@@ -103,6 +105,8 @@ type HeaderConfig = {
 const IN_APP_NOTIFICATION_TOAST_MS = 6500;
 const IN_APP_WARNING_NOTIFICATION_TOAST_MS = 9000;
 const FALLBACK_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const ACTIVE_REMINDER_POLL_INTERVAL_MS = 60 * 1000;
+const ACTIVE_REMINDER_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
 function isDocumentVisible() {
   if (typeof document === "undefined") return true;
@@ -588,6 +592,34 @@ function applyTheme(mode: ThemeMode) {
   }
 }
 
+function normalizeIdentity(value?: string | null) {
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function reminderKeyFromHref(href?: string | null) {
+  if (!href) return null;
+  const queryIndex = href.indexOf("?");
+  if (queryIndex === -1) return null;
+  const params = new URLSearchParams(href.slice(queryIndex + 1));
+  const value = params.get("reminder");
+  return value?.trim() || null;
+}
+
+function formatDateTimeUA(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const datePart = new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+  return `${datePart} • ${timePart}`;
+}
+
 const TOSHO_AI_OPEN_PARAM = "tosho_ai";
 const TOSHO_AI_REQUEST_PARAM = "tosho_ai_request";
 const FLOATING_LAUNCHER_BLOCKING_SURFACE_SELECTOR =
@@ -771,6 +803,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [fxError, setFxError] = useState<string | null>(null);
   const [fxStaleWarning, setFxStaleWarning] = useState<string | null>(null);
   const agencyLogo = useMemo(() => getAgencyLogo(theme), [theme]);
+  const activeReminderAssigneeKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const resolvedName = buildUserNameFromMetadata(
+      session?.user?.user_metadata as Record<string, unknown> | undefined,
+      session?.user?.email
+    );
+    const email = session?.user?.email ?? "";
+    const emailLocalPart = email.split("@")[0] ?? "";
+
+    const fullNameParts = resolvedName.fullName.split(/\s+/).filter(Boolean);
+    const shortForward =
+      fullNameParts.length >= 2 ? `${fullNameParts[0]} ${fullNameParts[1][0]}.` : "";
+    const shortReversed =
+      fullNameParts.length >= 2 ? `${fullNameParts[1]} ${fullNameParts[0][0]}.` : "";
+
+    [resolvedName.displayName, resolvedName.fullName, shortForward, shortReversed, email, emailLocalPart]
+      .map(normalizeIdentity)
+      .filter(Boolean)
+      .forEach((key) => keys.add(key));
+
+    return keys;
+  }, [session]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     let animationFrame = 0;
@@ -1044,6 +1098,180 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     }, FALLBACK_POLL_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [loadNotifications, realtimeDisabled, userId]);
+
+  useEffect(() => {
+    if (!userId || !teamId || activeReminderAssigneeKeys.size === 0) return;
+
+    let disposed = false;
+    let inFlight = false;
+
+    const deliverActiveReminder = async (row: {
+      title: string;
+      body: string;
+      href: string;
+    }) => {
+      try {
+        await notifyUsers({
+          userIds: [userId],
+          title: row.title,
+          body: row.body,
+          href: row.href,
+          type: "warning",
+        });
+      } catch {
+        await supabase.from("notifications").insert({
+          user_id: userId,
+          title: row.title,
+          body: row.body,
+          href: row.href,
+          type: "warning",
+        });
+      }
+    };
+
+    const run = async () => {
+      if (disposed || inFlight || !isDocumentVisible()) return;
+      inFlight = true;
+
+      try {
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const fromIso = new Date(now.getTime() - ACTIVE_REMINDER_LOOKBACK_MS).toISOString();
+
+        const [customersResult, leadsResult, existingResult] = await Promise.all([
+          supabase
+            .schema("tosho")
+            .from("customers")
+            .select("id,name,manager,manager_user_id,reminder_at,reminder_comment")
+            .eq("team_id", teamId)
+            .not("reminder_at", "is", null)
+            .lte("reminder_at", nowIso)
+            .gte("reminder_at", fromIso)
+            .order("reminder_at", { ascending: true })
+            .limit(200),
+          supabase
+            .schema("tosho")
+            .from("leads")
+            .select("id,company_name,legal_name,manager,manager_user_id,reminder_at,reminder_comment")
+            .eq("team_id", teamId)
+            .not("reminder_at", "is", null)
+            .lte("reminder_at", nowIso)
+            .gte("reminder_at", fromIso)
+            .order("reminder_at", { ascending: true })
+            .limit(200),
+          supabase
+            .from("notifications")
+            .select("href")
+            .eq("user_id", userId)
+            .not("href", "is", null)
+            .like("href", "/orders/customers%")
+            .gte("created_at", fromIso)
+            .limit(1000),
+        ]);
+
+        if (customersResult.error || leadsResult.error || existingResult.error) return;
+
+        const existingKeys = new Set(
+          ((existingResult.data ?? []) as Array<{ href?: string | null }>)
+            .map((row) => reminderKeyFromHref(row.href))
+            .filter((value): value is string => Boolean(value))
+        );
+        const pendingRows: Array<{ title: string; body: string; href: string }> = [];
+
+        const enqueue = (params: {
+          kind: "customer" | "lead";
+          id: string;
+          name: string;
+          manager?: string | null;
+          managerUserId?: string | null;
+          reminderAt?: string | null;
+          comment?: string | null;
+        }) => {
+          if (!params.id || !params.reminderAt) return;
+          if (params.managerUserId && params.managerUserId !== userId) return;
+          if (!params.managerUserId) {
+            const managerKey = normalizeIdentity(params.manager);
+            if (managerKey && !activeReminderAssigneeKeys.has(managerKey)) return;
+          }
+
+          const reminderKey = `${params.kind}:${params.id}:${params.reminderAt}`;
+          if (existingKeys.has(reminderKey)) return;
+          existingKeys.add(reminderKey);
+
+          const search = new URLSearchParams({
+            reminder: reminderKey,
+            tab: params.kind === "lead" ? "leads" : "customers",
+            [params.kind === "lead" ? "leadId" : "customerId"]: params.id,
+          });
+          const body = params.comment?.trim()
+            ? `${params.comment.trim()}\nЗаплановано на ${formatDateTimeUA(params.reminderAt)}`
+            : `Заплановано на ${formatDateTimeUA(params.reminderAt)}`;
+
+          pendingRows.push({
+            title: `Нагадування: ${params.name}`,
+            body,
+            href: `/orders/customers?${search.toString()}`,
+          });
+        };
+
+        for (const row of (customersResult.data ?? []) as Array<{
+          id: string;
+          name?: string | null;
+          manager?: string | null;
+          manager_user_id?: string | null;
+          reminder_at?: string | null;
+          reminder_comment?: string | null;
+        }>) {
+          enqueue({
+            kind: "customer",
+            id: row.id,
+            name: row.name?.trim() || "Замовник",
+            manager: row.manager,
+            managerUserId: row.manager_user_id,
+            reminderAt: row.reminder_at,
+            comment: row.reminder_comment,
+          });
+        }
+
+        for (const row of (leadsResult.data ?? []) as Array<{
+          id: string;
+          company_name?: string | null;
+          legal_name?: string | null;
+          manager?: string | null;
+          manager_user_id?: string | null;
+          reminder_at?: string | null;
+          reminder_comment?: string | null;
+        }>) {
+          enqueue({
+            kind: "lead",
+            id: row.id,
+            name: row.company_name?.trim() || row.legal_name?.trim() || "Лід",
+            manager: row.manager,
+            managerUserId: row.manager_user_id,
+            reminderAt: row.reminder_at,
+            comment: row.reminder_comment,
+          });
+        }
+
+        await Promise.all(pendingRows.map((row) => deliverActiveReminder(row)));
+        if (pendingRows.length > 0) {
+          void loadNotifications();
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void run();
+    const intervalId = window.setInterval(() => {
+      void run();
+    }, ACTIVE_REMINDER_POLL_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeReminderAssigneeKeys, loadNotifications, teamId, userId]);
 
   useEffect(() => {
     loadActivityUnread();
